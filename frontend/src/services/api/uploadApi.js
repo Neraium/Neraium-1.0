@@ -46,7 +46,7 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
     const payload = await readJsonPayload(response, { route: path, phase: "result" });
     if (!response.ok) {
       const requestError = buildUploadRequestError(response, payload, "result");
-      throw Object.assign(new Error(requestError.detail || `Unexpected response: ${response.status}`), requestError);
+      throw Object.assign(new Error(requestError.detail || "Analysis results could not be loaded. Refresh and retry."), requestError);
     }
 
     const latestResult = uploadStateView.resolveCurrentUploadResult(payload);
@@ -74,7 +74,7 @@ export async function resetDemoSession({ apiFetch, accessCode }) {
     accessCode,
   });
   if (!response.ok) {
-    throw new Error(`Unexpected response: ${response.status}`);
+    throw new Error("Analysis status could not be loaded. Refresh and retry.");
   }
   return response.json();
 }
@@ -106,7 +106,7 @@ function readJsonResponse(xhr, { route = "", phase = "" } = {}) {
 
 function buildUploadXhrError(xhr, payload, uploadUrl, phase) {
   const requestError = buildUploadRequestError({ status: xhr.status, url: uploadUrl }, payload, phase);
-  const error = new Error(requestError.detail || `Unexpected response: ${xhr.status}`);
+  const error = new Error(requestError.detail || "The dataset could not be imported. Check the file and retry.");
   return Object.assign(error, requestError, {
     responseText: requestError.rawResponseBody || xhr.responseText || "",
     uploadUrl,
@@ -397,7 +397,7 @@ export async function retryUploadAnalysisJob({ jobId, apiFetch, accessCode } = {
   const payload = await readJsonPayload(response, { route: path, phase: "retry" });
   if (!response.ok) {
     const requestError = buildUploadRequestError(response, payload, "retry");
-    throw Object.assign(new Error(requestError.detail || `Unexpected response: ${response.status}`), requestError);
+    throw Object.assign(new Error(requestError.detail || "Analysis results could not be loaded. Refresh and retry."), requestError);
   }
   return { ok: true, status: response.status, payload: normalizeUploadJob(payload) };
 }

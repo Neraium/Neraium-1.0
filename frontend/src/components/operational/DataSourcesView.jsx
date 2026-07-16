@@ -1,63 +1,63 @@
 const AVAILABLE_SOURCES = [
   {
     icon: "CSV",
-    label: "Historical CSV",
-    detail: "Use exported telemetry when live telemetry is unavailable.",
+    label: "CSV dataset import",
+    detail: "Import a timestamped telemetry dataset for one SII analysis.",
     status: "Available",
   },
 ];
 
 const PLANNED_CONNECTORS = [
-  { icon: "OPC", label: "OPC-UA", detail: "Read-only industrial tag intake from OPC-UA endpoints." },
-  { icon: "MQ", label: "MQTT", detail: "Read-only broker topic subscriptions for live monitoring." },
-  { icon: "BAC", label: "BACnet", detail: "Read-only building automation telemetry discovery." },
-  { icon: "HIS", label: "Historian integrations", detail: "Read-only operating windows from enterprise historians." },
+  { icon: "OPC", label: "OPC UA", detail: "Planned read-only connector for industrial telemetry." },
+  { icon: "MQ", label: "MQTT", detail: "Planned read-only connector for broker telemetry." },
+  { icon: "BAC", label: "BACnet", detail: "Planned read-only connector for building automation telemetry." },
+  { icon: "HIS", label: "Enterprise historians", detail: "Planned read-only connectors for historian telemetry." },
 ];
 
 export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalData }) {
   const { DetailGrid, PanelHeader, StatusBadge } = helpers;
   const sourceHealth = model.telemetryConnected
-    ? { label: "Source healthy", tone: "active", statusKey: "active" }
-    : model.sourceLabel !== "None"
-      ? { label: "Historical telemetry available", tone: "ready", statusKey: "ready" }
-      : { label: "Awaiting telemetry", tone: "unknown", statusKey: "waiting" };
+    ? { label: "Connector healthy", tone: "active", statusKey: "active" }
+    : !["None", "Not connected"].includes(model.sourceLabel)
+      ? { label: "Dataset imported", tone: "ready", statusKey: "ready" }
+      : { label: "No telemetry data", tone: "unknown", statusKey: "waiting" };
   const findingRows = model.analysisComplete
     ? [
-        ["Findings", model.insights.length ? `${model.insights.length} active` : "No active findings"],
+        ["Insights", model.insights.length ? `${model.insights.length} active` : "No active insights"],
         ["Highest severity", model.highestSeverity],
         ["Behavior state", model.behaviorState],
         ["Baseline", model.baselineAvailable ? "Established" : "Pending"],
       ]
     : [
-        ["Findings", "Pending baseline"],
+        ["Insights", "Available after analysis"],
         ["Behavior state", "Not analyzed"],
         ["Baseline", "Pending"],
       ];
 
   return (
     <div className="operational-grid operational-grid--data-sources">
-      <section className="operational-panel operational-panel--wide data-source-status-panel" aria-label="Telemetry Sources">
+      <section className="operational-panel operational-panel--wide data-source-status-panel" aria-label="Data Availability">
         <PanelHeader
-          eyebrow="Telemetry Sources"
-          title="Telemetry Sources"
-          subtitle="Current source availability and the latest historical or live telemetry used by the platform."
+          eyebrow="Telemetry"
+          title="Data Availability"
+          subtitle="Dataset imports and connector health are shown separately so operators know what can be analyzed."
         />
         <StatusBadge label={sourceHealth.label} tone={sourceHealth.tone} statusKey={sourceHealth.statusKey} />
         <DetailGrid rows={model.dataSourceRows} />
       </section>
 
-      <section className="operational-panel operational-panel--wide data-source-actions-panel" aria-label="Primary Analysis Actions">
-        <PanelHeader eyebrow="Primary Analysis Actions" title="Analyze Historical Telemetry" subtitle="One canonical workflow uploads historical telemetry and establishes or refreshes the behavioral baseline." />
+      <section className="operational-panel operational-panel--wide data-source-actions-panel" aria-label="Dataset Analysis">
+        <PanelHeader eyebrow="Dataset Analysis" title="Import and Analyze a Dataset" subtitle="Choose a timestamped CSV dataset to create one analysis and establish or refresh the behavior baseline." />
         <div className="data-source-action-grid data-source-action-grid--single">
           <button type="button" className="command-button data-source-action data-source-action--primary" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled} title={model.analyzeDisabled ? "Analysis is already in progress. Wait for it to finish before starting another." : "Choose a telemetry CSV to analyze."}>
-            <strong>Analyze Historical Telemetry</strong>
-            <span>Upload telemetry evidence, infer relationships, organize behavior, and persist the behavioral baseline.</span>
+            <strong>Choose Dataset</strong>
+            <span>Import timestamped telemetry, run SII, and save the resulting insights and evidence.</span>
           </button>
         </div>
       </section>
 
-      <section className="operational-panel" aria-label="Available Sources">
-        <PanelHeader eyebrow="Available Sources" title="Available Sources" subtitle="Supported telemetry sources for the canonical analysis workflow." />
+      <section className="operational-panel" aria-label="Dataset Imports">
+        <PanelHeader eyebrow="Datasets" title="Dataset Imports" subtitle="Supported file formats for bounded historical analysis." />
         <div className="telemetry-source-grid telemetry-source-grid--compact">
           {AVAILABLE_SOURCES.map((source) => (
             <ConnectorCard key={source.label} {...source} available />
@@ -65,8 +65,8 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
         </div>
       </section>
 
-      <section className="operational-panel" aria-label="Connector Roadmap">
-        <PanelHeader eyebrow="Connector Roadmap" title="Connector Roadmap" subtitle="Planned read-only integrations for live telemetry intake." />
+      <section className="operational-panel" aria-label="Planned Live Connectors">
+        <PanelHeader eyebrow="Connectors" title="Planned Live Connectors" subtitle="These connector types are not available in this release." />
         <div className="telemetry-source-grid telemetry-source-grid--compact">
           {PLANNED_CONNECTORS.map((source) => (
             <ConnectorCard key={source.label} {...source} status="Planned" />
@@ -79,18 +79,18 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
         <DetailGrid rows={model.dashboardSummaryRows} />
       </section>
 
-      <section className="operational-panel" aria-label="Analytical Findings">
-        <PanelHeader eyebrow="Analytical Findings" title="Analytical Findings" subtitle="Current finding summary derived from the established behavioral baseline." />
+      <section className="operational-panel" aria-label="Analysis Summary">
+        <PanelHeader eyebrow="Analysis" title="Analysis Summary" subtitle="Current insight count, severity, behavior state, and behavior baseline status." />
         <DetailGrid rows={findingRows} />
       </section>
 
       <section className="operational-panel operational-panel--wide read-only-architecture" aria-label="Read-only enforcement">
-        <PanelHeader eyebrow="Read-only Enforcement" title="Read-only Enforcement" subtitle="Neraium supports decision-making without controlling facility equipment." />
+        <PanelHeader eyebrow="Safety Boundary" title="Read-only Control Boundary" subtitle="Neraium supports operator decisions and never writes commands or setpoints to facility equipment." />
         <ul className="compact-list compact-list--safety">
-          <li>PLC writeback disabled</li>
-          <li>SCADA writeback disabled</li>
-          <li>BMS writeback disabled</li>
-          <li>Equipment controller writeback disabled</li>
+          <li>PLC commands disabled</li>
+          <li>SCADA commands disabled</li>
+          <li>BMS commands disabled</li>
+          <li>Equipment controller commands disabled</li>
         </ul>
       </section>
     </div>

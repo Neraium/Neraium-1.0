@@ -592,7 +592,7 @@ def build_system_interpretation(result: dict | None, summary: dict | None, snaps
         )
         return {
             "facility_state_enum": "no_active_session",
-            "facility_state_label": "No Active Session",
+            "facility_state_label": "No Dataset Analyzed",
             "confidence": "Calm",
             "instability_index": 0.0,
             "instability_scale": "0-100",

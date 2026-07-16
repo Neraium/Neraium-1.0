@@ -277,7 +277,7 @@ def _operational_mapping(candidate: dict[str, Any]) -> str:
 
 def _first_admitted_window(candidate: dict[str, Any]) -> str:
     metadata = candidate.get("source_metadata", {}) or {}
-    return str(candidate.get("first_admitted_window") or metadata.get("first_window") or metadata.get("window_start") or "First Gate-admitted window")
+    return str(candidate.get("first_admitted_window") or metadata.get("first_window") or metadata.get("window_start") or "First approved evidence window")
 
 
 def _elapsed_operational_duration(candidate: dict[str, Any], persistence_count: int) -> str:

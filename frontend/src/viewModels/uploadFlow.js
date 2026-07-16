@@ -7,18 +7,18 @@ import {
 } from "./uploadContract";
 
 const INTAKE_STAGES = [
-  "Upload",
-  "Validation",
-  "Preprocessing",
-  "Relationship Inference",
-  "Behavioral Organization",
-  "Behavioral Baseline",
-  "Operator Findings",
+  "Import Dataset",
+  "Check Dataset",
+  "Prepare Dataset",
+  "Learn Relationships",
+  "Organize Systems",
+  "Behavior Baseline",
+  "Insights and Evidence",
   "Completion",
 ];
 
-export const SERVICE_UNAVAILABLE_UPLOAD_MESSAGE = "Analysis service temporarily unavailable. Please retry.";
-export const SERVICE_UNAVAILABLE_RETRY_MESSAGE = "Analysis service is temporarily unavailable. Retrying...";
+export const SERVICE_UNAVAILABLE_UPLOAD_MESSAGE = "Analysis service is temporarily unavailable. Retry the analysis.";
+export const SERVICE_UNAVAILABLE_RETRY_MESSAGE = "Analysis service is temporarily unavailable. Retrying the analysis...";
 
 const TRANSIENT_UPLOAD_SERVICE_STATUSES = new Set([408, 429, 502, 503, 504]);
 
@@ -123,12 +123,15 @@ function withResponseDiagnostics(payload, { status = null, rawBody = "", route =
   };
 }
 
-export function sanitizeUploadUserMessage(value, fallback = "Telemetry analysis interrupted.") {
+export function sanitizeUploadUserMessage(value, fallback = "Analysis was interrupted. Retry the analysis.") {
   const text = typeof value === "string"
     ? value.trim()
     : normalizeUploadContractErrorMessage(value);
   if (!text || text === "Unknown error") return fallback;
   if (isLikelyHtmlResponse(text)) return SERVICE_UNAVAILABLE_UPLOAD_MESSAGE;
+  if (/traceback|stack|exception|localhost|\/api\/|\b(?:sql|python|uvicorn|undefined|null pointer)\b/i.test(text)) {
+    return "Analysis could not complete or save a usable result. Retry the analysis. If it happens again, contact an administrator.";
+  }
   return text;
 }
 
@@ -154,24 +157,24 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
       return {
         title: stage,
         detail: index === 2
-          ? "Preprocessing begins after the telemetry batch is accepted."
-          : "Upload historical telemetry to establish a behavioral baseline.",
+          ? "Dataset preparation begins after the import is accepted."
+          : "Import a historical telemetry dataset to establish a behavior baseline.",
         state: "standby",
         tone: index === 3 ? "review" : "info",
       };
     }
 
     const details = [
-      `${result.filename ?? result.last_filename ?? "Telemetry batch"} received for analysis.`,
+      `${result.filename ?? result.last_filename ?? "Telemetry dataset"} imported for analysis.`,
       `${result.columns?.length ?? result.columns_detected ?? result.column_count ?? 0} telemetry fields validated from the uploaded batch.`,
-      `${result.row_count ?? result.rows_processed ?? 0} telemetry rows normalized for comparison.`,
-      "Meaningful operational relationships were inferred from the evidence.",
-      "Relationships were organized into visible subsystem behavior.",
-      "Behavioral baseline established from normalized telemetry.",
-      "Operator findings generated from observed evidence and interpretation.",
+      `${result.row_count ?? result.rows_processed ?? 0} telemetry rows prepared for comparison.`,
+      "SII learned meaningful operational relationships from the telemetry.",
+      "Related telemetry was organized into visible system behavior.",
+      "Behavior baseline established from the prepared telemetry.",
+      "Insights and supporting evidence generated from observed behavior.",
       operatorReviewReady
-        ? "Behavioral baseline saved and ready for review."
-        : "Behavioral baseline saved; operator findings are still finalizing.",
+        ? "Behavior baseline saved and ready for review."
+        : "Behavior baseline saved. Insights and evidence are still being prepared.",
     ];
 
     return {
@@ -302,10 +305,10 @@ export function classifyUploadError(error, phase) {
       rawResponseBody: error.responseText ?? "",
       responseStatus: error?.status ?? null,
       message: phase === "poll"
-        ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
+        ? "Dataset analysis is in progress. Large datasets may require additional processing time."
         : error?.name === "ApiTimeoutError"
-          ? "Upload timed out."
-          : normalizeErrorMessage(error?.message || "Upload network error before server accepted the file."),
+          ? "Dataset import timed out. Retry the analysis."
+          : normalizeErrorMessage(error?.message || "The dataset could not be imported because the analysis service could not be reached. Retry the analysis."),
     };
   }
   if (error instanceof TypeError) {
@@ -319,8 +322,8 @@ export function classifyUploadError(error, phase) {
       rawResponseBody: "",
       responseStatus: null,
       message: phase === "poll"
-        ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
-        : normalizeErrorMessage(error?.message || "Upload network error before server accepted the file."),
+        ? "Dataset analysis is in progress. Large datasets may require additional processing time."
+        : normalizeErrorMessage(error?.message || "The dataset could not be imported because the analysis service could not be reached. Retry the analysis."),
     };
   }
   return {
@@ -344,14 +347,14 @@ export function classifyUploadError(error, phase) {
 export function operatorUploadMessage({ status, errorType, detail, phase }) {
   if (errorType === "auth" || errorType === "auth_session_expired" || status === 401 || status === 403) {
     return phase === "poll"
-      ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
-      : "Telemetry processing session could not be validated.";
+      ? "Dataset analysis is in progress. Large datasets may require additional processing time."
+      : "Your analysis session could not be verified. Sign in again, then retry the analysis.";
   }
   if (errorType === "upload_session_missing") {
     if (phase === "poll") {
-      return "Telemetry batch processing in progress. Waiting for upload status to become available.";
+      return "Dataset analysis is in progress. Waiting for analysis status to become available.";
     }
-    return "Upload state unavailable.";
+    return "Analysis status is unavailable. Refresh and retry.";
   }
   if (errorType === "shared_upload_queue_not_configured") {
     return "Analysis processing is unavailable right now.";
@@ -379,8 +382,8 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
   }
   if (errorType === "upload_response_timeout" || errorType === "timeout" || status === 408) {
     return phase === "poll"
-      ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
-      : "Upload timed out.";
+      ? "Dataset analysis is in progress. Large datasets may require additional processing time."
+      : "Dataset import timed out. Retry the analysis.";
   }
   if (errorType === "csv_parse_error" || errorType === "processing_error") {
     return detail ? `CSV could not be parsed: ${normalizeErrorMessage(detail)}` : "CSV could not be parsed.";
@@ -396,13 +399,13 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
   }
   if (status === 425 || status === 429 || status >= 500) {
     return phase === "poll"
-      ? "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time."
+      ? "Dataset analysis is in progress. Large datasets may require additional processing time."
       : (typeof detail === "string" && detail.trim()
         ? normalizeErrorMessage(detail)
         : "Analysis processing is unavailable right now.");
   }
   if (phase === "poll") {
-    return "Telemetry batch processing in progress. Large telemetry uploads may require additional processing time.";
+    return "Dataset analysis is in progress. Large datasets may require additional processing time.";
   }
   return typeof detail === "string" && detail.trim()
     ? detail
@@ -425,7 +428,7 @@ function uploadStageDetail(stage, index, job, roomContext) {
   }
   if (jobStatus === "complete") {
     return index === 7
-      ? "The Command Center is using the established behavioral baseline."
+      ? "The Command Center is using the established behavior baseline."
       : "Step complete.";
   }
   const details = [
@@ -434,9 +437,9 @@ function uploadStageDetail(stage, index, job, roomContext) {
     ["parsing", "processing"].includes(jobStatus) ? job.progress_label : "Telemetry is being normalized for relationship inference.",
     jobStatus === "baseline_modeling" ? job.progress_label : "Operational relationships are being inferred from the evidence.",
     jobStatus === "structural_scoring" ? job.progress_label : "Relationship changes are being organized into subsystem behavior.",
-    jobStatus === "building_fingerprint" ? job.progress_label : "The behavioral baseline is being established from normalized telemetry.",
-    jobStatus === "writing_state" ? job.progress_label : "Operator findings are being generated from observed behavior.",
-    ["cognition_ready", "saving_result"].includes(jobStatus) ? job.progress_label : "The behavioral baseline is being persisted for Command Center review.",
+    jobStatus === "building_fingerprint" ? job.progress_label : "The behavior baseline is being established from normalized telemetry.",
+    jobStatus === "writing_state" ? job.progress_label : "Insights and supporting evidence are being prepared from observed behavior.",
+    ["cognition_ready", "saving_result"].includes(jobStatus) ? job.progress_label : "The behavior baseline is being persisted for Command Center review.",
     "Completion will open the Command Center with the learned baseline.",
   ];
   return details[index] ?? stage;

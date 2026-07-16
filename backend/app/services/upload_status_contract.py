@@ -97,7 +97,7 @@ def normalize_upload_status_payload(payload: dict) -> dict:
     normalized.setdefault("percent", int(payload.get("progress", payload.get("percent", 0)) or 0))
     normalized.setdefault("progress", int(payload.get("percent", payload.get("progress", 0)) or 0))
     if status in {"RUNNING_SII", "PROCESSING", "PENDING", "QUEUED"}:
-        normalized.setdefault("message", "Telemetry batch processing in progress.")
+        normalized.setdefault("message", "Dataset analysis is in progress.")
     if status in {"TIMEOUT", "CANCELLED"}:
         normalized.setdefault("error", str(normalized.get("message") or status.title()))
         return _with_propagation_fields(normalized, payload, status)
@@ -111,7 +111,7 @@ def normalize_upload_status_payload(payload: dict) -> dict:
             normalized["sii_completed"] = False
             normalized["error_type"] = "sii_completion_missing"
             normalized["error"] = "sii_completion_missing"
-            normalized["message"] = "SII completion artifacts are missing: " + ", ".join(missing_artifacts or ["sii_completed"])
+            normalized["message"] = "Analysis could not save a complete result. Retry the analysis."
             return _with_propagation_fields(normalized, payload, "FAILED")
         if str(normalized.get("progress_label") or "").strip() in {"", "Complete.", "Complete", "Telemetry processing complete."}:
             normalized["progress_label"] = "Analysis ready."

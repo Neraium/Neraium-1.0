@@ -39,10 +39,10 @@ function WorkspaceWithBackControl({ appReady, errorBoundaryResetKey, handleBackT
             >
               Back to Command Center
             </button>
-            <span>Read-only operational intelligence</span>
+            <span>Systemic Infrastructure Intelligence, read-only</span>
           </nav>
-          <main id="main-content" className="workspace-route-main" aria-label="Neraium operational workspace" tabIndex={-1}>
-            <h1 className="sr-only">Neraium Operational Workspace</h1>
+          <main id="main-content" className="workspace-route-main" aria-label="Neraium platform workspace" tabIndex={-1}>
+            <h1 className="sr-only">Neraium Platform Workspace</h1>
             {children}
           </main>
         </div>
@@ -110,7 +110,7 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Data Sources", "Preparing telemetry analysis workflow...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Datasets & Connectors", "Preparing dataset import and connector setup...")}>
           <DataConnectionsWorkspace
             accessCode={accessCode}
             apiFetch={apiFetch}
@@ -144,7 +144,7 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Advanced Details", "Preparing behavior diagnostics...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Analysis Details", "Preparing analysis history and support diagnostics...")}>
           <SystemStoryWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
@@ -185,7 +185,7 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Technical Admin", "Preparing technical admin workspace...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Administration", "Preparing user access and intelligence governance...")}>
           <GovernanceAdminWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
@@ -207,7 +207,7 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Insights", "Preparing insights...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Insights", "Preparing operational insights and evidence...")}>
           <ObservationCenterWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
@@ -229,7 +229,7 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Technical", "Preparing technical workspace...")}>
+        <Suspense fallback={renderLoadingPanel("Loading Help & Status", "Preparing product guidance and service status...")}>
           <HelpChangelogWorkspace
             apiStatus={apiStatus}
             onBackToGate={() => setActiveWorkspace("system-body")}
@@ -243,7 +243,7 @@ export default function AppWorkspaceRouter({
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <Suspense fallback={renderLoadingPanel("Opening Command Center", "Preparing operational status...")}>
+        <Suspense fallback={renderLoadingPanel("Opening Command Center", "Loading facility state, systems, and insights...")}>
           <OperationalWorkflowWorkspace
             liveOps={{
               ...liveOps,

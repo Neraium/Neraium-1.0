@@ -58,18 +58,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("Advanced Details workspace", () => {
+describe("Analysis Details workspace", () => {
   it("renders the flagship story sections without internal graph diagnostics", async () => {
     renderStory(baseProps());
 
-    await waitFor(() => expect(screen.getByText("Advanced Details")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Analysis Details")).toBeTruthy());
     expect(screen.getByLabelText("Evidence")).toBeTruthy();
     expect(screen.getByLabelText("Possible Operational Causes")).toBeTruthy();
     expect(screen.getByLabelText("What To Inspect")).toBeTruthy();
     expect(screen.getByLabelText("How It Developed")).toBeTruthy();
     expect(screen.getByLabelText("Supporting Trends")).toBeTruthy();
-    expect(screen.getByLabelText("Engineer Notes")).toBeTruthy();
-    expect(screen.getByLabelText("Repair Outcome")).toBeTruthy();
+    expect(screen.getByLabelText("Operator Notes")).toBeTruthy();
+    expect(screen.getByLabelText("Inspection Outcome")).toBeTruthy();
     expect(screen.queryByTestId("propagation-map")).toBeNull();
     expect(screen.queryByText("Raw change direction")).toBeNull();
   });
@@ -139,15 +139,15 @@ describe("Advanced Details workspace", () => {
       currentSession: { latestUploadResult: { job_id: "job-pending" }, hasReliableOperatorEvidence: false, reviewReadiness: "quality_gate" },
     }));
 
-    await waitFor(() => expect(screen.getByText("Telemetry is present, but the story is waiting for verification.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Insights are not ready because the analysis is still being verified.")).toBeTruthy());
     expect(screen.getAllByText(/does not yet meet the reliability threshold/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/stable telemetry|data quality|processing/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/complete dataset|data-quality warnings|run the analysis again/i).length).toBeGreaterThan(0);
   });
 
-  it("records engineer notes and repair outcome labels", async () => {
+  it("records operator notes and inspection outcome labels", async () => {
     renderStory(baseProps());
 
-    await waitFor(() => expect(screen.getByLabelText("Engineer Notes")).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText("Operator Notes")).toBeTruthy());
     fireEvent.change(screen.getByPlaceholderText("Add inspection notes"), { target: { value: "Valve replaced." } });
     fireEvent.click(screen.getByRole("button", { name: "Add Note" }));
     fireEvent.click(screen.getByRole("button", { name: "Maintenance event" }));
@@ -233,7 +233,7 @@ describe("Advanced Details workspace", () => {
 
     renderStory(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: null, latestUploadSnapshot: null } }));
 
-    await waitFor(() => expect(screen.getByText("Advanced details are waiting for an active telemetry session.")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Analysis details will appear after a dataset has been analyzed.")).toBeTruthy());
     expect(fetchMock.mock.calls.some(([path]) => String(path).includes("stale-history-job"))).toBe(false);
   });
 });

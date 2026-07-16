@@ -106,7 +106,7 @@ describe("ObservationCenterWorkspace", () => {
     await waitFor(() => expect(screen.getAllByText("Behavior Change Detected").length).toBeGreaterThan(0));
     expect(screen.getAllByText("System behavior has moved away from its historical operating pattern.").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Confidence:Moderate/i).length).toBeGreaterThan(0);
-    expect(screen.getByText("Filter issues")).toBeTruthy();
+    expect(screen.getByText("Filter and search insights")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: "Review Details" })[0]);
     expect(onReviewEvidence).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/State Group A/i)).toBeNull();
@@ -193,7 +193,7 @@ describe("ObservationCenterWorkspace", () => {
 
     await waitFor(() => expect(screen.getAllByRole("button", { name: "Save Review" }).length).toBeGreaterThan(0));
     expect(screen.getAllByRole("button", { name: "Save Review" })[0].disabled).toBe(true);
-    expect(screen.getByText(/feedback unlocks after the system record is persisted/i)).toBeTruthy();
+    expect(screen.getByText(/review feedback becomes available after the evidence record is saved/i)).toBeTruthy();
   });
 
 

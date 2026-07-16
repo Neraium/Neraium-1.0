@@ -2,60 +2,42 @@
 
 ## Current Scope
 
-Neraium is a full-stack customer-facing application for commercial water-system operators:
+Neraium is a full-stack platform for commercial water-system operators. Systemic Infrastructure Intelligence (SII) is the intelligence Neraium applies to infrastructure telemetry.
 
-- A FastAPI backend exposes versioned API endpoints under `/api`.
-- A Vite React frontend provides the customer-facing app shell for commercial water-system operations.
-- Automated tests currently cover backend health behavior, placeholder facility systems, CSV upload validation, water-system and telemetry column mapping, lightweight data profiling, simple baseline comparison, deterministic Neraium SII v1 engine output, and deterministic operator report generation.
-
-This scaffold intentionally does not include user accounts, a database, cloud deployment automation, assistant features, legacy data schemas, or private access-code gating.
+- A FastAPI backend exposes authenticated API endpoints under `/api`.
+- A Vite React frontend provides operator, administration, and evidence-review workspaces.
+- Role-based access distinguishes viewers, operators, and administrators.
+- Runtime persistence stores analysis jobs, results, evidence, audit records, connector state, and sessions.
+- Read-only CSV, REST API, and database inputs support bounded telemetry analysis. Additional connector types are explicitly marked as planned.
 
 ## Backend
 
 The backend lives in `backend/app`.
 
 ```text
-backend/app/main.py          FastAPI app factory, CORS, router registration
-backend/app/routers/         Route modules grouped by responsibility
-backend/app/services/        Upload parsing, mapping, profiling, comparison, and report services
-backend/app/engine/          Deterministic system intelligence engine v1
+backend/app/main.py          FastAPI app factory, security middleware, and router registration
+backend/app/routers/         Authenticated routes grouped by product workflow
+backend/app/services/        Dataset ingestion, SII analysis, evidence, persistence, and connector services
+backend/app/engine/          Deterministic Systemic Infrastructure Intelligence engine
 backend/requirements.txt     Python runtime and test dependencies
 ```
 
-Initial endpoints:
+Major API workflows include authentication and session management, system discovery, dataset import, connector setup and health, analysis status and retry, insights, evidence review and export, administration, observability, and behavior replay.
 
-- `GET /api/health` reports API availability.
-- `GET /api/app` returns basic application metadata.
-- `GET /api/facility/systems` returns monitored system placeholders for facility water operations.
-- `POST /api/data/upload` accepts CSV files, validates the extension and structure, parses headers and preview rows, and returns upload metadata, water-system mapping, timestamp profile, numeric column profiles, baseline comparison, engine result, operator report, data quality, warnings, and readiness. Uploaded CSV files are deleted after processing; job metadata and latest SII state are retained under the configured runtime directory.
-
-The app factory pattern keeps test setup simple and leaves room for future dependency wiring without changing the public ASGI entrypoint.
+CSV imports are validated and processed through a bounded analysis workflow. Source files are deleted after processing; analysis metadata, results, evidence, and the latest SII state are retained in the configured runtime directory. SII compares behavior windows and system relationships. It does not claim root cause, predict failure, or control equipment.
 
 ## Frontend
 
-The frontend lives in `frontend`.
+The frontend lives in `frontend`. The operator workspace is organized around distinct product objects:
 
-```text
-frontend/index.html
-frontend/src/main.jsx
-frontend/src/App.jsx
-frontend/src/styles.css
-```
+- **Systems** are operational equipment or processes discovered from telemetry behavior.
+- **Datasets** are bounded telemetry collections imported for analysis.
+- **Connectors** are configured read-only integrations with their own health state.
+- **Analyses** are individual SII executions against datasets.
+- **Insights** are operator-facing behavior changes that may warrant investigation.
+- **Evidence** is the observed telemetry and comparison context supporting an insight.
 
-The current interface is a focused customer-facing shell for commercial water-system operators. It includes Overview, Facility Systems, Data Upload, and Reports sections.
-
-The product direction is to help operators understand telemetry drift before it becomes operational water-system failure. Future workflows should explain changes across pumps, filtration, tanks, flow, pressure, temperature, chemistry, and equipment telemetry in plain English for water-system operators and facility teams.
-
-Current frontend sections:
-
-- Overview explains the product direction, shows API status, and displays placeholder cards for facility status, environmental drift, systems monitored, and latest report.
-- Facility Systems lists hardcoded monitored systems for pumps, filtration, tanks, flow, pressure, treatment, chemistry, and equipment telemetry.
-- Data Upload validates CSV exports from historical facility data and sensor systems, then displays water-system mapping, data quality, time range, numeric column profiles, baseline comparison, Neraium SII v1 engine result, operator report, columns, warnings, readiness, and preview rows.
-- Reports lists placeholder report types for Environmental Drift Summary, System Coupling Review, and Operator Action Report, and shows the latest generated upload report for the current frontend session when one exists.
-
-CSV ingestion streams uploaded files into a transient runtime upload file, processes representative windows for large batches, and deletes the uploaded CSV after completion or failure. It persists only job metadata and latest SII state in the configured runtime directory. It does not create facility records or run non-deterministic analysis. Water-system mapping, profiling, baseline comparison, Neraium SII v1 engine result, and operator reports are deterministic and limited to uploaded commercial water-system telemetry exports. Water-system mapping uses keyword matching against uploaded column names only. Baseline comparison uses the first 20% of rows as a simple baseline window and the last 20% as the recent window.
-
-Neraium SII v1 treats the upload as commercial water-system behavior rather than generic anomaly detection. It groups evidence by operational telemetry category, counts corroborating numeric signals, evaluates whether recent-window drift appears persistent within the uploaded rows, and returns an audit trace with baseline/recent windows, columns analyzed, columns skipped, relationship checks attempted, and relationship checks skipped with reasons. Engine output and reports do not predict failures, water quality outcome, service impact, or root cause.
+The Command Center prioritizes insights and discovered systems. Datasets & Connectors manages data availability. Analysis Details exposes analysis metadata and support diagnostics. Help & Status explains the product language and current service state. Administration provides governance records, user access, and session controls.
 
 ## Local Integration
 
@@ -64,15 +46,8 @@ During local development:
 - Backend: `http://127.0.0.1:8010`
 - Frontend: `http://127.0.0.1:3010`
 
-CORS is configured in the backend for the local frontend origins.
+Runtime configuration is centralized in `backend/app/core/config.py` and `frontend/src/config.js`. AWS deployment preparation is documented in `docs/AWS_DEPLOYMENT.md`.
 
-Runtime configuration is centralized in `backend/app/core/config.py` for backend environment values and `frontend/src/config.js` for the frontend API base URL. AWS deployment preparation is documented in `docs/AWS_DEPLOYMENT.md`. The backend container is prepared for Amazon ECS Express Mode / ECS Fargate on port `8080`, while local development keeps the dedicated Neraium ports listed above.
+## Product Language
 
-## Near-Term Extension Points
-
-Future work should add capabilities in small, explicit layers:
-
-- User identity and role-based authorization before broader customer access.
-- Persistence when the first durable customer data model is defined.
-- Deployment configuration when the target environment is selected.
-- Controlled environment operations workflows once the API contracts are clear.
+`docs/PRODUCT_LANGUAGE.md` is the source of truth for Neraium and SII terminology, entity names, health states, severity, and sanitized operator-facing messages.

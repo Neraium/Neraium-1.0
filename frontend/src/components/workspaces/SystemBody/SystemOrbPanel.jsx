@@ -44,7 +44,7 @@ export default function SystemOrbPanel({
   return (
     <aside
       className={`system-body-orb-panel system-body-orb-panel--${resolvedSystemState} ${indicatorClass} ${compactPreview ? "system-body-orb-panel--compact-preview" : ""}`}
-      aria-label={compactPreview ? "The Gate admitted condition indicator" : "System behavior intelligence field"}
+      aria-label={compactPreview ? "Governance-approved condition indicator" : "System behavior intelligence field"}
     >
       <div className="system-body-orb-panel__lattice" aria-hidden="true">
         {Array.from({ length: 9 }, (_, index) => (

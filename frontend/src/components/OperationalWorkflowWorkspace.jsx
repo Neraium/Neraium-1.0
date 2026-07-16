@@ -8,6 +8,7 @@ import FingerprintView from "./operational/FingerprintView";
 import InsightsView from "./operational/InsightsView";
 import SystemsView from "./operational/SystemsView";
 import { FALLBACK_SYSTEMS } from "../config/workspaces";
+import { PRODUCT_DESCRIPTOR } from "../content/productLanguage";
 import { sanitizeOperatorText } from "../viewModels/operatorFinding";
 import "../styles/operational-workflow.css";
 
@@ -16,9 +17,17 @@ const NAV_ITEMS = [
   { id: "systems", label: "Systems" },
   { id: "insights", label: "Insights" },
   { id: "fingerprint", label: "Behavior Baseline" },
-  { id: "data-sources", label: "Data Sources" },
-  { id: "advanced", label: "Advanced" },
+  { id: "data-sources", label: "Datasets & Connectors" },
+  { id: "advanced", label: "Analysis Details" },
 ];
+
+const SECTION_HEADERS = {
+  systems: { eyebrow: "Systems", title: "Discovered Systems", subtitle: "Systems identified from analyzed telemetry and their active insights." },
+  insights: { eyebrow: "SII Intelligence", title: "Operational Insights", subtitle: "Prioritized changes identified by Systemic Infrastructure Intelligence, with evidence for operator review." },
+  fingerprint: { eyebrow: "Reference", title: "Behavior Baseline", subtitle: "The learned reference for how system relationships normally move together." },
+  "data-sources": { eyebrow: "Telemetry", title: "Datasets & Connectors", subtitle: "Import a telemetry dataset or review the health of a configured read-only connector." },
+  advanced: { eyebrow: "Analysis", title: "Analysis Details", subtitle: "Review analysis history, source information, evidence metadata, and support diagnostics." },
+};
 
 const MOBILE_PRIMARY_NAV = NAV_ITEMS;
 const ACTIVE_SECTION_STORAGE_KEY = "neraium.operational.active_section";
@@ -62,47 +71,47 @@ const hiddenFileInputStyle = {
 };
 
 const EMPTY_TELEMETRY_COPY = {
-  label: "Awaiting Initial Baseline",
-  detail: "Connect telemetry or analyze historical data to establish the facility's learned operational baseline.",
-  commandTitle: "Awaiting Initial Baseline",
-  commandDetail: "The facility has not yet established a learned operational baseline.",
-  fileStatus: "No source connected",
-  cta: "Analyze Historical Telemetry",
-  secondaryCta: "Connect Live Telemetry",
-  headerStatus: "Waiting for telemetry",
+  label: "Baseline Needed",
+  detail: "Import a telemetry dataset to establish the facility's learned behavior baseline.",
+  commandTitle: "Baseline Needed",
+  commandDetail: "Import a telemetry dataset, then run an analysis to establish the facility's behavior baseline.",
+  fileStatus: "No dataset imported",
+  cta: "Import and Analyze Dataset",
+  secondaryCta: "Configure Connector",
+  headerStatus: "No telemetry data",
 };
 const NO_TELEMETRY_STATUS = {
-  label: "Ready to Build Baseline",
+  label: "Baseline Needed",
   tone: "ready",
   statusKey: "ready",
   detail: EMPTY_TELEMETRY_COPY.detail,
 };
 const WAITING_FOR_TELEMETRY_STATUS = {
-  label: "Waiting for telemetry",
+  label: "No telemetry data",
   tone: "ready",
   statusKey: "waiting",
   detail: EMPTY_TELEMETRY_COPY.detail,
 };
 const READY_TO_ANALYZE_STATUS = {
-  label: "Ready to Analyze Historical Telemetry",
+  label: "Dataset Ready for Analysis",
   tone: "ready",
   statusKey: "ready",
-  detail: "Telemetry is ready for analysis.",
+  detail: "The imported dataset is ready. Start the analysis to create or refresh the behavior baseline.",
 };
 const ANALYZING_STATUS = {
-  label: "Analyzing Operational Behavior...",
+  label: "Analyzing Operational Behavior",
   tone: "learning",
   statusKey: "learning",
   detail: "Neraium is comparing current relationships against historical operating behavior.",
 };
 const ANALYSIS_COMPLETE_STATUS = {
-  label: "Operational Baseline Active",
+  label: "Analysis Complete",
   tone: "active",
   statusKey: "active",
-  detail: "Result ready.",
+  detail: "SII results are ready for operator review.",
 };
 const MONITORING_LIVE_STATUS = {
-  label: "Monitoring Active",
+  label: "Live Analysis Active",
   tone: "active",
   statusKey: "active",
   detail: "Live telemetry is connected and current behavior is being monitored.",
@@ -289,6 +298,8 @@ export default function OperationalWorkflowWorkspace({
     navigate("data-sources");
   }
 
+  const sectionHeader = SECTION_HEADERS[visibleSection] ?? null;
+
   return (
     <>
       <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -297,7 +308,7 @@ export default function OperationalWorkflowWorkspace({
         <div className="operational-sidebar__brand">
           <span className="section-token">Neraium</span>
           <strong>{model.siteLabel}</strong>
-          <p>Read-only operational intelligence layer</p>
+          <p>Read-only intelligence for infrastructure operators</p>
         </div>
         <nav className="operational-nav" aria-label="Primary workflow navigation">
           {NAV_ITEMS.map((item) => (
@@ -327,14 +338,14 @@ export default function OperationalWorkflowWorkspace({
         </div>
       </aside>
 
-      <main id="main-content" className={visibleSection === "command-center" ? "operational-main operational-main--command-center" : "operational-main"} aria-label="Neraium operational workspace" tabIndex={-1}>
-        <input data-testid="overview-csv-upload-input" ref={overviewUploadInputRef} accept=".csv,text/csv" type="file" className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Upload historical telemetry CSV" tabIndex={-1} onChange={handleOverviewFileSelection} />
+      <main id="main-content" className={visibleSection === "command-center" ? "operational-main operational-main--command-center" : "operational-main"} aria-label="Neraium platform workspace" tabIndex={-1}>
+        <input data-testid="overview-csv-upload-input" ref={overviewUploadInputRef} accept=".csv,text/csv" type="file" className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose telemetry dataset CSV" tabIndex={-1} onChange={handleOverviewFileSelection} />
         {visibleSection === "command-center" ? <h1 className="sr-only">Neraium Command Center</h1> : null}
         {visibleSection !== "command-center" ? <header className="operational-topbar">
           <div>
-            <p className="section-token">{model.headerEyebrow}</p>
-            <h1>{model.headerTitle}</h1>
-            <p className="operational-topbar__context">{model.headerSubtitle}</p>
+            <p className="section-token">{sectionHeader?.eyebrow}</p>
+            <h1>{sectionHeader?.title}</h1>
+            <p className="operational-topbar__context">{sectionHeader?.subtitle}</p>
           </div>
         </header> : null}
 
@@ -446,7 +457,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const analysisHistory = Array.isArray(liveOps?.analysisHistory) ? liveOps.analysisHistory : [];
   const domainLabel = formatDomainLabel(domainDetection?.mode ?? result?.domain_detection?.mode ?? result?.detected_schema?.mode ?? "Infrastructure");
   const facilityName = firstMeaningfulText(result?.facility_name, snapshot?.facility_name, liveOps?.facilityName, liveOps?.facility_name, currentSession?.facilityName, currentSession?.facility_name);
-  const siteLabel = facilityName || "Operational Intelligence";
+  const siteLabel = facilityName || PRODUCT_DESCRIPTOR;
   const headerTitle = facilityName || (analysisComplete ? ANALYSIS_COMPLETE_STATUS.label : "Command Center");
   const sourceLabel = deriveSourceLabel({ uiState, result, snapshot, liveOps });
   const contextLabel = "Site: " + siteLabel + " | Data source: " + sourceLabel;
@@ -501,7 +512,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const relationshipChangeRows = buildRelationshipChangeRows(relationshipRows);
   const dataSourceRows = buildDataSourceRows({ sourceLabel, telemetryStatus, lastAnalysis, sourceRowCount, telemetryConnected });
   const commandCenterMessage = buildCommandCenterMessage({ uiState, analysisComplete, insights, behaviorState });
-  const emptyInsightMessage = analysisComplete ? "Current relationships remain within the learned operational baseline." : "Insights are generated automatically once a learned operational baseline has been established.";
+  const emptyInsightMessage = analysisComplete ? "Current relationships remain within the learned behavior baseline." : "Insights are generated automatically once a learned behavior baseline has been established.";
 
   const resultTabsReady = analysisComplete;
 
@@ -518,8 +529,8 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     systemsTabMetric: systemSummary.tabMetric,
     insightsTabMetric: analysisComplete ? String(insights.length) : "0 Insights",
     fingerprintTabMetric: analysisComplete ? fingerprintDrift.label : "Pending",
-    dataSourcesTabMetric: telemetryConnected ? "Connected" : sourceLabel === "None" ? "Not Connected" : "Import",
-    advancedTabMetric: resultTabsReady ? "Raw" : "Ready",
+    dataSourcesTabMetric: telemetryConnected ? "Connector Healthy" : sourceLabel === "None" ? "No Data" : "Dataset Imported",
+    advancedTabMetric: resultTabsReady ? "Available" : "No Results",
     resultTabsReady,
     sourceStatusLabel: uiState.sourceStatusLabel,
     sourceRowCount,
@@ -674,25 +685,25 @@ function buildRelationshipChangeRows(relationshipRows) {
 }
 
 function buildDataSourceRows({ sourceLabel, lastAnalysis, sourceRowCount, telemetryConnected }) {
-  const historicalImported = sourceLabel !== "None";
+  const historicalImported = !["None", "Not connected"].includes(sourceLabel);
   const lastImport = historicalImported && !["No analysis yet", "Not analyzed yet", "Analysis in progress"].includes(lastAnalysis)
     ? lastAnalysis
     : "No import yet";
   return [
-    ["Historical CSV", historicalImported ? "Historical telemetry available" : "Historical CSV available"],
-    ["Historical rows", historicalImported && sourceRowCount ? String(sourceRowCount) : "No historical dataset imported"],
-    ["Live connector", telemetryConnected ? "Source healthy" : "Live connector unavailable"],
-    ["Last import", lastImport],
-    ["Last successful synchronization", telemetryConnected ? lastAnalysis : "No live synchronization"],
-    ["Writeback", "Disabled (Read Only)"],
+    ["Dataset import", historicalImported ? "Telemetry dataset imported" : "No dataset imported"],
+    ["Imported rows", historicalImported && sourceRowCount ? String(sourceRowCount) : "No dataset imported"],
+    ["Connector health", telemetryConnected ? "Healthy" : "Not configured"],
+    ["Last dataset import", lastImport],
+    ["Last connector sync", telemetryConnected ? lastAnalysis : "No connector sync yet"],
+    ["Control access", "Read-only"],
   ];
 }
 
 function buildCommandCenterMessage({ uiState, analysisComplete, insights, behaviorState }) {
   if (uiState.key === "analyzing") return ANALYZING_STATUS.detail;
   if (!analysisComplete) return EMPTY_TELEMETRY_COPY.commandDetail;
-  if (insights.length) return "Highest-severity finding identifies operational behavior that no longer matches the learned baseline.";
-  if (behaviorState === "Stable") return "Current operation remains aligned with the learned operational baseline.";
+  if (insights.length) return "The highest-severity insight identifies behavior that no longer matches the learned behavior baseline.";
+  if (behaviorState === "Stable") return "Current operation remains aligned with the learned behavior baseline.";
   return "Current operation is moving away from its established operating pattern.";
 }
 
@@ -747,16 +758,16 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: MONITORING_LIVE_STATUS,
       sourceStatusLabel: "Live telemetry connected",
       storyProgressLabel: "Live telemetry connected",
-      primaryCtaLabel: "Analyze Historical Telemetry",
+      primaryCtaLabel: "Import and Analyze Dataset",
     };
   }
   if (analysisComplete) {
     return {
       key: "analysisComplete",
       status: ANALYSIS_COMPLETE_STATUS,
-      sourceStatusLabel: "Operational assessment ready",
-      storyProgressLabel: "Assessment based on selected telemetry",
-      primaryCtaLabel: "Analyze Historical Telemetry",
+      sourceStatusLabel: "Analysis ready",
+      storyProgressLabel: "Analysis based on the selected dataset",
+      primaryCtaLabel: "Import and Analyze Dataset",
     };
   }
   return {
@@ -764,12 +775,12 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
     status: READY_TO_ANALYZE_STATUS,
     sourceStatusLabel: telemetryConnected ? "Live telemetry connected" : "Telemetry loaded",
     storyProgressLabel: "Telemetry loaded; analysis not run",
-    primaryCtaLabel: "Analyze Historical Telemetry",
+    primaryCtaLabel: "Import and Analyze Dataset",
   };
 }
 
 function deriveSourceLabel({ uiState, result, snapshot, liveOps }) {
-  if (uiState.key === "noTelemetry") return "None";
+  if (uiState.key === "noTelemetry") return "Not connected";
   return firstMeaningfulText(
     result?.analysis_result?.source_file,
     result?.result_source,
@@ -974,8 +985,8 @@ function buildDashboardActivityItems({ historyItems, insights, analysisComplete,
     return [{ id: "analysis-complete", title: "Analysis completed", time: lastAnalysis, detail: "No significant operational changes detected." }];
   }
   return [
-    { id: "platform-initialized", icon: "✓", title: "Platform initialized", time: "Ready", detail: "Neraium Operational Intelligence is ready to build a learned operational baseline." },
-    { id: "waiting-for-telemetry", icon: "⏳", title: "Waiting for telemetry", time: "Not Connected", detail: "Connect historical or live telemetry when the facility source is ready." },
+    { id: "platform-initialized", icon: "✓", title: "Neraium ready", time: "Available", detail: "Import a telemetry dataset or configure a connector to begin." },
+    { id: "waiting-for-telemetry", icon: "⏳", title: "No telemetry data", time: "Action needed", detail: "Import a dataset or configure a supported read-only connector." },
     { id: "baseline-pending", icon: "○", title: "Behavior baseline pending", time: "Pending", detail: "The baseline will be created after the first successful telemetry analysis." },
   ];
 }
@@ -1840,7 +1851,7 @@ function whyNeraiumBelievesInsight(insight, relationships, evidenceLines) {
     return `Neraium detected that the historical relationship between ${relationship.replace(" ↔ ", " and ")} changed while the surrounding telemetry stayed comparable to its learned operating pattern. This combination most closely matches a real operational behavior change rather than an isolated reading.`;
   }
   if (evidenceLines[0]) {
-    return `Neraium generated this insight because the supporting evidence moved away from the learned operational baseline: ${evidenceLines[0]}`;
+    return `Neraium generated this insight because the supporting evidence moved away from the learned behavior baseline: ${evidenceLines[0]}`;
   }
   return "";
 }
@@ -2338,9 +2349,9 @@ function InsightEvidenceDrawer({ insight, summaryItems = [] }) {
   if (!evidenceItems.length && !summaryItems.length) return null;
   return (
     <details className="insight-evidence-drawer">
-      <summary>Technical Details</summary>
+      <summary>Analysis Details</summary>
       <div className="insight-evidence-drawer__body">
-        {summaryItems.length ? <BriefingList title="Raw evidence" items={summaryItems} limit={10} codeItems /> : null}
+        {summaryItems.length ? <BriefingList title="Source evidence" items={summaryItems} limit={10} codeItems /> : null}
         <DetailGrid rows={diagnosticRows} technical />
         {evidenceItems.map((item, index) => (
           <div className="insight-evidence-item" key={item.evidence_id ?? index}>
@@ -2355,7 +2366,7 @@ function InsightEvidenceDrawer({ insight, summaryItems = [] }) {
 function EvidencePanel({ evidence }) {
   return (
     <details className="evidence-panel">
-      <summary>Technical Details</summary>
+      <summary>Analysis Details</summary>
       <EvidenceDetails evidence={evidence} />
     </details>
   );
@@ -2380,7 +2391,7 @@ function EvidenceDetails({ evidence }) {
         ["Analysis reference", evidence.analysis_id],
         ["Signal identifiers", toList(evidence.source_columns, evidence.sourceColumns, evidence.source_metrics, evidence.sourceMetrics, evidence.source_tags, evidence.sourceTags)],
         ["Internal metric names", toList(evidence.metric_delta, evidence.relevant_metric_changes, evidence.relevantMetricChanges)],
-        ["Raw evidence", evidence],
+        ["Evidence record", evidence],
       ]} technical />
       {sourceColumns.length ? <QualityList title="Source signals" items={sourceColumns} empty="" /> : null}
       {sourceRanges.length ? <QualityList title="Source time ranges" items={sourceRanges} empty="" /> : null}
@@ -2415,7 +2426,7 @@ function renderDisplayValue(value, options = {}) {
   }
   if (isPlainObject(value)) {
     if (options.technical) return <TechnicalValue value={value} />;
-    return plainObjectSummary(value) || "Details available in Advanced Details";
+    return plainObjectSummary(value) || "Details available in Analysis Details";
   }
   return displayText(value) || "Not available";
 }
@@ -2426,7 +2437,7 @@ function TechnicalValue({ value }) {
     .slice(0, 16);
   if (!entries.length) return <span>Not available</span>;
   return (
-    <div className="technical-value" role="group" aria-label="Technical values">
+    <div className="technical-value" role="group" aria-label="Analysis values">
       {entries.map(([key, entryValue]) => (
         <div key={key}>
           <code>{formatTechnicalKey(key)}</code>
@@ -3181,7 +3192,7 @@ function relationshipEndpointLabels(value, index = 0) {
 
 function relationshipBriefingSentence(value, index = 0) {
   const endpoints = relationshipEndpointLabels(value, index);
-  if (endpoints.length >= 2) return `The relationship between ${endpoints[0]} and ${endpoints[1]} has shifted from its established operational baseline.`;
+  if (endpoints.length >= 2) return `The relationship between ${endpoints[0]} and ${endpoints[1]} has shifted from its established behavior baseline.`;
   return `The ${relationshipSentenceLabel(value, index)} relationship no longer follows its established operating pattern.`;
 }
 

@@ -1,6 +1,6 @@
 # SII Validation Methodology
 
-SII validation does not use predictive maintenance metrics.
+SII validation does not use failure-forecasting metrics.
 
 ## Validated Dimensions
 

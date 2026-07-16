@@ -116,7 +116,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="Neraium API",
         version="0.1.0",
-        description="Customer-facing API for the Neraium application.",
+        description="API for the Neraium platform and its Systemic Infrastructure Intelligence (SII).",
         lifespan=app_lifespan,
     )
     app.state.settings = settings
@@ -313,7 +313,7 @@ def is_service_unavailable_upload_error(status_code: int, error_type: str | None
 
 def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
     error_type = "upload_request_error"
-    message = "Upload interrupted. Refresh your workspace and try again."
+    message = "Dataset import was interrupted. Refresh the workspace and retry the analysis."
     if isinstance(detail, dict):
         error_type = str(detail.get("error_type") or error_type)
         message = normalize_error_message(detail.get("message") or detail.get("detail") or detail.get("error") or message)
@@ -339,7 +339,7 @@ def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
 
 
 def auth_error_payload(detail: Any | None = None) -> dict[str, Any]:
-    message = "Telemetry processing session could not be validated."
+    message = "Your analysis session could not be verified. Sign in again, then retry the analysis."
     payload = {
         "job_id": None,
         "status": "unauthorized",
@@ -355,19 +355,20 @@ def auth_error_payload(detail: Any | None = None) -> dict[str, Any]:
 
 
 def normalize_error_message(error: Any) -> str:
+    fallback = "Analysis could not complete. Retry the analysis. If it happens again, contact an administrator."
     if not error:
-        return "Unknown error"
-    if isinstance(error, str):
-        return error
+        return fallback
     if isinstance(error, dict):
         for key in ("message", "detail", "error"):
             if error.get(key):
                 return normalize_error_message(error[key])
-        return str(error)
-    message = getattr(error, "message", None)
-    if message:
-        return normalize_error_message(message)
-    return str(error) or "Unexpected processing error"
+        return fallback
+    message = str(getattr(error, "message", None) or error or "").strip()
+    if not message:
+        return fallback
+    if re.search(r"traceback|stack trace|exception|localhost|/api/|\b(?:sql|python|uvicorn|psycopg|sqlite|errno)\b|[a-z]:\\", message, re.IGNORECASE):
+        return fallback
+    return message
 
 
 def cors_error_headers(request: Request) -> dict[str, str]:

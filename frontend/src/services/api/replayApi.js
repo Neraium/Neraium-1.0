@@ -5,7 +5,7 @@ export async function fetchReplayTimeline({ apiFetch, accessCode, intervals = 24
     { accessCode },
   );
   if (!response.ok) {
-    throw new Error(`Unexpected response: ${response.status}`);
+    throw new Error("The behavior timeline could not be loaded. Refresh and retry.");
   }
   return response.json();
 }
@@ -17,7 +17,7 @@ export async function fetchReplayFrame({ apiFetch, accessCode, timestamp, interv
     { accessCode },
   );
   if (!response.ok) {
-    throw new Error(`Unexpected response: ${response.status}`);
+    throw new Error("The behavior timeline could not be loaded. Refresh and retry.");
   }
   return response.json();
 }
@@ -37,7 +37,7 @@ export async function fetchReplayRange({
     { accessCode },
   );
   if (!response.ok) {
-    throw new Error(`Unexpected response: ${response.status}`);
+    throw new Error("The behavior timeline could not be loaded. Refresh and retry.");
   }
   return response.json();
 }

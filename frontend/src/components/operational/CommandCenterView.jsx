@@ -79,7 +79,7 @@ function operationalStatus(model, queue) {
       label: "Analyzing Operational Behavior",
       tone: "loading",
       orbStatus: "learning",
-      stage: "Evidence  Relationships  Organization  Baseline",
+      stage: "Evidence > Relationships > System organization > Behavior baseline",
       explanation: "Neraium is comparing facility behavior against learned operational relationships.",
     };
   }
@@ -90,7 +90,7 @@ function operationalStatus(model, queue) {
       tone: "neutral",
       orbStatus: "awaiting",
       stage: null,
-      explanation: model.commandCenterMessage || "Connect telemetry or analyze historical data to establish the learned operational baseline.",
+      explanation: model.commandCenterMessage || "Connect telemetry or analyze historical data to establish the learned behavior baseline.",
     };
   }
 
@@ -103,7 +103,7 @@ function operationalStatus(model, queue) {
 
   if (criticalCount > 0 || highCount > 1) {
     return {
-      label: "Critical",
+      label: "Urgent Investigation",
       tone: "critical",
       orbStatus: "critical",
       stage: null,
@@ -122,7 +122,7 @@ function operationalStatus(model, queue) {
   }
 
   return {
-    label: "Healthy",
+    label: "Stable",
     tone: "healthy",
     orbStatus: "healthy",
     stage: null,
@@ -152,7 +152,7 @@ function OperationalStatusSection({ model, status, onConnectLiveData }) {
       <p className="operational-status-explanation">{status.explanation}</p>
       {!model.analysisComplete && status.tone !== "loading" ? (
         <div className="operational-actions operational-status-actions">
-          <button type="button" className="command-button" onClick={onConnectLiveData}>Analyze Historical Telemetry</button>
+          <button type="button" className="command-button" onClick={onConnectLiveData}>Import and Analyze Dataset</button>
           <button type="button" className="secondary-command-button" onClick={onConnectLiveData}>Connect Live Telemetry</button>
         </div>
       ) : null}
@@ -184,10 +184,10 @@ function OperationalFindings({ insights, selectedInsight, onSelectInsight, helpe
     return (
       <section className="command-section command-section--findings" aria-labelledby="operational-findings-heading">
         <div className="command-section__header">
-          <h2 id="operational-findings-heading">Operational Findings</h2>
-          <p>No active findings.</p>
+          <h2 id="operational-findings-heading">Operational Insights</h2>
+          <p>No active insights.</p>
         </div>
-        <p className="operational-findings-empty">No active operational findings.</p>
+        <p className="operational-findings-empty">No active insights. Import a current dataset after operating conditions change to refresh the analysis.</p>
       </section>
     );
   }
@@ -197,8 +197,8 @@ function OperationalFindings({ insights, selectedInsight, onSelectInsight, helpe
   return (
     <section className="command-section command-section--findings" aria-labelledby="operational-findings-heading">
       <div className="command-section__header">
-        <h2 id="operational-findings-heading">Operational Findings</h2>
-        <p>Highest severity first.</p>
+        <h2 id="operational-findings-heading">Operational Insights</h2>
+        <p>Sorted by severity, then confidence.</p>
       </div>
       <div className="operational-findings-list" role="list" ref={queueRef} onKeyDown={handleKeyDown}>
         {insights.map((insight, index) => {
@@ -240,8 +240,8 @@ function SystemOverview({ systems, model }) {
   return (
     <section className="command-section command-section--systems" aria-labelledby="system-overview-heading">
       <div className="command-section__header">
-        <h2 id="system-overview-heading">Supporting Systems</h2>
-        <p>Supporting system information.</p>
+        <h2 id="system-overview-heading">Discovered Systems</h2>
+        <p>Systems identified from the analyzed dataset.</p>
       </div>
       {systems.length ? (
         <div className="system-overview-list" role="list">
@@ -265,8 +265,8 @@ function AdvancedDashboardSection({ model }) {
   return (
     <section className="command-section command-section--advanced" aria-labelledby="dashboard-advanced-heading">
       <div className="command-section__header">
-        <h2 id="dashboard-advanced-heading">Advanced Information</h2>
-        <p>Analysis history, diagnostics, source details, and raw payloads.</p>
+        <h2 id="dashboard-advanced-heading">Analysis Details</h2>
+        <p>Analysis history, source details, evidence metadata, and support diagnostics.</p>
       </div>
       <div className="dashboard-advanced-stack">
         <details>
@@ -278,15 +278,15 @@ function AdvancedDashboardSection({ model }) {
           ) : <p>No saved analysis history is available.</p>}
         </details>
         <details>
-          <summary>Telemetry Source Details</summary>
+          <summary>Dataset and Connector Details</summary>
           <DetailRows rows={model.dataSourceRows} />
         </details>
         <details>
-          <summary>Raw Diagnostics</summary>
+          <summary>Support Diagnostics</summary>
           <DetailRows rows={[...model.analysisMetadataRows, ...model.behaviorWindowRows]} technical />
         </details>
         <details>
-          <summary>Source Payload</summary>
+          <summary>Analysis Record</summary>
           <pre className="advanced-json"><code>{model.rawResultJson}</code></pre>
         </details>
       </div>

@@ -2,9 +2,9 @@
 
 **See system drift before it becomes operational failure.**
 
-Neraium is a system intelligence platform for complex, telemetry-driven environments. It analyzes multivariable data to detect drift, instability, weak signals, and operational risk before conventional threshold alarms or visible symptoms reveal a problem.
+Neraium is the platform for Systemic Infrastructure Intelligence (SII). It analyzes multivariable telemetry to identify behavior changes, instability, weak signals, and operational risk before conventional threshold alarms or visible symptoms reveal a problem.
 
-The platform is designed first for commercial water systems where pumps, tanks, filtration, treatment, pressure, temperature, flow, chemistry, and equipment signals interact continuously. The same system-intelligence layer can extend to other telemetry-heavy infrastructure, but commercial water operations are the primary use case.
+The platform is designed first for commercial water systems where pumps, tanks, filtration, treatment, pressure, temperature, flow, chemistry, and equipment signals interact continuously. The same SII intelligence can extend to other telemetry-heavy infrastructure, but commercial water operations are the primary use case.
 
 ---
 
@@ -26,13 +26,13 @@ Current capabilities include:
 - Data quality checks
 - Timestamp and signal profiling
 - Baseline versus recent comparison
-- Neraium SII v1 engine results
+- Systemic Infrastructure Intelligence results
 - Evidence summaries
 - Operator-facing reports
 - Replay-ready upload artifacts
 - Audit events
 - Runtime observability
-- Data connection scaffolding
+- Read-only connector setup, testing, health, and ingestion
 - Backend worker processing
 - AWS ECS deployment preparation
 - Continuous backend and frontend validation through GitHub Actions
@@ -41,14 +41,14 @@ Current capabilities include:
 
 ## Primary CSV Upload Workflow
 
-The core product workflow is uploading telemetry from a commercial water system and turning that file into evidence-backed system intelligence.
+The core product workflow imports a telemetry dataset from a commercial water system and turns it into evidence-backed SII insights.
 
 Recommended operator flow:
 
 1. Open the system status view.
 2. Upload a commercial water-system CSV telemetry export.
 3. Show validation, queued worker visibility, and processing progress.
-4. Open the operator finding or report.
+4. Review the resulting insights and evidence.
 5. Explain what changed, why it matters, and what the operator should inspect next.
 6. Open Evidence Replay to show the behavior change over time.
 7. Close by explaining that the same intelligence layer applies across telemetry-heavy operational environments.

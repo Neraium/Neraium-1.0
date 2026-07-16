@@ -45,14 +45,54 @@ const SIGNAL_ROLES = [
 ];
 
 const STEPS = [
-  "Telemetry Profile",
-  "Data Source",
-  "Connection Details",
-  "Variable Mapping",
-  "Connection Test",
-  "Reference Setup",
-  "Begin Monitoring",
+  "Telemetry Context",
+  "Data Input",
+  "Connector or Dataset",
+  "Telemetry Fields",
+  "Validate Input",
+  "Behavior Baseline",
+  "Review Setup",
 ];
+
+const DATA_SOURCE_LABELS = {
+  "CSV Upload": "CSV Dataset",
+  API: "REST API Connector",
+  "Read-only Stream": "Read-only Stream (planned)",
+  "Control Platform": "Control Platform (planned)",
+  MQTT: "MQTT Connector (planned)",
+  "Modbus Gateway": "Modbus Connector (planned)",
+  "Demo Mode": "Sample Dataset",
+};
+
+const BASELINE_MODE_LABELS = {
+  "historical-upload": "Historical Dataset",
+  "live-learning-window": "First Live Learning Window",
+  "demo-baseline": "Sample Behavior Baseline",
+};
+
+const BASELINE_TRAINING_LABELS = {
+  "auto-detect-stable-window": "Automatically select a stable window",
+  "operator-marked-window": "Use an operator-selected stable window",
+};
+
+function dataSourceLabel(value) {
+  return DATA_SOURCE_LABELS[value] || value;
+}
+
+function fieldRoleLabel(value) {
+  return String(value || "")
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function onboardingErrorMessage(value, fallback) {
+  const message = String(value || "").trim();
+  if (!message) return fallback;
+  if (/traceback|stack|exception|localhost|\/api\/|sql|python|uvicorn|undefined/i.test(message)) return fallback;
+  return message;
+}
 
 const MOCK_FIELDS = [
   "timestamp",
@@ -68,10 +108,10 @@ const MOCK_FIELDS = [
 ];
 
 const UPLOAD_STAGE_LABELS = {
-  validating: "validating evidence",
-  uploading: "uploading",
-  queued: "preparing analysis",
-  processing: "analyzing behavior",
+  validating: "checking dataset",
+  uploading: "importing dataset",
+  queued: "waiting to analyze",
+  processing: "analyzing system behavior",
   complete: "complete",
   failed: "failed",
 };
@@ -433,7 +473,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       setFlow((current) => ({
         ...current,
         uploadStatus: "processing",
-        uploadMessage: "Persisting the behavioral baseline...",
+        uploadMessage: "Persisting the behavior baseline...",
         uploadError: "",
       }));
       await refreshLatestUploadAndPropagate(jobId, completionPayload);
@@ -479,7 +519,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
         });
         const payload = await readJsonSafely(response);
         if (!response.ok) {
-          throw new Error(String(payload?.detail || payload?.message || "API verification failed."));
+          throw new Error(onboardingErrorMessage(payload?.detail || payload?.message, "The connector could not be validated. Check the URL and credentials, then retry."));
         }
         const readiness = buildLocalConnectionAssessment(flow);
         updateFlow({
@@ -503,7 +543,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
         updateFlow({
           ...buildConnectionTestReset(),
           connectionTestState: "failed",
-          connectionTestError: String(error?.message || "API verification failed."),
+          connectionTestError: onboardingErrorMessage(error?.message, "The connector could not be validated. Check the URL and credentials, then retry."),
         });
         return;
       }
@@ -544,11 +584,11 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       <header className="onboarding-header">
         <div>
           <p className="section-token">Neraium Setup</p>
-          <h1>Set Up Telemetry Intake</h1>
-          <p>Guided onboarding from first connection to structural monitoring.</p>
+          <h1>Set Up Neraium</h1>
+          <p>Connect a telemetry source, map its fields, and establish the behavior baseline used by SII.</p>
         </div>
         <div className="onboarding-actions">
-          <button type="button" className="secondary-command-button" onClick={onBackToGate}>Back to Gate</button>
+          <button type="button" className="secondary-command-button" onClick={onBackToGate}>Back to Command Center</button>
           <button type="button" className="secondary-command-button" onClick={resetWizard}>Reset</button>
         </div>
       </header>
@@ -565,7 +605,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
       <div className="onboarding-card">
         {flow.step === 0 && (
           <div className="onboarding-section">
-            <h2>Telemetry Profile</h2>
+            <h2>Telemetry Context</h2>
             <div className="onboarding-choice-grid">
               {SYSTEM_TYPES.map((option) => (
                 <button
@@ -574,7 +614,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                   className={`onboarding-choice ${flow.systemType === option ? "is-selected" : ""}`}
                   onClick={() => updateFlow({ systemType: option, ...buildConnectionTestReset(), step: 1 })}
                 >
-                  {option}
+                  {dataSourceLabel(option)}
                 </button>
               ))}
             </div>
@@ -583,7 +623,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
         {flow.step === 1 && (
           <div className="onboarding-section">
-            <h2>Data Source</h2>
+            <h2>Choose a Data Input</h2>
             <div className="onboarding-choice-grid">
               {DATA_SOURCES.map((option) => (
                 <button
@@ -596,7 +636,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                     step: 2,
                   })}
                 >
-                  {option}
+                  {dataSourceLabel(option)}
                 </button>
               ))}
             </div>
@@ -605,7 +645,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
         {flow.step === 2 && (
           <div className="onboarding-section">
-            <h2>Connection Details</h2>
+            <h2>Connector or Dataset</h2>
             {flow.dataSource === "API" && (
               <div className="onboarding-form-grid">
                 <label className="onboarding-field">
@@ -640,18 +680,18 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                   />
                 </label>
                 <label className="onboarding-field">
-                  <span>Deployment label</span>
+                  <span>Facility name</span>
                   <input
-                    aria-label="Deployment label"
+                    aria-label="Facility name"
                     value={flow.api.siteName}
                     onChange={(event) => setApiField("siteName", event.target.value)}
                     placeholder="Production greenhouse"
                   />
                 </label>
                 <label className="onboarding-field">
-                  <span>Telemetry stream label</span>
+                  <span>System name</span>
                   <input
-                    aria-label="Telemetry stream label"
+                    aria-label="System name"
                     value={flow.api.systemName}
                     onChange={(event) => setApiField("systemName", event.target.value)}
                     placeholder="Main telemetry stream"
@@ -673,11 +713,11 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                   className="command-button"
                   onClick={() => csvInputRef.current?.click()}
                 >
-                  Upload and Detect Variables
+                  Choose CSV Dataset
                 </button>
-                <button type="button" className="secondary-command-button" onClick={handleMockCsvSelect}>Use Demo CSV</button>
+                <button type="button" className="secondary-command-button" onClick={handleMockCsvSelect}>Use Sample Dataset</button>
                 <span>
-                  {flow.csvFileName ? `${flow.csvFileName} (${flow.detectedColumns.length} columns detected)` : "No file selected yet."}
+                  {flow.csvFileName ? `${flow.csvFileName} (${flow.detectedColumns.length} fields detected)` : "Choose a CSV dataset to continue."}
                   {flow.uploadStatus ? ` | ${UPLOAD_STAGE_LABELS[flow.uploadStatus] || flow.uploadStatus}` : ""}
                 </span>
                 {flow.uploadMessage ? <span>{flow.uploadMessage}</span> : null}
@@ -686,12 +726,12 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
             )}
             {flow.dataSource === "Demo Mode" && (
               <div className="onboarding-inline">
-                <span>Demo telemetry package will be used for setup and baseline learning.</span>
+                <span>The sample dataset will be used to demonstrate setup and behavior-baseline learning.</span>
               </div>
             )}
             {!["API", "CSV Upload", "Demo Mode"].includes(flow.dataSource) && (
               <div className="onboarding-inline">
-                <span>Connector configuration will be available when this read-only source is enabled.</span>
+                <span>This connector is planned but is not available in this release. Choose a CSV dataset or REST API connector to continue.</span>
               </div>
             )}
           </div>
@@ -699,15 +739,15 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
         {flow.step === 3 && (
           <div className="onboarding-section">
-            <h2>Variable Mapping</h2>
+            <h2>Map Telemetry Fields</h2>
             <div className="onboarding-form-grid">
               {SIGNAL_ROLES.map((role) => (
                 <label key={role} className="onboarding-map-row">
-                  <span>{role}</span>
+                  <span>{fieldRoleLabel(role)}</span>
                   <input
                     value={flow.signalMapping[role] || ""}
                     onChange={(event) => setMappedField(role, event.target.value)}
-                    placeholder={flow.detectedColumns[0] || "source field"}
+                    placeholder={flow.detectedColumns[0] || "Choose a dataset field"}
                     list="detected-column-options"
                   />
                 </label>
@@ -721,7 +761,7 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
         {flow.step === 4 && (
           <div className="onboarding-section">
-            <h2>Connection Test</h2>
+            <h2>Validate Input</h2>
             <div className="onboarding-inline">
               <button
                 type="button"
@@ -731,17 +771,17 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
                 }}
                 disabled={flow.connectionTestState === "running"}
               >
-                {flow.connectionTestState === "running" ? "Testing Connection..." : "Run Connection Test"}
+                {flow.connectionTestState === "running" ? "Validating Input..." : "Validate Input"}
               </button>
             </div>
             {flow.connectionTestMessage ? <p className="narrative-text">{flow.connectionTestMessage}</p> : null}
             {flow.connectionTestError ? <p className="narrative-text">{flow.connectionTestError}</p> : null}
             {flow.connectionTest && (
               <ul className="onboarding-checklist">
-                <li className={flow.connectionTest.sourceReachable ? "ok" : "warn"}>Data source reachable</li>
-                <li className={flow.connectionTest.telemetryReceived ? "ok" : "warn"}>Telemetry received</li>
+                <li className={flow.connectionTest.sourceReachable ? "ok" : "warn"}>Input is reachable</li>
+                <li className={flow.connectionTest.telemetryReceived ? "ok" : "warn"}>Telemetry sample received</li>
                 <li className={flow.connectionTest.timestampDetected ? "ok" : "warn"}>Timestamp detected</li>
-                <li className={flow.connectionTest.requiredSignalsMapped ? "ok" : "warn"}>Required variables mapped</li>
+                <li className={flow.connectionTest.requiredSignalsMapped ? "ok" : "warn"}>Required fields mapped</li>
                 <li className={flow.connectionTest.sampleRateAcceptable ? "ok" : "warn"}>Sample rate acceptable</li>
               </ul>
             )}
@@ -755,16 +795,16 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
         {flow.step === 5 && (
           <div className="onboarding-section">
-            <h2>Reference Setup</h2>
+            <h2>Establish a Behavior Baseline</h2>
             <div className="onboarding-form-grid" style={{ marginBottom: 16 }}>
               <label className="onboarding-map-row">
-                <span>Training mode</span>
+                <span>Baseline window selection</span>
                 <select
                   value={flow.baselineTrainingMode}
                   onChange={(event) => updateFlow({ baselineTrainingMode: event.target.value })}
                 >
-                  <option value="auto-detect-stable-window">Auto-detect stable window</option>
-                  <option value="operator-marked-window">Operator-marked stable window</option>
+                  <option value="auto-detect-stable-window">Automatically select a stable window</option>
+                  <option value="operator-marked-window">Use an operator-selected stable window</option>
                 </select>
               </label>
               <label className="onboarding-map-row">
@@ -785,13 +825,13 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
               </label>
             </div>
             <p className="narrative-text">
-              Connect to data source, verify telemetry, choose a stable training period or accept auto-detection, and let the reference behavior finish learning before findings go live.
+              Validate the telemetry, choose a stable operating period, and let SII learn the behavior baseline before insights become available.
             </p>
             <div className="onboarding-choice-grid">
               {[
-                { id: "historical-upload", label: "Upload Historical Reference" },
-                { id: "live-learning-window", label: "Use First Live Learning Window" },
-                { id: "demo-baseline", label: "Use Demo Reference" },
+                { id: "historical-upload", label: "Use Historical Dataset" },
+                { id: "live-learning-window", label: "Learn from First Live Window" },
+                { id: "demo-baseline", label: "Use Sample Behavior Baseline" },
               ].map((mode) => (
                 <button
                   key={mode.id}
@@ -808,26 +848,26 @@ export default function OnboardingWorkspace({ onBackToGate, onStartMonitoring, o
 
         {flow.step === 6 && (
           <div className="onboarding-section">
-            <h2>Begin Monitoring</h2>
+            <h2>Review Setup</h2>
             <ul className="onboarding-summary">
               <li><span>Profile</span><strong>{flow.api.systemName || flow.systemType || "Unspecified telemetry profile"}</strong></li>
-              <li><span>Data source</span><strong>{flow.dataSource || "Not selected"}</strong></li>
+              <li><span>Data input</span><strong>{flow.dataSource ? dataSourceLabel(flow.dataSource) : "Not selected"}</strong></li>
               <li><span>Mapped variables</span><strong>{mappedCount}</strong></li>
-              <li><span>Baseline</span><strong>{flow.baselineMode}</strong></li>
-              <li><span>Training mode</span><strong>{flow.baselineTrainingMode}</strong></li>
+              <li><span>Behavior baseline</span><strong>{BASELINE_MODE_LABELS[flow.baselineMode] || "Not selected"}</strong></li>
+              <li><span>Baseline window</span><strong>{BASELINE_TRAINING_LABELS[flow.baselineTrainingMode] || "Not selected"}</strong></li>
             </ul>
-            <button type="button" className="command-button onboarding-start" onClick={startMonitoring}>Start Monitoring</button>
+            <button type="button" className="command-button onboarding-start" onClick={startMonitoring}>Save Setup</button>
             {flow.monitoringStarted && (
-              <p className="onboarding-started">Monitoring started. Returning operators to the Gate now uses this setup context.</p>
+              <p className="onboarding-started">Setup saved. Return to the Command Center to review telemetry availability and run an analysis.</p>
             )}
           </div>
         )}
       </div>
 
       <footer className="onboarding-footer">
-        <button type="button" className="secondary-command-button" onClick={prevStep} disabled={flow.step === 0}>Back</button>
+        <button type="button" className="secondary-command-button" onClick={prevStep} disabled={flow.step === 0} title={flow.step === 0 ? "You are at the first setup step." : undefined}>Back</button>
         {(flow.step === 2 || flow.step === 3) ? (
-          <button type="button" className="command-button" onClick={advanceStep} disabled={!canContinue}>Continue</button>
+          <button type="button" className="command-button" onClick={advanceStep} disabled={!canContinue} title={!canContinue ? "Complete the required fields in this step to continue." : undefined}>Continue</button>
         ) : null}
       </footer>
     </section>

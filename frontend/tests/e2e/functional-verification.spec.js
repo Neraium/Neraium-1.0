@@ -67,7 +67,7 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
 async function startCommandCenterUpload(page, { name, csv }) {
   await page.goto("/", { waitUntil: "load" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-  await expect(page.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Import and Analyze Dataset" })).toBeVisible();
 
   const uploadAcceptedPromise = page.waitForResponse(
     (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
@@ -96,8 +96,8 @@ test.describe("Functional verification", () => {
     });
 
     await waitForUploadComplete(page, uploadJobId, 180000);
-    await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible({ timeout: 30000 });
-    await expect(page.getByRole("region", { name: "Operational Status" })).not.toContainText("Awaiting Initial Baseline");
+    await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("region", { name: "Operational Status" })).not.toContainText("Baseline Needed");
     await expect(page.getByTestId("operational-orb")).toBeVisible();
     await expect(page.getByRole("button", { name: /Behavior Baseline/i }).first()).toBeVisible();
   });

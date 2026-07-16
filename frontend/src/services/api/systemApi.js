@@ -29,11 +29,11 @@ export async function fetchFacilitySystems({ apiFetch, accessCode, domainMode = 
       if (response.status === 401 || response.status === 403) {
         throw response;
       }
-      throw new Error(`Unexpected response: ${response.status}`);
+      throw new Error("Systems could not be loaded. Refresh and retry.");
     }
     const payload = await response.json();
     if (!Array.isArray(payload.systems)) {
-      throw new Error("Facility systems payload was incomplete.");
+      throw new Error("System data was incomplete. Refresh and retry.");
     }
     facilitySystemsCache.set(key, { expiresAt: Date.now() + FACILITY_SYSTEMS_DEDUPE_TTL_MS, value: payload });
     return payload;
@@ -53,6 +53,6 @@ export async function fetchEngineIdentity({ apiFetch, accessCode }) {
 
 export async function fetchDomainMode({ apiFetch, accessCode }) {
   const response = await apiFetch("/api/domain/mode", { accessCode });
-  if (!response.ok) throw new Error(`Unexpected response: ${response.status}`);
+  if (!response.ok) throw new Error("Telemetry context could not be loaded. Refresh and retry.");
   return response.json();
 }

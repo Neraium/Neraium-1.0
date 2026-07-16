@@ -279,7 +279,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
       affectedRelationshipPath: relationshipEvidence || "Primary equipment loop",
       operationalMapping: governance?.operational_mapping ?? "Operational loop under admitted finding",
       persistenceCount: persistenceCount || "Confirmed",
-      firstAdmittedWindow: governance?.first_admitted_window ?? primaryWindow?.window ?? "First Gate-admitted window",
+      firstAdmittedWindow: governance?.first_admitted_window ?? primaryWindow?.window ?? "First governance-approved window",
       elapsedOperationalDuration:
         governance?.elapsed_operational_duration
         ?? intervention?.window
@@ -301,7 +301,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
         governance?.first_admitted_window
         ?? intervention?.window
         ?? primaryWindow?.window
-        ?? "Gate-admitted telemetry window",
+        ?? "Governance-approved telemetry window",
       evpPreview,
     },
   };

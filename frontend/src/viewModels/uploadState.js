@@ -286,7 +286,7 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
           ? (operatorReviewReady ? "Active Session" : "Telemetry still processing")
           : latestStatus === "baseline_active"
             ? "Live baseline active"
-            : "No Active Session",
+            : "No Dataset Analyzed",
       detail: uploadError
         ? normalizeErrorMessage(uploadError)
         : latestStatus === "active"
@@ -295,7 +295,7 @@ export function buildConnectionStateStages({ latestUploadSnapshot, uploadState, 
             : "Telemetry processing finished, but the system story is still being verified before engineer review."
           : latestStatus === "baseline_active"
             ? "Live baseline is active. The next telemetry comparison will update the Command Center."
-            : "No Active Session. Awaiting uploaded telemetry.",
+            : "No dataset has been analyzed. Choose a dataset to begin.",
       state: uploadError ? "active" : (latestStatus === "active" || latestStatus === "baseline_active" ? "active" : "standby"),
       tone: uploadError
         ? "elevated"
@@ -349,7 +349,7 @@ export function buildUploadDiffSummary(history = []) {
   const previous = history[1] ?? null;
   if (!current) {
     return {
-      title: "No Active Session",
+      title: "No Dataset Analyzed",
       lines: [noDataGuidance()],
     };
   }

@@ -86,7 +86,7 @@ def test_polling_retries_missing_upload_status() -> None:
     assert "response.status === 404 || response.status >= 500" in source
     assert "statusEndpointFailureCountRef.current += 1;" in source
     assert "statusEndpointFailureCountRef.current > MAX_STATUS_POLL_FAILURES" in source
-    assert "Upload status remained unavailable after repeated retries." in source
+    assert "Analysis status is temporarily unavailable. Retry the analysis." in source
 
 
 def test_upload_polling_preserves_returned_job_id() -> None:
@@ -117,9 +117,9 @@ def test_frontend_upload_progress_uses_propagation_fields_with_fallback() -> Non
     assert "[uploadTransferPercent, backendPercent, statusFallbackPercent]" in source
     assert "[propagationPercent, backendPercent, statusFallbackPercent]" in source
     assert "propagationLabel" in source
-    assert "Uploading Historical Data..." in panel
+    assert "Importing Dataset..." in panel
     assert "Learning Operational Relationships" in panel
-    assert "Generating Operational Insights..." in panel
+    assert "Preparing Insights and Evidence..." in panel
 
 
 def test_mobile_upload_limit_and_guidance_are_operational_grade() -> None:
@@ -137,8 +137,8 @@ def test_protected_route_errors_use_generic_session_copy() -> None:
     source = read_upload_surface()
 
     assert "Session expired. Refresh workspace." in source
-    assert "Telemetry analysis interrupted." in source
-    assert "Upload state unavailable." in source
+    assert "Analysis was interrupted. Retry the analysis." in source
+    assert "Analysis status is unavailable. Refresh and retry." in source
     assert "[object Object]" not in source
 
 
@@ -180,7 +180,7 @@ def test_system_body_fallback_is_neutral_without_semantic_derivation() -> None:
 
     assert '"No data yet"' in source
     assert '"Processing data"' in source
-    assert '"Interpretation Unavailable"' in source
+    assert '"Interpretation not available"' in source
     assert '"Upload data to begin."' in source
 
     assert "compoundSignals" not in source
@@ -199,15 +199,15 @@ def test_system_body_displays_backend_interpretation_fields_in_mapper() -> None:
     assert "text: simplifyOperatorSummary(backendSummary.text || fallbackSummary || EMPTY_VALUE)" in source
     assert "divergence_severity: String(divergence.severity" in source
     assert "findingEvidenceChains: Array.isArray(value.finding_evidence_chains)" in source
-    assert 'summary>Advanced Details</summary>' in source
-    assert 'Raw Evidence' in source
+    assert 'summary>Analysis Details</summary>' in source
+    assert 'Source Evidence' in source
 
 
 def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
     source = read_upload_surface()
     workspaces_source = read_frontend(WORKSPACES_CONFIG)
 
-    assert 'label: "Data Sources"' in workspaces_source
+    assert 'label: "Datasets & Connectors"' in workspaces_source
     assert 'id: "data-connections"' in workspaces_source
     assert "DataConnectionsWorkspace" in source
     assert "HistorianSetupWorkspace" not in source
@@ -295,9 +295,9 @@ def test_frontend_surfaces_backend_runtime_diagnostics() -> None:
     assert "const diagnostics = healthPayload?.ready?.diagnostics ?? healthPayload?.diagnostics ?? null;" in runtime_source
     assert "diagnostics," in runtime_source
     assert "apiStatus={apiStatus}" in router_source
-    assert "Production diagnostics" in technical_source
+    assert "Service diagnostics" in technical_source
     assert 'data-testid="production-diagnostics"' in technical_source
-    assert "Deployment warnings" in technical_source
+    assert "Service warnings" in technical_source
     assert "latest_upload_error_type" in technical_source
 
 
@@ -310,6 +310,6 @@ def test_retry_analysis_targets_current_uploaded_job() -> None:
     assert "/api/data/upload/${encodeURIComponent(cleanJobId)}/retry" in upload_api_source
     assert "retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode })" in workspace_source
     assert "await handleUpload();" in workspace_source
-    assert "Analyze Historical Telemetry" in panel_source
-    assert "Choose File" in panel_source
+    assert "Import and Analyze Dataset" in panel_source
+    assert "Choose Dataset" in panel_source
     assert "onClick={() => onRetryFailedUploads?.()}" in panel_source

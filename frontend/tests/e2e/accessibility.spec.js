@@ -19,12 +19,12 @@ test.describe("Accessibility audit", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
-    const main = page.getByRole("main", { name: "Neraium operational workspace" });
+    const main = page.getByRole("main", { name: "Neraium platform workspace" });
     const skipLink = page.getByRole("link", { name: "Skip to main content" });
     await expect(main).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Primary workflow navigation" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Operational Status" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Import and Analyze Dataset" })).toBeVisible();
 
     await page.keyboard.press("Tab");
     await expect(skipLink).toBeFocused();
@@ -37,10 +37,10 @@ test.describe("Accessibility audit", () => {
       return Boolean(active?.matches?.("button, input, select, textarea, a[href], summary, [tabindex]:not([tabindex='-1'])"));
     }), { timeout: 10000 }).toBe(true);
 
-    const dataSourcesButton = page.getByRole("button", { name: /Data Sources/ });
+    const dataSourcesButton = page.getByRole("button", { name: /Datasets & Connectors/ });
     await dataSourcesButton.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { name: "Analyze Historical Telemetry" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Import and Analyze a Dataset" })).toBeVisible();
   });
 
   test("command center, data sources, and home pass automated WCAG rules", async ({ page }) => {
@@ -48,8 +48,8 @@ test.describe("Accessibility audit", () => {
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
     await expectNoWcagViolations(page);
 
-    await page.getByRole("button", { name: /Data Sources/ }).click();
-    await expect(page.getByRole("heading", { name: "Analyze Historical Telemetry" })).toBeVisible();
+    await page.getByRole("button", { name: /Datasets & Connectors/ }).click();
+    await expect(page.getByRole("heading", { name: "Import and Analyze a Dataset" })).toBeVisible();
     await expectNoWcagViolations(page);
 
     const homePage = await page.context().newPage();
@@ -68,7 +68,7 @@ test.describe("Accessibility audit", () => {
 
     await page.setViewportSize({ width: 320, height: 800 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
-    await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
   });
 
   test("reduced-motion preference is respected", async ({ page }) => {

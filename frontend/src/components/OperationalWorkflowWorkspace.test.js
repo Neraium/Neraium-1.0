@@ -124,35 +124,35 @@ afterEach(() => {
 });
 
 describe("OperationalWorkflowWorkspace system-first architecture", () => {
-  it("opens to a focused Command Center with status, findings, and supporting sections", () => {
+  it("opens to a focused Command Center with status, insights, and system sections", () => {
     renderWorkspace();
 
-    expect(screen.getByText("Awaiting Initial Baseline")).toBeTruthy();
+    expect(screen.getByText("Baseline Needed")).toBeTruthy();
     expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
     expect(screen.getByTestId("operational-orb")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Operational Status" })).toBeTruthy();
-    expect(screen.getByText("The facility has not yet established a learned operational baseline.")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Operational Findings" })).toBeTruthy();
-    expect(screen.getByText("No active operational findings.")).toBeTruthy();
+    expect(screen.getByText("Import a telemetry dataset, then run an analysis to establish the facility's behavior baseline.")).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("No active insights.")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Supporting Systems" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Advanced Information" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Discovered Systems" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Analysis Details" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import and Analyze Dataset" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Open Insight" })).toBeNull();
     expect(screen.queryByLabelText("Systems requiring attention")).toBeNull();
     expect(screen.getByRole("button", { name: "Connect Live Telemetry" })).toBeTruthy();
-    expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/PLACEHOLDER|Placeholder|Current\s+Site/);
-    expect(screen.queryByRole("heading", { name: /Analyze Historical Telemetry/i })).toBeNull();
+    expect(screen.getByLabelText("Neraium platform workspace").textContent).not.toMatch(/PLACEHOLDER|Placeholder|Current\s+Site/);
+    expect(screen.queryByRole("heading", { name: /Choose Dataset/i })).toBeNull();
   });
 
-  it("Data Sources analysis action opens the existing hidden file picker path", () => {
+  it("Datasets & Connectors analysis action opens the existing hidden file picker path", () => {
     const onCsvSelected = vi.fn();
     renderWorkspace({ onCsvSelected });
 
     const input = screen.getByTestId("overview-csv-upload-input");
     const inputClick = vi.spyOn(input, "click");
-    clickNav("Data Sources");
-    fireEvent.click(screen.getByRole("button", { name: /Analyze Historical Telemetry/i }));
+    clickNav("Datasets & Connectors");
+    fireEvent.click(screen.getByRole("button", { name: /Choose Dataset/i }));
     expect(inputClick).toHaveBeenCalledTimes(1);
 
     const file = new File(["timestamp,flow\n2026-01-01,1"], "ops.csv", { type: "text/csv" });
@@ -174,18 +174,18 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(onCsvSelected.mock.calls[0][0]).toEqual([file]);
     expect(onTelemetrySelected).not.toHaveBeenCalled();
     expect(input.value).toBe("");
-    expect(screen.getByRole("heading", { name: "Telemetry Sources" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Awaiting Initial Baseline" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Data Availability" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Baseline Needed" })).toBeNull();
   });
 
-  it("Data Sources CSV Import uses the same hidden file-selection path", () => {
+  it("Datasets & Connectors CSV Import uses the same hidden file-selection path", () => {
     const onCsvSelected = vi.fn();
     renderWorkspace({ onCsvSelected });
 
-    clickNav("Data Sources");
+    clickNav("Datasets & Connectors");
     const input = screen.getByTestId("overview-csv-upload-input");
     const inputClick = vi.spyOn(input, "click");
-    fireEvent.click(screen.getByRole("button", { name: /Analyze Historical Telemetry/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Choose Dataset/i }));
     expect(inputClick).toHaveBeenCalledTimes(1);
 
     const file = new File(["timestamp,flow\n2026-01-01,2"], "sources.csv", { type: "text/csv" });
@@ -193,26 +193,26 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     expect(onCsvSelected).toHaveBeenCalledTimes(1);
     expect(onCsvSelected.mock.calls[0][0]).toEqual([file]);
-    expect(screen.getByRole("heading", { name: "Telemetry Sources" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Data Availability" })).toBeTruthy();
   });
 
-  it("Data Sources owns CSV import and planned telemetry connectors", () => {
+  it("Datasets & Connectors owns CSV import and planned telemetry connectors", () => {
     renderWorkspace();
 
-    clickNav("Data Sources");
-    expect(screen.getByRole("heading", { name: "Telemetry Sources" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Analyze Historical Telemetry/i })).toBeTruthy();
-    expect(screen.getAllByText("Analyze Historical Telemetry").length).toBeGreaterThan(0);
+    clickNav("Datasets & Connectors");
+    expect(screen.getByRole("heading", { name: "Data Availability" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Choose Dataset/i })).toBeTruthy();
+    expect(screen.getAllByText("Import and Analyze a Dataset").length).toBeGreaterThan(0);
     expect(screen.queryByText("Historical Analysis")).toBeNull();
     expect(screen.queryByText("Analyze New Dataset")).toBeNull();
     expect(screen.queryByRole("button", { name: /Import Historical CSV/i })).toBeNull();
-    expect(screen.getByText("OPC-UA")).toBeTruthy();
+    expect(screen.getByText("OPC UA")).toBeTruthy();
     expect(screen.getByText("MQTT")).toBeTruthy();
-    expect(screen.getByText("Historian integrations")).toBeTruthy();
+    expect(screen.getByText("Enterprise historians")).toBeTruthy();
     expect(screen.getByText("BACnet")).toBeTruthy();
-    expect(screen.getByText("PLC writeback disabled")).toBeTruthy();
-    expect(screen.getByText("SCADA writeback disabled")).toBeTruthy();
-    expect(screen.getAllByText("Read-only Enforcement").length).toBeGreaterThan(0);
+    expect(screen.getByText("PLC commands disabled")).toBeTruthy();
+    expect(screen.getByText("SCADA commands disabled")).toBeTruthy();
+    expect(screen.getAllByText("Read-only Control Boundary").length).toBeGreaterThan(0);
   });
 
   it("Systems view shows discovery guidance before telemetry", () => {
@@ -280,7 +280,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(priorityButton.getAttribute("aria-expanded")).toBe("true");
     expect(priorityButton.getAttribute("aria-controls")).toMatch(/^selected-investigation-/);
 
-    expect(screen.getByRole("heading", { name: "Operational Findings" })).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
     expect(screen.getByText("Interpretation")).toBeTruthy();
@@ -305,7 +305,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Systems");
     fireEvent.click(screen.getByRole("button", { name: "Open Insight" }));
 
-    expect(screen.getByRole("heading", { name: "Operational Findings" })).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
     expect(screen.getByText("Interpretation")).toBeTruthy();
@@ -321,15 +321,15 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByText("Operational Findings")).toBeTruthy();
+    expect(screen.getByText("Operational Insights")).toBeTruthy();
     expect(screen.queryByText("Selected Investigation")).toBeNull();
 
     clickNav("Systems");
     expect(screen.getAllByRole("heading", { name: "Operational Systems Identified" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("Primary Finding")).toBeTruthy();
+    expect(screen.getByText("Primary Insight")).toBeTruthy();
 
     clickNav("Insights");
-    expect(screen.getByRole("heading", { name: "Operational Insights" })).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Observed Evidence")).toBeTruthy();
 
     clickNav("Behavior Baseline");
@@ -337,12 +337,12 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("Behavior Windows")).toBeTruthy();
     expect(screen.getByText("System Relationship Changes")).toBeTruthy();
 
-    clickNav("Data Sources");
-    expect(screen.getByRole("heading", { name: "Telemetry Sources" })).toBeTruthy();
+    clickNav("Datasets & Connectors");
+    expect(screen.getByRole("heading", { name: "Data Availability" })).toBeTruthy();
 
-    clickNav("Advanced");
-    expect(screen.getAllByRole("heading", { name: "Advanced Details" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("Raw Result JSON")).toBeTruthy();
+    clickNav("Analysis Details");
+    expect(screen.getAllByRole("heading", { name: "Analysis Details" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("Analysis Result JSON")).toBeTruthy();
   });
 
   it("keeps insights system-level and maps relationship claims to relationship evidence", () => {
@@ -442,7 +442,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     });
 
     clickNav("Insights");
-    const text = screen.getByLabelText("Neraium operational workspace").textContent;
+    const text = screen.getByLabelText("Neraium platform workspace").textContent;
     expect(text).toContain("0.78");
     expect(text).toContain("0.06");
     expect(text).toContain("0.84");
@@ -469,10 +469,10 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.queryByText("Raw Result JSON")).toBeNull();
-    clickNav("Advanced");
-    expect(screen.getByText("Raw Result JSON")).toBeTruthy();
-    expect(screen.getByText("Raw Relationship Identifiers")).toBeTruthy();
+    expect(screen.queryByText("Analysis Result JSON")).toBeNull();
+    clickNav("Analysis Details");
+    expect(screen.getByText("Analysis Result JSON")).toBeTruthy();
+    expect(screen.getByText("Relationship Identifiers")).toBeTruthy();
     expect(screen.getByText("Source signals")).toBeTruthy();
     expect(screen.getByText("Source time ranges")).toBeTruthy();
   });
@@ -524,22 +524,22 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     expect(flowButton).toBeTruthy();
     fireEvent.click(flowButton);
 
-    const workspaceText = screen.getByLabelText("Neraium operational workspace").textContent;
+    const workspaceText = screen.getByLabelText("Neraium platform workspace").textContent;
     expect(workspaceText).toContain("The historical relationship between Filter Diff Pressure and Cum Chemical Feed Gal shifted from its established operating pattern.");
     expect(workspaceText).not.toContain("The relationship between The Historical Relationship Between");
     expect(workspaceText).toContain("74%");
   });
 
-  it("lists each insight subsystem in operational findings and supporting systems", () => {
+  it("lists each insight subsystem in operational insights and discovered systems", () => {
     renderWorkspace({
       effectiveLatestUploadResult: completeResult({ analysis_result: bugRegressionAnalysis() }),
       effectiveLatestUploadSnapshot: completeSnapshot(),
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    const workspaceText = screen.getByLabelText("Neraium operational workspace").textContent;
-    expect(screen.getByText("Operational Findings")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Supporting Systems" })).toBeTruthy();
+    const workspaceText = screen.getByLabelText("Neraium platform workspace").textContent;
+    expect(screen.getByText("Operational Insights")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Discovered Systems" })).toBeTruthy();
     expect(workspaceText).toContain("Flow & Pressure");
     expect(workspaceText).toContain("Disinfection");
   });

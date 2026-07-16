@@ -33,7 +33,7 @@ export const DEMO_STEPS = [
   },
   {
     title: "Evidence Review",
-    message: "Engineering teams can review findings, evidence, and inspection priorities.",
+    message: "Operators can review insights, supporting evidence, and inspection priorities.",
     workspace: "system-body",
   },
   {

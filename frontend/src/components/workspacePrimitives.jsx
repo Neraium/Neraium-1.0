@@ -248,7 +248,7 @@ export function RelationshipMonitor({
             <p>{relationshipConsistencyLabel(row)}</p>
             {Array.isArray(row.technicalDetails) && row.technicalDetails.length > 0 && (
               <details className="technical-detail-panel technical-detail-panel--compact">
-                <summary>Technical detail</summary>
+                <summary>Analysis detail</summary>
                 <div className="technical-detail-panel__lines">
                   {row.technicalDetails.slice(0, 4).map((line, detailIndex) => (
                     <code key={`${line}-${detailIndex}`}>{line}</code>
@@ -447,7 +447,7 @@ export function WhyPanel({
 
       {technicalDetails.length > 0 && (
         <details className="technical-detail-panel">
-          <summary>Technical detail</summary>
+          <summary>Analysis detail</summary>
           <div className="technical-detail-panel__lines">
             {technicalDetails.slice(0, compact ? 5 : 10).map((line, index) => (
               <code key={`${line}-${index}`}>{line}</code>

@@ -3,10 +3,10 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
   const groups = prioritizeEvidenceGroups(model.evidenceGroups, selectedInsightId);
   return (
     <div className="operational-grid operational-grid--overview">
-      <section className="operational-panel operational-panel--wide" aria-label="Advanced Details">
-        <PanelHeader eyebrow="Advanced Details" title="Advanced Details" subtitle="Technical fields are collapsed until opened." />
+      <section className="operational-panel operational-panel--wide" aria-label="Analysis Details">
+        <PanelHeader eyebrow="Analysis Details" title="Analysis Details" subtitle="Analysis metadata and service diagnostics are collapsed until opened." />
         <details className="advanced-details-panel">
-          <summary>Model Metadata</summary>
+          <summary>Analysis Metadata</summary>
           <DetailGrid rows={model.analysisMetadataRows} technical />
         </details>
         <details className="advanced-details-panel">
@@ -14,14 +14,14 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
           <DetailGrid rows={model.behaviorWindowRows} technical />
         </details>
         <details className="advanced-details-panel">
-          <summary>Technical Diagnostics</summary>
+          <summary>Service Diagnostics</summary>
           <QualityList title="Warnings" items={model.qualityWarnings} empty={model.analysisComplete ? "No data quality warnings reported." : model.uiState.status.detail} />
           <QualityList title="Missing values" items={model.missingValues} empty={model.analysisComplete ? "No missing value summary reported." : model.uiState.status.detail} />
           <QualityList title="Timestamp quality" items={model.timestampNotes} empty={model.analysisComplete ? "Timestamp quality is acceptable or not yet reported." : model.uiState.status.detail} />
         </details>
         {model.advancedRelationshipDetails.length ? (
           <details className="advanced-details-panel">
-            <summary>Raw Relationship Identifiers</summary>
+            <summary>Relationship Identifiers</summary>
             <QualityList title="Identifiers" items={model.advancedRelationshipDetails} empty="" codeItems />
           </details>
         ) : null}
@@ -50,7 +50,7 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
           </details>
         ) : null}
         <details className="advanced-details-panel">
-          <summary>Raw Result JSON</summary>
+          <summary>Analysis Result JSON</summary>
           <pre className="advanced-json"><code>{model.rawResultJson}</code></pre>
         </details>
       </section>

@@ -39,13 +39,13 @@ describe("deriveCanonicalFinding", () => {
 
     expect(finding.exists).toBe(true);
     expect(finding.confidence).toBe("Moderate");
-    expect(finding.status).toBe("Issue Detected");
+    expect(finding.status).toBe("High");
     expect(containsDisallowedOperatorTerms(finding.summary)).toBe(false);
     expect(containsDisallowedOperatorTerms(finding.whyItMatters)).toBe(false);
     expect(finding.supportingEvidence.some((item) => /current observation|current analysis|historical comparison evidence|observation method/i.test(item))).toBe(true);
   });
 
-  it("holds findings in a pending state when telemetry is not yet reviewable", () => {
+  it("holds insights in a pending state when telemetry is not yet reviewable", () => {
     const finding = deriveCanonicalFinding({
       currentSession: buildSession({
         job_id: "job-pending",
@@ -60,7 +60,7 @@ describe("deriveCanonicalFinding", () => {
     expect(finding.exists).toBe(false);
     expect(finding.status).toBe("Processing");
     expect(finding.confidence).toBe("Pending");
-    expect(finding.summary).toMatch(/pending verification/i);
-    expect(finding.reviewNext).toMatch(/stable telemetry|data quality|wait|processing/i);
+    expect(finding.summary).toMatch(/insights are not ready/i);
+    expect(finding.reviewNext).toMatch(/complete dataset|data-quality warnings|run the analysis again/i);
   });
 });

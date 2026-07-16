@@ -29,7 +29,7 @@ export default function FingerprintView({ model, helpers }) {
         {model.relationshipChangeRows.length ? (
           <QualityList title="Changed relationships" items={model.relationshipChangeRows} empty="" />
         ) : (
-          <EmptyOperationalState title="No relationship changes available" body={model.analysisComplete ? "No material relationship drift was reported." : "Relationship changes will appear after a learned operational baseline is established."} />
+          <EmptyOperationalState title="No relationship changes available" body={model.analysisComplete ? "No material relationship drift was reported." : "Relationship changes will appear after a learned behavior baseline is established."} />
         )}
       </section>
     </div>

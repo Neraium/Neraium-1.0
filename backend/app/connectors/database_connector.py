@@ -41,7 +41,7 @@ class DatabaseConnector(RESTConnector):
             return {"ok": False, "message": "A read-only telemetry query is required."}
         return {
             "ok": True,
-            "message": "Read-only database connector configured.",
+            "message": "Read-only database connector settings are complete.",
             "database": self._masked_database_configuration(),
         }
 
@@ -52,7 +52,7 @@ class DatabaseConnector(RESTConnector):
             return {"ok": False, "message": str(exc)}
         if not rows:
             return {"ok": False, "message": "Database query returned an empty dataset."}
-        return {"ok": True, "message": f"Database query validated with {len(rows)} rows."}
+        return {"ok": True, "message": f"Database access confirmed with {len(rows)} telemetry rows."}
 
     def fetch_historical(self) -> list[dict[str, Any]]:
         return self._execute_query(str(self.config.get("query") or ""))

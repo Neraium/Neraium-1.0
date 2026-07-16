@@ -2,15 +2,15 @@ import { resolveSessionJobId } from "./currentSession";
 import { hasFullUploadResult } from "./uploadState";
 
 export const OPERATOR_EMPTY_STATE = {
-  title: "No current observations.",
-  subtitle: "Telemetry is being monitored.",
-  detail: "No equipment issues detected.",
+  title: "No active insights.",
+  subtitle: "The latest analysis found no behavior that requires operator review.",
+  detail: "Review data quality or import a newer dataset when conditions change.",
 };
 
 export const OPERATOR_PENDING_STATE = {
-  title: "Analysis pending verification.",
+  title: "Insights are not ready.",
   subtitle: "Telemetry is present, but it is not ready for operator review yet.",
-  detail: "Wait for processing to finish before reviewing issues.",
+  detail: "Wait for the analysis to finish, then review the insights.",
 };
 
 const DISALLOWED_REPLACEMENTS = [
@@ -34,7 +34,6 @@ const DISALLOWED_REPLACEMENTS = [
   [/\bdeformation\b/gi, "behavior change"],
   [/\bbaseline separation\b/gi, "change from the historical pattern"],
   [/\bstructural drift\b/gi, "system behavior change"],
-  [/\bSII\b/g, "analysis"],
   [/\bbackend\b/gi, "analysis service"],
   [/\bpipeline\b/gi, "analysis workflow"],
   [/\breplay\b/gi, "historical review"],
@@ -120,7 +119,7 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
       dataQuality,
       evidenceButtonLabel: "Review Evidence",
       affectedVariables: [],
-      historicalComparison: "No equipment issues detected.",
+      historicalComparison: "No behavior requiring operator review was detected.",
       replayReferences,
       sourceName: result?.filename ?? null,
     };
@@ -144,7 +143,7 @@ export function deriveCanonicalFinding({ currentSession, latestReplayFrame = nul
     id: jobId ? `current-${jobId}` : "current-observation",
     runId: jobId,
     exists: true,
-    status: statusLevel === "critical" ? "Critical Issue" : "Issue Detected",
+    status: statusLevel === "critical" ? "Critical" : "High",
     confidence,
     summary,
     whyItMatters,
@@ -409,23 +408,23 @@ function buildDataQualityGroups(result) {
 export function buildPendingState(reviewReadiness) {
   if (reviewReadiness === "processing") {
     return {
-      title: "Analysis pending verification.",
+      title: "Insights are not ready.",
       subtitle: "Telemetry is still being processed into an evidence-backed interpretation.",
-      detail: "Wait for processing to complete before reviewing issues.",
+      detail: "Wait for the analysis to complete, then review the insights.",
     };
   }
   if (reviewReadiness === "quality_gate") {
     return {
-      title: "Analysis pending verification.",
+      title: "Insights are not ready.",
       subtitle: "The current telemetry does not yet meet the reliability threshold for operator review.",
-      detail: "Collect more stable telemetry or correct data quality issues before reviewing issues.",
+      detail: "Import a more complete dataset or correct the data-quality warnings, then run the analysis again.",
     };
   }
   if (reviewReadiness === "unaligned") {
     return {
-      title: "Analysis pending verification.",
-      subtitle: "The latest interpretation is not aligned to the active upload session.",
-      detail: "Refresh telemetry and wait for the system story to realign before reviewing issues.",
+      title: "Insights are not ready.",
+      subtitle: "The latest result does not match the active analysis.",
+      detail: "Refresh the page. If the result still does not match, run the analysis again.",
     };
   }
   return OPERATOR_PENDING_STATE;
@@ -433,7 +432,7 @@ export function buildPendingState(reviewReadiness) {
 
 function buildReplayReferences(result, frame) {
   const refs = [];
-  if (result?.job_id) refs.push(`Run ${result.job_id}`);
+  if (result?.job_id) refs.push(`Analysis ${result.job_id}`);
   if (frame?.frame_number != null) refs.push(`Frame ${frame.frame_number}`);
   if (frame?.timestamp_end ?? frame?.timestamp) refs.push(String(frame?.timestamp_end ?? frame?.timestamp));
   return refs;

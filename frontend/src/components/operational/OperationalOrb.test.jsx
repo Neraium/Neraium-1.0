@@ -11,7 +11,7 @@ afterEach(() => {
 });
 
 describe("OperationalOrb", () => {
-  it("renders an awaiting operational baseline without hotspots", () => {
+  it("renders an awaiting behavior baseline without hotspots", () => {
     render(h(OperationalOrb, { status: "awaiting" }));
 
     const orb = screen.getByTestId("operational-orb");

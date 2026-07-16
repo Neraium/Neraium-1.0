@@ -231,7 +231,7 @@ export default function useWorkspaceSessionController({
     const payloadValid = isCompletedAnalysisPayload({ result: refreshedResult, snapshot: refreshedSnapshot });
     console.info("[neraium] payload validation result", { jobId: expectedJobId, valid: payloadValid, terminal: terminalCompletion });
     if (terminalCompletion && !payloadValid) {
-      throw new Error("Saved analysis payload was not valid after refresh.");
+      throw new Error("The saved analysis result could not be opened. Refresh and retry.");
     }
     if (refreshedResult) {
       setCompletedUploadOverride(refreshedResult);
@@ -448,8 +448,8 @@ function buildPendingUploadSnapshot({ completedPayload = null, completedResult =
     ...(completedPayload ?? {}),
     status: normalizeUploadStatus(completedPayload?.status ?? completedPayload?.processing_state ?? completedPayload?.worker_state) || "structural_scoring",
     processing_state: "structural_scoring",
-    progress_label: completedPayload?.progress_label ?? completedPayload?.message ?? "Telemetry active. Analysis pending.",
-    message: completedPayload?.message ?? completedPayload?.progress_label ?? "Telemetry active. Analysis pending.",
+    progress_label: completedPayload?.progress_label ?? completedPayload?.message ?? "Telemetry is available. Analysis has not started.",
+    message: completedPayload?.message ?? completedPayload?.progress_label ?? "Telemetry is available. Analysis has not started.",
     percent: Number(completedPayload?.percent ?? completedPayload?.progress) || 86,
     current_upload: {
       ...(completedPayload?.current_upload ?? {}),

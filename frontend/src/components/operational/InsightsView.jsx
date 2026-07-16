@@ -12,7 +12,7 @@ export default function InsightsView({ model, helpers, selectedInsight, onSelect
         </div>
         <InsightList
           insights={model.insights}
-          empty={model.analysisComplete ? "No active operational insights were detected." : "Insights are generated automatically once a learned operational baseline has been established."}
+          empty={model.analysisComplete ? "No active operational insights were detected." : "Insights are generated automatically once a learned behavior baseline has been established."}
           emptyTitle="No Operational Insights Yet"
           onOpenInsight={onSelectInsight}
           selectedId={selectedInsight?.id}

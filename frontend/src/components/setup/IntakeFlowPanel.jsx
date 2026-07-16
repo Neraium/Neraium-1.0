@@ -62,27 +62,27 @@ function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) 
 
 function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }) {
   const cleanMessage = String(latestMessage || "").trim();
-  if (viewState === "uploading") return "Uploading Historical Data...";
+  if (viewState === "uploading") return "Importing Dataset...";
   if (viewState === "complete") return "Analysis Complete";
   if (viewState === "finalizing") {
     const normalized = primaryJobStatus(uploadJob, uploadState);
-    if (normalized === "saving_results") return "Persisting Behavioral Baseline";
-    if (normalized === "navigation_pending") return "Opening Results";
-    return "Generating Operational Insights...";
+    if (normalized === "saving_results") return "Saving Analysis";
+    if (normalized === "navigation_pending") return "Opening Analysis";
+    return "Preparing Insights and Evidence...";
   }
-  if (viewState === "failed") return "Upload Error";
-  if (viewState === "completion_error") return "Results View Unavailable";
+  if (viewState === "failed") return "Dataset Import Failed";
+  if (viewState === "completion_error") return "Analysis Saved, Results Not Opened";
   if (/temporarily unavailable/i.test(cleanMessage)) return cleanMessage;
 
   const normalized = primaryJobStatus(uploadJob, uploadState);
   if (["writing_state", "cognition_ready", "saving_result"].includes(normalized)) {
-    return "Generating Operational Insights...";
+    return "Preparing Insights and Evidence...";
   }
   if (["building_fingerprint", "baseline_modeling", "building_baseline", "structural_scoring", "running_sii", "accepted", "queued", "validating_schema", "parsing", "processing"].includes(normalized)) {
-    return "Learning the Facility Behavior...";
+    return "Learning System Behavior...";
   }
 
-  return cleanMessage || "Learning the Facility Behavior...";
+  return cleanMessage || "Learning System Behavior...";
 }
 
 function resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent }) {
@@ -188,7 +188,7 @@ const FINGERPRINT_BUILD_STAGES = [
   },
   {
     id: "baseline",
-    label: "Establishing Behavioral Baseline",
+    label: "Establishing Behavior Baseline",
     shortLabel: "Baseline",
     states: ["writing_state", "cognition_ready", "saving_result", "saving_results"],
   },
@@ -243,15 +243,15 @@ function networkProgress({ displayPercent, phase, stageIndex, complete }) {
 
 function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
   if (viewState === "complete") {
-    return { id: "complete", label: "Behavioral Baseline Established", index: FINGERPRINT_BUILD_STAGES.length };
+    return { id: "complete", label: "Behavior Baseline Established", index: FINGERPRINT_BUILD_STAGES.length };
   }
   if (viewState === "finalizing") {
     const normalized = primaryJobStatus(uploadJob, uploadState);
     if (normalized === "saving_results") {
-      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Persisting Behavioral Baseline", index: 3 };
+      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Saving Analysis", index: 3 };
     }
     if (normalized === "navigation_pending") {
-      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Opening Results", index: 3 };
+      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Opening Analysis", index: 3 };
     }
     return { ...FINGERPRINT_BUILD_STAGES[3], index: 3 };
   }
@@ -379,12 +379,12 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
   const compatibilityMode = renderTier === "safe";
   const particleCount = FINGERPRINT_RENDERER_PARTICLES[renderTier] ?? 0;
   const statusTitle = complete
-    ? "Behavioral Baseline Established"
+    ? "Behavior Baseline Established"
     : compatibilityMode
       ? "Using an alternate processing path."
       : stage?.label || "Learning Operational Relationships";
   const statusDetail = complete
-    ? "The behavioral baseline has been established"
+    ? "The behavior baseline has been established"
     : compatibilityMode
       ? "Analysis quality is unchanged. Full SII results remain valid."
       : "Stage " + stageNumber + " of " + stageCount;
@@ -522,29 +522,23 @@ function uploadOrbStatus(viewState) {
 }
 
 function uploadFingerprintStatusText(viewState, hasSelectedFiles) {
-  if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Learning Facility Behavior";
-  if (viewState === "complete") return "Behavioral Baseline Active";
-  if (viewState === "failed") return hasSelectedFiles ? "Historical Data Ready" : "Awaiting Behavioral Baseline";
-  if (hasSelectedFiles) return "Historical Data Ready";
-  return "Awaiting Behavioral Baseline";
+  if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Learning System Behavior";
+  if (viewState === "complete") return "Behavior Baseline Active";
+  if (viewState === "failed") return hasSelectedFiles ? "Dataset Ready" : "Awaiting Behavior Baseline";
+  if (hasSelectedFiles) return "Dataset Ready";
+  return "Awaiting Behavior Baseline";
 }
 
 function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
-  const rawError = uploadJob?.error ?? uploadJob?.detail ?? uploadJob?.message;
   return [
-    ["Upload ID", uploadJob?.job_id ?? uploadJob?.id],
-    ["Stage name", uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status],
-    ["Timing", uploadJob?.processing_time_seconds ? `${uploadJob.processing_time_seconds}s` : null],
+    ["Analysis ID", uploadJob?.job_id ?? uploadJob?.id],
+    ["Analysis stage", uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status],
+    ["Elapsed time", uploadJob?.processing_time_seconds ? `${uploadJob.processing_time_seconds}s` : null],
     ["Transfer", uploadTransfer?.label],
-    ["Finalization", uploadJob?.result_available ? "Result available" : uploadJob?.first_usable_available ? "First result available" : null],
-    ["Processing status", queuedWorkerDetail],
-    ["Stage detail", propagationLabel],
-    ["Failure phase", uploadJob?.failure_phase ?? uploadDebug?.failurePhase],
-    ["Failed route", uploadJob?.failure_url ?? uploadDebug?.uploadUrl],
-    ["HTTP status", uploadJob?.response_status ?? uploadDebug?.responseStatus],
-    ["Raw message", latestMessage],
-    ["Raw error", uploadJob?.error_type || uploadJob?.error ? rawError : null],
-    ["Raw response", uploadJob?.raw_response_body ?? uploadDebug?.responseBodyOrError],
+    ["Analysis result", uploadJob?.result_available ? "Available" : uploadJob?.first_usable_available ? "Preliminary result available" : null],
+    ["Analysis status", queuedWorkerDetail],
+    ["Current step", propagationLabel],
+    ["Operator message", latestMessage],
   ].filter(([, value]) => String(value ?? "").trim());
 }
 
@@ -562,7 +556,7 @@ function AdvancedDetails({ latestUploadSnapshot, uploadJob, uploadState, uploadT
 
   return (
     <details className="upload-advanced-details">
-      <summary>Advanced Details</summary>
+      <summary>Analysis Details</summary>
       {rows.length ? (
         <dl className="upload-advanced-details__grid">
           {rows.map(([label, value]) => (
@@ -574,7 +568,7 @@ function AdvancedDetails({ latestUploadSnapshot, uploadJob, uploadState, uploadT
         </dl>
       ) : null}
       {compactStages.length ? (
-        <ol className="upload-advanced-details__stages" aria-label="Pipeline stages">
+        <ol className="upload-advanced-details__stages" aria-label="Analysis stages">
           {compactStages.map((stage) => (
             <li key={`${stage.title}-${stage.state}`}>
               <strong>{stage.title}</strong>
@@ -627,13 +621,13 @@ export default function IntakeFlowPanel({
   const mainPercent = resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent });
   const fingerprintBuildStage = resolveFingerprintBuildStage({ viewState, uploadJob, uploadState });
   const remaining = estimateRemaining(uploadTransfer);
-  const errorMessage = String(latestMessage || "Choose another telemetry file and try again.").trim();
+  const errorMessage = String(latestMessage || "Choose another telemetry dataset and try again.").trim();
   const summary = analysisResult ? completionSummary({ analysisResult }) : [];
   const showProgress = viewState === "uploading" || viewState === "analyzing" || viewState === "finalizing";
   const fingerprintStatus = uploadFingerprintStatusText(viewState, hasSelectedFiles);
   const resolvedOrbStatus = uploadOrbStatus(viewState);
-  const chooseFileButtonText = "Choose File";
-  const selectedFileDetail = hasSelectedFiles ? `${fileKind} telemetry - ${selectedFileSize}` : "No file selected";
+  const chooseFileButtonText = "Choose Dataset";
+  const selectedFileDetail = hasSelectedFiles ? `${fileKind} dataset, ${selectedFileSize}` : "No file selected";
   const dragClassName = isDragActive ? " upload-analysis-card--drag-active" : "";
 
   function handleUploadDragOver(event) {
@@ -654,15 +648,15 @@ export default function IntakeFlowPanel({
   }
 
   return (
-    <Panel title="Analyze Historical Telemetry" className="span-7 upload-ops-panel upload-ops-panel--command">
+    <Panel title="Import and Analyze Dataset" className="span-7 upload-ops-panel upload-ops-panel--command">
       <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={handleUpload}>
-        <p className="intake-flow__subtitle">Upload historical telemetry to establish a learned behavior baseline for this facility.</p>
-        <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose historical telemetry CSV files" tabIndex={-1} onChange={handleFileSelection} />
+        <p className="intake-flow__subtitle">Import a historical telemetry dataset so SII can learn the facility behavior baseline and produce evidence-backed insights.</p>
+        <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose telemetry dataset CSV files" tabIndex={-1} onChange={handleFileSelection} />
 
         {(viewState === "noFile" || viewState === "fileSelected") ? (
           <section
             className={`upload-analysis-card${dragClassName}`}
-            aria-label="Historical data upload"
+            aria-label="Historical dataset import"
             onDragOver={handleUploadDragOver}
             onDragLeave={handleUploadDragLeave}
             onDrop={handleUploadDrop}
@@ -672,7 +666,7 @@ export default function IntakeFlowPanel({
                 status={resolvedOrbStatus}
                 state={{
                   label: fingerprintStatus,
-                  visualLabel: "Behavioral Baseline",
+                  visualLabel: "Behavior Baseline",
                 }}
               />
               <div className="upload-analysis-card__status" aria-live="polite">
@@ -683,13 +677,13 @@ export default function IntakeFlowPanel({
 
             <div className="upload-analysis-card__content">
               <div className="upload-analysis-card__copy">
-                <p className="section-token">Historical Telemetry</p>
-                <h3>Analyze Historical Telemetry</h3>
-                <p>Upload historical telemetry to establish a learned behavior baseline for this facility.</p>
+                <p className="section-token">Historical Dataset</p>
+                <h3>Import and Analyze Dataset</h3>
+                <p>Import a historical telemetry dataset so SII can learn the facility behavior baseline and produce evidence-backed insights.</p>
               </div>
 
-              <div className="upload-analysis-card__sources" role="group" aria-label="Supported Sources">
-                <span>Supported Sources</span>
+              <div className="upload-analysis-card__sources" role="group" aria-label="Supported dataset types">
+                <span>Supported Dataset Types</span>
                 <ul>
                   {SUPPORTED_HISTORICAL_SOURCES.map((source) => <li key={source}>{source}</li>)}
                 </ul>
@@ -702,8 +696,8 @@ export default function IntakeFlowPanel({
 
               <div className="upload-simple-actions upload-analysis-card__actions">
                 <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
-                <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!hasSelectedFiles || isUploadProcessing(uploadState)} title={!hasSelectedFiles ? "Choose a telemetry CSV before starting analysis." : isUploadProcessing(uploadState) ? "Analysis is already in progress." : "Start telemetry analysis."}>
-                  Analyze Historical Telemetry
+                <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!hasSelectedFiles || isUploadProcessing(uploadState)} title={!hasSelectedFiles ? "Choose a CSV dataset before starting analysis." : isUploadProcessing(uploadState) ? "Analysis is already in progress." : "Start dataset analysis."}>
+                  Analyze Dataset
                 </button>
               </div>
             </div>
@@ -731,15 +725,15 @@ export default function IntakeFlowPanel({
               <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
               <div className="upload-analysis-card__status">
                 <span>Status</span>
-                <strong>Behavioral Baseline Established</strong>
+                <strong>Behavior Baseline Established</strong>
               </div>
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3>Behavioral Baseline Established</h3>
+                <h3>Behavior Baseline Established</h3>
                 <span className="upload-complete-filename" title={selectedFileLabel}>{selectedFileLabel}</span>
               </div>
-              <p className="upload-complete-message">The behavioral baseline has been established. Neraium has learned how the facility normally behaves together.</p>
+              <p className="upload-complete-message">The behavior baseline is ready. SII has learned how the facility systems normally behave together.</p>
               <div className="upload-result-summary">
                 {summary.map((item) => (
                   <div key={item.label} className="upload-result-summary__item">
@@ -749,8 +743,8 @@ export default function IntakeFlowPanel({
                 ))}
               </div>
               <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={onViewResults}>View Results</button>
-                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze New Telemetry</button>
+                <button type="button" className="command-button" onClick={onViewResults}>Review Analysis</button>
+                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Dataset</button>
               </div>
             </div>
           </section>
@@ -762,18 +756,18 @@ export default function IntakeFlowPanel({
               <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
               <div className="upload-analysis-card__status">
                 <span>Status</span>
-                <strong>Behavioral Baseline Established</strong>
+                <strong>Behavior Baseline Established</strong>
               </div>
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3>Results View Unavailable</h3>
+                <h3>Analysis Saved, Results Not Opened</h3>
                 <span>{hasSelectedFiles ? selectedFileLabel : "Results saved"}</span>
               </div>
-              <p className="upload-error-message">{errorMessage || "Results were saved, but the results view could not be loaded."}</p>
+              <p className="upload-error-message">{errorMessage || "The analysis was saved, but its results could not be opened. Try opening the analysis again."}</p>
               <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={onViewResults}>Retry Results</button>
-                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze New Telemetry</button>
+                <button type="button" className="command-button" onClick={onViewResults}>Open Analysis Again</button>
+                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Dataset</button>
               </div>
             </div>
           </section>
@@ -786,7 +780,7 @@ export default function IntakeFlowPanel({
                 status={resolvedOrbStatus}
                 state={{
                   label: fingerprintStatus,
-                  visualLabel: "Behavioral Baseline",
+                  visualLabel: "Behavior Baseline",
                 }}
               />
               <div className="upload-analysis-card__status">
@@ -796,13 +790,13 @@ export default function IntakeFlowPanel({
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3>Upload Error</h3>
+                <h3>Dataset Import Failed</h3>
                 <span>{hasSelectedFiles ? selectedFileLabel : "No file selected"}</span>
               </div>
               <p className="upload-error-message">{errorMessage}</p>
               <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles} title={!hasSelectedFiles ? "Choose the source telemetry again before retrying." : "Retry this failed analysis."}>Retry</button>
-                <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose File</button>
+                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles} title={!hasSelectedFiles ? "Choose the source dataset again before retrying." : "Retry this analysis."}>Retry Analysis</button>
+                <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose Dataset</button>
               </div>
             </div>
           </section>

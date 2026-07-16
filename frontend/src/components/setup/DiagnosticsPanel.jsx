@@ -39,7 +39,7 @@ function replaySummaryFromFrames(frames) {
       evidenceConfidence: DASH,
       leadTime: DASH,
       previewRange: DASH,
-      story: "Unavailable",
+      story: "Not available",
     };
   }
   const last = frames[frames.length - 1] || {};
@@ -72,7 +72,7 @@ function replaySummaryFromResult(result) {
     previewRange: String(result?.timestamp_profile?.first_timestamp && result?.timestamp_profile?.last_timestamp
       ? `${result.timestamp_profile.first_timestamp} -> ${result.timestamp_profile.last_timestamp}`
       : DASH),
-    story: "Unavailable",
+    story: "Not available",
   };
 }
 
@@ -104,7 +104,7 @@ export default function DiagnosticsPanel({
     async function loadReplayByJob() {
       try {
         const response = await apiFetch(`/api/data/replay/${encodeURIComponent(activeJobId)}`, { accessCode });
-        if (!response.ok) throw new Error(`Unexpected response: ${response.status}`);
+        if (!response.ok) throw new Error("The behavior timeline could not be checked. Refresh and retry.");
         const payload = await response.json();
         if (cancelled) return;
         const frames = Array.isArray(payload?.timeline) ? payload.timeline : [];
@@ -137,7 +137,7 @@ export default function DiagnosticsPanel({
     { label: "System behavior", value: summary.structuralRead },
     { label: "Evidence focus", value: contributors },
     { label: "Confidence", value: summary.evidenceConfidence },
-    { label: "Advanced details", value: summary.replay },
+    { label: "Analysis details", value: summary.replay },
     { label: "Review Window", value: summary.leadTime },
     { label: "Preview Range", value: summary.previewRange },
   ] : [
@@ -149,7 +149,7 @@ export default function DiagnosticsPanel({
     { label: "System behavior", value: DASH },
     { label: "Evidence focus", value: DASH },
     { label: "Confidence", value: DASH },
-    { label: "Advanced details", value: "Unavailable" },
+    { label: "Analysis details", value: "Not available" },
     { label: "Review Window", value: DASH },
     { label: "Preview Range", value: DASH },
   ];

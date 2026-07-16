@@ -8,7 +8,7 @@ async function signIn(page, email = "e2e-admin@neraium.test", password = "e2e-pa
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
 }
 
 test.describe("Authentication, navigation, connectors, and permissions", () => {
@@ -32,12 +32,12 @@ test.describe("Authentication, navigation, connectors, and permissions", () => {
     await page.reload();
     await expect(page.getByRole("button", { name: /Systems/ }).first()).toHaveAttribute("aria-current", "page");
 
-    await page.getByRole("button", { name: /Data Sources/ }).first().click();
+    await page.getByRole("button", { name: /Datasets & Connectors/ }).first().click();
     await expect(page).toHaveURL(/section=data-sources/);
     await page.goBack();
     await expect(page.getByRole("button", { name: /Systems/ }).first()).toHaveAttribute("aria-current", "page");
     await page.goForward();
-    await expect(page.getByRole("button", { name: /Data Sources/ }).first()).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: /Datasets & Connectors/ }).first()).toHaveAttribute("aria-current", "page");
   });
 
   test("an expired server session returns the user to sign in", async ({ page, context }) => {
@@ -55,9 +55,9 @@ test.describe("Authentication, navigation, connectors, and permissions", () => {
     await page.getByLabel("Connector type").selectOption("database");
     await page.getByLabel("Database URL").fill(e2eDatabaseURL);
     await page.getByRole("button", { name: "Test connection" }).click();
-    await expect(page.getByRole("status")).toContainText("No telemetry was ingested");
-    await page.getByRole("button", { name: "Normalize telemetry" }).click();
-    await expect(page.getByRole("status")).toContainText("normalized records are ready");
+    await expect(page.getByRole("status")).toContainText("No records were saved");
+    await page.getByRole("button", { name: "Prepare sample" }).click();
+    await expect(page.getByRole("status")).toContainText("records were validated for analysis");
     await expect(page.getByLabel("Connector health")).toContainText("2 records");
     await expect(page.getByLabel("Connector health")).not.toContainText("must be numeric");
   });
@@ -65,15 +65,15 @@ test.describe("Authentication, navigation, connectors, and permissions", () => {
   test("administrator creates an operator whose direct admin link is denied in the frontend", async ({ page }) => {
     const email = `operator-${Date.now()}@neraium.test`;
     await page.goto("/workspace/admin");
-    await expect(page.getByText("Access Administration", { exact: true })).toBeVisible();
+    await expect(page.getByText("User Access", { exact: true })).toBeVisible();
     await page.getByLabel("User email").fill(email);
     await page.getByLabel("User name").fill("Workflow Operator");
     await page.getByLabel("Temporary password").fill("operator-password-123");
     await page.getByLabel("User role").selectOption("operator");
-    await page.getByRole("button", { name: "Create account" }).click();
+    await page.getByRole("button", { name: "Create Account" }).click();
     await expect(page.getByText(email)).toBeVisible();
 
-    await page.getByRole("button", { name: "Back to Command Center" }).click();
+    await page.getByRole("button", { name: "Back to Command Center" }).first().click();
     await page.getByRole("button", { name: "Sign out" }).click();
     await signIn(page, email, "operator-password-123");
     await page.goto("/workspace/admin");

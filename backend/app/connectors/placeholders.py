@@ -10,10 +10,10 @@ class PlaceholderConnector(ConnectorBase):
     functional = False
 
     def connect(self) -> dict[str, str]:
-        return {"message": f"{self.display_name} connector scaffold is present but not active yet."}
+        return {"message": f"{self.display_name} is not available in this release."}
 
     def validate_connection(self) -> dict[str, str]:
-        return {"ok": False, "message": f"{self.display_name} support is scaffolded and awaiting implementation."}
+        return {"ok": False, "message": f"{self.display_name} is not available in this release. Use a CSV dataset, REST API, or database connector."}
 
     def fetch_historical(self) -> list[dict[str, str]]:
         return []
@@ -22,7 +22,7 @@ class PlaceholderConnector(ConnectorBase):
         return []
 
     def normalize(self, raw_data: list[dict[str, str]]) -> NormalizedConnectorBatch:
-        raise ValueError(f"{self.display_name} connector is not implemented yet.")
+        raise ValueError(f"{self.display_name} is not available in this release. Use a CSV dataset, REST API, or database connector.")
 
     def health_check(self) -> ConnectorHealthStatus:
         return ConnectorHealthStatus(
@@ -30,7 +30,7 @@ class PlaceholderConnector(ConnectorBase):
             display_name=self.display_name,
             functional=False,
             connection_status="not_configured",
-            warnings=[f"{self.display_name} connector scaffold is ready for future implementation."],
+            warnings=[f"{self.display_name} is not available in this release."],
         )
 
 

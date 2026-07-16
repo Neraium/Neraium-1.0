@@ -1,6 +1,6 @@
 # Neraium Validation Rubric
 
-Neraium should be evaluated as a structural intelligence and interpretation engine, not as a conventional predictive-maintenance platform.
+Neraium should be evaluated as a structural intelligence and interpretation engine, not as a conventional maintenance-forecasting platform.
 
 ## Correct Evaluation Frame
 

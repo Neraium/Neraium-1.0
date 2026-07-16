@@ -25,7 +25,7 @@ It models how environmental relationships evolve across temperature, humidity, a
 - anomaly score
 - automated grow control
 - AI recommendations
-- predictive maintenance
+- maintenance forecasting
 
 ## Operational framing
 

@@ -1,4 +1,4 @@
-/* @vitest-environment jsdom */
+﻿/* @vitest-environment jsdom */
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
@@ -72,7 +72,7 @@ describe("OnboardingWorkspace CSV propagation", () => {
     render(h(OnboardingWorkspace, { apiFetch, onUploadComplete }));
 
     fireEvent.click(screen.getByRole("button", { name: "General Telemetry" }));
-    fireEvent.click(screen.getByRole("button", { name: "CSV Upload" }));
+    fireEvent.click(screen.getByRole("button", { name: "CSV Dataset" }));
 
     const fileInput = document.querySelector("input[type='file']");
     const file = new File(["timestamp,variable_a,variable_b\n2026-05-01T08:00:00Z,75.2,58\n"], "telemetry.csv", { type: "text/csv" });
@@ -90,26 +90,26 @@ describe("OnboardingWorkspace CSV propagation", () => {
       expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-123" }));
     });
 
-    expect(await screen.findByRole("heading", { name: "Variable Mapping", level: 2 })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Map Telemetry Fields", level: 2 })).toBeTruthy();
   });
 
-  it("keeps API setup on the connection details step until the operator explicitly continues", async () => {
+  it("keeps API setup on the connector or dataset step until the operator explicitly continues", async () => {
     render(h(OnboardingWorkspace, { apiFetch: vi.fn() }));
 
     fireEvent.click(screen.getByRole("button", { name: "General Telemetry" }));
-    fireEvent.click(screen.getByRole("button", { name: "API" }));
+    fireEvent.click(screen.getByRole("button", { name: "REST API Connector" }));
 
     fireEvent.change(screen.getByRole("textbox", { name: "API base URL" }), { target: { value: "https://example.test/telemetry" } });
     fireEvent.change(screen.getByLabelText("API key or token"), { target: { value: "secret-token" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Polling interval (seconds)" }), { target: { value: "30" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Deployment label" }), { target: { value: "site-a" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Telemetry stream label" }), { target: { value: "system-a" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Facility name" }), { target: { value: "site-a" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "System name" }), { target: { value: "system-a" } });
 
     await new Promise((resolve) => window.setTimeout(resolve, 250));
-    expect(screen.getByRole("heading", { name: "Connection Details", level: 2 })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Connector or Dataset", level: 2 })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(await screen.findByRole("heading", { name: "Variable Mapping", level: 2 })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Map Telemetry Fields", level: 2 })).toBeTruthy();
   });
 
   it("does not propagate completion when the confirmed latest upload belongs to a different job", async () => {
@@ -143,7 +143,7 @@ describe("OnboardingWorkspace CSV propagation", () => {
     render(h(OnboardingWorkspace, { apiFetch, onUploadComplete }));
 
     fireEvent.click(screen.getByRole("button", { name: "General Telemetry" }));
-    fireEvent.click(screen.getByRole("button", { name: "CSV Upload" }));
+    fireEvent.click(screen.getByRole("button", { name: "CSV Dataset" }));
 
     const fileInput = document.querySelector("input[type='file']");
     const file = new File(["timestamp,variable_a,variable_b\n2026-05-01T08:00:00Z,75.2,58\n"], "telemetry.csv", { type: "text/csv" });
@@ -154,7 +154,7 @@ describe("OnboardingWorkspace CSV propagation", () => {
     });
     await new Promise((resolve) => window.setTimeout(resolve, 300));
     expect(onUploadComplete).not.toHaveBeenCalled();
-    expect(screen.getByRole("heading", { name: "Variable Mapping", level: 2 })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Map Telemetry Fields", level: 2 })).toBeTruthy();
   });
 
   it("runs API connection verification through the backend connector endpoint", async () => {
@@ -184,22 +184,22 @@ describe("OnboardingWorkspace CSV propagation", () => {
     render(h(OnboardingWorkspace, { apiFetch }));
 
     fireEvent.click(screen.getByRole("button", { name: "General Telemetry" }));
-    fireEvent.click(screen.getByRole("button", { name: "API" }));
+    fireEvent.click(screen.getByRole("button", { name: "REST API Connector" }));
 
     fireEvent.change(screen.getByRole("textbox", { name: "API base URL" }), { target: { value: "https://example.test/telemetry" } });
     fireEvent.change(screen.getByLabelText("API key or token"), { target: { value: "secret-token" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Polling interval (seconds)" }), { target: { value: "30" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Deployment label" }), { target: { value: "site-a" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Telemetry stream label" }), { target: { value: "system-a" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Facility name" }), { target: { value: "site-a" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "System name" }), { target: { value: "system-a" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    const mappingInputs = screen.getAllByPlaceholderText("source field");
+    const mappingInputs = screen.getAllByPlaceholderText("Choose a dataset field");
     fireEvent.change(mappingInputs[0], { target: { value: "timestamp" } });
     fireEvent.change(mappingInputs[1], { target: { value: "temperature" } });
     fireEvent.change(mappingInputs[2], { target: { value: "humidity" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Run Connection Test" }));
+    fireEvent.click(screen.getByRole("button", { name: "Validate Input" }));
 
     await waitFor(() => {
       expect(apiFetch).toHaveBeenCalledWith("/api/connectors/rest/test", expect.objectContaining({
@@ -208,6 +208,6 @@ describe("OnboardingWorkspace CSV propagation", () => {
       }));
     });
 
-    expect(await screen.findByRole("heading", { name: "Reference Setup", level: 2 })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Establish a Behavior Baseline", level: 2 })).toBeTruthy();
   });
 });

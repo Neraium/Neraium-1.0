@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures.js";
 
-async function openAdvanced(page) {
-  const advancedButton = page.getByRole("button", { name: /Advanced/i }).first();
+async function openAnalysisDetails(page) {
+  const advancedButton = page.getByRole("button", { name: /Analysis Details/i }).first();
   await expect(advancedButton).toBeVisible();
   await advancedButton.click();
   await expect(page.getByRole("region", { name: "Telemetry source details" })).toBeVisible();
@@ -67,7 +67,7 @@ test.describe("Domain mode wiring", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-    await openAdvanced(page);
+    await openAnalysisDetails(page);
     await expect(page.getByText("Detected data type")).toBeVisible();
     await expect(page.getByText(/Water Infrastructure|Aquatic|Cultivation/).first()).toBeVisible();
 
@@ -75,7 +75,7 @@ test.describe("Domain mode wiring", () => {
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-    await openAdvanced(page);
+    await openAnalysisDetails(page);
     await expect(page.getByText("Detected data type")).toBeVisible();
     await expect(page.getByText(/Water Infrastructure|Aquatic|Cultivation/).first()).toBeVisible();
   });

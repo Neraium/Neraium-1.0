@@ -78,7 +78,7 @@ async function openWorkspace(page, viewport) {
   await page.setViewportSize(viewport);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-  await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
 }
 
 test.describe("Responsive layout audit", () => {
@@ -114,14 +114,14 @@ test.describe("Responsive layout audit", () => {
     expect(metrics.mainRight).toBeLessThanOrEqual(metrics.viewportWidth);
     expect(metrics.heroRight).toBeLessThanOrEqual(metrics.viewportWidth);
 
-    await expect(page.getByRole("button", { name: /Data Sources/i }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /Datasets & Connectors/i }).first()).toBeVisible();
   });
 
   test("mobile workflow navigation remains visible and usable", async ({ page }) => {
     await openWorkspace(page, { width: 390, height: 844 });
-    await page.getByRole("button", { name: /Data Sources/i }).first().click();
-    await expect(page.getByRole("region", { name: "Telemetry Sources" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Analyze Historical Telemetry/i })).toBeVisible();
+    await page.getByRole("button", { name: /Datasets & Connectors/i }).first().click();
+    await expect(page.getByRole("region", { name: "Dataset Analysis" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Choose Dataset/i })).toBeVisible();
   });
 
   test("buttons do not overlap across responsive widths", async ({ page }) => {

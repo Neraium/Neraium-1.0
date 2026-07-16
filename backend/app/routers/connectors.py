@@ -41,7 +41,7 @@ def test_connector(request: Request, payload: ConnectorTestRequest) -> dict[str,
     update_runtime_health(request, health)
     return ConnectorActionResponse(
         connector_type=payload.connector_type,
-        message=validation_result.get("message", "Connector validated."),
+        message=validation_result.get("message", "Connector access confirmed."),
         connection_status=health.connection_status,
         last_sync_time=health.last_sync_time,
         sensors_detected=health.sensors_detected,
@@ -101,7 +101,7 @@ async def upload_csv_connector(
         masked_configuration={"filename": filename, "source_id": source_id, "system_id": system_id},
     )
     update_runtime_health(request, health)
-    return build_action_response(batch, health, "CSV telemetry normalized and ready for engine ingestion.")
+    return build_action_response(batch, health, "CSV dataset prepared for analysis.")
 
 
 @router.post("/connectors/rest/test")
@@ -117,7 +117,7 @@ def test_rest_connector(request: Request, payload: RestConnectorRequest) -> dict
     update_runtime_health(request, health)
     return ConnectorActionResponse(
         connector_type="rest",
-        message=validation_result.get("message", "REST connector validated."),
+        message=validation_result.get("message", "REST API access confirmed."),
         connection_status=health.connection_status,
         last_sync_time=health.last_sync_time,
         sensors_detected=health.sensors_detected,
@@ -145,7 +145,7 @@ def ingest_rest_connector(request: Request, payload: RestConnectorRequest) -> di
         masked_configuration=connector.health_check().masked_configuration,
     )
     update_runtime_health(request, health)
-    return build_action_response(batch, health, "REST telemetry normalized and ready for engine ingestion.")
+    return build_action_response(batch, health, "REST telemetry sample prepared for analysis.")
 
 
 @router.post("/connectors/database/test")
@@ -160,7 +160,7 @@ def test_database_connector(request: Request, payload: DatabaseConnectorRequest)
     update_runtime_health(request, health)
     return ConnectorActionResponse(
         connector_type="database",
-        message=validation_result.get("message", "Database connector validated."),
+        message=validation_result.get("message", "Database access confirmed."),
         connection_status=health.connection_status,
         masked_configuration=health.masked_configuration,
     ).model_dump()
@@ -187,7 +187,7 @@ def ingest_database_connector(request: Request, payload: DatabaseConnectorReques
         masked_configuration=connector.health_check().masked_configuration,
     )
     update_runtime_health(request, health)
-    return build_action_response(batch, health, "Database telemetry normalized and ready for engine ingestion.")
+    return build_action_response(batch, health, "Database telemetry sample prepared for analysis.")
 
 
 @router.get("/connectors/health")

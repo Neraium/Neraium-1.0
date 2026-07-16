@@ -137,7 +137,7 @@ afterEach(() => {
 });
 
 
-it("shows a clean service unavailable upload failure while keeping raw HTML in Advanced Details", async () => {
+it("shows a clean service unavailable failure without exposing the raw response", async () => {
   uploadTelemetryFileWithProgress.mockRejectedValue(uploadHtml503Error());
 
   renderWorkspace();
@@ -152,9 +152,9 @@ it("shows a clean service unavailable upload failure while keeping raw HTML in A
   expect(alert.textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
   expect(alert.textContent).not.toContain("<html>");
 
-  const details = screen.getByText("Advanced Details").closest("details");
-  expect(details.textContent).toContain("/api/data/upload");
-  expect(details.textContent).toContain(HTML_503);
+  const details = screen.getByText("Analysis Details").closest("details");
+  expect(details.textContent).not.toContain("/api/data/upload");
+  expect(details.textContent).not.toContain(HTML_503);
 });
 
 it("continues polling after temporary stream and status HTML 503 responses", async () => {
@@ -233,14 +233,14 @@ it("mobile upload screen does not render backend milestone cards by default", ()
   window.innerWidth = 390;
   renderPanel();
 
-  expect(screen.getAllByRole("heading", { name: "Analyze Historical Telemetry" }).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole("heading", { name: "Import and Analyze Dataset" }).length).toBeGreaterThan(0);
   expect(screen.queryByLabelText("Backend milestones")).toBeNull();
   expect(screen.queryByText("Backend milestones")).toBeNull();
   expect(screen.queryByText("What this run returns")).toBeNull();
   expect(screen.queryByText("Current run at a glance")).toBeNull();
 });
 
-it("selected file state shows filename, size, and Analyze Historical Telemetry", () => {
+it("selected file state shows filename, size, and analysis action", () => {
   renderPanel({
     uploadState: "validated",
     selectedFiles: [selectedCsv("operators.csv")],
@@ -248,17 +248,17 @@ it("selected file state shows filename, size, and Analyze Historical Telemetry",
   });
 
   expect(screen.getByText("operators.csv")).toBeTruthy();
-  expect(screen.getByText("CSV telemetry - 15.7 MB")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Choose File" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeTruthy();
-  expect(screen.getByText("Historical Data Ready")).toBeTruthy();
+  expect(screen.getByText("CSV dataset, 15.7 MB")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Choose Dataset" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Dataset" })).toBeTruthy();
+  expect(screen.getByText("Dataset Ready")).toBeTruthy();
 });
 
 it("drag-over and drop use the premium upload card", () => {
   const handleFileSelection = vi.fn();
   renderPanel({ handleFileSelection });
 
-  const card = screen.getByLabelText("Historical data upload");
+  const card = screen.getByLabelText("Historical dataset import");
   fireEvent.dragOver(card, { dataTransfer: { dropEffect: "" } });
   expect(card.classList.contains("upload-analysis-card--drag-active")).toBe(true);
 
@@ -394,11 +394,11 @@ it("failed state shows retry and choose another file", () => {
     },
   });
 
-  expect(screen.getByRole("heading", { name: "Upload Error" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Dataset Import Failed" })).toBeTruthy();
   expect(screen.getAllByText("CSV could not be parsed.").length).toBeGreaterThan(0);
-  const retryButton = screen.getByRole("button", { name: "Retry" });
+  const retryButton = screen.getByRole("button", { name: "Retry Analysis" });
   expect(retryButton).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Choose File" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Choose Dataset" })).toBeTruthy();
   fireEvent.click(retryButton);
   expect(onRetryFailedUploads).toHaveBeenCalledTimes(1);
 });
@@ -420,13 +420,13 @@ it("complete state shows the behavior baseline completion moment", () => {
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByRole("heading", { name: "Behavioral Baseline Established" })).toBeTruthy();
-  expect(screen.getByText("The behavioral baseline has been established. Neraium has learned how the facility normally behaves together.")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Behavior Baseline Established" })).toBeTruthy();
+  expect(screen.getByText("The behavior baseline is ready. SII has learned how the facility systems normally behave together.")).toBeTruthy();
   const labels = Array.from(document.querySelectorAll(".upload-result-summary__item span")).map((node) => node.textContent);
   expect(labels).toEqual(["Systems", "Insights", "Baseline"]);
-  expect(screen.getByRole("button", { name: "View Results" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Analyze New Telemetry" })).toBeTruthy();
-  const details = screen.getByText("Advanced Details").closest("details");
+  expect(screen.getByRole("button", { name: "Review Analysis" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Another Dataset" })).toBeTruthy();
+  const details = screen.getByText("Analysis Details").closest("details");
   expect(details.open).toBe(false);
 });
 
@@ -503,8 +503,8 @@ it("shows finalizing results instead of fake zero counts before AnalysisResult i
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByLabelText("Analysis progress: Generating Operational Insights...")).toBeTruthy();
-  expect(screen.getByText("Establishing Behavioral Baseline")).toBeTruthy();
+  expect(screen.getByLabelText("Analysis progress: Preparing Insights and Evidence...")).toBeTruthy();
+  expect(screen.getByText("Establishing Behavior Baseline")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Analysis Complete" })).toBeNull();
   expect(document.querySelector(".upload-result-summary")).toBeNull();
   expect(screen.getByLabelText("Analysis 99% complete")).toBeTruthy();
@@ -534,7 +534,7 @@ it("selecting a file clears stale complete progress", async () => {
     expect(screen.getByText("fresh.csv")).toBeTruthy();
   });
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-  expect(screen.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze Dataset" })).toBeTruthy();
 });
 
 it("analyze another CSV resets the completed workspace", async () => {
@@ -546,10 +546,10 @@ it("analyze another CSV resets the completed workspace", async () => {
   });
 
   await waitFor(() => {
-    expect(screen.getByRole("button", { name: "Analyze New Telemetry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Analyze Another Dataset" })).toBeTruthy();
   });
 
-  fireEvent.click(screen.getByRole("button", { name: "Analyze New Telemetry" }));
+  fireEvent.click(screen.getByRole("button", { name: "Analyze Another Dataset" }));
 
   await waitFor(() => {
     expect(onResetDemo).toHaveBeenCalledTimes(1);
@@ -609,8 +609,8 @@ it("treats the first complete payload with a saved result as terminal and auto-o
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: false });
   });
 
-  expect(await screen.findByRole("button", { name: "View Results" })).toBeTruthy();
-  expect(screen.getByText("The behavioral baseline has been established. Neraium has learned how the facility normally behaves together.")).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "Review Analysis" })).toBeTruthy();
+  expect(screen.getByText("The behavior baseline is ready. SII has learned how the facility systems normally behave together.")).toBeTruthy();
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: true });

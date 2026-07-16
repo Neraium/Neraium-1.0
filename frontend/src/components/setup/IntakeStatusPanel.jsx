@@ -18,7 +18,7 @@ export default function IntakeStatusPanel({
   latestUploadResult = null,
 }) {
   const showAnalysis = hasActiveSession && (hasCurrentUploadResult || hasResumedSession);
-  const sessionState = showAnalysis ? uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError, latestUploadSnapshot) : "No Active Session";
+  const sessionState = showAnalysis ? uploadStateView.connectionStateLabel(latestStatus, uploadState, displayUploadError, latestUploadSnapshot) : "No Dataset Analyzed";
   const timings = latestUploadResult?.processing_stats?.timings ?? uploadJob?.timings ?? {};
   const parseSeconds = timings?.parse_seconds ?? null;
   const baselineSeconds = timings?.baseline_build_seconds ?? null;
@@ -27,7 +27,7 @@ export default function IntakeStatusPanel({
   const processingPath = latestUploadSnapshot?.history?.[0]?.upload_processing_mode ?? uploadJob?.result_summary?.upload_processing_mode ?? null;
   const activeFilename = latestUploadSnapshot?.history?.[0]?.filename ?? null;
   const baselineReference = activeFilename
-    ? `${activeFilename} (behavioral baseline)`
+    ? `${activeFilename} (behavior baseline)`
     : "Awaiting telemetry file";
   const queuePending = Number(apiStatus?.queue?.pending ?? 0);
   const queueOldestPendingSeconds = Number(apiStatus?.queue?.oldest_pending_age_seconds ?? NaN);
@@ -51,7 +51,7 @@ export default function IntakeStatusPanel({
       <Panel title="Processing" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
         <MetricGrid
           metrics={[
-            { label: "Processing Path", value: processingPath === "hash_cache_reused" ? "Alternate Path" : processingPath ? "Standard Path" : "Unavailable" },
+            { label: "Analysis path", value: processingPath === "hash_cache_reused" ? "Reused Result" : processingPath ? "New Analysis" : "Not available" },
             { label: "Parse (s)", value: parseSeconds },
             { label: "Baseline (s)", value: baselineSeconds },
             { label: "Scoring (s)", value: scoreSeconds },
@@ -75,7 +75,7 @@ export default function IntakeStatusPanel({
       ) : (
         <Panel title="No Active System Review" className="span-5 uploaded-intelligence-panel uploaded-intelligence-panel--delta">
           <div className="intake-flow__controls">
-            <button type="button" className="command-button" onClick={onOpenUpload}>Analyze New Telemetry</button>
+            <button type="button" className="command-button" onClick={onOpenUpload}>Analyze Another Dataset</button>
             <button type="button" className="secondary-command-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
           </div>
         </Panel>

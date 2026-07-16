@@ -1,17 +1,17 @@
 # SII Ecosystem Standard
 
-Systemic Infrastructure Intelligence (SII) defines Neraium as a read-only cognition layer that sits above BMS, SCADA, historians, telemetry pipelines, and digital twin environments.
+Neraium is the read-only platform. Its Systemic Infrastructure Intelligence (SII) analyzes context from BMS, SCADA, historians, telemetry pipelines, and digital-twin environments.
 
 ## Core principles
 - Read-only integration only.
-- Evidence lineage attached to every cognition output.
-- Replayable reasoning with timeline reconstruction.
+- Evidence lineage attached to every SII output.
+- Replayable evidence with timeline reconstruction.
 - Operator-centric interpretation over autonomous action.
 
 ## Ecosystem contracts
 - Runtime state export (`/api/ecosystem/runtime/state`)
 - Context entity and relationship export (`/api/ecosystem/context/*`)
-- Structural cognition graph snapshot/evolution export (`/api/ecosystem/graph/*`)
+- System relationship graph snapshot/evolution export (`/api/ecosystem/graph/*`)
 - Replay/evidence/ontology export (`/api/ecosystem/*/export`)
 - Simulation scenario export (`/api/ecosystem/simulation/scenarios`)
 

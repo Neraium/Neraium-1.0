@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,6 +27,15 @@ from app.services.data_connections import (
 
 router = APIRouter(tags=["data-connections"], dependencies=[Depends(require_api_access)])
 logger = logging.getLogger(__name__)
+
+
+def _safe_connection_message(value: Any, fallback: str) -> str:
+    message = str(value or "").strip()
+    if not message:
+        return fallback
+    if re.search(r"traceback|stack trace|exception|localhost|/api/|\b(?:sql|python|uvicorn|psycopg|sqlite|errno)\b|[a-z]:\\", message, re.IGNORECASE):
+        return fallback
+    return message
 
 
 @router.get("/data-connections", response_model=DataConnectionsListResponse)
@@ -59,7 +69,7 @@ def test_registered_data_connection(connection_id: str) -> dict[str, Any]:
     try:
         result = test_data_connection(connection_id)
     except Exception as exc:
-        message = str(exc) or "Telemetry source did not return usable readings."
+        message = _safe_connection_message(exc, "The connector did not return usable telemetry. Check its settings and retry.")
         connection = {**existing_connection}
         connection.update(
             {
@@ -93,7 +103,7 @@ def start_data_connection(connection_id: str) -> dict[str, Any]:
         connection = set_connection_polling(connection_id, enabled=True)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
-    return {"connection": connection, "message": f"Started polling {connection['name']}."}
+    return {"connection": connection, "message": f"Continuous ingestion started for {connection['name']}."}
 
 
 @router.post("/data-connections/{connection_id}/stop", response_model=DataConnectionActionResponse, dependencies=[Depends(require_admin_role)])
@@ -102,7 +112,7 @@ def stop_data_connection(connection_id: str) -> dict[str, Any]:
         connection = set_connection_polling(connection_id, enabled=False)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
-    return {"connection": connection, "message": f"Stopped polling {connection['name']}."}
+    return {"connection": connection, "message": f"Continuous ingestion stopped for {connection['name']}."}
 
 
 @router.post("/data-connections/{connection_id}/poll-once", response_model=DataConnectionActionResponse, dependencies=[Depends(require_operator_role)])
@@ -112,8 +122,8 @@ def poll_data_connection(connection_id: str) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
     message = (
-        result.get("error")
-        or f"Polled {result['connection']['name']}."
+        _safe_connection_message(result.get("error"), "The connector check did not return usable telemetry. Check its settings and retry.")
+        if result.get("error") else f"Checked {result['connection']['name']}."
     )
     return {
         "connection": result["connection"],

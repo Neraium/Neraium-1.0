@@ -48,15 +48,15 @@ afterEach(() => {
 });
 
 describe("SystemBodyWorkspace empty state", () => {
-  it("keeps the Gate settings control reachable by its stable accessible name", () => {
+  it("keeps the workspace menu reachable by its stable accessible name", () => {
     renderWorkspace();
 
-    expect(screen.getByRole("button", { name: "Open Gate settings" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open workspace menu" })).toBeTruthy();
   });
 
   it("traps focus in the settings dialog, closes on Escape, and restores trigger focus", async () => {
     renderWorkspace();
-    const trigger = screen.getByRole("button", { name: "Open Gate settings" });
+    const trigger = screen.getByRole("button", { name: "Open workspace menu" });
     trigger.focus();
     fireEvent.click(trigger);
 
@@ -80,10 +80,10 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
-  it("surfaces detected telemetry domain in the Gate settings menu", () => {
+  it("surfaces detected telemetry domain in the workspace menu", () => {
     renderWorkspace({ domainDetection: { mode: "aquatic", source: "upload_shape", confidence: 0.88 } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Gate settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open workspace menu" }));
 
     expect(screen.getByText("Detected data type: Aquatic")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Data connections" })).toBeTruthy();
@@ -93,12 +93,12 @@ describe("SystemBodyWorkspace empty state", () => {
     renderWorkspace();
 
     expect(screen.getAllByText("Awaiting Telemetry").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Start operational intelligence" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Analyze New Telemetry" })).toBeTruthy();
-    expect(screen.queryByRole("tab", { name: "Issues" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Data Quality" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Evidence" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "View Issues" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Start with Neraium" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import Dataset" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Insights" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Data Quality" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Evidence" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "View Insights" })).toBeNull();
     expect(screen.queryByText("Rows loaded")).toBeNull();
   });
 
@@ -121,13 +121,13 @@ describe("SystemBodyWorkspace empty state", () => {
       onResumePreviousUpload,
     });
 
-    expect(screen.getByRole("heading", { name: "Start operational intelligence" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Analyze New Telemetry" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Start with Neraium" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import Dataset" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Resume Previous Analysis" })).toBeTruthy();
     expect(screen.getByLabelText("Previous analysis").textContent).toContain("old-upload.csv");
     expect(screen.queryByText("Ready with warnings")).toBeNull();
     expect(screen.queryByText("51841")).toBeNull();
-    expect(screen.queryByRole("button", { name: "View Issues" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "View Insights" })).toBeNull();
   });
 
   it("enables review metrics after a completed analysis exists", () => {
@@ -147,7 +147,7 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    expect(screen.getByRole("button", { name: "View Issues" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "View Insights" })).toBeTruthy();
     expect(readResultDetail("Historical comparison")).toBe("State Group B");
     expect(screen.queryByText("Operating pattern duration")).toBeNull();
   });
@@ -189,7 +189,7 @@ describe("SystemBodyWorkspace empty state", () => {
       canonicalFinding: {
         exists: true,
         title: "Relationship drift detected",
-        status: "Issue Detected",
+        status: "High",
         confidence: "High",
         summary: "Pump power and filter DP changed from their historical pattern.",
         whyItMatters: "The relationship change can indicate an emerging operating constraint.",
@@ -228,7 +228,7 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.queryByRole("heading", { name: "Analysis running" })).toBeNull();
     expect(screen.queryByText(/backend processing has not finished/i)).toBeNull();
     expect(readResultDetail("Operating pattern duration")).toBe("2d");
-    expect(screen.queryByRole("button", { name: "Review Issues" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review Insights" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Review Evidence" })).toBeNull();
   });
 
@@ -265,7 +265,7 @@ describe("SystemBodyWorkspace empty state", () => {
 
     expect(screen.getByRole("heading", { name: "Telemetry is still processing." })).toBeTruthy();
     expect(screen.getAllByText("Telemetry is present, but analysis is still running.")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Review Issues" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review Insights" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Review Evidence" })).toBeNull();
   });
 

@@ -491,7 +491,7 @@ def test_upload_status_accepts_existing_session_cookie_in_production(tmp_path) -
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "RUNNING_SII"
-    assert payload["message"] == "Telemetry batch processing in progress."
+    assert payload["message"] == "Dataset analysis is in progress."
     assert payload["rows_processed"] == 500_000
 
 
@@ -2270,7 +2270,7 @@ def test_latest_upload_always_returns_system_interpretation_for_no_active_sessio
     assert "system_interpretation" in payload
     interpretation = payload["system_interpretation"]
     assert interpretation["facility_state_enum"] == "no_active_session"
-    assert interpretation["facility_state_label"] == "No Active Session"
+    assert interpretation["facility_state_label"] == "No Dataset Analyzed"
     assert interpretation["instability_index"] == 0.0
     assert interpretation["instability_scale"] == "0-100"
     assert interpretation["engine_native_fields"] == []
@@ -2584,8 +2584,9 @@ def test_worker_processing_exception_marks_job_failed_instead_of_leaving_pending
     assert payload.get("status") == "FAILED"
     assert payload.get("processing_state") == "failed"
     assert payload.get("error_type") == "processing_error"
-    assert "structural scoring exploded" in str(payload.get("error") or "")
-    assert "structural scoring exploded" in str(payload.get("message") or "")
+    assert payload.get("error") == "Analysis could not complete."
+    assert payload.get("message") == "Analysis could not complete. Retry the analysis. If it happens again, contact an administrator."
+    assert "structural scoring exploded" not in str(payload)
     assert queue_entry.get("status") == "failed"
 
 

@@ -3,8 +3,17 @@ import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 import SystemStateMark from "./SystemStateMark";
 import { buildCanonicalFindingRun, OPERATOR_EMPTY_STATE, sanitizeOperatorText } from "../viewModels/operatorFinding";
 
+function observationRequestError(response, payload, fallback) {
+  if (response?.status === 401) return "Your session expired. Sign in again, then reopen Insights.";
+  if (response?.status === 403) return "Your account does not have permission to update this evidence record. Ask an administrator for access.";
+  if (response?.status >= 500) return fallback;
+  const detail = String(payload?.detail || "").trim();
+  if (!detail || /(traceback|exception|stack trace|shared_upload|psycopg|sqlite3|errno|file:\/\/|[a-z]:\\)/i.test(detail)) return fallback;
+  return detail;
+}
+
 const FEEDBACK_OPTIONS = [
-  { id: "confirmed_issue", label: "Confirmed issue" },
+  { id: "confirmed_issue", label: "Confirmed insight" },
   { id: "false_positive", label: "False positive" },
   { id: "maintenance_event", label: "Maintenance event" },
   { id: "known_operational_change", label: "Known operational change" },
@@ -74,7 +83,7 @@ function canRecordFeedback(run, persistedRunIds) {
 
 function observationTypeLabel(value) {
   const text = String(value ?? "").replaceAll("_", " ").trim();
-  if (!text) return "Issue";
+  if (!text) return "Insight";
   const normalized = text.toLowerCase();
   if (normalized === "coupling change") return "System Behavior Shift";
   if (normalized === "recovery elongation") return "Slower Recovery";
@@ -111,7 +120,7 @@ function driftToneFor(run) {
 }
 
 function summarizeObservation(run, aliases) {
-  if (!run) return "No issue selected.";
+  if (!run) return "No insight selected.";
   const variables = (run?.variables ?? []).slice(0, 2).map((item) => displayVariable(item, aliases));
   const type = String(run?.observation_type ?? "");
   const duration = formatDurationFrom(run?.deformation_started_at);
@@ -350,11 +359,11 @@ export default function ObservationCenterWorkspace({
         const response = await apiFetch(`/api/evidence/runs?limit=${ISSUE_PAGE_SIZE}&offset=0`, { accessCode });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(String(payload?.detail ?? `Unexpected response: ${response.status}`));
+          throw new Error(observationRequestError(response, payload, "Insights could not be loaded. Refresh the page and retry."));
         }
         if (cancelled) return;
         const nextRuns = Array.isArray(payload?.runs) ? payload.runs : [];
-        console.info("[neraium] issues fetch status", { count: nextRuns.length, background });
+        console.info("[neraium] insights fetch status", { count: nextRuns.length, background });
         const newestRun = nextRuns[0]?.run_id ?? "";
         const pendingRunId = readPendingObservationRunId();
         if (latestSeenRunId.current && newestRun && newestRun !== latestSeenRunId.current) {
@@ -392,11 +401,11 @@ export default function ObservationCenterWorkspace({
         });
       } catch (loadError) {
         if (cancelled) return;
-        console.warn("[neraium] issues fetch status", { error: String(loadError?.message ?? loadError) });
+        console.warn("[neraium] insights fetch status", { error: String(loadError?.message ?? loadError), background });
         if (!background || runsRef.current.length === 0) {
           setError(String(loadError?.message ?? loadError));
         } else {
-          setListStatus("Issue refresh failed; showing the last loaded records.");
+          setListStatus("Insight refresh failed; showing the last loaded records.");
         }
       } finally {
         requestInFlight = false;
@@ -604,7 +613,7 @@ export default function ObservationCenterWorkspace({
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(String(payload?.detail ?? `Unexpected response: ${response.status}`));
+        throw new Error(observationRequestError(response, payload, "The evidence review could not be saved. Check the form and retry."));
       }
       setRuns((current) => current.map((run) => (run.run_id === payload.run_id ? payload : run)));
       setFeedbackActionTaken("");
@@ -635,14 +644,14 @@ export default function ObservationCenterWorkspace({
         className="system-gate__settings-action"
         onClick={() => onBackToGate?.()}
       >
-        Back to Health
+        Back to Command Center
       </button>
       <button
         type="button"
         className="system-gate__settings-action"
         onClick={() => onWorkspaceNavigate?.("help-changelog")}
       >
-        Technical
+        Help & Status
       </button>
     </div>
   );
@@ -651,7 +660,7 @@ export default function ObservationCenterWorkspace({
     return (
       <section className="workspace-surface">
         {backControl}
-        <Panel title="Issues" subtitle="Loading issues..." />
+        <Panel title="Operational Insights" subtitle="Loading insights and supporting evidence..." />
       </section>
     );
   }
@@ -660,7 +669,7 @@ export default function ObservationCenterWorkspace({
     return (
       <section className="workspace-surface">
         {backControl}
-        <EmptyState title="Issues Unavailable" body={error} />
+        <EmptyState title="Insights Unavailable" body={error} />
       </section>
     );
   }
@@ -671,20 +680,20 @@ export default function ObservationCenterWorkspace({
     <section className="workspace-surface observation-center">
       {backControl}
       <div className="observation-center__hero">
-        <section className="observation-center__snapshot" aria-label="Latest issue snapshot">
+        <section className="observation-center__snapshot" aria-label="Latest insight snapshot">
           <div className="observation-center__snapshot-orb">
             <SystemStateMark systemState={hasCurrentFinding ? gateOrbState : "stable"} intensity={hasCurrentFinding ? Math.min(1, Number(latestRun?.drift_metrics?.baseline_distance ?? latestRun?.drift_metrics?.drift_index ?? 0.18)) : 0.12} />
           </div>
           <div className="observation-center__snapshot-copy">
-            <p className="section-token">Current Status</p>
+            <p className="section-token">Current status</p>
             <strong>{activeFinding.status}</strong>
             <span>{activeFinding.confidence} confidence</span>
             <span>{hasCurrentFinding ? activeFinding.reviewNext : activeFinding.emptyState.detail}</span>
           </div>
         </section>
-        <section className="observation-center__summary" aria-label="Current issue summary">
+        <section className="observation-center__summary" aria-label="Current insight summary">
           <p className="section-token">Current observation</p>
-          <h1>Issues</h1>
+          <h1>Operational Insights</h1>
           <p>{activeFinding.summary}</p>
           <MetricGrid
             metrics={[
@@ -702,17 +711,17 @@ export default function ObservationCenterWorkspace({
       </div>
 
       <div className="workspace-grid workspace-grid--console observation-center__grid">
-        <Panel title="Issues" className="span-7 observation-center__panel observation-center__panel--timeline">
+        <Panel title="Insights" className="span-7 observation-center__panel observation-center__panel--timeline">
           <details className="observation-center__filters-toggle">
-            <summary>Filter issues</summary>
-            <div className="observation-center__filters" role="group" aria-label="Issues filters">
+            <summary>Filter and search insights</summary>
+            <div className="observation-center__filters" role="group" aria-label="Insight filters">
               <label className="observation-center__field">
-                <span>Search issues</span>
+                <span>Search insights</span>
                 <input
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search run ID, signals, or evidence"
+                  placeholder="Search analysis ID, signals, or evidence"
                 />
               </label>
               <label className="observation-center__field">
@@ -728,7 +737,7 @@ export default function ObservationCenterWorkspace({
                 </select>
               </label>
               <label className="observation-center__field">
-                <span>Issue category</span>
+                <span>Insight category</span>
                 <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
                   <option value="all">All categories</option>
                   {observationTypeOptions.map((item) => <option key={item} value={item}>{observationTypeLabel(item)}</option>)}
@@ -780,7 +789,7 @@ export default function ObservationCenterWorkspace({
           </div>
         </Panel>
 
-        <Panel title="Review Issue" className="span-5 observation-center__panel observation-center__panel--detail">
+        <Panel title="Review Insight" className="span-5 observation-center__panel observation-center__panel--detail">
           {!hasCurrentFinding ? (
             <div className="observation-detail-callout">
               <strong>{activeFinding.emptyState.title}</strong>
@@ -802,14 +811,14 @@ export default function ObservationCenterWorkspace({
                 ]}
                 compact
               />
-              <IssueBriefingList title="Most Probable Operational Causes" items={activeBriefing.possibleCauses} />
+              <IssueBriefingList title="Possible Operational Contributors" items={activeBriefing.possibleCauses} />
               <IssueBriefingList title="Relationships Involved" items={activeBriefing.relationships} />
               <IssueBriefingList title="Recommended First Checks" items={activeBriefing.investigation} />
               <div className="intake-flow__controls">
-                <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Details</button>
+                <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Evidence</button>
               </div>
               <details className="compact-list-block">
-                <summary className="section-token">Advanced Details</summary>
+                <summary className="section-token">Analysis Details</summary>
                 <ul className="compact-list">
                   {(activeFinding.supportingEvidence ?? []).length > 0
                     ? activeFinding.supportingEvidence.map((item, index) => <li key={`${item}-${index}`}>{sanitizeOperatorText(item)}</li>)
@@ -821,7 +830,7 @@ export default function ObservationCenterWorkspace({
                 </ul>
               </details>
               <details className="compact-list-block">
-                <summary className="section-token">Data Quality</summary>
+                <summary className="section-token">Data quality</summary>
                 <ul className="compact-list">
                   {renderDataQualityRows(activeFinding.dataQuality)}
                 </ul>
@@ -862,7 +871,7 @@ export default function ObservationCenterWorkspace({
                 <textarea aria-label="Optional review note" value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional review note" rows={3} />
                 <div className="intake-flow__controls">
                   <button type="button" className="command-button" onClick={submitFeedback} disabled={!selectedRunAllowsFeedback}>Save Review</button>
-                  {feedbackState.message ? <span className="observation-feedback-state" role="status" aria-live="polite">{feedbackState.message}</span> : (!selectedRunAllowsFeedback && selectedRun ? <span className="observation-feedback-state">Review feedback unlocks after the system record is persisted.</span> : null)}
+                  {feedbackState.message ? <span className="observation-feedback-state" role="status" aria-live="polite">{feedbackState.message}</span> : (!selectedRunAllowsFeedback && selectedRun ? <span className="observation-feedback-state">Review feedback becomes available after the evidence record is saved.</span> : null)}
                 </div>
               </div>
             </>
@@ -902,8 +911,8 @@ export default function ObservationCenterWorkspace({
         <Panel title="Notifications" className="span-5 observation-center__panel">
           <MetricGrid
             metrics={[
-              { label: "Issues / 24h", value: silenceHealth.lastDay },
-              { label: "Issues / 7d", value: silenceHealth.lastWeek },
+              { label: "Insights in 24h", value: silenceHealth.lastDay },
+              { label: "Insights in 7d", value: silenceHealth.lastWeek },
               { label: "Instrument state", value: silenceHealth.state },
             ]}
             compact
@@ -936,7 +945,7 @@ export default function ObservationCenterWorkspace({
           </div>
           <div className="observation-trust-note">
             <strong>Default silence is preserved.</strong>
-            <p>Notifications stay operator-controlled, quiet hours are respected, and ignored issues remain open without reminders or escalation.</p>
+            <p>Notifications stay operator-controlled, quiet hours are respected, and ignored insights remain open without reminders or escalation.</p>
           </div>
         </Panel>
 
@@ -954,7 +963,7 @@ export default function ObservationCenterWorkspace({
             </label>
           </div>
           <div className="intake-flow__controls">
-            <button type="button" className="command-button" onClick={saveAlias}>Save Alias</button>
+            <button type="button" className="command-button" onClick={saveAlias}>Save label</button>
           </div>
           <ul className="compact-list">
             {Object.entries(aliases).filter(([, value]) => String(value ?? "").trim()).map(([key, value]) => (
@@ -963,7 +972,7 @@ export default function ObservationCenterWorkspace({
           </ul>
         </Panel>
 
-        <Panel title="Technical Sources" className="span-7 observation-center__panel">
+        <Panel title="Evidence Sources" className="span-7 observation-center__panel">
           {selectedRun ? (
             <div className="observation-center__export-actions" style={{ marginBottom: 16 }}>
               <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "json")}>Export JSON</button>
@@ -1001,7 +1010,7 @@ function maybeNotifyForObservation(run, prefs, aliases) {
   const body = variables
     ? `${observationTypeLabel(run?.observation_type)} involving ${variables}`
     : `${observationTypeLabel(run?.observation_type)} recorded`;
-  const notification = new Notification("Neraium issue", { body });
+  const notification = new Notification("Neraium insight", { body });
   notification.onclick = () => {
     try {
       window.localStorage.setItem(PENDING_OBSERVATION_STORAGE_KEY, String(run?.run_id ?? ""));

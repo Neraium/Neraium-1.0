@@ -182,7 +182,7 @@ function App() {
         window: governance?.elapsed_operational_duration ?? "Governed window active",
       },
       findings: hasPass
-        ? [{ detail: governance?.why_summary ?? canonicalFinding.summary ?? "Admitted governed finding active." }]
+        ? [{ detail: governance?.why_summary ?? canonicalFinding.summary ?? "Governed insight approved for operator review." }]
         : (canonicalFinding.exists ? [{ detail: canonicalFinding.summary }] : []),
       interventionItems: hasPass
         ? [{
@@ -354,9 +354,9 @@ function deriveUploadTone(result) {
 }
 
 function formatClockTime(value) {
-  if (!value) return "Unavailable";
+  if (!value) return "Not available";
   const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unavailable";
+  if (Number.isNaN(date.getTime())) return "Not available";
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "2-digit",

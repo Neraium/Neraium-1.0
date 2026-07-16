@@ -2,19 +2,19 @@ import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 
 const CHANGELOG_ENTRIES = [
   {
-    date: "2026-06-05",
-    title: "Historical fact moved into the evidence model",
-    detail: "Observation exports and API responses now carry the corpus-derived historical fact instead of rebuilding it in the frontend.",
+    date: "2026-07-16",
+    title: "Product language standardized",
+    detail: "Neraium now names the platform separately from Systemic Infrastructure Intelligence and uses consistent operator-facing terms across every workspace.",
   },
   {
-    date: "2026-06-05",
-    title: "Issues simplified",
-    detail: "Trust boundaries and version history now live in a dedicated help workspace so issues stay focused on what changed.",
+    date: "2026-07-16",
+    title: "Datasets and connectors separated",
+    detail: "Dataset imports, connector setup, and connector health now have distinct labels and status messages.",
   },
   {
-    date: "2026-06-04",
-    title: "Instrument language tightened",
-    detail: "Warm shift tones replaced emergency red so the instrument stays calm while still showing sustained change.",
+    date: "2026-07-16",
+    title: "Insight review clarified",
+    detail: "Insights, evidence, severity, and facility state now use consistent labels and explain the next operator action.",
   },
 ];
 
@@ -28,18 +28,18 @@ function displayValue(value) {
 function diagnosticsRows(diagnostics) {
   if (!diagnostics) return [];
   return [
-    ["API host", `${displayValue(diagnostics.api?.backend_host)}:${displayValue(diagnostics.api?.backend_port)}`],
-    ["Upload route", displayValue(diagnostics.api?.upload_endpoint)],
-    ["Build", displayValue(diagnostics.deployment?.build_sha)],
-    ["Environment", displayValue(diagnostics.deployment?.app_env)],
-    ["Process role", displayValue(diagnostics.deployment?.process_role)],
-    ["Analysis state", displayValue(diagnostics.upload?.upload_state_backend)],
-    ["Pending analyses", displayValue(diagnostics.upload?.queue_backend)],
-    ["Shared analysis state", displayValue(diagnostics.upload?.upload_state_shared_configured)],
-    ["Background analysis", displayValue(diagnostics.worker?.startup_worker_started || diagnostics.worker?.configured_start_background_workers)],
-    ["Latest upload", displayValue(diagnostics.upload?.latest_upload_session_id)],
-    ["Latest status", displayValue(diagnostics.upload?.latest_upload_status || diagnostics.upload?.latest_upload_state)],
-    ["Latest error", displayValue(diagnostics.upload?.latest_upload_error_type || diagnostics.upload?.latest_upload_message)],
+    ["Service address", `${displayValue(diagnostics.api?.backend_host)}:${displayValue(diagnostics.api?.backend_port)}`],
+    ["Dataset import endpoint", displayValue(diagnostics.api?.upload_endpoint)],
+    ["Release", displayValue(diagnostics.deployment?.build_sha)],
+    ["Deployment environment", displayValue(diagnostics.deployment?.app_env)],
+    ["Service role", displayValue(diagnostics.deployment?.process_role)],
+    ["Analysis status", displayValue(diagnostics.upload?.upload_state_backend)],
+    ["Queued analyses", displayValue(diagnostics.upload?.queue_backend)],
+    ["Shared analysis storage", displayValue(diagnostics.upload?.upload_state_shared_configured)],
+    ["Background analysis service", displayValue(diagnostics.worker?.startup_worker_started || diagnostics.worker?.configured_start_background_workers)],
+    ["Latest analysis identifier", displayValue(diagnostics.upload?.latest_upload_session_id)],
+    ["Latest analysis status", displayValue(diagnostics.upload?.latest_upload_status || diagnostics.upload?.latest_upload_state)],
+    ["Latest service message", displayValue(diagnostics.upload?.latest_upload_error_type || diagnostics.upload?.latest_upload_message)],
   ];
 }
 
@@ -55,26 +55,26 @@ export default function HelpChangelogWorkspace({
     <section className="workspace-surface help-changelog">
       <div className="observation-center__back-control">
         <button type="button" className="system-gate__settings-action" onClick={() => onBackToGate?.()}>
-          Back to Health
+          Back to Command Center
         </button>
         <button type="button" className="system-gate__settings-action" onClick={() => onWorkspaceNavigate?.("observation-center")}>
-          Open Issues
+          Open Insights
         </button>
       </div>
 
       <div className="observation-center__hero">
-        <section className="observation-center__summary help-changelog__hero" aria-label="Help and changelog summary">
-          <p className="section-token">Technical</p>
-          <h1>Technical</h1>
+        <section className="observation-center__summary help-changelog__hero" aria-label="Platform guide and service status">
+          <p className="section-token">Help & Status</p>
+          <h1>Platform Guide & Service Status</h1>
           <p>
-            Neraium observes operating pattern changes, records support details, and stays read-only. This page holds the operating boundary and version history so issues stay focused.
+            Neraium is the platform. Systemic Infrastructure Intelligence (SII) analyzes infrastructure behavior and presents operator-reviewable insights with evidence. Neraium remains read-only.
           </p>
           <MetricGrid
             metrics={[
               { label: "Control boundary", value: "Read-only" },
               { label: "Sharing", value: "Operator-controlled" },
-              { label: "Review posture", value: "Quiet" },
-              { label: "Versioning", value: "Plain language" },
+              { label: "Insight priority", value: "Severity labels" },
+              { label: "Intelligence", value: "SII" },
             ]}
             compact
           />
@@ -82,27 +82,29 @@ export default function HelpChangelogWorkspace({
       </div>
 
       <div className="workspace-grid workspace-grid--console observation-center__grid">
-        <Panel title="What Neraium does" className="span-7 observation-center__panel">
+        <Panel title="Product terminology" className="span-7 observation-center__panel">
           <ul className="compact-list">
-            <li>Ingests multivariate telemetry without requiring domain semantics.</li>
-            <li>Compares current telemetry with historical operating patterns.</li>
-            <li>Surfaces issues as operating changes, not control instructions.</li>
-            <li>Records engineer feedback for future comparisons.</li>
+            <li><strong>System:</strong> equipment or processes grouped by shared telemetry behavior.</li>
+            <li><strong>Dataset:</strong> a bounded collection of timestamped telemetry imported for analysis.</li>
+            <li><strong>Connector:</strong> a configured read-only integration to a telemetry source.</li>
+            <li><strong>Analysis:</strong> one execution of SII against a dataset.</li>
+            <li><strong>Insight:</strong> an operational change that may warrant investigation.</li>
+            <li><strong>Evidence:</strong> observed measurements and relationships supporting an insight.</li>
           </ul>
         </Panel>
 
-        <Panel title="What it does not do" className="span-5 observation-center__panel">
+        <Panel title="Status meanings" className="span-5 observation-center__panel">
           <ul className="compact-list">
-            <li>No actuation or setpoint control.</li>
-            <li>No severity score, risk rating, or prediction.</li>
-            <li>No automatic root-cause claim.</li>
-            <li>No hidden cross-site sharing unless the operator exports records.</li>
+            <li><strong>Insight severity:</strong> Critical, High, Moderate, or Low investigation priority.</li>
+            <li><strong>Connector health:</strong> Healthy, Degraded, Offline, or Not configured.</li>
+            <li><strong>Facility state:</strong> Stable, Investigation recommended, Urgent investigation, Baseline needed, or Analyzing.</li>
+            <li>Evidence supports an interpretation but does not prove root cause.</li>
           </ul>
         </Panel>
 
-        <Panel title="Production diagnostics" className="span-12 observation-center__panel">
+        <Panel title="Service diagnostics" className="span-12 observation-center__panel">
           {rows.length === 0 ? (
-            <EmptyState title="Diagnostics unavailable" body="Analysis service diagnostics will appear after the next health check." compact />
+            <EmptyState title="Service diagnostics unavailable" body="Refresh the Command Center to run another health check. If diagnostics remain unavailable, contact an administrator." compact />
           ) : (
             <>
               <ul className="compact-list" data-testid="production-diagnostics">
@@ -115,7 +117,7 @@ export default function HelpChangelogWorkspace({
               </ul>
               {warnings.length > 0 ? (
                 <div className="upload-partial-alert" role="status">
-                  <strong>Deployment warnings</strong>
+                  <strong>Service warnings</strong>
                   <p>{warnings.join(", ")}</p>
                 </div>
               ) : null}
@@ -123,9 +125,9 @@ export default function HelpChangelogWorkspace({
           )}
         </Panel>
 
-        <Panel title="Version history" className="span-12 observation-center__panel">
+        <Panel title="Product updates" className="span-12 observation-center__panel">
           {CHANGELOG_ENTRIES.length === 0 ? (
-            <EmptyState title="No changelog entries" body="No version notes are available yet." compact />
+            <EmptyState title="No product updates" body="Product update notes will appear here after a release." compact />
           ) : (
             <ul className="compact-list">
               {CHANGELOG_ENTRIES.map((entry) => (

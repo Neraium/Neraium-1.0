@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { connectorHealthLabel } from "../content/productLanguage";
+
 const SAFE_CONFIG_KEY = "neraium.connector.safe_config";
 const DEFAULT_SAMPLE = JSON.stringify({ records: [{ timestamp: "2026-01-01T00:00:00Z", sensor_id: "supply_temp", value: 42.5, unit: "f" }] }, null, 2);
 
@@ -12,10 +14,19 @@ async function responsePayload(response) {
   try { return await response.json(); } catch { return {}; }
 }
 
+function safeConnectorDetail(value) {
+  const detail = String(value || "").trim();
+  if (!detail) return "The connector settings were not accepted.";
+  if (/(traceback|exception|stack trace|shared_upload|psycopg|sqlite3|errno|file:\/\/|[a-z]:\\)/i.test(detail)) {
+    return "The connector could not complete the request. Check the settings and retry.";
+  }
+  return detail;
+}
+
 function connectorError(response, payload) {
   if (response?.status === 401) return "Your session expired. Sign in again and retry.";
   if (response?.status === 403) return "Administrator access is required to configure telemetry connectors.";
-  if (response?.status === 400) return `${String(payload?.detail || "The connector settings were not accepted.")} Review the fields and retry.`;
+  if (response?.status === 400) return `${safeConnectorDetail(payload?.detail)} Review the fields and retry.`;
   return "The connector service is unavailable. Check service health and retry.";
 }
 
@@ -85,7 +96,7 @@ export default function ConnectorSetupPanel({ apiFetch, accessCode, currentUser 
       const response = await apiFetch(path, { accessCode, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const body = await responsePayload(response);
       if (!response.ok) throw new Error(connectorError(response, body));
-      setNotice(action === "test" ? `${body.message} No telemetry was ingested.` : `${body.message} ${body.records_ingested || 0} normalized records are ready for historical analysis.`);
+      setNotice(action === "test" ? `${body.message} No records were saved.` : `${body.message} ${body.records_ingested || 0} records were validated for analysis.`);
       await refresh({ announce: false });
     } catch (actionError) {
       setError(String(actionError?.message || actionError));
@@ -95,22 +106,22 @@ export default function ConnectorSetupPanel({ apiFetch, accessCode, currentUser 
   }
 
   if (!isAdmin) {
-    return <section className="connector-setup" aria-label="Telemetry connector permissions"><h2>Telemetry connectors</h2><p>Connector health and configuration are restricted to administrators. Use historical CSV analysis, or ask an administrator to configure a read-only source.</p></section>;
+    return <section className="connector-setup" aria-label="Telemetry connector permissions"><h2>Telemetry connectors</h2><p>Only administrators can configure connectors or review connector health. Import a CSV dataset for analysis, or ask an administrator to configure a supported read-only connector.</p></section>;
   }
 
   const functionalTypes = types.filter((item) => item.functional && ["rest", "database"].includes(item.connector_type));
   return (
     <section className="connector-setup" aria-labelledby="connector-title">
-      <div className="connector-setup__header"><div><p className="section-token">Administrator</p><h2 id="connector-title">Telemetry connector setup</h2><p>Test read-only access before normalizing telemetry. Credentials remain in this browser only and are never shown in health responses.</p></div><button type="button" className="secondary-command-button" onClick={() => void refresh()} disabled={Boolean(busy)}>{busy === "refresh" ? "Refreshing..." : "Refresh health"}</button></div>
+      <div className="connector-setup__header"><div><p className="section-token">Administrator</p><h2 id="connector-title">Telemetry Connector Setup</h2><p>Test read-only access before preparing a bounded telemetry sample. Credentials are used only for the request and are masked in connector health responses.</p></div><button type="button" className="secondary-command-button" onClick={() => void refresh()} disabled={Boolean(busy)}>{busy === "refresh" ? "Refreshing..." : "Refresh health"}</button></div>
       <div className="connector-setup__grid">
         <label>Connector type<select value={connectorType} onChange={(event) => setConnectorType(event.target.value)} disabled={Boolean(busy)}>{functionalTypes.map((item) => <option key={item.connector_type} value={item.connector_type}>{item.display_name}</option>)}</select></label>
-        <label>Source ID<input value={sourceId} onChange={(event) => setSourceId(event.target.value)} disabled={Boolean(busy)} /></label>
-        <label>System ID<input value={systemId} onChange={(event) => setSystemId(event.target.value)} disabled={Boolean(busy)} /></label>
-        {connectorType === "rest" ? <><label className="connector-setup__wide">Endpoint<input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://telemetry.example/api/readings" disabled={Boolean(busy)} /></label><label className="connector-setup__wide">Sample JSON<textarea value={samplePayload} onChange={(event) => setSamplePayload(event.target.value)} rows={7} disabled={Boolean(busy)} /></label></> : <><label className="connector-setup__wide">Database URL<input type="password" value={databaseUrl} onChange={(event) => setDatabaseUrl(event.target.value)} placeholder="postgresql://readonly@host/database" autoComplete="off" disabled={Boolean(busy)} /></label><label className="connector-setup__wide">Read-only query<textarea value={query} onChange={(event) => setQuery(event.target.value)} rows={5} disabled={Boolean(busy)} /></label></>}
+        <label>Source identifier<input value={sourceId} onChange={(event) => setSourceId(event.target.value)} disabled={Boolean(busy)} /></label>
+        <label>System identifier<input value={systemId} onChange={(event) => setSystemId(event.target.value)} disabled={Boolean(busy)} /></label>
+        {connectorType === "rest" ? <><label className="connector-setup__wide">Endpoint<input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://telemetry.example/api/readings" disabled={Boolean(busy)} /></label><label className="connector-setup__wide">Sample response JSON<textarea value={samplePayload} onChange={(event) => setSamplePayload(event.target.value)} rows={7} disabled={Boolean(busy)} /></label></> : <><label className="connector-setup__wide">Database URL<input type="password" value={databaseUrl} onChange={(event) => setDatabaseUrl(event.target.value)} placeholder="postgresql://readonly@host/database" autoComplete="off" disabled={Boolean(busy)} /></label><label className="connector-setup__wide">Read-only query<textarea value={query} onChange={(event) => setQuery(event.target.value)} rows={5} disabled={Boolean(busy)} /></label></>}
       </div>
-      <div className="operational-actions"><button type="button" className="secondary-command-button" onClick={() => void run("test")} disabled={Boolean(busy)}>{busy === "test" ? "Testing..." : "Test connection"}</button><button type="button" className="command-button" onClick={() => void run("ingest")} disabled={Boolean(busy)} title="Normalizes a bounded sample; use Historical Telemetry to execute analysis.">{busy === "ingest" ? "Normalizing..." : "Normalize telemetry"}</button></div>
+      <div className="operational-actions"><button type="button" className="secondary-command-button" onClick={() => void run("test")} disabled={Boolean(busy)}>{busy === "test" ? "Testing..." : "Test connection"}</button><button type="button" className="command-button" onClick={() => void run("ingest")} disabled={Boolean(busy)} title="Validates and prepares a bounded sample. This does not run an analysis.">{busy === "ingest" ? "Preparing sample..." : "Prepare sample"}</button></div>
       {notice ? <p className="connector-notice" role="status">{notice}</p> : null}{error ? <p className="auth-error" role="alert">{error}</p> : null}
-      <div className="connector-health" aria-label="Connector health">{health.map((item) => <article key={item.connector_type}><strong>{item.display_name}</strong><span className={`connector-health__status connector-health__status--${item.connection_status}`}>{item.connection_status.replaceAll("_", " ")}</span><small>{item.records_ingested || 0} records · {item.sensors_detected || 0} sensors</small>{item.errors?.length ? <small>{item.errors[0]}</small> : null}</article>)}</div>
+      <div className="connector-health" aria-label="Connector health">{health.map((item) => <article key={item.connector_type}><strong>{item.display_name}</strong><span className={`connector-health__status connector-health__status--${item.connection_status}`}>{connectorHealthLabel(item.connection_status)}</span><small>{item.records_ingested || 0} records · {item.sensors_detected || 0} sensors</small>{item.errors?.length ? <small>{safeConnectorDetail(item.errors[0])}</small> : null}</article>)}</div>
     </section>
   );
 }

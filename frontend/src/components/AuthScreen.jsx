@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { loginUser } from "../services/api/authApi";
+import { PRODUCT_DESCRIPTOR, PRODUCT_NAME } from "../content/productLanguage";
 
 const LAST_EMAIL_KEY = "neraium.auth.last_email";
 
@@ -34,9 +35,9 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
   return (
     <main className="auth-shell" aria-labelledby="auth-title" data-testid="auth-screen">
       <section className="auth-panel">
-        <p className="auth-kicker">Neraium Operational Intelligence</p>
-        <h1 id="auth-title">Sign in</h1>
-        <p className="auth-copy">Use the operator or administrator account provided by your facility administrator.</p>
+        <p className="auth-kicker">{PRODUCT_NAME}</p>
+        <h1 id="auth-title">Sign in to Neraium</h1>
+        <p className="auth-copy">Access the Neraium platform and its {PRODUCT_DESCRIPTOR}. Use the account provided by your facility administrator.</p>
         {notice ? <p className="auth-notice" role="status">{notice}</p> : null}
         <form className="auth-form" onSubmit={handleSubmit} aria-busy={busy}>
           <label htmlFor="auth-email">Email</label>
@@ -48,7 +49,7 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
             {busy ? "Signing in..." : "Sign in"}
           </button>
         </form>
-        <p className="auth-help">Cannot sign in? Ask an administrator to activate your account or reset your session.</p>
+        <p className="auth-help">Cannot sign in? Ask an administrator to confirm that your account is active or revoke your previous sessions.</p>
       </section>
     </main>
   );

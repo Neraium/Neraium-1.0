@@ -39,7 +39,9 @@ function isCrossOriginApiTarget(apiBaseUrl = API_BASE_URL) {
 }
 
 function timeoutMessage(timeoutMs, path) {
-  return `API request timed out after ${timeoutMs}ms while calling ${path}.`;
+  void timeoutMs;
+  void path;
+  return "The analysis service took too long to respond. Retry the action.";
 }
 
 function isPublicReadonlyPath(path) {
@@ -206,7 +208,7 @@ export async function apiFetch(path, options = {}) {
       throw timeoutError;
     }
 
-    const networkError = new Error(`API network unavailable while calling ${path}.`);
+    const networkError = new Error("The analysis service could not be reached. Check service health and retry.");
     networkError.name = "ApiNetworkError";
     networkError.path = path;
     networkError.cause = error;
@@ -217,11 +219,7 @@ export async function apiFetch(path, options = {}) {
   }
 }
 
-export const API_CONFIG_WARNING = configuredApiBaseUrl
-  ? ""
-  : isProductionBuild
-    ? ""
-    : "VITE_API_BASE_URL is not configured. Using local development API.";
+export const API_CONFIG_WARNING = "";
 
 export const APP_ACCESS_CONFIG_WARNING = "";
 

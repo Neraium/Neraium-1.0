@@ -490,8 +490,8 @@ export default function DataConnectionsWorkspace({
       processing_state: "saving_results",
       percent: 100,
       progress: 100,
-      progress_label: "Persisting Behavioral Baseline",
-      message: "Persisting Behavioral Baseline",
+      progress_label: "Persisting Behavior Baseline",
+      message: "Persisting Behavior Baseline",
     }));
     setUploadState("saving_results");
     logTelemetryStage("save request started", { jobId });
@@ -506,7 +506,7 @@ export default function DataConnectionsWorkspace({
       const payloadValid = Boolean(resolveFinalAnalysisResult(completedPayload, hydratedResult, hydratedSnapshot, uploadResult, latestUploadResult, latestUploadSnapshot));
       logTelemetryStage("payload validation result", { jobId, valid: payloadValid });
       if (!payloadValid) {
-        throw new Error("Analysis payload was not valid after results were saved.");
+        throw new Error("The saved analysis result could not be opened. Refresh and retry.");
       }
       const finalResult = hydratedResult ?? savedResult ?? completedPayload;
       setUploadResult(finalResult);
@@ -517,8 +517,8 @@ export default function DataConnectionsWorkspace({
         processing_state: "save_complete",
         percent: 100,
         progress: 100,
-        progress_label: "Behavioral Baseline Established",
-        message: "Behavioral Baseline Established",
+        progress_label: "Behavior Baseline Established",
+        message: "Behavior Baseline Established",
       }));
       logTelemetryStage("state hydration completed", { jobId });
       completionNavigationEligibleRef.current = true;
@@ -577,7 +577,7 @@ export default function DataConnectionsWorkspace({
               const streamedStatus = normalizeUploadStatus(streamed.status);
               logTelemetryStatusProgress(streamedStatus, streamed);
               if (isTerminalCompletedPayload(streamed)) {
-                const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "saving_results", progress_label: "Persisting Behavioral Baseline", message: "Persisting Behavioral Baseline" };
+                const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "saving_results", progress_label: "Saving Analysis", message: "Saving Analysis" };
                 logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
                 setUploadJob(completedPayload);
                 completionNavigationEligibleRef.current = false;
@@ -628,7 +628,7 @@ export default function DataConnectionsWorkspace({
                   {
                     ...payload,
                     error_type: payload?.error_type || "upload_status_unavailable",
-                    message: payload?.message || "Upload status remained unavailable after repeated retries.",
+                    message: payload?.message || "Analysis status is temporarily unavailable. Retry the analysis.",
                   },
                   "poll",
                 );
@@ -659,8 +659,8 @@ export default function DataConnectionsWorkspace({
               processing_state: "saving_results",
               percent: 100,
               progress: 100,
-              progress_label: "Persisting Behavioral Baseline",
-              message: "Persisting Behavioral Baseline",
+              progress_label: "Persisting Behavior Baseline",
+              message: "Persisting Behavior Baseline",
             };
             setUploadJob(completePayload);
             completionNavigationEligibleRef.current = false;

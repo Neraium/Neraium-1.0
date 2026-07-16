@@ -130,10 +130,10 @@ export default function ReplayWorkspace({
 
   return (
     <div className="workspace-grid workspace-grid--console system-story-workspace">
-      <Panel title="Advanced Details" className="span-12 workspace-hero-panel system-story-hero" subtitle="What happened, why we believe it, and what to inspect next.">
+      <Panel title="Analysis Details" className="span-12 workspace-hero-panel system-story-hero" subtitle="What happened, why we believe it, and what to inspect next.">
         <div className="system-story-hero__layout">
           <div>
-            <p className="section-token">Advanced Details</p>
+            <p className="section-token">Analysis Details</p>
             <h3>{story.whatHappened}</h3>
             <p className="narrative-text">{story.summary}</p>
           </div>
@@ -197,7 +197,7 @@ export default function ReplayWorkspace({
       <Panel title="Supporting Trends" className="span-12 system-story-card">
         <div className="system-story-chart-grid">{story.trends.map((trend) => <TrendChart key={trend.label} trend={trend} />)}</div>
       </Panel>
-      <Panel title="Engineer Notes" className="span-6 system-story-card">
+      <Panel title="Operator Notes" className="span-6 system-story-card">
         <div className="system-story-note-entry">
           <textarea aria-label="Inspection notes" value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="Add inspection notes" rows={3} />
           <button type="button" className="command-button" onClick={() => addNote()}>Add Note</button>
@@ -211,11 +211,11 @@ export default function ReplayWorkspace({
               <strong>{note.text}</strong>
               <span>{formatClockTime(note.createdAt)}</span>
             </section>
-          )) : <p className="narrative-text">No engineer notes attached yet.</p>}
+          )) : <p className="narrative-text">No operator notes have been added. Add inspection context when it becomes available.</p>}
         </div>
       </Panel>
-      <Panel title="Repair Outcome" className="span-6 system-story-card">
-        <div className="system-story-learning" role="group" aria-label="Repair outcome">
+      <Panel title="Inspection Outcome" className="span-6 system-story-card">
+        <div className="system-story-learning" role="group" aria-label="Inspection outcome">
           {LEARNING_OPTIONS.map((label) => (
             <button type="button" key={label} className={selectedLearning === label ? "command-button" : "secondary-command-button"} onClick={() => selectLearning(label)}>
               {label}
@@ -226,7 +226,7 @@ export default function ReplayWorkspace({
           {selectedLearning ? `Marked as ${selectedLearning.toLowerCase()}. Future comparisons for this session will include that field context.` : "Mark the inspection outcome so future stories can account for field knowledge."}
         </p>
       </Panel>
-      {error ? <Panel title="Advanced Details Notice" className="span-12"><p className="narrative-text">{error}</p></Panel> : null}
+      {error ? <Panel title="Analysis Details Notice" className="span-12"><p className="narrative-text">{error}</p></Panel> : null}
     </div>
   );
 }
@@ -255,11 +255,11 @@ async function fetchUploadScopedTimeline({ apiFetch, accessCode, jobId = null })
   let targetJobId = jobId;
   if (!targetJobId) {
     const latestResponse = await apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode });
-    if (!latestResponse.ok) throw new Error(`Unexpected response: ${latestResponse.status}`);
+    if (!latestResponse.ok) throw new Error("The saved analysis could not be loaded. Refresh and retry.");
     const latestPayload = await latestResponse.json();
     const currentUpload = latestPayload?.current_upload ?? latestPayload?.snapshot?.current_upload ?? null;
     targetJobId = uploadStateView.resolveCurrentUploadJobId(latestPayload) ?? currentUpload?.job_id ?? null;
-    if (!targetJobId) return { jobId: null, timeline: [], meta: {}, message: "Advanced details are waiting for an active telemetry session." };
+    if (!targetJobId) return { jobId: null, timeline: [], meta: {}, message: "Analysis details will appear after a dataset has been analyzed." };
   }
   const statusResponse = await apiFetch(`/api/data/upload-status/${encodeURIComponent(targetJobId)}`, { accessCode });
   let pendingMessage = "";
@@ -272,7 +272,7 @@ async function fetchUploadScopedTimeline({ apiFetch, accessCode, jobId = null })
     if (status && !terminalOrFetchable) pendingMessage = `Advanced details are still building for this upload job (${status.toLowerCase()}).`;
   }
   const timelineResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}?mode=${encodeURIComponent("live")}&replay_compression=${encodeURIComponent(String(1))}`, { accessCode });
-  if (!timelineResponse.ok) throw new Error(`Unexpected response: ${timelineResponse.status}`);
+  if (!timelineResponse.ok) throw new Error("The behavior timeline could not be loaded. Refresh and retry.");
   const payload = await timelineResponse.json();
   const timeline = Array.isArray(payload?.timeline) ? payload.timeline : [];
   const meta = payload?.meta && typeof payload.meta === "object" ? payload.meta : {};
@@ -296,7 +296,7 @@ function buildSystemStory({ timeline, frame, frameIndex, canonicalFinding, curre
   const equipment = inferEquipmentName(variables, domainMode);
   const duration = inferDuration({ frames, evidenceRun, finding });
   const strength = formatChangeStrength(activeFrame);
-  const whatHappened = pendingState ? "Telemetry is present, but the story is waiting for verification." : finding.summary ? sanitizeOperatorText(finding.summary) : buildWhatHappened({ equipment, strength, duration, activeFrame });
+  const whatHappened = pendingState ? "Insights are not ready because the analysis is still being verified." : finding.summary ? sanitizeOperatorText(finding.summary) : buildWhatHappened({ equipment, strength, duration, activeFrame });
   const evidence = pendingState ? sanitizeOperatorList([pendingState.subtitle, pendingState.detail]) : buildEvidenceBullets({ evidenceRun, finding, activeFrame, variables });
   return {
     whatHappened,

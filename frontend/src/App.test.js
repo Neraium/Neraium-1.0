@@ -104,7 +104,7 @@ vi.mock("./components/OperationalWorkflowWorkspace", () => ({
         onChange: (event) => onCsvSelected?.(Array.from(event.target.files ?? [])),
       }),
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open telemetry intake"),
-      h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open findings"),
+      h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open insights"),
     );
   },
 }));
@@ -393,7 +393,7 @@ describe("App telemetry completion navigation", () => {
     }
   });
 
-  it("passes the same canonical finding to Gate and Findings", async () => {
+  it("passes the same canonical insight to Command Center and Insights", async () => {
     runtimeState.latestUploadResult = {
       job_id: "finding-job-9",
       observation_type: "trajectory_drift",
@@ -422,14 +422,14 @@ describe("App telemetry completion navigation", () => {
     expect(gateSummary).toMatch(/historical operating pattern/i);
     expect(screen.getByTestId("gate-finding-confidence").textContent).toBe("High");
 
-    fireEvent.click(screen.getByRole("button", { name: "Open findings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open insights" }));
 
     await waitFor(() => expect(screen.getByTestId("observation-workspace")).toBeTruthy());
     expect(screen.getByTestId("observation-finding-summary").textContent).toBe(gateSummary);
     expect(screen.getByTestId("observation-finding-confidence").textContent).toBe("High");
   });
 
-  it("keeps findings pending when telemetry exists but operator review is not yet evidence-ready", async () => {
+  it("keeps insights pending when telemetry exists but operator review is not yet evidence-ready", async () => {
     runtimeState.latestUploadResult = {
       job_id: "pending-job-3",
       observation_type: "trajectory_drift",
@@ -451,10 +451,10 @@ describe("App telemetry completion navigation", () => {
     render(h(App));
     await launchWorkspace();
 
-    expect(screen.getByTestId("gate-finding-summary").textContent).toBe("Analysis pending verification.");
+    expect(screen.getByTestId("gate-finding-summary").textContent).toBe("Insights are not ready.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Open findings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open insights" }));
     await waitFor(() => expect(screen.getByTestId("observation-workspace")).toBeTruthy());
-    expect(screen.getByTestId("observation-finding-summary").textContent).toBe("Analysis pending verification.");
+    expect(screen.getByTestId("observation-finding-summary").textContent).toBe("Insights are not ready.");
   });
 });

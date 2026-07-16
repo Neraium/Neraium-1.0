@@ -184,7 +184,7 @@ def create_auth_user(payload: AuthUserCreateRequest, request: Request) -> AuthUs
 def activate_auth_user(email: str, request: Request) -> AuthUserResponse:
     user = activate_user(email)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise HTTPException(status_code=404, detail="User account not found.")
     _record_admin_auth_event(
         actor=_request_actor(request),
         action="auth.user.activated",
@@ -203,7 +203,7 @@ def activate_auth_user(email: str, request: Request) -> AuthUserResponse:
 def deactivate_auth_user(email: str, request: Request) -> AuthUserResponse:
     user = deactivate_user(email)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise HTTPException(status_code=404, detail="User account not found.")
     _record_admin_auth_event(
         actor=_request_actor(request),
         action="auth.user.deactivated",
@@ -238,7 +238,7 @@ def revoke_auth_sessions(payload: AuthSessionRevokeRequest, request: Request) ->
         revoke_all_for_user=payload.revoke_all_for_user,
     )
     if revoked <= 0:
-        raise HTTPException(status_code=404, detail="Session target not found.")
+        raise HTTPException(status_code=404, detail="No matching active session was found.")
     _record_admin_auth_event(
         actor=_request_actor(request),
         action="auth.session.revoked",
@@ -257,7 +257,7 @@ def revoke_auth_sessions(payload: AuthSessionRevokeRequest, request: Request) ->
 def login(payload: LoginRequest, request: Request, response: Response) -> dict[str, Any]:
     retry_after = _enforce_login_rate_limit(request, payload.email)
     if retry_after is not None:
-        raise HTTPException(status_code=429, detail="Too many login attempts. Retry later.", headers={"Retry-After": str(retry_after)})
+        raise HTTPException(status_code=429, detail="Too many sign-in attempts. Wait a few minutes and try again.", headers={"Retry-After": str(retry_after)})
     user = authenticate_user(payload.email, payload.password)
     if not user:
         _record_auth_event(

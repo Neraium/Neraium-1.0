@@ -25,7 +25,7 @@ async function renderCompletionFixture(page) {
             </div>
           </section>
           <details class="upload-advanced-details">
-            <summary>Advanced Details</summary>
+            <summary>Analysis Details</summary>
             <dl class="upload-advanced-details__grid">
               <div><dt>Upload ID</dt><dd>job-complete</dd></div>
             </dl>

@@ -17,7 +17,7 @@ export default function SystemsView({ model, helpers, onOpenInsight }) {
                   <DetailGrid rows={[
                     ["Status", system.status],
                     ["Active Insights", system.activeInsights],
-                    ["Primary Finding", system.primaryFinding],
+                    ["Primary Insight", system.primaryFinding],
                     ["Recommended First Action", system.recommendedFirstAction],
                     ["Key Changed Relationship", system.keyChangedRelationship],
                   ]} />

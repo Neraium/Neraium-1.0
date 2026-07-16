@@ -15,7 +15,7 @@ describe("ConnectorSetupPanel", () => {
   it("explains operator permissions without calling admin endpoints", () => {
     const apiFetch = vi.fn();
     render(h(ConnectorSetupPanel, { apiFetch, currentUser: { role: "operator" } }));
-    expect(screen.getByText(/restricted to administrators/i)).toBeTruthy();
+    expect(screen.getByText(/Only administrators can configure connectors/i)).toBeTruthy();
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
@@ -29,11 +29,11 @@ describe("ConnectorSetupPanel", () => {
     render(h(ConnectorSetupPanel, { apiFetch, currentUser: { role: "admin" } }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Test connection" }).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
-    await screen.findByText(/No telemetry was ingested/i);
+    await screen.findByText(/No records were saved/i);
     expect(apiFetch.mock.calls.filter(([path]) => path === "/api/connectors/rest/test")).toHaveLength(1);
   });
 
-  it("turns a backend validation failure into a next-step message", async () => {
+  it("turns a connector validation failure into a next-step message", async () => {
     const apiFetch = vi.fn(async (path) => {
       if (path === "/api/connectors/types") return reply({ types: [{ connector_type: "rest", display_name: "REST API", functional: true }] });
       if (path === "/api/connectors/health") return reply({ connectors: [] });
@@ -42,7 +42,7 @@ describe("ConnectorSetupPanel", () => {
     });
     render(h(ConnectorSetupPanel, { apiFetch, currentUser: { role: "admin" } }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Test connection" }).disabled).toBe(false));
-    fireEvent.change(screen.getByLabelText("Sample JSON"), { target: { value: JSON.stringify({ records: [{}] }) } });
+    fireEvent.change(screen.getByLabelText("Sample response JSON"), { target: { value: JSON.stringify({ records: [{}] }) } });
     fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Review the fields and retry");
   });

@@ -271,7 +271,7 @@ function defaultOperationalImpacts(causes, relationships) {
     ];
   }
   return [
-    "Continued movement away from the learned operational baseline",
+    "Continued movement away from the learned behavior baseline",
     "Reduced confidence in downstream operating assumptions",
     "Higher likelihood of manual investigation on the next operating cycle",
   ];
@@ -357,7 +357,7 @@ function whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships)
     return `Neraium detected that the historical relationship between ${relationship.replace(" \u2194 ", " and ")} changed compared with the learned operating pattern. This combination most closely matches a change in operating behavior rather than a single isolated reading.`;
   }
   if (evidenceLine) {
-    return `Neraium generated this insight because the supporting evidence changed from the learned operational baseline: ${evidenceLine}`;
+    return `Neraium generated this insight because the supporting evidence changed from the learned behavior baseline: ${evidenceLine}`;
   }
   return "";
 }
@@ -544,10 +544,10 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
   const changeContext = buildChangeContext(insight, evidence);
   const operationalMemory = buildOperationalMemory(insight);
   const explicitSummary = text(insight?.behaviorInterpretation ?? insight?.whatHappened ?? insight?.rawSummary ?? insight?.summary);
-  const behavioralSummary = explicitSummary || `The ${subsystem} subsystem no longer behaves according to its learned operational baseline.`;
+  const behavioralSummary = explicitSummary || `The ${subsystem} subsystem no longer behaves according to its learned behavior baseline.`;
   const whyGenerated = whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships)
     || `The ${subsystem} subsystem changed behavior, and multiple operational relationships corroborated the shift. The combined evidence supports investigation.`;
-  const interpretation = `The simultaneous reorganization of ${relationships.length ? relationships.slice(0, 3).join(", ") : `relationships within ${subsystem}`} indicates that the subsystem is operating differently from its learned behavioral baseline.`;
+  const interpretation = `The simultaneous reorganization of ${relationships.length ? relationships.slice(0, 3).join(", ") : `relationships within ${subsystem}`} indicates that the subsystem is operating differently from its learned behavior baseline.`;
   const operationalStatus = severity === "Critical" ? "Critical" : severity === "High" ? "Investigation Recommended" : severity === "Moderate" ? "Watch" : "Normal";
   const relationshipModels = relationships.map((label, index) => ({ label, evidence: evidence[index], measurement: relationshipMeasurement(evidence[index]) }));
   const supportingSignals = unique(evidence.flatMap((item) => toList(item?.supporting_signals, item?.supportingSignals, item?.source_columns, item?.sourceColumns)).map(signalName));

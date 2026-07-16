@@ -5,10 +5,10 @@ test.describe("Neraium frontend smoke", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
-    await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Operational Status" })).toBeVisible();
-    await expect(page.getByText("Awaiting Initial Baseline", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeVisible();
+    await expect(page.getByText("Baseline Needed", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Import and Analyze Dataset" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Connect Live Telemetry" })).toBeVisible();
   });
 
@@ -17,9 +17,9 @@ test.describe("Neraium frontend smoke", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
-    await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Command Center Overview" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Operational Status" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Import and Analyze Dataset" })).toBeVisible();
   });
 });

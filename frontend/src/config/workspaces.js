@@ -3,13 +3,13 @@ export const WORKSPACES = [
     id: "system-body",
     label: "Command Center",
     eyebrow: "Operational State",
-    description: "Operational state, behavior baseline, system summary, and top finding.",
+    description: "Facility state, behavior baseline, discovered systems, and highest-priority insight.",
   },
   {
     id: "data-connections",
-    label: "Data Sources",
+    label: "Datasets & Connectors",
     eyebrow: "Telemetry",
-    description: "Connect telemetry sources and analyze historical operating data.",
+    description: "Import telemetry datasets and configure supported read-only connectors.",
   },
   {
     id: "observation-center",
@@ -19,21 +19,21 @@ export const WORKSPACES = [
   },
   {
     id: "system-story",
-    label: "Advanced",
-    eyebrow: "Technical",
-    description: "Raw identifiers, evidence objects, metadata, and diagnostics.",
+    label: "Analysis Details",
+    eyebrow: "Analysis",
+    description: "Review analysis history, evidence metadata, source details, and support diagnostics.",
   },
   {
     id: "help-changelog",
-    label: "Technical",
+    label: "Help & Status",
     eyebrow: "Support",
-    description: "Review support notes and operator-facing review rules.",
+    description: "Review product terminology, status meanings, service diagnostics, and product updates.",
   },
   {
     id: "governance-admin",
-    label: "Technical Admin",
+    label: "Administration",
     eyebrow: "Admin",
-    description: "Internal custody records and backend review details.",
+    description: "Manage user access, sessions, SII governance records, and analysis service status.",
   },
 ];
 

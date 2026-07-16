@@ -67,7 +67,7 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
 async function startCommandCenterUpload(page, { name, csv }) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-  await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
 
   const uploadAcceptedPromise = page.waitForResponse(
     (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
@@ -104,7 +104,7 @@ test.describe("Mobile post-upload transition", () => {
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
 
     const completionFallback = page.getByRole("button", { name: "Open Command Center" });
-    const commandCenter = page.getByRole("main", { name: "Neraium operational workspace" });
+    const commandCenter = page.getByRole("main", { name: "Neraium platform workspace" });
     await expect(completionFallback.or(commandCenter).first()).toBeVisible({ timeout: 30000 });
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
   });

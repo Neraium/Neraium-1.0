@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 
 import SystemStateMark from "./SystemStateMark";
+import { PRODUCT_DESCRIPTOR, PRODUCT_NAME } from "../content/productLanguage";
 import "../styles/home.css";
 
 const PLATFORM_CARDS = [
@@ -9,7 +10,7 @@ const PLATFORM_CARDS = [
     body: "Learns how systems normally interact across the full operating environment.",
   },
   {
-    title: "Priority findings",
+    title: "Prioritized insights",
     body: "Ranks operational changes by severity, confidence, and investigation value.",
   },
   {
@@ -21,7 +22,7 @@ const PLATFORM_CARDS = [
 const HERO_SIGNALS = [
   ["Operational state", "Current facility behavior"],
   ["What changed", "Relationships outside baseline"],
-  ["Where to begin", "Highest-priority finding"],
+  ["Where to begin", "Highest-priority insight"],
 ];
 
 const WORKFLOW_STEPS = [
@@ -96,10 +97,10 @@ export default function HomePage({ onLaunchWorkspace }) {
       <main id="main-content" tabIndex={-1}>
         <section id="home-hero" className="home-hero" aria-labelledby="home-title">
           <div className="home-hero__copy">
-            <p className="home-eyebrow">Operational Intelligence Platform</p>
-            <h1 id="home-title">Operational Intelligence for Critical Infrastructure</h1>
+            <p className="home-eyebrow">{PRODUCT_NAME}</p>
+            <h1 id="home-title">{PRODUCT_DESCRIPTOR} for Critical Infrastructure</h1>
             <p>
-              Neraium learns how facilities normally behave, detects meaningful operational change, and shows teams where to investigate first.
+              Neraium is the platform. Its SII learns how facilities normally behave, identifies meaningful operational change, and shows operators where to investigate first.
             </p>
           </div>
 
@@ -118,7 +119,7 @@ export default function HomePage({ onLaunchWorkspace }) {
             onPointerMove={handleOrbPointerMove}
             onPointerLeave={resetOrbPointer}
             role="img"
-            aria-label="Animated Neraium operational intelligence orb"
+            aria-label="Animated Systemic Infrastructure Intelligence status"
           >
             <div className="home-orb__energy home-orb__energy--outer" aria-hidden="true" />
             <div className="home-orb__energy home-orb__energy--inner" aria-hidden="true" />
@@ -138,7 +139,7 @@ export default function HomePage({ onLaunchWorkspace }) {
         <section id="platform" className="home-section home-section--platform" aria-labelledby="platform-title">
           <div className="home-section__header">
             <p className="home-eyebrow">Platform</p>
-            <h2 id="platform-title">Built for operational teams watching complex infrastructure.</h2>
+            <h2 id="platform-title">The Neraium platform is built for teams operating complex infrastructure.</h2>
           </div>
           <div className="home-card-grid">
             {PLATFORM_CARDS.map((card) => (
@@ -179,9 +180,9 @@ export default function HomePage({ onLaunchWorkspace }) {
         <section id="about" className="home-section home-section--about" aria-labelledby="about-title">
           <div className="home-section__header">
             <p className="home-eyebrow">About</p>
-            <h2 id="about-title">Explainable intelligence for operational change detection.</h2>
+            <h2 id="about-title">Systemic Infrastructure Intelligence that operators can review.</h2>
             <p>
-              Neraium gives operators a focused view of infrastructure behavior, relationship changes, and investigation priorities across monitored systems.
+              Neraium presents SII analyses as prioritized insights with supporting evidence, while keeping every connector and recommendation read-only.
             </p>
           </div>
           <button type="button" className="home-command" onClick={onLaunchWorkspace}>Open Command Center</button>

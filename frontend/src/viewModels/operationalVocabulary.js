@@ -1,26 +1,26 @@
 export const OPERATIONAL_VOCABULARY = {
   neutral: {
     awaitingTelemetry: "Awaiting telemetry",
-    baselinePending: "Reference pending",
-    standby: "Standby",
-    noActiveAnalysis: "No Active Structural Analysis",
-    noActiveTrajectory: "No Active Structural Trajectory",
-    noActiveProgression: "No Active Progression Sequence",
+    baselinePending: "Behavior baseline needed",
+    standby: "Ready",
+    noActiveAnalysis: "No active analysis",
+    noActiveTrajectory: "No active behavior trajectory",
+    noActiveProgression: "No active behavior sequence",
     awaitingHistorianStream: "Awaiting telemetry stream",
   },
   monitoring: {
     monitoringActive: "Monitoring",
-    structuralTrackingActive: "Persistence Under Evaluation",
+    structuralTrackingActive: "Tracking sustained change",
   },
   escalation: {
-    driftEmerging: "Change Emerging",
-    structuralInstabilityDetected: "Structural Instability",
-    relationshipDivergenceObserved: "Divergence Observed",
-    crossSubsystemPropagationObserved: "Change Spread",
+    driftEmerging: "Emerging change",
+    structuralInstabilityDetected: "Unstable behavior",
+    relationshipDivergenceObserved: "Relationship change observed",
+    crossSubsystemPropagationObserved: "Change spreading across systems",
   },
   recovery: {
-    structuralConvergenceObserved: "Stability Recovery",
-    recoveryStabilizationDetected: "Containment Stable",
+    structuralConvergenceObserved: "Returning to stable behavior",
+    recoveryStabilizationDetected: "Stable after intervention",
   },
 };
 
@@ -29,9 +29,9 @@ export const ESCALATION_LAYERS = [
   "Monitoring",
   "Change Emerging",
   "Persistent Change",
-  "Structural Instability",
-  "Sustained Structural Shift",
-  "Fragmented Structural Shift",
+  "Unstable Behavior",
+  "Sustained Behavior Change",
+  "Widespread Behavior Change",
 ];
 
 export const LIFECYCLE_RAIL_NEUTRAL = ESCALATION_LAYERS.map((label) => ({

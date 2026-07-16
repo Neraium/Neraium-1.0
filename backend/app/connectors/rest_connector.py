@@ -51,14 +51,14 @@ class RESTConnector(ConnectorBase):
         endpoint = self.config.get("endpoint")
         if not endpoint:
             return {"ok": False, "message": "REST endpoint is required."}
-        return {"ok": True, "message": "REST connector configured.", "endpoint": endpoint}
+        return {"ok": True, "message": "REST API connector settings are complete.", "endpoint": endpoint}
 
     def validate_connection(self) -> dict[str, Any]:
         payload = self._request_json()
         records = self._extract_records(payload)
         if not records:
             return {"ok": False, "message": "REST API returned an empty dataset."}
-        return {"ok": True, "message": f"REST API validated with {len(records)} records."}
+        return {"ok": True, "message": f"REST API access confirmed with {len(records)} telemetry records."}
 
     def fetch_historical(self) -> list[dict[str, Any]]:
         payload = self._request_json()

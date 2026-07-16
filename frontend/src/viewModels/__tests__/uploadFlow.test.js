@@ -36,9 +36,9 @@ describe("uploadFlow poll error classification", () => {
     const backendDetail = "token=do-not-render internal auth middleware failed";
 
     expect(operatorUploadMessage({ status: 401, errorType: "auth", detail: backendDetail, phase: "upload" }))
-      .toBe("Telemetry processing session could not be validated.");
+      .toBe("Your analysis session could not be verified. Sign in again, then retry the analysis.");
     expect(operatorUploadMessage({ status: 404, errorType: "upload_session_missing", detail: backendDetail, phase: "upload" }))
-      .toBe("Upload state unavailable.");
+      .toBe("Analysis status is unavailable. Refresh and retry.");
   });
 
   it("keeps upload job-not-found errors distinct from endpoint misses", () => {
@@ -78,15 +78,15 @@ describe("uploadFlow poll error classification", () => {
     });
   });
 
-  it("shows the concrete upload network failure during the upload phase", () => {
-    const error = new Error("Upload network error before server accepted the file. Failed URL: /api/data/upload");
+  it("sanitizes an upload network failure without exposing its route", () => {
+    const error = new Error("Analysis could not complete or save a usable result. Retry the analysis. If it happens again, contact an administrator.");
     error.name = "ApiNetworkError";
 
     expect(classifyUploadError(error, "upload")).toMatchObject({
       state: "error",
       retryable: false,
       errorType: "network",
-      message: "Upload network error before server accepted the file. Failed URL: /api/data/upload",
+      message: "Analysis could not complete or save a usable result. Retry the analysis. If it happens again, contact an administrator.",
     });
   });
 
@@ -131,7 +131,7 @@ describe("uploadFlow poll error classification", () => {
       state: "error",
       retryable: false,
       errorType: "timeout",
-      message: "Upload timed out.",
+      message: "Dataset import timed out. Retry the analysis.",
     });
   });
 
