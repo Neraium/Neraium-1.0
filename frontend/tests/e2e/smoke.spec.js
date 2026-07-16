@@ -6,10 +6,13 @@ test.describe("Neraium frontend smoke", () => {
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
     await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Command Center" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Awaiting Initial Baseline" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Connect Live Telemetry" })).toBeVisible();
+    const commandCenterNav = page
+      .getByRole("navigation", { name: "Primary workflow navigation" })
+      .getByRole("button", { name: /^Command Center/ });
+    await expect(commandCenterNav).toBeVisible();
+    await expect(commandCenterNav).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("region", { name: "Operational Status" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Operational Findings" })).toBeVisible();
   });
 
   test("mobile loads command center workspace", async ({ browser }) => {
@@ -19,9 +22,13 @@ test.describe("Neraium frontend smoke", () => {
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
     await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Command Center Overview" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Command Center" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
+    const commandCenterNav = page
+      .getByLabel("Mobile workflow navigation")
+      .getByRole("button", { name: /^Command Center/ });
+    await expect(commandCenterNav).toBeVisible();
+    await expect(commandCenterNav).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("region", { name: "Operational Status" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Operational Findings" })).toBeVisible();
 
     await context.close();
   });

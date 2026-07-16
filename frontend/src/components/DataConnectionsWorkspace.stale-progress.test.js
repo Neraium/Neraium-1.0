@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import DataConnectionsWorkspace, { queuedWorkerMessage } from "./DataConnectionsWorkspace";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
@@ -286,13 +286,21 @@ it("processing state uses the behavior baseline as the progress indicator", () =
     latestMessage: "Building behavior baseline...",
   });
 
+  const network = screen.getByTestId("baseline-network-progress");
+  const progress = screen.getByRole("progressbar", { name: "Analysis 65% complete" });
+  const stages = screen.getByRole("list", { name: "Analysis stages" });
+  const currentStage = within(stages).getByRole("listitem", { name: "Organizing System Behavior" });
+
+  expect(screen.getByText("Behavioral baseline")).toBeTruthy();
   expect(screen.getByText("Organizing System Behavior")).toBeTruthy();
   expect(screen.getByText("Stage 3 of 4")).toBeTruthy();
+  expect(screen.getByText("65%")).toBeTruthy();
   expect(screen.getByText("progress.csv")).toBeTruthy();
   expect(screen.getByText("1.0 KB")).toBeTruthy();
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
-  expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
-  expect(screen.queryByText("65% complete")).toBeNull();
+  expect(network.contains(progress)).toBe(true);
+  expect(progress.getAttribute("aria-valuenow")).toBe("65");
+  expect(currentStage.getAttribute("aria-current")).toBe("step");
 });
 
 
@@ -314,12 +322,12 @@ it("baseline renderer fallback keeps the active analysis job visible", () => {
     latestMessage: "Building behavior baseline...",
   });
 
-  expect(screen.getByText("Using an alternate processing path.")).toBeTruthy();
+  const renderer = screen.getByTestId("baseline-network-progress");
+  expect(renderer.getAttribute("data-render-tier")).toBe("safe");
+  expect(renderer.querySelector('[class*="particle"]')).toBeNull();
   expect(screen.getByText("fallback.csv")).toBeTruthy();
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
-  const renderer = document.querySelector(".upload-fingerprint-build");
-  expect(renderer?.getAttribute("data-render-tier")).toBe("safe");
-  expect(renderer?.querySelector(".upload-fingerprint-build__particles")).toBeNull();
+  expect(screen.getByText("Your browser is using a simplified view. Analysis quality is unchanged and no action is required.")).toBeTruthy();
 });
 
 it("baseline renderer uses enhanced mode on mobile-capable constraints", () => {
@@ -349,9 +357,9 @@ it("baseline renderer uses enhanced mode on mobile-capable constraints", () => {
     latestMessage: "Building behavior baseline...",
   });
 
-  const renderer = document.querySelector(".upload-fingerprint-build");
-  expect(renderer?.getAttribute("data-render-tier")).toBe("enhanced");
-  expect(renderer?.querySelectorAll(".upload-fingerprint-build__particles span")).toHaveLength(3);
+  const renderer = screen.getByTestId("baseline-network-progress");
+  expect(renderer.getAttribute("data-render-tier")).toBe("enhanced");
+  expect(renderer.querySelector(".upload-network-build__canvas svg")).toBeTruthy();
   expect(screen.getByText("Organizing System Behavior")).toBeTruthy();
 });
 

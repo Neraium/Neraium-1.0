@@ -7,7 +7,11 @@ test.describe("Accessibility audit", () => {
 
     await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Primary workflow navigation" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
+    const commandCenterNav = page
+      .getByRole("navigation", { name: "Primary workflow navigation" })
+      .getByRole("button", { name: /^Command Center/ });
+    await expect(commandCenterNav).toBeVisible();
+    await expect(commandCenterNav).toHaveAttribute("aria-current", "page");
 
     await page.keyboard.press("Tab");
     await expect.poll(async () => page.evaluate(() => {

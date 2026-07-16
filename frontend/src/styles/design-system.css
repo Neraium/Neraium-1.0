@@ -848,22 +848,18 @@ button:focus-visible {
 }
 
 .upload-file-chip {
-  position: relative;
-  z-index: 2;
   display: inline-flex;
   align-items: center;
-  justify-self: center;
-  max-width: min(100%, 460px);
+  max-width: 100%;
   min-width: 0;
-  gap: 8px;
-  padding: 7px 11px;
+  gap: 9px;
+  padding: 8px 10px;
   border: 1px solid rgba(121, 150, 164, 0.2);
-  border-radius: 999px;
-  background: rgba(8, 18, 28, 0.58);
+  border-radius: 6px;
+  background: rgba(8, 18, 28, 0.72);
   color: var(--upload-ink-soft);
   font-size: var(--type-body-sm);
   line-height: 1.2;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
 }
 
 .upload-file-chip__icon {
@@ -891,301 +887,181 @@ button:focus-visible {
   font-weight: 650;
 }
 
-.upload-fingerprint-build {
+.upload-network-build {
   position: relative;
   display: grid;
-  justify-items: center;
-  gap: 12px;
-  width: min(100%, 520px);
-  min-height: clamp(330px, 44vw, 430px);
+  width: min(100%, 680px);
+  min-width: 0;
+  gap: 16px;
   overflow: hidden;
-  padding: clamp(18px, 3vw, 30px);
-  border: 0;
+  box-sizing: border-box;
+  padding: 18px;
+  border: 1px solid rgba(121, 150, 164, 0.2);
   border-radius: 8px;
-  background:
-    radial-gradient(circle at 50% 48%, rgba(41, 53, 62, 0.34), transparent 44%),
-    radial-gradient(circle at 52% 54%, rgba(29, 216, 196, 0.07), transparent 52%),
-    linear-gradient(180deg, rgba(6, 15, 24, 0.7), rgba(4, 10, 17, 0.8));
-  box-shadow: inset 0 0 0 1px rgba(218, 255, 249, 0.04), 0 24px 60px rgba(0, 0, 0, 0.22);
-  isolation: isolate;
+  background: linear-gradient(180deg, rgba(7, 16, 25, 0.96), rgba(4, 10, 17, 0.98));
+  box-shadow: inset 0 1px 0 rgba(218, 255, 249, 0.035);
 }
 
-.upload-fingerprint-build::before {
-  content: "";
-  position: absolute;
-  inset: clamp(34px, 6vw, 58px);
-  border: 1px solid rgba(146, 160, 170, 0.14);
-  border-radius: 45% 55% 48% 52%;
-  box-shadow: inset 0 0 34px rgba(146, 160, 170, 0.04);
-  opacity: 0.34;
-  animation: fingerprint-build-breathe 3.2s ease-in-out infinite;
-}
-
-.upload-fingerprint-build__status small {
-  display: block;
-  max-width: min(360px, 86vw);
-  margin: 2px auto 0;
-  color: rgba(196, 218, 222, 0.78);
-  font-size: var(--type-label-xs);
-  font-weight: 680;
-  line-height: 1.35;
-}
-
-.upload-fingerprint-build__relationship-links path,
-.upload-fingerprint-build__clusters path,
-.upload-fingerprint-build__baseline-lock {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-}
-
-.upload-fingerprint-build__relationship-links path {
-  opacity: 0;
-  stroke: rgba(29, 216, 196, 0.62);
-  stroke-width: 1.35;
-  stroke-dasharray: 100;
-  stroke-dashoffset: 100;
-  filter: drop-shadow(0 0 4px rgba(29, 216, 196, 0.28));
-  transition: opacity 520ms ease, stroke-dashoffset 900ms cubic-bezier(0.2, 0.76, 0.22, 1);
-  transition-delay: calc(var(--link-index, 0) * 55ms);
-}
-
-.upload-fingerprint-build__evidence-points circle {
-  opacity: 0.18;
-  fill: rgba(244, 210, 132, 0.88);
-  filter: drop-shadow(0 0 6px rgba(244, 210, 132, 0.42));
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: fingerprint-evidence-gather 3.8s cubic-bezier(0.18, 0.78, 0.24, 1) infinite;
-  animation-delay: calc(var(--point-index, 0) * 120ms);
-  transition: opacity 420ms ease, fill 420ms ease, r 420ms ease;
-}
-
-.upload-fingerprint-build__clusters path {
-  opacity: 0;
-  fill: rgba(29, 216, 196, 0.07);
-  stroke: rgba(218, 255, 249, 0.32);
-  stroke-width: 1.2;
-  transform-box: fill-box;
-  transform-origin: center;
-  transition: opacity 700ms ease, transform 900ms cubic-bezier(0.2, 0.76, 0.22, 1), fill 700ms ease;
-}
-
-.upload-fingerprint-build__baseline-lock {
-  opacity: 0;
-  stroke: rgba(244, 210, 132, 0.82);
-  stroke-width: 2.25;
-  stroke-dasharray: 100;
-  stroke-dashoffset: 100;
-  filter: drop-shadow(0 0 7px rgba(244, 210, 132, 0.28));
-  transition: opacity 520ms ease, stroke-dashoffset 900ms cubic-bezier(0.2, 0.76, 0.22, 1);
-}
-
-.upload-fingerprint-build[data-build-stage="evidence"] .upload-fingerprint-build__evidence-points circle {
-  opacity: 0.82;
-}
-
-.upload-fingerprint-build[data-build-stage="relationships"] .upload-fingerprint-build__evidence-points circle,
-.upload-fingerprint-build[data-build-stage="organization"] .upload-fingerprint-build__evidence-points circle,
-.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__evidence-points circle,
-.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__evidence-points circle {
-  opacity: 0.72;
-  fill: rgba(218, 255, 249, 0.9);
-  animation-duration: 5.4s;
-}
-
-.upload-fingerprint-build[data-build-stage="relationships"] .upload-fingerprint-build__relationship-links path,
-.upload-fingerprint-build[data-build-stage="organization"] .upload-fingerprint-build__relationship-links path,
-.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__relationship-links path,
-.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__relationship-links path {
-  opacity: 0.64;
-  stroke-dashoffset: 0;
-}
-
-.upload-fingerprint-build[data-build-stage="organization"] .upload-fingerprint-build__clusters path,
-.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__clusters path,
-.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__clusters path {
-  opacity: 0.86;
-  transform: scale(1.02);
-}
-
-.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__clusters path,
-.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__clusters path {
-  fill: rgba(29, 216, 196, 0.1);
-  stroke: rgba(218, 255, 249, 0.46);
-}
-
-.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__baseline-lock,
-.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__baseline-lock {
-  opacity: 0.88;
-  stroke-dashoffset: 0;
-}
-
-.upload-fingerprint-build--safe .upload-fingerprint-build__relationship-links path,
-.upload-fingerprint-build--safe .upload-fingerprint-build__clusters path,
-.upload-fingerprint-build--safe .upload-fingerprint-build__baseline-lock {
-  filter: none;
-  transition: none;
-}
-
-@keyframes fingerprint-evidence-gather {
-  0%, 100% { transform: translate(0, 0) scale(0.92); }
-  44% { transform: translate(4px, 5px) scale(1.24); }
-  72% { transform: translate(1px, 1px) scale(1); }
-}
-
-.upload-fingerprint-build__halo {
-  position: absolute;
-  inset: clamp(28px, 5vw, 48px);
-  border-radius: 45% 55% 48% 52%;
-  background:
-    conic-gradient(from 0deg, transparent, rgba(29, 216, 196, 0.18), transparent 31%, rgba(244, 210, 132, 0.12), transparent 68%, rgba(29, 216, 196, 0.16), transparent),
-    radial-gradient(circle, transparent 58%, rgba(29, 216, 196, 0.18) 59%, transparent 61%);
-  filter: blur(0.2px);
-  opacity: 0.54;
-  animation: fingerprint-halo-drift 12s ease-in-out infinite;
-}
-
-.upload-fingerprint-build__particles {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.upload-fingerprint-build__particles span {
-  --particle-angle: calc(var(--particle-index) * 36deg);
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(218, 255, 249, 0.82);
-  box-shadow: 0 0 12px rgba(29, 216, 196, 0.64);
-  opacity: 0;
-  transform: rotate(var(--particle-angle)) translateX(clamp(150px, 26vw, 230px)) scale(0.7);
-  animation: fingerprint-particle-flow 3.8s ease-in-out infinite;
-  animation-delay: calc(var(--particle-index) * -260ms);
-}
-
-.upload-fingerprint-build__status {
-  position: relative;
-  z-index: 2;
+.upload-network-build__header {
   display: grid;
-  justify-items: center;
-  gap: 5px;
-  max-width: min(100%, 420px);
-  text-align: center;
+  gap: 7px;
+  min-width: 0;
 }
 
-.upload-fingerprint-build__status strong {
-  color: var(--upload-ink);
-  font-size: clamp(1.05rem, 2.1vw, 1.38rem);
-  font-weight: 760;
-  line-height: 1.18;
-}
-
-.upload-fingerprint-build__status span {
+.upload-network-build__header p {
+  margin: 0;
   color: var(--upload-ink-muted);
-  font-size: var(--type-label-sm);
-  font-weight: 720;
-  letter-spacing: 0.06em;
+  font-size: var(--type-label-xs);
+  font-weight: 760;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
-.upload-fingerprint-build__print {
+.upload-network-build__title-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.upload-network-build__title-row > strong {
+  min-width: 0;
+  color: var(--upload-ink);
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  font-weight: 690;
+  line-height: 1.25;
+}
+
+.upload-network-build__meta {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  align-items: center;
+  color: var(--upload-ink-soft);
+  font-size: var(--type-label-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.upload-network-build__meta span:last-child {
+  min-width: 46px;
+  color: #8ce4d9;
+  text-align: right;
+}
+
+.upload-network-build__header small {
+  max-width: 560px;
+  color: rgba(194, 206, 215, 0.82);
+  font-size: var(--type-label-xs);
+  font-weight: 620;
+  line-height: 1.45;
+}
+
+.upload-network-build__canvas {
   position: relative;
-  z-index: 2;
-  width: min(76%, 300px);
-  height: auto;
-  overflow: visible;
-  filter: drop-shadow(0 0 10px rgba(29, 216, 196, 0.1));
-  animation: fingerprint-print-breathe 3.6s ease-in-out infinite;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 680 / 280;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid rgba(121, 150, 164, 0.14);
+  border-radius: 6px;
+  background-color: rgba(3, 10, 16, 0.72);
+  background-image:
+    linear-gradient(rgba(121, 150, 164, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(121, 150, 164, 0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
-.upload-fingerprint-build__field {
-  fill: url(#upload-fingerprint-core);
-  opacity: 0.92;
+.upload-network-build__canvas svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-.upload-fingerprint-build__outline {
-  fill: rgba(12, 20, 28, 0.12);
-  stroke: rgba(146, 160, 170, 0.12);
-  stroke-width: 0.8;
-}
-
-.upload-fingerprint-build__ridge {
+.upload-network-build__clusters path,
+.upload-network-build__links path,
+.upload-network-build__baseline-boundary,
+.upload-network-build__completion-check {
   fill: none;
-  stroke: url(#upload-fingerprint-ridge);
-  stroke-width: 2.15;
+  vector-effect: non-scaling-stroke;
+}
+
+.upload-network-build__clusters path {
+  stroke: rgba(121, 150, 164, 0.22);
+  stroke-width: 1;
+  stroke-dasharray: 5 7;
+  stroke-dashoffset: var(--network-offset, 100);
+  transition: stroke-dashoffset 700ms ease;
+  transition-delay: calc(var(--cluster-index, 0) * 70ms);
+}
+
+.upload-network-build__links path {
+  stroke: rgba(30, 193, 178, 0.7);
+  stroke-width: 1.25;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 100;
-  stroke-dashoffset: var(--ridge-offset);
-  opacity: var(--ridge-opacity);
-  transition: stroke-dashoffset 680ms cubic-bezier(0.22, 0.8, 0.24, 1), opacity 520ms ease, stroke-width 420ms ease;
-  transition-delay: var(--ridge-delay, 0ms);
+  stroke-dashoffset: var(--network-offset, 100);
+  transition: stroke-dashoffset 780ms cubic-bezier(0.2, 0.76, 0.22, 1);
+  transition-delay: calc(var(--link-index, 0) * 26ms);
 }
 
-.upload-fingerprint-build__ridge[data-ridge-detail="fine"] {
-  stroke-width: 1.45;
+.upload-network-build__node {
+  fill: rgba(121, 150, 164, 0.4);
+  stroke: rgba(194, 206, 215, 0.2);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  transition: fill 320ms ease, stroke 320ms ease, opacity 320ms ease;
 }
 
-.upload-fingerprint-build__ridge[data-ridge-phase="0"] {
-  filter: none;
+.upload-network-build__node.is-resolved {
+  fill: rgba(52, 210, 197, 0.88);
+  stroke: rgba(186, 247, 239, 0.65);
 }
 
-.upload-fingerprint-build--complete::before {
-  border-color: rgba(218, 255, 249, 0.56);
-  box-shadow: 0 0 74px rgba(29, 216, 196, 0.44), 0 0 34px rgba(244, 210, 132, 0.2);
-  animation: fingerprint-complete-glow 1.8s ease-in-out 1, fingerprint-build-breathe 4.2s ease-in-out infinite 1.8s;
+.upload-network-build__node.is-active {
+  stroke: rgba(218, 255, 249, 0.92);
+  stroke-width: 1.5;
 }
 
-.upload-fingerprint-build--complete .upload-fingerprint-build__halo {
-  opacity: 0.94;
-  animation-duration: 10s;
+.upload-network-build__node--endpoint,
+.upload-network-build__node--endpoint.is-resolved {
+  fill: rgba(210, 164, 88, 0.9);
+  stroke: rgba(244, 210, 132, 0.78);
 }
 
-.upload-fingerprint-build--complete .upload-fingerprint-build__print {
-  filter: drop-shadow(0 0 30px rgba(29, 216, 196, 0.4));
+.upload-network-build__baseline-boundary {
+  stroke: rgba(121, 150, 164, 0.28);
+  stroke-width: 1;
+  stroke-dasharray: 4 7;
+  transition: stroke 360ms ease, stroke-dasharray 360ms ease;
 }
 
-.upload-fingerprint-build--complete .upload-fingerprint-build__ridge {
-  stroke-width: 2.35;
+.upload-network-build__baseline-boundary.is-resolved {
+  stroke: rgba(210, 164, 88, 0.72);
+  stroke-dasharray: 7 5;
 }
 
-.upload-fingerprint-build__check {
-  position: absolute;
-  z-index: 3;
-  top: 50%;
-  left: 50%;
-  display: grid;
-  width: clamp(54px, 10vw, 76px);
-  height: clamp(54px, 10vw, 76px);
-  place-items: center;
-  border: 1px solid rgba(218, 255, 249, 0.64);
-  border-radius: 999px;
-  background: rgba(3, 19, 20, 0.74);
-  color: rgba(218, 255, 249, 0.98);
-  font-size: clamp(1.6rem, 4vw, 2.4rem);
-  font-weight: 800;
-  box-shadow: 0 0 38px rgba(29, 216, 196, 0.42), inset 0 0 18px rgba(29, 216, 196, 0.12);
-  transform: translate(-50%, -42%);
-  animation: fingerprint-check-arrive 900ms cubic-bezier(0.2, 0.9, 0.22, 1) both;
+.upload-network-build__completion-check {
+  stroke: rgba(255, 232, 183, 0.96);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.upload-fingerprint-build__nodes {
-  position: relative;
-  z-index: 2;
+.upload-network-build__stages {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  width: min(100%, 480px);
   gap: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.upload-fingerprint-build__nodes span {
+.upload-network-build__stages li {
   position: relative;
   display: grid;
   justify-items: center;
@@ -1193,287 +1069,135 @@ button:focus-visible {
   min-width: 0;
   color: var(--upload-ink-muted);
   font-size: var(--type-label-xs);
-  font-weight: 720;
-  line-height: 1.15;
+  line-height: 1.2;
   text-align: center;
 }
 
-.upload-fingerprint-build__nodes span::before {
+.upload-network-build__stages li::before {
   content: "";
   position: absolute;
-  top: 5px;
-  left: calc(-50% + 8px);
-  right: calc(50% + 8px);
+  top: 11px;
+  right: calc(50% + 15px);
+  left: calc(-50% + 15px);
   height: 1px;
-  background: rgba(128, 161, 178, 0.28);
+  background: rgba(121, 150, 164, 0.24);
 }
 
-.upload-fingerprint-build__nodes span:first-child::before {
+.upload-network-build__stages li:first-child::before {
   display: none;
 }
 
-.upload-fingerprint-build__nodes i {
+.upload-network-build__stages i {
   position: relative;
   z-index: 1;
-  width: 11px;
-  height: 11px;
-  border: 1px solid rgba(128, 161, 178, 0.6);
-  border-radius: 999px;
-  background: rgba(8, 18, 28, 0.86);
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border: 1px solid rgba(121, 150, 164, 0.48);
+  border-radius: 50%;
+  background: #07111a;
+  color: inherit;
+  font-style: normal;
+  font-size: 0.68rem;
+  font-weight: 760;
 }
 
-.upload-fingerprint-build__nodes b {
+.upload-network-build__stages b {
   max-width: 100%;
   overflow: hidden;
+  font-weight: 680;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.upload-fingerprint-build__nodes span.is-complete,
-.upload-fingerprint-build__nodes span.is-active {
-  color: var(--upload-ink);
+.upload-network-build__stages li.is-complete,
+.upload-network-build__stages li.is-active {
+  color: var(--upload-ink-soft);
 }
 
-.upload-fingerprint-build__nodes span.is-complete::before,
-.upload-fingerprint-build__nodes span.is-active::before {
-  background: linear-gradient(90deg, rgba(29, 216, 196, 0.92), rgba(244, 210, 132, 0.62));
-  box-shadow: 0 0 12px rgba(29, 216, 196, 0.24);
+.upload-network-build__stages li.is-complete::before,
+.upload-network-build__stages li.is-active::before {
+  background: rgba(52, 210, 197, 0.58);
 }
 
-.upload-fingerprint-build__nodes span.is-complete i,
-.upload-fingerprint-build__nodes span.is-active i {
-  border-color: rgba(218, 255, 249, 0.86);
-  background: rgba(29, 216, 196, 0.9);
-  box-shadow: 0 0 14px rgba(29, 216, 196, 0.42);
+.upload-network-build__stages li.is-complete i {
+  border-color: rgba(52, 210, 197, 0.58);
+  background: rgba(0, 122, 116, 0.48);
+  color: #d9fff9;
 }
 
-.upload-fingerprint-build__nodes span.is-complete i::after {
-  content: "";
-  position: absolute;
-  left: 3px;
-  top: 1px;
-  width: 3px;
-  height: 6px;
-  border: solid rgba(3, 19, 20, 0.92);
-  border-width: 0 1.5px 1.5px 0;
-  transform: rotate(45deg);
+.upload-network-build__stages li.is-active i {
+  border-color: rgba(244, 210, 132, 0.68);
+  background: rgba(105, 77, 31, 0.42);
+  color: #ffe8b7;
 }
 
-.upload-fingerprint-build__nodes span.is-active i {
-  background: linear-gradient(180deg, rgba(244, 210, 132, 0.98), rgba(29, 216, 196, 0.92));
-}
-
-@keyframes fingerprint-build-breathe {
-  0%, 100% { opacity: 0.58; transform: scale(0.985); }
-  50% { opacity: 0.98; transform: scale(1.018); }
-}
-
-@keyframes fingerprint-print-breathe {
-  0%, 100% { transform: scale(0.992); }
-  50% { transform: scale(1.012); }
-}
-
-@keyframes fingerprint-halo-drift {
-  0%, 100% { transform: translate3d(-1%, 1%, 0) scale(0.99); }
-  50% { transform: translate3d(1.4%, -1.2%, 0) scale(1.015); }
-}
-
-@keyframes fingerprint-particle-flow {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--particle-angle)) translateX(clamp(150px, 26vw, 230px)) scale(0.6);
-  }
-  28% { opacity: 0.9; }
-  72% { opacity: 0.8; }
-  100% {
-    opacity: 0;
-    transform: rotate(var(--particle-angle)) translateX(28px) scale(1);
-  }
-}
-
-@keyframes fingerprint-complete-glow {
-  0% { opacity: 0.68; transform: scale(0.98); }
-  45% { opacity: 1; transform: scale(1.06); }
-  100% { opacity: 0.86; transform: scale(1); }
-}
-
-@keyframes fingerprint-check-arrive {
-  0% { opacity: 0; transform: translate(-50%, -42%) scale(0.72); }
-  100% { opacity: 1; transform: translate(-50%, -42%) scale(1); }
-}
-
-.upload-fingerprint-build__ripple {
-  position: absolute;
-  z-index: 2;
-  top: 50%;
-  left: 50%;
-  width: clamp(110px, 20vw, 170px);
-  aspect-ratio: 1;
-  border: 1px solid rgba(218, 255, 249, 0.42);
-  border-radius: 999px;
-  opacity: 0;
-  transform: translate(-50%, -42%) scale(0.5);
-  animation: fingerprint-complete-ripple 1.15s cubic-bezier(0.2, 0.78, 0.24, 1) 140ms both;
-}
-
-.upload-fingerprint-build--enhanced {
-  min-height: clamp(320px, 76vw, 420px);
-  background:
-    radial-gradient(circle at 50% 48%, rgba(29, 216, 196, 0.18), transparent 46%),
-    linear-gradient(180deg, rgba(5, 15, 23, 0.84), rgba(4, 10, 17, 0.92));
-  box-shadow: inset 0 0 0 1px rgba(218, 255, 249, 0.06);
-}
-
-.upload-fingerprint-build--enhanced::before {
-  inset: 15%;
-  border-color: rgba(29, 216, 196, 0.22);
-  box-shadow: none;
-  opacity: 0.36;
-  animation: fingerprint-mobile-opacity-pulse 4.8s ease-in-out infinite;
-}
-
-.upload-fingerprint-build--enhanced .upload-fingerprint-build__halo {
-  inset: 11%;
-  background: conic-gradient(from 0deg, transparent, rgba(29, 216, 196, 0.18), transparent 38%, rgba(244, 210, 132, 0.12), transparent 72%, rgba(29, 216, 196, 0.14), transparent);
-  filter: none;
-  opacity: 0.6;
-  animation-duration: 14s;
-}
-
-.upload-fingerprint-build--enhanced .upload-fingerprint-build__particles span {
-  width: 3px;
-  height: 3px;
-  box-shadow: none;
-  transform: rotate(var(--particle-angle)) translateX(clamp(112px, 28vw, 170px)) scale(0.7);
-  animation-duration: 4.6s;
-}
-
-.upload-fingerprint-build--enhanced .upload-fingerprint-build__print {
-  width: min(74%, 280px);
-  filter: drop-shadow(0 0 12px rgba(29, 216, 196, 0.16));
-  animation: fingerprint-print-breathe 4.6s ease-in-out infinite;
-}
-
-.upload-fingerprint-build--enhanced .upload-fingerprint-build__ridge,
-.upload-fingerprint-build--enhanced .upload-fingerprint-build__ridge[data-ridge-phase="0"] {
-  filter: none;
-  transition-duration: 520ms, 360ms, 320ms;
-}
-
-.upload-fingerprint-build--enhanced.upload-fingerprint-build--complete::before {
-  border-color: rgba(218, 255, 249, 0.32);
-  box-shadow: none;
-  animation: fingerprint-mobile-opacity-pulse 5.4s ease-in-out infinite;
-}
-
-.upload-fingerprint-build--enhanced .upload-fingerprint-build__check {
-  box-shadow: 0 0 18px rgba(29, 216, 196, 0.24), inset 0 0 12px rgba(29, 216, 196, 0.1);
-}
-
-.upload-fingerprint-build--safe {
-  min-height: clamp(300px, 72vw, 390px);
-  background: #041018;
-  box-shadow: inset 0 0 0 1px rgba(218, 255, 249, 0.06);
-}
-
-.upload-fingerprint-build--safe::before {
-  inset: 16%;
-  border-color: rgba(29, 216, 196, 0.2);
-  box-shadow: none;
-  opacity: 0.34;
-  transform: none;
-  animation: none;
-}
-
-.upload-fingerprint-build--safe .upload-fingerprint-build__halo,
-.upload-fingerprint-build--safe .upload-fingerprint-build__particles,
-.upload-fingerprint-build--safe .upload-fingerprint-build__ripple {
-  display: none;
-}
-
-.upload-fingerprint-build--safe .upload-fingerprint-build__print {
-  width: min(74%, 270px);
-  overflow: visible;
-  filter: none;
-  transform: none;
-  animation: none;
-}
-
-.upload-fingerprint-build--safe .upload-fingerprint-build__field {
-  fill: rgba(8, 28, 38, 0.62);
-  opacity: 1;
-}
-
-.upload-fingerprint-build--safe .upload-fingerprint-build__outline {
-  fill: rgba(6, 18, 27, 0.22);
-  stroke: rgba(218, 255, 249, 0.18);
-}
-
-.upload-fingerprint-build--safe .upload-fingerprint-build__ridge,
-.upload-fingerprint-build--safe .upload-fingerprint-build__ridge[data-ridge-phase="0"] {
-  filter: none;
-  stroke: rgba(146, 245, 235, 0.92);
-  stroke-width: 2.1;
+.upload-network-build--safe .upload-network-build__clusters path,
+.upload-network-build--safe .upload-network-build__links path,
+.upload-network-build--safe .upload-network-build__node,
+.upload-network-build--safe .upload-network-build__baseline-boundary {
   transition: none;
 }
 
-.upload-fingerprint-build--safe.upload-fingerprint-build--complete .upload-fingerprint-build__ridge {
-  stroke-width: 2.25;
+.upload-network-build--complete .upload-network-build__links path {
+  stroke: rgba(52, 210, 197, 0.82);
 }
 
-.upload-fingerprint-build--safe .upload-fingerprint-build__check {
-  box-shadow: none;
-  animation: none;
-}
-
-.upload-fingerprint-build--safe .upload-fingerprint-build__nodes span.is-complete::before,
-.upload-fingerprint-build--safe .upload-fingerprint-build__nodes span.is-active::before,
-.upload-fingerprint-build--safe .upload-fingerprint-build__nodes span.is-complete i,
-.upload-fingerprint-build--safe .upload-fingerprint-build__nodes span.is-active i {
-  box-shadow: none;
-}
-
-.upload-fingerprint-build--safe .upload-fingerprint-build__nodes span.is-active i {
-  background: rgba(244, 210, 132, 0.94);
-}
-
-@keyframes fingerprint-complete-ripple {
-  0% { opacity: 0.58; transform: translate(-50%, -42%) scale(0.48); }
-  100% { opacity: 0; transform: translate(-50%, -42%) scale(1.68); }
-}
-
-@keyframes fingerprint-mobile-opacity-pulse {
-  0%, 100% { opacity: 0.24; }
-  50% { opacity: 0.42; }
-}
-
-@media (max-width: 760px), (hover: none) and (pointer: coarse) {
-  .upload-fingerprint-build {
-    min-height: clamp(300px, 82vw, 390px);
-    padding: 18px 14px 20px;
-    transform: none;
+@media (max-width: 520px) {
+  .upload-network-build {
+    gap: 13px;
+    padding: 13px;
   }
 
-  .upload-fingerprint-build__nodes b {
+  .upload-network-build__title-row {
+    display: grid;
+    gap: 8px;
+  }
+
+  .upload-network-build__meta {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .upload-network-build__canvas {
+    background-size: 20px 20px;
+  }
+
+  .upload-network-build__stages {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .upload-network-build__stages li {
+    grid-template-columns: 23px minmax(0, 1fr);
+    justify-items: start;
+    align-items: center;
+    text-align: left;
+  }
+
+  .upload-network-build__stages li::before {
+    top: -8px;
+    bottom: calc(50% + 11px);
+    left: 11px;
+    width: 1px;
+    height: auto;
+  }
+
+  .upload-network-build__stages b {
     white-space: normal;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .upload-fingerprint-build::before,
-  .upload-fingerprint-build--complete::before,
-  .upload-fingerprint-build__halo,
-  .upload-fingerprint-build__particles span,
-  .upload-fingerprint-build__print,
-  .upload-fingerprint-build__check,
-  .upload-fingerprint-build__evidence-points circle {
-    animation: none;
-  }
-
-  .upload-fingerprint-build__ridge {
+  .upload-network-build__clusters path,
+  .upload-network-build__links path,
+  .upload-network-build__node,
+  .upload-network-build__baseline-boundary {
     transition: none;
   }
 }
+
 .upload-complete-message {
   margin: -2px 0 2px;
   color: var(--muted-text);
@@ -1739,14 +1463,61 @@ button:focus-visible {
 .upload-analysis-card--processing {
   grid-template-columns: minmax(0, 1fr);
   border-color: rgba(52, 210, 197, 0.22);
-  background:
-    radial-gradient(circle at 50% 44%, rgba(0, 163, 154, 0.18), transparent 38%),
-    linear-gradient(180deg, var(--upload-surface-strong), var(--upload-surface));
+  background: linear-gradient(180deg, var(--upload-surface-strong), var(--upload-surface));
 }
 
 .upload-analysis-card--processing .upload-analysis-card__content {
   justify-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.upload-processing-heading,
+.upload-processing-message {
+  display: flex;
+  width: min(100%, 680px);
+  min-width: 0;
+  align-items: center;
+}
+
+.upload-processing-heading {
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.upload-processing-heading__state {
+  flex: 0 0 auto;
+  color: var(--upload-ink-muted);
+  font-size: var(--type-label-xs);
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.upload-processing-message {
   gap: 14px;
+  justify-content: space-between;
+  padding-top: 2px;
+}
+
+.upload-processing-status {
+  color: var(--upload-ink-soft);
+  font-weight: 650;
+}
+
+.upload-processing-remaining {
+  flex: 0 0 auto;
+  color: var(--upload-ink-muted);
+  font-size: var(--type-label-sm);
+  white-space: nowrap;
+}
+
+.upload-simple-card--complete {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.upload-simple-card--complete .upload-analysis-card__visual {
+  width: 100%;
 }
 
 .upload-analysis-card__visual,
@@ -1921,110 +1692,21 @@ button:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .upload-processing-heading,
+  .upload-processing-message {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .upload-processing-heading__state {
+    align-self: flex-start;
+  }
+
+  .upload-processing-remaining {
+    white-space: normal;
+  }
+
   .upload-analysis-card__visual .operational-orb {
     width: min(62vw, 220px);
-  }
-}
-
-/* Behavioral baseline network: a structured learning model, not a biometric mark. */
-.upload-fingerprint-build__orbits path,
-.upload-fingerprint-build__relationship-links path,
-.upload-fingerprint-build__baseline-lock {
-  fill: none;
-  vector-effect: non-scaling-stroke;
-}
-
-.upload-fingerprint-build__orbits path {
-  stroke: rgba(146, 160, 170, 0.24);
-  stroke-width: 0.8;
-  stroke-dasharray: 2 7;
-  stroke-dashoffset: var(--network-offset, 100);
-  opacity: 0.66;
-  transition: stroke-dashoffset 1100ms cubic-bezier(0.2, 0.76, 0.22, 1), opacity 600ms ease;
-  transition-delay: calc(var(--orbit-index, 0) * 100ms);
-}
-
-.upload-fingerprint-build__relationship-links path {
-  stroke: url(#upload-baseline-link);
-  stroke-width: 1.15;
-  stroke-dasharray: 100;
-  stroke-dashoffset: var(--network-offset, 100);
-  opacity: 0.58;
-}
-
-.upload-fingerprint-build__evidence-points .upload-fingerprint-build__node-core {
-  fill: rgba(218, 255, 249, 0.92);
-  opacity: 0.82;
-  animation: fingerprint-evidence-gather 5.8s ease-in-out infinite;
-  animation-delay: calc(var(--point-index, 0) * -310ms);
-}
-
-.upload-fingerprint-build__evidence-points .upload-fingerprint-build__node-orbit {
-  fill: none;
-  stroke: rgba(29, 216, 196, 0.22);
-  stroke-width: 0.7;
-  stroke-dasharray: 1.5 3.5;
-  opacity: 0.52;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: baseline-node-orbit 8s linear infinite;
-  animation-delay: calc(var(--point-index, 0) * -540ms);
-}
-
-.upload-fingerprint-build__network-node--core .upload-fingerprint-build__node-core {
-  fill: rgba(244, 210, 132, 0.96);
-  opacity: 1;
-}
-
-.upload-fingerprint-build__network-node--core .upload-fingerprint-build__node-orbit {
-  stroke: rgba(244, 210, 132, 0.54);
-  opacity: 0.78;
-}
-
-.upload-fingerprint-build__network-node--signal .upload-fingerprint-build__node-core {
-  fill: rgba(146, 160, 170, 0.9);
-  opacity: 0.68;
-}
-
-.upload-fingerprint-build__baseline-lock {
-  stroke: rgba(244, 210, 132, 0.72);
-  stroke-width: 1;
-  stroke-dasharray: 2 5;
-  stroke-dashoffset: 0;
-}
-
-.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__baseline-lock,
-.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__baseline-lock {
-  opacity: 0.92;
-  stroke-dashoffset: 0;
-}
-
-.upload-fingerprint-build--complete .upload-fingerprint-build__relationship-links path {
-  opacity: 0.82;
-}
-
-.upload-fingerprint-build--complete .upload-fingerprint-build__orbits path {
-  stroke: rgba(218, 255, 249, 0.34);
-  opacity: 0.86;
-}
-
-.upload-fingerprint-build--safe .upload-fingerprint-build__orbits path,
-.upload-fingerprint-build--safe .upload-fingerprint-build__relationship-links path,
-.upload-fingerprint-build--safe .upload-fingerprint-build__baseline-lock {
-  filter: none;
-  transition: none;
-}
-
-@keyframes baseline-node-orbit {
-  to { transform: rotate(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .upload-fingerprint-build__orbits path,
-  .upload-fingerprint-build__relationship-links path,
-  .upload-fingerprint-build__evidence-points .upload-fingerprint-build__node-core,
-  .upload-fingerprint-build__evidence-points .upload-fingerprint-build__node-orbit {
-    animation: none;
-    transition: none;
   }
 }

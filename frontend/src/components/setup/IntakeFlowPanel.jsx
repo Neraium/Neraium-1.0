@@ -153,7 +153,7 @@ function finalAnalysisResult(latestUploadSnapshot, uploadJob) {
 
 function completionSummary({ analysisResult }) {
   const fingerprint = analysisResult?.fingerprint ?? {};
-  const fingerprintStatus = formatFingerprintStatus(
+  const baselineStatus = formatFingerprintStatus(
     fingerprint?.status
       ?? fingerprint?.drift_status
       ?? fingerprint?.label
@@ -163,11 +163,11 @@ function completionSummary({ analysisResult }) {
   return [
     { label: "Systems", value: String(analysisResult.systems.length) },
     { label: "Insights", value: String(analysisResult.insights.length) },
-    { label: "Baseline", value: fingerprintStatus },
+    { label: "Baseline", value: baselineStatus },
   ];
 }
 
-const FINGERPRINT_BUILD_STAGES = [
+const BASELINE_NETWORK_STAGES = [
   {
     id: "evidence",
     label: "Collecting Operational Evidence",
@@ -194,42 +194,55 @@ const FINGERPRINT_BUILD_STAGES = [
   },
 ];
 
-const FINGERPRINT_RENDERER_RECOVERY_KEY = "neraium.upload_fingerprint.compatibility_mode";
-const FINGERPRINT_RENDERER_REPORTED_KEY = "neraium.upload_fingerprint.compatibility_reported";
-const FINGERPRINT_RENDERER_MOUNT_KEY = "neraium.upload_fingerprint.mounts";
-const FINGERPRINT_RENDERER_PARTICLES = {
-  premium: 8,
-  enhanced: 3,
-  safe: 0,
-};
+// Keep the legacy storage keys so existing compatibility-mode sessions recover without migration.
+const BASELINE_NETWORK_RECOVERY_KEY = "neraium.upload_fingerprint.compatibility_mode";
+const BASELINE_NETWORK_REPORTED_KEY = "neraium.upload_fingerprint.compatibility_reported";
+const BASELINE_NETWORK_MOUNT_KEY = "neraium.upload_fingerprint.mounts";
 
 const BASELINE_NETWORK_NODES = [
-  { x: 80, y: 94, r: 5.2, role: "core" },
-  { x: 50, y: 70, r: 3.3, role: "system" },
-  { x: 109, y: 65, r: 3.5, role: "system" },
-  { x: 119, y: 112, r: 3.1, role: "system" },
-  { x: 65, y: 132, r: 3.4, role: "system" },
-  { x: 35, y: 107, r: 2.6, role: "signal" },
-  { x: 76, y: 47, r: 2.5, role: "signal" },
-  { x: 137, y: 82, r: 2.4, role: "signal" },
-  { x: 101, y: 145, r: 2.5, role: "signal" },
+  { id: "evidence-1", x: 54, y: 88, r: 5, phase: 0, kind: "evidence" },
+  { id: "evidence-2", x: 80, y: 142, r: 4, phase: 0, kind: "evidence" },
+  { id: "evidence-3", x: 112, y: 72, r: 4, phase: 0, kind: "evidence" },
+  { id: "evidence-4", x: 142, y: 120, r: 5, phase: 0, kind: "evidence" },
+  { id: "evidence-5", x: 104, y: 200, r: 4, phase: 0, kind: "evidence" },
+  { id: "evidence-6", x: 162, y: 184, r: 3.5, phase: 0, kind: "evidence" },
+  { id: "relation-1", x: 222, y: 96, r: 5, phase: 1, kind: "relationship" },
+  { id: "relation-2", x: 246, y: 172, r: 5, phase: 1, kind: "relationship" },
+  { id: "relation-3", x: 292, y: 132, r: 4, phase: 1, kind: "relationship" },
+  { id: "relation-4", x: 322, y: 202, r: 3.5, phase: 1, kind: "relationship" },
+  { id: "system-1", x: 372, y: 84, r: 6, phase: 2, kind: "system" },
+  { id: "system-2", x: 398, y: 148, r: 5, phase: 2, kind: "system" },
+  { id: "system-3", x: 442, y: 104, r: 5, phase: 2, kind: "system" },
+  { id: "system-4", x: 468, y: 184, r: 5, phase: 2, kind: "system" },
+  { id: "system-5", x: 500, y: 138, r: 4, phase: 2, kind: "system" },
+  { id: "baseline-1", x: 564, y: 92, r: 4.5, phase: 3, kind: "baseline" },
+  { id: "baseline-2", x: 566, y: 188, r: 4.5, phase: 3, kind: "baseline" },
+  { id: "baseline-endpoint", x: 626, y: 140, r: 8, phase: 3, kind: "endpoint" },
 ];
 
 const BASELINE_NETWORK_LINKS = [
-  { phase: 0, path: "M35 107L50 70L76 47" },
-  { phase: 0, path: "M76 47L109 65L137 82" },
-  { phase: 1, path: "M50 70Q66 77 80 94" },
-  { phase: 1, path: "M109 65Q95 78 80 94" },
-  { phase: 1, path: "M80 94Q101 95 119 112" },
-  { phase: 2, path: "M80 94Q74 113 65 132" },
-  { phase: 2, path: "M65 132Q83 142 101 145" },
-  { phase: 2, path: "M119 112Q113 132 101 145" },
+  { phase: 0, path: "M54 88L112 72L142 120L80 142L104 200L162 184" },
+  { phase: 0, path: "M54 88L80 142M112 72L80 142M142 120L162 184" },
+  { phase: 1, path: "M112 72C154 64 188 76 222 96" },
+  { phase: 1, path: "M142 120C180 124 208 145 246 172" },
+  { phase: 1, path: "M162 184C196 200 222 194 246 172" },
+  { phase: 1, path: "M222 96L292 132L246 172L322 202" },
+  { phase: 1, path: "M222 96C250 118 260 138 246 172" },
+  { phase: 2, path: "M292 132C326 110 342 94 372 84" },
+  { phase: 2, path: "M292 132C334 142 360 146 398 148" },
+  { phase: 2, path: "M322 202C360 196 424 190 468 184" },
+  { phase: 2, path: "M372 84L442 104L398 148L468 184L500 138L442 104" },
+  { phase: 2, path: "M398 148L500 138M442 104L468 184" },
+  { phase: 3, path: "M442 104C500 84 528 82 564 92" },
+  { phase: 3, path: "M468 184C506 198 532 198 566 188" },
+  { phase: 3, path: "M500 138C536 138 572 140 626 140" },
+  { phase: 3, path: "M564 92L626 140L566 188" },
 ];
 
-const BASELINE_ORBITS = [
-  { phase: 1, path: "M37 93A44 31 0 1 0 125 93A44 31 0 1 0 37 93" },
-  { phase: 2, path: "M54 50A35 55 18 1 0 108 139A35 55 18 1 0 54 50" },
-  { phase: 3, path: "M30 72A58 58 -18 1 0 130 120A58 58 -18 1 0 30 72" },
+const BASELINE_NETWORK_CLUSTERS = [
+  { phase: 0, path: "M30 52Q30 36 46 36H174Q190 36 190 52V220Q190 236 174 236H46Q30 236 30 220Z" },
+  { phase: 1, path: "M202 58Q202 44 216 44H326Q340 44 340 58V218Q340 232 326 232H216Q202 232 202 218Z" },
+  { phase: 2, path: "M354 48Q354 34 368 34H506Q520 34 520 48V222Q520 236 506 236H368Q354 236 354 222Z" },
 ];
 
 function networkProgress({ displayPercent, phase, stageIndex, complete }) {
@@ -241,22 +254,22 @@ function networkProgress({ displayPercent, phase, stageIndex, complete }) {
   return Math.max(12, Math.min(100, Math.round(withinPhase)));
 }
 
-function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
+function resolveBaselineNetworkStage({ viewState, uploadJob, uploadState }) {
   if (viewState === "complete") {
-    return { id: "complete", label: "Behavioral Baseline Established", index: FINGERPRINT_BUILD_STAGES.length };
+    return { id: "complete", label: "Behavioral Baseline Established", index: BASELINE_NETWORK_STAGES.length };
   }
   if (viewState === "finalizing") {
     const normalized = primaryJobStatus(uploadJob, uploadState);
     if (normalized === "saving_results") {
-      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Persisting Behavioral Baseline", index: 3 };
+      return { ...BASELINE_NETWORK_STAGES[3], label: "Persisting Behavioral Baseline", index: 3 };
     }
     if (normalized === "navigation_pending") {
-      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Opening Results", index: 3 };
+      return { ...BASELINE_NETWORK_STAGES[3], label: "Opening Results", index: 3 };
     }
-    return { ...FINGERPRINT_BUILD_STAGES[3], index: 3 };
+    return { ...BASELINE_NETWORK_STAGES[3], index: 3 };
   }
   if (viewState === "uploading") {
-    return { ...FINGERPRINT_BUILD_STAGES[0], index: 0 };
+    return { ...BASELINE_NETWORK_STAGES[0], index: 0 };
   }
 
   const rawStage = String(
@@ -267,10 +280,10 @@ function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
       ?? ""
   ).trim().toLowerCase();
   const normalized = primaryJobStatus(uploadJob, uploadState);
-  const rawMatchedIndex = FINGERPRINT_BUILD_STAGES.findIndex((stage) => stage.states.includes(rawStage));
-  const normalizedMatchedIndex = FINGERPRINT_BUILD_STAGES.findIndex((stage) => stage.states.includes(normalized));
+  const rawMatchedIndex = BASELINE_NETWORK_STAGES.findIndex((stage) => stage.states.includes(rawStage));
+  const normalizedMatchedIndex = BASELINE_NETWORK_STAGES.findIndex((stage) => stage.states.includes(normalized));
   const index = rawMatchedIndex >= 0 ? rawMatchedIndex : normalizedMatchedIndex >= 0 ? normalizedMatchedIndex : 1;
-  return { ...FINGERPRINT_BUILD_STAGES[index], index };
+  return { ...BASELINE_NETWORK_STAGES[index], index };
 }
 
 function safeStorage(storageName) {
@@ -307,13 +320,13 @@ function mediaMatches(query) {
   }
 }
 
-function markFingerprintRendererRecovery(reason) {
-  writeStorageValue("localStorage", FINGERPRINT_RENDERER_RECOVERY_KEY, reason || "renderer-recovery");
+function markBaselineNetworkRecovery(reason) {
+  writeStorageValue("localStorage", BASELINE_NETWORK_RECOVERY_KEY, reason || "renderer-recovery");
 }
 
-function detectFingerprintRenderTier() {
+function detectBaselineNetworkRenderTier() {
   if (typeof window === "undefined") return { tier: "safe", reason: "server-render" };
-  const recoveryReason = readStorageValue("localStorage", FINGERPRINT_RENDERER_RECOVERY_KEY);
+  const recoveryReason = readStorageValue("localStorage", BASELINE_NETWORK_RECOVERY_KEY);
   if (recoveryReason) return { tier: "safe", reason: recoveryReason };
 
   const navigatorInfo = window.navigator ?? {};
@@ -332,17 +345,17 @@ function detectFingerprintRenderTier() {
   return { tier: "premium", reason: "capable-device" };
 }
 
-function registerFingerprintRendererMount() {
+function registerBaselineNetworkMount() {
   if (typeof window === "undefined") return false;
   const now = window.performance?.now?.() ?? Date.now();
-  const raw = readStorageValue("sessionStorage", FINGERPRINT_RENDERER_MOUNT_KEY);
+  const raw = readStorageValue("sessionStorage", BASELINE_NETWORK_MOUNT_KEY);
   const previous = raw ? raw.split(",").map(Number).filter((value) => Number.isFinite(value)) : [];
   const recent = [...previous.filter((value) => now - value < 5000), now].slice(-5);
-  writeStorageValue("sessionStorage", FINGERPRINT_RENDERER_MOUNT_KEY, recent.join(","));
+  writeStorageValue("sessionStorage", BASELINE_NETWORK_MOUNT_KEY, recent.join(","));
   return recent.length >= 4;
 }
 
-class FingerprintRendererBoundary extends Component {
+class BaselineNetworkRendererBoundary extends Component {
   constructor(props) {
     super(props);
     this.state = { failed: false };
@@ -353,46 +366,36 @@ class FingerprintRendererBoundary extends Component {
   }
 
   componentDidCatch() {
-    markFingerprintRendererRecovery("renderer-error");
+    markBaselineNetworkRecovery("renderer-error");
   }
 
   render() {
     if (this.state.failed) {
-      return <OperationalFingerprintBuildVisual {...this.props} forcedTier="safe" recoveryReason="renderer-error" />;
+      return <BaselineNetworkBuildVisual {...this.props} forcedTier="safe" recoveryReason="renderer-error" />;
     }
-    return <OperationalFingerprintBuildVisual {...this.props} />;
+    return <BaselineNetworkBuildVisual {...this.props} />;
   }
 }
 
-function OperationalFingerprintBuild(props) {
-  return <FingerprintRendererBoundary {...props} />;
+function BaselineNetworkBuild(props) {
+  return <BaselineNetworkRendererBoundary {...props} />;
 }
 
-function OperationalFingerprintBuildVisual({ percent, stage, complete = false, forcedTier = "", recoveryReason = "" }) {
+function BaselineNetworkBuildVisual({ percent, stage, complete = false, forcedTier = "", recoveryReason = "" }) {
   const displayPercent = clampPercent(percent);
   const stageIndex = stage?.index ?? 0;
-  const stageCount = FINGERPRINT_BUILD_STAGES.length;
+  const stageCount = BASELINE_NETWORK_STAGES.length;
   const stageNumber = Math.min(stageIndex + 1, stageCount);
   const rootRef = useRef(null);
-  const [renderProfile, setRenderProfile] = useState(() => forcedTier ? { tier: forcedTier, reason: recoveryReason || "renderer-recovery" } : detectFingerprintRenderTier());
+  const [renderProfile, setRenderProfile] = useState(() => forcedTier ? { tier: forcedTier, reason: recoveryReason || "renderer-recovery" } : detectBaselineNetworkRenderTier());
   const renderTier = forcedTier || renderProfile.tier;
   const compatibilityMode = renderTier === "safe";
-  const particleCount = FINGERPRINT_RENDERER_PARTICLES[renderTier] ?? 0;
-  const statusTitle = complete
-    ? "Behavioral Baseline Established"
-    : compatibilityMode
-      ? "Using an alternate processing path."
-      : stage?.label || "Learning Operational Relationships";
-  const statusDetail = complete
-    ? "The behavioral baseline has been established"
-    : compatibilityMode
-      ? "Analysis quality is unchanged. Full SII results remain valid."
-      : "Stage " + stageNumber + " of " + stageCount;
+  const statusTitle = complete ? "Behavioral Baseline Established" : stage?.label || "Learning Operational Relationships";
 
   useEffect(() => {
     if (forcedTier) return undefined;
-    if (registerFingerprintRendererMount()) {
-      markFingerprintRendererRecovery("repeated-remounts");
+    if (registerBaselineNetworkMount()) {
+      markBaselineNetworkRecovery("repeated-remounts");
       setRenderProfile({ tier: "safe", reason: "repeated-remounts" });
       return undefined;
     }
@@ -400,15 +403,16 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
     let active = true;
     const recover = (reason) => {
       if (!active) return;
-      markFingerprintRendererRecovery(reason);
+      markBaselineNetworkRecovery(reason);
       setRenderProfile({ tier: "safe", reason });
     };
     const handleRendererError = () => recover("renderer-error");
     const handleCompatibilityRecovery = () => recover("black-screen-recovery");
+    const recoveryEvents = ["neraium:baseline-network-renderer-failed", "neraium:fingerprint-renderer-failed"];
 
     window.addEventListener("error", handleRendererError);
     window.addEventListener("unhandledrejection", handleRendererError);
-    window.addEventListener("neraium:fingerprint-renderer-failed", handleCompatibilityRecovery);
+    recoveryEvents.forEach((eventName) => window.addEventListener(eventName, handleCompatibilityRecovery));
 
     const frame = window.requestAnimationFrame?.(() => {
       const box = rootRef.current?.getBoundingClientRect?.();
@@ -419,96 +423,99 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
       active = false;
       window.removeEventListener("error", handleRendererError);
       window.removeEventListener("unhandledrejection", handleRendererError);
-      window.removeEventListener("neraium:fingerprint-renderer-failed", handleCompatibilityRecovery);
+      recoveryEvents.forEach((eventName) => window.removeEventListener(eventName, handleCompatibilityRecovery));
       if (frame && window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
     };
   }, [forcedTier]);
 
   useEffect(() => {
     if (!compatibilityMode || complete) return;
-    if (readStorageValue("sessionStorage", FINGERPRINT_RENDERER_REPORTED_KEY)) return;
-    writeStorageValue("sessionStorage", FINGERPRINT_RENDERER_REPORTED_KEY, "1");
+    if (readStorageValue("sessionStorage", BASELINE_NETWORK_REPORTED_KEY)) return;
+    writeStorageValue("sessionStorage", BASELINE_NETWORK_REPORTED_KEY, "1");
   }, [compatibilityMode, complete]);
 
   return (
     <div
       ref={rootRef}
-      className={`upload-fingerprint-build upload-fingerprint-build--${renderTier}${complete ? " upload-fingerprint-build--complete" : ""}`}
+      className={`upload-network-build upload-network-build--${renderTier}${complete ? " upload-network-build--complete" : ""}`}
+      data-testid="baseline-network-progress"
       data-render-tier={renderTier}
       data-render-reason={renderProfile.reason}
       data-build-stage={stage?.id || "evidence"}
-      aria-label={`Analysis ${displayPercent}% complete`}
-      aria-valuemin="0"
-      aria-valuemax="100"
-      aria-valuenow={displayPercent}
-      role="progressbar"
     >
-      <div className="upload-fingerprint-build__halo" aria-hidden="true" />
-      {particleCount > 0 ? (
-        <div className="upload-fingerprint-build__particles" aria-hidden="true">
-          {Array.from({ length: particleCount }, (_, index) => <span key={index} style={{ "--particle-index": index }} />)}
+      <span
+        className="sr-only"
+        aria-label={`Analysis ${displayPercent}% complete`}
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow={displayPercent}
+        role="progressbar"
+      />
+      <header className="upload-network-build__header">
+        <p>Behavioral baseline</p>
+        <div className="upload-network-build__title-row">
+          <strong>{statusTitle}</strong>
+          <div className="upload-network-build__meta">
+            <span>Stage {stageNumber} of {stageCount}</span>
+            <span>{displayPercent}%</span>
+          </div>
         </div>
-      ) : null}
-      <div className="upload-fingerprint-build__status">
-        <strong>{statusTitle}</strong>
-        <span>{statusDetail}</span>
         {compatibilityMode && !complete ? (
-          <small>Analysis quality is unchanged. Full SII results remain valid. No action is required.</small>
+          <small>Your browser is using a simplified view. Analysis quality is unchanged and no action is required.</small>
         ) : null}
+      </header>
+
+      <div className="upload-network-build__canvas" aria-hidden="true">
+        <svg viewBox="0 0 680 280" focusable="false">
+          <g className="upload-network-build__clusters">
+            {BASELINE_NETWORK_CLUSTERS.map((cluster, index) => {
+              const fill = networkProgress({ displayPercent, phase: cluster.phase, stageIndex, complete });
+              return <path key={cluster.path} d={cluster.path} pathLength="100" style={{ "--network-offset": compatibilityMode ? (fill > 0 ? 0 : 100) : 100 - fill, "--cluster-index": index }} />;
+            })}
+          </g>
+          <g className="upload-network-build__links">
+            {BASELINE_NETWORK_LINKS.map((link, index) => {
+              const fill = networkProgress({ displayPercent, phase: link.phase, stageIndex, complete });
+              return <path key={link.path} d={link.path} pathLength="100" style={{ "--network-offset": compatibilityMode ? (fill > 0 ? 0 : 100) : 100 - fill, "--link-index": index }} />;
+            })}
+          </g>
+          <rect className={`upload-network-build__baseline-boundary${complete || stageIndex >= 3 ? " is-resolved" : ""}`} x="542" y="58" width="112" height="164" rx="18" pathLength="100" />
+          <g className="upload-network-build__evidence-nodes">
+            {BASELINE_NETWORK_NODES.map((node) => {
+              const resolved = complete || stageIndex >= node.phase;
+              const active = !complete && stageIndex === node.phase;
+              return (
+                <circle
+                  key={node.id}
+                  className={`upload-network-build__node upload-network-build__node--${node.kind}${resolved ? " is-resolved" : ""}${active ? " is-active" : ""}`}
+                  cx={node.x}
+                  cy={node.y}
+                  r={node.r}
+                />
+              );
+            })}
+          </g>
+          {complete ? <path className="upload-network-build__completion-check" d="M616 140l7 7 14-17" /> : null}
+        </svg>
       </div>
-      <svg className="upload-fingerprint-build__print" viewBox="0 0 160 190" aria-hidden="true" focusable="false">
-        <defs>
-          <linearGradient id="upload-baseline-link" x1="38" y1="42" x2="126" y2="148" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(226, 232, 236, 0.82)" />
-            <stop offset="0.58" stopColor="rgba(113, 128, 139, 0.7)" />
-            <stop offset="1" stopColor="rgba(29, 216, 196, 0.78)" />
-          </linearGradient>
-          <radialGradient id="upload-fingerprint-core" cx="50%" cy="50%" r="58%">
-            <stop offset="0" stopColor="rgba(92, 107, 118, 0.18)" />
-            <stop offset="0.7" stopColor="rgba(29, 216, 196, 0.05)" />
-            <stop offset="1" stopColor="rgba(29, 216, 196, 0)" />
-          </radialGradient>
-          <filter id="upload-baseline-node-glow" x="-200%" y="-200%" width="500%" height="500%">
-            <feGaussianBlur stdDeviation="2.4" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-        </defs>
-        <circle className="upload-fingerprint-build__field" cx="80" cy="95" r="69" />
-        <g className="upload-fingerprint-build__orbits">
-          {BASELINE_ORBITS.map((orbit, index) => {
-            const fill = networkProgress({ displayPercent, phase: orbit.phase, stageIndex, complete });
-            return <path key={orbit.path} d={orbit.path} pathLength="100" style={{ "--network-offset": compatibilityMode ? (fill > 0 ? 0 : 100) : 100 - fill, "--orbit-index": index }} />;
-          })}
-        </g>
-        <g className="upload-fingerprint-build__relationship-links">
-          {BASELINE_NETWORK_LINKS.map((link, index) => {
-            const fill = networkProgress({ displayPercent, phase: link.phase, stageIndex, complete });
-            return <path key={link.path} d={link.path} pathLength="100" style={{ "--network-offset": compatibilityMode ? (fill > 0 ? 0 : 100) : 100 - fill, "--link-index": index }} />;
-          })}
-        </g>
-        <g className="upload-fingerprint-build__evidence-points" filter="url(#upload-baseline-node-glow)">
-          {BASELINE_NETWORK_NODES.map((node, index) => (
-            <g key={`${node.x}-${node.y}`} className={`upload-fingerprint-build__network-node upload-fingerprint-build__network-node--${node.role}`} style={{ "--point-index": index }}>
-              <circle className="upload-fingerprint-build__node-orbit" cx={node.x} cy={node.y} r={node.r + 4.5} />
-              <circle className="upload-fingerprint-build__node-core" cx={node.x} cy={node.y} r={node.r} />
-            </g>
-          ))}
-        </g>
-        <circle className="upload-fingerprint-build__baseline-lock" cx="80" cy="95" r="18" pathLength="100" />
-      </svg>
-      {complete ? <div className="upload-fingerprint-build__ripple" aria-hidden="true" /> : null}
-      {complete ? <div className="upload-fingerprint-build__check" aria-hidden="true">✓</div> : null}
-      <div className="upload-fingerprint-build__nodes" aria-hidden="true">
-        {FINGERPRINT_BUILD_STAGES.map((item, index) => (
-          <span
-            key={item.id}
-            className={index < stageIndex ? "is-complete" : index === stageIndex ? "is-active" : ""}
-          >
-            <i />
-            <b>{item.shortLabel}</b>
-          </span>
-        ))}
-      </div>
+
+      <ol className="upload-network-build__stages" aria-label="Analysis stages">
+        {BASELINE_NETWORK_STAGES.map((item, index) => {
+          const isComplete = complete || index < stageIndex;
+          const isActive = !complete && index === stageIndex;
+          return (
+            <li
+              key={item.id}
+              className={isComplete ? "is-complete" : isActive ? "is-active" : ""}
+              aria-current={isActive ? "step" : undefined}
+              aria-label={item.label}
+            >
+              <i aria-hidden="true">{isComplete ? "\u2713" : index + 1}</i>
+              <b>{item.shortLabel}</b>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
@@ -521,7 +528,7 @@ function uploadOrbStatus(viewState) {
   return "awaiting";
 }
 
-function uploadFingerprintStatusText(viewState, hasSelectedFiles) {
+function uploadBaselineStatusText(viewState, hasSelectedFiles) {
   if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Learning Facility Behavior";
   if (viewState === "complete") return "Behavioral Baseline Active";
   if (viewState === "failed") return hasSelectedFiles ? "Historical Data Ready" : "Awaiting Behavioral Baseline";
@@ -625,12 +632,12 @@ export default function IntakeFlowPanel({
   const viewState = rawViewState === "complete" && !analysisResult ? "finalizing" : rawViewState;
   const statusText = operatorStatusText({ viewState, uploadJob, uploadState, latestMessage });
   const mainPercent = resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent });
-  const fingerprintBuildStage = resolveFingerprintBuildStage({ viewState, uploadJob, uploadState });
+  const baselineNetworkStage = resolveBaselineNetworkStage({ viewState, uploadJob, uploadState });
   const remaining = estimateRemaining(uploadTransfer);
   const errorMessage = String(latestMessage || "Choose another telemetry file and try again.").trim();
   const summary = analysisResult ? completionSummary({ analysisResult }) : [];
   const showProgress = viewState === "uploading" || viewState === "analyzing" || viewState === "finalizing";
-  const fingerprintStatus = uploadFingerprintStatusText(viewState, hasSelectedFiles);
+  const baselineStatus = uploadBaselineStatusText(viewState, hasSelectedFiles);
   const resolvedOrbStatus = uploadOrbStatus(viewState);
   const chooseFileButtonText = "Choose File";
   const selectedFileDetail = hasSelectedFiles ? `${fileKind} telemetry - ${selectedFileSize}` : "No file selected";
@@ -671,13 +678,13 @@ export default function IntakeFlowPanel({
               <OperationalOrb
                 status={resolvedOrbStatus}
                 state={{
-                  label: fingerprintStatus,
+                  label: baselineStatus,
                   visualLabel: "Behavioral Baseline",
                 }}
               />
               <div className="upload-analysis-card__status" aria-live="polite">
                 <span>Status</span>
-                <strong>{fingerprintStatus}</strong>
+                <strong>{baselineStatus}</strong>
               </div>
             </div>
 
@@ -713,14 +720,19 @@ export default function IntakeFlowPanel({
         {showProgress ? (
           <section className="upload-analysis-card upload-analysis-card--processing" aria-live="polite" aria-label={`Analysis progress: ${statusText}`}>
             <div className="upload-analysis-card__content">
-              <div className="upload-file-chip" title={`${selectedFileLabel} - ${selectedFileSize}`}>
-                <span className="upload-file-chip__icon" aria-hidden="true" />
-                <span className="upload-file-chip__name">{selectedFileLabel}</span>
-                <span className="upload-file-chip__meta">{selectedFileSize}</span>
+              <div className="upload-processing-heading">
+                <div className="upload-file-chip" title={`${selectedFileLabel} - ${selectedFileSize}`}>
+                  <span className="upload-file-chip__icon" aria-hidden="true" />
+                  <span className="upload-file-chip__name">{selectedFileLabel}</span>
+                  <span className="upload-file-chip__meta">{selectedFileSize}</span>
+                </div>
+                <span className="upload-processing-heading__state">Analysis in progress</span>
               </div>
-              <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} />
-              <p className="upload-simple-note upload-processing-status">{queuedWorkerDetail || statusText}</p>
-              {remaining ? <p className="upload-simple-note">{remaining}</p> : null}
+              <BaselineNetworkBuild percent={mainPercent} stage={baselineNetworkStage} />
+              <div className="upload-processing-message">
+                <p className="upload-simple-note upload-processing-status">{queuedWorkerDetail || statusText}</p>
+                {remaining ? <p className="upload-simple-note upload-processing-remaining">{remaining}</p> : null}
+              </div>
             </div>
           </section>
         ) : null}
@@ -728,7 +740,7 @@ export default function IntakeFlowPanel({
         {viewState === "complete" ? (
           <section className="upload-analysis-card upload-simple-card--complete" aria-label="Analysis complete">
             <div className="upload-analysis-card__visual">
-              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
+              <BaselineNetworkBuild percent={100} stage={resolveBaselineNetworkStage({ viewState: "complete", uploadJob, uploadState })} complete />
               <div className="upload-analysis-card__status">
                 <span>Status</span>
                 <strong>Behavioral Baseline Established</strong>
@@ -759,7 +771,7 @@ export default function IntakeFlowPanel({
         {viewState === "completion_error" ? (
           <section className="upload-analysis-card upload-simple-card--failed" role="alert" aria-live="assertive">
             <div className="upload-analysis-card__visual">
-              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
+              <BaselineNetworkBuild percent={100} stage={resolveBaselineNetworkStage({ viewState: "complete", uploadJob, uploadState })} complete />
               <div className="upload-analysis-card__status">
                 <span>Status</span>
                 <strong>Behavioral Baseline Established</strong>
@@ -785,13 +797,13 @@ export default function IntakeFlowPanel({
               <OperationalOrb
                 status={resolvedOrbStatus}
                 state={{
-                  label: fingerprintStatus,
+                  label: baselineStatus,
                   visualLabel: "Behavioral Baseline",
                 }}
               />
               <div className="upload-analysis-card__status">
                 <span>Status</span>
-                <strong>{fingerprintStatus}</strong>
+                <strong>{baselineStatus}</strong>
               </div>
             </div>
             <div className="upload-analysis-card__content">

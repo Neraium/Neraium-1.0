@@ -65,7 +65,7 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
 async function startCommandCenterUpload(page, { name, csv }) {
   await page.goto("/", { waitUntil: "load" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-  await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
+  await expect(page.getByTestId("overview-csv-upload-input")).toBeAttached();
 
   const uploadAcceptedPromise = page.waitForResponse(
     (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
@@ -86,7 +86,7 @@ async function startCommandCenterUpload(page, { name, csv }) {
 }
 
 test.describe("Functional verification", () => {
-  test("medium upload exposes Operational Fingerprint results and workspace data", async ({ page }) => {
+  test("medium upload exposes Behavioral Baseline results and workspace data", async ({ page }) => {
     test.setTimeout(180000);
     const uploadJobId = await startCommandCenterUpload(page, {
       name: "functional-medium.csv",
@@ -94,7 +94,7 @@ test.describe("Functional verification", () => {
     });
 
     await waitForUploadComplete(page, uploadJobId, 180000);
-    await expect(page.getByRole("heading", { name: /Analysis Complete|Operational Fingerprint Established/ })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: /Analysis Complete|Behavioral Baseline Established/ })).toBeVisible({ timeout: 30000 });
 
     const viewResults = page.getByRole("button", { name: "View Results" });
     if (await viewResults.isVisible().catch(() => false)) {
@@ -105,6 +105,6 @@ test.describe("Functional verification", () => {
 
     await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible({ timeout: 30000 });
     await expect(page.getByTestId("operational-orb")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Fingerprint/i }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /Behavior Baseline/i }).first()).toBeVisible();
   });
 });

@@ -31,6 +31,7 @@ async function startCommandCenterUpload(page, { name, csv }) {
     buffer: Buffer.from(csv, "utf8"),
   });
   await expect(page.getByTestId("upload-workspace")).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
   const uploadAccepted = await uploadAcceptedPromise;
   expect(uploadAccepted.ok()).toBeTruthy();
 }
@@ -39,7 +40,11 @@ test.describe("Setup + Upload regression", () => {
   test("opens command-center upload entry without the setup wizard", async ({ page }) => {
     await openCommandCenter(page);
     await expect(page.getByTestId("onboarding-root")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
+    const commandCenterNav = page
+      .getByRole("navigation", { name: "Primary workflow navigation" })
+      .getByRole("button", { name: /^Command Center/ });
+    await expect(commandCenterNav).toBeVisible();
+    await expect(commandCenterNav).toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("overview-csv-upload-input")).toBeAttached();
   });
 
@@ -48,9 +53,6 @@ test.describe("Setup + Upload regression", () => {
       name: "e2e-sample.csv",
       csv: "timestamp,temperature,humidity\n2026-05-01T08:00:00Z,75.2,58\n",
     });
-
-    await expect(page.getByTestId("upload-workspace")).toBeVisible();
-    await expect(page.locator("strong", { hasText: "e2e-sample.csv" })).toBeVisible();
   });
 
   test("large CSV upload moves progress and completes analysis", async ({ page }) => {
@@ -65,6 +67,33 @@ test.describe("Setup + Upload regression", () => {
     });
 
     await expect(page.getByRole("progressbar", { name: /Telemetry transfer|Analysis/i })).toHaveAttribute("aria-valuenow", /[1-9][0-9]*|100/, { timeout: 30000 });
-    await expect(page.getByRole("heading", { name: /Analysis Complete|Operational Fingerprint Established/ })).toBeVisible({ timeout: 120000 });
+
+    const baselineNetwork = page.getByTestId("baseline-network-progress");
+    await expect(baselineNetwork).toBeVisible({ timeout: 30000 });
+    const accessibleProgress = baselineNetwork.getByRole("progressbar", { name: /Analysis \d+% complete/ });
+    await expect(accessibleProgress).toHaveAttribute("aria-valuenow", /\d+/);
+    await baselineNetwork.scrollIntoViewIfNeeded();
+    const isContainedInViewport = await baselineNetwork.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.left >= -1
+        && bounds.top >= -1
+        && bounds.right <= window.innerWidth + 1
+        && bounds.bottom <= window.innerHeight + 1;
+    });
+    expect(isContainedInViewport).toBeTruthy();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(baselineNetwork).toBeVisible();
+    const isHorizontallyContainedInViewport = await baselineNetwork.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.left >= -1 && bounds.right <= window.innerWidth + 1;
+    });
+    expect(isHorizontallyContainedInViewport).toBeTruthy();
+    const hasNoHorizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+    );
+    expect(hasNoHorizontalOverflow).toBeTruthy();
+
+    await expect(page.getByRole("heading", { name: /Analysis Complete|Behavioral Baseline Established/ })).toBeVisible({ timeout: 120000 });
   });
 });
