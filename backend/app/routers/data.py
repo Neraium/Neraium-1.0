@@ -41,6 +41,8 @@ UPLOAD_RATE_LIMIT = 20
 UPLOAD_RATE_WINDOW_SECONDS = 60
 UPLOAD_STATUS_RATE_LIMIT = 240
 UPLOAD_STATUS_RATE_WINDOW_SECONDS = 60
+_UPLOAD_WORKERS: set[threading.Thread] = set()
+_UPLOAD_WORKERS_LOCK = threading.Lock()
 
 
 def format_upload_capacity(size_bytes: int) -> str:
@@ -173,17 +175,50 @@ def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
             )
 
 
+def _run_tracked_upload_worker(runtime_dir: Path) -> None:
+    try:
+        _run_upload_worker_for_runtime(runtime_dir)
+    finally:
+        with _UPLOAD_WORKERS_LOCK:
+            _UPLOAD_WORKERS.discard(threading.current_thread())
+
+
+def wait_for_upload_workers(timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + max(float(timeout), 0.0)
+    current_thread = threading.current_thread()
+    while True:
+        with _UPLOAD_WORKERS_LOCK:
+            workers = [
+                worker
+                for worker in _UPLOAD_WORKERS
+                if worker is not current_thread and worker.is_alive()
+            ]
+        if not workers:
+            return
+        for worker in workers:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            worker.join(remaining)
+
+
 def _dispatch_upload_worker_for_runtime(runtime_dir: Path) -> None:
     logger.info("worker_dispatch_requested runtime_dir=%s", runtime_dir)
+    worker: threading.Thread | None = None
     try:
         worker = threading.Thread(
-            target=_run_upload_worker_for_runtime,
+            target=_run_tracked_upload_worker,
             args=(runtime_dir,),
             daemon=True,
             name="upload-worker-dispatch",
         )
+        with _UPLOAD_WORKERS_LOCK:
+            _UPLOAD_WORKERS.add(worker)
         worker.start()
     except Exception:
+        if worker is not None:
+            with _UPLOAD_WORKERS_LOCK:
+                _UPLOAD_WORKERS.discard(worker)
         logger.exception("upload_worker_thread_start_failed runtime_dir=%s", runtime_dir)
 
 

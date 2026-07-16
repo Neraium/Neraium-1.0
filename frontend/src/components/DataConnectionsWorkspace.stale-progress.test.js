@@ -2,7 +2,7 @@
 import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import DataConnectionsWorkspace from "./DataConnectionsWorkspace";
+import DataConnectionsWorkspace, { queuedWorkerMessage } from "./DataConnectionsWorkspace";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { SERVICE_UNAVAILABLE_RETRY_MESSAGE, SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
@@ -22,7 +22,7 @@ function renderPanel(overrides = {}) {
     selectedFiles: [],
     pendingUploadKind: "csv",
     selectedFileSize: "Awaiting file",
-    isUploadProcessing: (state) => ["uploading", "processing", "running_sii", "structural_scoring", "building_fingerprint", "saving_results", "navigation_pending"].includes(String(state)),
+    isUploadProcessing: (state) => ["uploading", "accepted", "queued", "processing", "running_sii", "structural_scoring", "building_fingerprint", "saving_results", "navigation_pending"].includes(String(state)),
     uploadState: "idle",
     openFilePicker: vi.fn(),
     uploadJob: null,
@@ -355,8 +355,33 @@ it("baseline renderer uses enhanced mode on mobile-capable constraints", () => {
   expect(screen.getByText("Organizing System Behavior")).toBeTruthy();
 });
 
-it("failed state shows retry and choose another file", () => {
+it("maps backend worker states to current operator status copy", () => {
+  expect(queuedWorkerMessage({ worker_state: "starting" })).toBe("Preparing analysis resources...");
+  expect(queuedWorkerMessage({ worker_state: "active", worker_last_update_at: "12:03" })).toBe("Analysis active - last update 12:03");
+  expect(queuedWorkerMessage({ worker_state: "queued" })).toBe("Preparing analysis resources");
+  expect(queuedWorkerMessage({ worker_state: "stalled" })).toBe("No recent progress update; analysis may still be continuing.");
+});
+
+
+it("shows queued worker status as one visible processing line", () => {
   renderPanel({
+    uploadState: "queued",
+    selectedFiles: [selectedCsv("queued.csv")],
+    selectedFileSize: "1.0 KB",
+    uploadJob: { job_id: "queued-job", status: "QUEUED", worker_state: "starting" },
+    queuedWorkerDetail: "Preparing analysis resources...",
+  });
+
+  const statusLine = document.querySelector(".upload-processing-status");
+  expect(statusLine?.textContent).toBe("Preparing analysis resources...");
+  expect(document.querySelector(".metadata-text")).toBeNull();
+});
+
+
+it("failed state shows retry and choose another file", () => {
+  const onRetryFailedUploads = vi.fn();
+  renderPanel({
+    onRetryFailedUploads,
     uploadState: "error",
     selectedFiles: [selectedCsv("bad.csv")],
     selectedFileSize: "3.2 MB",
@@ -371,8 +396,11 @@ it("failed state shows retry and choose another file", () => {
 
   expect(screen.getByRole("heading", { name: "Upload Error" })).toBeTruthy();
   expect(screen.getAllByText("CSV could not be parsed.").length).toBeGreaterThan(0);
-  expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+  const retryButton = screen.getByRole("button", { name: "Retry" });
+  expect(retryButton).toBeTruthy();
   expect(screen.getByRole("button", { name: "Choose File" })).toBeTruthy();
+  fireEvent.click(retryButton);
+  expect(onRetryFailedUploads).toHaveBeenCalledTimes(1);
 });
 
 it("complete state shows the behavior baseline completion moment", () => {

@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from app.core.config import get_settings
 from app.main import create_app
+from app.routers.data import wait_for_upload_workers
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
 from app.services.sii_runner import configure_runtime_dir as configure_sii_runner_dir
 from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir
@@ -30,6 +31,8 @@ def isolate_runtime(monkeypatch, tmp_path):
     get_settings()
     init_runtime_db()
     yield
+    # Prevent an old test's daemon worker from reconfiguring the next test's runtime path.
+    wait_for_upload_workers()
 
 
 @pytest.fixture

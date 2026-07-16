@@ -273,17 +273,6 @@ function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
   return { ...FINGERPRINT_BUILD_STAGES[index], index };
 }
 
-function ridgeProgress({ displayPercent, ridge, stageIndex, complete }) {
-  if (complete || stageIndex > ridge.phase) return 100;
-  if (stageIndex < ridge.phase) return 0;
-
-  const phaseStartPercent = [0, 35, 62, 84][ridge.phase] ?? 0;
-  const phaseEndPercent = [35, 62, 84, 99][ridge.phase] ?? 100;
-  const phaseSpan = Math.max(1, phaseEndPercent - phaseStartPercent);
-  const withinPhase = ((displayPercent - phaseStartPercent) / phaseSpan) * 100;
-  return Math.max(12, Math.min(100, Math.round(withinPhase)));
-}
-
 function safeStorage(storageName) {
   if (typeof window === "undefined") return null;
   try {
@@ -730,6 +719,7 @@ export default function IntakeFlowPanel({
                 <span className="upload-file-chip__meta">{selectedFileSize}</span>
               </div>
               <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} />
+              <p className="upload-simple-note upload-processing-status">{queuedWorkerDetail || statusText}</p>
               {remaining ? <p className="upload-simple-note">{remaining}</p> : null}
             </div>
           </section>

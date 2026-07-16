@@ -137,7 +137,7 @@ def test_protected_route_errors_use_generic_session_copy() -> None:
     source = read_upload_surface()
 
     assert "Session expired. Refresh workspace." in source
-    assert "Upload processing interrupted." in source
+    assert "Telemetry analysis interrupted." in source
     assert "Upload state unavailable." in source
     assert "[object Object]" not in source
 
@@ -242,10 +242,10 @@ def test_frontend_displays_queued_worker_visibility_messages() -> None:
     source = read_frontend(ROOT / "frontend" / "src" / "components" / "DataConnectionsWorkspace.jsx")
     panel = read_frontend(ROOT / "frontend" / "src" / "components" / "setup" / "IntakeFlowPanel.jsx")
 
-    assert "Worker starting..." in source
-    assert "Worker active • last update" in source
-    assert "Still queued • waiting for worker" in source
-    assert "Possible stall • no worker update yet" in source
+    assert "Preparing analysis resources..." in source
+    assert "Analysis active - last update" in source
+    assert "Preparing analysis resources" in source
+    assert "No recent progress update; analysis may still be continuing." in source
     assert "queuedWorkerDetail" in panel
 
 
@@ -254,7 +254,8 @@ def test_queued_worker_status_is_folded_into_single_upload_line() -> None:
     panel = read_frontend(ROOT / "frontend" / "src" / "components" / "setup" / "IntakeFlowPanel.jsx")
 
     assert "workerState === \"starting\"" in source
-    assert "Worker starting..." in source
+    assert "Preparing analysis resources..." in source
+    assert "upload-processing-status" in panel
     assert "queuedWorkerDetail ? <span className=\"metadata-text\">{queuedWorkerDetail}</span> : null" not in panel
     assert "statusText" in panel
     assert "uploadTransfer?.label" in panel
@@ -309,6 +310,6 @@ def test_retry_analysis_targets_current_uploaded_job() -> None:
     assert "/api/data/upload/${encodeURIComponent(cleanJobId)}/retry" in upload_api_source
     assert "retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode })" in workspace_source
     assert "await handleUpload();" in workspace_source
-    assert "Analyze Dataset" in panel_source
+    assert "Analyze Historical Telemetry" in panel_source
     assert "Choose File" in panel_source
     assert "onClick={() => onRetryFailedUploads?.()}" in panel_source

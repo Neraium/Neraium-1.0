@@ -104,7 +104,7 @@ function boundedFailureDelay(failureCount) {
   return Math.min(Math.max(backoff, 1000), 45000);
 }
 
-function queuedWorkerMessage(uploadJob) {
+export function queuedWorkerMessage(uploadJob) {
   const workerState = String(uploadJob?.worker_state ?? uploadJob?.workerState ?? "").toLowerCase();
   const lastUpdate = uploadJob?.worker_last_update_at ?? uploadJob?.worker_last_update ?? uploadJob?.updated_at ?? "";
   if (workerState === "starting") return "Preparing analysis resources...";

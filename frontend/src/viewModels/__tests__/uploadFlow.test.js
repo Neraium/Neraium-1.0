@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SERVICE_UNAVAILABLE_UPLOAD_MESSAGE, buildUploadRequestError, classifyUploadError, readJsonPayload } from "../uploadFlow";
+import { SERVICE_UNAVAILABLE_UPLOAD_MESSAGE, buildUploadRequestError, classifyUploadError, operatorUploadMessage, readJsonPayload } from "../uploadFlow";
 
 
 describe("uploadFlow poll error classification", () => {
@@ -32,6 +32,15 @@ describe("uploadFlow poll error classification", () => {
     expect(requestError.detail).not.toContain("<html>");
     expect(requestError.failureUrl).toBe("/api/data/upload-status/job-503");
   });
+  it("uses generic protected-route messages without reflecting backend details", () => {
+    const backendDetail = "token=do-not-render internal auth middleware failed";
+
+    expect(operatorUploadMessage({ status: 401, errorType: "auth", detail: backendDetail, phase: "upload" }))
+      .toBe("Telemetry processing session could not be validated.");
+    expect(operatorUploadMessage({ status: 404, errorType: "upload_session_missing", detail: backendDetail, phase: "upload" }))
+      .toBe("Upload state unavailable.");
+  });
+
   it("keeps upload job-not-found errors distinct from endpoint misses", () => {
     const error = new Error("Upload job missing");
     error.name = "UploadRequestError";

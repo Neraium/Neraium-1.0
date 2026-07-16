@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import ctypes
+import importlib
 import json
 import os
-import resource
+import sys
+from typing import Any
 
 import pytest
+
+try:
+    resource_module: Any = importlib.import_module("resource")
+except ImportError:  # Windows does not provide the Unix resource module.
+    resource_module = None
 
 from app.services.upload_jobs import process_csv_content
 
@@ -34,10 +42,37 @@ def _rows(count: int, *, drift: bool = False, missing: bool = False, relationshi
     return "\n".join(lines).encode()
 
 
+def _peak_memory_kb() -> int:
+    if resource_module is not None:
+        # Linux CI reports ru_maxrss in KiB. Keep that native path unchanged.
+        return int(resource_module.getrusage(resource_module.RUSAGE_SELF).ru_maxrss)
+    if sys.platform == "win32":
+        class ProcessMemoryCounters(ctypes.Structure):
+            _fields_ = [
+                ("cb", ctypes.c_ulong),
+                ("PageFaultCount", ctypes.c_ulong),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
+
+        counters = ProcessMemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        process = ctypes.windll.kernel32.GetCurrentProcess()
+        if ctypes.windll.psapi.GetProcessMemoryInfo(process, ctypes.byref(counters), counters.cb):
+            return int(counters.PeakWorkingSetSize // 1024)
+    return 0
+
+
 def _run_case(name: str, content: bytes, *, expected_detected: bool, max_seconds: float) -> dict:
-    before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    before = _peak_memory_kb()
     result = process_csv_content(filename=f"{name}.csv", content=content)
-    after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    after = _peak_memory_kb()
     latest = result.get("sii_runner_result", {}).get("latest_state", {})
     relationship_changes = result.get("baseline_analysis", {}).get("top_relationship_changes") or []
     detected = (
