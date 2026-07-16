@@ -287,7 +287,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("Possible Causes")).toBeTruthy();
     expect(screen.getByText("Recommended Investigation")).toBeTruthy();
     expect(screen.getByText("Observed Evidence")).toBeTruthy();
-    expect(screen.queryByText("What Changed")).toBeNull();
+    expect(screen.getByText("What Changed")).toBeTruthy();
     expect(screen.queryByText("Confidence Breakdown")).toBeNull();
     expect(screen.queryByRole("button", { name: "Open Insight" })).toBeNull();
     expect(hasActiveNavButton(/Command Center/)).toBe(true);
@@ -356,13 +356,13 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("Observed Evidence")).toBeTruthy();
     expect(screen.getByText("Observed Evidence")).toBeTruthy();
     expect(screen.getByText("Possible Causes")).toBeTruthy();
-    expect(screen.getByText("Confidence Breakdown")).toBeTruthy();
+    expect(screen.getAllByText("Confidence").length).toBeGreaterThan(0);
     expect(screen.getByText("Recommended Investigation")).toBeTruthy();
-    expect(screen.getByText("Technical Details")).toBeTruthy();
+    expect(screen.getByText("Advanced Diagnostics")).toBeTruthy();
     expect(screen.getAllByText("pressure \u2194 flow").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pressure and flow relationship weakened.").length).toBeGreaterThan(0);
     expect(screen.queryByText("[object Object]")).toBeNull();
-    expect(screen.queryByText(/1\.111111/)).toBeNull();
+    expect(screen.getByText(/1\.111111/)).toBeTruthy();
   });
 
   it("maps two changed relationships to two evidence lines", () => {
@@ -401,7 +401,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(text).toContain("0.06");
     expect(text).toContain("0.84");
     expect(text).toContain("weakened sharply toward little linear coupling");
-    expect(screen.getByText("Technical Details")).toBeTruthy();
+    expect(screen.getByText("Advanced Diagnostics")).toBeTruthy();
     expect(text).toMatch(/0\.775497|0\.063807|0\.839304/);
   });
 

@@ -416,184 +416,191 @@ function ContextGrid({ rows }) {
   );
 }
 
+function Disclosure({ title, children, className = "" }) {
+  return (
+    <details className={`insight-disclosure ${className}`.trim()}>
+      <summary><span>{title}</span><span className="insight-disclosure__chevron" aria-hidden="true">?</span></summary>
+      <div className="insight-disclosure__body">{children}</div>
+    </details>
+  );
+}
+
+function PriorityActions({ actions, explain = false }) {
+  const labels = ["Recommended First", "Recommended Second", "Recommended Third"];
+  return (
+    <ol className={explain ? "investigation-priorities investigation-priorities--explained" : "investigation-priorities"}>
+      {actions.slice(0, 3).map((action, index) => (
+        <li key={action}>
+          {explain ? <span>{labels[index]}</span> : null}
+          <strong>{action}</strong>
+          {explain ? <p>{index === 0
+            ? "Start here because it tests the strongest observed change directly."
+            : index === 1
+              ? "Check this next to determine whether an operating change explains the deviation."
+              : "Use this to rule out equipment or instrumentation effects if the first checks do not explain the change."}</p> : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export default function OperatorInsightDetail({ insight, defaultOpen = false, inline = false, focusMode = false }) {
   const evidence = Array.isArray(insight?.evidence) ? insight.evidence : [];
+  const relationships = relationshipLabels(insight);
   const evidenceLines = unique([
+    ...toList(insight?.observedFacts, insight?.observed, insight?.observed_facts).map(text),
     ...evidenceSummaries(insight, evidence),
     ...toList(insight?.evidenceSummary, insight?.confidenceRationale).map(text),
   ]).slice(0, 8);
   const evidenceMetrics = evidenceMetricRows(insight, evidence);
+  const observedFacts = unique(toList(insight?.observedFacts, insight?.observed, insight?.observed_facts).map(text)).slice(0, 8);
 
   const actions = unique(toList(
-    insight?.recommendedFirstAction,
-    insight?.recommendedAction,
-    insight?.recommended_action,
-    insight?.recommendedInvestigation,
-    insight?.recommended_investigation,
-    insight?.operatorCheck,
-    insight?.operator_check,
-    insight?.recommendedActions,
-    insight?.recommended_actions,
-    insight?.recommendedFirstChecks,
-    insight?.recommended_first_checks,
-    insight?.recommendedCheck,
+    insight?.recommendedFirstAction, insight?.recommendedAction, insight?.recommended_action,
+    insight?.recommendedInvestigation, insight?.recommended_investigation, insight?.operatorCheck,
+    insight?.operator_check, insight?.recommendedActions, insight?.recommended_actions,
+    insight?.recommendedFirstChecks, insight?.recommended_first_checks, insight?.recommendedCheck,
     insight?.recommended_check
-  ).flatMap((item) => text(item).split(/\n|;|•/g)).map((item) => item.trim())).slice(0, 6);
-  const investigationActions = actions.length ? actions : [
+  ).flatMap((item) => text(item).split(/\n|;|\u2022/g)).map((item) => item.trim()));
+  const investigationActions = (actions.length ? actions : [
     "Review the contributing signal trends for the selected operating window.",
-    "Compare the current operating mode against comparable historical operation.",
-    "Confirm whether the relationship change persists in the next operating cycle.",
-  ];
+    "Compare recent control and valve changes with the start of the deviation.",
+    "Verify equipment performance and instrumentation health.",
+  ]).slice(0, 3);
 
   const suppliedCauses = unique(toList(
-    insight?.likelyCauses,
-    insight?.possibleOperationalCauses,
-    insight?.possible_operational_causes,
-    insight?.contributingFactors,
-    insight?.contributing_factors,
-    insight?.likely_causes
-  ).flatMap((item) => Array.isArray(item) ? item : [item]).map(text)).slice(0, 6);
-  const causes = suppliedCauses.length ? suppliedCauses : [
-    "Operating mode changed",
-    "Control relationship shifted",
-    "Sensor or telemetry drift",
-    "Instrument drift",
-  ];
+    insight?.likelyCauses, insight?.possibleOperationalCauses, insight?.possible_operational_causes,
+    insight?.contributingFactors, insight?.contributing_factors, insight?.likely_causes
+  ).map(text));
+  const causes = (suppliedCauses.length ? suppliedCauses : [
+    "Operating mode change", "Hydraulic restriction", "Equipment wear", "Valve configuration change", "Instrumentation issue",
+  ]).slice(0, 6);
 
   const confidence = confidenceLabel(insight);
   const confidenceValue = confidencePercent(insight) || confidence;
-  const observedFacts = unique(toList(insight?.observedFacts, insight?.observed, insight?.observed_facts).flatMap((item) => Array.isArray(item) ? item : [item]).map(text)).slice(0, 8);
-  const whatChanged = unique(toList(insight?.whatHappened, insight?.behaviorInterpretation, insight?.whyNeraiumThinks, insight?.rawSummary, insight?.summary).map(text)).slice(0, 3);
-  const relationships = relationshipLabels(insight);
+  const severity = insightSeverityLabel(insight);
+  const subsystem = text(insight?.system || insight?.rawSystemName) || "Operational subsystem";
+  const changedCount = Number(insight?.changedRelationshipCount ?? relationships.length);
+  const measurements = evidence.map(relationshipMeasurement).filter((item) => item.delta !== null);
+  const largestDelta = measurements.length ? Math.max(...measurements.map((item) => item.delta)) : null;
+  const primaryRelationship = relationships[0];
+
+  const whatChanged = unique([
+    Number.isFinite(changedCount) && changedCount > 0 ? `${changedCount} operational relationship${changedCount === 1 ? "" : "s"} reorganized.` : "",
+    largestDelta !== null ? `Largest behavioral deviation: ${largestDelta.toFixed(2)}.` : "",
+    primaryRelationship ? `Primary affected relationship: ${primaryRelationship}.` : "",
+    `Behavioral organization in ${subsystem} differs from its learned baseline.`,
+  ]).slice(0, 4);
+
   const suppliedImpacts = splitOperationalImpacts(toList(
-    insight?.expectedOperationalImpact,
-    insight?.expected_operational_impact,
-    insight?.possibleOperationalConsequence,
-    insight?.possible_operational_consequence,
-    insight?.whyThisMatters,
-    insight?.whyItMatters,
-    insight?.possibleConsequence,
+    insight?.expectedOperationalImpact, insight?.expected_operational_impact,
+    insight?.possibleOperationalConsequence, insight?.possible_operational_consequence,
+    insight?.whyThisMatters, insight?.whyItMatters, insight?.possibleConsequence,
     insight?.possible_consequence
-  ).flatMap((item) => Array.isArray(item) ? item : [item]));
-  const expectedImpacts = (suppliedImpacts.length ? suppliedImpacts : defaultOperationalImpacts(causes, relationships)).slice(0, 6);
+  ));
+  const expectedImpacts = (suppliedImpacts.length ? suppliedImpacts : defaultOperationalImpacts(causes, relationships)).slice(0, 4);
   const confidenceEvidence = confidenceEvidenceItems(insight, evidence);
   const severityReasons = severityRationaleItems(insight, evidence, relationships, confidenceValue);
-  const whyGenerated = whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships);
   const changeContext = buildChangeContext(insight, evidence);
   const operationalMemory = buildOperationalMemory(insight);
-  const advancedDiagnostics = evidence.length || insight?.id || insight?.metricName ? (
-    <details className="insight-evidence-drawer">
-      <summary>Advanced Diagnostics <span className="sr-only">Technical Details</span></summary>
-      <div className="insight-evidence-drawer__body">
-        <dl className="operational-detail-grid operational-detail-grid--technical">
-          {insight?.id ? <div><dt>Insight identifier</dt><dd><code>{insight.id}</code></dd></div> : null}
-          {insight?.metricName ? <div><dt>Signal identifier</dt><dd><code>{text(insight.metricName)}</code></dd></div> : null}
-          {insight?.confidenceRationale ? <div><dt>Diagnostic metadata</dt><dd>{text(insight.confidenceRationale)}</dd></div> : null}
-        </dl>
+  const explicitSummary = text(insight?.behaviorInterpretation ?? insight?.whatHappened ?? insight?.rawSummary ?? insight?.summary);
+  const behavioralSummary = explicitSummary || `The ${subsystem} subsystem no longer behaves according to its learned operational baseline.`;
+  const whyGenerated = whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships)
+    || `The ${subsystem} subsystem changed behavior, and multiple operational relationships corroborated the shift. The combined evidence supports investigation.`;
+  const interpretation = `The simultaneous reorganization of ${relationships.length ? relationships.slice(0, 3).join(", ") : `relationships within ${subsystem}`} indicates that the subsystem is operating differently from its learned behavioral baseline.`;
 
-        {evidence.map((item, index) => {
-          const rows = usefulDiagnosticEntries(item);
-          if (!rows.length) return null;
-          return (
-            <div className="insight-evidence-item" key={item?.evidence_id ?? index}>
-              <dl className="operational-detail-grid operational-detail-grid--technical">
-                {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd><DiagnosticValue value={value} /></dd></div>)}
-              </dl>
-            </div>
-          );
-        })}
-      </div>
-    </details>
-  ) : null;
-  const focusRationale = whyGenerated ? [whyGenerated] : whatChanged;
-
-  const body = focusMode ? (
-    <>
-      {evidenceLines.length || observedFacts.length ? (
-        <Section title="Observed Evidence">
-          <BulletList items={[...observedFacts, ...evidenceLines]} />
-        </Section>
-      ) : null}
-
-      {focusRationale.length || expectedImpacts.length ? (
-        <Section title="Interpretation">
-          {focusRationale.map((line) => <p key={line}>{line}</p>)}
-          <BulletList items={expectedImpacts} />
-        </Section>
-      ) : null}
-
-      <Section title="Possible Causes"><BulletList items={causes} /></Section>
-
-      <Section title="Recommended Investigation"><BulletList items={investigationActions} /></Section>
+  const body = (
+    <div className="insight-layered">
+      <section className="insight-situation-card" aria-labelledby="insight-situation-title">
+        <div className="insight-situation-card__meta">
+          <span className={`insight-severity insight-severity--${severity.toLowerCase()}`}>{severity}</span>
+          <span>{subsystem}</span>
+          {confidenceValue ? <span>Confidence {confidenceValue}</span> : null}
+        </div>
+        <h3 id="insight-situation-title">{behavioralSummary}</h3>
+      </section>
 
       {severityReasons.length ? (
-        <Section title={`${insightSeverityLabel(insight)} because`}>
+        <section className="insight-severity-rationale" aria-label={`${severity} severity rationale`}>
+          <h4>{severity} because</h4>
           <CheckedList items={severityReasons} />
-        </Section>
+        </section>
       ) : null}
 
-      {advancedDiagnostics}
-    </>
-  ) : (
-    <>
-      <div className="insight-briefing__header">
-        <span className="section-token">{insight?.system || "Operational Insight"}</span>
-        <h3>{insight?.summary || insight?.rawSummary || "Operational change detected"}</h3>
+      <div className="insight-summary-grid">
+        <section className="insight-summary-card">
+          <span className="insight-summary-card__eyebrow">Situation</span>
+          <h4>What Changed</h4>
+          <BulletList items={whatChanged} />
+        </section>
+        <section className="insight-summary-card insight-summary-card--action">
+          <span className="insight-summary-card__eyebrow">Action</span>
+          <h4>Start Investigation</h4>
+          <PriorityActions actions={investigationActions} />
+        </section>
       </div>
 
-      <dl className="insight-briefing__status" aria-label="Insight status">
-        {insight?.severity ? <div><dt>Severity</dt><dd>{humanize(insight.severity)}</dd></div> : null}
-        {confidenceValue ? <div><dt>Overall Confidence</dt><dd>{confidenceValue}</dd></div> : null}
-      </dl>
+      <section className="insight-summary-card insight-summary-card--why">
+        <span className="insight-summary-card__eyebrow">Evidence</span>
+        <h4>Why Neraium surfaced this</h4>
+        <p>{whyGenerated}</p>
+      </section>
 
-      {evidenceLines.length || observedFacts.length || evidenceMetrics.length ? (
-        <Section title="Observed Evidence">
-          <BulletList items={[...observedFacts, ...evidenceLines]} />
+      <div className="insight-disclosure-stack" aria-label="Additional insight detail">
+        <Disclosure title="Observed Evidence">
+          <BulletList items={evidenceLines} />
           {evidenceMetrics.length ? <ContextGrid rows={evidenceMetrics} /> : null}
-        </Section>
-      ) : null}
+        </Disclosure>
 
-      {changeContext.length ? <Section title="Change Context"><ContextGrid rows={changeContext} /></Section> : null}
-
-      {whatChanged.length || expectedImpacts.length || whyGenerated ? (
-        <Section title="Interpretation">
-          {whatChanged.map((line) => <p key={line}>{line}</p>)}
+        <Disclosure title="Interpretation">
+          <p>{interpretation}</p>
           <BulletList items={expectedImpacts} />
-          {whyGenerated ? <p>{whyGenerated}</p> : null}
-        </Section>
-      ) : null}
+        </Disclosure>
 
-      <Section title="Possible Causes"><BulletList items={causes} /></Section>
+        <Disclosure title="Possible Causes"><BulletList items={causes} /></Disclosure>
 
-      <Section title="Recommended Investigation"><BulletList items={investigationActions} /></Section>
+        <Disclosure title="Recommended Investigation">
+          <PriorityActions actions={investigationActions} explain />
+        </Disclosure>
 
-      {severityReasons.length ? (
-        <Section title={`${insightSeverityLabel(insight)} because`}>
-          <CheckedList items={severityReasons} />
-        </Section>
-      ) : null}
+        <Disclosure title="Supporting Relationships">
+          <BulletList items={relationships.length ? relationships : evidenceLines} />
+        </Disclosure>
 
-      {(confidenceValue || confidenceEvidence.length) ? (
-        <Section title="Confidence Breakdown">
-          {confidenceValue ? <div className="confidence-breakdown__score"><span>Overall Confidence</span><strong>{confidenceValue}</strong></div> : null}
-          {confidenceEvidence.length ? (
-            <>
-              <p className="insight-briefing__list-label">Evidence supporting this assessment</p>
-              <CheckedList items={confidenceEvidence} />
-            </>
-          ) : null}
-        </Section>
-      ) : null}
-
-      {!focusMode && (operationalMemory.rows.length || operationalMemory.similarEvents.length) ? (
-        <Section title="Operational Memory">
-          <ContextGrid rows={operationalMemory.rows} />
+        <Disclosure title="Evidence Lineage">
+          <ContextGrid rows={changeContext} />
+          {operationalMemory.rows.length ? <ContextGrid rows={operationalMemory.rows} /> : null}
           <BulletList items={operationalMemory.similarEvents} />
-        </Section>
-      ) : null}
+        </Disclosure>
 
-      {advancedDiagnostics}
-    </>
+        <Disclosure title="Confidence">
+          {confidenceValue ? <div className="confidence-breakdown__score"><span>Overall Confidence</span><strong>{confidenceValue}</strong></div> : null}
+          <CheckedList items={confidenceEvidence} />
+        </Disclosure>
+
+        <Disclosure title="Advanced Diagnostics">
+          <dl className="operational-detail-grid operational-detail-grid--technical">
+            {insight?.id ? <div><dt>Insight identifier</dt><dd><code>{insight.id}</code></dd></div> : null}
+            {insight?.metricName ? <div><dt>Signal identifier</dt><dd><code>{text(insight.metricName)}</code></dd></div> : null}
+            {insight?.confidenceRationale ? <div><dt>Evidence weights and rationale</dt><dd>{text(insight.confidenceRationale)}</dd></div> : null}
+          </dl>
+          {evidence.map((item, index) => {
+            const rows = usefulDiagnosticEntries(item);
+            return rows.length ? (
+              <div className="insight-evidence-item" key={item?.evidence_id ?? index}>
+                <dl className="operational-detail-grid operational-detail-grid--technical">
+                  {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd><DiagnosticValue value={value} /></dd></div>)}
+                </dl>
+              </div>
+            ) : null;
+          })}
+        </Disclosure>
+
+        <Disclosure title="Raw Payload" className="insight-disclosure--raw">
+          <pre><code>{JSON.stringify(insight, null, 2)}</code></pre>
+        </Disclosure>
+      </div>
+    </div>
   );
 
   if (inline) {
