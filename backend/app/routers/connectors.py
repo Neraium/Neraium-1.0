@@ -30,6 +30,11 @@ def test_connector(request: Request, payload: ConnectorTestRequest) -> dict[str,
     validation_result = connector.validate_connection()
     health = connector.health_check()
     if validation_result.get("ok") is False:
+        if payload.connector_type == "database":
+            update_runtime_health(
+                request,
+                failed_database_health(connector, validation_result.get("message", "Connector validation failed.")),
+            )
         raise HTTPException(status_code=400, detail=validation_result.get("message", "Connector validation failed."))
 
     update_runtime_health(request, health)
@@ -134,7 +139,9 @@ def test_database_connector(request: Request, payload: DatabaseConnectorRequest)
     validation_result = connector.validate_connection()
     health = connector.health_check()
     if validation_result.get("ok") is False:
-        raise HTTPException(status_code=400, detail=validation_result.get("message", "Database connector validation failed."))
+        message = validation_result.get("message", "Database connector validation failed.")
+        update_runtime_health(request, failed_database_health(connector, message))
+        raise HTTPException(status_code=400, detail=message)
     update_runtime_health(request, health)
     return ConnectorActionResponse(
         connector_type="database",
@@ -147,7 +154,11 @@ def test_database_connector(request: Request, payload: DatabaseConnectorRequest)
 @router.post("/connectors/database/ingest")
 def ingest_database_connector(request: Request, payload: DatabaseConnectorRequest) -> dict[str, Any]:
     connector = build_connector_instance("database", payload.model_dump())
-    batch = normalize_or_fail(connector)
+    try:
+        batch = normalize_or_fail(connector)
+    except HTTPException as exc:
+        update_runtime_health(request, failed_database_health(connector, str(exc.detail)))
+        raise
     health = ConnectorHealthStatus(
         connector_type="database",
         display_name=connector.display_name,
@@ -194,6 +205,13 @@ def normalize_or_fail(connector: Any) -> Any:
         raise HTTPException(status_code=400, detail="CSV file could not be decoded as UTF-8.") from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+def failed_database_health(connector: Any, message: str) -> ConnectorHealthStatus:
+    health = connector.health_check()
+    health.connection_status = "offline"
+    health.errors = [message]
+    return health
 
 
 def build_action_response(batch: Any, health: ConnectorHealthStatus, message: str) -> dict[str, Any]:

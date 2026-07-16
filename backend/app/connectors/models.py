@@ -113,6 +113,8 @@ class DatabaseConnectorRequest(BaseModel):
     parameters: dict[str, Any] | list[Any] | None = None
     latest_query: str | None = None
     max_rows: int = Field(default=5000, ge=1, le=10_000)
+    query_timeout_seconds: int = Field(default=30, ge=1, le=120)
+    sslmode: Literal["require", "verify-ca", "verify-full"] = "require"
 
 
 class ConnectorActionResponse(BaseModel):

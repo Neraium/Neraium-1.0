@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -66,10 +68,15 @@ class DatabaseConnector(RESTConnector):
     def normalize(self, raw_data: list[dict[str, Any]]) -> NormalizedConnectorBatch:
         if not raw_data:
             raise ValueError("Database query returned no telemetry records.")
-        batch = super().normalize(raw_data)
+        try:
+            batch = super().normalize(raw_data)
+        except ValueError as exc:
+            message = str(exc).replace("REST API", "database query").replace("REST telemetry", "Database telemetry")
+            raise ValueError(message) from None
         batch.metadata = {
             "database": self._masked_database_configuration(),
             "row_limit": self._max_rows(),
+            "query_timeout_seconds": self._query_timeout_seconds(),
         }
         return batch
 
@@ -80,6 +87,10 @@ class DatabaseConnector(RESTConnector):
             max_rows: int | str = self._max_rows()
         except ValueError:
             max_rows = "invalid"
+        try:
+            query_timeout: int | str = self._query_timeout_seconds()
+        except ValueError:
+            query_timeout = "invalid"
         return ConnectorHealthStatus(
             connector_type=self.connector_type,
             display_name=self.display_name,
@@ -90,6 +101,8 @@ class DatabaseConnector(RESTConnector):
                 "source_id": self.config.get("source_id"),
                 "system_id": self.config.get("system_id"),
                 "max_rows": max_rows,
+                "query_timeout_seconds": query_timeout,
+                "sslmode": self._masked_sslmode(),
                 "query_configured": bool(query),
             },
         )
@@ -98,14 +111,16 @@ class DatabaseConnector(RESTConnector):
         database_url = str(self.config.get("database_url") or "").strip()
         if not database_url:
             raise ValueError("Database URL is required.")
-        self._validate_query(query)
+        clean_query = self._validate_query(query)
         limit = max_rows or self._max_rows()
+        timeout_seconds = self._query_timeout_seconds()
         parameters = self.config.get("parameters") or ()
+        bounded_query = self._bounded_query(clean_query, limit)
 
         if database_url.startswith("sqlite:///"):
-            return self._execute_sqlite(database_url, query, parameters, limit)
+            return self._execute_sqlite(database_url, bounded_query, parameters, limit, timeout_seconds)
         if database_url.startswith(("postgresql://", "postgres://")):
-            return self._execute_postgres(database_url, query, parameters, limit)
+            return self._execute_postgres(database_url, bounded_query, parameters, limit, timeout_seconds)
         raise ValueError("Database URL must use a supported sqlite:/// or postgresql:// scheme.")
 
     def _execute_sqlite(
@@ -114,6 +129,7 @@ class DatabaseConnector(RESTConnector):
         query: str,
         parameters: Any,
         limit: int,
+        timeout_seconds: int,
     ) -> list[dict[str, Any]]:
         raw_path = unquote(database_url.removeprefix("sqlite:///"))
         if not raw_path or raw_path == ":memory:":
@@ -126,17 +142,45 @@ class DatabaseConnector(RESTConnector):
         if not database_path.is_file():
             raise ValueError("SQLite database file does not exist.")
 
+        deadline = time.monotonic() + timeout_seconds
+        timed_out = False
+
+        def abort_expired_query() -> int:
+            nonlocal timed_out
+            timed_out = time.monotonic() >= deadline
+            return 1 if timed_out else 0
+
+        def deny_system_catalog_reads(action: int, target: str | None, _column: str | None, *_args: Any) -> int:
+            if action == sqlite3.SQLITE_READ and str(target or "").lower().startswith("sqlite_"):
+                return sqlite3.SQLITE_DENY
+            return sqlite3.SQLITE_OK
+
         try:
-            connection = sqlite3.connect(f"file:{database_path.as_posix()}?mode=ro", uri=True, timeout=10)
+            database_uri = f"{database_path.resolve().as_uri()}?mode=ro"
+            connection = sqlite3.connect(database_uri, uri=True, timeout=min(timeout_seconds, 10))
             connection.row_factory = sqlite3.Row
+
+            def interrupt_expired_query() -> None:
+                nonlocal timed_out
+                timed_out = True
+                connection.interrupt()
+
+            timeout_timer = threading.Timer(timeout_seconds, interrupt_expired_query)
+            timeout_timer.daemon = True
             try:
                 connection.execute("PRAGMA query_only = ON")
+                connection.set_authorizer(deny_system_catalog_reads)
+                connection.set_progress_handler(abort_expired_query, 1000)
+                timeout_timer.start()
                 cursor = connection.execute(query, parameters)
                 return self._rows_from_cursor(cursor, limit)
             finally:
+                timeout_timer.cancel()
                 connection.close()
-        except (sqlite3.Error, TypeError) as exc:
-            raise ValueError(f"Database query failed: {exc}") from None
+        except (sqlite3.Error, TypeError):
+            if timed_out:
+                raise ValueError(f"Database query exceeded the configured {timeout_seconds}-second timeout.") from None
+            raise ValueError("Database connection or query failed. Check the file, parameters, and read-only query.") from None
 
     def _execute_postgres(
         self,
@@ -144,14 +188,25 @@ class DatabaseConnector(RESTConnector):
         query: str,
         parameters: Any,
         limit: int,
+        timeout_seconds: int,
     ) -> list[dict[str, Any]]:
         try:
-            with psycopg.connect(database_url, connect_timeout=10) as connection:
+            with psycopg.connect(
+                database_url,
+                connect_timeout=min(timeout_seconds, 10),
+                sslmode=self._sslmode(),
+            ) as connection:
                 with connection.cursor() as cursor:
                     cursor.execute("SET TRANSACTION READ ONLY")
+                    cursor.execute(
+                        "SELECT set_config('statement_timeout', %s, true)",
+                        (f"{timeout_seconds * 1000}ms",),
+                    )
                     cursor.execute(query, parameters)
                     return self._rows_from_cursor(cursor, limit)
-        except (psycopg.Error, TypeError) as exc:
+        except psycopg.errors.QueryCanceled:
+            raise ValueError(f"Database query exceeded the configured {timeout_seconds}-second timeout.") from None
+        except (psycopg.Error, TypeError):
             raise ValueError("Database connection or query failed. Check the URL, credentials, and read-only query.") from None
 
     @staticmethod
@@ -165,7 +220,11 @@ class DatabaseConnector(RESTConnector):
         return [dict(zip(columns, row, strict=True)) for row in raw_rows]
 
     @staticmethod
-    def _validate_query(query: str) -> None:
+    def _bounded_query(query: str, limit: int) -> str:
+        return f"SELECT * FROM ({query}) AS neraium_telemetry_query LIMIT {limit + 1}"
+
+    @staticmethod
+    def _validate_query(query: str) -> str:
         stripped = query.strip()
         if not stripped:
             raise ValueError("A read-only telemetry query is required.")
@@ -175,6 +234,7 @@ class DatabaseConnector(RESTConnector):
         first_keyword = without_trailing_semicolon.split(None, 1)[0].lower()
         if first_keyword not in {"select", "with"}:
             raise ValueError("Database connector only accepts SELECT or WITH queries.")
+        return without_trailing_semicolon
 
     def _max_rows(self) -> int:
         try:
@@ -184,6 +244,27 @@ class DatabaseConnector(RESTConnector):
         if not 1 <= value <= 10_000:
             raise ValueError("max_rows must be between 1 and 10000.")
         return value
+
+    def _query_timeout_seconds(self) -> int:
+        try:
+            value = int(self.config.get("query_timeout_seconds", 30))
+        except (TypeError, ValueError):
+            raise ValueError("query_timeout_seconds must be an integer between 1 and 120.") from None
+        if not 1 <= value <= 120:
+            raise ValueError("query_timeout_seconds must be between 1 and 120.")
+        return value
+
+    def _sslmode(self) -> str:
+        value = str(self.config.get("sslmode", "require")).strip().lower()
+        if value not in {"require", "verify-ca", "verify-full"}:
+            raise ValueError("sslmode must be require, verify-ca, or verify-full.")
+        return value
+
+    def _masked_sslmode(self) -> str:
+        try:
+            return self._sslmode()
+        except ValueError:
+            return "invalid"
 
     def _masked_database_configuration(self) -> dict[str, Any]:
         database_url = str(self.config.get("database_url") or "")

@@ -80,3 +80,29 @@ def test_admin_can_access_admin_audit_route_in_production(monkeypatch, tmp_path)
 
     assert response.status_code == 200
     assert response.json()["audit_record"]["audit_id"] == "audit-demo"
+
+
+def test_database_connector_endpoints_require_admin_in_production(monkeypatch, tmp_path) -> None:
+    clear_rate_limits()
+    client = _production_client(monkeypatch, tmp_path)
+    request_payload = {
+        "database_url": "sqlite:///telemetry.db",
+        "query": "SELECT timestamp FROM telemetry",
+    }
+
+    for path in ("/api/connectors/database/test", "/api/connectors/database/ingest"):
+        response = client.post(path, json=request_payload)
+        assert response.status_code == 401
+        assert response.json()["error_type"] == "auth"
+
+    create_user("connector-operator@example.com", "password123", role="operator")
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "connector-operator@example.com", "password": "password123"},
+    )
+    assert login.status_code == 200
+
+    for path in ("/api/connectors/database/test", "/api/connectors/database/ingest"):
+        response = client.post(path, json=request_payload)
+        assert response.status_code == 403
+        assert response.json()["error_type"] == "auth"
