@@ -1,4 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
+
+const apiBaseURL = `http://127.0.0.1:${Number(process.env.PLAYWRIGHT_BACKEND_PORT || 8012)}`;
 
 function buildCsvRows(count) {
   const lines = ["timestamp,room,flow,pressure,power"];
@@ -23,7 +25,7 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
     if (!activeJobId) {
       throw new Error("Upload job id is missing.");
     }
-    const response = await page.request.get(`http://127.0.0.1:8010/api/data/upload-status/${encodeURIComponent(activeJobId)}`);
+    const response = await page.request.get(`${apiBaseURL}/api/data/upload-status/${encodeURIComponent(activeJobId)}`);
     const payload = await response.json().catch(() => ({}));
     const status = String(payload?.status ?? "").toUpperCase();
     if (status) {
@@ -32,7 +34,7 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
     if (status === "NOT_FOUND") {
       notFoundCount += 1;
       if (notFoundCount >= 3) {
-        const latestResponse = await page.request.get("http://127.0.0.1:8010/api/data/latest-upload?include_persisted=1");
+        const latestResponse = await page.request.get(`${apiBaseURL}/api/data/latest-upload?include_persisted=1`);
         if (latestResponse.ok()) {
           const latestPayload = await latestResponse.json().catch(() => ({}));
           const recoveredJobId = String(
@@ -65,7 +67,7 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
 async function startCommandCenterUpload(page, { name, csv }) {
   await page.goto("/", { waitUntil: "load" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-  await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeVisible();
 
   const uploadAcceptedPromise = page.waitForResponse(
     (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
@@ -94,17 +96,9 @@ test.describe("Functional verification", () => {
     });
 
     await waitForUploadComplete(page, uploadJobId, 180000);
-    await expect(page.getByRole("heading", { name: /Analysis Complete|Operational Fingerprint Established/ })).toBeVisible({ timeout: 30000 });
-
-    const viewResults = page.getByRole("button", { name: "View Results" });
-    if (await viewResults.isVisible().catch(() => false)) {
-      await viewResults.click();
-    } else {
-      await page.getByRole("button", { name: "Back to Workspace" }).click();
-    }
-
     await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("region", { name: "Operational Status" })).not.toContainText("Awaiting Initial Baseline");
     await expect(page.getByTestId("operational-orb")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Fingerprint/i }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /Behavior Baseline/i }).first()).toBeVisible();
   });
 });

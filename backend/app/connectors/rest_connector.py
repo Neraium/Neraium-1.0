@@ -92,6 +92,38 @@ class RESTConnector(ConnectorBase):
             }
             row_quality = str(row.get("quality") or row.get("status") or "good").strip().lower() or "good"
 
+            normalized_keys = {str(key).strip().lower(): key for key in row}
+            if "sensor_id" in normalized_keys and "value" in normalized_keys:
+                raw_sensor_id = str(row.get(normalized_keys["sensor_id"]) or "").strip()
+                numeric_value = validate_numeric_value(row.get(normalized_keys["value"]))
+                if not raw_sensor_id:
+                    errors.append(ValidationIssue(row_number=row_index, field="sensor_id", message="Sensor ID is required."))
+                    continue
+                if numeric_value is None:
+                    errors.append(ValidationIssue(row_number=row_index, field="value", message=f"Sensor value for {raw_sensor_id} must be numeric."))
+                    continue
+                raw_unit = row.get(normalized_keys.get("unit")) if "unit" in normalized_keys else infer_unit(raw_sensor_id)
+                unit = normalize_unit(raw_unit)
+                if not validate_unit(unit):
+                    errors.append(ValidationIssue(row_number=row_index, field="unit", message=f"Unit {unit or '[blank]'} is not supported for {raw_sensor_id}."))
+                    continue
+                sensor_name_key = normalized_keys.get("sensor_name")
+                sensor_name = str(row.get(sensor_name_key) or raw_sensor_id).strip()
+                records.append(
+                    NormalizedTelemetryRecord(
+                        source_id=source_id,
+                        system_id=system_id,
+                        sensor_id=slugify(f"{system_id}-{raw_sensor_id}"),
+                        sensor_name=sensor_name,
+                        value=numeric_value,
+                        unit=unit,
+                        timestamp=normalized_timestamp,
+                        quality_status=row_quality,
+                        metadata={"row_number": row_index, **context},
+                    )
+                )
+                continue
+
             for column_name, raw_value in row.items():
                 normalized_column = column_name.strip().lower()
                 if normalized_column == timestamp_column.lower() or normalized_column in CONTEXT_COLUMNS:

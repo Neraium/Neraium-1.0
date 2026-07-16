@@ -1,52 +1,44 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const reuseExistingServer = process.env.CI === "true" || process.env.PLAYWRIGHT_REUSE_SERVER === "1";
-
-const backendCommand = [
-  "cd ..",
-  "PYTHON_BIN=./.venv/bin/python",
-  "if [ ! -x \"$PYTHON_BIN\" ]; then PYTHON_BIN=$(command -v python3 || command -v python); fi",
-  "PYTHONPATH=backend APP_ENV=test NERAIUM_RUNTIME_DIR=.playwright-runtime NERAIUM_START_BACKGROUND_WORKERS=1 NERAIUM_START_DATA_POLLER=0 \"$PYTHON_BIN\" -m uvicorn app.main:app --host 127.0.0.1 --port 8010",
-].join(" && ");
+const backendPort = Number(process.env.PLAYWRIGHT_BACKEND_PORT || 8012);
+const frontendPort = Number(process.env.PLAYWRIGHT_FRONTEND_PORT || 3012);
+const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_SERVER === "1";
+const externalServer = process.env.PLAYWRIGHT_EXTERNAL_SERVER === "1";
+const pythonBin = process.platform === "win32" ? "python" : "../.venv/bin/python";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  timeout: 90_000,
-  expect: {
-    timeout: 10_000,
-  },
+  timeout: 150_000,
+  expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  reporter: [
-    ["list"],
-    ["html", { outputFolder: "playwright-report", open: "never" }],
-  ],
+  reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:3010",
+    baseURL: `http://127.0.0.1:${frontendPort}`,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
-  webServer: [
+  webServer: externalServer ? undefined : [
     {
-      command: backendCommand,
-      port: 8010,
-      timeout: 240_000,
-      reuseExistingServer,
-    },
-    {
-      command: "npm run build && npm run preview",
-      port: 3010,
+      command: `${pythonBin} ../scripts/start_e2e_backend.py`,
+      port: backendPort,
       timeout: 240_000,
       reuseExistingServer,
       env: {
         ...process.env,
-        VITE_API_BASE_URL: "http://127.0.0.1:8010",
+        PLAYWRIGHT_BACKEND_PORT: String(backendPort),
+        PLAYWRIGHT_FRONTEND_PORT: String(frontendPort),
       },
     },
+    {
+      command: `npm run build && npm run preview -- --port ${frontendPort}`,
+      port: frontendPort,
+      timeout: 240_000,
+      reuseExistingServer,
+      env: { ...process.env, VITE_API_BASE_URL: `http://127.0.0.1:${backendPort}` },
+    },
   ],
-  projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-  ],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });

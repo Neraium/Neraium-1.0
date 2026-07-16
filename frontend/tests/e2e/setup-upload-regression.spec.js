@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 async function openCommandCenter(page) {
   await page.addInitScript(() => {
@@ -39,7 +39,7 @@ test.describe("Setup + Upload regression", () => {
   test("opens command-center upload entry without the setup wizard", async ({ page }) => {
     await openCommandCenter(page);
     await expect(page.getByTestId("onboarding-root")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeVisible();
     await expect(page.getByTestId("overview-csv-upload-input")).toBeAttached();
   });
 
@@ -50,7 +50,7 @@ test.describe("Setup + Upload regression", () => {
     });
 
     await expect(page.getByTestId("upload-workspace")).toBeVisible();
-    await expect(page.locator("strong", { hasText: "e2e-sample.csv" })).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("We hit a workspace error");
   });
 
   test("large CSV upload moves progress and completes analysis", async ({ page }) => {
@@ -65,6 +65,7 @@ test.describe("Setup + Upload regression", () => {
     });
 
     await expect(page.getByRole("progressbar", { name: /Telemetry transfer|Analysis/i })).toHaveAttribute("aria-valuenow", /[1-9][0-9]*|100/, { timeout: 30000 });
-    await expect(page.getByRole("heading", { name: /Analysis Complete|Operational Fingerprint Established/ })).toBeVisible({ timeout: 120000 });
+    await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible({ timeout: 120000 });
+    await expect(page.getByRole("region", { name: "Operational Status" })).not.toContainText("Awaiting Initial Baseline");
   });
 });

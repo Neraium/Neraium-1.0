@@ -137,7 +137,7 @@ function statusExplanationForInsight(insight) {
   return "Historical operating behavior changed.";
 }
 
-function OperationalStatusSection({ model, status }) {
+function OperationalStatusSection({ model, status, onConnectLiveData }) {
   return (
     <section className={`command-section command-section--status command-section--${status.tone}`} aria-labelledby="operational-status-heading">
       <h2 id="operational-status-heading">Operational Status</h2>
@@ -150,6 +150,12 @@ function OperationalStatusSection({ model, status }) {
       {status.stage ? <p className="operational-status-stage">{status.stage}</p> : null}
       <p className="operational-status-value">{status.label}</p>
       <p className="operational-status-explanation">{status.explanation}</p>
+      {!model.analysisComplete && status.tone !== "loading" ? (
+        <div className="operational-actions operational-status-actions">
+          <button type="button" className="command-button" onClick={onConnectLiveData}>Analyze Historical Telemetry</button>
+          <button type="button" className="secondary-command-button" onClick={onConnectLiveData}>Connect Live Telemetry</button>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -303,7 +309,7 @@ function DetailRows({ rows = [], technical = false }) {
   );
 }
 
-export default function CommandCenterView({ model, helpers, selectedInsight, onSelectInsight }) {
+export default function CommandCenterView({ model, helpers, selectedInsight, onSelectInsight, onConnectLiveData }) {
   const queue = useMemo(() => rankedInsights(model.insights), [model.insights]);
   const activeInsight = selectedInsight && queue.some((item) => item.id === selectedInsight.id)
     ? selectedInsight
@@ -313,7 +319,7 @@ export default function CommandCenterView({ model, helpers, selectedInsight, onS
 
   return (
     <div className="operational-command-center" data-testid="operational-command-center">
-      <OperationalStatusSection model={model} status={status} />
+      <OperationalStatusSection model={model} status={status} onConnectLiveData={onConnectLiveData} />
       <OperationalFindings insights={queue} selectedInsight={activeInsight} onSelectInsight={onSelectInsight} helpers={helpers} />
       <SystemOverview systems={systems} model={model} />
       <AdvancedDashboardSection model={model} />

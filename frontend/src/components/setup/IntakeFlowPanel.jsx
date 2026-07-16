@@ -702,7 +702,7 @@ export default function IntakeFlowPanel({
 
               <div className="upload-simple-actions upload-analysis-card__actions">
                 <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
-                <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!hasSelectedFiles || isUploadProcessing(uploadState)}>
+                <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!hasSelectedFiles || isUploadProcessing(uploadState)} title={!hasSelectedFiles ? "Choose a telemetry CSV before starting analysis." : isUploadProcessing(uploadState) ? "Analysis is already in progress." : "Start telemetry analysis."}>
                   Analyze Historical Telemetry
                 </button>
               </div>
@@ -801,7 +801,7 @@ export default function IntakeFlowPanel({
               </div>
               <p className="upload-error-message">{errorMessage}</p>
               <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles}>Retry</button>
+                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles} title={!hasSelectedFiles ? "Choose the source telemetry again before retrying." : "Retry this failed analysis."}>Retry</button>
                 <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose File</button>
               </div>
             </div>

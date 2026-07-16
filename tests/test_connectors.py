@@ -107,6 +107,18 @@ def test_csv_connector_rejects_empty_dataset(tmp_path) -> None:
     assert response.json()["detail"] == "CSV dataset is empty."
 
 
+def test_rest_connector_test_returns_actionable_validation_error(tmp_path) -> None:
+    client = build_client(tmp_path)
+
+    response = client.post(
+        "/api/connectors/rest/test",
+        json={"endpoint": "", "sample_payload": {"records": []}},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "REST endpoint is required."}
+
+
 def test_rest_connector_normalizes_response_and_health_status() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -137,6 +149,21 @@ def test_rest_connector_normalizes_response_and_health_status() -> None:
     assert batch.sensor_count == 2
     assert batch.records[0].timestamp == "2026-05-01T08:00:00"
     assert health.masked_configuration["headers"]["token"].startswith("su")
+
+
+def test_rest_connector_normalizes_long_format_without_false_sensor_errors() -> None:
+    connector = RESTConnector({"source_id": "customer-rest", "system_id": "facility-rest"})
+    batch = connector.normalize(
+        [
+            {"timestamp": "2026-05-01T08:00:00Z", "sensor_id": "supply_temp", "value": 42.5, "unit": "f"},
+            {"timestamp": "2026-05-01T08:05:00Z", "sensor_id": "supply_temp", "value": 42.7, "unit": "f"},
+        ]
+    )
+
+    assert batch.record_count == 2
+    assert batch.sensor_count == 1
+    assert batch.errors == []
+    assert batch.records[0].sensor_name == "supply_temp"
 
 
 def test_rest_connector_rejects_malformed_response() -> None:

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 async function openAdvanced(page) {
   const advancedButton = page.getByRole("button", { name: /Advanced/i }).first();

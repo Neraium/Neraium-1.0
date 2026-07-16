@@ -134,6 +134,9 @@ export default function OperationalWorkflowWorkspace({
   onReopenHistoricalAnalysis,
   onDeleteHistoricalAnalysis,
   onSignOut,
+  signOutPending = false,
+  currentUser = null,
+  onWorkspaceNavigate,
 }) {
   useEffect(() => {
     console.info("[neraium] route mounted", { route: "system-body" });
@@ -184,6 +187,12 @@ export default function OperationalWorkflowWorkspace({
   const selectedInsight = selectedInsightId ? (model.insights.find((item) => item.id === selectedInsightId) ?? null) : null;
 
   useEffect(() => {
+    const handlePopState = () => setActiveSection(readStoredOperationalSection());
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(ACTIVE_SECTION_STORAGE_KEY, activeSection);
   }, [activeSection]);
@@ -226,11 +235,17 @@ export default function OperationalWorkflowWorkspace({
   const visibleSection = activeSection;
   const shellClassName = "operational-workflow";
 
-  function navigate(sectionId) {
+  function navigate(sectionId, { replace = false } = {}) {
     if (sectionId === "insights" && !model.insights.some((item) => item.id === selectedInsightId)) {
       setSelectedInsightId(model.insights[0]?.id ?? null);
     }
     setActiveSection(sectionId);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (sectionId === "command-center") url.searchParams.delete("section");
+      else url.searchParams.set("section", sectionId);
+      window.history[replace ? "replaceState" : "pushState"]({}, "", `${url.pathname}${url.search}`);
+    }
   }
 
   function openInsight(insightId) {
@@ -298,11 +313,15 @@ export default function OperationalWorkflowWorkspace({
           ))}
         </nav>
         <div className="operational-sidebar__footer">
-          <small>Neraium Operational Intelligence</small>
+          <small>{currentUser?.name || currentUser?.email || "Signed in"} &middot; {currentUser?.role || "operator"}</small>
           <small>Last analysis: {model.lastAnalysis}</small>
-          {typeof onSignOut === "function" ? (
-            <button type="button" className="operational-link-button" onClick={onSignOut}>Sign out</button>
-          ) : null}
+          <div className="operational-sidebar__account-actions">
+            <button type="button" className="operational-link-button" onClick={() => onWorkspaceNavigate?.("help-changelog")}>Help & status</button>
+            {currentUser?.role === "admin" ? <button type="button" className="operational-link-button" onClick={() => onWorkspaceNavigate?.("governance-admin")}>Administration</button> : null}
+            {typeof onSignOut === "function" ? (
+              <button type="button" className="operational-link-button" onClick={onSignOut} disabled={signOutPending}>{signOutPending ? "Signing out..." : "Sign out"}</button>
+            ) : null}
+          </div>
         </div>
       </aside>
 
@@ -368,6 +387,8 @@ export default function OperationalWorkflowWorkspace({
 
 function readStoredOperationalSection() {
   if (typeof window === "undefined") return "command-center";
+  const linked = new URLSearchParams(window.location.search).get("section");
+  if (NAV_ITEMS.some((item) => item.id === linked)) return linked;
   const stored = window.localStorage.getItem(ACTIVE_SECTION_STORAGE_KEY);
   return NAV_ITEMS.some((item) => item.id === stored) ? stored : "command-center";
 }

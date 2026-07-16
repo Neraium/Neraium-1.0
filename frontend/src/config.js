@@ -193,6 +193,9 @@ export async function apiFetch(path, options = {}) {
       },
       signal: controller.signal,
     });
+    if (typeof window !== "undefined" && response.status === 401 && !normalizedPath.startsWith("/api/auth/login") && !normalizedPath.startsWith("/api/auth/me")) {
+      window.dispatchEvent(new CustomEvent("neraium:session-expired"));
+    }
     return response;
   } catch (error) {
     if (error?.name === "AbortError") {

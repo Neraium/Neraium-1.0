@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 test.describe("Accessibility audit", () => {
   test("keyboard focus and semantic controls are reachable", async ({ page }) => {
@@ -7,7 +7,7 @@ test.describe("Accessibility audit", () => {
 
     await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Primary workflow navigation" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeVisible();
 
     await page.keyboard.press("Tab");
     await expect.poll(async () => page.evaluate(() => {
@@ -16,9 +16,8 @@ test.describe("Accessibility audit", () => {
     }), { timeout: 10000 }).toBe(true);
   });
 
-  test("reduced-motion preference is respected", async ({ browser }) => {
-    const context = await browser.newContext({ reducedMotion: "reduce" });
-    const page = await context.newPage();
+  test("reduced-motion preference is respected", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
@@ -29,7 +28,5 @@ test.describe("Accessibility audit", () => {
     });
     const normalizedDuration = Number.parseFloat(String(animationDuration || "0"));
     expect(normalizedDuration).toBeLessThanOrEqual(0.01);
-
-    await context.close();
   });
 });

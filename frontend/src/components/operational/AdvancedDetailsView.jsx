@@ -64,7 +64,7 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
           ["Detected data type", model.domainLabel],
         ]} technical />
         <div className="operational-actions">
-          <button type="button" className="command-button" onClick={onAnalyzeSystem} disabled={model.analyzeDisabled}>{model.primaryCtaLabel}</button>
+          <button type="button" className="command-button" onClick={onAnalyzeSystem} disabled={model.analyzeDisabled} title={model.analyzeDisabled ? "Analysis is already in progress. Wait for it to finish before starting another." : "Open historical telemetry analysis."}>{model.primaryCtaLabel}</button>
         </div>
       </section>
 

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 async function renderCompletionFixture(page) {
   await page.setViewportSize({ width: 390, height: 844 });

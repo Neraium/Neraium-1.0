@@ -168,6 +168,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.exception_handler(HTTPException)
     async def upload_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
         if exc.status_code in {401, 403}:
+            if request.url.path.startswith("/api/auth/"):
+                return JSONResponse(
+                    status_code=exc.status_code,
+                    content={"detail": exc.detail},
+                    headers=exc.headers,
+                )
             return JSONResponse(
                 status_code=exc.status_code,
                 content=auth_error_payload(exc.detail),

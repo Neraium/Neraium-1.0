@@ -135,7 +135,7 @@ function relationshipLabels(insight) {
       relationship.source_columns,
       relationship.sourceColumns
     ).map(signalName).filter(Boolean);
-    if (columns.length >= 2) return columns[0] + " ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â " + columns[1];
+    if (columns.length >= 2) return `${columns[0]} \u2194 ${columns[1]}`;
     return text(relationship) || "Supporting relationship " + (itemIndex + 1);
   }).filter(Boolean);
 }
@@ -254,7 +254,7 @@ function cleanOperationalImpact(value) {
 }
 
 function splitOperationalImpacts(values) {
-  return unique(values.flatMap((value) => cleanOperationalImpact(value).split(/\n|;|ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢/g))
+  return unique(values.flatMap((value) => cleanOperationalImpact(value).split(/\n|;|\u2022/g))
     .flatMap((value) => value.split(/(?<=\.)\s+(?=[A-Z])/g))
     .map((item) => item.trim())
     .filter(Boolean));
@@ -354,7 +354,7 @@ function whyNeraiumBelievesThis(insight, observedFacts, evidence, relationships)
     return `Neraium detected that ${observed.charAt(0).toLowerCase()}${observed.slice(1)} while the ${relationship} relationship moved away from its learned operating pattern. This combination most closely matches a real operational behavior change rather than normal demand movement.`;
   }
   if (relationship) {
-    return `Neraium detected that the historical relationship between ${relationship.replace(" ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ", " and ")} changed compared with the learned operating pattern. This combination most closely matches a change in operating behavior rather than a single isolated reading.`;
+    return `Neraium detected that the historical relationship between ${relationship.replace(" \u2194 ", " and ")} changed compared with the learned operating pattern. This combination most closely matches a change in operating behavior rather than a single isolated reading.`;
   }
   if (evidenceLine) {
     return `Neraium generated this insight because the supporting evidence changed from the learned operational baseline: ${evidenceLine}`;
@@ -434,7 +434,7 @@ function PriorityActions({ actions, signals = [], impacts = [], explain = false 
           {explain ? <span>{labels[index]}</span> : null}
           <strong>{action}</strong>
           {explain ? <dl className="investigation-card__details">
-            <div><dt>Estimated impact</dt><dd>{impacts[index] || (index === 0 ? "High ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â validates the primary operational risk" : "Moderate ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â narrows the likely cause")}</dd></div>
+            <div><dt>Estimated impact</dt><dd>{impacts[index] || (index === 0 ? "High - validates the primary operational risk" : "Moderate - narrows the likely cause")}</dd></div>
             <div><dt>Supporting signals</dt><dd>{signals[index] || signals[0] || "Relationship drift and persistence evidence"}</dd></div>
             <div><dt>Expected validation</dt><dd>{index === 0 ? "Confirm whether the observed shift is present at the affected equipment." : "Confirm or rule out this cause against the current fingerprint."}</dd></div>
             <div><dt>Why this order</dt><dd>{reasons[index]}</dd></div>
@@ -594,7 +594,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         </Disclosure>
 
         <Disclosure title="Relationship Explorer">
-          <div id="relationship-explorer"><Suspense fallback={<p>Loading relationship explorerÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦</p>}><RelationshipExplorer relationships={relationshipModels} /></Suspense></div>
+          <div id="relationship-explorer"><Suspense fallback={<p>Loading relationship explorer...</p>}><RelationshipExplorer relationships={relationshipModels} /></Suspense></div>
         </Disclosure>
 
         <Disclosure title="Historical Comparison">

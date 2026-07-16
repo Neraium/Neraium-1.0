@@ -59,7 +59,10 @@ vi.mock("./config", () => ({
   ENABLE_ADMISSION_GATE: false,
 }));
 
-vi.mock("./services/api/authApi", () => ({ logoutUser: vi.fn() }));
+vi.mock("./services/api/authApi", () => ({
+  fetchCurrentUser: vi.fn().mockResolvedValue({ authenticated: true, user: { email: "operator@facility.com", name: "Operator", role: "operator" } }),
+  logoutUser: vi.fn().mockResolvedValue({ authenticated: false }),
+}));
 
 vi.mock("./hooks/useFacilityRuntime", () => ({
   default: () => ({

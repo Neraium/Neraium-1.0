@@ -49,7 +49,7 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
       <section className="operational-panel operational-panel--wide data-source-actions-panel" aria-label="Primary Analysis Actions">
         <PanelHeader eyebrow="Primary Analysis Actions" title="Analyze Historical Telemetry" subtitle="One canonical workflow uploads historical telemetry and establishes or refreshes the behavioral baseline." />
         <div className="data-source-action-grid data-source-action-grid--single">
-          <button type="button" className="command-button data-source-action data-source-action--primary" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled}>
+          <button type="button" className="command-button data-source-action data-source-action--primary" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled} title={model.analyzeDisabled ? "Analysis is already in progress. Wait for it to finish before starting another." : "Choose a telemetry CSV to analyze."}>
             <strong>Analyze Historical Telemetry</strong>
             <span>Upload telemetry evidence, infer relationships, organize behavior, and persist the behavioral baseline.</span>
           </button>

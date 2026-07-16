@@ -1,4 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
+
+const apiBaseURL = `http://127.0.0.1:${Number(process.env.PLAYWRIGHT_BACKEND_PORT || 8012)}`;
 
 function buildCsvRows(count) {
   const lines = ["timestamp,room,flow,pressure,power"];
@@ -18,7 +20,7 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
   const startedAt = Date.now();
   let activeJobId = String(jobId ?? "").trim();
   while (Date.now() - startedAt < timeoutMs) {
-    const response = await page.request.get(`http://127.0.0.1:8010/api/data/upload-status/${encodeURIComponent(activeJobId)}`);
+    const response = await page.request.get(`${apiBaseURL}/api/data/upload-status/${encodeURIComponent(activeJobId)}`);
     const payload = await response.json().catch(() => ({}));
     const status = String(payload?.status ?? "").toUpperCase();
     if (status === "COMPLETE") return payload;

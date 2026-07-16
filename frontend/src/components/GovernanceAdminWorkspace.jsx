@@ -6,6 +6,7 @@ export default function GovernanceAdminWorkspace({
   Panel,
   EmptyState,
   onBackToGate = null,
+  currentUser = null,
 }) {
   const [payload, setPayload] = useState(null); 
   const [performance, setPerformance] = useState(null);
@@ -108,6 +109,8 @@ export default function GovernanceAdminWorkspace({
         </div>
       </Panel>
 
+      <AccessAdminPanel apiFetch={apiFetch} accessCode={accessCode} Panel={Panel} currentUser={currentUser} />
+
       <div className="workspace-grid workspace-grid--two"> 
         {rows.map((record) => (
           <Panel
@@ -127,4 +130,65 @@ export default function GovernanceAdminWorkspace({
       </div>
     </section>
   );
+}
+
+
+function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser }) {
+  const [users, setUsers] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState("");
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({ email: "", name: "", password: "", role: "operator" });
+
+  async function read(response) { try { return await response.json(); } catch { return {}; } }
+  async function loadAccess() {
+    setLoading(true); setError("");
+    try {
+      const [userResponse, sessionResponse] = await Promise.all([
+        apiFetch("/api/auth/users?include_inactive=true", { accessCode, cache: "no-store" }),
+        apiFetch("/api/auth/sessions?include_revoked=false", { accessCode, cache: "no-store" }),
+      ]);
+      const userPayload = await read(userResponse); const sessionPayload = await read(sessionResponse);
+      if (!userResponse.ok || !sessionResponse.ok) throw new Error(userPayload?.detail || sessionPayload?.detail || "Access records could not be loaded.");
+      setUsers(userPayload.users || []); setSessions(sessionPayload.sessions || []);
+    } catch (loadError) { setError(String(loadError?.message || loadError)); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void loadAccess(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function mutate(key, path, options = {}) {
+    if (busy) return false;
+    setBusy(key); setError(""); setNotice("");
+    try {
+      const response = await apiFetch(path, { accessCode, method: "POST", ...options });
+      const payload = await read(response);
+      if (!response.ok) throw new Error(payload?.detail || (response.status === 403 ? "Administrator access is required." : "The action failed. Review the account and retry."));
+      setNotice(payload?.message || "Access settings updated.");
+      await loadAccess();
+      return true;
+    } catch (actionError) { setError(String(actionError?.message || actionError)); return false; }
+    finally { setBusy(""); }
+  }
+
+  async function createAccount(event) {
+    event.preventDefault();
+    if (!form.email.trim() || form.password.length < 8) { setError("Enter a valid email and a password of at least 8 characters."); return; }
+    const created = await mutate("create", "/api/auth/users", { headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+    if (created) setForm({ email: "", name: "", password: "", role: "operator" });
+  }
+
+  return <Panel title="Access Administration" subtitle={`Signed in as ${currentUser?.email || "administrator"}. Create accounts, activate access, or revoke sessions.`}>
+    {loading ? <p role="status">Loading access records...</p> : null}
+    <form className="admin-access-form" onSubmit={createAccount} aria-busy={Boolean(busy)}>
+      <input aria-label="User email" type="email" placeholder="operator@facility.com" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} disabled={Boolean(busy)} />
+      <input aria-label="User name" placeholder="Operator name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} disabled={Boolean(busy)} />
+      <input aria-label="Temporary password" type="password" placeholder="Temporary password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} disabled={Boolean(busy)} />
+      <select aria-label="User role" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} disabled={Boolean(busy)}><option value="viewer">Viewer</option><option value="operator">Operator</option><option value="admin">Administrator</option></select>
+      <button className="command-button" type="submit" disabled={Boolean(busy)}>{busy === "create" ? "Creating..." : "Create account"}</button>
+    </form>
+    {notice ? <p className="connector-notice" role="status">{notice}</p> : null}{error ? <p className="auth-error" role="alert">{error}</p> : null}
+    <div className="admin-access-list" aria-label="User accounts">{users.map((user) => <article key={user.email}><div><strong>{user.name || user.email}</strong><small>{user.email} &middot; {user.role} &middot; {user.is_active ? "active" : "inactive"}</small></div><div>{user.is_active ? <button type="button" className="operational-link-button operational-link-button--danger" disabled={Boolean(busy) || user.email === currentUser?.email} title={user.email === currentUser?.email ? "You cannot deactivate your current account." : "Deactivate this account and revoke its sessions."} onClick={() => void mutate(`deactivate-${user.email}`, `/api/auth/users/${encodeURIComponent(user.email)}/deactivate`)}>Deactivate</button> : <button type="button" className="secondary-command-button" disabled={Boolean(busy)} onClick={() => void mutate(`activate-${user.email}`, `/api/auth/users/${encodeURIComponent(user.email)}/activate`)}>Activate</button>}<button type="button" className="operational-link-button" disabled={Boolean(busy) || !sessions.some((session) => session.email === user.email)} title={sessions.some((session) => session.email === user.email) ? "Revoke all active sessions for this account." : "This account has no active sessions."} onClick={() => void mutate(`revoke-${user.email}`, "/api/auth/sessions/revoke", { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: user.email, revoke_all_for_user: true }) })}>Revoke sessions</button></div></article>)}</div>
+  </Panel>;
 }

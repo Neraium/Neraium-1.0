@@ -17,6 +17,7 @@ import {
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
 import { retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
+import ConnectorSetupPanel from "./ConnectorSetupPanel";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
@@ -193,6 +194,7 @@ export default function DataConnectionsWorkspace({
   sessionStore,
   onUploadComplete,
   onResetDemo,
+  currentUser = null,
   initialSelectedFiles = [],
   onInitialSelectedFilesConsumed,
   autoStartInitialFiles = false,
@@ -1035,6 +1037,7 @@ export default function DataConnectionsWorkspace({
         onResetWorkspace={() => { void clearUploadClientState(); }}
         onViewResults={() => { void viewCompletedResults(); }}
       />
+      <ConnectorSetupPanel apiFetch={apiFetch} accessCode={accessCode} currentUser={currentUser} />
     </div>
   );
 }

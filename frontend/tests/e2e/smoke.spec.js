@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 test.describe("Neraium frontend smoke", () => {
   test("loads command center workspace", async ({ page }) => {
@@ -6,23 +6,20 @@ test.describe("Neraium frontend smoke", () => {
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
     await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Command Center" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Awaiting Initial Baseline" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Operational Status" })).toBeVisible();
+    await expect(page.getByText("Awaiting Initial Baseline", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Connect Live Telemetry" })).toBeVisible();
   });
 
-  test("mobile loads command center workspace", async ({ browser }) => {
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-    const page = await context.newPage();
+  test("mobile loads command center workspace", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
     await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Command Center Overview" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Command Center" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze Historical Data" })).toBeVisible();
-
-    await context.close();
+    await expect(page.getByRole("region", { name: "Operational Status" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeVisible();
   });
 });

@@ -79,6 +79,8 @@ export default function AppWorkspaceRouter({
   handleReplayFrameChange,
   handleReplayModeChange,
   handleSignOut,
+  signOutPending = false,
+  currentUser = null,
   setActiveWorkspace,
   pendingUploadFiles = [],
   setPendingUploadFiles = () => {},
@@ -118,6 +120,7 @@ export default function AppWorkspaceRouter({
             sessionStore={liveOps.session}
             onResetDemo={handleResetDemo}
             formatClockTime={formatClockTime}
+            currentUser={currentUser}
             initialSelectedFiles={pendingUploadFiles}
             onInitialSelectedFilesConsumed={() => setPendingUploadFiles([])}
             autoStartInitialFiles={pendingUploadFiles.length > 0}
@@ -160,6 +163,14 @@ export default function AppWorkspaceRouter({
     );
   }
 
+  if (activeWorkspace === "governance-admin" && currentUser?.role !== "admin") {
+    return (
+      <WorkspaceWithBackControl appReady={appReady} errorBoundaryResetKey={errorBoundaryResetKey} handleBackToGate={handleBackToGate} handleRetryWorkspace={handleRetryWorkspace}>
+        <EmptyState title="Administrator access required" body="Your account can review operational results, but only administrators can manage users, sessions, and governance records." />
+      </WorkspaceWithBackControl>
+    );
+  }
+
   if (activeWorkspace === "governance-admin") {
     return (
       <WorkspaceWithBackControl
@@ -175,6 +186,7 @@ export default function AppWorkspaceRouter({
             Panel={Panel}
             EmptyState={EmptyState}
             onBackToGate={() => setActiveWorkspace("system-body")}
+            currentUser={currentUser}
           />
         </Suspense>
       </WorkspaceWithBackControl>
@@ -244,6 +256,8 @@ export default function AppWorkspaceRouter({
             resultsNavigationKey={resultsNavigationKey}
             onWorkspaceNavigate={setActiveWorkspace}
             onSignOut={handleSignOut}
+            signOutPending={signOutPending}
+            currentUser={currentUser}
             onCsvSelected={(files) => {
               setPendingUploadFiles(files);
               setActiveWorkspace("data-connections");
@@ -268,6 +282,7 @@ export default function AppWorkspaceRouter({
               sessionStore={liveOps.session}
               onResetDemo={handleResetDemo}
               formatClockTime={formatClockTime}
+              currentUser={currentUser}
               initialSelectedFiles={pendingUploadFiles}
               autoStartInitialFiles={true}
               headless={true}

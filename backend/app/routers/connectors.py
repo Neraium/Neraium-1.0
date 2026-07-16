@@ -95,7 +95,10 @@ async def upload_csv_connector(
 @router.post("/connectors/rest/test")
 def test_rest_connector(request: Request, payload: RestConnectorRequest) -> dict[str, Any]:
     connector = build_connector_instance("rest", payload.model_dump())
-    validation_result = connector.validate_connection()
+    try:
+        validation_result = connector.validate_connection()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
     health = connector.health_check()
     if validation_result.get("ok") is False:
         raise HTTPException(status_code=400, detail=validation_result.get("message", "REST connector validation failed."))

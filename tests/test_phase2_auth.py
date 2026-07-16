@@ -56,6 +56,19 @@ def test_production_login_rate_limit_returns_429(monkeypatch, tmp_path) -> None:
     assert response.headers.get("Retry-After")
 
 
+def test_invalid_login_returns_auth_specific_message(monkeypatch, tmp_path) -> None:
+    clear_rate_limits()
+    client = _production_client(monkeypatch, tmp_path)
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "missing@example.com", "password": "wrongpass123"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid email or password."}
+
+
 def test_operator_cannot_access_admin_audit_route_in_production(monkeypatch, tmp_path) -> None:
     clear_rate_limits()
     create_user_context = _production_client(monkeypatch, tmp_path)

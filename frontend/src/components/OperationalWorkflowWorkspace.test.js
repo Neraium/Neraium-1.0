@@ -120,6 +120,7 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   window.sessionStorage.clear();
+  window.history.replaceState({}, "", "/");
 });
 
 describe("OperationalWorkflowWorkspace system-first architecture", () => {
@@ -136,10 +137,10 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Supporting Systems" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Advanced Information" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Analyze Historical Telemetry" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Analyze Historical Telemetry" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Open Insight" })).toBeNull();
     expect(screen.queryByLabelText("Systems requiring attention")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Connect Live Telemetry" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Connect Live Telemetry" })).toBeTruthy();
     expect(screen.getByLabelText("Neraium operational workspace").textContent).not.toMatch(/PLACEHOLDER|Placeholder|Current\s+Site/);
     expect(screen.queryByRole("heading", { name: /Analyze Historical Telemetry/i })).toBeNull();
   });
@@ -386,6 +387,28 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("button", { name: "Compare fingerprints" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "View related subsystems" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Export investigation report" })).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/Ã|â|Â/);
+  });
+
+  it("exports the selected investigation as a JSON download", () => {
+    const createObjectURL = vi.fn(() => "blob:investigation-report");
+    const revokeObjectURL = vi.fn();
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysis() }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+    clickNav("Insights");
+    fireEvent.click(screen.getByRole("button", { name: "Export investigation report" }));
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:investigation-report");
+    anchorClick.mockRestore();
   });
 
   it("maps two changed relationships to two evidence lines", () => {

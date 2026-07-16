@@ -3,20 +3,30 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch, ENABLE_ADMISSION_GATE } from "./config";
 
 import AppWorkspaceRouter from "./components/AppWorkspaceRouter";
+import AuthScreen from "./components/AuthScreen";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import useWorkspaceSessionController, { readStoredAllowPersistedLatest } from "./hooks/useWorkspaceSessionController";
-import { logoutUser } from "./services/api/authApi";
+import { fetchCurrentUser, logoutUser } from "./services/api/authApi";
 import { resolveSessionStore } from "./viewModels/sessionState";
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
 
 const HOME_PATH = "/";
-const WORKSPACE_PATH = "/workspace";
+const WORKSPACE_PATHS = {
+  home: "/home",
+  "system-body": "/workspace",
+  "data-connections": "/workspace/data-sources",
+  "observation-center": "/workspace/insights",
+  "system-story": "/workspace/advanced",
+  "help-changelog": "/workspace/help",
+  "governance-admin": "/workspace/admin",
+};
+const PATH_WORKSPACES = Object.fromEntries(Object.entries(WORKSPACE_PATHS).map(([workspace, path]) => [path, workspace]));
 
 function readInitialWorkspaceRoute() {
   if (typeof window === "undefined") return "system-body";
   const pathname = window.location.pathname.replace(/\/+$/, "") || HOME_PATH;
-  if (pathname === "/home") return "home";
-  return "system-body";
+  if (pathname === HOME_PATH || pathname === "/signin") return "system-body";
+  return PATH_WORKSPACES[pathname] ?? "system-body";
 }
 
 function App() {
@@ -25,14 +35,17 @@ function App() {
   const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
   const [resultsNavigationKey, setResultsNavigationKey] = useState(0);
   const [appReady, setAppReady] = useState(false);
+  const [authState, setAuthState] = useState({ status: "checking", user: null, notice: "" });
+  const [signOutPending, setSignOutPending] = useState(false);
   const initialAllowPersistedLatest = readStoredAllowPersistedLatest();
+  const hasAccess = authState.status === "authenticated" && Boolean(authState.user);
 
   const setActiveWorkspace = useCallback((workspaceId) => {
     const nextWorkspace = workspaceId === "home" ? "home" : workspaceId;
     setActiveWorkspaceState(nextWorkspace);
 
     if (typeof window === "undefined") return;
-    const nextPath = nextWorkspace === "home" ? "/home" : WORKSPACE_PATH;
+    const nextPath = WORKSPACE_PATHS[nextWorkspace] ?? WORKSPACE_PATHS["system-body"];
     if (window.location.pathname !== nextPath) {
       window.history.pushState({}, "", nextPath);
     }
@@ -56,7 +69,7 @@ function App() {
     telemetryTick,
     domainMode,
   } = useFacilityRuntime({
-    hasAccess: true,
+    hasAccess,
     accessCode,
     formatClockTime,
     formatEndpoint,
@@ -205,8 +218,18 @@ function App() {
   }, [analysisHistory, apiStatus.state, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, persistedLatestUpload, previousUploadHistory, resolvedSessionStore, roomContext.primary, systems, systemsState, telemetrySession, telemetryTick]);
 
   const handleSignOut = useCallback(async () => {
-    await logoutUser();
-  }, []);
+    if (signOutPending) return;
+    setSignOutPending(true);
+    try {
+      await logoutUser();
+      clearUploadSessionState();
+      setAuthState({ status: "signed-out", user: null, notice: "You have been signed out." });
+    } catch (error) {
+      setAuthState((current) => ({ ...current, notice: String(error?.message ?? "Sign out failed. Try again.") }));
+    } finally {
+      setSignOutPending(false);
+    }
+  }, [clearUploadSessionState, signOutPending]);
 
   const handleTelemetryAnalysisComplete = useCallback(async (completedPayload = null, options = {}) => {
     await handleGateUploadComplete(completedPayload, options);
@@ -215,6 +238,30 @@ function App() {
       setResultsNavigationKey((current) => current + 1);
     }
   }, [handleGateUploadComplete]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCurrentUser()
+      .then((payload) => {
+        if (cancelled) return;
+        setAuthState(payload?.authenticated && payload?.user
+          ? { status: "authenticated", user: payload.user, notice: "" }
+          : { status: "signed-out", user: null, notice: "Sign in to continue." });
+      })
+      .catch((error) => {
+        if (!cancelled) setAuthState({ status: "signed-out", user: null, notice: String(error?.message ?? "Unable to verify your session.") });
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      clearUploadSessionState();
+      setAuthState({ status: "signed-out", user: null, notice: "Your session expired. Sign in again to continue." });
+    };
+    window.addEventListener("neraium:session-expired", handleSessionExpired);
+    return () => window.removeEventListener("neraium:session-expired", handleSessionExpired);
+  }, [clearUploadSessionState]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -241,6 +288,14 @@ function App() {
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  if (authState.status === "checking") {
+    return <main className="auth-shell" data-testid="auth-loading"><section className="auth-panel" aria-live="polite"><h1>Loading session</h1><p>Checking your access...</p></section></main>;
+  }
+
+  if (!hasAccess) {
+    return <AuthScreen notice={authState.notice} onAuthenticated={(user) => setAuthState({ status: "authenticated", user, notice: "" })} />;
+  }
 
   return (
     <AppWorkspaceRouter
@@ -275,6 +330,8 @@ function App() {
       handleReplayFrameChange={handleReplayFrameChange}
       handleReplayModeChange={handleReplayModeChange}
       handleSignOut={handleSignOut}
+      signOutPending={signOutPending}
+      currentUser={authState.user}
       setActiveWorkspace={setActiveWorkspace}
       pendingUploadFiles={pendingUploadFiles}
       setPendingUploadFiles={setPendingUploadFiles}

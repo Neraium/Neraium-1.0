@@ -33,8 +33,12 @@ function setLocalSessionEmail(email) {
   window.localStorage.setItem(LOCAL_AUTH_SESSION_KEY, String(email).trim().toLowerCase());
 }
 
-function isNotFoundResponse(response) {
-  return Number(response?.status) === 404;
+export async function fetchCurrentUser() {
+  const response = await safeAuthFetch("/api/auth/me", { cache: "no-store" });
+  if (!response) throw new Error("The sign-in service is unavailable. Check the connection and retry.");
+  const payload = await readJson(response);
+  if (!response.ok) throw new Error(detailMessage(payload, "Unable to verify your session."));
+  return payload;
 }
 
 export async function loginUser({ email, password }) {
@@ -42,11 +46,11 @@ export async function loginUser({ email, password }) {
   const response = await safeAuthFetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email: normalizedEmail, password }),
   });
   const payload = await readJson(response);
   if (!response || !response.ok) {
-    throw new Error(detailMessage(payload, "Invalid email or password."));
+    throw new Error(detailMessage(payload, response?.status === 429 ? "Too many sign-in attempts. Wait and try again." : "Invalid email or password."));
   }
   setLocalSessionEmail(normalizedEmail);
   return payload;
@@ -54,11 +58,9 @@ export async function loginUser({ email, password }) {
 
 export async function logoutUser() {
   const response = await safeAuthFetch("/api/auth/logout", { method: "POST" });
-  if (!response || isNotFoundResponse(response)) {
-    setLocalSessionEmail("");
-    return { authenticated: false };
-  }
   const payload = await readJson(response);
-  if (!response.ok) throw new Error(detailMessage(payload, "Logout failed."));
+  if (!response) throw new Error("The sign-out service is unavailable. Check the connection and try again.");
+  if (!response.ok) throw new Error(detailMessage(payload, "Sign out failed. Try again."));
+  setLocalSessionEmail("");
   return payload;
 }
