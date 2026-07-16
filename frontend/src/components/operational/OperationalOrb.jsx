@@ -240,6 +240,7 @@ export default function OperationalOrb({ state, status, hotspotCount, hotspots, 
       className={className}
       data-testid="operational-orb"
       data-status={resolvedStatus}
+      role="img"
       aria-label={`Operational status: ${label}`}
     >
       <div className="operational-orb__glow" aria-hidden="true" />
@@ -285,7 +286,7 @@ export default function OperationalOrb({ state, status, hotspotCount, hotspots, 
         </div>
         ) : null}
         {!minimal ? (
-        <div className="operational-orb__hotspots">
+        <div className="operational-orb__hotspots" aria-hidden="true">
           {resolvedHotspots.map((hotspot, index) => (
             <i
               className="operational-orb__hotspot"
@@ -296,7 +297,6 @@ export default function OperationalOrb({ state, status, hotspotCount, hotspots, 
                 "--hotspot-scale": hotspot.scale,
                 "--hotspot-delay": `${index * -1.4}s`,
               }}
-              title={hotspot.subsystem}
             />
           ))}
         </div>

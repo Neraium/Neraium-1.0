@@ -890,6 +890,7 @@ export default function DataConnectionsWorkspace({
   const deferredProgressUploadTransfer = useDeferredValue(progressUploadTransfer);
   const latestStatusMessage = completionError || uploadError || visibleStatusLabel || readiness;
   const deferredLatestStatusMessage = useDeferredValue(latestStatusMessage);
+  const announcedStatusMessage = uploadError || completionError ? latestStatusMessage : deferredLatestStatusMessage;
   const deferredVisibleProgressPercent = useDeferredValue(visibleProgressPercent);
   const deferredPropagationLabel = useDeferredValue(propagationLabel);
   const deferredQueuedWorkerDetail = useDeferredValue(queuedWorkerDetail);
@@ -1024,7 +1025,7 @@ export default function DataConnectionsWorkspace({
         uploadState={uploadState}
         openFilePicker={openFilePicker}
         uploadJob={deferredProgressUploadJob}
-        latestMessage={deferredLatestStatusMessage}
+        latestMessage={announcedStatusMessage}
         visibleProgressPercent={deferredVisibleProgressPercent}
         propagationLabel={deferredPropagationLabel}
         queuedWorkerDetail={deferredQueuedWorkerDetail}

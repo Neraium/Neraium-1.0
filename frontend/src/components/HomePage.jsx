@@ -55,7 +55,8 @@ export default function HomePage({ onLaunchWorkspace }) {
 
   const scrollToSection = useCallback((sectionId) => {
     if (typeof document === "undefined") return;
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
   }, []);
 
   const handleOrbPointerMove = useCallback((event) => {
@@ -77,6 +78,7 @@ export default function HomePage({ onLaunchWorkspace }) {
 
   return (
     <div className="home-page" data-testid="home-page">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <header className="home-nav" aria-label="Neraium site navigation">
         <button type="button" className="home-brand" onClick={() => scrollToSection("home-hero")} aria-label="Neraium home">
           <span className="home-brand__mark" aria-hidden="true" />
@@ -91,7 +93,7 @@ export default function HomePage({ onLaunchWorkspace }) {
         <button type="button" className="home-nav__launch" onClick={onLaunchWorkspace}>Open Command Center</button>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section id="home-hero" className="home-hero" aria-labelledby="home-title">
           <div className="home-hero__copy">
             <p className="home-eyebrow">Operational Intelligence Platform</p>
@@ -101,9 +103,9 @@ export default function HomePage({ onLaunchWorkspace }) {
             </p>
           </div>
 
-          <div className="home-signal-strip" aria-label="Neraium command center focus">
+          <div className="home-signal-strip" role="list" aria-label="Neraium command center focus">
             {HERO_SIGNALS.map(([label, value]) => (
-              <div className="home-signal-strip__item" key={label}>
+              <div className="home-signal-strip__item" key={label} role="listitem">
                 <span>{label}</span>
                 <strong>{value}</strong>
               </div>
@@ -115,6 +117,7 @@ export default function HomePage({ onLaunchWorkspace }) {
             className="home-orb"
             onPointerMove={handleOrbPointerMove}
             onPointerLeave={resetOrbPointer}
+            role="img"
             aria-label="Animated Neraium operational intelligence orb"
           >
             <div className="home-orb__energy home-orb__energy--outer" aria-hidden="true" />
@@ -126,7 +129,7 @@ export default function HomePage({ onLaunchWorkspace }) {
             </div>
           </div>
 
-          <div className="home-hero__actions" aria-label="Primary actions">
+          <div className="home-hero__actions" role="group" aria-label="Primary actions">
             <button type="button" className="home-command" onClick={onLaunchWorkspace}>Open Command Center</button>
             <button type="button" className="home-secondary" onClick={() => scrollToSection("platform")}>View Platform</button>
           </div>
@@ -168,8 +171,8 @@ export default function HomePage({ onLaunchWorkspace }) {
             <p className="home-eyebrow">Domains</p>
             <h2 id="systems-title">Designed for infrastructure behavior, not a single equipment category.</h2>
           </div>
-          <div className="home-system-list" aria-label="Infrastructure system areas">
-            {SYSTEM_AREAS.map((area) => <span key={area}>{area}</span>)}
+          <div className="home-system-list" role="list" aria-label="Infrastructure system areas">
+            {SYSTEM_AREAS.map((area) => <span key={area} role="listitem">{area}</span>)}
           </div>
         </section>
 

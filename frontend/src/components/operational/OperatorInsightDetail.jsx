@@ -458,6 +458,14 @@ function InvestigationTimeline({ insight, context }) {
   ))}</ol>;
 }
 
+function focusInvestigationSection(sectionId) {
+  const target = document.getElementById(sectionId);
+  if (!target) return;
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+  target.focus({ preventScroll: true });
+}
+
 function OperatorActions({ insight, subsystem }) {
   const exportReport = () => {
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), subsystem, insight }, null, 2)], { type: "application/json" });
@@ -468,10 +476,10 @@ function OperatorActions({ insight, subsystem }) {
     anchor.click();
     URL.revokeObjectURL(url);
   };
-  return <div className="operator-quick-actions" aria-label="Operator actions">
-    <button type="button" onClick={() => document.getElementById("insight-evidence")?.scrollIntoView({ behavior: "smooth" })}>Inspect affected equipment</button>
-    <button type="button" onClick={() => document.getElementById("fingerprint-comparison")?.scrollIntoView({ behavior: "smooth" })}>Compare fingerprints</button>
-    <button type="button" onClick={() => document.getElementById("relationship-explorer")?.scrollIntoView({ behavior: "smooth" })}>View related subsystems</button>
+  return <div className="operator-quick-actions" role="group" aria-label="Operator actions">
+    <button type="button" onClick={() => focusInvestigationSection("insight-evidence")}>Inspect affected equipment</button>
+    <button type="button" onClick={() => focusInvestigationSection("fingerprint-comparison")}>Compare fingerprints</button>
+    <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>View related subsystems</button>
     <button type="button" onClick={exportReport}>Export investigation report</button>
   </div>;
 }
@@ -586,7 +594,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         <p>{whyGenerated}</p>
       </section>
 
-      <div className="insight-disclosure-stack" aria-label="Additional insight detail">
+      <div className="insight-disclosure-stack" role="region" aria-label="Additional insight detail">
         <Disclosure title="Investigation Timeline"><InvestigationTimeline insight={insight} context={changeContext} /></Disclosure>
 
         <Disclosure title="Prioritized Investigation Workflow">
@@ -594,11 +602,11 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         </Disclosure>
 
         <Disclosure title="Relationship Explorer">
-          <div id="relationship-explorer"><Suspense fallback={<p>Loading relationship explorer...</p>}><RelationshipExplorer relationships={relationshipModels} /></Suspense></div>
+          <div id="relationship-explorer" tabIndex={-1}><Suspense fallback={<p>Loading relationship explorer...</p>}><RelationshipExplorer relationships={relationshipModels} /></Suspense></div>
         </Disclosure>
 
         <Disclosure title="Historical Comparison">
-          <div id="fingerprint-comparison" className="fingerprint-comparison">
+          <div id="fingerprint-comparison" className="fingerprint-comparison" tabIndex={-1}>
             <section><span>Current fingerprint</span><strong>{behavioralSummary}</strong></section>
             <section><span>Previous fingerprint</span><strong>{text(insight?.previousFingerprint) || "Behavior was closer to the learned operating pattern."}</strong></section>
             <section><span>Healthy baseline</span><strong>{text(insight?.healthyBaseline) || "Relationships remained stable inside the learned range."}</strong></section>
@@ -607,7 +615,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         </Disclosure>
 
         <Disclosure title="Primary Evidence" className="insight-evidence-group">
-          <div id="insight-evidence"><BulletList items={evidenceLines.slice(0, 3)} />{evidenceMetrics.length ? <ContextGrid rows={evidenceMetrics} /> : null}</div>
+          <div id="insight-evidence" tabIndex={-1}><BulletList items={evidenceLines.slice(0, 3)} />{evidenceMetrics.length ? <ContextGrid rows={evidenceMetrics} /> : null}</div>
         </Disclosure>
 
         <Disclosure title="Supporting Evidence" className="insight-evidence-group"><BulletList items={evidenceLines.slice(3)} /></Disclosure>
@@ -673,7 +681,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
 
   if (inline) {
     return (
-      <div className={focusMode ? "insight-detail-card insight-detail-card--selected" : "insight-detail-card"} aria-label="Selected investigation detail">
+      <div className={focusMode ? "insight-detail-card insight-detail-card--selected" : "insight-detail-card"} role="region" aria-label="Selected investigation detail">
         {body}
       </div>
     );

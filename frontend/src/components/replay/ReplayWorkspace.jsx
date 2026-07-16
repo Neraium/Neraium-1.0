@@ -137,7 +137,7 @@ export default function ReplayWorkspace({
             <h3>{story.whatHappened}</h3>
             <p className="narrative-text">{story.summary}</p>
           </div>
-          <div className="system-story-hero__facts" aria-label="Story status">
+          <div className="system-story-hero__facts" role="group" aria-label="Story status">
             {story.facts.map((fact) => (
               <div key={fact.label}>
                 <span>{fact.label}</span>
@@ -173,7 +173,7 @@ export default function ReplayWorkspace({
         </div>
       </Panel>
       <Panel title="How It Developed" className="span-6 system-story-card">
-        <div className="system-story-timeline" aria-label="Behavior timeline">
+        <div className="system-story-timeline" role="group" aria-label="Behavior timeline">
           {story.development.map((item) => (
             <section key={`${item.time}-${item.label}`}>
               <span>{item.time}</span>
@@ -199,10 +199,10 @@ export default function ReplayWorkspace({
       </Panel>
       <Panel title="Engineer Notes" className="span-6 system-story-card">
         <div className="system-story-note-entry">
-          <textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="Add inspection notes" rows={3} />
+          <textarea aria-label="Inspection notes" value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="Add inspection notes" rows={3} />
           <button type="button" className="command-button" onClick={() => addNote()}>Add Note</button>
         </div>
-        <div className="system-story-note-templates" aria-label="Note shortcuts">
+        <div className="system-story-note-templates" role="group" aria-label="Note shortcuts">
           {NOTE_TEMPLATES.map((item) => <button type="button" className="secondary-command-button" key={item} onClick={() => addNote(item)}>{item}</button>)}
         </div>
         <div className="system-story-notes">

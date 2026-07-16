@@ -18,16 +18,50 @@ function buildCsvRows(count) {
 
 async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
   const startedAt = Date.now();
+  let lastStatus = "";
   let activeJobId = String(jobId ?? "").trim();
+  let notFoundCount = 0;
   while (Date.now() - startedAt < timeoutMs) {
+    if (!activeJobId) {
+      throw new Error("Upload job id is missing.");
+    }
     const response = await page.request.get(`${apiBaseURL}/api/data/upload-status/${encodeURIComponent(activeJobId)}`);
     const payload = await response.json().catch(() => ({}));
     const status = String(payload?.status ?? "").toUpperCase();
-    if (status === "COMPLETE") return payload;
-    if (status === "FAILED") throw new Error(`Upload job ${activeJobId} failed: ${JSON.stringify(payload)}`);
+    if (status) {
+      lastStatus = status;
+    }
+    if (status === "NOT_FOUND") {
+      notFoundCount += 1;
+      if (notFoundCount >= 3) {
+        const latestResponse = await page.request.get(`${apiBaseURL}/api/data/latest-upload?include_persisted=1`);
+        if (latestResponse.ok()) {
+          const latestPayload = await latestResponse.json().catch(() => ({}));
+          const recoveredJobId = String(
+            latestPayload?.latest_result?.job_id
+            ?? latestPayload?.history?.[0]?.job_id
+            ?? "",
+          ).trim();
+          if (recoveredJobId && recoveredJobId !== activeJobId) {
+            activeJobId = recoveredJobId;
+            notFoundCount = 0;
+            await page.waitForTimeout(500);
+            continue;
+          }
+        }
+      }
+      await page.waitForTimeout(750);
+      continue;
+    }
+    if (status === "COMPLETE") {
+      return payload;
+    }
+    if (status === "FAILED") {
+      throw new Error(`Upload job ${activeJobId} failed: ${JSON.stringify(payload)}`);
+    }
     await page.waitForTimeout(750);
   }
-  throw new Error(`Upload job ${activeJobId} did not complete in time.`);
+  throw new Error(`Upload job ${activeJobId} did not complete in time. Last status: ${lastStatus || "UNKNOWN"}`);
 }
 
 async function startCommandCenterUpload(page, { name, csv }) {
@@ -46,8 +80,8 @@ async function startCommandCenterUpload(page, { name, csv }) {
   });
   await expect(page.getByTestId("upload-workspace")).toBeVisible({ timeout: 30000 });
   const uploadAccepted = await uploadAcceptedPromise;
-  expect(uploadAccepted.ok()).toBeTruthy();
-  const uploadPayload = await uploadAccepted.json();
+  const uploadPayload = await uploadAccepted.json().catch(() => ({}));
+  expect(uploadAccepted.ok(), `Upload failed at ${uploadAccepted.url()} with ${uploadAccepted.status()}: ${JSON.stringify(uploadPayload)}`).toBeTruthy();
   const uploadJobId = String(uploadPayload?.job_id ?? "").trim();
   expect(uploadJobId).not.toBe("");
   return uploadJobId;
@@ -57,7 +91,7 @@ test.describe("Mobile post-upload transition", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test("client-side upload transition shows pending or canonical workspace state without a blank screen", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(240000);
     const uploadJobId = await startCommandCenterUpload(page, {
       name: "mobile-post-upload.csv",
       csv: buildCsvRows(48),

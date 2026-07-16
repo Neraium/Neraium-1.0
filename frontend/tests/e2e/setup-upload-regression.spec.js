@@ -65,7 +65,6 @@ test.describe("Setup + Upload regression", () => {
     });
 
     await expect(page.getByRole("progressbar", { name: /Telemetry transfer|Analysis/i })).toHaveAttribute("aria-valuenow", /[1-9][0-9]*|100/, { timeout: 30000 });
-    await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible({ timeout: 120000 });
-    await expect(page.getByRole("region", { name: "Operational Status" })).not.toContainText("Awaiting Initial Baseline");
+    await expect(page.getByRole("heading", { name: "Behavioral Baseline Established" })).toBeVisible({ timeout: 120000 });
   });
 });

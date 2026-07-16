@@ -622,7 +622,7 @@ export default function ObservationCenterWorkspace({
         <Panel title="Issues" className="span-7 observation-center__panel observation-center__panel--timeline">
           <details className="observation-center__filters-toggle">
             <summary>Filter issues</summary>
-            <div className="observation-center__filters" aria-label="Issues filters">
+            <div className="observation-center__filters" role="group" aria-label="Issues filters">
               <label className="observation-center__field">
                 <span>Search issues</span>
                 <input
@@ -661,9 +661,9 @@ export default function ObservationCenterWorkspace({
             </div>
           ) : (
             <div className="feed-list">
-              <button
-                type="button"
+              <article
                 className="intervention-card intervention-card--selected observation-history-card"
+                aria-label="Current observation"
                 style={{ textAlign: "left", width: "100%" }}
               >
                 <div className="intervention-card__header">
@@ -678,7 +678,7 @@ export default function ObservationCenterWorkspace({
                   <span>Confidence {activeFinding.confidence}</span>
                   <span>{activeBriefing.investigation[0]}</span>
                 </div>
-              </button>
+              </article>
             </div>
           )}
         </Panel>
@@ -761,11 +761,11 @@ export default function ObservationCenterWorkspace({
                 <select value={feedbackOutcome} onChange={(event) => setFeedbackOutcome(event.target.value)} aria-label="Validation outcome">
                   {FEEDBACK_OUTCOME_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                 </select>
-                <textarea value={feedbackActionTaken} onChange={(event) => setFeedbackActionTaken(event.target.value)} placeholder="Action taken or follow-up" rows={2} />
-                <textarea value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional review note" rows={3} />
+                <textarea aria-label="Action taken or follow-up" value={feedbackActionTaken} onChange={(event) => setFeedbackActionTaken(event.target.value)} placeholder="Action taken or follow-up" rows={2} />
+                <textarea aria-label="Optional review note" value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional review note" rows={3} />
                 <div className="intake-flow__controls">
                   <button type="button" className="command-button" onClick={submitFeedback} disabled={!selectedRunAllowsFeedback}>Save Review</button>
-                  {feedbackState.message ? <span className="observation-feedback-state">{feedbackState.message}</span> : (!selectedRunAllowsFeedback && selectedRun ? <span className="observation-feedback-state">Review feedback unlocks after the system record is persisted.</span> : null)}
+                  {feedbackState.message ? <span className="observation-feedback-state" role="status" aria-live="polite">{feedbackState.message}</span> : (!selectedRunAllowsFeedback && selectedRun ? <span className="observation-feedback-state">Review feedback unlocks after the system record is persisted.</span> : null)}
                 </div>
               </div>
             </>
@@ -777,11 +777,11 @@ export default function ObservationCenterWorkspace({
           <div className="workspace-grid workspace-grid--console observation-center__advanced-grid">
         <Panel title="Pattern History" className="span-7 observation-center__panel observation-center__panel--explorer">
           <div className="intake-flow__controls" style={{ marginBottom: 12 }}>
-            <select value={selectedVariables[0]} onChange={(event) => setSelectedVariables([event.target.value, selectedVariables[1]])}>
+            <select aria-label="Pattern history variable A" value={selectedVariables[0]} onChange={(event) => setSelectedVariables([event.target.value, selectedVariables[1]])}>
               <option value="">Select variable A</option>
               {variables.map((item) => <option key={item} value={item}>{displayVariable(item, aliases)}</option>)}
             </select>
-            <select value={selectedVariables[1]} onChange={(event) => setSelectedVariables([selectedVariables[0], event.target.value])}>
+            <select aria-label="Pattern history variable B" value={selectedVariables[1]} onChange={(event) => setSelectedVariables([selectedVariables[0], event.target.value])}>
               <option value="">Select variable B</option>
               {variables.map((item) => <option key={item} value={item}>{displayVariable(item, aliases)}</option>)}
             </select>
@@ -790,7 +790,7 @@ export default function ObservationCenterWorkspace({
             <EmptyState title="No pattern history" body="Select two variables that have appeared together in recorded observations." compact />
           ) : (
             <>
-              <svg viewBox="0 0 420 120" className="observation-explorer__chart">
+              <svg viewBox="0 0 420 120" className="observation-explorer__chart" role="img" aria-label="Pattern history for the selected variables">
                 <polyline fill="none" stroke="rgba(59, 122, 140, 0.92)" strokeWidth="3" points={relationshipPoints} />
               </svg>
               <ul className="compact-list">

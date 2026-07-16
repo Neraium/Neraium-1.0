@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import React from "react";
 import fs from "node:fs";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SystemBodyWorkspace from "./SystemBodyWorkspace";
 
@@ -16,8 +16,8 @@ vi.mock("../../layout/PageContainer", () => ({
 }));
 
 function readResultDetail(label, sectionName = "Evidence") {
-  fireEvent.click(screen.getByRole("button", { name: sectionName }));
-  const section = screen.getByLabelText(sectionName);
+  fireEvent.click(screen.getByRole("tab", { name: sectionName }));
+  const section = screen.getByRole("tabpanel", { name: sectionName });
   const labelNode = within(section).getByText(label);
   return labelNode.nextElementSibling?.textContent;
 }
@@ -54,6 +54,32 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.getByRole("button", { name: "Open Gate settings" })).toBeTruthy();
   });
 
+  it("traps focus in the settings dialog, closes on Escape, and restores trigger focus", async () => {
+    renderWorkspace();
+    const trigger = screen.getByRole("button", { name: "Open Gate settings" });
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    const dialog = await screen.findByRole("dialog", { name: "Views" });
+    const dialogButtons = within(dialog).getAllByRole("button");
+    const firstButton = dialogButtons[0];
+    const lastButton = dialogButtons[dialogButtons.length - 1];
+
+    await waitFor(() => expect(document.activeElement).toBe(firstButton));
+
+    lastButton.focus();
+    fireEvent.keyDown(window, { key: "Tab" });
+    expect(document.activeElement).toBe(firstButton);
+
+    firstButton.focus();
+    fireEvent.keyDown(window, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(lastButton);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Views" })).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it("surfaces detected telemetry domain in the Gate settings menu", () => {
     renderWorkspace({ domainDetection: { mode: "aquatic", source: "upload_shape", confidence: 0.88 } });
 
@@ -69,9 +95,9 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.getAllByText("Awaiting Telemetry").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Start operational intelligence" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Analyze New Telemetry" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Issues" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Data Quality" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Evidence" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Issues" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Data Quality" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Evidence" })).toBeNull();
     expect(screen.queryByRole("button", { name: "View Issues" })).toBeNull();
     expect(screen.queryByText("Rows loaded")).toBeNull();
   });
@@ -175,8 +201,8 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
-    const section = screen.getByLabelText("Evidence");
+    fireEvent.click(screen.getByRole("tab", { name: "Evidence" }));
+    const section = screen.getByRole("tabpanel", { name: "Evidence" });
 
     expect(within(section).getByText("Detection confidence").nextElementSibling?.textContent).toBe("High");
     expect(within(section).getByText("3 operating relationships shifted simultaneously.")).toBeTruthy();
@@ -222,7 +248,7 @@ describe("SystemBodyWorkspace empty state", () => {
     expect(screen.getAllByText("Ready with warnings").length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Analysis running" })).toBeNull();
     expect(screen.queryByText(/backend processing has not finished/i)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Data Quality" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Data Quality" }));
     expect(screen.getAllByText((text) => text.includes("Sparse missing values detected; short numeric gaps interpolated.")).length).toBeGreaterThan(0);
   });
 
@@ -256,7 +282,7 @@ describe("SystemBodyWorkspace empty state", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Evidence" }));
     expect(screen.queryByText("Operating pattern duration")).toBeNull();
     expect(screen.queryByText(/20625d/)).toBeNull();
   });

@@ -70,7 +70,7 @@ export default function SystemOrbPanel({
         </div>
       ) : null}
       {!compactPreview ? (
-        <div className="system-body-orb-panel__sync" aria-label="Live system mark timestamp">
+        <div className="system-body-orb-panel__sync" role="status" aria-live="polite" aria-label="Live system mark timestamp">
           <span />
           <strong>{lastUpdate || EMPTY_VALUE}</strong>
           <em>{resolvedSystemState === "unknown" ? EMPTY_VALUE : `Change signal ${instabilityDisplay}`}</em>

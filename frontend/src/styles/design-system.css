@@ -248,12 +248,33 @@ textarea {
   resize: vertical;
 }
 
+a[href]:focus-visible,
+button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-button:focus-visible {
-  outline: 0;
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--color-neutral-100);
+  outline-offset: 3px;
   box-shadow: var(--shadow-focus);
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 10000;
+  top: var(--space-12);
+  left: var(--space-12);
+  transform: translateY(-200%);
+  border-radius: var(--control-radius);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-950);
+  padding: var(--space-12) var(--space-16);
+  font-weight: 700;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 .workspace-shell-with-back {

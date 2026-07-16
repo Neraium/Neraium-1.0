@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import PageContainer from "../../layout/PageContainer";
 import { EMPTY_VALUE } from "../../../viewModels/emptyValue";
@@ -42,6 +42,8 @@ export default function SystemBodyWorkspace({
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeResultSection, setActiveResultSection] = useState("overview");
   const [showAllWarnings, setShowAllWarnings] = useState(false);
+  const menuDialogRef = useRef(null);
+  const menuTriggerRef = useRef(null);
   const resolvedStatusLight = statusLight === "red" || statusLight === "amber" ? "yellow" : statusLight;
 
   const interpretation = useMemo(() => {
@@ -144,6 +146,25 @@ export default function SystemBodyWorkspace({
   const previousUploadSummary = buildPreviousUploadSummary(persistedLatestUpload, previousUploadHistory);
   const canResumePreviousUpload = Boolean(previousUploadSummary && typeof onResumePreviousUpload === "function");
 
+  function closeMenu() {
+    setMenuOpen(false);
+  }
+
+  function handleResultTabKeyDown(event, currentId) {
+    const currentIndex = resultSections.findIndex((section) => section.id === currentId);
+    if (currentIndex < 0) return;
+    let nextIndex = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") nextIndex = (currentIndex + 1) % resultSections.length;
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") nextIndex = (currentIndex - 1 + resultSections.length) % resultSections.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = resultSections.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextId = resultSections[nextIndex].id;
+    setActiveResultSection(nextId);
+    window.requestAnimationFrame(() => document.getElementById(`result-tab-${nextId}`)?.focus());
+  }
+
   function navigateWorkspace(workspaceId) {
     if (typeof onWorkspaceNavigate === "function") {
       onWorkspaceNavigate(workspaceId);
@@ -174,18 +195,51 @@ export default function SystemBodyWorkspace({
   }, [menuOpen]);
 
   useEffect(() => {
-    if (!menuOpen || typeof window === "undefined") {
-      return undefined;
-    }
+    if (!menuOpen || typeof document === "undefined") return undefined;
+
+    const dialog = menuDialogRef.current;
+    const menuTrigger = menuTriggerRef.current;
+    const previouslyFocused = document.activeElement;
+    const focusableSelector = [
+      "button:not([disabled])",
+      "a[href]",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+      "[tabindex]:not([tabindex='-1'])",
+    ].join(",");
+    dialog?.querySelector(focusableSelector)?.focus();
 
     function handleKeyDown(event) {
       if (event.key === "Escape") {
-        setMenuOpen(false);
+        event.preventDefault();
+        closeMenu();
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll(focusableSelector));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      if (previouslyFocused instanceof HTMLElement && document.contains(previouslyFocused)) previouslyFocused.focus();
+      else menuTrigger?.focus();
+    };
   }, [menuOpen]);
 
   const menuOverlay = menuOpen && typeof document !== "undefined"
@@ -193,23 +247,25 @@ export default function SystemBodyWorkspace({
       <div
         className="system-gate__settings-overlay"
         data-testid="views-overlay"
-        onClick={() => setMenuOpen(false)}
+        onClick={closeMenu}
       >
         <aside
           id="system-body-menu"
+          ref={menuDialogRef}
           className="system-gate__settings-panel"
-          aria-label="System body navigation menu"
+          aria-labelledby="system-body-menu-title"
           aria-modal="true"
           role="dialog"
+          tabIndex={-1}
           onClick={(event) => event.stopPropagation()}
         >
           <div className="system-gate__settings-panel-header">
-            <p className="system-gate__settings-panel-title">Views</p>
+            <h2 id="system-body-menu-title" className="system-gate__settings-panel-title">Views</h2>
             <button
               type="button"
               className="system-gate__settings-close"
               aria-label="Close workspace menu"
-              onClick={() => setMenuOpen(false)}
+              onClick={closeMenu}
             >
               Close
             </button>
@@ -247,7 +303,7 @@ export default function SystemBodyWorkspace({
   return (
     <PageContainer className="system-body system-body--gate">
       <section className={`system-gate system-gate--${resolvedStatusLight} ui-state-surface ui-state-surface--${uiState}`} aria-label="System interpretation view">
-        <div className={`system-gate__heartbeat system-gate__heartbeat--${heartbeat.tone}`} aria-label={`Neraium platform status: ${heartbeat.label}`}>
+        <div className={`system-gate__heartbeat system-gate__heartbeat--${heartbeat.tone}`} role="status" aria-live="polite" aria-atomic="true" aria-label={`Neraium platform status: ${heartbeat.label}`}>
           <span className="system-gate__heartbeat-dot" />
           <strong>{assessmentState.headerStatus}</strong>
         </div>
@@ -256,6 +312,7 @@ export default function SystemBodyWorkspace({
           type="button"
           className="system-gate__settings"
           data-testid="workspace-menu-button"
+          ref={menuTriggerRef}
           aria-label="Open Gate settings"
           aria-expanded={menuOpen}
           aria-controls="system-body-menu"
@@ -266,21 +323,33 @@ export default function SystemBodyWorkspace({
 
         {hasPostUploadDashboard ? (
           <>
-        <nav className="result-section-tabs" aria-label="Analysis result sections">
+        <nav className="result-section-tabs" aria-label="Analysis result sections" role="tablist">
           {resultSections.map((section) => (
             <button
+              id={`result-tab-${section.id}`}
               key={section.id}
               type="button"
+              role="tab"
               className={activeResultSection === section.id ? "is-active" : ""}
-              aria-current={activeResultSection === section.id ? "page" : undefined}
+              aria-controls="analysis-result-panel"
+              aria-selected={activeResultSection === section.id}
+              tabIndex={activeResultSection === section.id ? 0 : -1}
               onClick={() => setActiveResultSection(section.id)}
+              onKeyDown={(event) => handleResultTabKeyDown(event, section.id)}
             >
               {section.label}
             </button>
           ))}
         </nav>
 
-        <div className="post-upload-result" data-testid="post-upload-result">
+        <div
+          id="analysis-result-panel"
+          className="post-upload-result"
+          data-testid="post-upload-result"
+          role="tabpanel"
+          aria-labelledby={`result-tab-${activeResultSection}`}
+          tabIndex={0}
+        >
           {activeResultSection === "overview" ? (
             <section className="post-upload-overview" aria-label="Analysis overview">
               <div className="post-upload-overview__header">

@@ -490,7 +490,7 @@ export function OperatorActionControls({ actionStatus, targetId, onOperatorActio
   ];
 
   return (
-    <div className="operator-action-controls" aria-label="Operator action status">
+    <div className="operator-action-controls" role="group" aria-label="Operator action status">
       {actions.map((action) => (
         <button
           className={`operator-action-button ${actionStatus?.action === action.id ? "operator-action-button--active" : ""}`}
@@ -503,7 +503,7 @@ export function OperatorActionControls({ actionStatus, targetId, onOperatorActio
       ))}
       {actionStatus && (
         <p className="operator-action-status">
-          {formatOperatorActionLabel(actionStatus.action)} at {formatClockTime(actionStatus.at)} CT.
+          <span role="status" aria-live="polite">{formatOperatorActionLabel(actionStatus.action)} at {formatClockTime(actionStatus.at)} CT.</span>
         </p>
       )}
     </div>
@@ -525,11 +525,13 @@ export function ProgressionStrip({ tone, compact = false, detailed = false }) {
     <div
       className={`progression-strip ${compact ? "progression-strip--compact" : ""} ${detailed ? "progression-strip--detailed" : ""}`}
       aria-label="Structural movement progression"
+      role="list"
     >
       {stages.map((stage, index) => (
         <div
           className={`progression-strip__stage ${index <= activeIndex ? "progression-strip__stage--active" : ""}`}
           key={stage}
+          role="listitem"
         >
           <span />
           <strong>{stage}</strong>
@@ -664,14 +666,15 @@ export function EngineIdentityPanel({
   );
 }
 
-export function DataTable({ columns, rows }) {
+export function DataTable({ columns, rows, caption = "Operational data" }) {
   return (
     <div className="table-shell">
       <table className="data-table">
+        <caption className="sr-only">{caption}</caption>
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column}>{column}</th>
+              <th key={column} scope="col">{column}</th>
             ))}
           </tr>
         </thead>
@@ -708,7 +711,7 @@ export function StatusDot({ tone }) {
   const uiState = normalizeOperationalState(tone);
 
   return (
-    <span className={`status-dot status-dot--${tone} status-dot--state-${uiState}`}>
+    <span className={`status-dot status-dot--${tone} status-dot--state-${uiState}`} aria-hidden="true">
       <span className="status-dot__halo" />
       <span className="status-dot__ring" />
       <span className="status-dot__core" />

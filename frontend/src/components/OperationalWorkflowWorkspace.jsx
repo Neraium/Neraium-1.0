@@ -290,7 +290,9 @@ export default function OperationalWorkflowWorkspace({
   }
 
   return (
-    <PageContainer className={shellClassName}>
+    <>
+      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <PageContainer className={shellClassName}>
       <aside className="operational-sidebar" aria-label="Neraium navigation">
         <div className="operational-sidebar__brand">
           <span className="section-token">Neraium</span>
@@ -325,8 +327,9 @@ export default function OperationalWorkflowWorkspace({
         </div>
       </aside>
 
-      <main className={visibleSection === "command-center" ? "operational-main operational-main--command-center" : "operational-main"} aria-label="Neraium operational workspace">
-        <input data-testid="overview-csv-upload-input" ref={overviewUploadInputRef} accept=".csv,text/csv" type="file" className="intake-flow__input" style={hiddenFileInputStyle} onChange={handleOverviewFileSelection} />
+      <main id="main-content" className={visibleSection === "command-center" ? "operational-main operational-main--command-center" : "operational-main"} aria-label="Neraium operational workspace" tabIndex={-1}>
+        <input data-testid="overview-csv-upload-input" ref={overviewUploadInputRef} accept=".csv,text/csv" type="file" className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Upload historical telemetry CSV" tabIndex={-1} onChange={handleOverviewFileSelection} />
+        {visibleSection === "command-center" ? <h1 className="sr-only">Neraium Command Center</h1> : null}
         {visibleSection !== "command-center" ? <header className="operational-topbar">
           <div>
             <p className="section-token">{model.headerEyebrow}</p>
@@ -335,7 +338,7 @@ export default function OperationalWorkflowWorkspace({
           </div>
         </header> : null}
 
-        <div className="operational-mobile-nav" aria-label="Mobile workflow navigation">
+        <nav className="operational-mobile-nav" aria-label="Mobile workflow navigation">
           {MOBILE_PRIMARY_NAV.map((item) => (
             <button
               key={item.id}
@@ -349,7 +352,7 @@ export default function OperationalWorkflowWorkspace({
               <small>{navMetrics[item.id]}</small>
             </button>
           ))}
-        </div>
+        </nav>
 
         {visibleSection === "command-center" ? (
           <CommandCenterView
@@ -381,7 +384,8 @@ export default function OperationalWorkflowWorkspace({
           <AdvancedDetailsView model={model} helpers={viewHelpers} selectedInsightId={selectedInsightId} onAnalyzeSystem={analyzeSystem} onResumePreviousSession={onResumePreviousSession} onReopenHistoricalAnalysis={onReopenHistoricalAnalysis} onDeleteHistoricalAnalysis={onDeleteHistoricalAnalysis} />
         ) : null}
       </main>
-    </PageContainer>
+      </PageContainer>
+    </>
   );
 }
 
@@ -2422,7 +2426,7 @@ function TechnicalValue({ value }) {
     .slice(0, 16);
   if (!entries.length) return <span>Not available</span>;
   return (
-    <div className="technical-value" aria-label="Technical values">
+    <div className="technical-value" role="group" aria-label="Technical values">
       {entries.map(([key, entryValue]) => (
         <div key={key}>
           <code>{formatTechnicalKey(key)}</code>

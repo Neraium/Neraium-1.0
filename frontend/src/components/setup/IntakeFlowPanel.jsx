@@ -657,7 +657,7 @@ export default function IntakeFlowPanel({
     <Panel title="Analyze Historical Telemetry" className="span-7 upload-ops-panel upload-ops-panel--command">
       <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={handleUpload}>
         <p className="intake-flow__subtitle">Upload historical telemetry to establish a learned behavior baseline for this facility.</p>
-        <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} onChange={handleFileSelection} />
+        <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose historical telemetry CSV files" tabIndex={-1} onChange={handleFileSelection} />
 
         {(viewState === "noFile" || viewState === "fileSelected") ? (
           <section
@@ -688,7 +688,7 @@ export default function IntakeFlowPanel({
                 <p>Upload historical telemetry to establish a learned behavior baseline for this facility.</p>
               </div>
 
-              <div className="upload-analysis-card__sources" aria-label="Supported Sources">
+              <div className="upload-analysis-card__sources" role="group" aria-label="Supported Sources">
                 <span>Supported Sources</span>
                 <ul>
                   {SUPPORTED_HISTORICAL_SOURCES.map((source) => <li key={source}>{source}</li>)}

@@ -13,7 +13,7 @@ const HelpChangelogWorkspace = lazy(() => import("./HelpChangelogWorkspace"));
 
 function renderLoadingPanel(title, message) {
   return (
-    <div className="workspace-grid workspace-loading-shell">
+    <div className="workspace-grid workspace-loading-shell" role="status" aria-live="polite" aria-atomic="true">
       <Panel title={title} className="span-12 workspace-loading-panel">
         <p className="narrative-text">{message}</p>
         <div className="workspace-loading-panel__meter" aria-hidden="true">
@@ -28,8 +28,9 @@ function WorkspaceWithBackControl({ appReady, errorBoundaryResetKey, handleBackT
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
+        <a className="skip-link" href="#main-content">Skip to main content</a>
         <div className="workspace-shell-with-back" style={{ minHeight: "100svh" }}>
-          <div className="workspace-back-control" aria-label="Workspace navigation">
+          <nav className="workspace-back-control" aria-label="Workspace navigation">
             <button
               type="button"
               className="workspace-back-control__button"
@@ -39,8 +40,11 @@ function WorkspaceWithBackControl({ appReady, errorBoundaryResetKey, handleBackT
               Back to Command Center
             </button>
             <span>Read-only operational intelligence</span>
-          </div>
-          {children}
+          </nav>
+          <main id="main-content" className="workspace-route-main" aria-label="Neraium operational workspace" tabIndex={-1}>
+            <h1 className="sr-only">Neraium Operational Workspace</h1>
+            {children}
+          </main>
         </div>
       </div>
     </AppErrorBoundary>
