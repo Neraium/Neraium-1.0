@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 import asyncio
 import pytest
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.core.config import Settings
@@ -50,7 +51,11 @@ def post_json(client: TestClient, filename: str, content: str):
     )
 
 
-def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 45.0) -> dict:
+def large_upload_timestamp(index: int) -> str:
+    return (datetime(2026, 5, 1, tzinfo=timezone.utc) + timedelta(minutes=index)).isoformat().replace("+00:00", "Z")
+
+
+def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 5.0) -> dict:
     deadline = time.time() + timeout_seconds
     last_payload = None
     while time.time() < deadline:
@@ -322,7 +327,7 @@ def test_upload_returns_job_id_immediately_without_waiting_for_worker(monkeypatc
     payload = response.json()
     assert payload["job_id"]
     assert payload["status"] == "PENDING"
-    assert elapsed < 1.25
+    assert elapsed < 0.35
 
 
 def test_upload_large_csv_returns_job_id_immediately_without_waiting_for_worker(monkeypatch) -> None:
@@ -347,7 +352,7 @@ def test_upload_large_csv_returns_job_id_immediately_without_waiting_for_worker(
     payload = response.json()
     assert payload["job_id"]
     assert payload["status"] == "PENDING"
-    assert elapsed < 1.5
+    assert elapsed < 0.6
 
 
 def test_upload_rejects_oversize_request(monkeypatch, tmp_path) -> None:
@@ -1914,20 +1919,46 @@ def test_upload_runs_sii_on_all_cleaned_rows_even_when_legacy_limits_are_set(mon
     assert result["processing_trace"]["sii_rows_excluded"] == 0
 
 
+def test_large_upload_bounds_analysis_sample_without_losing_population(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("NERAIUM_MAX_INGESTION_ANALYSIS_ROWS", "100")
+    csv_path = tmp_path / "bounded-analysis.csv"
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    with csv_path.open("w", encoding="utf-8") as output:
+        output.write("timestamp,temperature,humidity,airflow\n")
+        for index in range(1_001):
+            timestamp = (start + timedelta(minutes=index)).isoformat().replace("+00:00", "Z")
+            output.write(f"{timestamp},{70 + index % 11},{45 + index % 13},{300 + index % 17}\n")
+
+    result = process_csv_file(csv_path, filename=csv_path.name)
+
+    stats = result["processing_stats"]
+    trace = result["processing_trace"]
+    assert result["row_count"] == 1_001
+    assert result["ingestion_report"]["rows_received"] == 1_001
+    assert result["ingestion_report"]["rows_used"] == 1_001
+    assert 2 < stats["sampled_rows"] <= 100
+    assert stats["analysis_population_rows"] == 1_001
+    assert stats["analysis_sampling_applied"] is True
+    assert stats["analysis_sample_stride"] == 11
+    assert trace["analysis_sample_rows"] == stats["sampled_rows"]
+    assert trace["analysis_population_rows"] == 1_001
+    assert trace["analysis_sampling_applied"] is True
+
+
 @pytest.mark.slow
 def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:
     client = TestClient(create_app())
     rows = "\n".join(
-        f"2026-05-01T08:{index % 60:02d}:00Z,Flower 1,{75 + (index % 10) * 0.1:.1f},{58 + (index % 12) * 0.2:.1f}"
+        f"{large_upload_timestamp(index)},Flower 1,{75 + (index % 10) * 0.1:.1f},{58 + (index % 12) * 0.2:.1f}"
         for index in range(50_000)
     )
 
     upload = post_csv(client, "telemetry-50k.csv", f"timestamp,room,temperature,humidity\n{rows}")
-    payload = client.get(upload.json()["status_url"]).json()
+    payload = wait_for_terminal_upload_status(client, upload.json()["status_url"], timeout_seconds=30.0)
 
     assert payload["status"] == "COMPLETE"
     assert payload["rows_processed"] == 50_000
-    assert payload["chunk_count"] == 5
+    assert payload["chunk_count"] == (50_000 + upload_jobs.CSV_CHUNK_SIZE_ROWS - 1) // upload_jobs.CSV_CHUNK_SIZE_ROWS
     assert payload["runner_used"] is True
 
 
@@ -1935,7 +1966,7 @@ def test_50k_upload_completes_with_chunked_job_metadata(monkeypatch) -> None:
 def test_75k_upload_status_polling_completes_with_extended_timeout() -> None:
     client = TestClient(create_app())
     rows = "\n".join(
-        f"2026-05-01T08:{index % 60:02d}:00Z,Flower 1,{75 + (index % 10) * 0.1:.1f},{58 + (index % 12) * 0.2:.1f}"
+        f"{large_upload_timestamp(index)},Flower 1,{75 + (index % 10) * 0.1:.1f},{58 + (index % 12) * 0.2:.1f}"
         for index in range(75_000)
     )
 
@@ -1965,14 +1996,14 @@ def test_100k_upload_completes_without_loading_all_rows(monkeypatch, tmp_path) -
     with csv_path.open("w", encoding="utf-8") as output:
         output.write("timestamp,room,temperature,humidity\n")
         for index in range(100_000):
-            output.write(f"2026-05-01T08:{index % 60:02d}:00Z,Flower 1,{75 + (index % 9) * 0.1:.1f},{58 + (index % 11) * 0.2:.1f}\n")
+            output.write(f"{large_upload_timestamp(index)},Flower 1,{75 + (index % 9) * 0.1:.1f},{58 + (index % 11) * 0.2:.1f}\n")
 
-    result = process_csv_file(file_path=csv_path, filename="telemetry-100k.csv")
+    result = process_csv_file(csv_path, filename="telemetry-100k.csv")
 
     assert result["row_count"] == 100_000
     assert result["processing_stats"]["used_streaming"] is True
     assert result["processing_stats"]["sampled_rows"] == result["row_count"]
-    assert result["processing_stats"]["chunk_count"] == 10
+    assert result["processing_stats"]["chunk_count"] == (100_000 + upload_jobs.CSV_CHUNK_SIZE_ROWS - 1) // upload_jobs.CSV_CHUNK_SIZE_ROWS
 
 
 @pytest.mark.slow
@@ -1982,16 +2013,20 @@ def test_simulated_300k_upload_streams_windows_and_preserves_status(monkeypatch,
         output.write("timestamp,room,temperature,humidity,airflow\n")
         for index in range(300_000):
             output.write(
-                f"2026-05-01T08:{index % 60:02d}:00Z,Flower 1,{75 + (index % 13) * 0.1:.1f},{58 + (index % 17) * 0.2:.1f},{1.2 + (index % 7) * 0.01:.2f}\n"
+                f"{large_upload_timestamp(index)},Flower 1,{75 + (index % 13) * 0.1:.1f},{58 + (index % 17) * 0.2:.1f},{1.2 + (index % 7) * 0.01:.2f}\n"
             )
 
-    result = process_csv_file(file_path=csv_path, filename="telemetry-300k.csv")
+    result = process_csv_file(csv_path, filename="telemetry-300k.csv")
 
     assert result["row_count"] == 300_000
-    assert result["processing_stats"]["sampled_rows"] == result["row_count"]
-    assert result["processing_stats"]["chunk_count"] == 30
+    assert result["processing_stats"]["sampled_rows"] == 100_000
+    assert result["processing_stats"]["analysis_population_rows"] == 300_000
+    assert result["processing_stats"]["analysis_sampling_applied"] is True
+    assert result["processing_stats"]["analysis_sample_stride"] == 3
+    assert result["processing_stats"]["chunk_count"] == (300_000 + upload_jobs.CSV_CHUNK_SIZE_ROWS - 1) // upload_jobs.CSV_CHUNK_SIZE_ROWS
     assert result["processing_stats"]["memory_estimate_bytes"] > 0
     assert result["processing_trace"]["rows_processed"] == 300_000
+    assert result["processing_trace"]["analysis_sample_rows"] == 100_000
 
 
 @pytest.mark.slow
@@ -2001,16 +2036,20 @@ def test_simulated_500k_upload_streams_windows_and_preserves_status(monkeypatch,
         output.write("timestamp,room,temperature,humidity,airflow\n")
         for index in range(500_000):
             output.write(
-                f"2026-05-01T08:{index % 60:02d}:00Z,Flower 1,{75 + (index % 13) * 0.1:.1f},{58 + (index % 17) * 0.2:.1f},{1.2 + (index % 7) * 0.01:.2f}\n"
+                f"{large_upload_timestamp(index)},Flower 1,{75 + (index % 13) * 0.1:.1f},{58 + (index % 17) * 0.2:.1f},{1.2 + (index % 7) * 0.01:.2f}\n"
             )
 
-    result = process_csv_file(file_path=csv_path, filename="telemetry-500k.csv")
+    result = process_csv_file(csv_path, filename="telemetry-500k.csv")
 
     assert result["row_count"] == 500_000
-    assert result["processing_stats"]["sampled_rows"] == result["row_count"]
-    assert result["processing_stats"]["chunk_count"] == 50
+    assert result["processing_stats"]["sampled_rows"] == 100_000
+    assert result["processing_stats"]["analysis_population_rows"] == 500_000
+    assert result["processing_stats"]["analysis_sampling_applied"] is True
+    assert result["processing_stats"]["analysis_sample_stride"] == 5
+    assert result["processing_stats"]["chunk_count"] == (500_000 + upload_jobs.CSV_CHUNK_SIZE_ROWS - 1) // upload_jobs.CSV_CHUNK_SIZE_ROWS
     assert result["processing_stats"]["memory_estimate_bytes"] > 0
     assert result["processing_trace"]["rows_processed"] == 500_000
+    assert result["processing_trace"]["analysis_sample_rows"] == 100_000
 
 
 def test_upload_polling_reads_persisted_job_state() -> None:

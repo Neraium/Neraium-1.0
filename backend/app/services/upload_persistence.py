@@ -78,6 +78,7 @@ def read_upload_history(
             "column_count": result.get("column_count", 0),
             "replay_ready": len(timeline or []) > 0,
             "replay_frame_count": len(timeline or []),
+            "neraium_score": (result.get("sii_intelligence") or {}).get("neraium_score"),
             "intelligence_metrics": {
                 "room_count": 1,
                 "flagged_room_count": 0,
@@ -100,6 +101,7 @@ def read_upload_history(
             "column_count": latest.get("column_count", 0),
             "replay_ready": bool((latest.get("replay_timeline") or {}).get("timeline")),
             "replay_frame_count": len((latest.get("replay_timeline") or {}).get("timeline", [])),
+            "neraium_score": (latest.get("sii_intelligence") or {}).get("neraium_score"),
             "intelligence_metrics": {
                 "room_count": 1,
                 "flagged_room_count": 0,
@@ -110,4 +112,17 @@ def read_upload_history(
             "session_scope": latest.get("session_scope") if isinstance(latest.get("session_scope"), dict) else None,
         })
 
-    return items[: max(0, int(limit or 100))]
+    bounded_items = items[: max(0, int(limit or 100))]
+    for index, item in enumerate(bounded_items):
+        previous = bounded_items[index + 1] if index + 1 < len(bounded_items) else {}
+        current_score = item.get("neraium_score")
+        previous_score = previous.get("neraium_score")
+        score_delta = None
+        if isinstance(current_score, (int, float)) and isinstance(previous_score, (int, float)):
+            score_delta = round(float(current_score) - float(previous_score), 2)
+        item["diff"] = {
+            "previous_filename": previous.get("filename"),
+            "previous_processed_at": previous.get("completed_at"),
+            "neraium_score_delta": score_delta,
+        }
+    return bounded_items

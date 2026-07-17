@@ -89,6 +89,9 @@ def _run_case(name: str, content: bytes, *, expected_detected: bool, max_seconds
         "missed_detection": missed_detection,
         "runtime_seconds": result["processing_time_seconds"],
         "memory_delta_kb": max(0, after - before),
+        "analysis_sample_rows": result["processing_stats"]["sampled_rows"],
+        "analysis_population_rows": result["processing_stats"]["analysis_population_rows"],
+        "analysis_sampling_applied": result["processing_stats"]["analysis_sampling_applied"],
         "rows_received": result["ingestion_report"]["rows_received"],
         "rows_used": result["ingestion_report"]["rows_used"],
         "rows_dropped": result["ingestion_report"]["rows_dropped"],
@@ -131,3 +134,7 @@ def test_1m_upload_performance_guard() -> None:
     assert report["runtime_seconds"] <= report["max_seconds"]
     assert report["rows_received"] == 1_000_000
     assert report["rows_used"] == 1_000_000
+    assert report["analysis_population_rows"] == 1_000_000
+    assert 2 < report["analysis_sample_rows"] <= 100_000
+    assert report["analysis_sampling_applied"] is True
+    assert report["memory_delta_kb"] <= 768 * 1024
