@@ -31,7 +31,7 @@ def production_client(monkeypatch, tmp_path, *, token: str = "") -> TestClient:
         cors_origins=["https://app.neraium.com"],
         runtime_dir=tmp_path,
     )
-    return TestClient(create_app(settings))
+    return TestClient(create_app(settings), base_url="https://testserver")
 
 
 @pytest.mark.parametrize(
@@ -73,6 +73,21 @@ def test_exact_public_health_allowlist_does_not_prefix_match(monkeypatch, tmp_pa
 
     assert client.get("/api/health").status_code in {200, 503}
     assert client.get("/api/health-private").status_code == 404
+
+
+def test_production_session_cookie_is_secure_even_if_proxy_scheme_is_http(monkeypatch, tmp_path) -> None:
+    production_app = production_client(monkeypatch, tmp_path).app
+    client = TestClient(production_app, base_url="http://testserver")
+    create_user("secure-cookie@example.com", "password123", role="operator")
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "secure-cookie@example.com", "password": "password123"},
+    )
+
+    assert response.status_code == 200
+    assert "secure" in response.headers["set-cookie"].lower()
+    assert "httponly" in response.headers["set-cookie"].lower()
 
 
 def test_login_response_never_contains_bearer_session_secret(monkeypatch, tmp_path) -> None:

@@ -50,8 +50,14 @@ class AuthSessionRevokeRequest(BaseModel):
     revoke_all_for_user: bool = False
 
 
+def _session_cookie_secure(request: Request) -> bool:
+    settings = getattr(request.app.state, "settings", None)
+    environment = str(getattr(settings, "app_env", "")).strip().lower()
+    return request.url.scheme == "https" or environment in {"prod", "production"}
+
+
 def _apply_session_cookie(response: Response, session_id: str, request: Request) -> None:
-    secure = request.url.scheme == "https"
+    secure = _session_cookie_secure(request)
     expires_at = datetime.now(timezone.utc) + timedelta(days=14)
     response.set_cookie(
         key=session_cookie_name(),
@@ -68,7 +74,7 @@ def _clear_session_cookie(response: Response, request: Request) -> None:
     response.delete_cookie(
         key=session_cookie_name(),
         httponly=True,
-        secure=request.url.scheme == "https",
+        secure=_session_cookie_secure(request),
         samesite="lax",
         path="/",
     )

@@ -16,7 +16,7 @@ def _production_client(monkeypatch, tmp_path) -> TestClient:
         cors_origins=["https://app.neraium.com"],
         runtime_dir=tmp_path,
     )
-    return TestClient(create_app(settings))
+    return TestClient(create_app(settings), base_url="https://testserver")
 
 
 def test_bootstrap_admin_can_log_in(monkeypatch, tmp_path) -> None:
@@ -31,7 +31,7 @@ def test_bootstrap_admin_can_log_in(monkeypatch, tmp_path) -> None:
         cors_origins=["https://app.neraium.com"],
         runtime_dir=tmp_path,
     )
-    client = TestClient(create_app(settings))
+    client = TestClient(create_app(settings), base_url="https://testserver")
 
     login = client.post("/api/auth/login", json={"email": "admin@example.com", "password": "password123"})
 
