@@ -12,6 +12,7 @@ import httpx
 
 from app.connectors.models import NormalizedTelemetryRecord
 from app.core.config import Settings, get_settings
+from app.core.outbound_url import sanitize_url_for_display, validate_outbound_http_url
 from app.services.evidence_store import digest_payload, upsert_evidence_run
 from app.services.runtime_db import (
     clear_upload_runtime_tables,
@@ -115,7 +116,9 @@ def upsert_registered_data_connection(payload: dict[str, Any]) -> dict[str, Any]
         **current,
         **payload,
     }
-    merged["masked_configuration"] = {"url": merged.get("url")}
+    if merged.get("url"):
+        merged["url"] = validate_outbound_http_url(str(merged["url"]), resolve_dns=False)
+    merged["masked_configuration"] = {"url": sanitize_url_for_display(merged.get("url"))}
     merged["status"] = merged.get("status") or ("polling" if merged.get("polling_enabled") else "offline")
     merged["error_message"] = merged.get("error_message") or ""
     merged["baseline_status"] = merged.get("baseline_status") or "none"
@@ -880,8 +883,9 @@ def update_connection_health_fields(
 
 def fetch_connection_payload(connection: dict[str, Any], transport: httpx.BaseTransport | None = None) -> dict[str, Any]:
     headers = {"Accept": "application/json"}
-    with httpx.Client(timeout=10.0, transport=transport) as client:
-        response = client.get(connection["url"], headers=headers)
+    url = validate_outbound_http_url(connection["url"], resolve_dns=transport is None)
+    with httpx.Client(timeout=10.0, transport=transport, follow_redirects=False) as client:
+        response = client.get(url, headers=headers)
     response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, dict):

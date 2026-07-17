@@ -201,6 +201,7 @@ export default function DataConnectionsWorkspace({
   headless = false,
 }) {
   const seededSelectedFiles = useMemo(() => (Array.isArray(initialSelectedFiles) ? initialSelectedFiles : []), [initialSelectedFiles]);
+  const canOperate = !currentUser || ["operator", "admin"].includes(String(currentUser.role || "").toLowerCase());
   const [selectedFiles, setSelectedFiles] = useState(() => seededSelectedFiles);
   const [pendingUploadKind, setPendingUploadKind] = useState("csv");
   const [uploadState, setUploadState] = useState(() => seededSelectedFiles.length ? "validated" : "idle");
@@ -781,6 +782,10 @@ export default function DataConnectionsWorkspace({
   }
 
   async function handleUpload() {
+    if (!canOperate) {
+      setUploadError("Operator access is required to import telemetry datasets.");
+      return;
+    }
     if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) {
       logTelemetryStage("duplicate processing prevented", { state: uploadStateRef.current });
       return;
@@ -896,6 +901,11 @@ export default function DataConnectionsWorkspace({
   const deferredQueuedWorkerDetail = useDeferredValue(queuedWorkerDetail);
 
   function handleFileSelection(event) {
+    if (!canOperate) {
+      setUploadError("Operator access is required to import telemetry datasets.");
+      if (event?.target) event.target.value = "";
+      return;
+    }
     if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) {
       logTelemetryStage("duplicate processing prevented", { action: "file selection", state: uploadStateRef.current });
       if (event?.target) event.target.value = "";
@@ -923,6 +933,10 @@ export default function DataConnectionsWorkspace({
   }
 
   function openFilePicker(kind = "csv") {
+    if (!canOperate) {
+      setUploadError("Operator access is required to import telemetry datasets.");
+      return;
+    }
     if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) {
       logTelemetryStage("duplicate processing prevented", { action: "open file picker", state: uploadStateRef.current });
       return;
@@ -1011,6 +1025,7 @@ export default function DataConnectionsWorkspace({
   return (
     <div className="data-connections-workspace" data-testid="upload-workspace">
       <IntakeFlowPanel
+        canOperate={canOperate}
         handleUpload={(event) => {
           event?.preventDefault?.();
           void handleUpload();

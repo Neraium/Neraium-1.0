@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import Settings, get_settings
-from app.core.security import require_admin_role
+from app.core.security import require_admin_role, require_api_access
 from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
@@ -151,8 +151,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault("Content-Security-Policy", "default-src 'self'")
-        if request.url.scheme == "https":
+        response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+        if request.url.scheme == "https" or str(settings.app_env).strip().lower() in {"prod", "production"}:
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return response
 
@@ -237,11 +238,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Legacy frontend compatibility aliases. Older bundles may call shorthand
     # endpoints without the "/api/..." prefix.
-    @app.get("/latest-upload")
+    @app.get("/latest-upload", dependencies=[Depends(require_api_access)])
     async def latest_upload_alias(include_persisted: int | bool = True):
         return await data.latest_upload(include_persisted=include_persisted)
 
-    @app.get("/systems")
+    @app.get("/systems", dependencies=[Depends(require_api_access)])
     def systems_alias(include_persisted: bool = True, domain_mode: str | None = None):
         return facility.read_facility_systems(include_persisted=include_persisted, domain_mode=domain_mode)
 

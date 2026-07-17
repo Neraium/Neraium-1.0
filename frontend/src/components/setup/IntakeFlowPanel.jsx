@@ -582,6 +582,7 @@ function AdvancedDetails({ latestUploadSnapshot, uploadJob, uploadState, uploadT
 }
 
 export default function IntakeFlowPanel({
+  canOperate = true,
   handleUpload,
   uploadInputRef,
   handleFileSelection,
@@ -632,6 +633,7 @@ export default function IntakeFlowPanel({
 
   function handleUploadDragOver(event) {
     event.preventDefault();
+    if (!canOperate) return;
     event.dataTransfer.dropEffect = "copy";
     setIsDragActive(true);
   }
@@ -644,14 +646,14 @@ export default function IntakeFlowPanel({
   function handleUploadDrop(event) {
     event.preventDefault();
     setIsDragActive(false);
-    handleFileSelection(event);
+    if (canOperate) handleFileSelection(event);
   }
 
   return (
     <Panel title="Import and Analyze Dataset" className="span-7 upload-ops-panel upload-ops-panel--command">
       <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={handleUpload}>
         <p className="intake-flow__subtitle">Import a historical telemetry dataset so SII can learn the facility behavior baseline and produce evidence-backed insights.</p>
-        <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose telemetry dataset CSV files" tabIndex={-1} onChange={handleFileSelection} />
+        <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose telemetry dataset CSV files" tabIndex={-1} onChange={handleFileSelection} disabled={!canOperate} />
 
         {(viewState === "noFile" || viewState === "fileSelected") ? (
           <section
@@ -695,8 +697,8 @@ export default function IntakeFlowPanel({
               </div>
 
               <div className="upload-simple-actions upload-analysis-card__actions">
-                <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
-                <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!hasSelectedFiles || isUploadProcessing(uploadState)} title={!hasSelectedFiles ? "Choose a CSV dataset before starting analysis." : isUploadProcessing(uploadState) ? "Analysis is already in progress." : "Start dataset analysis."}>
+                <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")} disabled={!canOperate} title={!canOperate ? "Operator access is required to import datasets." : "Choose a telemetry dataset."}>{chooseFileButtonText}</button>
+                <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!canOperate || !hasSelectedFiles || isUploadProcessing(uploadState)} title={!canOperate ? "Operator access is required to import datasets." : !hasSelectedFiles ? "Choose a CSV dataset before starting analysis." : isUploadProcessing(uploadState) ? "Analysis is already in progress." : "Start dataset analysis."}>
                   Analyze Dataset
                 </button>
               </div>
@@ -744,7 +746,7 @@ export default function IntakeFlowPanel({
               </div>
               <div className="upload-simple-actions">
                 <button type="button" className="command-button" onClick={onViewResults}>Review Analysis</button>
-                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Dataset</button>
+                <button type="button" className="secondary-command-button" onClick={onResetWorkspace} disabled={!canOperate} title={!canOperate ? "Operator access is required to start another analysis." : "Start another dataset analysis."}>Analyze Another Dataset</button>
               </div>
             </div>
           </section>
@@ -767,7 +769,7 @@ export default function IntakeFlowPanel({
               <p className="upload-error-message">{errorMessage || "The analysis was saved, but its results could not be opened. Try opening the analysis again."}</p>
               <div className="upload-simple-actions">
                 <button type="button" className="command-button" onClick={onViewResults}>Open Analysis Again</button>
-                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Dataset</button>
+                <button type="button" className="secondary-command-button" onClick={onResetWorkspace} disabled={!canOperate} title={!canOperate ? "Operator access is required to start another analysis." : "Start another dataset analysis."}>Analyze Another Dataset</button>
               </div>
             </div>
           </section>
@@ -795,8 +797,8 @@ export default function IntakeFlowPanel({
               </div>
               <p className="upload-error-message">{errorMessage}</p>
               <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles} title={!hasSelectedFiles ? "Choose the source dataset again before retrying." : "Retry this analysis."}>Retry Analysis</button>
-                <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose Dataset</button>
+                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!canOperate || !hasSelectedFiles} title={!canOperate ? "Operator access is required to retry analysis." : !hasSelectedFiles ? "Choose the source dataset again before retrying." : "Retry this analysis."}>Retry Analysis</button>
+                <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")} disabled={!canOperate}>Choose Dataset</button>
               </div>
             </div>
           </section>

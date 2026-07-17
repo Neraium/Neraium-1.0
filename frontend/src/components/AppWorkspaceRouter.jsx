@@ -213,6 +213,7 @@ export default function AppWorkspaceRouter({
             accessCode={accessCode}
             canonicalFinding={canonicalFinding}
             currentSession={currentSession}
+            currentUser={currentUser}
             onBackToGate={() => setActiveWorkspace("system-body")}
             onReviewEvidence={() => setActiveWorkspace("observation-center")}
           />

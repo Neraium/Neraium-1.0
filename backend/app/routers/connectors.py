@@ -16,6 +16,7 @@ from app.connectors.models import (
 from app.connectors.registry import CONNECTOR_CLASSES, build_connector_descriptors, get_connector
 from app.connectors.store import read_health_state, upsert_health_status
 from app.core.security import require_admin_role, require_api_access
+from app.core.upload_security import contains_binary_markers, validate_telemetry_upload
 
 router = APIRouter(tags=["connectors"], dependencies=[Depends(require_api_access), Depends(require_admin_role)])
 
@@ -59,9 +60,14 @@ async def upload_csv_connector(
     source_id: str = Form("customer-csv"),
     system_id: str = Form("facility-csv"),
 ) -> dict[str, Any]:
-    filename = file.filename or "telemetry.csv"
-    if Path(filename).suffix.lower() != ".csv":
-        raise HTTPException(status_code=400, detail="Only CSV files are supported for the CSV connector.")
+    try:
+        filename, _content_type = validate_telemetry_upload(
+            file.filename or "telemetry.csv",
+            file.content_type,
+            allowed_extensions={".csv"},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
     content = bytearray()
     while True:
@@ -75,6 +81,8 @@ async def upload_csv_connector(
                 detail=f"CSV connector upload exceeds the {MAX_CONNECTOR_RESPONSE_BYTES}-byte limit.",
             )
     content_bytes = bytes(content)
+    if contains_binary_markers(content_bytes):
+        raise HTTPException(status_code=400, detail="CSV connector uploads must be text-based files.")
     if not content_bytes:
         raise HTTPException(status_code=400, detail="CSV dataset is empty.")
 

@@ -16,7 +16,8 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.services.evidence_store import read_evidence_run, upsert_evidence_run
 from app.services.analysis_result_contract import empty_analysis_result, ensure_analysis_result
-from app.core.security import _strict_auth_mode, require_operator_role
+from app.core.security import _strict_auth_mode, require_api_access, require_operator_role
+from app.core.upload_security import contains_binary_markers, validate_telemetry_upload
 from app.services import upload_jobs
 from app.services.upload_evidence import build_evidence_record_from_result
 from app.services.upload_persistence import summarize_result
@@ -34,7 +35,7 @@ from app.services.rate_limiter import consume_rate_limit
 from app.services.latest_upload_state import resolve_latest_upload_payload
 from app.services.upload_session_service import resolve_upload_status
 
-router = APIRouter(prefix="/data", tags=["data"])
+router = APIRouter(prefix="/data", tags=["data"], dependencies=[Depends(require_api_access)])
 logger = logging.getLogger(__name__)
 UPLOAD_JOB_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$", re.IGNORECASE)
 UPLOAD_RATE_LIMIT = 20
@@ -57,9 +58,6 @@ def format_upload_capacity(size_bytes: int) -> str:
 
 
 def _request_client_ip(request: Request) -> str:
-    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
-    if forwarded_for:
-        return forwarded_for
     if request.client and request.client.host:
         return str(request.client.host)
     return "unknown"
@@ -471,19 +469,25 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
     settings = request.app.state.settings
     started_at = time.perf_counter()
     request_id = getattr(request.state, "request_id", None)
-    filename = file.filename or "upload.csv"
-    lowered = filename.lower()
-    if not (lowered.endswith(".csv") or lowered.endswith(".json") or lowered.endswith(".txt")):
-        _log_upload_event("request_rejected", request_id=request_id, endpoint="/api/data/upload", filename=filename, processing_stage="validate_file_type", failure_reason="unsupported_file_type")
+    raw_filename = file.filename or "upload.csv"
+    try:
+        filename, content_type = validate_telemetry_upload(
+            raw_filename,
+            file.content_type,
+            allowed_extensions={".csv", ".json", ".txt"},
+        )
+    except ValueError as exc:
+        _log_upload_event("request_rejected", request_id=request_id, endpoint="/api/data/upload", filename=raw_filename, processing_stage="validate_file_type", failure_reason="unsupported_file_type")
         return JSONResponse(
             status_code=400,
             content={
                 "status": "FAILED",
                 "processing_state": "failed",
                 "error_type": "unsupported_file_type",
-                "message": "Only .csv, .txt, and .json telemetry files are supported.",
+                "message": str(exc),
             },
         )
+    lowered = filename.lower()
 
     max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 10 * 1024 * 1024 * 1024))
     metrics = queue_metrics()
@@ -499,7 +503,6 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             },
         )
 
-    content_type = (file.content_type or "").lower()
     _log_upload_event(
         "request_started",
         request_id=request_id,
@@ -519,6 +522,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
     )
     file_size_bytes = 0
     csv_has_non_whitespace = False
+    binary_markers_found = False
     temp_path = ""
     summary: dict[str, Any] = {}
     try:
@@ -544,11 +548,25 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                             "received_size_bytes": file_size_bytes,
                         },
                     )
-                if lowered.endswith(".csv") and not csv_has_non_whitespace and chunk.strip():
+                if contains_binary_markers(chunk):
+                    binary_markers_found = True
+                if lowered.endswith((".csv", ".txt")) and not csv_has_non_whitespace and chunk.strip():
                     csv_has_non_whitespace = True
                 temp.write(chunk)
 
-        if lowered.endswith(".csv") and (file_size_bytes == 0 or not csv_has_non_whitespace):
+        if binary_markers_found:
+            Path(temp_path).unlink(missing_ok=True)
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "FAILED",
+                    "processing_state": "failed",
+                    "error_type": "malformed_upload",
+                    "message": "Telemetry uploads must be text-based CSV, TXT, or JSON files.",
+                },
+            )
+
+        if lowered.endswith((".csv", ".txt")) and (file_size_bytes == 0 or not csv_has_non_whitespace):
             _log_upload_event("request_rejected", request_id=request_id, endpoint="/api/data/upload", filename=filename, file_size_bytes=file_size_bytes, processing_stage="validate_csv", failure_reason="csv_empty")
             try:
                 Path(temp_path).unlink(missing_ok=True)

@@ -380,9 +380,18 @@ def sanitize_user_record(user: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _public_session_id(session_id: str | None) -> str:
+    value = str(session_id or "")
+    if not value:
+        return ""
+    return f"session_{hashlib.sha256(value.encode('utf-8')).hexdigest()[:32]}"
+
+
 def sanitize_session_record(session: dict[str, Any]) -> dict[str, Any]:
     return {
-        "session_id": str(session.get("session_id") or ""),
+        # This is a revocation handle, not the bearer credential stored in the
+        # HttpOnly cookie.
+        "session_id": _public_session_id(session.get("session_id")),
         "email": _normalize_email(session.get("email", "")),
         "created_at": session.get("created_at"),
         "expires_at": session.get("expires_at"),
@@ -677,9 +686,19 @@ def revoke_session(*, session_id: str | None = None, email: str | None = None, r
     normalized_email = _normalize_email(email or "")
     with _STORE_LOCK:
         if session_id:
-            if not backend.read_session(session_id):
+            resolved_session_id = str(session_id)
+            if not backend.read_session(resolved_session_id):
+                resolved_session_id = next(
+                    (
+                        str(record.get("session_id") or "")
+                        for record in backend.list_sessions(include_revoked=True)
+                        if hmac.compare_digest(_public_session_id(record.get("session_id")), str(session_id))
+                    ),
+                    "",
+                )
+            if not resolved_session_id or not backend.read_session(resolved_session_id):
                 return 0
-            backend.revoke_session(session_id)
+            backend.revoke_session(resolved_session_id)
             return 1
         if revoke_all_for_user and normalized_email:
             return backend.revoke_sessions_for_email(normalized_email)

@@ -296,6 +296,8 @@ describe("App telemetry completion navigation", () => {
       expect(runtimeMocks.clearUploadSessionState).toHaveBeenCalledTimes(1);
     });
     expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: false });
+    expect(apiFetch).toHaveBeenCalledWith("/api/data/reset", expect.objectContaining({ method: "POST" }));
+    expect(apiFetch).not.toHaveBeenCalledWith("/api/data-connections/reset-all", expect.anything());
   });
 
   it("does not leave Data Connections when an existing analysis is restored", async () => {

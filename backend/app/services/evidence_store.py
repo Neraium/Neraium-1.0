@@ -289,6 +289,9 @@ def format_validation_history_item(item: dict[str, Any]) -> str:
 
 def csv_escape(value: Any) -> str:
     text = "" if value is None else str(value)
+    # CSV quoting does not stop spreadsheet applications from evaluating formulas.
+    if text.startswith(("=", "+", "-", "@", "\t", "\r")):
+        text = "'" + text
     if any(token in text for token in [",", "\"", "\n"]):
         return "\"" + text.replace("\"", "\"\"") + "\""
     return text

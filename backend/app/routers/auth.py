@@ -4,9 +4,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.core.security import _strict_auth_mode, require_admin_role, require_api_access
+from app.core.security import _strict_auth_mode, require_admin_role, require_api_access, require_same_origin_cookie_request
 from app.models.api_models import (
     AuthSessionResponse,
     AuthSessionsListResponse,
@@ -40,8 +40,8 @@ _LOGIN_EMAIL_WINDOW_SECONDS = 900
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=1024)
 
 
 class AuthSessionRevokeRequest(BaseModel):
@@ -75,9 +75,6 @@ def _clear_session_cookie(response: Response, request: Request) -> None:
 
 
 def _client_ip(request: Request) -> str:
-    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
-    if forwarded_for:
-        return forwarded_for
     if request.client and request.client.host:
         return str(request.client.host)
     return "unknown"
@@ -283,7 +280,7 @@ def login(payload: LoginRequest, request: Request, response: Response) -> dict[s
     return {"authenticated": True, "user": user, "session": session}
 
 
-@router.post("/auth/logout")
+@router.post("/auth/logout", dependencies=[Depends(require_same_origin_cookie_request)])
 def logout(request: Request, response: Response) -> dict[str, Any]:
     session_id = request.cookies.get(session_cookie_name())
     user = get_user_by_session(session_id)

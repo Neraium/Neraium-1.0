@@ -1,3 +1,4 @@
+import hmac
 import os
 import uuid
 
@@ -5,22 +6,11 @@ from fastapi import HTTPException, Request, Response
 
 from app.services.auth_store import get_user_by_session, normalize_role, session_cookie_name
 
-_PUBLIC_READONLY_PATHS = (
+_PUBLIC_READONLY_PATHS = {
     "/api/health",
     "/api/ready",
     "/api/domain/mode",
-    "/api/intelligence/engine-identity",
-    "/api/data/latest-upload",
-    "/api/data/upload-status/",
-    "/api/data/upload-stream/",
-    "/api/data/replay/",
-    "/api/data/system-interpretation",
-    "/api/facility/systems",
-    "/api/facility/intelligence-status",
-    "/api/facility/cognition-state",
-    "/latest-upload",
-    "/systems",
-)
+}
 _ROLE_ORDER = {"viewer": 0, "operator": 1, "admin": 2}
 
 
@@ -29,10 +19,9 @@ def _request_id(request: Request) -> str:
 
 
 def _is_public_readonly_request(request: Request) -> bool:
-    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+    if request.method not in {"GET", "HEAD"}:
         return False
-    path = request.url.path
-    return any(path.startswith(prefix) for prefix in _PUBLIC_READONLY_PATHS)
+    return request.url.path in _PUBLIC_READONLY_PATHS
 
 
 def _strict_auth_mode(request: Request) -> bool:
@@ -46,9 +35,9 @@ def _configured_token_role() -> str:
 
 
 def _client_ip(request: Request) -> str:
-    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
-    if forwarded_for:
-        return forwarded_for
+    # Uvicorn/Starlette may already replace request.client for trusted proxy
+    # peers. Reading X-Forwarded-For directly would let untrusted clients
+    # choose audit and rate-limit identities.
     if request.client and request.client.host:
         return str(request.client.host)
     return "unknown"
@@ -70,8 +59,25 @@ def _set_auth_context(request: Request, *, subject: str, role: str, source: str,
     }
 
 
-def require_api_access(request: Request, response: Response) -> None:
-    if _is_public_readonly_request(request):
+def _validate_cookie_request_origin(request: Request, *, has_cookie: bool) -> None:
+    if not has_cookie or request.method in {"GET", "HEAD", "OPTIONS"}:
+        return
+    origin = str(request.headers.get("Origin") or "").strip()
+    if not origin:
+        return
+    settings = getattr(request.app.state, "settings", None)
+    allowed_origins = set(getattr(settings, "cors_origins", []) or [])
+    if origin not in allowed_origins:
+        raise HTTPException(status_code=403, detail="Request origin is not allowed.")
+
+
+def require_same_origin_cookie_request(request: Request) -> None:
+    has_cookie = bool(request.cookies.get(session_cookie_name()) or request.cookies.get("neraium_access_code"))
+    _validate_cookie_request_origin(request, has_cookie=has_cookie)
+
+
+def _require_api_access(request: Request, response: Response, *, allow_public: bool) -> None:
+    if allow_public and _is_public_readonly_request(request):
         _set_auth_context(
             request,
             subject="readonly",
@@ -90,6 +96,10 @@ def require_api_access(request: Request, response: Response) -> None:
     cookie_token = request.cookies.get("neraium_access_code", "").strip() if request.cookies.get("neraium_access_code") else ""
     auth_session_cookie = request.cookies.get(session_cookie_name(), "").strip() if request.cookies.get(session_cookie_name()) else ""
     session_user = get_user_by_session(auth_session_cookie)
+    _validate_cookie_request_origin(
+        request,
+        has_cookie=bool(cookie_token or auth_session_cookie),
+    )
     resolved_token = access_header or cookie_token
     if not resolved_token and bearer_header.lower().startswith("bearer "):
         resolved_token = bearer_header.split(" ", 1)[1].strip()
@@ -107,7 +117,7 @@ def require_api_access(request: Request, response: Response) -> None:
         )
         return
 
-    if configured_token and resolved_token == configured_token:
+    if configured_token and resolved_token and hmac.compare_digest(resolved_token, configured_token):
         _set_auth_context(
             request,
             subject="service-token",
@@ -140,6 +150,14 @@ def require_api_access(request: Request, response: Response) -> None:
         has_auth_session_cookie=bool(auth_session_cookie),
         authenticated=False,
     )
+
+
+def require_api_access(request: Request, response: Response) -> None:
+    _require_api_access(request, response, allow_public=True)
+
+
+def require_authenticated_api_access(request: Request, response: Response) -> None:
+    _require_api_access(request, response, allow_public=False)
 
 
 def _require_minimum_role(request: Request, minimum_role: str) -> None:

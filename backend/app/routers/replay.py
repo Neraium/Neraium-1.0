@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.core.config import get_settings
+from app.core.security import require_api_access
 from app.services.sii_runner import read_latest_sii_state
 from app.services.upload_state_repository import read_replay_payload, resolve_upload_artifacts
 
-router = APIRouter(prefix="/replay", tags=["replay"])
+router = APIRouter(prefix="/replay", tags=["replay"], dependencies=[Depends(require_api_access)])
 
 
 @router.get("/timeline")

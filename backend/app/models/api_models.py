@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
+
+from app.core.outbound_url import sanitize_url_for_display
 
 
 class UploadAcceptedResponse(BaseModel):
@@ -198,10 +200,10 @@ class AuthSessionsListResponse(BaseModel):
 
 
 class AuthUserCreateRequest(BaseModel):
-    email: str
-    password: str
-    name: str | None = None
-    role: str = "operator"
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=1024)
+    name: str | None = Field(default=None, max_length=200)
+    role: str = Field(default="operator", pattern="^(viewer|operator|admin)$")
 
 
 class ObservabilitySummaryResponse(BaseModel):
@@ -241,20 +243,24 @@ class DataConnectionResponse(BaseModel):
     baseline_error_message: str = ""
     masked_configuration: dict[str, Any] = Field(default_factory=dict)
 
+    @field_serializer("url")
+    def serialize_url(self, value: str) -> str:
+        return sanitize_url_for_display(value)
+
 
 class DataConnectionsListResponse(BaseModel):
     connections: list[DataConnectionResponse] = Field(default_factory=list)
 
 
 class DataConnectionUpsertRequest(BaseModel):
-    connection_id: str | None = None
-    name: str
-    url: str
-    source_type: str = "external_rest_api"
-    facility_id: str | None = None
-    room_id: str | None = None
+    connection_id: str | None = Field(default=None, max_length=120)
+    name: str = Field(min_length=1, max_length=200)
+    url: str = Field(min_length=1, max_length=2048)
+    source_type: str = Field(default="external_rest_api", max_length=80)
+    facility_id: str | None = Field(default=None, max_length=120)
+    room_id: str | None = Field(default=None, max_length=120)
     polling_enabled: bool = False
-    polling_interval_seconds: int = 5
+    polling_interval_seconds: int = Field(default=5, ge=1, le=86400)
 
 
 class DataConnectionActionResponse(BaseModel):

@@ -114,6 +114,7 @@ function App() {
     setActiveWorkspace,
     apiFetch,
     accessCode,
+    currentUser: authState.user,
     sessionStore: resolvedSessionStore,
     loadFacilitySystems,
     loadLatestUploadState,

@@ -289,6 +289,7 @@ export default function ObservationCenterWorkspace({
   accessCode,
   canonicalFinding = null,
   currentSession = null,
+  currentUser = null,
   onBackToGate = null,
   onReviewEvidence = null,
   onWorkspaceNavigate = null,
@@ -523,7 +524,8 @@ export default function ObservationCenterWorkspace({
   const selectedRunInterventionComparison = selectedRun?.before_after_intervention ?? {};
   const selectedRunStatus = normalizeObservationStatus(selectedRun, persistedRunIds);
   const activeBriefing = buildObservationBriefing(activeFinding, selectedRun);
-  const selectedRunAllowsFeedback = canRecordFeedback(selectedRun, persistedRunIds);
+  const canSubmitFeedback = !currentUser || ["operator", "admin"].includes(String(currentUser.role || "").toLowerCase());
+  const selectedRunAllowsFeedback = canSubmitFeedback && canRecordFeedback(selectedRun, persistedRunIds);
   const gateOrbState = driftToneFor(latestRun);
   const silenceHealth = useMemo(() => {
     const now = Date.now();
@@ -597,6 +599,10 @@ export default function ObservationCenterWorkspace({
   }
 
   async function submitFeedback() {
+    if (!canSubmitFeedback) {
+      setFeedbackState({ status: "error", message: "Operator access is required to save evidence reviews." });
+      return;
+    }
     if (!selectedRun?.run_id || !selectedRunAllowsFeedback) return;
     try {
       setFeedbackState({ status: "saving", message: "" });
@@ -861,17 +867,17 @@ export default function ObservationCenterWorkspace({
               ) : null}
               <div className="why-panel__section guidance-checks">
                 <span className="section-token">Review outcome</span>
-                <select value={feedbackCategory} onChange={(event) => setFeedbackCategory(event.target.value)} aria-label="Feedback category">
+                <select value={feedbackCategory} onChange={(event) => setFeedbackCategory(event.target.value)} aria-label="Feedback category" disabled={!canSubmitFeedback}>
                   {FEEDBACK_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                 </select>
-                <select value={feedbackOutcome} onChange={(event) => setFeedbackOutcome(event.target.value)} aria-label="Validation outcome">
+                <select value={feedbackOutcome} onChange={(event) => setFeedbackOutcome(event.target.value)} aria-label="Validation outcome" disabled={!canSubmitFeedback}>
                   {FEEDBACK_OUTCOME_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                 </select>
-                <textarea aria-label="Action taken or follow-up" value={feedbackActionTaken} onChange={(event) => setFeedbackActionTaken(event.target.value)} placeholder="Action taken or follow-up" rows={2} />
-                <textarea aria-label="Optional review note" value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional review note" rows={3} />
+                <textarea aria-label="Action taken or follow-up" value={feedbackActionTaken} onChange={(event) => setFeedbackActionTaken(event.target.value)} placeholder="Action taken or follow-up" rows={2} disabled={!canSubmitFeedback} />
+                <textarea aria-label="Optional review note" value={feedbackNote} onChange={(event) => setFeedbackNote(event.target.value)} placeholder="Optional review note" rows={3} disabled={!canSubmitFeedback} />
                 <div className="intake-flow__controls">
                   <button type="button" className="command-button" onClick={submitFeedback} disabled={!selectedRunAllowsFeedback}>Save Review</button>
-                  {feedbackState.message ? <span className="observation-feedback-state" role="status" aria-live="polite">{feedbackState.message}</span> : (!selectedRunAllowsFeedback && selectedRun ? <span className="observation-feedback-state">Review feedback becomes available after the evidence record is saved.</span> : null)}
+                  {feedbackState.message ? <span className="observation-feedback-state" role="status" aria-live="polite">{feedbackState.message}</span> : (!canSubmitFeedback ? <span className="observation-feedback-state">Operator access is required to save evidence reviews.</span> : !selectedRunAllowsFeedback && selectedRun ? <span className="observation-feedback-state">Review feedback becomes available after the evidence record is saved.</span> : null)}
                 </div>
               </div>
             </>

@@ -14,13 +14,17 @@ from app.connectors.limits import (
 )
 from app.connectors.models import ConnectorHealthStatus, NormalizedConnectorBatch, NormalizedTelemetryRecord, ValidationIssue
 from app.connectors.validation import deduplicate_records, normalize_timestamp_value, normalize_unit, summarize_issues, validate_numeric_value, validate_unit
+from app.core.outbound_url import sanitize_url_for_display, validate_outbound_http_url
 from app.services.data_quality import detect_timestamp_column
 
 
 def masked_headers(headers: dict[str, str], token: str | None) -> dict[str, str]:
     masked = {}
     for key, value in headers.items():
-        if key.lower() in {"authorization", "x-api-key", "api-key"}:
+        normalized_key = key.lower()
+        if normalized_key in {"authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "api-key"} or any(
+            marker in normalized_key for marker in ("token", "secret", "password")
+        ):
             masked[key] = mask_secret(value)
         else:
             masked[key] = value
@@ -30,12 +34,7 @@ def masked_headers(headers: dict[str, str], token: str | None) -> dict[str, str]
 
 
 def mask_secret(value: str | None) -> str:
-    if not value:
-        return ""
-    value = str(value)
-    if len(value) <= 4:
-        return "*" * len(value)
-    return f"{value[:2]}{'*' * max(4, len(value) - 4)}{value[-2:]}"
+    return "********" if value else ""
 
 
 class RESTConnector(ConnectorBase):
@@ -51,7 +50,7 @@ class RESTConnector(ConnectorBase):
         endpoint = self.config.get("endpoint")
         if not endpoint:
             return {"ok": False, "message": "REST endpoint is required."}
-        return {"ok": True, "message": "REST API connector settings are complete.", "endpoint": endpoint}
+        return {"ok": True, "message": "REST API connector settings are complete.", "endpoint": sanitize_url_for_display(endpoint)}
 
     def validate_connection(self) -> dict[str, Any]:
         payload = self._request_json()
@@ -191,7 +190,7 @@ class RESTConnector(ConnectorBase):
             errors=errors,
             duplicate_records_removed=duplicates_removed,
             last_sync_time=max(record.timestamp for record in deduplicated_records),
-            metadata={"endpoint": self.config.get("endpoint")},
+            metadata={"endpoint": sanitize_url_for_display(self.config.get("endpoint"))},
         )
 
     def health_check(self) -> ConnectorHealthStatus:
@@ -203,7 +202,7 @@ class RESTConnector(ConnectorBase):
             functional=True,
             connection_status=status,
             masked_configuration={
-                "endpoint": endpoint or "No endpoint configured",
+                "endpoint": sanitize_url_for_display(endpoint) if endpoint else "No endpoint configured",
                 "headers": masked_headers(self.config.get("headers", {}), self.config.get("token")),
             },
         )
@@ -213,7 +212,10 @@ class RESTConnector(ConnectorBase):
         if not endpoint:
             raise ValueError("REST endpoint is required.")
 
+        endpoint = validate_outbound_http_url(endpoint, resolve_dns=self.transport is None)
         method = str(self.config.get("method", "GET")).upper()
+        if method not in {"GET", "POST"}:
+            raise ValueError("REST connector method must be GET or POST.")
         headers = dict(self.config.get("headers") or {})
         token = self.config.get("token")
         if token and "Authorization" not in headers:

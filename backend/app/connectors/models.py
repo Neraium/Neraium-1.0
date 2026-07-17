@@ -95,13 +95,13 @@ class ConnectorTestRequest(BaseModel):
 
 
 class RestConnectorRequest(BaseModel):
-    source_id: str = "customer-rest"
-    system_id: str = "facility-rest"
-    endpoint: str
-    method: str = "GET"
+    source_id: str = Field(default="customer-rest", max_length=120)
+    system_id: str = Field(default="facility-rest", max_length=120)
+    endpoint: str = Field(default="", max_length=2048)
+    method: Literal["GET", "POST"] = "GET"
     headers: dict[str, str] = Field(default_factory=dict)
-    token: str | None = None
-    records_path: str | None = None
+    token: str | None = Field(default=None, max_length=8192)
+    records_path: str | None = Field(default=None, max_length=500)
     sample_payload: dict[str, Any] | None = None
 
 

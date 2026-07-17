@@ -55,11 +55,11 @@ def large_upload_timestamp(index: int) -> str:
     return (datetime(2026, 5, 1, tzinfo=timezone.utc) + timedelta(minutes=index)).isoformat().replace("+00:00", "Z")
 
 
-def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 5.0) -> dict:
+def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 10.0, headers: dict[str, str] | None = None) -> dict:
     deadline = time.time() + timeout_seconds
     last_payload = None
     while time.time() < deadline:
-        response = client.get(status_url)
+        response = client.get(status_url, headers=headers)
         assert response.status_code == 200
         last_payload = response.json()
         if last_payload["status"] in {"COMPLETE", "FAILED", "TIMEOUT", "CANCELLED"}:
@@ -194,7 +194,11 @@ def test_upload_uses_local_queue_when_split_role_production_has_no_shared_bucket
     assert payload["status"] == "PENDING"
     assert payload["job_id"]
 
-    status_payload = wait_for_terminal_upload_status(client, payload["status_url"])
+    status_payload = wait_for_terminal_upload_status(
+        client,
+        payload["status_url"],
+        headers={"X-Neraium-Access-Code": "expected-secret"},
+    )
     assert status_payload["status"] == "COMPLETE"
     assert status_payload["result_available"] is True
     assert status_payload["job_id"] == payload["job_id"]
@@ -469,13 +473,13 @@ def test_upload_accepts_authenticated_session_in_production(monkeypatch, tmp_pat
     assert response.json()["status_url"].startswith("/api/data/upload-status/")
 
 
-def test_upload_status_accepts_existing_session_cookie_in_production(tmp_path) -> None:
+def test_upload_status_requires_authentication_in_production(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("NERAIUM_API_TOKEN", "expected-secret")
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-
         runtime_dir=tmp_path,
     )
     client = TestClient(create_app(settings))
@@ -491,7 +495,12 @@ def test_upload_status_accepts_existing_session_cookie_in_production(tmp_path) -
         "error": None,
     }
     write_job(job)
-    response = client.get("/api/data/upload-status/session-job")
+
+    assert client.get("/api/data/upload-status/session-job").status_code == 401
+    response = client.get(
+        "/api/data/upload-status/session-job",
+        headers={"X-Neraium-Access-Code": "expected-secret"},
+    )
 
     assert response.status_code == 200
     payload = response.json()
@@ -2265,7 +2274,8 @@ def _build_interpretation_result_for_state(state: str) -> dict:
     return base
 
 
-def test_latest_upload_ignores_stale_result_without_active_session_marker(tmp_path: Path) -> None:
+def test_latest_upload_ignores_stale_result_without_active_session_marker(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("NERAIUM_API_TOKEN", "expected-secret")
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -2287,13 +2297,17 @@ def test_latest_upload_ignores_stale_result_without_active_session_marker(tmp_pa
     })
 
     client = TestClient(create_app(settings))
-    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+    payload = client.get(
+        "/api/data/latest-upload?include_persisted=1",
+        headers={"X-Neraium-Access-Code": "expected-secret"},
+    ).json()
 
     assert payload["latest_result"] is None
     assert payload["system_interpretation"]["facility_state_enum"] == "no_active_session"
 
 
-def test_latest_upload_always_returns_system_interpretation_for_no_active_session(tmp_path: Path) -> None:
+def test_latest_upload_always_returns_system_interpretation_for_no_active_session(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("NERAIUM_API_TOKEN", "expected-secret")
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -2304,7 +2318,10 @@ def test_latest_upload_always_returns_system_interpretation_for_no_active_sessio
     upload_jobs.configure_runtime_dir(tmp_path)
     client = TestClient(create_app(settings))
 
-    payload = client.get("/api/data/latest-upload?include_persisted=1").json()
+    payload = client.get(
+        "/api/data/latest-upload?include_persisted=1",
+        headers={"X-Neraium-Access-Code": "expected-secret"},
+    ).json()
 
     assert "system_interpretation" in payload
     interpretation = payload["system_interpretation"]

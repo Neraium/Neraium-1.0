@@ -1,9 +1,10 @@
 import os
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
+from app.core.security import require_admin_role, require_authenticated_api_access
 from app.services.runtime_db import queue_metrics, queue_operational_metrics, upload_queue_backend
 from app.services.service_status import STARTUP_STATUS, service_health_snapshot
 from app.services.sii_runner import build_runner_status
@@ -121,6 +122,9 @@ def read_health(request: Request) -> JSONResponse:
 
 @router.get("/ready")
 def read_ready(request: Request, verbose: bool = False) -> JSONResponse:
+    if verbose:
+        require_authenticated_api_access(request, Response())
+        require_admin_role(request)
     settings = request.app.state.settings
     checks, failed_modules = readiness_snapshot(settings)
     diagnostics = runtime_diagnostics(settings, include_upload_session=verbose)

@@ -34,6 +34,7 @@ export default function useWorkspaceSessionController({
   setActiveWorkspace,
   apiFetch,
   accessCode,
+  currentUser,
   sessionStore,
   loadFacilitySystems,
   loadLatestUploadState,
@@ -297,28 +298,24 @@ export default function useWorkspaceSessionController({
   }, []);
 
   const handleResetDemo = useCallback(async () => {
-    const [uploadResetResponse, connectionResetResponse] = await Promise.all([
+    const resetRequests = [
       apiFetch("/api/data/reset", {
         method: "POST",
         accessCode,
       }),
-      apiFetch("/api/data-connections/reset-all", {
+    ];
+    if (String(currentUser?.role || "").toLowerCase() === "admin") {
+      resetRequests.push(apiFetch("/api/data-connections/reset-all", {
         method: "POST",
         accessCode,
-      }),
-    ]);
-
-    const [uploadResetPayload, connectionResetPayload] = await Promise.all([
-      uploadResetResponse.json().catch(() => ({})),
-      connectionResetResponse.json().catch(() => ({})),
-    ]);
-
-    if (!uploadResetResponse.ok || !connectionResetResponse.ok) {
-      const detail = uploadResetPayload?.message
-        || uploadResetPayload?.detail
-        || connectionResetPayload?.message
-        || connectionResetPayload?.detail
-        || "Reset Everything failed.";
+      }));
+    }
+    const resetResponses = await Promise.all(resetRequests);
+    const resetPayloads = await Promise.all(resetResponses.map((response) => response.json().catch(() => ({}))));
+    const failedIndex = resetResponses.findIndex((response) => !response.ok);
+    if (failedIndex >= 0) {
+      const failedPayload = resetPayloads[failedIndex] || {};
+      const detail = failedPayload?.message || failedPayload?.detail || "Workspace reset failed.";
       throw new Error(String(detail));
     }
 
@@ -341,7 +338,7 @@ export default function useWorkspaceSessionController({
     setHistorianReplayState({ enabled: false, frame: null, meta: null });
     await loadLatestUploadState({ includePersisted: false });
     await loadFacilitySystems();
-  }, [accessCode, apiFetch, clearUploadSessionState, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
+  }, [accessCode, apiFetch, clearUploadSessionState, currentUser?.role, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleBackToGate = useCallback(async () => {
     if (hasActiveSession) {

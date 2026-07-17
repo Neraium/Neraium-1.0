@@ -148,7 +148,8 @@ def test_rest_connector_normalizes_response_and_health_status() -> None:
     assert batch.record_count == 4
     assert batch.sensor_count == 2
     assert batch.records[0].timestamp == "2026-05-01T08:00:00"
-    assert health.masked_configuration["headers"]["token"].startswith("su")
+    assert health.masked_configuration["headers"]["token"] == "********"
+    assert "super-secret-token" not in str(health.masked_configuration)
 
 
 def test_rest_connector_normalizes_long_format_without_false_sensor_errors() -> None:

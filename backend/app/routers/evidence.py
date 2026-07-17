@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.core.security import require_api_access, require_operator_role
+from app.core.upload_security import sanitize_upload_filename
 from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse, LatestEvidenceResponse, OperatorFeedbackRequest
 from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, latest_evidence_run, list_evidence_runs_page, read_evidence_run, record_operator_feedback
 from app.services.runtime_db import now_iso, record_audit_event
@@ -57,23 +58,24 @@ def export_evidence_run(request: Request, run_id: str, format: str = Query(defau
         detail={"source_name": record.get("source_name")},
     )
     normalized_format = str(format or "markdown").strip().lower()
+    download_stem = sanitize_upload_filename(f"neraium-evidence-{run_id}", fallback="neraium-evidence")
     if normalized_format == "json":
         return JSONResponse(
             content=build_evidence_export_payload(record),
-            headers={"Content-Disposition": f'attachment; filename="neraium-evidence-{run_id}.json"'},
+            headers={"Content-Disposition": f'attachment; filename="{download_stem}.json"'},
         )
     if normalized_format == "csv":
         body = build_evidence_export_csv(record)
         return Response(
             content=body,
             media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="neraium-evidence-{run_id}.csv"'},
+            headers={"Content-Disposition": f'attachment; filename="{download_stem}.csv"'},
         )
     body = build_evidence_export(record)
     return PlainTextResponse(
         content=body,
         media_type="text/markdown",
-        headers={"Content-Disposition": f'attachment; filename="neraium-evidence-{run_id}.md"'},
+        headers={"Content-Disposition": f'attachment; filename="{download_stem}.md"'},
     )
 
 
