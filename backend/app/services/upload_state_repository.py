@@ -433,6 +433,10 @@ def warm_latest_upload_cache() -> None:
     state.latest_upload_cache["summary"] = read_shared_state("latest_upload_summary") or read_local_json("latest_upload_summary.json")
     state.latest_upload_cache["result"] = read_shared_state("latest_upload_result") or read_local_json("latest_upload_result.json")
     state.latest_upload_cache["canonical"] = read_shared_state("latest_upload") or read_local_json("latest_upload.json")
+    # Runtime-path changes block stale state inside long-lived test/dev processes.
+    # Startup warm-up establishes the configured persistence boundary and may
+    # safely expose state recovered from that boundary after a process restart.
+    state.reset_block_persisted = False
 
 
 def read_latest_upload_result() -> dict[str, Any] | None:

@@ -201,6 +201,40 @@ def test_split_role_production_requires_shared_upload_bucket(monkeypatch, tmp_pa
         validate_environment_completeness(settings)
 
 
+def test_production_api_requires_postgres_auth_database(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-state")
+    monkeypatch.delenv("NERAIUM_AUTH_DATABASE_URL", raising=False)
+
+    with pytest.raises(ValueError, match="NERAIUM_AUTH_DATABASE_URL"):
+        validate_environment_completeness(get_settings())
+
+
+def test_production_worker_does_not_require_auth_database(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "worker")
+    monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-state")
+    monkeypatch.delenv("NERAIUM_AUTH_DATABASE_URL", raising=False)
+
+    validate_environment_completeness(get_settings())
+
+
+@pytest.mark.parametrize(
+    "database_url",
+    ["sqlite:///auth.db", "postgresql://db.example.test", "postgresql://db.example.test:bad/neraium"],
+)
+def test_invalid_auth_database_url_fails_fast(monkeypatch, database_url: str) -> None:
+    monkeypatch.setenv("NERAIUM_AUTH_DATABASE_URL", database_url)
+
+    with pytest.raises(ValueError, match="NERAIUM_AUTH_DATABASE_URL"):
+        validate_environment_completeness(get_settings())
+
+
 def test_partial_bootstrap_secret_pair_fails_fast(monkeypatch) -> None:
     monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "admin@example.test")
     monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", raising=False)

@@ -27,6 +27,15 @@ EVIDENCE_HISTORY_CONTEXT = 500
 LEGACY_EVIDENCE_IMPORT_MARKER = "evidence_legacy_json_migrated_v1"
 logger = logging.getLogger(__name__)
 
+
+def configure_runtime_dir(runtime_dir: str | Path) -> None:
+    """Keep legacy evidence mirrors inside the active runtime boundary."""
+    global RUNTIME_DIR, EVIDENCE_DIR, EVIDENCE_RUNS_PATH
+    RUNTIME_DIR = Path(runtime_dir)
+    EVIDENCE_DIR = RUNTIME_DIR / "evidence"
+    EVIDENCE_RUNS_PATH = EVIDENCE_DIR / "runs.json"
+
+
 FEEDBACK_CATEGORIES = [
     "confirmed_issue",
     "known_operational_change",

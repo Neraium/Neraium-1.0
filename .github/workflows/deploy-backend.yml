@@ -23,11 +23,17 @@ env:
   WORKER_TASK_FAMILY: neraium-prod-worker
   API_LOG_GROUP: /ecs/neraium-prod-api
   WORKER_LOG_GROUP: /ecs/neraium-prod-worker
-  UPLOAD_STATE_BUCKET: neraium-prod-upload-state
+  UPLOAD_STATE_BUCKET: ${{ secrets.NERAIUM_UPLOAD_STATE_BUCKET }}
   NERAIUM_RUNTIME_DIR: /mnt/neraium-runtime
+  CORS_ORIGINS: https://app.neraium.com
+  NERAIUM_MAX_UPLOAD_SIZE_BYTES: "262144000"
+  NERAIUM_MAX_PENDING_UPLOAD_JOBS: "50"
+  LOG_LEVEL: INFO
+  LOG_FORMAT: json
   APP_TASK_ROLE_NAME: neraium-prod-task-app-role
   API_TOKEN_SECRET_ARN: ${{ vars.NERAIUM_API_TOKEN_SECRET_ARN }}
-  TASK_EXECUTION_ROLE_NAME: neraium-prod-task-exec-role
+  AUTH_DATABASE_URL_SECRET_ARN: ${{ vars.NERAIUM_AUTH_DATABASE_URL_SECRET_ARN }}
+  TASK_EXECUTION_ROLE_NAME: neraium-prod-ecs-task-execution-role
 
 jobs:
   deploy-backend:
@@ -54,12 +60,11 @@ jobs:
           test -n "$UPLOAD_STATE_BUCKET"
           test -n "$APP_TASK_ROLE_NAME"
           test -n "$TASK_EXECUTION_ROLE_NAME"
+          test -n "$API_TOKEN_SECRET_ARN"
+          test -n "$AUTH_DATABASE_URL_SECRET_ARN"
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          if [ -z "${API_TOKEN_SECRET_ARN:-}" ]; then
-            API_TOKEN_SECRET_ARN="arn:aws:secretsmanager:${AWS_REGION}:${ACCOUNT_ID}:secret:neraium-prod-api-token-*"
-            echo "::notice::NERAIUM_API_TOKEN_SECRET_ARN is not set. Using a non-blocking production secret ARN pattern so deploy can continue."
-          fi
           echo "API_TOKEN_SECRET_ARN=$API_TOKEN_SECRET_ARN" >> "$GITHUB_ENV"
+          echo "AUTH_DATABASE_URL_SECRET_ARN=$AUTH_DATABASE_URL_SECRET_ARN" >> "$GITHUB_ENV"
           echo "APP_TASK_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${APP_TASK_ROLE_NAME}" >> "$GITHUB_ENV"
           echo "TASK_EXECUTION_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${TASK_EXECUTION_ROLE_NAME}" >> "$GITHUB_ENV"
 
@@ -157,7 +162,7 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
           echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_URL_SECRET_ARN "$AUTH_DATABASE_URL_SECRET_ARN" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
             | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .containerDefinitions = (.containerDefinitions | map(
@@ -165,12 +170,24 @@ jobs:
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA"))
                     + [
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "api"},
                       {"name": "APP_ENV", "value": "prod"},
                       {"name": "NERAIUM_UPLOAD_STATE_BUCKET", "value": $UPLOAD_STATE_BUCKET},
-                      {"name": "NERAIUM_RUNTIME_DIR", "value": $NERAIUM_RUNTIME_DIR}
+                      {"name": "NERAIUM_RUNTIME_DIR", "value": $NERAIUM_RUNTIME_DIR},
+                      {"name": "CORS_ORIGINS", "value": $CORS_ORIGINS},
+                      {"name": "NERAIUM_MAX_UPLOAD_SIZE_BYTES", "value": $MAX_UPLOAD_SIZE},
+                      {"name": "NERAIUM_MAX_PENDING_UPLOAD_JOBS", "value": $MAX_PENDING_JOBS},
+                      {"name": "LOG_LEVEL", "value": $LOG_LEVEL},
+                      {"name": "LOG_FORMAT", "value": $LOG_FORMAT},
+                      {"name": "NERAIUM_BUILD_SHA", "value": $BUILD_SHA}
+                    ])
+                | .secrets = ((.secrets // [])
+                    | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL"))
+                    + [
+                      {"name": "NERAIUM_API_TOKEN", "valueFrom": $API_TOKEN_SECRET_ARN},
+                      {"name": "NERAIUM_AUTH_DATABASE_URL", "valueFrom": $AUTH_DATABASE_URL_SECRET_ARN}
                     ])
                 | .logConfiguration = {
                     "logDriver": "awslogs",
@@ -213,7 +230,7 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-worker-task-definition.json)
           echo "Updating worker container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg WORKER_LOG_GROUP "$WORKER_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg WORKER_LOG_GROUP "$WORKER_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
             | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .containerDefinitions = (.containerDefinitions | map(
@@ -221,13 +238,21 @@ jobs:
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA"))
                     + [
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "worker"},
                       {"name": "APP_ENV", "value": "prod"},
                       {"name": "NERAIUM_UPLOAD_STATE_BUCKET", "value": $UPLOAD_STATE_BUCKET},
-                      {"name": "NERAIUM_RUNTIME_DIR", "value": $NERAIUM_RUNTIME_DIR}
+                      {"name": "NERAIUM_RUNTIME_DIR", "value": $NERAIUM_RUNTIME_DIR},
+                      {"name": "CORS_ORIGINS", "value": $CORS_ORIGINS},
+                      {"name": "NERAIUM_MAX_UPLOAD_SIZE_BYTES", "value": $MAX_UPLOAD_SIZE},
+                      {"name": "NERAIUM_MAX_PENDING_UPLOAD_JOBS", "value": $MAX_PENDING_JOBS},
+                      {"name": "LOG_LEVEL", "value": $LOG_LEVEL},
+                      {"name": "LOG_FORMAT", "value": $LOG_FORMAT},
+                      {"name": "NERAIUM_BUILD_SHA", "value": $BUILD_SHA}
                     ])
+                | .secrets = ((.secrets // [])
+                    | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL")))
                 | .logConfiguration = {
                     "logDriver": "awslogs",
                     "options": {
@@ -378,3 +403,18 @@ jobs:
 
           test "$(cat api-upload-bucket.txt)" = "$UPLOAD_STATE_BUCKET"
           test "$(cat worker-upload-bucket.txt)" = "$UPLOAD_STATE_BUCKET"
+
+          API_TOKEN_VALUE_FROM=$(aws ecs describe-task-definition \
+            --task-definition "$API_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].secrets[?name==`NERAIUM_API_TOKEN`].valueFrom | [0]' \
+            --output text)
+
+          AUTH_DATABASE_VALUE_FROM=$(aws ecs describe-task-definition \
+            --task-definition "$API_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].secrets[?name==`NERAIUM_AUTH_DATABASE_URL`].valueFrom | [0]' \
+            --output text)
+
+          test "$API_TOKEN_VALUE_FROM" = "$API_TOKEN_SECRET_ARN"
+          test "$AUTH_DATABASE_VALUE_FROM" = "$AUTH_DATABASE_URL_SECRET_ARN"

@@ -324,15 +324,37 @@ def validate_settings(settings: Settings) -> None:
 
 def validate_environment_completeness(settings: Settings) -> None:
     app_env = str(getattr(settings, "app_env", DEFAULT_APP_ENV) or "").strip().lower()
+    process_role = str(getattr(settings, "process_role", DEFAULT_PROCESS_ROLE) or "").strip().lower()
+    auth_database_url = str(os.getenv("NERAIUM_AUTH_DATABASE_URL", "")).strip()
+    if auth_database_url:
+        parsed_auth_database = urlsplit(auth_database_url)
+        try:
+            parsed_auth_database.port
+            invalid_auth_database_port = False
+        except ValueError:
+            invalid_auth_database_port = True
+        if (
+            parsed_auth_database.scheme not in {"postgres", "postgresql"}
+            or not parsed_auth_database.hostname
+            or not parsed_auth_database.path.strip("/")
+            or invalid_auth_database_port
+        ):
+            raise ValueError(
+                "NERAIUM_AUTH_DATABASE_URL must be an absolute PostgreSQL URL with a host and database name."
+            )
     if app_env in {"prod", "production"}:
         if not str(os.getenv("CORS_ORIGINS", "")).strip():
             raise ValueError("CORS_ORIGINS must be set explicitly in production.")
         if (
-            str(getattr(settings, "process_role", DEFAULT_PROCESS_ROLE) or "").strip().lower() in {"api", "worker"}
+            process_role in {"api", "worker"}
             and not str(os.getenv("NERAIUM_UPLOAD_STATE_BUCKET", "")).strip()
         ):
             raise ValueError(
                 "NERAIUM_UPLOAD_STATE_BUCKET is required for split-role production."
+            )
+        if process_role in {"api", "all", "monolith"} and not auth_database_url:
+            raise ValueError(
+                "NERAIUM_AUTH_DATABASE_URL is required for production API processes."
             )
 
     for label, email_name, password_name in (

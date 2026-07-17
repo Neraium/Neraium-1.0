@@ -834,6 +834,69 @@ def mark_queue_job_failed(job_id: str, reason: str) -> None:
         )
 
 
+def _publish_interrupted_upload_status(job_ids: list[str]) -> None:
+    if not job_ids:
+        return
+    # Lazy imports avoid a module cycle: the upload-state repository uses this
+    # runtime store for its durable payload backend.
+    from app.services.evidence_store import read_evidence_run, upsert_evidence_run
+    from app.services.upload_state_repository import (
+        persist_latest_upload_state,
+        read_latest_upload_record,
+        read_upload_status,
+        write_upload_status,
+    )
+
+    canonical = read_latest_upload_record() or {}
+    canonical_summary = canonical.get("summary") if isinstance(canonical.get("summary"), dict) else {}
+    canonical_job_id = str(canonical.get("job_id") or canonical_summary.get("job_id") or "")
+    recovered_at = now_iso()
+    for job_id in job_ids:
+        current = read_upload_status(job_id) or read_upload_job(job_id) or {"job_id": job_id}
+        failed = {
+            **current,
+            "job_id": job_id,
+            "run_id": current.get("run_id") or job_id,
+            "upload_id": current.get("upload_id") or job_id,
+            "status": "FAILED",
+            "processing_state": "failed",
+            "error_type": "interrupted_upload",
+            "error": "Upload processing was interrupted by a service restart.",
+            "message": "Upload processing was interrupted by a service restart. Retry the analysis.",
+            "progress_label": "Processing interrupted. Retry the analysis.",
+            "result_available": False,
+            "first_usable_available": False,
+            "sii_completed": False,
+            "replay_ready": False,
+            "replay_frame_count": 0,
+            "propagation_stage": "failed",
+            "propagation_label": "Interrupted by restart.",
+            "worker_state": "stopped",
+            "updated_at": recovered_at,
+        }
+        upsert_upload_job(failed)
+        write_upload_status(job_id, failed)
+
+        evidence = read_evidence_run(job_id)
+        if isinstance(evidence, dict) and str(evidence.get("status") or "").lower() not in {"completed", "failed"}:
+            errors = list(evidence.get("errors") or [])
+            interruption = "Upload processing was interrupted by a service restart."
+            if interruption not in errors:
+                errors.append(interruption)
+            upsert_evidence_run(
+                {
+                    **evidence,
+                    "status": "failed",
+                    "observation_status": "failed",
+                    "completed_at": recovered_at,
+                    "errors": errors,
+                }
+            )
+
+        if job_id == canonical_job_id:
+            persist_latest_upload_state(summary=failed, result=None, keep_result=False)
+
+
 def clear_stale_processing_queue_jobs() -> int:
     backend = upload_queue_backend()
     if backend == "s3":
@@ -849,7 +912,10 @@ def clear_stale_processing_queue_jobs() -> int:
                     "locked_at": None,
                 }
             )
-        return len(processing_jobs)
+        stale_job_ids = [str(record.get("job_id") or "") for record in processing_jobs]
+        stale_job_ids = [job_id for job_id in stale_job_ids if job_id]
+        _publish_interrupted_upload_status(stale_job_ids)
+        return len(stale_job_ids)
 
     init_runtime_db()
     with db_connection() as connection:
@@ -866,6 +932,7 @@ def clear_stale_processing_queue_jobs() -> int:
                 """,
                 [("stale_processing_job_recovered", now_iso(), job_id) for job_id in stale_job_ids],
             )
+    _publish_interrupted_upload_status(stale_job_ids)
     return len(stale_job_ids)
 
 

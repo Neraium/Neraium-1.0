@@ -538,6 +538,11 @@ def _get_backend() -> _BaseAuthBackend:
         return _AUTH_BACKEND
 
 
+def initialize_auth_store() -> str:
+    """Connect, migrate, and validate the configured authentication store."""
+    return _get_backend().dialect
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 

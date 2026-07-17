@@ -7,6 +7,7 @@ from app.services.upload_session_service import (
     SESSION_STATE_RESTORED,
     SESSION_STATE_STALE,
     SESSION_STATE_VERIFIED,
+    resolve_latest_upload_session,
 )
 from app.services.upload_state_repository import write_latest_upload_result, write_latest_upload_summary
 
@@ -43,6 +44,27 @@ def test_latest_upload_reports_restored_when_persisted_session_is_recovered() ->
     payload = client.get("/api/data/latest-upload?include_persisted=1").json()
     assert payload["session_state"] in {SESSION_STATE_RESTORED, SESSION_STATE_VERIFIED}
     assert payload["upload_session_id"] == job_id
+
+
+def test_startup_warmup_restores_persisted_session_after_process_restart() -> None:
+    from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
+    from app.services.upload_state_repository import warm_latest_upload_cache
+
+    job_id = "restart-restored-session"
+    write_latest_upload_result(job_id, _result(job_id))
+    UPLOAD_RUNTIME_STATE.jobs.clear()
+    UPLOAD_RUNTIME_STATE.latest_upload_cache.update(
+        {"summary": None, "result": None, "canonical": None}
+    )
+    UPLOAD_RUNTIME_STATE.reset_block_persisted = True
+
+    warm_latest_upload_cache()
+    payload = resolve_latest_upload_session(include_persisted=True)
+
+    assert UPLOAD_RUNTIME_STATE.reset_block_persisted is False
+    assert payload["session_state"] in {SESSION_STATE_RESTORED, SESSION_STATE_VERIFIED}
+    assert payload["upload_session_id"] == job_id
+    assert payload["latest_result"]["filename"] == f"{job_id}.csv"
 
 
 def test_latest_upload_reports_processing_for_active_summary_without_result() -> None:

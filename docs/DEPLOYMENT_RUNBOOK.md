@@ -10,7 +10,7 @@ This runbook covers the production deployment and verification sequence for Nera
 git status --short
 npm --prefix frontend run build
 python -m pytest tests/test_health.py tests/test_config.py tests/test_logging.py tests/test_operational_lifecycle.py tests/test_data_upload.py -q
-node scripts/smoke-production.js
+BASE_URL=http://127.0.0.1:8010 node scripts/smoke-production.js
 python scripts/pilot_rehearsal_check.py
 ```
 
@@ -65,6 +65,7 @@ Required repository variables before running either workflow:
 secret: NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
 NERAIUM_API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name>
+NERAIUM_AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<postgres-dsn-secret>
 NERAIUM_BOOTSTRAP_ADMIN_EMAIL=<pilot-admin-email>
 NERAIUM_BOOTSTRAP_ADMIN_PASSWORD=<pilot-admin-password>
 ```

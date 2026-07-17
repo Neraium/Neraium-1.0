@@ -242,6 +242,8 @@ def test_upload_in_split_role_production_uses_external_worker_queue(monkeypatch,
     assert dispatched_workers == []
     status_payload = upload_jobs.read_upload_status(payload["job_id"])
     assert status_payload["shared_upload_source_key"] == f"upload-state/upload-sources/{payload['job_id']}.csv"
+    assert status_payload["file_path"] is None
+    assert list((tmp_path / "uploads").iterdir()) == []
 
 
 def test_retry_upload_analysis_requeues_current_uploaded_dataset(tmp_path) -> None:

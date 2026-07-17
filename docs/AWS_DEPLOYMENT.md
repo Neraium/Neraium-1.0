@@ -56,11 +56,12 @@ Production split-role backend behavior does require a shared upload-state bucket
 ```text
 NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_PROCESS_ROLE=api|worker
+NERAIUM_AUTH_DATABASE_URL=<postgresql-dsn-from-secrets-manager-on-api-task>
 ```
 
-The ECS deployment workflow now registers both task definitions directly with AWS CLI and pins:
+The ECS deployment workflow registers both task definitions directly with AWS CLI. It expects the production ECS cluster, API service, worker service, and both task-definition families to already exist, validates those resources before image build, and fails fast if any are missing or inactive. New revisions pin the entrypoint, process role, CORS, upload limits, JSON logging, build SHA, runtime path, shared-state bucket, log group, and secret references.
 
-It expects the production ECS cluster, API service, worker service, and both task-definition families to already exist. The workflow now validates those resources before image build and fails fast if any are missing or inactive.
+`.aws/task-definition.json` is a legacy reference artifact and is not registered by the active deployment workflow. The live task families are the deployment baseline. Their volume and mount definitions are preserved: each role must already have its own durable writable volume mounted at `/mnt/neraium-runtime` if runtime history must survive task replacement. Do not share a SQLite runtime database between API and worker tasks; use distinct per-role volumes or EFS access points.
 
 ```text
 command=["python","-m","app.entrypoint"]
@@ -190,6 +191,7 @@ AWS_REGION=us-east-2 \
 UPLOAD_STATE_BUCKET=<shared-s3-bucket> \
 APP_TASK_ROLE_NAME=neraium-prod-task-app-role \
 API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name> \
+AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<postgres-dsn-secret> \
 TASK_EXECUTION_ROLE_NAME=neraium-prod-ecs-task-execution-role \
 API_LOG_GROUP=/ecs/neraium-prod-api \
 WORKER_LOG_GROUP=/ecs/neraium-prod-worker \
@@ -202,4 +204,5 @@ GitHub Actions configuration required by the active deploy path:
 secret: NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
 NERAIUM_API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name>
+NERAIUM_AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<postgres-dsn-secret>
 ```

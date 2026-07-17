@@ -16,10 +16,11 @@ Startup validates configuration before binding the HTTP port or entering the wor
 2. Configure JSON logging.
 3. Configure and initialize the runtime directory/database.
 4. Recover stale queue claims and prune retention-bound records.
-5. Warm the latest-upload cache.
-6. Initialize the default data connection.
-7. Start enabled background services.
-8. Mark startup complete and begin serving.
+5. Connect and migrate the authentication store (PostgreSQL in production API roles).
+6. Warm the latest-upload cache.
+7. Initialize the default data connection.
+8. Start enabled background services.
+9. Mark startup complete and begin serving.
 
 For split-role production, both tasks must use the same `NERAIUM_UPLOAD_STATE_BUCKET`. Local runtime files are not shared across ECS tasks.
 
@@ -31,9 +32,9 @@ Use separate load-balancer and deployment probes:
 |---|---|---|
 | `GET /api/health` (or `/health`) | Process liveness and recorded fatal/degraded state | HTTP 200 and `status=ok` |
 | `GET /api/ready` | Lightweight traffic readiness | HTTP 200 and every existing `checks` value is `ok` |
-| `GET /api/ready`verbose=true` | Operator diagnostic; includes queue, upload session, and runner details | Same readiness status, with diagnostic detail |
+| `GET /api/ready?verbose=true` | Operator diagnostic; includes queue, upload session, and runner details | Same readiness status, with diagnostic detail |
 
-Readiness actively checks the runtime database and reports startup, default-connection, and split-role shared-state state. It does not make an S3 network request on every probe; `shared_upload_state=ok` confirms configuration, not current AWS reachability. Use upload queue/error metrics and CloudWatch AWS API errors to monitor that dependency.
+Readiness actively checks the runtime database and reports startup, authentication-store initialization, default-connection, and split-role shared-state state. It does not make an S3 network request on every probe; `shared_upload_state=ok` confirms configuration, not current AWS reachability. Use upload queue/error metrics and CloudWatch AWS API errors to monitor that dependency.
 
 Do not point a high-frequency load-balancer probe at `verbose=true`. It performs additional persisted-state reads.
 
@@ -72,8 +73,10 @@ All values are read at process startup. Invalid enums, booleans, ports, positive
 | `CORS_ORIGINS` | comma-separated explicit origins | Browser allowlist; `*` is rejected in production |
 | `CORS_ORIGIN_REGEX` | valid Python regex | Optional domain allowlist; defaults to Neraium domains |
 | `NERAIUM_RUNTIME_DIR` | `/mnt/neraium-runtime` | Explicit writable runtime path; required in production |
+| `NERAIUM_BUILD_SHA` | deployed commit SHA | Its 12-character prefix is included in diagnostics; the ECS workflow pins the full value |
 | `NERAIUM_PROCESS_ROLE` | `api` or `worker` | Selects process behavior |
 | `NERAIUM_UPLOAD_STATE_BUCKET` | shared S3 bucket | Required operationally for split API/worker state |
+| `NERAIUM_AUTH_DATABASE_URL` | PostgreSQL DSN from Secrets Manager | Required for production API/monolith authentication persistence |
 | `NERAIUM_API_TOKEN` | secret-manager injection | Service authentication secret where configured |
 
 Bootstrap passwords, API tokens, SMTP passwords, webhook URLs, and authenticated database URLs must be injected through the deployment platform's secret facility. In ECS, use task-definition `secrets` backed by AWS Secrets Manager or SSM Parameter Store; do not put them in the plain `environment` array or workflow logs.
@@ -144,7 +147,7 @@ Before deployment:
 6. Keep the previous task definition revision available for rollback.
 7. Run the backend test suite, frontend build/tests, dependency audits, and production smoke.
 
-After deployment, verify build SHA, role, shared-state backend, readiness checks, a small upload through `COMPLETE`, evidence persistence, SII state publication, and a clean worker shutdown in staging.
+After deployment, verify build SHA, role, shared-state backend, readiness checks, a small upload through `COMPLETE`, upload and evidence persistence across a clean restart, SII state publication, and a clean worker shutdown in staging. The smoke script requires an explicit `BASE_URL` or `API_BASE_URL`; it never selects a production target by default.
 
 ## Troubleshooting
 
@@ -154,7 +157,7 @@ Read the first configuration error. It names the invalid variable. Common causes
 
 ### Health is 200 but readiness is 503
 
-Inspect `checks`, `failed_modules`, `config_warnings`, and `diagnostics`. A runtime DB failure means the runtime volume is missing, read-only, full, or corrupt. A shared-upload-state failure in split roles means the bucket is absent from configuration.
+Inspect `checks`, `failed_modules`, `config_warnings`, and `diagnostics`. A runtime DB failure means the runtime volume is missing, read-only, full, or corrupt. An authentication-store startup failure means the PostgreSQL secret, network path, credentials, or migration permissions are invalid. A shared-upload-state failure in split roles means the bucket is absent from configuration.
 
 ### Upload remains pending
 

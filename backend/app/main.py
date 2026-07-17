@@ -17,6 +17,7 @@ from app.core.logging_config import bind_log_context, configure_logging, reset_l
 from app.core.security import require_admin_role
 from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay
 from app.routers.data import wait_for_upload_workers
+from app.services.auth_store import initialize_auth_store
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
 from app.services.rate_limiter import clear_rate_limits
@@ -51,7 +52,11 @@ async def app_lifespan(app: FastAPI):
             "upload_state_shared_configured": STARTUP_STATUS["upload_state_shared_configured"],
         },
     )
-    if settings.app_env == "production" and not shared_state_configured():
+    if (
+        settings.app_env in {"prod", "production"}
+        and settings.process_role in {"api", "worker"}
+        and not shared_state_configured()
+    ):
         logger.warning(
             "upload_state_shared_storage_not_configured",
             extra={
@@ -79,6 +84,14 @@ async def app_lifespan(app: FastAPI):
             STARTUP_STATUS["failed_modules"].append("runtime_db: initialization_failed")
             logger.exception("runtime_db_startup_failure")
             raise RuntimeError("Required runtime database initialization failed.") from error
+
+        try:
+            STARTUP_STATUS["auth_store_backend"] = initialize_auth_store()
+            STARTUP_STATUS["auth_store_ready"] = True
+        except Exception as error:
+            STARTUP_STATUS["failed_modules"].append("auth_store: initialization_failed")
+            logger.exception("auth_store_startup_failure")
+            raise RuntimeError("Required authentication database initialization failed.") from error
 
         try:
             warm_latest_upload_cache()

@@ -105,6 +105,7 @@ def readiness_snapshot(settings) -> tuple[dict[str, str], list[str]]:
     checks: dict[str, str] = {
         "startup": "ok",
         "runtime_db": "ok",
+        "auth_store": "ok",
         "default_connection": "ok",
         "shared_upload_state": "ok",
     }
@@ -113,6 +114,8 @@ def readiness_snapshot(settings) -> tuple[dict[str, str], list[str]]:
         checks["startup"] = "error"
     if not STARTUP_STATUS.get("runtime_db_ready", False) or not _runtime_db_available():
         checks["runtime_db"] = "error"
+    if not STARTUP_STATUS.get("auth_store_ready", False):
+        checks["auth_store"] = "error"
     if not STARTUP_STATUS.get("default_connection_ready", False):
         checks["default_connection"] = "error"
     if (
@@ -178,6 +181,8 @@ def read_ready(request: Request, verbose: bool = Query(False)) -> JSONResponse:
         "startup_complete": bool(STARTUP_STATUS.get("startup_complete", False)),
         "failed_modules": failed_modules,
         "runtime_db_ready": STARTUP_STATUS.get("runtime_db_ready", False),
+        "auth_store_ready": STARTUP_STATUS.get("auth_store_ready", False),
+        "auth_store_backend": STARTUP_STATUS.get("auth_store_backend", "unknown"),
         "default_connection_ready": STARTUP_STATUS.get("default_connection_ready", False),
         "upload_worker_started": STARTUP_STATUS.get("upload_worker_started", False),
         "data_poller_started": STARTUP_STATUS.get("data_poller_started", False),

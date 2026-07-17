@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-const DEFAULT_BASE_URL = "https://app.neraium.com";
-const API_BASE_URL = (process.env.API_BASE_URL || process.env.BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "");
+const API_BASE_URL = (process.env.API_BASE_URL || process.env.BASE_URL || "").replace(/\/$/, "");
 const TOKEN = process.env.NERAIUM_API_TOKEN || process.env.API_TOKEN || "";
 const UPLOAD_TIMEOUT_MS = Number(process.env.SMOKE_UPLOAD_TIMEOUT_MS || 45000);
 const POLL_INTERVAL_MS = Number(process.env.SMOKE_POLL_INTERVAL_MS || 1000);
@@ -160,6 +159,21 @@ async function pollUploadStatus(statusUrl, { timeoutMs = UPLOAD_TIMEOUT_MS } = {
 async function main() {
   if (typeof fetch !== "function") {
     console.error("Node fetch is unavailable. Use Node 18 or newer.");
+    process.exit(2);
+  }
+  if (!API_BASE_URL) {
+    console.error("Smoke target is required. Set BASE_URL or API_BASE_URL explicitly.");
+    process.exit(2);
+  }
+  let parsedBaseUrl;
+  try {
+    parsedBaseUrl = new URL(API_BASE_URL);
+  } catch {
+    console.error("Smoke target must be an absolute HTTP(S) URL.");
+    process.exit(2);
+  }
+  if (!["http:", "https:"].includes(parsedBaseUrl.protocol) || parsedBaseUrl.username || parsedBaseUrl.password) {
+    console.error("Smoke target must be an HTTP(S) URL without embedded credentials.");
     process.exit(2);
   }
 

@@ -32,6 +32,11 @@ def test_clear_stale_processing_queue_jobs_marks_processing_as_failed() -> None:
     assert row is not None
     assert row["status"] == "failed"
     assert row["last_error"] == "stale_processing_job_recovered"
+    recovered_job = read_job("stale-job")
+    assert recovered_job["status"] == "FAILED"
+    assert recovered_job["processing_state"] == "failed"
+    assert recovered_job["error_type"] == "interrupted_upload"
+    assert "Retry the analysis" in recovered_job["message"]
 
 
 def test_process_next_queued_upload_job_marks_missing_file_failed() -> None:

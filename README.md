@@ -263,7 +263,7 @@ Current hardening focus areas include:
 - Confirming runtime database persistence across API and worker restarts
 - Confirming auth/session persistence through the dedicated auth database
 - Verifying multi-task or multi-worker deployment behavior
-- Using Postgres for production auth/session state while keeping SQLite fallback for tests and local development
+- Requiring Postgres for production API auth/session state while keeping SQLite fallback for tests and local development
 - Keeping README/workflow screenshots current with the deployed UI
 - Keeping browser clients free of build-time shared API secrets
 - Expanding dependency security policy from critical CVE blocking to broader release governance

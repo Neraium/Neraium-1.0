@@ -528,7 +528,13 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
     temp_path = ""
     summary: dict[str, Any] = {}
     try:
-        with NamedTemporaryFile(delete=False, suffix=Path(filename).suffix or ".csv") as temp:
+        spool_dir = Path(settings.runtime_dir) / "uploads"
+        spool_dir.mkdir(parents=True, exist_ok=True)
+        with NamedTemporaryFile(
+            delete=False,
+            dir=spool_dir,
+            suffix=Path(filename).suffix or ".csv",
+        ) as temp:
             temp_path = temp.name
             while True:
                 chunk = await file.read(1024 * 1024)
@@ -583,6 +589,11 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 content_type=content_type or None,
             )
         worker_dispatch_status = "thread_dispatched" if _should_dispatch_upload_worker(settings) else "external_worker_queue"
+        processing_file_path = (
+            None
+            if worker_dispatch_status == "external_worker_queue" and shared_upload_source_key
+            else temp_path
+        )
         summary = {
             "job_id": job_id,
             "filename": filename,
@@ -599,7 +610,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             "runner_used": False if str(getattr(settings, "process_role", "")).lower() == "api" else True,
             "runner_module": RUNNER_MODULE,
             "core_engine": CORE_ENGINE,
-            "file_path": temp_path,
+            "file_path": processing_file_path,
             "shared_upload_source_key": shared_upload_source_key,
             "file_size_bytes": file_size_bytes,
             "content_type": content_type,
@@ -653,6 +664,9 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 }
             )
         enqueue_upload_job(job_id)
+        if processing_file_path is None:
+            Path(temp_path).unlink(missing_ok=True)
+            temp_path = ""
         if worker_dispatch_status == "thread_dispatched":
             _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
         _log_upload_event(
