@@ -14,6 +14,8 @@ env:
   APP_TASK_ROLE_NAME: ${{ vars.NERAIUM_APP_TASK_ROLE_NAME }}
   API_TOKEN_SECRET_ARN: ${{ vars.NERAIUM_API_TOKEN_SECRET_ARN }}
   AUTH_DATABASE_URL_SECRET_ARN: ${{ vars.NERAIUM_AUTH_DATABASE_URL_SECRET_ARN }}
+  NERAIUM_BOOTSTRAP_ADMIN_EMAIL: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_EMAIL }}
+  NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN }}
   TASK_EXECUTION_ROLE_NAME: neraium-prod-ecs-task-execution-role
 
 jobs:
@@ -38,6 +40,8 @@ jobs:
           test -n "$APP_TASK_ROLE_NAME"
           test -n "$API_TOKEN_SECRET_ARN"
           test -n "$AUTH_DATABASE_URL_SECRET_ARN"
+          test -n "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL"
+          test -n "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN"
           test -n "$TASK_EXECUTION_ROLE_NAME"
 
       - name: Ensure production bucket, roles, and log groups

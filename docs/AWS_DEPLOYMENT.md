@@ -70,6 +70,8 @@ awslogs group=/ecs/neraium-prod-api or /ecs/neraium-prod-worker
 
 Upload path audit: the API streams FastAPI `UploadFile` chunks to disk, the default backend cap is 250 MiB, `NERAIUM_MAX_UPLOAD_SIZE_BYTES=262144000` is injected by the deployment workflow, and the ALB idle timeout is extended for slower mobile transfers. No NGINX reverse proxy is deployed in this stack; if you add CloudFront/CDN, WAF managed body-size rules, or NGINX later, align those request-body limits at or above 250 MiB before enabling mobile file intake.
 
+The API task also receives `NERAIUM_BOOTSTRAP_ADMIN_EMAIL` as an environment variable and `NERAIUM_BOOTSTRAP_ADMIN_PASSWORD` from the Secrets Manager secret referenced by `NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN`. Neither bootstrap administrator value is injected into the worker task.
+
 For split-role production ECS, do not rely on `NERAIUM_RUNTIME_DIR` for cross-task queue state. The queue and latest-upload state are shared through `NERAIUM_UPLOAD_STATE_BUCKET`.
 
 ## Frontend: AWS Amplify Hosting
@@ -192,6 +194,7 @@ UPLOAD_STATE_BUCKET=<shared-s3-bucket> \
 APP_TASK_ROLE_NAME=neraium-prod-task-app-role \
 API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name> \
 AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<postgres-dsn-secret> \
+NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<bootstrap-admin-password-secret> \
 TASK_EXECUTION_ROLE_NAME=neraium-prod-ecs-task-execution-role \
 API_LOG_GROUP=/ecs/neraium-prod-api \
 WORKER_LOG_GROUP=/ecs/neraium-prod-worker \
@@ -205,4 +208,6 @@ secret: NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
 NERAIUM_API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name>
 NERAIUM_AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<postgres-dsn-secret>
+NERAIUM_BOOTSTRAP_ADMIN_EMAIL=<pilot-admin-email>
+NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<bootstrap-admin-password-secret>
 ```

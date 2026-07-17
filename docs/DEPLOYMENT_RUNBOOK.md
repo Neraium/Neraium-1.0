@@ -59,7 +59,7 @@ gh workflow run "Bootstrap Production AWS" --repo Neraium/Neraium-1.0 --ref main
 gh run watch --repo Neraium/Neraium-1.0
 ```
 
-Required repository variables before running either workflow:
+Required repository variables before running either workflow (the bootstrap password itself remains stored in Secrets Manager):
 
 ```text
 secret: NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
@@ -67,7 +67,7 @@ NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
 NERAIUM_API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name>
 NERAIUM_AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<postgres-dsn-secret>
 NERAIUM_BOOTSTRAP_ADMIN_EMAIL=<pilot-admin-email>
-NERAIUM_BOOTSTRAP_ADMIN_PASSWORD=<pilot-admin-password>
+NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<bootstrap-admin-password-secret>
 ```
 
 The active production path is GitHub Actions plus AWS CLI. Terraform is deprecated and should not be used to register or update ECS task definitions. The backend deploy workflow expects the ECS cluster, API service, worker service, and both task-definition families to already exist, and now fails early if they do not.
