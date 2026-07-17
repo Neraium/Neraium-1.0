@@ -40,5 +40,9 @@ export default defineConfig({
       env: { ...process.env, VITE_API_BASE_URL: `http://127.0.0.1:${backendPort}` },
     },
   ],
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit", use: { ...devices["Desktop Safari"] } },
+  ],
 });

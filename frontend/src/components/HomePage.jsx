@@ -1,5 +1,6 @@
 import { useCallback, useRef } from "react";
 
+import SkipToMainContent from "./SkipToMainContent";
 import SystemStateMark from "./SystemStateMark";
 import { PRODUCT_DESCRIPTOR, PRODUCT_NAME } from "../content/productLanguage";
 import "../styles/home.css";
@@ -79,7 +80,7 @@ export default function HomePage({ onLaunchWorkspace }) {
 
   return (
     <div className="home-page" data-testid="home-page">
-      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <SkipToMainContent />
       <header className="home-nav" aria-label="Neraium site navigation">
         <button type="button" className="home-brand" onClick={() => scrollToSection("home-hero")} aria-label="Neraium home">
           <span className="home-brand__mark" aria-hidden="true" />

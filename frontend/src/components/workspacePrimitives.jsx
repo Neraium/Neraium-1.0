@@ -699,10 +699,12 @@ export function DataTable({ columns, rows, caption = "Operational data" }) {
 }
 
 export function EmptyState({ title, body, compact = false }) {
+  const displayTitle = String(title ?? "").trim() || EMPTY_VALUE;
+  const displayBody = String(body ?? "").trim() || EMPTY_VALUE;
   return (
     <div className={`empty-state ${compact ? "empty-state--compact" : ""}`}>
-      <strong>{formatEmptyValue(title) || EMPTY_VALUE}</strong>
-      <p>{formatEmptyValue(body) || EMPTY_VALUE}</p>
+      <strong>{displayTitle}</strong>
+      <p>{displayBody}</p>
     </div>
   );
 }

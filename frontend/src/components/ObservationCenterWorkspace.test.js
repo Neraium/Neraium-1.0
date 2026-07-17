@@ -281,6 +281,45 @@ describe("ObservationCenterWorkspace", () => {
     ));
   });
 
+  it("keeps recorded insight history searchable when there is no current finding", async () => {
+    installLocalStorageMock();
+    const runs = [
+      {
+        run_id: "historical-run-1",
+        source_type: "csv_upload",
+        source_name: "historical.csv",
+        status: "completed",
+        created_at: "2026-06-16T00:00:00Z",
+        observation_type: "trajectory_drift",
+        observation_status: "open",
+        variables: ["temperature", "humidity"],
+        drift_metrics: { baseline_distance: 0.7 },
+        evidence_summary: ["System behavior changed."],
+      },
+      {
+        run_id: "historical-run-2",
+        source_type: "csv_upload",
+        source_name: "relationships.csv",
+        status: "completed",
+        created_at: "2026-06-15T00:00:00Z",
+        observation_type: "coupling_change",
+        observation_status: "resolved",
+        variables: ["flow", "pressure"],
+        drift_metrics: { baseline_distance: 0.4 },
+        evidence_summary: ["Flow and pressure changed together."],
+      },
+    ];
+    renderWorkspace({ apiFetch: vi.fn(async () => createResponse({ runs })) });
+
+    const historical = await screen.findByRole("button", { name: "Review Behavior Change Continuing from historical.csv" });
+    expect(screen.getByRole("button", { name: "Review System Behavior Shift from relationships.csv" })).toBeTruthy();
+    expect(historical.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getAllByText(/continuing to move away from its usual pattern/i).length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText("Search insights"), { target: { value: "relationships.csv" } });
+    expect(screen.queryByRole("button", { name: "Review Behavior Change Continuing from historical.csv" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Review System Behavior Shift from relationships.csv" })).toBeTruthy();
+  });
   it("loads issue history in bounded pages", async () => {
     installLocalStorageMock();
     const buildRun = (index) => ({

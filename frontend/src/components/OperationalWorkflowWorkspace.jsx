@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import PageContainer from "./layout/PageContainer";
+import SkipToMainContent from "./SkipToMainContent";
 import AdvancedDetailsView from "./operational/AdvancedDetailsView";
 import CommandCenterView from "./operational/CommandCenterView";
 import DataSourcesView from "./operational/DataSourcesView";
@@ -302,7 +303,7 @@ export default function OperationalWorkflowWorkspace({
 
   return (
     <>
-      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <SkipToMainContent />
       <PageContainer className={shellClassName}>
       <aside className="operational-sidebar" aria-label="Neraium navigation">
         <div className="operational-sidebar__brand">

@@ -342,7 +342,17 @@ body {
 }
 
 .observation-history-card {
+  display: grid;
+  width: 100%;
   gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(136, 153, 170, 0.1);
+  border-radius: 14px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
   border-color: rgba(136, 153, 170, 0.1);
   background:
     radial-gradient(circle at 0% 0%, rgba(59, 122, 140, 0.07), transparent 24%),
@@ -353,6 +363,26 @@ body {
 .observation-history-card:hover {
   border-color: rgba(197, 146, 60, 0.26);
   transform: translateY(-1px);
+}
+
+.observation-history-card[aria-pressed="true"] {
+  border-color: rgba(197, 146, 60, 0.42);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(197, 146, 60, 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(18, 29, 44, 0.98), rgba(11, 20, 33, 0.98));
+}
+
+.observation-history-card .intervention-card__header,
+.observation-history-card .intervention-card__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.observation-history-card .intervention-card__header > div {
+  display: grid;
+  gap: 4px;
 }
 
 .observation-history-card__sketch {

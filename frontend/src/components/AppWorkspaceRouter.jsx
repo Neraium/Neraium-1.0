@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 
 import AppErrorBoundary from "./AppErrorBoundary";
+import SkipToMainContent from "./SkipToMainContent";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 
 const HomePage = lazy(() => import("./HomePage"));
@@ -28,7 +29,7 @@ function WorkspaceWithBackControl({ appReady, errorBoundaryResetKey, handleBackT
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <a className="skip-link" href="#main-content">Skip to main content</a>
+        <SkipToMainContent />
         <div className="workspace-shell-with-back" style={{ minHeight: "100svh" }}>
           <nav className="workspace-back-control" aria-label="Workspace navigation">
             <button

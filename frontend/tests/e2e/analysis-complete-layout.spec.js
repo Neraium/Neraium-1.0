@@ -1,5 +1,7 @@
 import { expect, test } from "./fixtures.js";
 
+const LONG_FILENAME = "north-campus-central-plant-telemetry-export-with-an-unusually-long-facility-and-system-identifier-2026-07-16.csv";
+
 async function renderCompletionFixture(page) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -12,7 +14,7 @@ async function renderCompletionFixture(page) {
           <section class="upload-simple-card upload-simple-card--complete" aria-label="Analysis complete">
             <div class="upload-complete-header">
               <h3>Analysis Complete</h3>
-              <span class="upload-complete-filename" title="neraium_water_test_dataset_2.csv">neraium_water_test_dataset_2.csv</span>
+              <span class="upload-complete-filename" title="north-campus-central-plant-telemetry-export-with-an-unusually-long-facility-and-system-identifier-2026-07-16.csv">north-campus-central-plant-telemetry-export-with-an-unusually-long-facility-and-system-identifier-2026-07-16.csv</span>
             </div>
             <div class="upload-result-summary">
               <div class="upload-result-summary__item"><span>Systems</span><strong>4</strong></div>
@@ -205,6 +207,13 @@ test.describe("Analysis complete mobile layout", () => {
     expect(metrics.bodyScrollWidth).toBeLessThanOrEqual(metrics.viewportWidth);
     expect(metrics.cardLeft).toBeGreaterThanOrEqual(0);
     expect(metrics.cardRight).toBeLessThanOrEqual(metrics.viewportWidth);
+
+    const filename = page.locator(".upload-complete-filename");
+    await expect(filename).toHaveAttribute("title", LONG_FILENAME);
+    const filenameBox = await filename.boundingBox();
+    expect(filenameBox).not.toBeNull();
+    expect(filenameBox.x).toBeGreaterThanOrEqual(0);
+    expect(filenameBox.x + filenameBox.width).toBeLessThanOrEqual(metrics.viewportWidth);
 
     const rows = await page.locator(".upload-result-summary__item").evaluateAll((nodes) => (
       nodes.map((node) => {

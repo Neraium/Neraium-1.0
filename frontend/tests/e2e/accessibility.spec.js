@@ -20,7 +20,7 @@ test.describe("Accessibility audit", () => {
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
 
     const main = page.getByRole("main", { name: "Neraium platform workspace" });
-    const skipLink = page.getByRole("link", { name: "Skip to main content" });
+    const skipLink = page.getByRole("button", { name: "Skip to main content" });
     await expect(main).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Primary workflow navigation" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Operational Status" })).toBeVisible();
