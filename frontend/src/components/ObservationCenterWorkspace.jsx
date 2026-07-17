@@ -289,9 +289,7 @@ export default function ObservationCenterWorkspace({
   accessCode,
   canonicalFinding = null,
   currentSession = null,
-  onBackToGate = null,
   onReviewEvidence = null,
-  onWorkspaceNavigate = null,
 }) {
   const [runs, setRuns] = useState([]);
   const [error, setError] = useState("");
@@ -658,29 +656,9 @@ export default function ObservationCenterWorkspace({
     window.open(href, "_blank", "noopener,noreferrer");
   }
 
-  const backControl = (
-    <div className="observation-center__back-control">
-      <button
-        type="button"
-        className="system-gate__settings-action"
-        onClick={() => onBackToGate?.()}
-      >
-        Back to Command Center
-      </button>
-      <button
-        type="button"
-        className="system-gate__settings-action"
-        onClick={() => onWorkspaceNavigate?.("help-changelog")}
-      >
-        Help & Status
-      </button>
-    </div>
-  );
-
   if (loading) {
     return (
       <section className="workspace-surface">
-        {backControl}
         <Panel title="Operational Insights" subtitle="Loading insights and supporting evidence..." />
       </section>
     );
@@ -689,7 +667,6 @@ export default function ObservationCenterWorkspace({
   if (error) {
     return (
       <section className="workspace-surface">
-        {backControl}
         <EmptyState title="Insights Unavailable" body={error} />
       </section>
     );
@@ -699,7 +676,6 @@ export default function ObservationCenterWorkspace({
 
   return (
     <section className="workspace-surface observation-center">
-      {backControl}
       <div className="observation-center__hero">
         <section className="observation-center__snapshot" aria-label="Latest insight snapshot">
           <div className="observation-center__snapshot-orb">

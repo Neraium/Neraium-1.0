@@ -25,22 +25,38 @@ function renderLoadingPanel(title, message) {
   );
 }
 
-function WorkspaceWithBackControl({ appReady, errorBoundaryResetKey, handleBackToGate, handleRetryWorkspace, children }) {
+function WorkspaceWithBackControl({
+  appReady,
+  errorBoundaryResetKey,
+  handleBackToGate,
+  handleRetryWorkspace,
+  contextLabel,
+  onHelp,
+  children,
+}) {
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
         <SkipToMainContent />
-        <div className="workspace-shell-with-back" style={{ minHeight: "100svh" }}>
+        <div className="workspace-shell-with-back">
           <nav className="workspace-back-control" aria-label="Workspace navigation">
-            <button
-              type="button"
-              className="workspace-back-control__button"
-              onClick={handleBackToGate}
-              aria-label="Back to Command Center"
-            >
-              Back to Command Center
-            </button>
-            <span>Systemic Infrastructure Intelligence, read-only</span>
+            <div className="workspace-back-control__context">
+              <button
+                type="button"
+                className="workspace-back-control__button"
+                onClick={handleBackToGate}
+                aria-label="Back to Command Center"
+              >
+                Command Center
+              </button>
+              {contextLabel ? <span className="workspace-back-control__breadcrumb" aria-current="page">{contextLabel}</span> : null}
+            </div>
+            <div className="workspace-back-control__meta">
+              <span className="workspace-back-control__product"><strong>Neraium</strong> · SII intelligence · Read-only</span>
+              {typeof onHelp === "function" ? (
+                <button type="button" className="workspace-back-control__help" onClick={onHelp}>Help</button>
+              ) : null}
+            </div>
           </nav>
           <main id="main-content" className="workspace-route-main" aria-label="Neraium platform workspace" tabIndex={-1}>
             <h1 className="sr-only">Neraium Platform Workspace</h1>
@@ -110,6 +126,8 @@ export default function AppWorkspaceRouter({
         errorBoundaryResetKey={errorBoundaryResetKey}
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
+        contextLabel="Datasets & Connectors"
+        onHelp={() => setActiveWorkspace("help-changelog")}
       >
         <Suspense fallback={renderLoadingPanel("Loading Datasets & Connectors", "Preparing dataset import and connector setup...")}>
           <DataConnectionsWorkspace
@@ -144,6 +162,8 @@ export default function AppWorkspaceRouter({
         errorBoundaryResetKey={errorBoundaryResetKey}
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
+        contextLabel="Analysis Details"
+        onHelp={() => setActiveWorkspace("help-changelog")}
       >
         <Suspense fallback={renderLoadingPanel("Loading Analysis Details", "Preparing analysis history and support diagnostics...")}>
           <SystemStoryWorkspace
@@ -172,7 +192,14 @@ export default function AppWorkspaceRouter({
 
   if (activeWorkspace === "governance-admin" && currentUser?.role !== "admin") {
     return (
-      <WorkspaceWithBackControl appReady={appReady} errorBoundaryResetKey={errorBoundaryResetKey} handleBackToGate={handleBackToGate} handleRetryWorkspace={handleRetryWorkspace}>
+      <WorkspaceWithBackControl
+        appReady={appReady}
+        errorBoundaryResetKey={errorBoundaryResetKey}
+        handleBackToGate={handleBackToGate}
+        handleRetryWorkspace={handleRetryWorkspace}
+        contextLabel="Administration"
+        onHelp={() => setActiveWorkspace("help-changelog")}
+      >
         <EmptyState title="Administrator access required" body="Your account can review operational results, but only administrators can manage users, sessions, and governance records." />
       </WorkspaceWithBackControl>
     );
@@ -185,6 +212,8 @@ export default function AppWorkspaceRouter({
         errorBoundaryResetKey={errorBoundaryResetKey}
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
+        contextLabel="Administration"
+        onHelp={() => setActiveWorkspace("help-changelog")}
       >
         <Suspense fallback={renderLoadingPanel("Loading Administration", "Preparing user access and intelligence governance...")}>
           <GovernanceAdminWorkspace
@@ -207,6 +236,8 @@ export default function AppWorkspaceRouter({
         errorBoundaryResetKey={errorBoundaryResetKey}
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
+        contextLabel="Insights"
+        onHelp={() => setActiveWorkspace("help-changelog")}
       >
         <Suspense fallback={renderLoadingPanel("Loading Insights", "Preparing operational insights and evidence...")}>
           <ObservationCenterWorkspace
@@ -229,6 +260,7 @@ export default function AppWorkspaceRouter({
         errorBoundaryResetKey={errorBoundaryResetKey}
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
+        contextLabel="Help & Status"
       >
         <Suspense fallback={renderLoadingPanel("Loading Help & Status", "Preparing product guidance and service status...")}>
           <HelpChangelogWorkspace

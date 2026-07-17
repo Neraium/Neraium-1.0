@@ -1,0 +1,291 @@
+/* Final operational-shell cascade. Imported after operational-workflow.css. */
+.operational-workflow {
+  grid-template-columns: 244px minmax(0, 1fr);
+  max-width: none;
+  background: var(--bg-app);
+}
+
+.operational-sidebar {
+  gap: var(--space-20);
+  width: 244px;
+  padding: var(--space-16);
+  border-right: 1px solid var(--surface-divider);
+  background: var(--bg-sidebar);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.operational-sidebar__brand {
+  gap: var(--space-4);
+  padding: var(--space-10) var(--space-10) var(--space-18);
+  border-bottom-color: var(--surface-divider);
+}
+
+.operational-nav button {
+  min-height: 48px;
+  padding: 8px 10px 8px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--nav-radius);
+}
+
+.operational-nav button::before {
+  left: 5px;
+  top: 13px;
+  bottom: 13px;
+  width: 2px;
+  border-radius: 1px;
+}
+
+.operational-nav button:hover {
+  border-color: var(--surface-divider);
+  background: rgba(154, 167, 184, 0.06);
+  color: var(--text-primary);
+}
+
+.operational-nav button.is-active,
+.operational-mobile-nav button.is-active {
+  border-color: rgba(22, 135, 127, 0.24);
+  background: rgba(22, 135, 127, 0.13);
+  color: #8fd4ce;
+}
+
+.operational-main {
+  width: 100%;
+  padding: clamp(20px, 2.4vw, 34px);
+}
+
+.operational-main--command-center {
+  padding-top: clamp(18px, 2vw, 28px);
+}
+
+.operational-topbar {
+  margin-bottom: var(--space-20);
+  padding-bottom: var(--space-18);
+  border-bottom-color: var(--surface-divider);
+}
+
+.operational-topbar h1 {
+  font-size: var(--type-title-lg);
+  font-weight: 650;
+}
+
+.operational-mobile-nav,
+.operational-panel {
+  border-color: var(--surface-border);
+  background: var(--surface-b);
+  box-shadow: none;
+}
+
+.operational-panel::before,
+.operational-panel::after {
+  content: none;
+}
+
+.operational-command-center {
+  width: min(100%, 1080px);
+}
+
+.command-section {
+  padding: clamp(20px, 2.4vw, 28px) 0;
+  border-top-color: var(--surface-divider);
+}
+
+.command-section--status {
+  grid-template-columns: 144px minmax(0, 1fr);
+  grid-template-rows: repeat(5, auto);
+  column-gap: clamp(20px, 3vw, 34px);
+  row-gap: var(--space-6);
+  justify-items: start;
+  align-items: center;
+  min-height: 204px;
+  padding: var(--space-12) 0 var(--space-28);
+  text-align: left;
+}
+
+.command-section--status > h2,
+.command-section--status > .operational-status-stage,
+.command-section--status > .operational-status-value,
+.command-section--status > .operational-status-explanation,
+.command-section--status > .operational-status-actions {
+  grid-column: 2;
+  justify-self: start;
+}
+
+.command-section--status > h2 {
+  align-self: end;
+  color: var(--text-muted);
+  font-size: var(--type-label-sm);
+  font-weight: 680;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.command-section--status > .operational-orb {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  place-self: center;
+  width: 132px;
+}
+
+.command-section--status .operational-status-stage,
+.command-section--status .operational-status-explanation {
+  max-width: 64ch;
+  text-align: left;
+}
+
+.operational-status-value {
+  font-size: clamp(1.75rem, 3vw, 2.35rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.operational-status-actions {
+  margin-top: var(--space-8);
+}
+
+.command-section--findings {
+  position: relative;
+}
+
+.command-section--findings::before {
+  content: "";
+  position: absolute;
+  inset: var(--space-12) calc(var(--space-16) * -1);
+  z-index: -1;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-a);
+}
+
+.command-section__header {
+  gap: var(--space-4);
+  margin-bottom: var(--space-16);
+}
+
+.command-section h2 {
+  font-size: var(--type-title-md);
+  font-weight: 640;
+}
+
+.command-section__header p,
+.operational-findings-empty {
+  color: var(--text-muted);
+  font-size: var(--type-body-sm);
+}
+
+.operational-finding-row {
+  min-height: 64px;
+  padding: 11px 8px;
+}
+
+.operational-finding-row:hover,
+.operational-finding-row:focus-visible,
+.operational-finding-row.is-selected {
+  background: rgba(154, 167, 184, 0.06);
+}
+
+.operational-finding-row.is-selected {
+  box-shadow: inset 2px 0 0 var(--color-brand-hover);
+}
+
+@media (max-width: 900px) {
+  .operational-workflow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .operational-sidebar {
+    display: none;
+  }
+
+  .operational-main {
+    padding: var(--space-16);
+  }
+
+  .operational-mobile-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+    margin: calc(var(--space-16) * -1) calc(var(--space-16) * -1) var(--space-18);
+    padding: var(--space-8) var(--space-16);
+    border-width: 0 0 1px;
+    border-radius: 0;
+    background: rgba(6, 10, 16, 0.96);
+  }
+
+  .operational-mobile-nav button {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 760px) {
+  .command-section--status {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    text-align: center;
+  }
+
+  .command-section--status > h2,
+  .command-section--status > .operational-status-stage,
+  .command-section--status > .operational-status-value,
+  .command-section--status > .operational-status-explanation,
+  .command-section--status > .operational-status-actions,
+  .command-section--status > .operational-orb {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: center;
+  }
+
+  .command-section--status .operational-status-stage,
+  .command-section--status .operational-status-explanation {
+    text-align: center;
+  }
+
+  .command-section--status > .operational-orb {
+    width: 112px;
+  }
+}
+
+@media (max-width: 520px) {
+  .operational-main {
+    padding: var(--space-12);
+  }
+
+  .operational-mobile-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: calc(var(--space-12) * -1) calc(var(--space-12) * -1) var(--space-16);
+    padding: var(--space-8) var(--space-12);
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .operational-mobile-nav {
+    position: relative;
+  }
+
+  .command-section--status {
+    grid-template-columns: 96px minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .command-section--status > .operational-orb {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    width: 88px;
+  }
+
+  .command-section--status > h2,
+  .command-section--status > .operational-status-stage,
+  .command-section--status > .operational-status-value,
+  .command-section--status > .operational-status-explanation,
+  .command-section--status > .operational-status-actions {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+/* Solid completion surfaces keep status badges from affecting following content. */
+.operational-workflow .operational-panel.operational-panel--hero { background: #0d141f; background-image: none; }
+.operational-workflow .operator-completion-list li { background: #121d2c; background-image: none; }

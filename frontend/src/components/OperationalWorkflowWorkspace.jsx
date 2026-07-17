@@ -12,6 +12,7 @@ import { FALLBACK_SYSTEMS } from "../config/workspaces";
 import { PRODUCT_DESCRIPTOR } from "../content/productLanguage";
 import { sanitizeOperatorText } from "../viewModels/operatorFinding";
 import "../styles/operational-workflow.css";
+import "../styles/operational-refinement.css";
 
 const NAV_ITEMS = [
   { id: "command-center", label: "Command Center" },
@@ -307,9 +308,9 @@ export default function OperationalWorkflowWorkspace({
       <PageContainer className={shellClassName}>
       <aside className="operational-sidebar" aria-label="Neraium navigation">
         <div className="operational-sidebar__brand">
-          <span className="section-token">Neraium</span>
-          <strong>{model.siteLabel}</strong>
-          <p>Read-only intelligence for infrastructure operators</p>
+          <span className="section-token">Operations platform</span>
+          <strong>Neraium</strong>
+          <p>{model.siteLabel === PRODUCT_DESCRIPTOR ? "SII intelligence · Read-only" : `${model.siteLabel} · SII intelligence`}</p>
         </div>
         <nav className="operational-nav" aria-label="Primary workflow navigation">
           {NAV_ITEMS.map((item) => (

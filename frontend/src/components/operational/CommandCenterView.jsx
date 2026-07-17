@@ -187,7 +187,7 @@ function OperationalFindings({ insights, selectedInsight, onSelectInsight, helpe
           <h2 id="operational-findings-heading">Operational Insights</h2>
           <p>No active insights.</p>
         </div>
-        <p className="operational-findings-empty">No active insights. Import a current dataset after operating conditions change to refresh the analysis.</p>
+        <p className="operational-findings-empty">Import a current dataset to establish the baseline and surface evidence-backed operational changes.</p>
       </section>
     );
   }

@@ -45,7 +45,6 @@ function diagnosticsRows(diagnostics) {
 
 export default function HelpChangelogWorkspace({
   apiStatus = null,
-  onBackToGate = null,
   onWorkspaceNavigate = null,
 }) {
   const diagnostics = apiStatus?.diagnostics ?? null;
@@ -53,15 +52,6 @@ export default function HelpChangelogWorkspace({
   const warnings = Array.isArray(diagnostics?.warnings) ? diagnostics.warnings : [];
   return (
     <section className="workspace-surface help-changelog">
-      <div className="observation-center__back-control">
-        <button type="button" className="system-gate__settings-action" onClick={() => onBackToGate?.()}>
-          Back to Command Center
-        </button>
-        <button type="button" className="system-gate__settings-action" onClick={() => onWorkspaceNavigate?.("observation-center")}>
-          Open Insights
-        </button>
-      </div>
-
       <div className="observation-center__hero">
         <section className="observation-center__summary help-changelog__hero" aria-label="Platform guide and service status">
           <p className="section-token">Help & Status</p>
@@ -78,6 +68,11 @@ export default function HelpChangelogWorkspace({
             ]}
             compact
           />
+          <div className="intake-flow__controls">
+            <button type="button" className="secondary-command-button" onClick={() => onWorkspaceNavigate?.("observation-center")}>
+              Open Insights
+            </button>
+          </div>
         </section>
       </div>
 

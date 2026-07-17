@@ -112,16 +112,94 @@ export default function ConnectorSetupPanel({ apiFetch, accessCode, currentUser 
   const functionalTypes = types.filter((item) => item.functional && ["rest", "database"].includes(item.connector_type));
   return (
     <section className="connector-setup" aria-labelledby="connector-title">
-      <div className="connector-setup__header"><div><p className="section-token">Administrator</p><h2 id="connector-title">Telemetry Connector Setup</h2><p>Test read-only access before preparing a bounded telemetry sample. Credentials are used only for the request and are masked in connector health responses.</p></div><button type="button" className="secondary-command-button" onClick={() => void refresh()} disabled={Boolean(busy)}>{busy === "refresh" ? "Refreshing..." : "Refresh health"}</button></div>
-      <div className="connector-setup__grid">
-        <label>Connector type<select value={connectorType} onChange={(event) => setConnectorType(event.target.value)} disabled={Boolean(busy)}>{functionalTypes.map((item) => <option key={item.connector_type} value={item.connector_type}>{item.display_name}</option>)}</select></label>
-        <label>Source identifier<input value={sourceId} onChange={(event) => setSourceId(event.target.value)} disabled={Boolean(busy)} /></label>
-        <label>System identifier<input value={systemId} onChange={(event) => setSystemId(event.target.value)} disabled={Boolean(busy)} /></label>
-        {connectorType === "rest" ? <><label className="connector-setup__wide">Endpoint<input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://telemetry.example/api/readings" disabled={Boolean(busy)} /></label><label className="connector-setup__wide">Sample response JSON<textarea value={samplePayload} onChange={(event) => setSamplePayload(event.target.value)} rows={7} disabled={Boolean(busy)} /></label></> : <><label className="connector-setup__wide">Database URL<input type="password" value={databaseUrl} onChange={(event) => setDatabaseUrl(event.target.value)} placeholder="postgresql://readonly@host/database" autoComplete="off" disabled={Boolean(busy)} /></label><label className="connector-setup__wide">Read-only query<textarea value={query} onChange={(event) => setQuery(event.target.value)} rows={5} disabled={Boolean(busy)} /></label></>}
+      <div className="connector-setup__header">
+        <div>
+          <p className="section-token">Administrator</p>
+          <h2 id="connector-title">Telemetry Connector Setup</h2>
+          <p>Test read-only access before preparing a bounded telemetry sample. Credentials are used only for the request and are masked in health responses.</p>
+        </div>
+        <button type="button" className="secondary-command-button" onClick={() => void refresh()} disabled={Boolean(busy)}>
+          {busy === "refresh" ? "Refreshing..." : "Refresh health"}
+        </button>
       </div>
-      <div className="operational-actions"><button type="button" className="secondary-command-button" onClick={() => void run("test")} disabled={Boolean(busy)}>{busy === "test" ? "Testing..." : "Test connection"}</button><button type="button" className="command-button" onClick={() => void run("ingest")} disabled={Boolean(busy)} title="Validates and prepares a bounded sample. This does not run an analysis.">{busy === "ingest" ? "Preparing sample..." : "Prepare sample"}</button></div>
-      {notice ? <p className="connector-notice" role="status">{notice}</p> : null}{error ? <p className="auth-error" role="alert">{error}</p> : null}
-      <div className="connector-health" aria-label="Connector health">{health.map((item) => <article key={item.connector_type}><strong>{item.display_name}</strong><span className={`connector-health__status connector-health__status--${item.connection_status}`}>{connectorHealthLabel(item.connection_status)}</span><small>{item.records_ingested || 0} records · {item.sensors_detected || 0} sensors</small>{item.errors?.length ? <small>{safeConnectorDetail(item.errors[0])}</small> : null}</article>)}</div>
+
+      <section className="connector-setup__section" aria-labelledby="connector-identity-title">
+        <div className="connector-setup__section-header">
+          <h3 id="connector-identity-title">Connection identity</h3>
+          <p>Choose the connector and map its source to one facility system.</p>
+        </div>
+        <div className="connector-setup__grid connector-setup__grid--identity">
+          <label>
+            <span>Connector type</span>
+            <select value={connectorType} onChange={(event) => setConnectorType(event.target.value)} disabled={Boolean(busy)}>
+              {functionalTypes.map((item) => <option key={item.connector_type} value={item.connector_type}>{item.display_name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Source identifier</span>
+            <input value={sourceId} onChange={(event) => setSourceId(event.target.value)} disabled={Boolean(busy)} />
+          </label>
+          <label>
+            <span>System identifier</span>
+            <input value={systemId} onChange={(event) => setSystemId(event.target.value)} disabled={Boolean(busy)} />
+          </label>
+        </div>
+      </section>
+
+      <section className="connector-setup__section" aria-labelledby="connector-request-title">
+        <div className="connector-setup__section-header">
+          <h3 id="connector-request-title">Read-only request</h3>
+          <p>Provide only the endpoint and bounded sample needed to validate access.</p>
+        </div>
+        <div className="connector-setup__grid">
+          {connectorType === "rest" ? (
+            <>
+              <label className="connector-setup__wide">
+                <span>Endpoint</span>
+                <input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://telemetry.example/api/readings" disabled={Boolean(busy)} />
+              </label>
+              <label className="connector-setup__wide">
+                <span>Sample response JSON</span>
+                <textarea value={samplePayload} onChange={(event) => setSamplePayload(event.target.value)} rows={7} disabled={Boolean(busy)} />
+              </label>
+            </>
+          ) : (
+            <>
+              <label className="connector-setup__wide">
+                <span>Database URL</span>
+                <input type="password" value={databaseUrl} onChange={(event) => setDatabaseUrl(event.target.value)} placeholder="postgresql://readonly@host/database" autoComplete="off" disabled={Boolean(busy)} />
+              </label>
+              <label className="connector-setup__wide">
+                <span>Bounded read-only query</span>
+                <textarea value={query} onChange={(event) => setQuery(event.target.value)} rows={5} disabled={Boolean(busy)} />
+              </label>
+            </>
+          )}
+        </div>
+      </section>
+
+      <div className="operational-actions connector-setup__actions">
+        <button type="button" className="secondary-command-button" onClick={() => void run("test")} disabled={Boolean(busy)}>
+          {busy === "test" ? "Testing..." : "Test connection"}
+        </button>
+        <button type="button" className="command-button" onClick={() => void run("ingest")} disabled={Boolean(busy)} title="Validates and prepares a bounded sample. This does not run an analysis.">
+          {busy === "ingest" ? "Preparing sample..." : "Prepare sample"}
+        </button>
+      </div>
+
+      {notice ? <p className="connector-notice" role="status">{notice}</p> : null}
+      {error ? <p className="auth-error" role="alert">{error}</p> : null}
+
+      <div className="connector-health" aria-label="Connector health">
+        {health.map((item) => (
+          <article key={item.connector_type}>
+            <strong>{item.display_name}</strong>
+            <span className={`connector-health__status connector-health__status--${item.connection_status}`}>{connectorHealthLabel(item.connection_status)}</span>
+            <small>{item.records_ingested || 0} records · {item.sensors_detected || 0} sensors</small>
+            {item.errors?.length ? <small>{safeConnectorDetail(item.errors[0])}</small> : null}
+          </article>
+        ))}
+      </div>
     </section>
   );
 }

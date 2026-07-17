@@ -24,12 +24,11 @@ export function TextInput({ className = "", ...props }) {
 }
 
 export function Panel({ title, subtitle, className = "", children }) {
-  const heading = subtitle || title;
   return (
     <Card className={`ops-panel ${className}`.trim()}>
       <div className="ops-panel__header">
-        {subtitle && title ? <p className="section-token">{title}</p> : null}
-        <h2>{heading}</h2>
+        <h2>{title}</h2>
+        {subtitle ? <p>{subtitle}</p> : null}
       </div>
       <div className="ops-panel__body">{children}</div>
     </Card>

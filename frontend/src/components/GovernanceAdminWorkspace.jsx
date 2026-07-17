@@ -11,12 +11,24 @@ function governanceDecision(value) {
   return String(value || "").toUpperCase() === "PASS" ? "Approved for operator review" : "Held for administrator review";
 }
 
+function AdministrationHeader({ currentUser }) {
+  return (
+    <header className="workspace-page-header">
+      <div className="workspace-page-header__copy">
+        <p className="section-token">Administration</p>
+        <h1>Access & Intelligence Governance</h1>
+        <p>Manage account access, active sessions, evidence admission records, and analysis service health.</p>
+      </div>
+      <span className="workspace-page-header__meta">{currentUser?.email || "Administrator"} · Administrator</span>
+    </header>
+  );
+}
+
 export default function GovernanceAdminWorkspace({
   apiFetch,
   accessCode,
   Panel,
   EmptyState,
-  onBackToGate = null,
   currentUser = null,
 }) {
   const [payload, setPayload] = useState(null);
@@ -55,34 +67,10 @@ export default function GovernanceAdminWorkspace({
     };
   }, [accessCode, apiFetch]);
 
-  const backControl = (
-    <button
-      type="button"
-      className="system-gate__settings-action"
-      onClick={() => {
-        if (typeof onBackToGate === "function") {
-          onBackToGate();
-        }
-      }}
-      style={{
-        position: "sticky",
-        top: "max(10px, env(safe-area-inset-top, 0px))",
-        left: 0,
-        zIndex: 40,
-        width: "fit-content",
-        marginBottom: "10px",
-        paddingInline: "12px",
-      }}
-      aria-label="Back to Command Center"
-    >
-      Back to Command Center
-    </button>
-  );
-
   if (loading) {
     return (
       <section className="workspace-surface">
-        {backControl}
+        <AdministrationHeader currentUser={currentUser} />
         <Panel title="Intelligence Governance" subtitle="Loading SII evidence review records..." />
       </section>
     );
@@ -91,7 +79,7 @@ export default function GovernanceAdminWorkspace({
   if (error) {
     return (
       <section className="workspace-surface">
-        {backControl}
+        <AdministrationHeader currentUser={currentUser} />
         <EmptyState title="Intelligence Governance Unavailable" body={error} />
       </section>
     );
@@ -100,7 +88,8 @@ export default function GovernanceAdminWorkspace({
   const rows = (payload?.records ?? []).slice(0, 100);
   return (
     <section className="workspace-surface">
-      {backControl}
+      <AdministrationHeader currentUser={currentUser} />
+      <div className="workspace-grid workspace-grid--two admin-summary-grid">
       <Panel
         title="Intelligence Governance"
         subtitle="Administrator audit records for decisions about which SII evidence can appear in operator workspaces."
@@ -119,10 +108,11 @@ export default function GovernanceAdminWorkspace({
           <article className="metric-card"><span className="metric-label">Result reuse rate</span><strong className="metric-value">{performance?.cache?.hash_cache_hit_rate != null ? `${Math.round(performance.cache.hash_cache_hit_rate * 100)}%` : "-"}</strong></article>
         </div>
       </Panel>
+      </div>
 
       <AccessAdminPanel apiFetch={apiFetch} accessCode={accessCode} Panel={Panel} currentUser={currentUser} />
 
-      <div className="workspace-grid workspace-grid--two">
+      <div className="workspace-grid workspace-grid--two admin-record-grid">
         {rows.map((record) => (
           <Panel
             key={record.evp_id}
@@ -190,16 +180,73 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser }) {
     if (created) setForm({ email: "", name: "", password: "", role: "operator" });
   }
 
-  return <Panel title="User Access" subtitle={`Signed in as ${currentUser?.email || "administrator"}. Create accounts, activate or deactivate access, and revoke sessions.`}>
-    {loading ? <p role="status">Loading user accounts and active sessions...</p> : null}
-    <form className="admin-access-form" onSubmit={createAccount} aria-busy={Boolean(busy)}>
-      <input aria-label="User email" type="email" placeholder="operator@facility.com" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} disabled={Boolean(busy)} />
-      <input aria-label="User name" placeholder="Operator name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} disabled={Boolean(busy)} />
-      <input aria-label="Temporary password" type="password" placeholder="Temporary password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} disabled={Boolean(busy)} />
-      <select aria-label="User role" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} disabled={Boolean(busy)}><option value="viewer">Viewer</option><option value="operator">Operator</option><option value="admin">Administrator</option></select>
-      <button className="command-button" type="submit" disabled={Boolean(busy)}>{busy === "create" ? "Creating Account..." : "Create Account"}</button>
-    </form>
-    {notice ? <p className="connector-notice" role="status">{notice}</p> : null}{error ? <p className="auth-error" role="alert">{error}</p> : null}
-    <div className="admin-access-list" aria-label="User accounts">{users.map((user) => <article key={user.email}><div><strong>{user.name || user.email}</strong><small>{user.email} &middot; {user.role} &middot; {user.is_active ? "active" : "inactive"}</small></div><div>{user.is_active ? <button type="button" className="operational-link-button operational-link-button--danger" disabled={Boolean(busy) || user.email === currentUser?.email} title={user.email === currentUser?.email ? "You cannot deactivate your current account." : "Deactivate this account and revoke its sessions."} onClick={() => void mutate(`deactivate-${user.email}`, `/api/auth/users/${encodeURIComponent(user.email)}/deactivate`)}>Deactivate Account</button> : <button type="button" className="secondary-command-button" disabled={Boolean(busy)} onClick={() => void mutate(`activate-${user.email}`, `/api/auth/users/${encodeURIComponent(user.email)}/activate`)}>Activate Account</button>}<button type="button" className="operational-link-button" disabled={Boolean(busy) || !sessions.some((session) => session.email === user.email)} title={sessions.some((session) => session.email === user.email) ? "Revoke all active sessions for this account." : "This account has no active sessions."} onClick={() => void mutate(`revoke-${user.email}`, "/api/auth/sessions/revoke", { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: user.email, revoke_all_for_user: true }) })}>Revoke Sessions</button></div></article>)}</div>
-  </Panel>;
+  return (
+    <Panel
+      title="User Access"
+      subtitle={`Signed in as ${currentUser?.email || "administrator"}. Create accounts, change access status, and revoke sessions.`}
+    >
+      {loading ? <p role="status">Loading user accounts and active sessions...</p> : null}
+      <form className="admin-access-form" onSubmit={createAccount} aria-busy={Boolean(busy)}>
+        <label>
+          <span>Email address</span>
+          <input aria-label="User email" type="email" placeholder="operator@facility.com" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} disabled={Boolean(busy)} />
+        </label>
+        <label>
+          <span>Display name</span>
+          <input aria-label="User name" placeholder="Operator name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} disabled={Boolean(busy)} />
+        </label>
+        <label>
+          <span>Temporary password</span>
+          <input aria-label="Temporary password" type="password" placeholder="At least 8 characters" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} disabled={Boolean(busy)} />
+        </label>
+        <label>
+          <span>Permission role</span>
+          <select aria-label="User role" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} disabled={Boolean(busy)}>
+            <option value="viewer">Viewer</option>
+            <option value="operator">Operator</option>
+            <option value="admin">Administrator</option>
+          </select>
+        </label>
+        <button className="command-button" type="submit" disabled={Boolean(busy)}>{busy === "create" ? "Creating Account..." : "Create Account"}</button>
+      </form>
+      {notice ? <p className="connector-notice" role="status">{notice}</p> : null}
+      {error ? <p className="auth-error" role="alert">{error}</p> : null}
+      <div className="admin-access-list" aria-label="User accounts">
+        {users.map((user) => (
+          <article key={user.email}>
+            <div>
+              <strong>{user.name || user.email}</strong>
+              <small>{user.email} · {user.role} · {user.is_active ? "active" : "inactive"}</small>
+            </div>
+            <div>
+              {user.is_active ? (
+                <button
+                  type="button"
+                  className="operational-link-button operational-link-button--danger"
+                  disabled={Boolean(busy) || user.email === currentUser?.email}
+                  title={user.email === currentUser?.email ? "You cannot deactivate your current account." : "Deactivate this account and revoke its sessions."}
+                  onClick={() => void mutate(`deactivate-${user.email}`, `/api/auth/users/${encodeURIComponent(user.email)}/deactivate`)}
+                >
+                  Deactivate Account
+                </button>
+              ) : (
+                <button type="button" className="secondary-command-button" disabled={Boolean(busy)} onClick={() => void mutate(`activate-${user.email}`, `/api/auth/users/${encodeURIComponent(user.email)}/activate`)}>
+                  Activate Account
+                </button>
+              )}
+              <button
+                type="button"
+                className="operational-link-button"
+                disabled={Boolean(busy) || !sessions.some((session) => session.email === user.email)}
+                title={sessions.some((session) => session.email === user.email) ? "Revoke all active sessions for this account." : "This account has no active sessions."}
+                onClick={() => void mutate(`revoke-${user.email}`, "/api/auth/sessions/revoke", { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: user.email, revoke_all_for_user: true }) })}
+              >
+                Revoke Sessions
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </Panel>
+  );
 }
