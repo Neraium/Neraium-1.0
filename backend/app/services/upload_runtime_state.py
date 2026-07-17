@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Any
 
 
+DEFAULT_MAX_CACHED_UPLOAD_JOBS = 1000
+
+
 @dataclass
 class UploadRuntimeState:
     runtime_dir: Path = Path("backend/runtime")
@@ -17,6 +20,18 @@ class UploadRuntimeState:
     )
     reset_block_persisted: bool = False
     upload_state_s3_client: Any | None = None
+    max_cached_jobs: int = DEFAULT_MAX_CACHED_UPLOAD_JOBS
+
+    def cache_job(self, job_id: str, payload: dict[str, Any]) -> list[str]:
+        normalized_id = str(job_id)
+        self.jobs.pop(normalized_id, None)
+        self.jobs[normalized_id] = payload
+        evicted: list[str] = []
+        while len(self.jobs) > max(int(self.max_cached_jobs), 1):
+            oldest_id = next(iter(self.jobs))
+            self.jobs.pop(oldest_id, None)
+            evicted.append(oldest_id)
+        return evicted
 
     def configure_runtime_dir(self, path: str | Path) -> bool:
         next_runtime_dir = Path(path)

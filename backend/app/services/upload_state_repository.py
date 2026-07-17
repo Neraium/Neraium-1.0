@@ -463,7 +463,7 @@ def read_upload_result_by_job_id(job_id: str) -> dict[str, Any] | None:
 def read_upload_status(job_id: str) -> dict[str, Any] | None:
     persisted = read_shared_state(f"upload_status_{job_id}")
     if isinstance(persisted, dict):
-        runtime_state().jobs[job_id] = persisted
+        runtime_state().cache_job(job_id, persisted)
         return persisted
     cached = runtime_state().jobs.get(job_id)
     if isinstance(cached, dict):

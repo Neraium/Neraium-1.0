@@ -1,16 +1,18 @@
+import logging
 import os
 
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
-from app.services.runtime_db import queue_metrics, queue_operational_metrics, upload_queue_backend
+from app.services.runtime_db import db_connection, queue_metrics, queue_operational_metrics, upload_queue_backend
 from app.services.service_status import STARTUP_STATUS, service_health_snapshot
 from app.services.sii_runner import build_runner_status
 from app.services.upload_session_service import resolve_latest_upload_session, session_metrics_snapshot
 from app.services.upload_state_repository import shared_state_configured, upload_state_backend
 
 router = APIRouter(tags=["health"])
+logger = logging.getLogger(__name__)
 
 
 def _build_sha() -> str:
@@ -86,6 +88,19 @@ def runtime_diagnostics(settings=None, *, include_upload_session: bool = True) -
     }
 
 
+def _runtime_db_available() -> bool:
+    try:
+        with db_connection() as connection:
+            row = connection.execute("SELECT 1 AS ready").fetchone()
+        return row is not None
+    except Exception:
+        logger.warning(
+            "readiness_dependency_failed",
+            extra={"event": "readiness_dependency_failed", "dependency": "runtime_db"},
+        )
+        return False
+
+
 def readiness_snapshot(settings) -> tuple[dict[str, str], list[str]]:
     checks: dict[str, str] = {
         "startup": "ok",
@@ -96,7 +111,7 @@ def readiness_snapshot(settings) -> tuple[dict[str, str], list[str]]:
     failed_modules = list(STARTUP_STATUS.get("failed_modules") or [])
     if failed_modules or not STARTUP_STATUS.get("startup_complete", False):
         checks["startup"] = "error"
-    if not STARTUP_STATUS.get("runtime_db_ready", False):
+    if not STARTUP_STATUS.get("runtime_db_ready", False) or not _runtime_db_available():
         checks["runtime_db"] = "error"
     if not STARTUP_STATUS.get("default_connection_ready", False):
         checks["default_connection"] = "error"

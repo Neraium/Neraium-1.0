@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any
@@ -7,12 +8,16 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.datastructures import Headers
 
 from app.core.config import Settings, get_settings
+from app.core.logging_config import bind_log_context, configure_logging, reset_log_context
 from app.core.security import require_admin_role
 from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay
+from app.routers.data import wait_for_upload_workers
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
+from app.services.rate_limiter import clear_rate_limits
 from app.services.runtime_db import clear_stale_processing_queue_jobs, configure_runtime_dir as configure_runtime_db_dir, init_runtime_db, prune_runtime_db_records
 from app.services.service_status import STARTUP_STATUS, reset_startup_status, service_health_snapshot
 from app.services.sii_runner import build_runner_status, configure_runtime_dir as configure_sii_runner_dir
@@ -28,84 +33,139 @@ async def app_lifespan(app: FastAPI):
     settings = app.state.settings
     upload_worker_started = False
     data_poller_started = False
+    startup_started_at = time.perf_counter()
     reset_startup_status()
     STARTUP_STATUS["upload_state_backend"] = upload_state_backend()
     STARTUP_STATUS["upload_state_shared_configured"] = shared_state_configured()
+
+    logger.info(
+        "runtime_services_starting",
+        extra={
+            "event": "runtime_services_starting",
+            "app_env": settings.app_env,
+            "process_role": settings.process_role,
+            "runtime_dir": str(settings.runtime_dir),
+            "upload_state_backend": STARTUP_STATUS["upload_state_backend"],
+            "upload_state_shared_configured": STARTUP_STATUS["upload_state_shared_configured"],
+        },
+    )
     if settings.app_env == "production" and not shared_state_configured():
         logger.warning(
-            "upload_state_shared_storage_not_configured app_env=production backend=%s expected_env=NERAIUM_UPLOAD_STATE_BUCKET",
-            upload_state_backend(),
+            "upload_state_shared_storage_not_configured",
+            extra={
+                "event": "upload_state_shared_storage_not_configured",
+                "app_env": settings.app_env,
+                "upload_state_backend": upload_state_backend(),
+                "expected_env": "NERAIUM_UPLOAD_STATE_BUCKET",
+            },
         )
 
     try:
-        init_runtime_db()
-        recovered_jobs = clear_stale_processing_queue_jobs()
-        prune_stats = prune_runtime_db_records()
-        if prune_stats.get("upload_queue_deleted") or prune_stats.get("evidence_runs_deleted"):
-            logger.info("runtime_db_prune_stats %s", prune_stats)
-        if recovered_jobs:
-            logger.warning("recovered_stale_processing_jobs count=%s", recovered_jobs)
-        STARTUP_STATUS["runtime_db_ready"] = True
-    except Exception as error:
-        STARTUP_STATUS["failed_modules"].append(f"runtime_db: {error}")
-        logger.exception("runtime_db_startup_failure")
-
-    try:
-        warm_latest_upload_cache()
-    except Exception:
-        logger.exception("latest_upload_cache_warmup_failure")
-
-    try:
-        ensure_default_data_connection(settings)
-        STARTUP_STATUS["default_connection_ready"] = True
-    except Exception as error:
-        STARTUP_STATUS["failed_modules"].append(f"default_connection: {error}")
-        logger.exception("default_connection_startup_failure")
-
-    if settings.start_background_workers:
         try:
-            start_upload_worker()
-            upload_worker_started = True
-            STARTUP_STATUS["upload_worker_started"] = True
+            init_runtime_db()
+            recovered_jobs = clear_stale_processing_queue_jobs()
+            prune_stats = prune_runtime_db_records()
+            if prune_stats.get("upload_queue_deleted") or prune_stats.get("evidence_runs_deleted"):
+                logger.info("runtime_db_pruned", extra={"event": "runtime_db_pruned", **prune_stats})
+            if recovered_jobs:
+                logger.warning(
+                    "stale_processing_jobs_recovered",
+                    extra={"event": "stale_processing_jobs_recovered", "count": recovered_jobs},
+                )
+            STARTUP_STATUS["runtime_db_ready"] = True
         except Exception as error:
-            STARTUP_STATUS["failed_modules"].append(f"upload_worker: {error}")
-            logger.exception("upload_worker_startup_failure")
+            STARTUP_STATUS["failed_modules"].append("runtime_db: initialization_failed")
+            logger.exception("runtime_db_startup_failure")
+            raise RuntimeError("Required runtime database initialization failed.") from error
 
-    if settings.start_data_connection_poller:
         try:
-            start_data_connection_poller()
-            data_poller_started = True
-            STARTUP_STATUS["data_poller_started"] = True
+            warm_latest_upload_cache()
+        except Exception:
+            logger.exception("latest_upload_cache_warmup_failure")
+
+        try:
+            ensure_default_data_connection(settings)
+            STARTUP_STATUS["default_connection_ready"] = True
         except Exception as error:
-            STARTUP_STATUS["failed_modules"].append(f"data_poller: {error}")
-            logger.exception("data_poller_startup_failure")
+            STARTUP_STATUS["failed_modules"].append("default_connection: initialization_failed")
+            logger.exception("default_connection_startup_failure")
+            raise RuntimeError("Default data connection initialization failed.") from error
 
-    STARTUP_STATUS["startup_complete"] = True
-    logger.info(
-        "runtime_services_started process_role=%s upload_worker=%s data_poller=%s",
-        settings.process_role,
-        upload_worker_started,
-        data_poller_started,
-    )
+        if settings.start_background_workers:
+            try:
+                start_upload_worker()
+                upload_worker_started = True
+                STARTUP_STATUS["upload_worker_started"] = True
+            except Exception as error:
+                STARTUP_STATUS["failed_modules"].append("upload_worker: startup_failed")
+                logger.exception("upload_worker_startup_failure")
+                raise RuntimeError("Upload worker startup failed.") from error
 
-    try:
+        if settings.start_data_connection_poller:
+            try:
+                start_data_connection_poller()
+                data_poller_started = True
+                STARTUP_STATUS["data_poller_started"] = True
+            except Exception as error:
+                STARTUP_STATUS["failed_modules"].append("data_poller: startup_failed")
+                logger.exception("data_poller_startup_failure")
+                raise RuntimeError("Data connection poller startup failed.") from error
+
+        STARTUP_STATUS["startup_complete"] = True
+        logger.info(
+            "runtime_services_started",
+            extra={
+                "event": "runtime_services_started",
+                "process_role": settings.process_role,
+                "upload_worker": upload_worker_started,
+                "data_poller": data_poller_started,
+                "startup_duration_ms": round((time.perf_counter() - startup_started_at) * 1000, 2),
+            },
+        )
         yield
     finally:
+        shutdown_started_at = time.perf_counter()
+        shutdown_failures: list[str] = []
         if data_poller_started:
             try:
-                stop_data_connection_poller()
+                if not stop_data_connection_poller(timeout_seconds=settings.shutdown_timeout_seconds):
+                    shutdown_failures.append("data_poller_timeout")
             except Exception:
+                shutdown_failures.append("data_poller_failure")
                 logger.exception("data_poller_shutdown_failure")
         if upload_worker_started:
             try:
-                stop_upload_worker()
+                if not stop_upload_worker(timeout_seconds=settings.shutdown_timeout_seconds):
+                    shutdown_failures.append("upload_worker_timeout")
             except Exception:
+                shutdown_failures.append("upload_worker_failure")
                 logger.exception("upload_worker_shutdown_failure")
-        logger.info("runtime_services_stopped process_role=%s", settings.process_role)
+        if not wait_for_upload_workers(timeout=settings.shutdown_timeout_seconds):
+            shutdown_failures.append("request_upload_workers_timeout")
+            logger.error(
+                "request_upload_workers_shutdown_timeout",
+                extra={
+                    "event": "request_upload_workers_shutdown_timeout",
+                    "timeout_seconds": settings.shutdown_timeout_seconds,
+                },
+            )
+        clear_rate_limits()
+        STARTUP_STATUS["upload_worker_started"] = False
+        STARTUP_STATUS["data_poller_started"] = False
+        logger.info(
+            "runtime_services_stopped",
+            extra={
+                "event": "runtime_services_stopped",
+                "process_role": settings.process_role,
+                "shutdown_duration_ms": round((time.perf_counter() - shutdown_started_at) * 1000, 2),
+                "shutdown_failures": shutdown_failures,
+            },
+        )
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    configure_logging(level=settings.log_level, log_format=settings.log_format)
     reset_startup_status()
     # Keep service runtime paths aligned with app settings, especially in tests
     # where each app instance may use a dedicated tmp runtime directory.
@@ -137,24 +197,64 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.middleware("http")
     async def add_request_context(request: Request, call_next):
-        request.state.request_id = str(request.headers.get("X-Request-Id") or uuid.uuid4().hex)
+        inbound_request_id = str(request.headers.get("X-Request-Id") or "").strip()
+        request_id = (
+            inbound_request_id
+            if re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", inbound_request_id)
+            else uuid.uuid4().hex
+        )
         inbound_upload_session_id = str(request.headers.get("X-Upload-Session-Id") or "").strip()
-        if inbound_upload_session_id:
-            request.state.upload_session_id = inbound_upload_session_id
-        response = await call_next(request)
-        request_id = getattr(request.state, "request_id", None)
-        upload_session_id = getattr(request.state, "upload_session_id", None)
-        if request_id:
-            response.headers["X-Request-Id"] = request_id
+        upload_session_id = (
+            inbound_upload_session_id
+            if re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", inbound_upload_session_id)
+            else None
+        )
+        request.state.request_id = request_id
+        if not inbound_request_id:
+            request.scope["headers"] = [
+                *request.scope.get("headers", []),
+                (b"x-request-id", request_id.encode("ascii")),
+            ]
+            # Request.headers may already be cached by header validation.
+            request._headers = Headers(scope=request.scope)
         if upload_session_id:
-            response.headers["X-Upload-Session-Id"] = str(upload_session_id)
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
-        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault("Content-Security-Policy", "default-src 'self'")
-        if request.url.scheme == "https":
-            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-        return response
+            request.state.upload_session_id = upload_session_id
+        tokens = bind_log_context(request_id=request_id, upload_session_id=upload_session_id)
+        started_at = time.perf_counter()
+        response = None
+        try:
+            response = await call_next(request)
+            response.headers["X-Request-Id"] = request_id
+            if upload_session_id:
+                response.headers["X-Upload-Session-Id"] = upload_session_id
+            response.headers.setdefault("X-Content-Type-Options", "nosniff")
+            response.headers.setdefault("X-Frame-Options", "DENY")
+            response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+            response.headers.setdefault("Content-Security-Policy", "default-src 'self'")
+            if request.url.scheme == "https":
+                response.headers.setdefault(
+                    "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+                )
+            return response
+        finally:
+            duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+            status_code = getattr(response, "status_code", 500)
+            log_method = (
+                logger.debug
+                if request.url.path in {"/health", "/api/health", "/api/ready"}
+                else logger.info
+            )
+            log_method(
+                "http_request_completed",
+                extra={
+                    "event": "http_request_completed",
+                    "http_method": request.method,
+                    "http_path": request.url.path,
+                    "http_status": status_code,
+                    "duration_ms": duration_ms,
+                },
+            )
+            reset_log_context(tokens)
 
     app.add_middleware(
         CORSMiddleware,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import logging
 import os
 import time
 from collections import deque
@@ -23,6 +24,7 @@ RUNNER_MODULE = "app.services.sii_runner.BackendSiiRunner"
 RUNNER_CALLABLE = "app.services.sii_runner.BackendSiiRunner.ingest"
 CORE_ENGINE = "app.engine.analysis.run_engine_analysis"
 VALIDATION_RUNNER = None
+logger = logging.getLogger(__name__)
 STATE_PATH = get_settings().runtime_dir / "latest_sii_state.json"
 STATE_REQUIRED_FIELDS = {
     "facility_state",
@@ -788,7 +790,16 @@ def write_latest_sii_state(state: dict[str, Any]) -> None:
             try:
                 upsert_latest_payload("latest_sii_state", state)
             except Exception:
-                pass
+                logger.exception("sii_state_runtime_db_persistence_failed")
+            logger.info(
+                "sii_state_published",
+                extra={
+                    "event": "sii_state_published",
+                    "source": state.get("source"),
+                    "room_count": len(state.get("rooms") or []),
+                    "state_available": True,
+                },
+            )
             return
         except OSError as exc:
             last_error = exc

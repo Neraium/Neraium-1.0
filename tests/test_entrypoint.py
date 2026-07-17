@@ -76,7 +76,8 @@ def test_run_worker_logs_startup_and_polls_queue_without_uvicorn(monkeypatch, ca
     assert "init_runtime_db" in calls
     assert "process_next" in calls
     assert "uvicorn" not in calls
-    assert "neraium_startup_role=worker" in caplog.text
+    assert "neraium_worker_starting" in caplog.text
     assert "worker_runtime_initialized" in caplog.text
     assert "worker_loop_started" in caplog.text
-    assert "worker_polling_queue" in caplog.text
+    assert "worker_loop_stopped" in caplog.text
+    assert "worker_polling_queue" not in caplog.text

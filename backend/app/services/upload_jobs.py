@@ -184,8 +184,10 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     payload["session_scope"] = build_session_scope(job_id, filename=payload.get("filename"), status=str(status).lower())
-    UPLOAD_RUNTIME_STATE.jobs[job_id] = payload
+    UPLOAD_RUNTIME_STATE.cache_job(job_id, payload)
     JOB_RUNTIME_DIRS[job_id] = RUNTIME_DIR
+    while len(JOB_RUNTIME_DIRS) > UPLOAD_RUNTIME_STATE.max_cached_jobs:
+        JOB_RUNTIME_DIRS.pop(next(iter(JOB_RUNTIME_DIRS)))
     repository_write_upload_status_progress(job_id, payload, latest_summary=payload, keep_result=False)
     UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = payload
     upsert_upload_job(payload)
@@ -208,7 +210,7 @@ def _complete_with_partial_result(
         build_traceability_packet=build_traceability_packet,
     )
     repository_write_upload_completion(job_id, result=result, summary=summary)
-    UPLOAD_RUNTIME_STATE.jobs[job_id] = summary
+    UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
     UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
     UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
 
@@ -227,7 +229,7 @@ def _persist_completed_upload(job_id: str, *, result: dict[str, Any], summary: d
         complete_upload_queue_job(job_id, "completed")
     except Exception:
         pass
-    UPLOAD_RUNTIME_STATE.jobs[job_id] = summary
+    UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
     UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
     UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
 
@@ -1176,8 +1178,10 @@ def write_job(*args) -> None:
         filename=payload.get("filename"),
         status=str(payload.get("processing_state") or payload.get("status") or "active").lower(),
     )
-    UPLOAD_RUNTIME_STATE.jobs[job_id] = payload
+    UPLOAD_RUNTIME_STATE.cache_job(job_id, payload)
     JOB_RUNTIME_DIRS[job_id] = RUNTIME_DIR
+    while len(JOB_RUNTIME_DIRS) > UPLOAD_RUNTIME_STATE.max_cached_jobs:
+        JOB_RUNTIME_DIRS.pop(next(iter(JOB_RUNTIME_DIRS)))
     status_text = str(payload.get("status") or "").upper()
     processing_state = str(payload.get("processing_state") or "").lower()
     if (

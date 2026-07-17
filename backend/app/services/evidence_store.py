@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import csv
+import logging
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ EVIDENCE_RUNS_PATH = EVIDENCE_DIR / "runs.json"
 MAX_EVIDENCE_PAGE_SIZE = 100
 DEFAULT_EVIDENCE_PAGE_SIZE = 50
 EVIDENCE_HISTORY_CONTEXT = 500
+logger = logging.getLogger(__name__)
 
 FEEDBACK_CATEGORIES = [
     "confirmed_issue",
@@ -88,6 +90,15 @@ def upsert_evidence_run(record: dict[str, Any]) -> dict[str, Any]:
     items = [item for item in raw_items if str(item.get("run_id") or "") != str(record.get("run_id") or "")]
     updated = [persisted, *items]
     atomic_write_json_list(path, updated[:500])
+    logger.info(
+        "evidence_run_persisted",
+        extra={
+            "event": "evidence_run_persisted",
+            "run_id": persisted.get("run_id"),
+            "evidence_status": persisted.get("status"),
+            "observation_status": persisted.get("observation_status"),
+        },
+    )
     return persisted
 
 

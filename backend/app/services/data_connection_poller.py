@@ -28,12 +28,29 @@ def start_data_connection_poller(poll_interval_seconds: float = 1.0) -> None:
     logger.info("data_connection_poller_started poll_interval_seconds=%s", poll_interval_seconds)
 
 
-def stop_data_connection_poller() -> None:
+def stop_data_connection_poller(timeout_seconds: float = 30.0) -> bool:
     global _poller_thread
     _stop_event.set()
-    if _poller_thread is not None and _poller_thread.is_alive():
-        _poller_thread.join(timeout=2.0)
-    _poller_thread = None
+    thread = _poller_thread
+    if thread is not None and thread.is_alive():
+        thread.join(timeout=max(float(timeout_seconds), 0.0))
+    stopped = thread is None or not thread.is_alive()
+    if stopped:
+        _poller_thread = None
+        logger.info(
+            "data_connection_poller_stopped",
+            extra={"event": "data_connection_poller_stopped"},
+        )
+    else:
+        logger.error(
+            "data_connection_poller_shutdown_timeout",
+            extra={
+                "event": "data_connection_poller_shutdown_timeout",
+                "timeout_seconds": timeout_seconds,
+                "thread_name": thread.name,
+            },
+        )
+    return stopped
 
 
 def run_due_data_connection_polls() -> None:

@@ -246,6 +246,7 @@ Deployment notes and runbooks are available in:
 
 - `docs/AWS_DEPLOYMENT.md`
 - `docs/DEPLOYMENT_RUNBOOK.md`
+- `docs/OPERATIONS.md`
 - `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md`
 - `docs/PRODUCTION_OPERATOR_FLOW_CHECKLIST.md`
 

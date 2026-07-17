@@ -1,5 +1,7 @@
 # Deployment Runbook
 
+See `docs/OPERATIONS.md` for the production configuration contract, log schema, probe semantics, monitoring guidance, resource ownership, and troubleshooting procedures.
+
 This runbook covers the production deployment and verification sequence for Neraium.
 
 ## Preflight
@@ -7,7 +9,7 @@ This runbook covers the production deployment and verification sequence for Nera
 ```bash
 git status --short
 npm --prefix frontend run build
-python -m pytest tests/test_health.py tests/test_data_upload.py -q
+python -m pytest tests/test_health.py tests/test_config.py tests/test_logging.py tests/test_operational_lifecycle.py tests/test_data_upload.py -q
 node scripts/smoke-production.js
 python scripts/pilot_rehearsal_check.py
 ```
@@ -111,7 +113,10 @@ Check backend logs for:
 - SII processing success or failure
 - polling start, stop, and poll result events
 - evidence export events
-- readiness degradation
+- `readiness_dependency_failed` and readiness degradation
+- `evidence_run_persisted`
+- `sii_state_published`
+- `*_shutdown_timeout`
 
 ## Rerun
 

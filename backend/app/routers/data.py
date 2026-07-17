@@ -183,7 +183,7 @@ def _run_tracked_upload_worker(runtime_dir: Path) -> None:
             _UPLOAD_WORKERS.discard(threading.current_thread())
 
 
-def wait_for_upload_workers(timeout: float = 5.0) -> None:
+def wait_for_upload_workers(timeout: float = 5.0) -> bool:
     deadline = time.monotonic() + max(float(timeout), 0.0)
     current_thread = threading.current_thread()
     while True:
@@ -194,11 +194,11 @@ def wait_for_upload_workers(timeout: float = 5.0) -> None:
                 if worker is not current_thread and worker.is_alive()
             ]
         if not workers:
-            return
+            return True
         for worker in workers:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                return
+                return False
             worker.join(remaining)
 
 
