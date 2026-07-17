@@ -77,6 +77,7 @@ JOB_RUNTIME_DIRS: dict[str, Path] = {}
 LATEST_UPLOAD_CACHE = UPLOAD_RUNTIME_STATE.latest_upload_cache
 MAX_ANALYSIS_ROWS = None
 MAX_SII_ROWS = None
+MAX_INGESTION_ANALYSIS_ROWS = 100_000
 CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "5000"))
 CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "5000"))
 logger = logging.getLogger(__name__)
@@ -825,6 +826,10 @@ def _build_csv_result(
     sii_intelligence = pipeline["sii_intelligence"]
     processing_time_seconds = pipeline["processing_time_seconds"]
     processing_trace = pipeline["processing_trace"]
+    processing_trace["analysis_sample_rows"] = len(rows)
+    processing_trace["analysis_population_rows"] = row_count_total
+    processing_trace["analysis_sampling_applied"] = len(rows) < row_count_total
+    processing_trace["analysis_sample_stride"] = int((ingestion_report or {}).get("analysis_sample_stride") or 1)
     runner_result = pipeline["runner_result"]
     latest_runner_state = pipeline["latest_runner_state"]
     relationship_model = pipeline["relationship_model"]
@@ -878,7 +883,16 @@ def _build_csv_result(
         "sii_intelligence": sii_intelligence,
         "sii_runner_result": runner_result,
         "processing_trace": processing_trace,
-        "processing_stats": {"used_streaming": True, "sampled_rows": len(rows), "chunk_count": chunk_count, "memory_estimate_bytes": memory_estimate_bytes, "processing_time_seconds": processing_time_seconds},
+        "processing_stats": {
+            "used_streaming": True,
+            "sampled_rows": len(rows),
+            "analysis_population_rows": row_count_total,
+            "analysis_sampling_applied": len(rows) < row_count_total,
+            "analysis_sample_stride": int((ingestion_report or {}).get("analysis_sample_stride") or 1),
+            "chunk_count": chunk_count,
+            "memory_estimate_bytes": memory_estimate_bytes,
+            "processing_time_seconds": processing_time_seconds,
+        },
         "room_summary": room_summary,
         "ingestion_metadata": {"source_type": "csv_upload"},
         "source_type": "csv",
@@ -1264,7 +1278,10 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
     try:
         snapshot = _stream_csv_snapshot(
             p,
-            max_analysis_rows=None,
+            max_analysis_rows=parse_positive_int_env(
+                "NERAIUM_MAX_INGESTION_ANALYSIS_ROWS",
+                MAX_INGESTION_ANALYSIS_ROWS,
+            ),
             job_id=job_id,
         )
 
@@ -1297,6 +1314,10 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
                 "data_quality_messages": snapshot.get("data_quality_messages", []),
                 "sample_interval_seconds": snapshot.get("sample_interval_seconds"),
                 "imputation_report": snapshot.get("imputation_report", {}),
+                "analysis_sample_rows": snapshot.get("analysis_sample_rows"),
+                "analysis_population_rows": snapshot.get("analysis_population_rows"),
+                "analysis_sampling_applied": snapshot.get("analysis_sampling_applied", False),
+                "analysis_sample_stride": snapshot.get("analysis_sample_stride", 1),
                 "delimiter": snapshot["delimiter"],
                 "header_present": snapshot["header_present"],
             },

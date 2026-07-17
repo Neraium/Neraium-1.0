@@ -202,6 +202,7 @@ def _empty_response(*, include_persisted: bool, request_id: str | None) -> dict[
         "upload_session_id": None,
         "request_id": request_id,
         "source": "none",
+        "result_source": None,
         "last_filename": None,
         "rows_processed": 0,
         "columns_detected": 0,
@@ -352,6 +353,11 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
         working_summary.get("status") if isinstance(working_summary, dict) else raw_status or session_state
     )
     snapshot_processing_state = "complete" if snapshot_status == "COMPLETE" else raw_status or session_state
+    resolved_result_source = (
+        (result or {}).get("result_source")
+        or working_summary.get("result_source")
+        or working_summary.get("upload_result_source")
+    )
     snapshot = {
         **(working_summary if isinstance(working_summary, dict) else {}),
         "state_backend": state_backend,
@@ -359,7 +365,8 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
         "session_source": source,
         "upload_session_id": working_job_id,
         "request_id": request_id,
-        "source": "uploaded" if result else ("processing" if session_state in {SESSION_STATE_QUEUED, SESSION_STATE_PROCESSING} else "history"),
+        "source": "rest_poll" if resolved_result_source == "rest_poll" else ("uploaded" if result else ("processing" if session_state in {SESSION_STATE_QUEUED, SESSION_STATE_PROCESSING} else "history")),
+        "result_source": resolved_result_source,
         "last_filename": (result or {}).get("filename") or working_summary.get("filename"),
         "rows_processed": (result or {}).get("row_count") or working_summary.get("rows_processed") or working_summary.get("row_count") or 0,
         "columns_detected": (result or {}).get("column_count") or working_summary.get("columns_detected") or working_summary.get("column_count") or 0,

@@ -238,6 +238,7 @@ def reset_connection_live_baseline(connection_id: str) -> dict[str, Any]:
     connection["last_baseline_update"] = rebuilt_state.get("last_baseline_update")
     connection["baseline_error_message"] = ""
     updated = upsert_registered_data_connection(connection)
+    publish_live_baseline_progress(updated, rebuilt_state)
     logger.info(
         "baseline_rebuild_completed connection_id=%s status=%s samples=%s required=%s",
         connection_id,
@@ -691,7 +692,8 @@ def result_from_connection_batch(
 
 
 def summarize_connection_result(connection: dict[str, Any], result: dict[str, Any], completed_at: str, metadata: dict[str, Any]) -> dict[str, Any]:
-    summary = summarize_result(result, completed_at)
+    summary = summarize_result(result)
+    summary["last_processed_at"] = summary.get("last_processed_at") or completed_at
     summary["filename"] = connection["name"]
     summary["source"] = "rest_poll"
     summary["upload_result_source"] = "rest_poll"
@@ -914,6 +916,35 @@ def build_processing_metadata(metadata: dict[str, Any], baseline_state: dict[str
     }
 
 
+def publish_live_baseline_progress(connection: dict[str, Any], baseline_state: dict[str, Any]) -> None:
+    samples_collected = int(baseline_state.get("samples_collected") or 0)
+    samples_required = max(int(baseline_state.get("samples_required") or DEFAULT_LIVE_BASELINE_SAMPLE_COUNT), 1)
+    progress = min(99, round(samples_collected / samples_required * 100))
+    summary = {
+        "job_id": connection["connection_id"],
+        "run_id": connection["connection_id"],
+        "upload_id": connection["connection_id"],
+        "filename": connection.get("name"),
+        "status": "PROCESSING",
+        "processing_state": "processing",
+        "percent": progress,
+        "progress": progress,
+        "message": f"Building live baseline ({samples_collected}/{samples_required} samples).",
+        "source": "rest_poll",
+        "upload_result_source": "rest_poll",
+        "result_available": False,
+        "sii_completed": False,
+        "baseline_source": baseline_state.get("baseline_source") or "live_rest",
+        "baseline_status": baseline_state.get("baseline_status") or "building",
+        "baseline_samples_collected": samples_collected,
+        "baseline_samples_required": samples_required,
+        "last_baseline_update": baseline_state.get("last_baseline_update"),
+        "last_processed_at": baseline_state.get("last_baseline_update"),
+        "connection_id": connection["connection_id"],
+    }
+    write_latest_upload_summary(connection["connection_id"], summary, append_history=False)
+
+
 def activate_live_baseline(connection: dict[str, Any], metadata: dict[str, Any], baseline_state: dict[str, Any]) -> dict[str, Any]:
     completed_at = now_iso()
     baseline_state.update(
@@ -1127,6 +1158,7 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
                 baseline_state.get("samples_collected"),
                 baseline_state.get("samples_required"),
             )
+            publish_live_baseline_progress(connection, baseline_state)
             partial = latest_result_without_live_baseline(connection, baseline_state)
             partial["actor"] = actor
             return partial

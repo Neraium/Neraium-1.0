@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 from pathlib import Path
 from typing import Any, Callable
 
@@ -227,6 +228,7 @@ def stream_csv_snapshot(
         handle.seek(0)
         saw_header = not header_present
         detection_rows: list[list[str]] = []
+        candidate_row_count = 0
         while True:
             line = handle.readline()
             if line == "":
@@ -239,6 +241,7 @@ def stream_csv_snapshot(
             tokens = row_tokens(line.rstrip("\r\n"), delimiter)
             if len(tokens) != len(columns):
                 continue
+            candidate_row_count += 1
             row_values = [token.strip() for token in tokens]
             if len(detection_rows) < 1000:
                 detection_rows.append(row_values)
@@ -281,10 +284,16 @@ def stream_csv_snapshot(
         duplicate_exact_rows = 0
         important_missing_by_column: dict[str, int] = {}
         invalid_numeric_cells = 0
-        seen_timestamps: set[str] = set()
-        seen_exact_rows: set[tuple[str, ...]] = set()
+        seen_timestamps: set[bytes] = set()
+        seen_exact_rows: set[bytes] = set()
         raw_rows_in_order: list[tuple[Any, dict[str, Any]]] = []
         header_skipped = not header_present
+        rows_used = 0
+        analysis_limit = max_analysis_rows if max_analysis_rows is not None and max_analysis_rows > 0 else None
+        analysis_stride = max(1, (candidate_row_count + analysis_limit - 1) // analysis_limit) if analysis_limit else 1
+        last_accepted_row: tuple[Any, dict[str, Any]] | None = None
+        previous_timestamp: Any = None
+        timestamps_were_unsorted = False
 
         for line in handle:
             if not line.strip():
@@ -304,7 +313,7 @@ def stream_csv_snapshot(
                 continue
 
             raw_row = [token.strip() for token in tokens]
-            exact_row_key = tuple(raw_row)
+            exact_row_key = hashlib.blake2b("\x1f".join(raw_row).encode("utf-8", errors="replace"), digest_size=16).digest()
             if exact_row_key in seen_exact_rows:
                 duplicate_exact_rows += 1
                 continue
@@ -316,7 +325,10 @@ def stream_csv_snapshot(
                     invalid_timestamps += 1
                     continue
                 identity_value = raw_row[identity_index].strip() if identity_index is not None else ""
-                timestamp_key = f"{identity_value}::{parsed_ts.isoformat()}"
+                timestamp_key = hashlib.blake2b(
+                    f"{identity_value}::{parsed_ts.isoformat()}".encode("utf-8", errors="replace"),
+                    digest_size=16,
+                ).digest()
                 if timestamp_key in seen_timestamps:
                     duplicate_timestamps += 1
                     continue
@@ -351,14 +363,23 @@ def stream_csv_snapshot(
                 rows_with_missing_values += 1
             if invalid_in_row:
                 rows_with_invalid_numeric += 1
-            raw_rows_in_order.append((parsed_ts, row))
+            if parsed_ts is not None and previous_timestamp is not None and parsed_ts < previous_timestamp:
+                timestamps_were_unsorted = True
+            if parsed_ts is not None:
+                previous_timestamp = parsed_ts
+            accepted_index = rows_used
+            rows_used += 1
+            last_accepted_row = (parsed_ts, row)
+            if analysis_stride == 1 or accepted_index % analysis_stride == 0:
+                raw_rows_in_order.append(last_accepted_row)
             if job_id and on_progress is not None and rows_received % max(1, csv_progress_update_every) == 0:
                 on_progress(job_id, "parsing_telemetry", 20, f"Normalizing telemetry... {rows_received:,} rows read.")
 
-        if not raw_rows_in_order:
+        if rows_used == 0 or not raw_rows_in_order:
             raise ValueError("CSV contains no usable telemetry rows after cleaning.")
 
-        rows_used = len(raw_rows_in_order)
+        if analysis_stride > 1 and last_accepted_row is not None and raw_rows_in_order[-1] is not last_accepted_row:
+            raw_rows_in_order[-1] = last_accepted_row
         cleaned = sorted(raw_rows_in_order, key=lambda item: item[0]) if timestamp_index is not None else raw_rows_in_order
         interval_seconds = detect_interval_seconds(cleaned) if timestamp_index is not None else None
         imputation_report = {"imputed_cells": 0, "imputed_columns": []}
@@ -399,7 +420,6 @@ def stream_csv_snapshot(
             warnings.append("No header row was detected; generic column names were assigned.")
         if timestamp_index is None:
             warnings.append("No usable timestamp column was detected; row-order analysis was used.")
-        timestamps_were_unsorted = timestamp_index is not None and [item[0] for item in raw_rows_in_order] != [item[0] for item in cleaned]
         if timestamps_were_unsorted:
             warnings.append("Timestamps were unsorted and were ordered before analysis.")
         schema_messages: list[str] = []
@@ -452,6 +472,10 @@ def stream_csv_snapshot(
             "timestamp_column": timestamp_column,
             "sample_rows": sample_rows,
             "row_count": rows_used,
+            "analysis_sample_rows": len(sample_rows),
+            "analysis_population_rows": rows_used,
+            "analysis_sampling_applied": len(sample_rows) < rows_used,
+            "analysis_sample_stride": analysis_stride,
             "rows_received": rows_received,
             "rows_used": rows_used,
             "rows_dropped": rows_dropped,

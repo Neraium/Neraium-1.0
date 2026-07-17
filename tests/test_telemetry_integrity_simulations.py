@@ -9,7 +9,7 @@ from app.main import create_app
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "telemetry_corruption"
 
 
-def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 15.0) -> dict:
+def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 5.0) -> dict:
   deadline = time.time() + timeout_seconds
   last_payload = None
   while time.time() < deadline:
