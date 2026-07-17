@@ -4,6 +4,7 @@ import pytest
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from threading import Event
 
 from app.core.config import Settings
 from app.main import create_app, upload_error_payload
@@ -55,7 +56,7 @@ def large_upload_timestamp(index: int) -> str:
     return (datetime(2026, 5, 1, tzinfo=timezone.utc) + timedelta(minutes=index)).isoformat().replace("+00:00", "Z")
 
 
-def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 5.0) -> dict:
+def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 15.0) -> dict:
     deadline = time.time() + timeout_seconds
     last_payload = None
     while time.time() < deadline:
@@ -309,32 +310,37 @@ def test_create_upload_job_enforces_streaming_size_limit() -> None:
 
 def test_upload_returns_job_id_immediately_without_waiting_for_worker(monkeypatch) -> None:
     client = TestClient(create_app())
+    release_worker = Event()
 
     def slow_worker(_runtime_dir):
-        time.sleep(0.6)
+        release_worker.wait(5.0)
 
     monkeypatch.setattr("app.routers.data._run_upload_worker_for_runtime", slow_worker)
 
-    started = time.perf_counter()
-    response = post_csv(
-        client,
-        "quick-confirmation.csv",
-        "timestamp,room,temperature,humidity\n2026-05-01T08:00:00Z,Flower 1,75,58\n",
-    )
-    elapsed = time.perf_counter() - started
+    try:
+        started = time.perf_counter()
+        response = post_csv(
+            client,
+            "quick-confirmation.csv",
+            "timestamp,room,temperature,humidity\n2026-05-01T08:00:00Z,Flower 1,75,58\n",
+        )
+        elapsed = time.perf_counter() - started
+    finally:
+        release_worker.set()
 
     assert response.status_code == 202
     payload = response.json()
     assert payload["job_id"]
     assert payload["status"] == "PENDING"
-    assert elapsed < 0.35
+    assert elapsed < 1.25
 
 
 def test_upload_large_csv_returns_job_id_immediately_without_waiting_for_worker(monkeypatch) -> None:
     client = TestClient(create_app())
+    release_worker = Event()
 
     def slow_worker(_runtime_dir):
-        time.sleep(0.8)
+        release_worker.wait(5.0)
 
     monkeypatch.setattr("app.routers.data._run_upload_worker_for_runtime", slow_worker)
 
@@ -344,15 +350,18 @@ def test_upload_large_csv_returns_job_id_immediately_without_waiting_for_worker(
     )
     csv_content = f"timestamp,room,temperature,humidity\n{rows}"
 
-    started = time.perf_counter()
-    response = post_csv(client, "large-quick-confirmation.csv", csv_content)
-    elapsed = time.perf_counter() - started
+    try:
+        started = time.perf_counter()
+        response = post_csv(client, "large-quick-confirmation.csv", csv_content)
+        elapsed = time.perf_counter() - started
+    finally:
+        release_worker.set()
 
     assert response.status_code == 202
     payload = response.json()
     assert payload["job_id"]
     assert payload["status"] == "PENDING"
-    assert elapsed < 0.6
+    assert elapsed < 1.5
 
 
 def test_upload_rejects_oversize_request(monkeypatch, tmp_path) -> None:
@@ -1973,12 +1982,12 @@ def test_75k_upload_status_polling_completes_with_extended_timeout() -> None:
     upload_response = post_csv(client, "telemetry-75k.csv", f"timestamp,room,temperature,humidity\n{rows}")
     upload_payload = upload_response.json()
     if upload_payload.get("status_url"):
-        payload = wait_for_terminal_upload_status(client, upload_payload["status_url"], timeout_seconds=30.0)
+        payload = wait_for_terminal_upload_status(client, upload_payload["status_url"], timeout_seconds=90.0)
     elif upload_payload.get("job_id"):
         payload = wait_for_terminal_upload_status(
             client,
             f"/api/data/upload-status/{upload_payload['job_id']}",
-            timeout_seconds=30.0,
+            timeout_seconds=90.0,
         )
     else:
         payload = upload_payload

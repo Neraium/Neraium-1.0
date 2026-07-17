@@ -27,6 +27,8 @@ def write_normalized(conn: Connection[Any], result: dict[str, Any]) -> None:
         flag = integrity_flags[signal_id]
         fill = fill_methods[signal_id]
         source_id = profiles[signal_id].source_id if signal_id in profiles else None
+        if not source_id:
+            raise ValueError(f"source_id is required for normalized signal {signal_id}.")
         for ts, value in series.items():
             telemetry_rows.append((
                 ts,
@@ -60,7 +62,11 @@ def write_normalized(conn: Connection[Any], result: dict[str, Any]) -> None:
                 INSERT INTO telemetry_normalized
                     (time, signal_id, source_id, value, is_filled, fill_method, integrity_flag)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT DO NOTHING
+                ON CONFLICT (time, source_id, signal_id) DO UPDATE SET
+                    value = EXCLUDED.value,
+                    is_filled = EXCLUDED.is_filled,
+                    fill_method = EXCLUDED.fill_method,
+                    integrity_flag = EXCLUDED.integrity_flag
                 """,
                 telemetry_rows,
             )
@@ -72,6 +78,12 @@ def write_normalized(conn: Connection[Any], result: dict[str, Any]) -> None:
                      gap_type, completeness, samples_expected,
                      samples_received, treatment)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (signal_id, source_id, window_start, window_end) DO UPDATE SET
+                    gap_type = EXCLUDED.gap_type,
+                    completeness = EXCLUDED.completeness,
+                    samples_expected = EXCLUDED.samples_expected,
+                    samples_received = EXCLUDED.samples_received,
+                    treatment = EXCLUDED.treatment
                 """,
                 profile_rows,
             )
@@ -94,6 +106,10 @@ def write_source_integrity(
             INSERT INTO source_integrity
                 (source_id, window_start, window_end, status, affected_signals, notes)
             VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (source_id, window_start, window_end) DO UPDATE SET
+                status = EXCLUDED.status,
+                affected_signals = EXCLUDED.affected_signals,
+                notes = EXCLUDED.notes
             """,
             (source_id, window_start, window_end, status, affected_signals, notes),
         )

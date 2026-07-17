@@ -11,6 +11,7 @@ from app.services.rate_limiter import clear_rate_limits
 
 def _production_client(monkeypatch, tmp_path) -> TestClient:
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
     monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
     settings = Settings(
         app_env="production",
@@ -24,6 +25,7 @@ def _production_client(monkeypatch, tmp_path) -> TestClient:
 
 def test_auth_store_migrates_legacy_json_to_auth_db(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
     monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
     legacy_path = tmp_path / "auth_store.json"
     legacy_payload = {
@@ -166,7 +168,7 @@ def test_admin_can_manage_users_and_sessions(monkeypatch, tmp_path) -> None:
         "/api/auth/users",
         json={"email": "viewer@example.com", "password": "password123", "name": "Viewer", "role": "viewer"},
     )
-    assert create_response.status_code == 200
+    assert create_response.status_code == 201
     assert create_response.json()["role"] == "viewer"
 
     users_response = client.get("/api/auth/users")

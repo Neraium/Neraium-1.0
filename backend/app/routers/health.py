@@ -1,7 +1,7 @@
 import logging
 import os
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
@@ -135,7 +135,7 @@ def read_health(request: Request) -> JSONResponse:
 
 
 @router.get("/ready")
-def read_ready(request: Request, verbose: bool = False) -> JSONResponse:
+def read_ready(request: Request, verbose: bool = Query(False)) -> JSONResponse:
     settings = request.app.state.settings
     checks, failed_modules = readiness_snapshot(settings)
     diagnostics = runtime_diagnostics(settings, include_upload_session=verbose)

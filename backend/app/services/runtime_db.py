@@ -8,13 +8,13 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from app.core.config import get_settings
 
 
 RUNTIME_DIR = get_settings().runtime_dir
-DB_PATH = RUNTIME_DIR / "runtime.db" 
+DB_PATH = RUNTIME_DIR / "runtime.db"
 UPLOAD_QUEUE_RETENTION_DAYS = int(os.getenv("NERAIUM_UPLOAD_QUEUE_RETENTION_DAYS", "14"))
 EVIDENCE_RUN_RETENTION_DAYS = int(os.getenv("NERAIUM_EVIDENCE_RUN_RETENTION_DAYS", "45"))
 logger = logging.getLogger(__name__)
@@ -47,6 +47,13 @@ def _normalize_upload_queue_status(status: str | None) -> str | None:
     return normalized
 
 
+def _require_upload_queue_status(status: str | None, allowed: set[str]) -> str:
+    normalized = _normalize_upload_queue_status(status)
+    if normalized not in allowed:
+        raise ValueError("invalid_upload_queue_status_transition")
+    return normalized
+
+
 def ensure_runtime_dir() -> None:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -56,17 +63,22 @@ def db_connection() -> Iterator[sqlite3.Connection]:
     ensure_runtime_dir()
     connection = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA busy_timeout = 30000")
     try:
         yield connection
         connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
     finally:
         connection.close()
 
 
-def init_runtime_db() -> None: 
-    with db_connection() as connection: 
-        connection.executescript( 
-            """ 
+def init_runtime_db() -> None:
+    with db_connection() as connection:
+        connection.executescript(
+            """
             CREATE TABLE IF NOT EXISTS upload_jobs (
                 job_id TEXT PRIMARY KEY,
                 status TEXT NOT NULL,
@@ -78,12 +90,13 @@ def init_runtime_db() -> None:
 
             CREATE TABLE IF NOT EXISTS upload_queue (
                 job_id TEXT PRIMARY KEY,
-                status TEXT NOT NULL,
-                attempts INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+                attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
                 last_error TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                locked_at TEXT
+                locked_at TEXT,
+                FOREIGN KEY(job_id) REFERENCES upload_jobs(job_id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS evidence_runs (
@@ -112,27 +125,27 @@ def init_runtime_db() -> None:
                 payload_json TEXT NOT NULL
             );
 
-            CREATE TABLE IF NOT EXISTS data_connections ( 
-                connection_id TEXT PRIMARY KEY, 
-                name TEXT NOT NULL, 
-                status TEXT NOT NULL, 
-                polling_enabled INTEGER NOT NULL DEFAULT 0, 
-                updated_at TEXT NOT NULL, 
-                payload_json TEXT NOT NULL 
-            ); 
+            CREATE TABLE IF NOT EXISTS data_connections (
+                connection_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('offline', 'polling', 'online', 'ready', 'error', 'not_configured')),
+                polling_enabled INTEGER NOT NULL DEFAULT 0 CHECK (polling_enabled IN (0, 1)),
+                updated_at TEXT NOT NULL,
+                payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
+            );
 
             CREATE TABLE IF NOT EXISTS auth_users (
                 email TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                role TEXT NOT NULL,
+                role TEXT NOT NULL CHECK (role IN ('viewer', 'operator', 'admin')),
                 salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 last_login_at TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1,
+                is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
                 deactivated_at TEXT,
-                bootstrap_managed INTEGER NOT NULL DEFAULT 0
+                bootstrap_managed INTEGER NOT NULL DEFAULT 0 CHECK (bootstrap_managed IN (0, 1))
             );
 
             CREATE TABLE IF NOT EXISTS auth_sessions (
@@ -149,16 +162,198 @@ def init_runtime_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_upload_jobs_status_updated ON upload_jobs(status, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_upload_queue_status_created ON upload_queue(status, created_at ASC);
             CREATE INDEX IF NOT EXISTS idx_upload_queue_updated_at ON upload_queue(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_upload_queue_status_updated ON upload_queue(status, updated_at ASC);
             CREATE INDEX IF NOT EXISTS idx_evidence_runs_created_at ON evidence_runs(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_evidence_runs_status_created ON evidence_runs(status, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_latest_payloads_updated_at ON latest_payloads(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_data_connections_updated_at ON data_connections(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_data_connections_polling_updated ON data_connections(polling_enabled, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_auth_users_role_active ON auth_users(role, is_active);
             CREATE INDEX IF NOT EXISTS idx_auth_sessions_email ON auth_sessions(email, expires_at DESC);
             CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked ON auth_sessions(revoked_at, expires_at DESC);
-            """ 
-        ) 
+            """
+        )
+        connection.execute("BEGIN IMMEDIATE")
+        _apply_runtime_migrations(connection)
+
+
+RUNTIME_SCHEMA_MIGRATIONS = (
+    "001_queue_integrity",
+    "002_query_indexes",
+    "003_state_constraints",
+)
+
+
+def _table_sql(connection: sqlite3.Connection, table_name: str) -> str:
+    row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    return str(row["sql"] or "") if row else ""
+
+
+def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
+    """Upgrade every supported runtime schema state.
+
+    Supported inputs are an empty database and the unversioned schema shipped
+    before the migration ledger. Downgrades are intentionally unsupported.
+    Migration 001 rebuilds only the bounded upload queue table so SQLite can add
+    a real foreign key and CHECK constraints; orphaned legacy queue rows are
+    discarded because they cannot be processed without a matching upload job.
+    """
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS runtime_schema_migrations (
+            migration_id TEXT PRIMARY KEY,
+            applied_at TEXT NOT NULL
+        )
+        """
+    )
+    applied = {
+        str(row["migration_id"])
+        for row in connection.execute("SELECT migration_id FROM runtime_schema_migrations").fetchall()
+    }
+
+    if "001_queue_integrity" not in applied:
+        queue_sql = _table_sql(connection, "upload_queue").lower()
+        needs_rebuild = "references upload_jobs" not in queue_sql or "check" not in queue_sql
+        if needs_rebuild:
+            connection.execute(
+                """
+                CREATE TABLE upload_queue_migrating (
+                    job_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+                    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    locked_at TEXT,
+                    FOREIGN KEY(job_id) REFERENCES upload_jobs(job_id) ON DELETE CASCADE
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO upload_queue_migrating
+                    (job_id, status, attempts, last_error, created_at, updated_at, locked_at)
+                SELECT q.job_id,
+                       CASE lower(q.status) WHEN 'queued' THEN 'pending' ELSE lower(q.status) END,
+                       CASE WHEN q.attempts < 0 THEN 0 ELSE q.attempts END,
+                       q.last_error, q.created_at, q.updated_at, q.locked_at
+                FROM upload_queue AS q
+                INNER JOIN upload_jobs AS j ON j.job_id = q.job_id
+                WHERE lower(q.status) IN ('queued', 'pending', 'processing', 'completed', 'failed')
+                """
+            )
+            connection.execute("DROP TABLE upload_queue")
+            connection.execute("ALTER TABLE upload_queue_migrating RENAME TO upload_queue")
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("001_queue_integrity", now_iso()),
+        )
+
+    if "002_query_indexes" not in applied:
+        # Keep only the newest legacy active session before enforcing the
+        # cross-process single-session invariant.
+        migration_time = now_iso()
+        connection.execute(
+            """
+            UPDATE auth_sessions
+            SET revoked_at = ?
+            WHERE revoked_at IS NULL
+              AND session_id NOT IN (
+                  SELECT session_id FROM (
+                      SELECT session_id,
+                             ROW_NUMBER() OVER (
+                                 PARTITION BY email ORDER BY created_at DESC, session_id DESC
+                             ) AS position
+                      FROM auth_sessions
+                      WHERE revoked_at IS NULL
+                  ) ranked
+                  WHERE position = 1
+              )
+            """,
+            (migration_time,),
+        )
+        for statement in (
+            "CREATE INDEX IF NOT EXISTS idx_upload_queue_status_created ON upload_queue(status, created_at ASC)",
+            "CREATE INDEX IF NOT EXISTS idx_upload_queue_status_updated ON upload_queue(status, updated_at ASC)",
+            "CREATE INDEX IF NOT EXISTS idx_evidence_runs_status_created ON evidence_runs(status, created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_data_connections_polling_updated ON data_connections(polling_enabled, updated_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_auth_sessions_email ON auth_sessions(email, expires_at DESC)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_auth_sessions_active_email ON auth_sessions(email) WHERE revoked_at IS NULL",
+        ):
+            connection.execute(statement)
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("002_query_indexes", now_iso()),
+        )
+
+    if "003_state_constraints" not in applied:
+        connection.execute(
+            "UPDATE data_connections SET status = 'offline' "
+            "WHERE status NOT IN ('offline', 'polling', 'online', 'ready', 'error', 'not_configured')"
+        )
+        connection.execute(
+            "UPDATE auth_users SET role = 'operator' WHERE role NOT IN ('viewer', 'operator', 'admin')"
+        )
+        for statement in (
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_data_connections_state_insert
+            BEFORE INSERT ON data_connections
+            WHEN NEW.status NOT IN ('offline', 'polling', 'online', 'ready', 'error', 'not_configured')
+              OR NEW.polling_enabled NOT IN (0, 1)
+            BEGIN SELECT RAISE(ABORT, 'data_connection_state'); END
+            """,
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_data_connections_state_update
+            BEFORE UPDATE OF status, polling_enabled ON data_connections
+            WHEN NEW.status NOT IN ('offline', 'polling', 'online', 'ready', 'error', 'not_configured')
+              OR NEW.polling_enabled NOT IN (0, 1)
+            BEGIN SELECT RAISE(ABORT, 'data_connection_state'); END
+            """,
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_runtime_auth_role_insert
+            BEFORE INSERT ON auth_users
+            WHEN NEW.role NOT IN ('viewer', 'operator', 'admin')
+            BEGIN SELECT RAISE(ABORT, 'auth_role'); END
+            """,
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_runtime_auth_role_update
+            BEFORE UPDATE OF role ON auth_users
+            WHEN NEW.role NOT IN ('viewer', 'operator', 'admin')
+            BEGIN SELECT RAISE(ABORT, 'auth_role'); END
+            """,
+        ):
+            connection.execute(statement)
+        for table_name, column_name in (
+            ("upload_jobs", "payload_json"),
+            ("evidence_runs", "payload_json"),
+            ("audit_events", "detail_json"),
+            ("latest_payloads", "payload_json"),
+            ("data_connections", "payload_json"),
+        ):
+            connection.execute(
+                f"""
+                CREATE TRIGGER IF NOT EXISTS trg_{table_name}_json_insert
+                BEFORE INSERT ON {table_name}
+                WHEN NOT json_valid(NEW.{column_name})
+                BEGIN SELECT RAISE(ABORT, 'invalid_json'); END
+                """
+            )
+            connection.execute(
+                f"""
+                CREATE TRIGGER IF NOT EXISTS trg_{table_name}_json_update
+                BEFORE UPDATE OF {column_name} ON {table_name}
+                WHEN NOT json_valid(NEW.{column_name})
+                BEGIN SELECT RAISE(ABORT, 'invalid_json'); END
+                """
+            )
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("003_state_constraints", now_iso()),
+        )
 
 
 def prune_runtime_db_records() -> dict[str, int]:
@@ -228,7 +423,7 @@ def read_upload_job(job_id: str) -> dict[str, Any] | None:
     return json.loads(row["payload_json"])
 
 
-def list_upload_jobs(status: str | None = None, limit: int = 100) -> list[dict[str, Any]]: 
+def list_upload_jobs(status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     init_runtime_db()
     query = "SELECT payload_json FROM upload_jobs"
     params: list[Any] = []
@@ -239,7 +434,7 @@ def list_upload_jobs(status: str | None = None, limit: int = 100) -> list[dict[s
     params.append(limit)
     with db_connection() as connection:
         rows = connection.execute(query, tuple(params)).fetchall()
-    return [json.loads(row["payload_json"]) for row in rows] 
+    return [json.loads(row["payload_json"]) for row in rows]
 
 
 def upload_duration_samples(limit: int = 200) -> list[float]:
@@ -539,8 +734,12 @@ def claim_next_upload_job() -> str | None:
 
     init_runtime_db()
     with db_connection() as connection:
+        # Serialize the select-and-transition across processes. A deferred SQLite
+        # transaction permits two readers to select the same row before either
+        # writes; BEGIN IMMEDIATE reserves the writer lock before the read.
+        connection.execute("BEGIN IMMEDIATE")
         pending_count_row = connection.execute(
-            "SELECT COUNT(*) AS count FROM upload_queue WHERE status IN ('pending', 'queued')"
+            "SELECT COUNT(*) AS count FROM upload_queue WHERE status = 'pending'"
         ).fetchone()
         pending_count = int((pending_count_row["count"] if pending_count_row else 0) or 0)
         logger.info(
@@ -551,27 +750,29 @@ def claim_next_upload_job() -> str | None:
         row = connection.execute(
             """
             SELECT job_id FROM upload_queue
-            WHERE status IN ('pending', 'queued')
-            ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at ASC
+            WHERE status = 'pending'
+            ORDER BY created_at ASC, job_id ASC
             LIMIT 1
             """
         ).fetchone()
         if row is None:
             logger.info("upload_queue_no_pending_jobs queue_backend=%s pending_job_count=0 no_pending_jobs=true", backend)
             return None
-        job_id = row["job_id"]
+        job_id = str(row["job_id"])
         timestamp = now_iso()
-        connection.execute(
+        updated = connection.execute(
             """
             UPDATE upload_queue
             SET status='processing',
                 attempts=attempts + 1,
                 updated_at=?,
                 locked_at=?
-            WHERE job_id = ?
+            WHERE job_id = ? AND status = 'pending'
             """,
             (timestamp, timestamp, job_id),
-        )
+        ).rowcount
+        if updated != 1:
+            return None
     logger.info(
         "upload_queue_claimed queue_backend=%s pending_job_count=%s claimed_job_id=%s",
         backend,
@@ -607,6 +808,8 @@ def mark_queue_job_failed(job_id: str, reason: str) -> None:
     if backend == "s3":
         _ensure_shared_upload_queue_backend()
         existing = _read_s3_queue_job(job_id) or {"job_id": job_id, "created_at": now_iso(), "attempts": 0}
+        if _normalize_upload_queue_status(existing.get("status")) == "completed":
+            return
         _write_s3_queue_job(
             {
                 **existing,
@@ -625,7 +828,7 @@ def mark_queue_job_failed(job_id: str, reason: str) -> None:
             """
             UPDATE upload_queue
             SET status = 'failed', last_error = ?, updated_at = ?, locked_at = NULL
-            WHERE job_id = ?
+            WHERE job_id = ? AND status IN ('pending', 'processing', 'failed')
             """,
             (reason, now_iso(), job_id),
         )
@@ -667,11 +870,15 @@ def clear_stale_processing_queue_jobs() -> int:
 
 
 def complete_upload_queue_job(job_id: str, status: str, last_error: str | None = None) -> None:
-    normalized_status = _normalize_upload_queue_status(status) or "completed"
+    normalized_status = _require_upload_queue_status(status, {"completed", "failed"})
     backend = upload_queue_backend()
     if backend == "s3":
         _ensure_shared_upload_queue_backend()
         existing = _read_s3_queue_job(job_id) or {"job_id": job_id, "created_at": now_iso(), "attempts": 0}
+        current_status = _normalize_upload_queue_status(existing.get("status"))
+        allowed_sources = {"processing", "completed"} if normalized_status == "completed" else {"pending", "processing", "failed"}
+        if current_status is not None and current_status not in allowed_sources:
+            return
         _write_s3_queue_job(
             {
                 **existing,
@@ -685,19 +892,23 @@ def complete_upload_queue_job(job_id: str, status: str, last_error: str | None =
         return
 
     init_runtime_db()
+    allowed_sources = ("processing", "completed") if normalized_status == "completed" else ("pending", "processing", "failed")
+    placeholders = ", ".join("?" for _ in allowed_sources)
     with db_connection() as connection:
         connection.execute(
-            """
+            f"""
             UPDATE upload_queue
             SET status = ?, last_error = ?, updated_at = ?, locked_at = NULL
-            WHERE job_id = ?
+            WHERE job_id = ? AND status IN ({placeholders})
             """,
-            (normalized_status, last_error, now_iso(), job_id),
+            (normalized_status, last_error, now_iso(), job_id, *allowed_sources),
         )
 
 
 def touch_upload_queue_job(job_id: str, status: str | None = None) -> None:
-    normalized_status = _normalize_upload_queue_status(status)
+    normalized_status = (
+        _require_upload_queue_status(status, {"processing"}) if status is not None else None
+    )
     backend = upload_queue_backend()
     if backend == "s3":
         _ensure_shared_upload_queue_backend()
@@ -706,6 +917,8 @@ def touch_upload_queue_job(job_id: str, status: str | None = None) -> None:
             return
         payload = {**existing, "updated_at": now_iso()}
         if normalized_status:
+            if _normalize_upload_queue_status(existing.get("status")) != "processing":
+                return
             payload["status"] = normalized_status
         _write_s3_queue_job(payload)
         return
@@ -717,7 +930,7 @@ def touch_upload_queue_job(job_id: str, status: str | None = None) -> None:
                 """
                 UPDATE upload_queue
                 SET status = ?, updated_at = ?
-                WHERE job_id = ?
+                WHERE job_id = ? AND status = 'processing'
                 """,
                 (normalized_status, now_iso(), job_id),
             )
@@ -891,6 +1104,34 @@ def upsert_latest_payload(key: str, payload: Any) -> None:
         )
 
 
+def mutate_latest_payload(key: str, mutator: Callable[[Any | None], Any]) -> Any:
+    """Atomically read, mutate, and persist one JSON payload.
+
+    BEGIN IMMEDIATE prevents two ingestion processes from reading the same
+    buffer version and then overwriting each other's append.
+    """
+    init_runtime_db()
+    with db_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute(
+            "SELECT payload_json FROM latest_payloads WHERE key = ?",
+            (key,),
+        ).fetchone()
+        current = json.loads(row["payload_json"]) if row is not None else None
+        updated = mutator(current)
+        connection.execute(
+            """
+            INSERT INTO latest_payloads (key, updated_at, payload_json)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                updated_at=excluded.updated_at,
+                payload_json=excluded.payload_json
+            """,
+            (key, now_iso(), json.dumps(updated)),
+        )
+    return updated
+
+
 def read_latest_payload(key: str) -> Any | None:
     init_runtime_db()
     with db_connection() as connection:
@@ -913,10 +1154,23 @@ def delete_latest_payload_prefix(prefix: str) -> int:
     return int(deleted or 0)
 
 
-def upsert_evidence_run_db(record: dict[str, Any]) -> None:
+def upsert_evidence_runs_db(records: list[dict[str, Any]]) -> int:
+    prepared = [
+        (
+            record["run_id"],
+            record.get("created_at") or now_iso(),
+            record.get("completed_at"),
+            record.get("status", "pending"),
+            record.get("source_name"),
+            json.dumps(record),
+        )
+        for record in records
+    ]
+    if not prepared:
+        return 0
     init_runtime_db()
     with db_connection() as connection:
-        connection.execute(
+        connection.executemany(
             """
             INSERT INTO evidence_runs (run_id, created_at, completed_at, status, source_name, payload_json)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -927,15 +1181,49 @@ def upsert_evidence_run_db(record: dict[str, Any]) -> None:
                 source_name=excluded.source_name,
                 payload_json=excluded.payload_json
             """,
+            prepared,
+        )
+    return len(prepared)
+
+
+def upsert_evidence_run_db(record: dict[str, Any]) -> None:
+    upsert_evidence_runs_db([record])
+
+
+def mutate_evidence_run_db(
+    run_id: str,
+    mutator: Callable[[dict[str, Any]], dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Atomically mutate an evidence record without losing concurrent feedback."""
+    init_runtime_db()
+    with db_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute(
+            "SELECT payload_json FROM evidence_runs WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        current = json.loads(row["payload_json"])
+        updated = mutator(current)
+        if str(updated.get("run_id") or "") != run_id:
+            raise ValueError("evidence mutator cannot change run_id")
+        connection.execute(
+            """
+            UPDATE evidence_runs
+            SET created_at = ?, completed_at = ?, status = ?, source_name = ?, payload_json = ?
+            WHERE run_id = ?
+            """,
             (
-                record["run_id"],
-                record.get("created_at") or now_iso(),
-                record.get("completed_at"),
-                record.get("status", "pending"),
-                record.get("source_name"),
-                json.dumps(record),
+                updated.get("created_at") or now_iso(),
+                updated.get("completed_at"),
+                updated.get("status", "pending"),
+                updated.get("source_name"),
+                json.dumps(updated),
+                run_id,
             ),
         )
+    return updated
 
 
 def list_evidence_runs_db(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:

@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 
 from app.core.config import get_settings
 from app.services.sii_runner import read_latest_sii_state
 from app.services.upload_state_repository import read_replay_payload, resolve_upload_artifacts
 
 router = APIRouter(prefix="/replay", tags=["replay"])
+ReplayMode = Literal["live", "demo", "aquatic_demo", "live_causal"]
+ReplayJobId = Annotated[str, Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
 
 
 @router.get("/timeline")
-async def replay_timeline(mode: str = Query(default="live"), intervals: int = Query(default=24)):
+async def replay_timeline(
+    mode: ReplayMode = Query(default="live"),
+    intervals: int = Query(default=24, ge=1, le=1000),
+):
     normalized_mode = str(mode or "live").lower()
     if normalized_mode == "demo":
         timeline = synthetic_timeline(max(8, int(intervals or 8)), prefix="demo")
@@ -58,26 +64,63 @@ async def replay_timeline(mode: str = Query(default="live"), intervals: int = Qu
 
 
 @router.get("/frame/{timestamp}")
-async def replay_frame(timestamp: str, mode: str = Query(default="live"), intervals: int = Query(default=24)):
+async def replay_frame(
+    timestamp: Annotated[str, Path(min_length=1, max_length=64)],
+    mode: ReplayMode = Query(default="live"),
+    intervals: int = Query(default=24, ge=1, le=1000),
+):
     timeline_payload = await replay_timeline(mode=mode, intervals=intervals)
     timeline = timeline_payload.get("timeline", [])
     frame = next((item for item in timeline if str(item.get("timestamp")) == str(timestamp)), None)
-    return {"frame": frame or (timeline[0] if timeline else {}), "source": timeline_payload.get("source", "empty")}
+    if frame is None:
+        raise HTTPException(status_code=404, detail="Replay frame was not found.")
+    return {"frame": frame, "source": timeline_payload.get("source", "empty")}
 
 
 @router.get("/range")
-async def replay_range(start_timestamp: str, end_timestamp: str, mode: str = Query(default="live"), intervals: int = Query(default=24)):
+async def replay_range(
+    start_timestamp: str = Query(min_length=1, max_length=64),
+    end_timestamp: str = Query(min_length=1, max_length=64),
+    mode: ReplayMode = Query(default="live"),
+    intervals: int = Query(default=24, ge=1, le=1000),
+):
+    start_value = _parse_timestamp(start_timestamp, "start_timestamp")
+    end_value = _parse_timestamp(end_timestamp, "end_timestamp")
+    if start_value > end_value:
+        raise HTTPException(status_code=422, detail="start_timestamp must be before or equal to end_timestamp.")
     timeline_payload = await replay_timeline(mode=mode, intervals=intervals)
     timeline = timeline_payload.get("timeline", [])
-    frames = [item for item in timeline if str(start_timestamp) <= str(item.get("timestamp", "")) <= str(end_timestamp)]
-    if not frames and timeline:
-        frames = timeline
+    frames = [
+        item for item in timeline
+        if _timestamp_in_range(item.get("timestamp"), start_value, end_value)
+    ]
     return {"frame_count": len(frames), "frames": frames, "source": timeline_payload.get("source", "empty")}
 
 
 @router.get("/{job_id}")
-async def replay_by_job(job_id: str):
-    return read_replay_payload(job_id)
+async def replay_by_job(job_id: ReplayJobId):
+    payload = read_replay_payload(job_id)
+    if not payload or not payload.get("timeline"):
+        raise HTTPException(status_code=404, detail="Replay was not found.")
+    return payload
+
+
+def _parse_timestamp(value: str, field: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"{field} must be an ISO 8601 timestamp.") from None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise HTTPException(status_code=422, detail=f"{field} must include a timezone offset.")
+    return parsed.astimezone(UTC)
+
+
+def _timestamp_in_range(value: object, start: datetime, end: datetime) -> bool:
+    try:
+        parsed = _parse_timestamp(str(value or ""), "timeline timestamp")
+    except HTTPException:
+        return False
+    return start <= parsed <= end
 
 
 def synthetic_timeline(frame_count: int, prefix: str) -> list[dict]:

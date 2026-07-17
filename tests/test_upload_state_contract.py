@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import sqlite3
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -435,13 +437,14 @@ def test_upload_state_malformed_runtime_db_payload_fails_safely(tmp_path: Path, 
     configure_runtime_db_dir(tmp_path)
     init_runtime_db()
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
-    with db_connection() as connection:
-        connection.execute(
-            """
-            INSERT OR REPLACE INTO latest_payloads (key, updated_at, payload_json)
-            VALUES ('latest_upload', '2026-06-15T00:00:00+00:00', '{not valid json')
-            """
-        )
+    with pytest.raises(sqlite3.IntegrityError, match="invalid_json"):
+        with db_connection() as connection:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO latest_payloads (key, updated_at, payload_json)
+                VALUES ('latest_upload', '2026-06-15T00:00:00+00:00', '{not valid json')
+                """
+            )
     client = TestClient(create_app())
 
     payload = client.get("/api/data/latest-upload?include_persisted=1").json()

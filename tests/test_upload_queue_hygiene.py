@@ -13,7 +13,13 @@ def test_clear_stale_processing_queue_jobs_marks_processing_as_failed() -> None:
     with db_connection() as connection:
         connection.execute(
             """
-            INSERT OR REPLACE INTO upload_queue (job_id, status, attempts, last_error, created_at, updated_at, locked_at)
+            INSERT INTO upload_jobs (job_id, status, started_at, completed_at, updated_at, payload_json)
+            VALUES ('stale-job', 'PROCESSING', '2026-01-01T00:00:00+00:00', NULL, '2026-01-01T00:00:00+00:00', '{}')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO upload_queue (job_id, status, attempts, last_error, created_at, updated_at, locked_at)
             VALUES ('stale-job', 'processing', 1, NULL, '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00')
             """
         )
@@ -60,7 +66,13 @@ def test_startup_recovers_stale_processing_jobs() -> None:
     with db_connection() as connection:
         connection.execute(
             """
-            INSERT OR REPLACE INTO upload_queue (job_id, status, attempts, last_error, created_at, updated_at, locked_at)
+            INSERT INTO upload_jobs (job_id, status, started_at, completed_at, updated_at, payload_json)
+            VALUES ('startup-stale-job', 'PROCESSING', '2026-01-01T00:00:00+00:00', NULL, '2026-01-01T00:00:00+00:00', '{}')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO upload_queue (job_id, status, attempts, last_error, created_at, updated_at, locked_at)
             VALUES ('startup-stale-job', 'processing', 1, NULL, '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00')
             """
         )

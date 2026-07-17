@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 
 from app.core.security import require_admin_role, require_api_access, require_operator_role
 from app.models.api_models import (
@@ -27,6 +27,8 @@ from app.services.data_connections import (
 
 router = APIRouter(tags=["data-connections"], dependencies=[Depends(require_api_access)])
 logger = logging.getLogger(__name__)
+
+ConnectionIdPath = Annotated[str, Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
 
 
 def _safe_connection_message(value: Any, fallback: str) -> str:
@@ -60,7 +62,7 @@ def create_or_update_data_connection(payload: DataConnectionUpsertRequest) -> di
 
 
 @router.post("/data-connections/{connection_id}/test", response_model=DataConnectionActionResponse, dependencies=[Depends(require_operator_role)])
-def test_registered_data_connection(connection_id: str) -> dict[str, Any]:
+def test_registered_data_connection(connection_id: ConnectionIdPath) -> dict[str, Any]:
     try:
         existing_connection = read_connection_status(connection_id)
     except ValueError as exc:
@@ -98,7 +100,7 @@ def test_registered_data_connection(connection_id: str) -> dict[str, Any]:
 
 
 @router.post("/data-connections/{connection_id}/start", response_model=DataConnectionActionResponse, dependencies=[Depends(require_admin_role)])
-def start_data_connection(connection_id: str) -> dict[str, Any]:
+def start_data_connection(connection_id: ConnectionIdPath) -> dict[str, Any]:
     try:
         connection = set_connection_polling(connection_id, enabled=True)
     except ValueError as exc:
@@ -107,7 +109,7 @@ def start_data_connection(connection_id: str) -> dict[str, Any]:
 
 
 @router.post("/data-connections/{connection_id}/stop", response_model=DataConnectionActionResponse, dependencies=[Depends(require_admin_role)])
-def stop_data_connection(connection_id: str) -> dict[str, Any]:
+def stop_data_connection(connection_id: ConnectionIdPath) -> dict[str, Any]:
     try:
         connection = set_connection_polling(connection_id, enabled=False)
     except ValueError as exc:
@@ -116,7 +118,7 @@ def stop_data_connection(connection_id: str) -> dict[str, Any]:
 
 
 @router.post("/data-connections/{connection_id}/poll-once", response_model=DataConnectionActionResponse, dependencies=[Depends(require_operator_role)])
-def poll_data_connection(connection_id: str) -> dict[str, Any]:
+def poll_data_connection(connection_id: ConnectionIdPath) -> dict[str, Any]:
     try:
         result = poll_data_connection_once(connection_id, actor="operator:poll-once")
     except ValueError as exc:
@@ -134,7 +136,7 @@ def poll_data_connection(connection_id: str) -> dict[str, Any]:
 
 
 @router.post("/data-connections/{connection_id}/reset-baseline", response_model=DataConnectionActionResponse, dependencies=[Depends(require_admin_role)])
-def reset_data_connection_baseline(connection_id: str) -> dict[str, Any]:
+def reset_data_connection_baseline(connection_id: ConnectionIdPath) -> dict[str, Any]:
     try:
         connection = reset_connection_live_baseline(connection_id)
     except ValueError as exc:
@@ -155,7 +157,7 @@ def reset_all_connections() -> dict[str, Any]:
 
 
 @router.get("/data-connections/{connection_id}/status", response_model=DataConnectionResponse)
-def read_data_connection_status(connection_id: str) -> dict[str, Any]:
+def read_data_connection_status(connection_id: ConnectionIdPath) -> dict[str, Any]:
     try:
         return read_connection_status(connection_id)
     except ValueError as exc:

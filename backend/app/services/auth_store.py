@@ -32,13 +32,13 @@ AUTH_SCHEMA_STATEMENTS = (
     CREATE TABLE IF NOT EXISTS auth_users (
         email TEXT PRIMARY KEY,
         name TEXT NOT NULL,
-        role TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('viewer', 'operator', 'admin')),
         salt TEXT NOT NULL,
         password_hash TEXT NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         last_login_at TEXT,
-        is_active BOOLEAN NOT NULL DEFAULT 1,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
         deactivated_at TEXT,
         bootstrap_managed BOOLEAN NOT NULL DEFAULT 0
     )
@@ -65,14 +65,152 @@ AUTH_SCHEMA_STATEMENTS = (
     """,
 )
 
+POSTGRES_AUTH_SCHEMA_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS auth_users (
+        email TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('viewer', 'operator', 'admin')),
+        salt TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        last_login_at TIMESTAMPTZ,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        deactivated_at TIMESTAMPTZ,
+        bootstrap_managed BOOLEAN NOT NULL DEFAULT FALSE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+        session_id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        last_seen_at TIMESTAMPTZ,
+        revoked_at TIMESTAMPTZ,
+        FOREIGN KEY(email) REFERENCES auth_users(email) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_auth_users_role_active ON auth_users(role, is_active)",
+    "CREATE INDEX IF NOT EXISTS idx_auth_sessions_email ON auth_sessions(email, expires_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked ON auth_sessions(revoked_at, expires_at DESC)",
+)
+
+AUTH_SCHEMA_MIGRATIONS = (
+    "001_auth_integrity",
+    "002_single_active_session",
+)
+
+
+def _apply_auth_schema_migrations(connection: Any, *, dialect: str, placeholder: str) -> None:
+    migration_timestamp_type = "TIMESTAMPTZ" if dialect == "postgresql" else "TEXT"
+    connection.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS auth_schema_migrations (
+            migration_id TEXT PRIMARY KEY,
+            applied_at {migration_timestamp_type} NOT NULL
+        )
+        """
+    )
+    rows = connection.execute("SELECT migration_id FROM auth_schema_migrations").fetchall()
+    applied = {str(row[0] if not hasattr(row, "keys") else row["migration_id"]) for row in rows}
+
+    if "001_auth_integrity" not in applied:
+        connection.execute(
+            "UPDATE auth_users SET role = 'operator' WHERE role NOT IN ('viewer', 'operator', 'admin')"
+        )
+        if dialect == "sqlite":
+            connection.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS trg_auth_users_integrity_insert
+                BEFORE INSERT ON auth_users
+                WHEN NEW.role NOT IN ('viewer', 'operator', 'admin')
+                  OR NEW.email = '' OR length(NEW.email) > 320
+                BEGIN
+                    SELECT RAISE(ABORT, 'auth_user_integrity');
+                END
+                """
+            )
+            connection.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS trg_auth_users_integrity_update
+                BEFORE UPDATE OF email, role ON auth_users
+                WHEN NEW.role NOT IN ('viewer', 'operator', 'admin')
+                  OR NEW.email = '' OR length(NEW.email) > 320
+                BEGIN
+                    SELECT RAISE(ABORT, 'auth_user_integrity');
+                END
+                """
+            )
+        else:
+            connection.execute(
+                """
+                DO $$ BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'ck_auth_users_role' AND conrelid = 'auth_users'::regclass
+                    ) THEN
+                        ALTER TABLE auth_users ADD CONSTRAINT ck_auth_users_role
+                            CHECK (role IN ('viewer', 'operator', 'admin')) NOT VALID;
+                    END IF;
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'ck_auth_users_email_length' AND conrelid = 'auth_users'::regclass
+                    ) THEN
+                        ALTER TABLE auth_users ADD CONSTRAINT ck_auth_users_email_length
+                            CHECK (length(email) BETWEEN 1 AND 320) NOT VALID;
+                    END IF;
+                END $$
+                """
+            )
+            connection.execute("ALTER TABLE auth_users VALIDATE CONSTRAINT ck_auth_users_role")
+            connection.execute("ALTER TABLE auth_users VALIDATE CONSTRAINT ck_auth_users_email_length")
+        connection.execute(
+            f"INSERT INTO auth_schema_migrations (migration_id, applied_at) VALUES ({placeholder}, {placeholder})",
+            ("001_auth_integrity", _now_iso()),
+        )
+
+    if "002_single_active_session" not in applied:
+        migration_time = _now_iso()
+        connection.execute(
+            f"""
+            UPDATE auth_sessions
+            SET revoked_at = {placeholder}
+            WHERE revoked_at IS NULL
+              AND session_id IN (
+                  SELECT session_id FROM (
+                      SELECT session_id,
+                             ROW_NUMBER() OVER (
+                                 PARTITION BY email ORDER BY created_at DESC, session_id DESC
+                             ) AS position
+                      FROM auth_sessions
+                      WHERE revoked_at IS NULL
+                  ) ranked
+                  WHERE position > 1
+              )
+            """,
+            (migration_time,),
+        )
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_auth_sessions_active_email "
+            "ON auth_sessions(email) WHERE revoked_at IS NULL"
+        )
+        connection.execute(
+            f"INSERT INTO auth_schema_migrations (migration_id, applied_at) VALUES ({placeholder}, {placeholder})",
+            ("002_single_active_session", migration_time),
+        )
+
 
 class _BaseAuthBackend:
     placeholder = "?"
 
+    dialect = "unknown"
+
     def ensure_schema(self) -> None:
         with self._connect() as connection:
-            for statement in AUTH_SCHEMA_STATEMENTS:
+            statements = POSTGRES_AUTH_SCHEMA_STATEMENTS if self.dialect == "postgresql" else AUTH_SCHEMA_STATEMENTS
+            for statement in statements:
                 connection.execute(statement)
+            _apply_auth_schema_migrations(connection, dialect=self.dialect, placeholder=self.placeholder)
 
     def _connect(self):
         raise NotImplementedError
@@ -140,6 +278,60 @@ class _BaseAuthBackend:
                 bool(payload.get("bootstrap_managed")),
             ),
         )
+
+    def insert_user_if_absent(self, payload: dict[str, Any]) -> bool:
+        sql = f"""
+            INSERT INTO auth_users (
+                email, name, role, salt, password_hash, created_at, updated_at,
+                last_login_at, is_active, deactivated_at, bootstrap_managed
+            )
+            VALUES ({self._placeholders(11)})
+            ON CONFLICT(email) DO NOTHING
+        """
+        values = (
+            payload["email"], payload.get("name") or payload["email"],
+            payload.get("role", "operator"), payload.get("salt", ""),
+            payload.get("password_hash", ""), payload.get("created_at") or _now_iso(),
+            payload.get("updated_at") or _now_iso(), payload.get("last_login_at"),
+            bool(payload.get("is_active", True)), payload.get("deactivated_at"),
+            bool(payload.get("bootstrap_managed")),
+        )
+        return self._execute(sql, values) == 1
+
+    def replace_active_session(self, payload: dict[str, Any]) -> None:
+        email = str(payload["email"])
+        timestamp = str(payload.get("created_at") or _now_iso())
+        with self._connect() as connection:
+            if self.dialect == "sqlite":
+                connection.execute("BEGIN IMMEDIATE")
+            else:
+                # Serialize session replacement for one account across API processes.
+                connection.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (email,))
+            revoke_sql = (
+                "UPDATE auth_sessions SET revoked_at = ? WHERE email = ? AND revoked_at IS NULL"
+                if self.placeholder == "?"
+                else "UPDATE auth_sessions SET revoked_at = %s WHERE email = %s AND revoked_at IS NULL"
+            )
+            connection.execute(revoke_sql, (timestamp, email))
+            insert_sql = f"""
+                INSERT INTO auth_sessions
+                    (session_id, email, created_at, expires_at, last_seen_at, revoked_at)
+                VALUES ({self._placeholders(6)})
+            """
+            connection.execute(
+                insert_sql,
+                (
+                    payload["session_id"], email, timestamp,
+                    payload.get("expires_at") or _session_expiry_iso(),
+                    payload.get("last_seen_at") or timestamp, None,
+                ),
+            )
+            login_sql = (
+                "UPDATE auth_users SET last_login_at = ?, updated_at = ? WHERE email = ?"
+                if self.placeholder == "?"
+                else "UPDATE auth_users SET last_login_at = %s, updated_at = %s WHERE email = %s"
+            )
+            connection.execute(login_sql, (timestamp, timestamp, email))
 
     def read_user(self, email: str) -> dict[str, Any] | None:
         return self._fetch_one("SELECT * FROM auth_users WHERE email = ?" if self.placeholder == "?" else "SELECT * FROM auth_users WHERE email = %s", (email,))
@@ -267,18 +459,30 @@ class _BaseAuthBackend:
 
 class _SQLiteAuthBackend(_BaseAuthBackend):
     placeholder = "?"
+    dialect = "sqlite"
 
     def __init__(self, db_path: Path):
         self.db_path = db_path
 
+    @contextmanager
     def _connect(self):
         connection = sqlite3.connect(self.db_path, timeout=30, check_same_thread=False)
         connection.row_factory = sqlite3.Row
-        return connection
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 30000")
+        try:
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
 
 class _PostgresAuthBackend(_BaseAuthBackend):
     placeholder = "%s"
+    dialect = "postgresql"
 
     def __init__(self, dsn: str):
         self.dsn = dsn
@@ -305,8 +509,9 @@ def _legacy_store_path() -> Path:
 
 
 def _auth_database_url() -> str:
-    settings = get_settings()
-    return str(getattr(settings, "auth_database_url", "") or os.getenv("NERAIUM_AUTH_DATABASE_URL", "")).strip()
+    # Authentication backend selection must not rebuild/validate unrelated app
+    # settings on every request; the DSN has a dedicated environment contract.
+    return str(os.getenv("NERAIUM_AUTH_DATABASE_URL", "")).strip()
 
 
 def _backend_key() -> tuple[str, str]:
@@ -355,16 +560,29 @@ def _session_expiry_iso() -> str:
     return (datetime.now(timezone.utc) + timedelta(days=_SESSION_TTL_DAYS)).isoformat()
 
 
-def _parse_iso(value: str | None) -> datetime | None:
+def _parse_iso(value: str | datetime | None) -> datetime | None:
     if not value:
         return None
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError:
-        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return None
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _serialize_timestamp(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat()
+    return str(value)
 
 
 def sanitize_user_record(user: dict[str, Any]) -> dict[str, Any]:
@@ -372,10 +590,10 @@ def sanitize_user_record(user: dict[str, Any]) -> dict[str, Any]:
         "email": user.get("email", ""),
         "name": user.get("name", ""),
         "role": normalize_role(user.get("role"), "operator"),
-        "created_at": user.get("created_at"),
-        "last_login_at": user.get("last_login_at"),
+        "created_at": _serialize_timestamp(user.get("created_at")),
+        "last_login_at": _serialize_timestamp(user.get("last_login_at")),
         "is_active": bool(user.get("is_active", True)),
-        "deactivated_at": user.get("deactivated_at"),
+        "deactivated_at": _serialize_timestamp(user.get("deactivated_at")),
         "bootstrap_managed": bool(user.get("bootstrap_managed", False)),
     }
 
@@ -384,10 +602,10 @@ def sanitize_session_record(session: dict[str, Any]) -> dict[str, Any]:
     return {
         "session_id": str(session.get("session_id") or ""),
         "email": _normalize_email(session.get("email", "")),
-        "created_at": session.get("created_at"),
-        "expires_at": session.get("expires_at"),
-        "last_seen_at": session.get("last_seen_at"),
-        "revoked_at": session.get("revoked_at"),
+        "created_at": _serialize_timestamp(session.get("created_at")),
+        "expires_at": _serialize_timestamp(session.get("expires_at")),
+        "last_seen_at": _serialize_timestamp(session.get("last_seen_at")),
+        "revoked_at": _serialize_timestamp(session.get("revoked_at")),
     }
 
 
@@ -547,17 +765,26 @@ def create_user(email: str, password: str, name: str | None = None, role: str = 
     display_name = str(name or "").strip() or normalized_email.split("@", 1)[0]
     normalized_role = normalize_role(role, "operator")
     with _STORE_LOCK:
-        if backend.read_user(normalized_email):
-            raise ValueError("An account with this email already exists.")
         salt = secrets.token_hex(16)
-        user = _upsert_user_record(
-            backend,
-            email=normalized_email,
-            password_hash=_hash_password(password, salt),
-            salt=salt,
-            name=display_name,
-            role=normalized_role,
+        timestamp = _now_iso()
+        inserted = backend.insert_user_if_absent(
+            {
+                "email": normalized_email,
+                "name": display_name,
+                "role": normalized_role,
+                "salt": salt,
+                "password_hash": _hash_password(password, salt),
+                "created_at": timestamp,
+                "updated_at": timestamp,
+                "is_active": True,
+                "bootstrap_managed": False,
+            }
         )
+        if not inserted:
+            raise ValueError("An account with this email already exists.")
+        user = backend.read_user(normalized_email)
+        if not user:
+            raise RuntimeError("auth_user_write_failed")
         return sanitize_user_record(user)
 
 
@@ -606,18 +833,20 @@ def create_session(email: str) -> str:
         user = backend.read_user(normalized_email)
         if not user or not bool(user.get("is_active", True)):
             raise ValueError("Account is inactive or missing.")
-        backend.revoke_sessions_for_email(normalized_email, revoked_at=timestamp)
-        backend.upsert_session(
-            {
-                "session_id": session_id,
-                "email": normalized_email,
-                "created_at": timestamp,
-                "expires_at": _session_expiry_iso(),
-                "last_seen_at": timestamp,
-                "revoked_at": None,
-            }
-        )
-        backend.set_user_login(normalized_email, timestamp)
+        session_payload = {
+            "session_id": session_id,
+            "email": normalized_email,
+            "created_at": timestamp,
+            "expires_at": _session_expiry_iso(),
+            "last_seen_at": timestamp,
+            "revoked_at": None,
+        }
+        if hasattr(backend, "replace_active_session"):
+            backend.replace_active_session(session_payload)
+        else:  # Compatibility for third-party/test backends implementing the legacy protocol.
+            backend.revoke_sessions_for_email(normalized_email, revoked_at=timestamp)
+            backend.upsert_session(session_payload)
+            backend.set_user_login(normalized_email, timestamp)
     return session_id
 
 

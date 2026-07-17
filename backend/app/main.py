@@ -5,11 +5,13 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers
 
+from app.contracts import ErrorResponse, enforce_query_contract, validate_contract_headers
 from app.core.config import Settings, get_settings
 from app.core.logging_config import bind_log_context, configure_logging, reset_log_context
 from app.core.security import require_admin_role
@@ -178,6 +180,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
         description="API for the Neraium platform and its Systemic Infrastructure Intelligence (SII).",
         lifespan=app_lifespan,
+        dependencies=[Depends(enforce_query_contract)],
+        responses={
+            code: {"model": ErrorResponse, "description": description}
+            for code, description in {
+                400: "Malformed request", 401: "Authentication required",
+                403: "Insufficient role", 404: "Resource not found",
+                409: "Conflicting state", 413: "Payload too large",
+                422: "Contract validation failed", 500: "Unexpected server error",
+            }.items()
+        },
     )
     app.state.settings = settings
 
@@ -197,6 +209,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.middleware("http")
     async def add_request_context(request: Request, call_next):
+        try:
+            validate_contract_headers(request)
+        except HTTPException as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail, "message": str(exc.detail), "error_type": "invalid_header"},
+            )
+        if request.method in {"POST", "PUT", "PATCH"} and request.url.path not in {
+            "/api/data/upload", "/api/connectors/csv/upload"
+        }:
+            max_payload_bytes = 1_048_576
+            raw_length = request.headers.get("content-length")
+            try:
+                declared_length = int(raw_length) if raw_length is not None else None
+            except ValueError:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "Invalid Content-Length header.", "message": "Invalid Content-Length header.", "error_type": "invalid_header"},
+                )
+            if declared_length is not None and declared_length > max_payload_bytes:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request payload exceeds the 1 MiB limit.", "message": "Request payload exceeds the 1 MiB limit.", "error_type": "payload_too_large"},
+                )
+            if declared_length is None:
+                body = await request.body()
+                if len(body) > max_payload_bytes:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": "Request payload exceeds the 1 MiB limit.", "message": "Request payload exceeds the 1 MiB limit.", "error_type": "payload_too_large"},
+                    )
         inbound_request_id = str(request.headers.get("X-Request-Id") or "").strip()
         request_id = (
             inbound_request_id
@@ -265,13 +308,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        errors = []
+        for error in exc.errors():
+            sanitized = {key: value for key, value in error.items() if key not in {"input", "ctx"}}
+            sanitized["loc"] = list(error.get("loc") or [])
+            errors.append(sanitized)
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": "Request validation failed.",
+                "message": "Request validation failed.",
+                "error_type": "validation_error",
+                "errors": errors,
+            },
+        )
+
     @app.exception_handler(HTTPException)
     async def upload_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
         if exc.status_code in {401, 403}:
             if request.url.path.startswith("/api/auth/"):
                 return JSONResponse(
                     status_code=exc.status_code,
-                    content={"detail": exc.detail},
+                    content={"detail": exc.detail, "message": str(exc.detail), "error_type": "auth"},
                     headers=exc.headers,
                 )
             return JSONResponse(
@@ -281,7 +341,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         if not is_upload_analysis_path(request.url.path):
             detail = exc.detail
-            return JSONResponse(status_code=exc.status_code, content={"detail": detail}, headers=exc.headers)
+            message = str(detail.get("message") or detail.get("detail") or "Request failed.") if isinstance(detail, dict) else str(detail)
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": detail, "message": message, "error_type": f"http_{exc.status_code}"},
+                headers=exc.headers,
+            )
 
         return JSONResponse(
             status_code=exc.status_code,
@@ -297,8 +362,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=500,
                 content={
                     "detail": "Unexpected API error.",
+                    "message": "Unexpected API error.",
                     "error_type": "api_request_error",
-                    "path": request.url.path,
                 },
                 headers=cors_error_headers(request),
             )
@@ -337,12 +402,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Legacy frontend compatibility aliases. Older bundles may call shorthand
     # endpoints without the "/api/..." prefix.
-    @app.get("/latest-upload")
-    async def latest_upload_alias(include_persisted: int | bool = True):
+    @app.get("/latest-upload", deprecated=True)
+    async def latest_upload_alias(include_persisted: bool = Query(True)):
         return await data.latest_upload(include_persisted=include_persisted)
 
-    @app.get("/systems")
-    def systems_alias(include_persisted: bool = True, domain_mode: str | None = None):
+    @app.get("/systems", deprecated=True)
+    def systems_alias(
+        include_persisted: bool = Query(True),
+        domain_mode: str | None = Query(default=None, pattern=r"^(aquatic|cultivation)$"),
+    ):
         return facility.read_facility_systems(include_persisted=include_persisted, domain_mode=domain_mode)
 
     @app.get("/api/startup-status", dependencies=[Depends(require_admin_role)])
@@ -428,6 +496,7 @@ def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
         message = UPLOAD_SERVICE_UNAVAILABLE_MESSAGE
 
     return {
+        "detail": message,
         "job_id": None,
         "status": "FAILED",
         "progress": 0,
@@ -441,6 +510,7 @@ def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
 def auth_error_payload(detail: Any | None = None) -> dict[str, Any]:
     message = "Your analysis session could not be verified. Sign in again, then retry the analysis."
     payload = {
+        "detail": message,
         "job_id": None,
         "status": "unauthorized",
         "progress": 0,

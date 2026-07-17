@@ -8,7 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import get_settings
-from app.services.runtime_db import list_evidence_runs_db, upsert_evidence_run_db
+from app.services.runtime_db import (
+    list_evidence_runs_db,
+    mutate_evidence_run_db,
+    read_latest_payload,
+    upsert_evidence_run_db,
+    upsert_evidence_runs_db,
+    upsert_latest_payload,
+)
 
 
 RUNTIME_DIR = get_settings().runtime_dir
@@ -17,6 +24,7 @@ EVIDENCE_RUNS_PATH = EVIDENCE_DIR / "runs.json"
 MAX_EVIDENCE_PAGE_SIZE = 100
 DEFAULT_EVIDENCE_PAGE_SIZE = 50
 EVIDENCE_HISTORY_CONTEXT = 500
+LEGACY_EVIDENCE_IMPORT_MARKER = "evidence_legacy_json_migrated_v1"
 logger = logging.getLogger(__name__)
 
 FEEDBACK_CATEGORIES = [
@@ -115,10 +123,6 @@ def record_operator_feedback(
 ) -> dict[str, Any]:
     if category not in FEEDBACK_CATEGORIES:
         raise ValueError("invalid_feedback_category")
-    record = read_evidence_run(run_id)
-    if record is None:
-        raise ValueError("evidence_run_not_found")
-
     feedback_entry = {
         "category": category,
         "note": (note or "").strip() or None,
@@ -129,13 +133,19 @@ def record_operator_feedback(
         "actor": actor,
         "recorded_at": recorded_at,
     }
-    history = [item for item in record.get("operator_feedback_history", []) if isinstance(item, dict)]
-    updated_record = {
-        **record,
-        "latest_feedback_category": category,
-        "operator_feedback_history": [feedback_entry, *history][:20],
-    }
-    return upsert_evidence_run(updated_record)
+
+    def append_feedback(record: dict[str, Any]) -> dict[str, Any]:
+        history = [item for item in record.get("operator_feedback_history", []) if isinstance(item, dict)]
+        return {
+            **record,
+            "latest_feedback_category": category,
+            "operator_feedback_history": [feedback_entry, *history][:20],
+        }
+
+    updated_record = mutate_evidence_run_db(run_id, append_feedback)
+    if updated_record is None:
+        raise ValueError("evidence_run_not_found")
+    return read_evidence_run(run_id) or updated_record
 
 
 def build_evidence_export(record: dict[str, Any]) -> str:
@@ -305,25 +315,45 @@ def csv_escape(value: Any) -> str:
     return text
 
 
-def _load_raw_evidence_runs(limit: int = 500, offset: int = 0) -> list[dict[str, Any]]:
-    db_items = list_evidence_runs_db(limit=limit, offset=offset)
-    if db_items:
-        return [item for item in db_items if isinstance(item, dict)]
-    # Only consult the legacy JSON store when SQLite has no evidence at all.
-    # Otherwise an empty final DB page could incorrectly restart pagination.
-    if offset > 0 and list_evidence_runs_db(limit=1, offset=0):
-        return []
+def _import_legacy_evidence_file() -> bool:
+    records: list[dict[str, Any]] = []
     path = evidence_runs_path()
-    if not path.exists():
+    if path.exists():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            payload = []
+        if isinstance(payload, list):
+            records = [
+                item
+                for item in payload[:500]
+                if isinstance(item, dict) and str(item.get("run_id") or "").strip()
+            ]
+    imported = upsert_evidence_runs_db(records)
+    upsert_latest_payload(LEGACY_EVIDENCE_IMPORT_MARKER, True)
+    return imported > 0
+
+
+def _load_raw_evidence_runs(limit: int = 500, offset: int = 0) -> list[dict[str, Any]]:
+    migration_complete = read_latest_payload(LEGACY_EVIDENCE_IMPORT_MARKER) is True
+    db_items = list_evidence_runs_db(limit=limit, offset=offset)
+    if migration_complete:
+        return [item for item in db_items if isinstance(item, dict)]
+    if db_items:
+        # A populated database is authoritative. Mark the import complete so a
+        # stale mirror cannot be resurrected after retention removes all rows.
+        upsert_latest_payload(LEGACY_EVIDENCE_IMPORT_MARKER, True)
+        return [item for item in db_items if isinstance(item, dict)]
+    if offset > 0 and list_evidence_runs_db(limit=1, offset=0):
+        upsert_latest_payload(LEGACY_EVIDENCE_IMPORT_MARKER, True)
         return []
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    if not _import_legacy_evidence_file():
         return []
-    if not isinstance(payload, list):
-        return []
-    items = [item for item in payload if isinstance(item, dict)]
-    return items[max(0, offset) : max(0, offset) + max(1, limit)]
+    return [
+        item
+        for item in list_evidence_runs_db(limit=limit, offset=offset)
+        if isinstance(item, dict)
+    ]
 
 
 def _annotate_and_sort_evidence_runs(items: list[dict[str, Any]]) -> list[dict[str, Any]]:

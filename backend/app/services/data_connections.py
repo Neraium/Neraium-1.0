@@ -17,6 +17,7 @@ from app.services.runtime_db import (
     clear_upload_runtime_tables,
     delete_data_connection,
     list_data_connections,
+    mutate_latest_payload,
     read_data_connection,
     read_latest_payload,
     upsert_data_connection,
@@ -566,25 +567,29 @@ def write_connection_buffer(connection_id: str, records: list[dict[str, Any]]) -
 
 
 def append_connection_buffer(connection_id: str, records: list[NormalizedTelemetryRecord]) -> list[dict[str, Any]]:
-    existing = read_connection_buffer(connection_id)
     serialized = [record.model_dump() for record in records]
-    combined = existing + serialized
-    combined.sort(key=lambda item: (item.get("timestamp") or "", item.get("sensor_id") or ""))
-    deduped: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for item in combined:
-        key = (
-            str(item.get("timestamp") or ""),
-            str(item.get("room_id") or ""),
-            str(item.get("sensor_id") or ""),
-            str(item.get("value") or ""),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(item)
-    write_connection_buffer(connection_id, deduped)
-    return deduped[-MAX_BUFFER_RECORDS:]
+
+    def append_and_deduplicate(current: Any | None) -> list[dict[str, Any]]:
+        existing = [item for item in (current or []) if isinstance(item, dict)]
+        combined = existing + serialized
+        combined.sort(key=lambda item: (item.get("timestamp") or "", item.get("sensor_id") or ""))
+        deduped: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str, str]] = set()
+        for item in combined:
+            identity = (
+                str(item.get("timestamp") or ""),
+                str(item.get("room_id") or ""),
+                str(item.get("sensor_id") or ""),
+                str(item.get("value") or ""),
+            )
+            if identity in seen:
+                continue
+            seen.add(identity)
+            deduped.append(item)
+        return deduped[-MAX_BUFFER_RECORDS:]
+
+    updated = mutate_latest_payload(records_buffer_key(connection_id), append_and_deduplicate)
+    return [item for item in updated if isinstance(item, dict)]
 
 
 def build_rows_from_normalized_records(records: list[dict[str, Any]]) -> tuple[list[str], list[list[str]], dict[str, Any]]:

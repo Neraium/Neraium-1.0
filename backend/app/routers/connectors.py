@@ -56,10 +56,12 @@ def test_connector(request: Request, payload: ConnectorTestRequest) -> dict[str,
 async def upload_csv_connector(
     request: Request,
     file: UploadFile = File(...),
-    source_id: str = Form("customer-csv"),
-    system_id: str = Form("facility-csv"),
+    source_id: str = Form("customer-csv", min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$"),
+    system_id: str = Form("facility-csv", min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$"),
 ) -> dict[str, Any]:
     filename = file.filename or "telemetry.csv"
+    if len(filename) > 255:
+        raise HTTPException(status_code=400, detail="Filename must not exceed 255 characters.")
     if Path(filename).suffix.lower() != ".csv":
         raise HTTPException(status_code=400, detail="Only CSV files are supported for the CSV connector.")
 

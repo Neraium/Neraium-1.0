@@ -8,7 +8,7 @@ router = APIRouter(tags=["app"])
 
 
 @router.get("/app")
-def read_app_metadata(domain_mode: str | None = Query(default=None)) -> dict[str, str]:
+def read_app_metadata(domain_mode: str | None = Query(default=None, pattern=r"^(aquatic|cultivation)$")) -> dict[str, str]:
     selected_mode = normalize_domain_mode(domain_mode) if domain_mode else read_domain_mode()
     profile = domain_profile(selected_mode)
     return {

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints, field_validator
+
+from app.contracts import ContractModel, EmailAddress, Identifier, OptionalNote, SecretText, ShortText, validate_http_url, validate_utc_timestamp
 
 
 class UploadAcceptedResponse(BaseModel):
@@ -145,13 +147,22 @@ class EvidenceRunResponse(BaseModel):
     deformation_started_at: str | None = None
 
 
-class OperatorFeedbackRequest(BaseModel):
-    category: str
-    note: str | None = None
-    outcome: str | None = None
-    action_taken: str | None = None
+class OperatorFeedbackRequest(ContractModel):
+    category: Literal[
+        "confirmed_issue", "known_operational_change", "sensor_or_data_problem",
+        "environmental_cause", "nothing_meaningful", "useful_warning",
+        "expected_behavior", "false_positive", "maintenance_event", "ignore",
+    ]
+    note: OptionalNote | None = None
+    outcome: Annotated[str, StringConstraints(max_length=500)] | None = None
+    action_taken: Annotated[str, StringConstraints(max_length=2000)] | None = None
     intervention_at: str | None = None
     followup_at: str | None = None
+
+    @field_validator("intervention_at", "followup_at")
+    @classmethod
+    def timestamps_are_utc(cls, value: str | None) -> str | None:
+        return validate_utc_timestamp(value)
 
 
 class EvidenceRunsListResponse(BaseModel):
@@ -197,11 +208,11 @@ class AuthSessionsListResponse(BaseModel):
     summary: dict[str, int] = Field(default_factory=dict)
 
 
-class AuthUserCreateRequest(BaseModel):
-    email: str
-    password: str
-    name: str | None = None
-    role: str = "operator"
+class AuthUserCreateRequest(ContractModel):
+    email: EmailAddress
+    password: Annotated[str, StringConstraints(min_length=8, max_length=1024)]
+    name: ShortText | None = None
+    role: Literal["viewer", "operator", "admin"] = "operator"
 
 
 class ObservabilitySummaryResponse(BaseModel):
@@ -246,15 +257,20 @@ class DataConnectionsListResponse(BaseModel):
     connections: list[DataConnectionResponse] = Field(default_factory=list)
 
 
-class DataConnectionUpsertRequest(BaseModel):
-    connection_id: str | None = None
-    name: str
+class DataConnectionUpsertRequest(ContractModel):
+    connection_id: Identifier | None = None
+    name: ShortText
     url: str
-    source_type: str = "external_rest_api"
-    facility_id: str | None = None
-    room_id: str | None = None
+    source_type: Literal["external_rest_api"] = "external_rest_api"
+    facility_id: Identifier | None = None
+    room_id: Identifier | None = None
     polling_enabled: bool = False
-    polling_interval_seconds: int = 5
+    polling_interval_seconds: int = Field(default=5, ge=1, le=86_400)
+
+    @field_validator("url")
+    @classmethod
+    def url_is_safe_http(cls, value: str) -> str:
+        return validate_http_url(value)
 
 
 class DataConnectionActionResponse(BaseModel):

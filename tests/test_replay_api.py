@@ -107,6 +107,7 @@ def test_aquatic_demo_mode_replay_timeline_available() -> None:
 
 def test_production_live_replay_does_not_return_synthetic_fallback(monkeypatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
     client = TestClient(create_app())
 
     response = client.get("/api/replay/timeline?mode=live&intervals=12")

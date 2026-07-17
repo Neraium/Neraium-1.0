@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Path
 
 from app.core.security import require_admin_role, require_api_access
 from app.routers.facility import resolve_uploaded_intelligence
@@ -14,10 +14,11 @@ from replay.structural_replay_engine import StructuralReplayEngine
 router = APIRouter(tags=["audit"], dependencies=[Depends(require_api_access), Depends(require_admin_role)])
 _audit_engine = OperationalAuditEngine()
 _replay_engine = StructuralReplayEngine()
+SessionIdPath = Annotated[str, Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
 
 
 @router.get("/audit/session/{session_id}")
-def read_audit_session(session_id: str) -> dict[str, Any]:
+def read_audit_session(session_id: SessionIdPath) -> dict[str, Any]:
     intelligence = current_intelligence()
     replay = _replay_engine.build_timeline(intelligence=intelligence, intervals=24, replay_compression=1)
     return _audit_engine.build_record(
@@ -28,7 +29,7 @@ def read_audit_session(session_id: str) -> dict[str, Any]:
 
 
 @router.get("/audit/replay/{session_id}")
-def read_audit_replay(session_id: str) -> dict[str, Any]:
+def read_audit_replay(session_id: SessionIdPath) -> dict[str, Any]:
     intelligence = current_intelligence()
     replay = _replay_engine.build_timeline(intelligence=intelligence, intervals=24, replay_compression=1)
     return {
@@ -38,7 +39,7 @@ def read_audit_replay(session_id: str) -> dict[str, Any]:
 
 
 @router.get("/audit/evidence/{session_id}")
-def read_audit_evidence(session_id: str) -> dict[str, Any]:
+def read_audit_evidence(session_id: SessionIdPath) -> dict[str, Any]:
     intelligence = current_intelligence()
     lineages = intelligence.get("evidence_lineage", {}).get("lineages", [])
     return {

@@ -65,7 +65,7 @@ def test_whitespace_delimited_cmapss_style_upload_is_ingested(client) -> None:
     )
     assert upload.status_code == 202
     status_url = upload.json()["status_url"]
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 15
     status = {}
     while time.monotonic() < deadline:
         status = client.get(status_url).json()

@@ -8,6 +8,7 @@ from app.services.rate_limiter import clear_rate_limits
 
 def _production_client(monkeypatch, tmp_path) -> TestClient:
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
     monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
     settings = Settings(
         app_env="production",
@@ -21,6 +22,7 @@ def _production_client(monkeypatch, tmp_path) -> TestClient:
 
 def test_bootstrap_admin_can_log_in(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
     monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
     monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
     monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "password123")
@@ -66,7 +68,11 @@ def test_invalid_login_returns_auth_specific_message(monkeypatch, tmp_path) -> N
     )
 
     assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid email or password."}
+    assert response.json() == {
+        "detail": "Invalid email or password.",
+        "message": "Invalid email or password.",
+        "error_type": "auth",
+    }
 
 
 def test_operator_cannot_access_admin_audit_route_in_production(monkeypatch, tmp_path) -> None:

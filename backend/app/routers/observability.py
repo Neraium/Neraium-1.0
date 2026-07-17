@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse
 
 from app.core.security import require_admin_role, require_api_access
@@ -151,7 +151,7 @@ def get_observability_metrics() -> PlainTextResponse:
 
 
 @router.get("/observability/performance")
-def get_observability_performance(window: int = 200) -> dict:
+def get_observability_performance(window: int = Query(default=200, ge=10, le=1000)) -> dict:
     queue = queue_metrics()
     durations = upload_duration_samples(limit=max(10, min(window, 1000)))
     cache_stats = read_upload_cache_stats()
@@ -177,7 +177,7 @@ def get_observability_performance(window: int = 200) -> dict:
 
 
 @router.get("/observability/evp-governance")
-def get_evp_governance_records(limit: int = 200) -> dict:
+def get_evp_governance_records(limit: int = Query(default=200, ge=1, le=500)) -> dict:
     records = list_evp_records(limit=limit, operator_visible=None)
     pass_records = [item for item in records if str(item.get("gate_outcome", "")).upper() == "PASS"]
     no_pass_records = [item for item in records if str(item.get("gate_outcome", "")).upper() == "NO_PASS"]

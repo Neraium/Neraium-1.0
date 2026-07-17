@@ -1,6 +1,6 @@
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.core.security import require_api_access, require_operator_role
@@ -12,18 +12,19 @@ from app.services.upload_state_repository import read_evidence_by_identity
 
 
 router = APIRouter(tags=["evidence"], dependencies=[Depends(require_api_access)])
+RunIdPath = Annotated[str, Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
 
 
 @router.get("/evidence/runs", response_model=EvidenceRunsListResponse)
 def get_evidence_runs(
     limit: int = Query(default=50, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
 ) -> dict[str, Any]:
     return list_evidence_runs_page(limit=limit, offset=offset)
 
 
 @router.get("/evidence/runs/{run_id}", response_model=EvidenceRunResponse)
-def get_evidence_run(run_id: str) -> dict[str, Any]:
+def get_evidence_run(run_id: RunIdPath) -> dict[str, Any]:
     record = read_evidence_by_identity(run_id) or read_evidence_run(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
@@ -43,7 +44,7 @@ def get_latest_evidence() -> dict[str, Any]:
 
 
 @router.get("/evidence/export/{run_id}", response_model=None)
-def export_evidence_run(request: Request, run_id: str, format: str = Query(default="markdown")):
+def export_evidence_run(request: Request, run_id: RunIdPath, format: Literal["markdown", "json", "csv"] = Query(default="markdown")):
     record = read_evidence_by_identity(run_id) or read_evidence_run(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
@@ -78,7 +79,7 @@ def export_evidence_run(request: Request, run_id: str, format: str = Query(defau
 
 
 @router.post("/evidence/runs/{run_id}/feedback", response_model=EvidenceRunResponse, dependencies=[Depends(require_operator_role)])
-def submit_evidence_feedback(request: Request, run_id: str, payload: OperatorFeedbackRequest) -> dict[str, Any]:
+def submit_evidence_feedback(request: Request, run_id: RunIdPath, payload: OperatorFeedbackRequest) -> dict[str, Any]:
     auth_context = getattr(request.state, "auth_context", {})
     actor = auth_context.get("auth_subject", "operator")
     try:

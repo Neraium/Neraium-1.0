@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
+from pydantic import StringConstraints, model_validator
+
+from app.contracts import ContractModel, EmailAddress, SecretText
 
 from app.core.security import _strict_auth_mode, require_admin_role, require_api_access
 from app.models.api_models import (
@@ -39,15 +41,28 @@ _LOGIN_EMAIL_LIMIT = 10
 _LOGIN_EMAIL_WINDOW_SECONDS = 900
 
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str
+class LoginRequest(ContractModel):
+    email: EmailAddress
+    password: SecretText
 
 
-class AuthSessionRevokeRequest(BaseModel):
-    session_id: str | None = None
-    email: str | None = None
+class AuthSessionRevokeRequest(ContractModel):
+    session_id: Annotated[str, StringConstraints(min_length=16, max_length=256)] | None = None
+    email: EmailAddress | None = None
     revoke_all_for_user: bool = False
+
+    @model_validator(mode="after")
+    def target_is_unambiguous(self):
+        if bool(self.session_id) == bool(self.email):
+            raise ValueError("Provide exactly one of session_id or email.")
+        if self.email and not self.revoke_all_for_user:
+            raise ValueError("revoke_all_for_user must be true when revoking by email.")
+        if self.session_id and self.revoke_all_for_user:
+            raise ValueError("revoke_all_for_user is only valid with email.")
+        return self
+
+
+EmailPath = Annotated[str, Path(min_length=5, max_length=320, pattern=r"^[^/\s@]+@[^/\s@]+\.[^/\s@]+$")]
 
 
 def _apply_session_cookie(response: Response, session_id: str, request: Request) -> None:
@@ -159,13 +174,15 @@ def read_auth_users(include_inactive: bool = True) -> AuthUsersListResponse:
 @router.post(
     "/auth/users",
     response_model=AuthUserResponse,
+    status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_api_access), Depends(require_admin_role)],
 )
 def create_auth_user(payload: AuthUserCreateRequest, request: Request) -> AuthUserResponse:
     try:
         user = create_user(payload.email, payload.password, name=payload.name, role=payload.role)
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        status_code = 409 if "already exists" in str(error).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
     _record_admin_auth_event(
         actor=_request_actor(request),
         action="auth.user.created",
@@ -181,7 +198,7 @@ def create_auth_user(payload: AuthUserCreateRequest, request: Request) -> AuthUs
     response_model=AuthUserResponse,
     dependencies=[Depends(require_api_access), Depends(require_admin_role)],
 )
-def activate_auth_user(email: str, request: Request) -> AuthUserResponse:
+def activate_auth_user(email: EmailPath, request: Request) -> AuthUserResponse:
     user = activate_user(email)
     if not user:
         raise HTTPException(status_code=404, detail="User account not found.")
@@ -200,7 +217,7 @@ def activate_auth_user(email: str, request: Request) -> AuthUserResponse:
     response_model=AuthUserResponse,
     dependencies=[Depends(require_api_access), Depends(require_admin_role)],
 )
-def deactivate_auth_user(email: str, request: Request) -> AuthUserResponse:
+def deactivate_auth_user(email: EmailPath, request: Request) -> AuthUserResponse:
     user = deactivate_user(email)
     if not user:
         raise HTTPException(status_code=404, detail="User account not found.")
@@ -219,7 +236,7 @@ def deactivate_auth_user(email: str, request: Request) -> AuthUserResponse:
     response_model=AuthSessionsListResponse,
     dependencies=[Depends(require_api_access), Depends(require_admin_role)],
 )
-def read_auth_sessions(email: str | None = None, include_revoked: bool = False) -> AuthSessionsListResponse:
+def read_auth_sessions(email: EmailAddress | None = Query(default=None), include_revoked: bool = Query(False)) -> AuthSessionsListResponse:
     sessions = list_sessions(email=email, include_revoked=include_revoked)
     return AuthSessionsListResponse(
         sessions=[AuthSessionResponse(**session) for session in sessions],

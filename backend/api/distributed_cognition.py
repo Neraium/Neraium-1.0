@@ -41,26 +41,26 @@ from training.operator_cognition_curriculum import build_operator_cognition_curr
 from training.operator_cognition_training import build_training_payload
 
 router = APIRouter(tags=["distributed-cognition"], dependencies=[Depends(require_api_access)])
-MEMORY = PersistentCognitionGraphMemory()
 
 
 @router.get("/distributed/memory")
 def distributed_memory() -> dict[str, Any]:
     intelligence = current_intelligence()
     graph_snapshot = build_structural_cognition_graph(intelligence).get("snapshot", {})
-    snapshot = MEMORY.append_graph_snapshot(
+    memory = PersistentCognitionGraphMemory()
+    snapshot = memory.append_graph_snapshot(
         facility_id="facility-primary",
         graph_snapshot=graph_snapshot,
         intelligence=intelligence,
     )
-    similar = MEMORY.retrieve_similar_graph_states(
+    similar = memory.retrieve_similar_graph_states(
         archetypes=[item.get("name", "") for item in intelligence.get("active_archetypes", [])],
         pathways=intelligence.get("causality_graph", {}).get("dominant_pathways", []),
     )
     return {
         "latest_snapshot": snapshot.to_dict(),
         "similar_states": similar.to_dict(),
-        "recurring_paths": MEMORY.query_recurring_propagation_paths().to_dict(),
+        "recurring_paths": memory.query_recurring_propagation_paths().to_dict(),
     }
 
 

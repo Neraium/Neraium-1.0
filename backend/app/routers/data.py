@@ -7,15 +7,15 @@ import json
 import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any
+from typing import Annotated, Any
 import uuid
 from datetime import datetime, timezone
 import re
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Path as ApiPath, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.services.evidence_store import read_evidence_run, upsert_evidence_run
-from app.services.analysis_result_contract import empty_analysis_result, ensure_analysis_result
+from app.services.analysis_result_contract import ensure_analysis_result
 from app.core.security import _strict_auth_mode, require_operator_role
 from app.services import upload_jobs
 from app.services.upload_evidence import build_evidence_record_from_result
@@ -43,6 +43,7 @@ UPLOAD_STATUS_RATE_LIMIT = 240
 UPLOAD_STATUS_RATE_WINDOW_SECONDS = 60
 _UPLOAD_WORKERS: set[threading.Thread] = set()
 _UPLOAD_WORKERS_LOCK = threading.Lock()
+UploadJobPath = Annotated[str, ApiPath(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
 
 
 def format_upload_capacity(size_bytes: int) -> str:
@@ -472,6 +473,11 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
     started_at = time.perf_counter()
     request_id = getattr(request.state, "request_id", None)
     filename = file.filename or "upload.csv"
+    if len(filename) > 255:
+        return JSONResponse(
+            status_code=400,
+            content={"status": "FAILED", "error_type": "invalid_filename", "message": "Filename must not exceed 255 characters."},
+        )
     lowered = filename.lower()
     if not (lowered.endswith(".csv") or lowered.endswith(".json") or lowered.endswith(".txt")):
         _log_upload_event("request_rejected", request_id=request_id, endpoint="/api/data/upload", filename=filename, processing_stage="validate_file_type", failure_reason="unsupported_file_type")
@@ -769,7 +775,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
 
 
 @router.post("/upload/{job_id}/retry", status_code=202, dependencies=[Depends(require_operator_role)])
-async def retry_upload_analysis(request: Request, job_id: str):
+async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
     settings = request.app.state.settings
     request_id = getattr(request.state, "request_id", None)
     requested_job_id = str(job_id or "").strip()
@@ -854,7 +860,7 @@ async def retry_upload_analysis(request: Request, job_id: str):
 
 
 @router.get("/upload-status/{job_id}")
-async def upload_status(request: Request, job_id: str):
+async def upload_status(request: Request, job_id: UploadJobPath):
     if _strict_auth_mode(request):
         allowed, retry_after = consume_rate_limit(
             "data.upload_status",
@@ -874,7 +880,7 @@ async def upload_status(request: Request, job_id: str):
 
 
 @router.get("/upload-stream/{job_id}")
-async def upload_stream(job_id: str, request: Request = None):
+async def upload_stream(job_id: UploadJobPath, request: Request = None):
     request_id = getattr(request.state, "request_id", None) if request is not None else None
 
     async def event_generator():
@@ -890,7 +896,7 @@ async def upload_stream(job_id: str, request: Request = None):
 
 
 @router.get("/latest-upload")
-async def latest_upload(include_persisted: int | bool = True, request: Request = None):
+async def latest_upload(include_persisted: bool = Query(True), request: Request = None):
     request_id = getattr(request.state, "request_id", None) if request is not None else None
     payload = resolve_latest_upload_payload(include_persisted=include_persisted, request_id=request_id)
     if request is not None:
@@ -899,7 +905,7 @@ async def latest_upload(include_persisted: int | bool = True, request: Request =
 
 
 @router.get("/system-interpretation")
-async def system_interpretation_contract(include_persisted: int | bool = True, request: Request = None):
+async def system_interpretation_contract(include_persisted: bool = Query(True), request: Request = None):
     payload = await latest_upload(include_persisted=include_persisted, request=request)
     interpretation = payload.get("system_interpretation") if isinstance(payload, dict) else None
     raw_source = str((payload or {}).get("source") or (payload or {}).get("snapshot", {}).get("source") or "").lower()
@@ -917,27 +923,18 @@ async def system_interpretation_contract(include_persisted: int | bool = True, r
 
 
 @router.get("/replay/{job_id}")
-async def data_replay(job_id: str):
-    return resolve_upload_artifacts(job_id).get("replay") or read_replay_payload(job_id)
+async def data_replay(job_id: UploadJobPath):
+    payload = resolve_upload_artifacts(job_id).get("replay") or read_replay_payload(job_id)
+    if not payload or not payload.get("timeline"):
+        raise HTTPException(status_code=404, detail="Replay was not found.")
+    return payload
 
 
 @router.get("/intake/{job_id}/result")
-async def intake_result(job_id: str):
+async def intake_result(job_id: UploadJobPath):
     result = read_upload_result_by_job_id(job_id)
     if not result:
-        return {
-            "job_id": job_id,
-            "result_available": False,
-            "status": "NOT_FOUND",
-            "result": None,
-            "analysis_result": empty_analysis_result(
-                analysis_id=job_id,
-                upload_id=job_id,
-                status="missing",
-                message="Upload result was not found.",
-                errors=["upload_result_missing"],
-            ),
-        }
+        raise HTTPException(status_code=404, detail="Upload result was not found.")
     return {
         "job_id": job_id,
         "result_available": True,

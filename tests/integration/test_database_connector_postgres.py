@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -12,6 +13,8 @@ from fastapi.testclient import TestClient
 from app.connectors.database_connector import DatabaseConnector
 from app.core.config import Settings
 from app.main import create_app
+from app.services.auth_store import _PostgresAuthBackend
+from db.migrations.create_normalization_tables import run as run_normalization_migration
 
 pytestmark = pytest.mark.integration
 
@@ -76,7 +79,7 @@ def test_real_tls_connection_and_parameterized_values(postgres_databases) -> Non
 
     assert connector.validate_connection() == {
         "ok": True,
-        "message": "Database query validated with 2 rows.",
+        "message": "Database access confirmed with 2 telemetry rows.",
     }
     rows = connector.fetch_historical()
     assert [row["value"] for row in rows] == [2.0, 3.0]
@@ -233,3 +236,110 @@ def test_sanitized_failure_persists_offline_health(postgres_databases, tmp_path:
         "Database connection or query failed. Check the URL, credentials, and read-only query."
     ]
     assert "reader-password" not in health_response.text
+
+
+def _schema_dsn(dsn: str, schema: str) -> str:
+    separator = "&" if "?" in dsn else "?"
+    return f"{dsn}{separator}options=-csearch_path%3D{schema}"
+
+
+def test_auth_schema_migrations_apply_on_real_postgres(postgres_databases) -> None:
+    schema = f"auth_contract_{uuid.uuid4().hex[:12]}"
+    admin_dsn = postgres_databases["admin"]
+    with psycopg.connect(admin_dsn, sslmode="require", autocommit=True) as connection:
+        connection.execute(f'CREATE SCHEMA "{schema}"')
+    try:
+        backend = _PostgresAuthBackend(_schema_dsn(admin_dsn, schema))
+        backend.ensure_schema()
+        backend.ensure_schema()
+        inserted = backend.insert_user_if_absent(
+            {
+                "email": "postgres@example.com", "name": "Postgres", "role": "operator",
+                "salt": "salt", "password_hash": "hash",
+                "created_at": "2026-01-01T00:00:00+00:00", "updated_at": "2026-01-01T00:00:00+00:00",
+                "is_active": True,
+            }
+        )
+        assert inserted is True
+        assert backend.insert_user_if_absent(
+            {
+                "email": "postgres@example.com", "name": "Duplicate", "role": "admin",
+                "salt": "other", "password_hash": "other",
+                "created_at": "2026-01-01T00:00:00+00:00", "updated_at": "2026-01-01T00:00:00+00:00",
+                "is_active": True,
+            }
+        ) is False
+        backend.replace_active_session(
+            {
+                "session_id": "session-one", "email": "postgres@example.com",
+                "created_at": "2026-01-01T00:00:00+00:00", "expires_at": "2099-01-01T00:00:00+00:00",
+            }
+        )
+        backend.replace_active_session(
+            {
+                "session_id": "session-two", "email": "postgres@example.com",
+                "created_at": "2026-01-02T00:00:00+00:00", "expires_at": "2099-01-01T00:00:00+00:00",
+            }
+        )
+        assert len(backend.list_sessions(email="postgres@example.com")) == 1
+        with psycopg.connect(_schema_dsn(admin_dsn, schema), sslmode="require") as connection:
+            types = dict(
+                connection.execute(
+                    "SELECT column_name, data_type FROM information_schema.columns "
+                    "WHERE table_schema = current_schema() AND table_name = 'auth_sessions'"
+                ).fetchall()
+            )
+            assert types["expires_at"] == "timestamp with time zone"
+            assert connection.execute(
+                "SELECT COUNT(*) FROM auth_schema_migrations"
+            ).fetchone()[0] == 2
+    finally:
+        with psycopg.connect(admin_dsn, sslmode="require", autocommit=True) as connection:
+            connection.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+
+
+def test_normalization_migration_constraints_on_real_postgres(postgres_databases) -> None:
+    schema = f"normalization_{uuid.uuid4().hex[:12]}"
+    admin_dsn = postgres_databases["admin"]
+    with psycopg.connect(admin_dsn, sslmode="require", autocommit=True) as connection:
+        connection.execute(f'CREATE SCHEMA "{schema}"')
+    try:
+        with psycopg.connect(_schema_dsn(admin_dsn, schema), sslmode="require") as connection:
+            run_normalization_migration(connection)
+            run_normalization_migration(connection)
+            primary_key_columns = [
+                row[0]
+                for row in connection.execute(
+                    """
+                    SELECT attribute.attname
+                    FROM pg_index AS index
+                    JOIN pg_attribute AS attribute
+                      ON attribute.attrelid = index.indrelid
+                     AND attribute.attnum = ANY(index.indkey)
+                    WHERE index.indrelid = 'telemetry_normalized'::regclass
+                      AND index.indisprimary
+                    ORDER BY array_position(index.indkey, attribute.attnum)
+                    """
+                ).fetchall()
+            ]
+            assert primary_key_columns == ["time", "source_id", "signal_id"]
+            connection.execute(
+                "INSERT INTO telemetry_normalized "
+                "(time, source_id, signal_id, value, integrity_flag) VALUES (%s, %s, %s, %s, %s)",
+                ("2026-01-01T00:00:00Z", "source-a", "temperature", 1.5, "good"),
+            )
+            connection.execute(
+                "INSERT INTO telemetry_normalized "
+                "(time, source_id, signal_id, value, integrity_flag) VALUES (%s, %s, %s, %s, %s)",
+                ("2026-01-01T00:00:00Z", "source-b", "temperature", 2.5, "good"),
+            )
+            assert connection.execute("SELECT COUNT(*) FROM telemetry_normalized").fetchone()[0] == 2
+            with pytest.raises(psycopg.errors.CheckViolation):
+                with connection.transaction():
+                    connection.execute(
+                        "INSERT INTO telemetry_normalized "
+                        "(time, source_id, signal_id, value, integrity_flag) VALUES (NOW(), 'x', 'x', 'Infinity', 'good')"
+                    )
+    finally:
+        with psycopg.connect(admin_dsn, sslmode="require", autocommit=True) as connection:
+            connection.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')

@@ -13,7 +13,7 @@ def test_backend_route_smoke() -> None:
             "/api/startup-status",
             "/api/routes/debug",
             "/api/facility/systems",
-            "/api/facility/cognition-state?mode=live",
+            "/api/facility/cognition-state",
             "/api/data/latest-upload",
             "/api/intelligence/status",
         ]

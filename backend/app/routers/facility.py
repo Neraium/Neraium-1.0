@@ -14,7 +14,7 @@ router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)]
 
 
 @router.get("/facility/systems")
-def read_facility_systems(include_persisted: bool = Query(True), domain_mode: str | None = Query(default=None)) -> dict[str, Any]:
+def read_facility_systems(include_persisted: bool = Query(True), domain_mode: str | None = Query(default=None, pattern=r"^(aquatic|cultivation)$")) -> dict[str, Any]:
     detection = detect_domain_mode()
     selected_mode = normalize_domain_mode(domain_mode) if domain_mode else read_domain_mode()
     profile = domain_profile(selected_mode)

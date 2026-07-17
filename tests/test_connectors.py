@@ -115,8 +115,9 @@ def test_rest_connector_test_returns_actionable_validation_error(tmp_path) -> No
         json={"endpoint": "", "sample_payload": {"records": []}},
     )
 
-    assert response.status_code == 400
-    assert response.json() == {"detail": "REST endpoint is required."}
+    assert response.status_code == 422
+    assert response.json()["error_type"] == "validation_error"
+    assert response.json()["detail"] == "Request validation failed."
 
 
 def test_rest_connector_normalizes_response_and_health_status() -> None:
