@@ -503,7 +503,7 @@ export default function ObservationCenterWorkspace({
   );
 
   const latestRun = reviewRuns[0] ?? null;
-  const activeFinding = canonicalFinding ?? {
+  const activeFinding = useMemo(() => canonicalFinding ?? ({
     exists: false,
     status: "Normal",
     confidence: "Low",
@@ -515,14 +515,35 @@ export default function ObservationCenterWorkspace({
     dataQuality: { missingBaselineValues: [], missingRecentValues: [], unavailableTelemetry: [] },
     evidenceButtonLabel: "Review Details",
     emptyState: OPERATOR_EMPTY_STATE,
-  };
+  }), [canonicalFinding]);
   const hasCurrentFinding = Boolean(activeFinding.exists);
   const selectedRunSummary = useMemo(() => summarizeObservation(selectedRun, aliases), [aliases, selectedRun]);
   const selectedRunHistoricalFact = selectedRun?.historical_fact ?? "";
   const selectedRunValidationHistory = Array.isArray(selectedRun?.validation_event_history) ? selectedRun.validation_event_history : [];
   const selectedRunInterventionComparison = selectedRun?.before_after_intervention ?? {};
-  const selectedRunStatus = normalizeObservationStatus(selectedRun, persistedRunIds);
-  const activeBriefing = buildObservationBriefing(activeFinding, selectedRun);
+  const selectedReviewFinding = useMemo(() => {
+    if (hasCurrentFinding) return activeFinding;
+    if (!selectedRun) return null;
+    return {
+      ...activeFinding,
+      status: observationTypeLabel(selectedRun.observation_type),
+      confidence: confidenceForFinding(selectedRun),
+      summary: summarizeObservation(selectedRun, aliases),
+      reviewNext: (selectedRun.evidence_summary ?? [])[0] ?? "Review the recorded evidence and operating context.",
+      supportingEvidence: selectedRun.evidence_summary ?? [],
+      technicalDetails: [
+        { label: "Source", value: selectedRun.source_name ?? selectedRun.source_type ?? "Recorded evidence" },
+        { label: "State", value: selectedRun.structural_state ?? selectedRun.operating_state ?? normalizeObservationStatus(selectedRun, persistedRunIds) },
+      ],
+      affectedVariables: selectedRun.variables ?? [],
+      dataQuality: {
+        missingBaselineValues: [],
+        missingRecentValues: [],
+        unavailableTelemetry: selectedRun.data_conditions ?? [],
+      },
+    };
+  }, [activeFinding, aliases, hasCurrentFinding, persistedRunIds, selectedRun]);
+  const activeBriefing = buildObservationBriefing(selectedReviewFinding ?? activeFinding, selectedRun);
   const selectedRunAllowsFeedback = canRecordFeedback(selectedRun, persistedRunIds);
   const gateOrbState = driftToneFor(latestRun);
   const silenceHealth = useMemo(() => {
@@ -745,32 +766,42 @@ export default function ObservationCenterWorkspace({
               </label>
             </div>
           </details>
-          {!hasCurrentFinding ? (
+          {filteredRuns.length === 0 ? (
             <div className="observation-detail-callout">
-              <strong>{activeFinding.emptyState.title}</strong>
-              <p>{activeFinding.emptyState.subtitle}</p>
-              <p>{activeFinding.emptyState.detail}</p>
+              <strong>{reviewRuns.length > 0 ? "No insights match these filters." : activeFinding.emptyState.title}</strong>
+              <p>{reviewRuns.length > 0 ? "Adjust the search or filter controls to review other recorded insights." : activeFinding.emptyState.subtitle}</p>
+              <p>{reviewRuns.length > 0 ? `${reviewRuns.length} issue records remain available.` : activeFinding.emptyState.detail}</p>
             </div>
           ) : (
             <div className="feed-list">
-              <article
-                className="intervention-card intervention-card--selected observation-history-card"
-                aria-label="Current observation"
-                style={{ textAlign: "left", width: "100%" }}
-              >
-                <div className="intervention-card__header">
-                  <div>
-                    <span>Current observation</span>
-                    <strong>{activeFinding.status}</strong>
-                  </div>
-                  <span className="observation-history-card__status observation-history-card__status--open">{selectedRunStatus === "processing" ? "processing" : "active"}</span>
-                </div>
-                <p>{activeFinding.summary}</p>
-                <div className="intervention-card__footer">
-                  <span>Confidence {activeFinding.confidence}</span>
-                  <span>{activeBriefing.investigation[0]}</span>
-                </div>
-              </article>
+              {filteredRuns.map((run) => {
+                const runStatus = normalizeObservationStatus(run, persistedRunIds);
+                const selected = run.run_id === selectedRun?.run_id;
+                const sourceLabel = run.source_name ?? run.source_type ?? run.run_id;
+                return (
+                  <button
+                    type="button"
+                    key={run.run_id}
+                    className={`intervention-card observation-history-card ${selected ? "intervention-card--selected" : ""}`}
+                    aria-label={`Review ${observationTypeLabel(run.observation_type)} from ${sourceLabel}`}
+                    aria-pressed={selected}
+                    onClick={() => setSelectedRunId(run.run_id)}
+                  >
+                    <div className="intervention-card__header">
+                      <div>
+                        <span>{formatDetectedTime(run)}</span>
+                        <strong>{observationTypeLabel(run.observation_type)}</strong>
+                      </div>
+                      <span className={`observation-history-card__status observation-history-card__status--${runStatus}`}>{runStatus}</span>
+                    </div>
+                    <p>{summarizeObservation(run, aliases)}</p>
+                    <div className="intervention-card__footer">
+                      <span>{sourceLabel}</span>
+                      <span>Confidence {confidenceForFinding(run)}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
           <div className="intake-flow__controls observation-center__pagination">
@@ -790,7 +821,7 @@ export default function ObservationCenterWorkspace({
         </Panel>
 
         <Panel title="Review Insight" className="span-5 observation-center__panel observation-center__panel--detail">
-          {!hasCurrentFinding ? (
+          {!selectedReviewFinding ? (
             <div className="observation-detail-callout">
               <strong>{activeFinding.emptyState.title}</strong>
               <p>{activeFinding.emptyState.subtitle}</p>
@@ -800,13 +831,13 @@ export default function ObservationCenterWorkspace({
             <>
               <div className="observation-detail-callout">
                 <span className="section-token">Observation Summary</span>
-                <strong>{activeFinding.summary}</strong>
+                <strong>{selectedReviewFinding.summary}</strong>
                 {activeBriefing.summary.slice(1).map((line) => <p key={line}>{line}</p>)}
               </div>
               <MetricGrid
                 metrics={[
-                  { label: "Severity", value: activeFinding.status },
-                  { label: "Confidence", value: activeFinding.confidence },
+                  { label: "Severity", value: selectedReviewFinding.status },
+                  { label: "Confidence", value: selectedReviewFinding.confidence },
                   { label: "Detected", value: formatDetectedTime(selectedRun) },
                 ]}
                 compact
@@ -814,16 +845,18 @@ export default function ObservationCenterWorkspace({
               <IssueBriefingList title="Possible Operational Contributors" items={activeBriefing.possibleCauses} />
               <IssueBriefingList title="Relationships Involved" items={activeBriefing.relationships} />
               <IssueBriefingList title="Recommended First Checks" items={activeBriefing.investigation} />
-              <div className="intake-flow__controls">
-                <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Evidence</button>
-              </div>
+              {hasCurrentFinding ? (
+                <div className="intake-flow__controls">
+                  <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Evidence</button>
+                </div>
+              ) : null}
               <details className="compact-list-block">
                 <summary className="section-token">Analysis Details</summary>
                 <ul className="compact-list">
-                  {(activeFinding.supportingEvidence ?? []).length > 0
-                    ? activeFinding.supportingEvidence.map((item, index) => <li key={`${item}-${index}`}>{sanitizeOperatorText(item)}</li>)
+                  {(selectedReviewFinding.supportingEvidence ?? []).length > 0
+                    ? selectedReviewFinding.supportingEvidence.map((item, index) => <li key={`${item}-${index}`}>{sanitizeOperatorText(item)}</li>)
                     : <li>{OPERATOR_EMPTY_STATE.detail}</li>}
-                  {(activeFinding.technicalDetails ?? []).map((item) => <li key={item.label}>{item.label}: {sanitizeOperatorText(item.value)}</li>)}
+                  {(selectedReviewFinding.technicalDetails ?? []).map((item) => <li key={item.label}>{item.label}: {sanitizeOperatorText(item.value)}</li>)}
                   {selectedRun ? <li>{sanitizeOperatorText(selectedRunSummary)}</li> : null}
                   {selectedRunHistoricalFact ? <li>{sanitizeOperatorText(selectedRunHistoricalFact)}</li> : null}
                   {selectedRun ? <li>Confidence: {confidenceForFinding(selectedRun)}</li> : null}
@@ -832,7 +865,7 @@ export default function ObservationCenterWorkspace({
               <details className="compact-list-block">
                 <summary className="section-token">Data quality</summary>
                 <ul className="compact-list">
-                  {renderDataQualityRows(activeFinding.dataQuality)}
+                  {renderDataQualityRows(selectedReviewFinding.dataQuality)}
                 </ul>
               </details>
               {selectedRunValidationHistory.length > 0 ? (

@@ -42,9 +42,12 @@ test.describe("Authentication, navigation, connectors, and permissions", () => {
 
   test("an expired server session returns the user to sign in", async ({ page, context }) => {
     await page.goto("/workspace");
+    await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
+    const administrationButton = page.getByRole("button", { name: "Administration" });
+    await expect(administrationButton).toBeVisible();
     const logout = await context.request.post(`${apiBaseURL}/api/auth/logout`);
     expect(logout.ok()).toBeTruthy();
-    await page.getByRole("button", { name: "Administration" }).click();
+    await administrationButton.click();
     await expect(page.getByTestId("auth-screen")).toBeVisible();
     await expect(page.getByRole("status")).toContainText("session expired");
   });

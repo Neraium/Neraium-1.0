@@ -1,5 +1,14 @@
 import { expect, test } from "./fixtures.js";
 
+const REQUIRED_VIEWPORTS = [
+  { name: "desktop", width: 1440, height: 900 },
+  { name: "laptop", width: 1280, height: 720 },
+  { name: "tablet landscape", width: 1024, height: 768 },
+  { name: "tablet portrait", width: 768, height: 1024 },
+  { name: "mobile portrait", width: 390, height: 844 },
+  { name: "mobile landscape", width: 844, height: 390 },
+];
+
 async function visibleButtonRects(page) {
   return page.evaluate(() => {
     const nodes = Array.from(document.querySelectorAll("button, [role='button'], .command-button, .secondary-command-button, .btn"));
@@ -124,19 +133,39 @@ test.describe("Responsive layout audit", () => {
     await expect(page.getByRole("button", { name: /Choose Dataset/i })).toBeVisible();
   });
 
+  test("required production viewports avoid document overflow and clipping", async ({ page }) => {
+    for (const viewport of REQUIRED_VIEWPORTS) {
+      await openWorkspace(page, viewport);
+      const metrics = await operationalLayoutMetrics(page);
+      expect(metrics.scrollWidth, viewport.name).toBeLessThanOrEqual(metrics.viewportWidth + 1);
+      expect(metrics.bodyScrollWidth, viewport.name).toBeLessThanOrEqual(metrics.viewportWidth + 1);
+      expect(metrics.mainLeft, viewport.name).toBeGreaterThanOrEqual(0);
+      expect(metrics.mainRight, viewport.name).toBeLessThanOrEqual(metrics.viewportWidth + 1);
+      expect(metrics.heroLeft, viewport.name).toBeGreaterThanOrEqual(0);
+      expect(metrics.heroRight, viewport.name).toBeLessThanOrEqual(metrics.viewportWidth + 1);
+      await expect(page.getByRole("heading", { name: "Operational Status" })).toBeVisible();
+    }
+  });
+
   test("buttons do not overlap across responsive widths", async ({ page }) => {
     const viewports = [
-      { width: 320, height: 720 },
-      { width: 375, height: 812 },
-      { width: 390, height: 844 },
-      { width: 430, height: 932 },
-      { width: 768, height: 1024 },
-      { width: 1440, height: 900 },
+      { name: "narrow window", width: 320, height: 720 },
+      ...REQUIRED_VIEWPORTS,
     ];
 
     for (const viewport of viewports) {
       await openWorkspace(page, viewport);
       await expectNoVisibleButtonOverlap(page);
+    }
+  });
+
+  test("touch controls meet the WCAG 2.2 minimum target size", async ({ page }) => {
+    for (const viewport of REQUIRED_VIEWPORTS.filter(({ name }) => name.startsWith("mobile"))) {
+      await openWorkspace(page, viewport);
+      const undersized = (await visibleButtonRects(page))
+        .filter(({ width, height }) => width < 24 || height < 24)
+        .map(({ label, width, height }) => `${label}: ${width.toFixed(1)}x${height.toFixed(1)}`);
+      expect(undersized, `${viewport.name}: ${undersized.join("; ")}`).toEqual([]);
     }
   });
 });

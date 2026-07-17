@@ -266,6 +266,9 @@ summary:focus-visible,
   top: var(--space-12);
   left: var(--space-12);
   transform: translateY(-200%);
+  border: 0;
+  font: inherit;
+  cursor: pointer;
   border-radius: var(--control-radius);
   background: var(--color-neutral-100);
   color: var(--color-neutral-950);
