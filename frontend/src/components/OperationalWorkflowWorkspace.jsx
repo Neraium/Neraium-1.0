@@ -44,11 +44,7 @@ const UNASSIGNED_SYSTEM_NAME = "Unassigned System";
 // from the backend doesn't silently slip through this filter again.
 const GENERIC_FALLBACK_LABELS = new Set([
   "observed system behavior changed",
-  "hydraulic performance changed",
-  "operating process performance changed",
-  "affected operational system behavior changed",
   "observed subsystem behavior changed",
-  "affected operational system",
   "subsystem behavior changed subsystem",
   "subsystem behavher changed system",
   "subsystem behavior changed system",
@@ -1041,9 +1037,9 @@ function activityDetailForInsight(insight) {
   const context = [insight?.system, insight?.summary, insightRelationshipLabels(insight).join(" ")].join(" ").toLowerCase();
   const relationships = insightRelationshipLabels(insight);
   if (relationships.length) return behaviorActivitySentence(relationships[0]);
-  if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Operating process relationships no longer match the learned baseline.";
+  if (/pump|flow|pressure|valve|vfd|filter|hydraulic/.test(context)) return "Flow and pressure behavior no longer matches the learned baseline.";
   if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Control behavior deviated from the learned baseline.";
-  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Performance subsystem response deviated from learned operational behavior.";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal response deviated from learned operational behavior.";
   return "Operational behavior changed from its learned baseline.";
 }
 
@@ -1053,10 +1049,10 @@ function activityTitleForInsight(insight) {
   const relationshipContext = insightRelationshipLabels(insight).join(" ").toLowerCase();
   const context = [insight?.system, insight?.summary, relationshipContext].join(" ").toLowerCase();
   if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Water quality control drift classified";
-  if (/(flow|pressure|dp|differential pressure)/.test(relationshipContext)) return "Operating process deviation classified";
-  if (/pump|valve|vfd|filter|hydraulic/.test(context)) return "Equipment group deviation classified";
+  if (/(flow|pressure|dp|differential pressure)/.test(relationshipContext)) return "Hydraulic resistance behavior classified";
+  if (/pump|valve|vfd|filter|hydraulic/.test(context)) return "Pumping system degradation classified";
   if (/chemical|chlor|dose|quality|ph|orp|conductivity/.test(context)) return "Water quality control drift classified";
-  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Performance subsystem deviation classified";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Heat transfer degradation classified";
   return `${formatSubsystemName(insight?.system)} behavior change classified`;
 }
 
@@ -3105,9 +3101,9 @@ function relationshipContributionLabels(values) {
 
 
 const DEFAULT_POTENTIAL_OPERATIONAL_CAUSES = [
-  "Performance restriction",
-  "Control position changed",
-  "Equipment efficiency changed",
+  "Filter fouling",
+  "Valve position changed",
+  "Pump efficiency degradation",
   "Instrument drift",
   "Process demand changed",
   "Recent maintenance activity",
@@ -3241,12 +3237,12 @@ function formatInsightTitle(value) {
       const metricTitle = normalizeSignalName(value.metricName);
       if (suppliedOperationalTitle) return suppliedOperationalTitle;
       if (metricTitle) return titleEndpoint(metricTitle) + " Operating Behavior Changed";
-      if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Affected Operational System Behavior Changed";
-      if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Operating Process Performance Changed";
+      if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller Operating Behavior Changed";
+      if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Hydraulic Performance Changed";
       return `${formatSubsystemName(value.system)} Operating Behavior Changed`;
     }
-    if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Affected Operational System Behavior Changed";
-    if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Operating Process Performance Changed";
+    if (/chiller|cooling|thermal|tower|condenser/i.test(context)) return "Chiller Operating Behavior Changed";
+    if (/pump|flow|pressure|valve|vfd|filter|hydraulic/i.test(context)) return "Hydraulic Performance Changed";
     return `${formatSubsystemName(value.system)} Operating Behavior Changed`;
   }
   return formatDisplayName(value)
@@ -3257,7 +3253,7 @@ function formatInsightTitle(value) {
 function operationalFindingTitle(value) {
   const title = firstText(value).trim();
   if (!title) return "";
-  if (/relationship\s+(changed|shifted|weakened)|behavior\s+changed|operating behavior changed|hydraulic performance changed|operating process performance changed|affected operational system behavior changed|observed subsystem behavior changed/i.test(title)) return "";
+  if (/relationship\s+(changed|shifted|weakened)|behavior\s+changed|operating behavior changed|hydraulic performance changed|observed subsystem behavior changed/i.test(title)) return "";
   return title;
 }
 

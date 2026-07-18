@@ -805,7 +805,7 @@ def operator_primary_title(primary: dict[str, Any], raw_system: str, system: str
     raw_title = first_text(primary.get("title") if primary else "")
     if raw_title and raw_system and raw_system != system and raw_title.lower().startswith(raw_system.lower()):
         return system + raw_title[len(raw_system):]
-    return first_text(raw_title, f"{system} behavior changed" if changed else "Operating fingerprint remains stable")
+    return first_text(raw_title, f"{system} subsystem behavior changed" if changed else "Operating fingerprint remains stable")
 
 def operator_relationship_labels(primary: dict[str, Any], relationships: list[dict[str, Any]]) -> list[str]:
     labels: list[str] = []
@@ -983,7 +983,7 @@ def operator_investigation_steps(
         steps = [
             "Review the contributing signal trends.",
             "Verify current operating mode and setpoints.",
-            "Compare operating states with historical operation.",
+            "Compare equipment states with historical operation.",
             "Review recent maintenance and operator logs.",
             "Monitor the next operating window for persistence.",
         ]
@@ -996,7 +996,7 @@ def operator_executive_summary(system: str, relationship_labels: list[str], fing
     if not changed:
         return [
             "Behavior stayed within the historical operating pattern during the analyzed period.",
-            "No system-level operating shift was flagged for review.",
+            "No subsystem-level operating shift was flagged for review.",
         ]
     relationship_sentence = (
         "Multiple operational relationships changed together, suggesting a system-level operational shift rather than an isolated sensor anomaly."
@@ -1004,7 +1004,7 @@ def operator_executive_summary(system: str, relationship_labels: list[str], fing
         "One operational relationship changed enough to warrant operator review."
     )
     return [
-        "Behavior within this operational system deviated from its historical operating pattern during the analyzed period.",
+        "Behavior within this subsystem deviated from its historical operating pattern during the analyzed period.",
         relationship_sentence,
     ]
 
@@ -1019,7 +1019,7 @@ def operator_what_changed(primary: dict[str, Any], system: str, relationship_lab
         )
         return [
             count_label,
-            f"Changes occurred within the {system} operational system",
+            f"Changes occurred within the {system} subsystem",
             "Relationship fingerprint differs from the established baseline",
         ]
     return [
@@ -1038,10 +1038,10 @@ def operator_why_it_matters(primary: dict[str, Any], changed: bool) -> list[str]
         return [direct]
     if changed:
         return [
-            "When several operating relationships change together, the underlying operating state of the system may have shifted.",
+            "When several operating relationships change together, the underlying operating state of the subsystem may have shifted.",
             "This is commonly observed before operators can isolate a single failed component.",
         ]
-    return ["Stable relationships reduce the need to investigate this system first."]
+    return ["Stable relationships reduce the need to investigate this subsystem first."]
 
 
 def operator_relationship_persistence(relationships: list[dict[str, Any]]) -> str:
@@ -1065,14 +1065,14 @@ def operator_did_not_observe(system: str, systems: list[dict[str, Any]], relatio
         [system, *[str(item.get("name") or "") for item in systems if isinstance(item, dict)], *[str(item.get("system") or "") for item in relationships if isinstance(item, dict)]]
     ).lower()
     candidates = [
-        ("thermal", "No evidence of abnormal thermal system behavior was flagged."),
+        ("thermal", "No evidence of abnormal thermal subsystem behavior was flagged."),
         ("chemical", "Chemical feed relationships remain consistent with the available baseline."),
         ("electrical", "Electrical load relationships remain stable in the reviewed evidence."),
         ("water quality", "Water quality relationships remain consistent with the available baseline."),
     ]
     observations = [message for token, message in candidates if token not in active_text]
     if baseline.get("overall_assessment") == "normal" and not relationships:
-        observations.insert(0, "No system-level relationship change was flagged.")
+        observations.insert(0, "No subsystem-level relationship change was flagged.")
     return observations[:3]
 
 
@@ -1231,8 +1231,6 @@ def relationship_source_time_ranges(item: dict[str, Any], fallback: list[dict[st
 def relationship_change_sentence(label: str, item: dict[str, Any]) -> str:
     change_type = first_text(item.get("change_type"), "changed").replace("_", " ")
     pair = relationship_pair_phrase(label)
-    if item.get("relationship_subtype") == "flat_setpoint_response_decoupling":
-        return f"{pair} decoupled during the current window: one signal held flat while the paired response moved materially."
     if change_type == "missing":
         return f"The historical relationship between {pair} no longer follows its established operating pattern."
     if change_type == "weakened":
@@ -1439,7 +1437,6 @@ def relationship_contribution(item: dict[str, Any], index: int, columns: list[st
             "display_columns": display_columns,
             "label": relationship_label(item),
             "relationship_type": item.get("relationship_type"),
-            "relationship_subtype": item.get("relationship_subtype"),
             "change_type": item.get("change_type"),
             "strength": item.get("strength"),
             "baseline_strength": item.get("baseline_strength"),
@@ -1813,12 +1810,12 @@ def operational_diagnosis_title(
     if system == "Pumping System" and "pump" in combined and any(token in combined for token in ["vibration", "bearing", "current", "amp"]):
         return "Pump Mechanical Behavior Degrading"
     if any(token in combined for token in ["flow", "pressure", "hydraulic", "filter", "valve", "suction", "discharge"]):
-        return f"{system} Degrading" if system not in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"} else "Operating Process Deviation"
+        return f"{system} Degrading" if system not in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"} else "Hydraulic Resistance Increasing"
     if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality", "conductivity"]):
         return f"{system} Control Drift" if system not in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"} else "Water Quality Control Drift"
     if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower", "temperature"]):
         if system in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"}:
-            return "Performance Subsystem Deviation"
+            return "Heat Transfer Performance Degrading"
         return f"{system} Degrading" if "performance" in system.lower() else f"{system} Performance Degrading"
     return f"{system} Behavior Degrading"
 
@@ -1928,8 +1925,8 @@ def relationship_why_this_matters(system: str, names: list[str]) -> list[str]:
     combined = " ".join([system, *[str(name or "") for name in names]]).lower().replace("_", " ").replace("-", " ")
     if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
         return [
-            "Higher energy consumption for the same operational output",
-            "Reduced process performance",
+            "Higher energy consumption for the same hydraulic output",
+            "Reduced filtration or flow performance",
             "Increased risk of cavitation, overload, or nuisance trips",
             "More rapid equipment wear if restriction continues",
         ]
@@ -1942,7 +1939,7 @@ def relationship_why_this_matters(system: str, names: list[str]) -> list[str]:
         ]
     if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower", "temperature"]):
         return [
-            "Higher energy consumption for the same operating load",
+            "Higher energy consumption for the same cooling load",
             "Reduced heat-transfer capacity",
             "Increased risk of equipment staging or limit problems",
             "Fouling or flow imbalance can compound if left unresolved",
@@ -1988,11 +1985,11 @@ def recommended_investigation_steps(system: str, names: list[str], label: str) -
 def relationship_behavior_interpretation(system: str, names: list[str], causes: list[str]) -> str:
     combined = " ".join([system, *[str(name or "") for name in names], *causes]).lower().replace("_", " ").replace("-", " ")
     if any(token in combined for token in ["pump", "flow", "pressure", "hydraulic", "filter"]):
-        return "The system is requiring different operating behavior than its established fingerprint. This pattern is more consistent with a process restriction, equipment response change, or control state change than normal demand variation."
+        return "The system is requiring different hydraulic behavior than its established fingerprint. This pattern is more consistent with increasing restriction or changed pump operating point than normal demand variation."
     if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "quality"]):
         return "Treatment response no longer matches the learned control fingerprint. This pattern is consistent with feed, sensor, or source-water changes that should be separated before changing controls."
     if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):
-        return "System output no longer matches the learned equipment response. This pattern is consistent with performance degradation, staging changes, process imbalance, or load changes."
+        return "Thermal output no longer matches the learned equipment response. This pattern is consistent with fouling, staging, flow imbalance, or load changes."
     return "Current equipment behavior no longer matches its established operating fingerprint. Review the first listed check before treating the finding as a sensor-only issue."
 
 
@@ -2069,7 +2066,7 @@ def merged_relationship_reason(group: list[dict[str, Any]], primary: dict[str, A
     rationale = first_text(primary.get("relationship_importance_rationale"), relationship_confidence_basis(label, primary))
     if len(group) <= 1:
         return rationale
-    return f"{rationale} Neraium grouped the related changes because they describe the same operational behavior instead of separate isolated sensor findings."
+    return f"{rationale} Neraium grouped the related changes because they describe the same subsystem behavior instead of separate isolated sensor findings."
 
 
 def relationship_label(item: dict[str, Any]) -> str:
@@ -2122,7 +2119,7 @@ def relationship_display_columns(item: dict[str, Any]) -> list[str]:
     return values or relationship_columns(item)
 
 
-GENERIC_SUBSYSTEM_NAME = "Affected operational system"
+GENERIC_SUBSYSTEM_NAME = "Observed subsystem behavior changed"
 
 
 def relationship_group_signal_names(group: list[dict[str, Any]]) -> list[str]:
@@ -2167,13 +2164,11 @@ def flow_pressure_label(names: list[str]) -> str:
         return "Pumping System"
     if any(token in combined for token in ["flow", "pressure", "valve", "suction", "discharge"]):
         return "Flow & Pressure"
-    return "Operating Process"
+    return "Hydraulic Performance"
 
 
 def chemical_water_quality_label(names: list[str]) -> str:
     combined = " ".join(str(name or "").lower().replace("_", " ").replace("-", " ") for name in names)
-    if "orp" in combined and any(token in combined for token in ["free chlorine", "disinfect", "sanitizer"]):
-        return "Disinfection"
     if any(token in combined for token in ["dose", "feed", "chemical", "chlorine", "chlor"]):
         return "Chemical Feed"
     if any(token in combined for token in ["orp", "disinfect"]):
@@ -2187,7 +2182,7 @@ def thermal_performance_label(names: list[str]) -> str:
         return "Heat Rejection"
     if any(token in combined for token in ["chiller", "chw", "cooling"]):
         return "Cooling Distribution"
-    return "Performance Subsystem"
+    return "Thermal Performance"
 
 
 def telemetry_group_scores(names: list[str]) -> dict[str, int]:
@@ -2297,18 +2292,18 @@ def relationship_observable_sentence(columns: list[str], item: dict[str, Any]) -
 
 def relationship_recommended_action(system: str) -> str:
     if any(token in str(system or "").lower() for token in ["pump", "flow", "pressure", "hydraulic"]):
-        return "Inspect the affected process trend before checking equipment performance."
+        return "Inspect filter differential pressure trend before checking pump performance."
     return f"Review {system.lower()} trends, operator logs, setpoint changes, maintenance activity, and demand changes for the same window."
 
 
 def relationship_operational_impact_sentence(system: str, names: list[str], causes: list[str]) -> str:
     combined = " ".join([system, *[str(name or "") for name in names], *causes]).lower().replace("_", " ").replace("-", " ")
     if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
-        return "Operational impact: This relationship change is consistent with conditions such as increasing process resistance, equipment degradation, operational changes, or recent maintenance. Investigation is recommended to determine the cause."
+        return "Operational impact: This relationship change is consistent with conditions such as increasing hydraulic resistance, equipment degradation, operational changes, or recent maintenance. Investigation is recommended to determine the cause."
     if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality", "disinfection"]):
         return "Operational impact: This relationship change is consistent with conditions such as feed calibration drift, water quality variation, control loop changes, or recent maintenance. Investigation is recommended to determine the cause."
     if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):
-        return "Operational impact: This relationship change is consistent with conditions such as performance degradation, equipment staging changes, load variation, or recent maintenance. Investigation is recommended to determine the cause."
+        return "Operational impact: This relationship change is consistent with conditions such as heat transfer degradation, equipment staging changes, load variation, or recent maintenance. Investigation is recommended to determine the cause."
     if any(token in combined for token in ["humidity", "moisture", "vpd"]):
         return "Operational impact: This relationship change is consistent with conditions such as airflow balance changes, latent load variation, control adjustments, or recent maintenance. Investigation is recommended to determine the cause."
     if any(token in combined for token in ["energy", "schedule", "runtime"]):
@@ -2339,7 +2334,7 @@ def possible_operational_causes(system: str, names: list[str]) -> list[str]:
             "Increasing filter resistance",
             "Pump operating point shifted",
             "Valve position changed",
-            "Increased process resistance",
+            "Increased hydraulic resistance",
             "VFD control adjustment",
             "Recent maintenance activity",
             "Operational demand change",

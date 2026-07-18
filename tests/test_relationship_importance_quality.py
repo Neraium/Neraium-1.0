@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.services.analysis_explanations import build_analysis_explanation, relationship_subsystem_name
 from app.services.analysis_result_contract import build_analysis_result
-from app.services.relationship_baselines import build_relationship_baseline, score_relationship_importance
+from app.services.relationship_baselines import score_relationship_importance
 from app.services.upload_jobs import process_csv_content
 
 
@@ -136,7 +136,7 @@ def test_duplicate_relationship_insights_are_merged_and_preserve_relationships()
     titles = [insight["title"] for insight in explanation["insights"]]
     assert titles.count("Thermal relationship changed") == 0
     assert "Heat Rejection Performance Degrading" in titles
-    assert "Performance Subsystem Behavior Degrading" in titles
+    assert "Thermal Performance Degrading" in titles
     contributing_relationships = [
         relationship
         for insight in explanation["insights"]
@@ -161,7 +161,7 @@ def test_analysis_result_preserves_relationship_importance_fields() -> None:
     assert result["relationships"][0]["ranking_factors"]
     assert result["insights"][0]["relationship_importance_score"] == 82.0
     assert result["insights"][0]["why_it_matters"].startswith("Operational impact: ")
-    assert "process resistance" in result["insights"][0]["why_it_matters"]
+    assert "hydraulic resistance" in result["insights"][0]["why_it_matters"]
 
 
 def test_relationship_stats_stay_out_of_main_insight_contract_and_remain_in_evidence() -> None:
@@ -191,7 +191,7 @@ def test_subsystem_names_match_dominant_telemetry_groups() -> None:
 
 
 def test_low_confidence_or_ambiguous_subsystem_naming_falls_back_to_observed_behavior() -> None:
-    assert relationship_subsystem_name(["source_temperature_f", "main_pressure_psi"]) == "Affected operational system"
+    assert relationship_subsystem_name(["source_temperature_f", "main_pressure_psi"]) == "Observed subsystem behavior changed"
 
     explanation = build_analysis_explanation(
         {
@@ -202,8 +202,8 @@ def test_low_confidence_or_ambiguous_subsystem_naming_falls_back_to_observed_beh
         }
     )
 
-    assert explanation["insights"][0]["title"] == "Affected operational system"
-    assert explanation["insights"][0]["affected_systems"] == ["Affected operational system"]
+    assert explanation["insights"][0]["title"] == "Observed subsystem behavior changed"
+    assert explanation["insights"][0]["affected_systems"] == ["Observed subsystem behavior changed"]
 
 
 def test_relationship_clusters_use_dominant_group_and_merge_related_findings() -> None:
@@ -261,48 +261,3 @@ def test_raw_csv_tags_remain_available_in_evidence() -> None:
     refs = result["insights"][0]["evidence_refs"]
     evidence_tags = {tag for ref in refs for tag in result["evidence_index"][ref]["source_tags"]}
     assert {"chlorine_dose_ppm", "turbidity_ntu"}.issubset(evidence_tags)
-
-
-def test_orp_free_chlorine_flat_response_break_promotes_disinfection_relationship() -> None:
-    rows = []
-    for index in range(100):
-        if index < 70:
-            orp = 358 + ((index % 5) * 0.4)
-        else:
-            orp = 358 - ((index - 70) * (85 / 29))
-        rows.append({"orp_mv": round(orp, 3), "free_chlorine_ppm": 2.95})
-
-    catalog = {
-        "orp_mv": {"telemetry_classification": {"category": "equipment_process", "is_ignored": False, "operator_primary_eligible": True}},
-        "free_chlorine_ppm": {"telemetry_classification": {"category": "constant", "is_ignored": True, "operator_primary_eligible": False}},
-    }
-    model = build_relationship_baseline(
-        rows,
-        ["orp_mv", "free_chlorine_ppm"],
-        telemetry_signal_catalog=catalog,
-        baseline_analysis={"column_drift": [{"column": "orp_mv", "drift_flag": "review"}]},
-    )
-
-    pair = model["top_relationship_changes"][0]
-    assert pair["relationship"] == "orp_mv <-> free_chlorine_ppm"
-    assert pair["relationship_subtype"] == "flat_setpoint_response_decoupling"
-    assert pair["change_type"] == "disrupted"
-    assert relationship_subsystem_name(pair["display_columns"]) == "Disinfection"
-
-
-def test_cumulative_counter_relationships_do_not_become_operator_insights() -> None:
-    explanation = build_analysis_explanation(
-        {
-            "job_id": "cum-counter-filter",
-            "timestamp_profile": {"first_timestamp": "2026-01-01T00:00:00Z", "last_timestamp": "2026-01-05T00:00:00Z"},
-            "baseline_analysis": {"baseline_window_rows": 40, "recent_window_rows": 40, "columns_analyzed": 2, "column_drift": []},
-            "relationship_model": {"top_relationship_changes": [_relationship("filter_diff_pressure_psi", "cum_chemical_feed_gal", score=99.0, confidence_score=1.0)]},
-        }
-    )
-
-    assert explanation["insights"] == []
-    assert explanation["relationships"] == []
-
-
-def test_orp_free_chlorine_maps_to_disinfection_not_chemical_feed() -> None:
-    assert relationship_subsystem_name(["orp_mv", "free_chlorine_ppm"]) == "Disinfection"

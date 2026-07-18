@@ -82,7 +82,7 @@ function uploadReadinessMessage(file) {
   if (isLargeOperationalUpload(file)) {
     return "Large telemetry export detected. Processing continues in the background.";
   }
-  return "Telemetry export validated.";
+  return "Telemetry file ready.";
 }
 
 function validateTelemetryFile(file, kind) {
@@ -108,9 +108,9 @@ function boundedFailureDelay(failureCount) {
 export function queuedWorkerMessage(uploadJob) {
   const workerState = String(uploadJob?.worker_state ?? uploadJob?.workerState ?? "").toLowerCase();
   const lastUpdate = uploadJob?.worker_last_update_at ?? uploadJob?.worker_last_update ?? uploadJob?.updated_at ?? "";
-  if (workerState === "starting") return "Preparing analysis resources...".slice(0, -3);
+  if (workerState === "starting") return "Preparing analysis resources";
   if (workerState === "active" || workerState === "running") return "Analysis active - last update " + (lastUpdate || "just now");
-  if (workerState === "queued" || normalizeUploadStatus(uploadJob?.status) === "queued") return "Preparing analysis resources...".slice(0, -3);
+  if (workerState === "queued" || normalizeUploadStatus(uploadJob?.status) === "queued") return "Preparing analysis resources";
   if (workerState === "stalled") return "No recent progress update; analysis may still be continuing.";
   return "";
 }

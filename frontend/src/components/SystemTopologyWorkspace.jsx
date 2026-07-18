@@ -245,7 +245,7 @@ function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
       ?? "Primary relationship scope";
   const evidenceSummary = governance?.why_summary
     ?? finding?.detail
-    ?? "Operational behavior changed and stayed changed long enough to review.";
+    ?? "Equipment behavior changed and stayed changed long enough to review.";
   const persistenceCount = valueOrEmpty(governance?.persistence_count);
   const trajectoryDirection = normalizeTrajectory(governance?.trajectory_direction);
   const recoveryWindowStatus = governance?.recovery_window_status ?? "RECOVERY_WINDOW_UNCLEAR";

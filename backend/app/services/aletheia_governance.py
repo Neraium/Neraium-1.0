@@ -268,7 +268,7 @@ def _affected_relationship_path(candidate: dict[str, Any]) -> str:
     evidence = candidate.get("relationship_evidence", []) or []
     if evidence:
         return str(evidence[0])
-    return str(candidate.get("affected_relationship_path") or "Primary operational relationship path")
+    return str(candidate.get("affected_relationship_path") or "Primary subsystem relationship path")
 
 
 def _operational_mapping(candidate: dict[str, Any]) -> str:

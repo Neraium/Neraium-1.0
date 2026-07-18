@@ -315,7 +315,7 @@ function PriorityActions({ actions, signals = [], impacts = [], explain = false 
           {explain ? <dl className="investigation-card__details">
             <div><dt>Estimated impact</dt><dd>{impacts[index] || (index === 0 ? "High - validates the primary operational risk" : "Moderate - narrows the likely cause")}</dd></div>
             <div><dt>Supporting signals</dt><dd>{signals[index] || signals[0] || "Relationship change evidence"}</dd></div>
-            <div><dt>Expected validation</dt><dd>{index === 0 ? "Confirm whether the observed shift is present in the affected operational system." : "Confirm or rule out this cause against current operation."}</dd></div>
+            <div><dt>Expected validation</dt><dd>{index === 0 ? "Confirm whether the observed shift is present at the affected equipment." : "Confirm or rule out this cause against current operation."}</dd></div>
             <div><dt>Why this order</dt><dd>{reasons[index]}</dd></div>
           </dl> : null}
         </li>
@@ -334,7 +334,7 @@ function focusInvestigationSection(sectionId) {
 
 function InvestigationDecisionPath({ evidenceCount, relationshipCount }) {
   const steps = [
-    ["1", "Understand change", "Confirm the affected operational system and operating status."],
+    ["1", "Understand change", "Confirm the affected subsystem and operating status."],
     ["2", "Verify evidence", `${relationshipCount || "No"} relationship${relationshipCount === 1 ? "" : "s"} and ${evidenceCount || "no"} evidence record${evidenceCount === 1 ? "" : "s"} support this finding.`],
     ["3", "Run checks", "Start with the highest-impact operator check before broad troubleshooting."],
     ["4", "Close the loop", "Export the report or inspect raw metrics if the decision needs escalation."],
@@ -363,7 +363,7 @@ function OperatorActions({ insight, subsystem }) {
     URL.revokeObjectURL(url);
   };
   return <div className="operator-quick-actions" role="group" aria-label="Operator actions">
-    <button type="button" onClick={() => focusInvestigationSection("insight-evidence")}>Inspect affected system</button>
+    <button type="button" onClick={() => focusInvestigationSection("insight-evidence")}>Inspect affected equipment</button>
     <button type="button" onClick={() => focusInvestigationSection("fingerprint-comparison")}>Compare baseline</button>
     <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>Related systems</button>
     <button type="button" onClick={exportReport}>Export report</button>
@@ -383,19 +383,19 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
   ).flatMap((item) => text(item).split(/\n|;|\u2022/g)).map((item) => item.trim()));
   const investigationActions = (actions.length ? actions : [
     "Review the contributing signal trends for the selected operating window.",
-    "Compare recent control or operating changes with the start of the deviation.",
-    "Verify operational performance and instrumentation health.",
+    "Compare recent control and valve changes with the start of the deviation.",
+    "Verify equipment performance and instrumentation health.",
   ]).slice(0, 3);
   const suppliedCauses = unique(toList(
     insight?.likelyCauses, insight?.possibleOperationalCauses, insight?.possible_operational_causes,
     insight?.contributingFactors, insight?.contributing_factors, insight?.likely_causes
   ).map(text));
   const causes = (suppliedCauses.length ? suppliedCauses : [
-    "Operating mode change", "Process restriction", "Equipment wear", "Control configuration change", "Instrumentation issue",
+    "Operating mode change", "Hydraulic restriction", "Equipment wear", "Valve configuration change", "Instrumentation issue",
   ]).slice(0, 6);
   const severity = insightSeverityLabel(insight);
   const confidenceValue = confidencePercent(insight) || confidenceLabel(insight);
-  const subsystem = text(insight?.system || insight?.rawSystemName) || "Operational system";
+  const subsystem = text(insight?.system || insight?.rawSystemName) || "Operational subsystem";
   const measurements = evidence.map(relationshipMeasurement).filter((item) => item.delta !== null);
   const largestDelta = measurements.length ? Math.max(...measurements.map((item) => item.delta)) : null;
   const primaryRelationship = relationships[0];
@@ -409,7 +409,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
   const historicalDetails = buildChangeContext(insight, evidence).filter(([label]) => !/Largest relationship change magnitude/.test(label));
   const operationalMemory = buildOperationalMemory(insight);
   const explicitSummary = text(insight?.behaviorInterpretation ?? insight?.whatHappened ?? insight?.rawSummary ?? insight?.summary);
-  const behavioralSummary = explicitSummary || `The ${subsystem} moved off its operating baseline.`;
+  const behavioralSummary = explicitSummary || `The ${subsystem} subsystem moved off its operating baseline.`;
   const operationalStatus = severity === "Critical" ? "Critical" : severity === "High" ? "Investigation Recommended" : severity === "Moderate" ? "Watch" : "Normal";
   const relationshipModels = relationships.map((label, index) => ({ label, evidence: evidence[index], measurement: relationshipMeasurement(evidence[index]) }));
   const supportingSignals = unique(evidence.flatMap((item) => toList(item?.supporting_signals, item?.supportingSignals, item?.source_columns, item?.sourceColumns)).map(signalName));
@@ -462,7 +462,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         <span className="insight-summary-card__eyebrow">What happened</span>
         <div className="insight-situation-card__meta">
           <span className={`insight-severity insight-severity--${severity.toLowerCase()}`}>{operationalStatus}</span>
-          <span>Affected operational system: {subsystem}</span>
+          <span>Affected subsystem: {subsystem}</span>
           {confidenceValue ? <span>Confidence {confidenceValue}</span> : null}
         </div>
         <p id="insight-situation-title" className="insight-situation-card__summary">{behavioralSummary}</p>

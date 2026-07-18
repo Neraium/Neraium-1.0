@@ -5,8 +5,8 @@ from typing import Any
 from app.services.aquatic_domain import INTEGRATION_STUBS as AQUATIC_INTEGRATION_STUBS
 from app.services.upload_state_repository import read_current_upload_result
 
-DEFAULT_DOMAIN_MODE = "infrastructure"
-SUPPORTED_DOMAIN_MODES = {"infrastructure", "aquatic", "cultivation"}
+DEFAULT_DOMAIN_MODE = "aquatic"
+SUPPORTED_DOMAIN_MODES = {"aquatic", "cultivation"}
 
 AQUATIC_HINTS = (
     "orp",
@@ -158,37 +158,13 @@ def _confidence_from_scores(winner: int, runner_up: int) -> float:
 
 def domain_profile(mode: str) -> dict[str, Any]:
     selected = normalize_domain_mode(mode)
-    if selected == "infrastructure":
-        return {
-            "mode": "infrastructure",
-            "app_subtitle": "Enterprise operations intelligence for resort infrastructure",
-            "app_description": "Neraium helps operations teams understand changes in system behavior across utilities, facilities, energy, environmental, transportation, guest infrastructure, and mechanical systems.",
-            "systems": [
-                {"name": "Operational Systems", "scope": "Equipment groups, control subsystems, operating processes, and service response"},
-                {"name": "Utility Infrastructure", "scope": "Electrical, water, gas, thermal, fuel, compressed air, and distribution behavior"},
-                {"name": "Guest Infrastructure", "scope": "Guest rooms, elevators, lighting, pools, transportation, and service availability"},
-                {"name": "Environmental Systems", "scope": "Wastewater, treatment, irrigation, refrigeration, and environmental operating behavior"},
-                {"name": "Telemetry Integrity", "scope": "Signal completeness, timestamp quality, source availability, and confidence impact"},
-            ],
-            "driver_categories": [
-                "operating_process_deviation",
-                "equipment_group_performance_change",
-                "control_subsystem_instability",
-                "utility_system_relationship_shift",
-                "guest_infrastructure_service_risk",
-                "environmental_system_deviation",
-                "telemetry_integrity_degradation",
-            ],
-            "integration_stubs": AQUATIC_INTEGRATION_STUBS,
-            "replay_demo_mode": "demo",
-        }
     if selected == "cultivation":
         return {
             "mode": "cultivation",
             "app_subtitle": "Environmental drift intelligence for cannabis grow facilities",
             "app_description": "Neraium helps cultivation teams detect persistent relationship instability before operational degradation compounds.",
             "systems": [
-                {"name": "Environmental Control", "scope": "Temperature conditioning, air movement, and equipment runtime behavior"},
+                {"name": "HVAC", "scope": "Temperature conditioning and equipment runtime behavior"},
                 {"name": "Humidity control", "scope": "Dehumidification, humidification, and moisture balance"},
                 {"name": "Airflow", "scope": "Air movement patterns, circulation, and room exchange signals"},
                 {"name": "Irrigation", "scope": "Irrigation events, timing, and environmental response context"},
@@ -197,7 +173,7 @@ def domain_profile(mode: str) -> dict[str, Any]:
             ],
             "driver_categories": [
                 "humidity_control",
-                "environmental_control_instability",
+                "hvac_instability",
                 "airflow_restriction",
                 "irrigation_timing",
                 "lighting_schedule",
@@ -215,8 +191,8 @@ def domain_profile(mode: str) -> dict[str, Any]:
         }
     return {
         "mode": "aquatic",
-        "app_subtitle": "Operational systems intelligence",
-        "app_description": "Neraium helps operations teams understand changes in system behavior across source, treatment, pumping, distribution, storage, thermal, utility, and process-loop operations.",
+        "app_subtitle": "Commercial water systems intelligence",
+        "app_description": "Neraium helps water infrastructure teams understand changes in system behavior across source, treatment, pumping, distribution, storage, thermal, and process-loop operations.",
         "systems": [
             {"name": "Supply Conditions", "scope": "Upstream availability, inlet pressure, and demand conditions"},
             {"name": "Treatment", "scope": "Treatment performance, chemistry, quality indicators, and process response"},
