@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
 import sqlite3
@@ -25,6 +26,7 @@ _SESSION_TTL_DAYS = 14
 _VALID_ROLES = {"viewer", "operator", "admin"}
 _AUTH_BACKEND_KEY: tuple[str, str] | None = None
 _AUTH_BACKEND: "_BaseAuthBackend" | None = None
+logger = logging.getLogger(__name__)
 
 
 AUTH_SCHEMA_STATEMENTS = (
@@ -533,8 +535,8 @@ def _get_backend() -> _BaseAuthBackend:
             _AUTH_BACKEND.ensure_schema()
             _AUTH_BACKEND_KEY = key
             _migrate_legacy_store_if_needed(_AUTH_BACKEND)
+            _apply_bootstrap_users(_AUTH_BACKEND)
         _AUTH_BACKEND.delete_expired_sessions()
-        _apply_bootstrap_users(_AUTH_BACKEND)
         return _AUTH_BACKEND
 
 
@@ -683,14 +685,85 @@ def _ensure_bootstrap_user(backend: _BaseAuthBackend, *, email: str, password: s
     return True
 
 
+def _bootstrap_reset_password_enabled() -> bool:
+    return str(os.getenv("NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD", "false")).strip().lower() == "true"
+
+
+def _log_bootstrap_event(event: str, email: str = "") -> None:
+    # Keep bootstrap diagnostics deliberately non-secret. In particular, do not
+    # attach exception details because database errors can contain DSNs.
+    logger.info(event, extra={"event": event, "email": email})
+
+
+def _ensure_bootstrap_admin(backend: _BaseAuthBackend) -> None:
+    normalized_email = _normalize_email(os.getenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", ""))
+    password = str(os.getenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "") or "")
+    reset_password = _bootstrap_reset_password_enabled()
+    name = str(os.getenv("NERAIUM_BOOTSTRAP_ADMIN_NAME", "Admin") or "").strip()
+
+    if not normalized_email:
+        _log_bootstrap_event("bootstrap_admin_skipped_missing_configuration")
+        return
+
+    try:
+        existing = backend.read_user(normalized_email)
+        if existing is None:
+            if not password:
+                _log_bootstrap_event("bootstrap_admin_skipped_missing_configuration", normalized_email)
+                return
+            salt = secrets.token_hex(16)
+            _upsert_user_record(
+                backend,
+                email=normalized_email,
+                password_hash=_hash_password(password, salt),
+                salt=salt,
+                name=name or normalized_email.split("@", 1)[0],
+                role="admin",
+                is_active=True,
+                deactivated_at=None,
+                bootstrap_managed=True,
+            )
+            _log_bootstrap_event("bootstrap_admin_created", normalized_email)
+            return
+
+        payload = dict(existing)
+        changed = False
+        if normalize_role(existing.get("role"), "operator") != "admin":
+            payload["role"] = "admin"
+            changed = True
+        if not bool(existing.get("is_active", True)):
+            payload["is_active"] = True
+            payload["deactivated_at"] = None
+            changed = True
+        if not str(existing.get("name") or "").strip() and name:
+            payload["name"] = name
+            changed = True
+        if not bool(existing.get("bootstrap_managed")):
+            payload["bootstrap_managed"] = True
+            changed = True
+
+        if reset_password:
+            if not password:
+                if changed:
+                    backend.upsert_user(payload)
+                _log_bootstrap_event("bootstrap_admin_skipped_missing_configuration", normalized_email)
+                return
+            salt = secrets.token_hex(16)
+            payload["salt"] = salt
+            payload["password_hash"] = _hash_password(password, salt)
+            changed = True
+
+        if changed:
+            backend.upsert_user(payload)
+            _log_bootstrap_event("bootstrap_admin_updated", normalized_email)
+        else:
+            _log_bootstrap_event("bootstrap_admin_already_exists", normalized_email)
+    except Exception:
+        _log_bootstrap_event("bootstrap_admin_failed", normalized_email)
+
+
 def _apply_bootstrap_users(backend: _BaseAuthBackend) -> None:
-    _ensure_bootstrap_user(
-        backend,
-        email=str(os.getenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "")).strip(),
-        password=str(os.getenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "")).strip(),
-        name=str(os.getenv("NERAIUM_BOOTSTRAP_ADMIN_NAME", "Admin")).strip(),
-        role="admin",
-    )
+    _ensure_bootstrap_admin(backend)
     _ensure_bootstrap_user(
         backend,
         email=str(os.getenv("NERAIUM_BOOTSTRAP_OPERATOR_EMAIL", "")).strip(),

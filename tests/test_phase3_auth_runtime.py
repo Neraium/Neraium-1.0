@@ -245,3 +245,108 @@ def test_observability_summary_includes_auth_metrics(monkeypatch, tmp_path) -> N
     assert metrics.status_code == 200
     assert "neraium_auth_users_active" in metrics.text
     assert "neraium_auth_sessions_active" in metrics.text
+
+
+def _reset_auth_backend(monkeypatch) -> None:
+    monkeypatch.setattr(auth_store, "_AUTH_BACKEND", None)
+    monkeypatch.setattr(auth_store, "_AUTH_BACKEND_KEY", None)
+
+
+def _bootstrap_event(caplog) -> str:
+    events = [record.getMessage() for record in caplog.records if record.getMessage().startswith("bootstrap_admin_")]
+    assert events
+    return events[-1]
+
+
+def test_bootstrap_admin_creates_absent_user_and_normalizes_email(monkeypatch, tmp_path, caplog) -> None:
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "  ADMIN@Example.COM ")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "new-password-123")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD", "false")
+    _reset_auth_backend(monkeypatch)
+
+    with caplog.at_level("INFO", logger="app.services.auth_store"):
+        auth_store.initialize_auth_store()
+
+    user = auth_store._get_backend().read_user("admin@example.com")
+    assert user is not None
+    assert user["email"] == "admin@example.com"
+    assert user["role"] == "admin"
+    assert bool(user["is_active"]) is True
+    assert _bootstrap_event(caplog) == "bootstrap_admin_created"
+    assert "new-password-123" not in caplog.text
+
+
+def test_bootstrap_admin_repairs_existing_inactive_user(monkeypatch, tmp_path, caplog) -> None:
+    monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", raising=False)
+    _reset_auth_backend(monkeypatch)
+    create_user("inactive@example.com", "old-password-123", role="operator")
+    auth_store.deactivate_user("inactive@example.com")
+
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "INACTIVE@EXAMPLE.COM")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "unused-password-123")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD", "false")
+    _reset_auth_backend(monkeypatch)
+    with caplog.at_level("INFO", logger="app.services.auth_store"):
+        auth_store.initialize_auth_store()
+
+    user = auth_store._get_backend().read_user("inactive@example.com")
+    assert bool(user["is_active"]) is True
+    assert user["role"] == "admin"
+    assert _bootstrap_event(caplog) == "bootstrap_admin_updated"
+
+
+def test_bootstrap_admin_repairs_missing_admin_role(monkeypatch, tmp_path, caplog) -> None:
+    monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", raising=False)
+    _reset_auth_backend(monkeypatch)
+    create_user("role-repair@example.com", "old-password-123", role="viewer")
+
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "role-repair@example.com")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "unused-password-123")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD", "false")
+    _reset_auth_backend(monkeypatch)
+    with caplog.at_level("INFO", logger="app.services.auth_store"):
+        auth_store.initialize_auth_store()
+
+    user = auth_store._get_backend().read_user("role-repair@example.com")
+    assert user["role"] == "admin"
+    assert bool(user["is_active"]) is True
+    assert _bootstrap_event(caplog) == "bootstrap_admin_updated"
+
+
+def test_bootstrap_admin_resets_password_when_enabled(monkeypatch, tmp_path, caplog) -> None:
+    monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", raising=False)
+    _reset_auth_backend(monkeypatch)
+    create_user("reset@example.com", "old-password-123", role="admin")
+
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "reset@example.com")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "new-password-123")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD", "true")
+    _reset_auth_backend(monkeypatch)
+    with caplog.at_level("INFO", logger="app.services.auth_store"):
+        auth_store.initialize_auth_store()
+
+    assert auth_store.authenticate_user("reset@example.com", "old-password-123") is None
+    assert auth_store.authenticate_user("reset@example.com", "new-password-123") is not None
+    assert _bootstrap_event(caplog) == "bootstrap_admin_updated"
+    assert "new-password-123" not in caplog.text
+
+
+def test_bootstrap_admin_preserves_password_when_reset_disabled(monkeypatch, tmp_path, caplog) -> None:
+    monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", raising=False)
+    _reset_auth_backend(monkeypatch)
+    create_user("no-reset@example.com", "old-password-123", role="admin")
+
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "no-reset@example.com")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "new-password-123")
+    monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD", "false")
+    _reset_auth_backend(monkeypatch)
+    with caplog.at_level("INFO", logger="app.services.auth_store"):
+        auth_store.initialize_auth_store()
+
+    assert auth_store.authenticate_user("no-reset@example.com", "old-password-123") is not None
+    assert auth_store.authenticate_user("no-reset@example.com", "new-password-123") is None
+    assert _bootstrap_event(caplog) == "bootstrap_admin_already_exists"

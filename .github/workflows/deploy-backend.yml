@@ -35,6 +35,7 @@ env:
   AUTH_DATABASE_URL_SECRET_ARN: ${{ vars.NERAIUM_AUTH_DATABASE_URL_SECRET_ARN }}
   NERAIUM_BOOTSTRAP_ADMIN_EMAIL: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_EMAIL }}
   NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN }}
+  NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD || 'false' }}
   TASK_EXECUTION_ROLE_NAME: neraium-prod-ecs-task-execution-role
 
 jobs:
@@ -66,6 +67,10 @@ jobs:
           test -n "$AUTH_DATABASE_URL_SECRET_ARN"
           test -n "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL"
           test -n "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN"
+          case "${NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD,,}" in
+            true|false) ;;
+            *) echo "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD must be true or false" >&2; exit 1 ;;
+          esac
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           echo "API_TOKEN_SECRET_ARN=$API_TOKEN_SECRET_ARN" >> "$GITHUB_ENV"
           echo "AUTH_DATABASE_URL_SECRET_ARN=$AUTH_DATABASE_URL_SECRET_ARN" >> "$GITHUB_ENV"
@@ -166,7 +171,7 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
           echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_URL_SECRET_ARN "$AUTH_DATABASE_URL_SECRET_ARN" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_URL_SECRET_ARN "$AUTH_DATABASE_URL_SECRET_ARN" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
             | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .containerDefinitions = (.containerDefinitions | map(
@@ -174,7 +179,7 @@ jobs:
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD"))
                     + [
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "api"},
                       {"name": "APP_ENV", "value": "prod"},
@@ -186,7 +191,8 @@ jobs:
                       {"name": "LOG_LEVEL", "value": $LOG_LEVEL},
                       {"name": "LOG_FORMAT", "value": $LOG_FORMAT},
                       {"name": "NERAIUM_BUILD_SHA", "value": $BUILD_SHA},
-                      {"name": "NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "value": $BOOTSTRAP_ADMIN_EMAIL}
+                      {"name": "NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "value": $BOOTSTRAP_ADMIN_EMAIL},
+                      {"name": "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD", "value": $BOOTSTRAP_ADMIN_RESET_PASSWORD}
                     ])
                 | .secrets = ((.secrets // [])
                     | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD"))
@@ -244,7 +250,7 @@ jobs:
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD"))
                     + [
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "worker"},
                       {"name": "APP_ENV", "value": "prod"},
@@ -449,7 +455,44 @@ jobs:
             --query 'length(taskDefinition.containerDefinitions[0].secrets[?name==`NERAIUM_BOOTSTRAP_ADMIN_PASSWORD`])' \
             --output text)
 
+          API_BOOTSTRAP_ADMIN_RESET_PASSWORD_VALUE=$(aws ecs describe-task-definition \
+            --task-definition "$API_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].environment[?name==`NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD`].value | [0]' \
+            --output text)
+
+          WORKER_BOOTSTRAP_ADMIN_RESET_PASSWORD_COUNT=$(aws ecs describe-task-definition \
+            --task-definition "$WORKER_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'length(taskDefinition.containerDefinitions[0].environment[?name==`NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD`])' \
+            --output text)
+
           test "$API_BOOTSTRAP_ADMIN_EMAIL_VALUE" = "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL"
           test "$API_BOOTSTRAP_ADMIN_PASSWORD_VALUE_FROM" = "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN"
+          test "$API_BOOTSTRAP_ADMIN_RESET_PASSWORD_VALUE" = "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD"
           test "$WORKER_BOOTSTRAP_ADMIN_EMAIL_COUNT" = "0"
           test "$WORKER_BOOTSTRAP_ADMIN_PASSWORD_COUNT" = "0"
+          test "$WORKER_BOOTSTRAP_ADMIN_RESET_PASSWORD_COUNT" = "0"
+
+      - name: Verify API bootstrap admin startup event
+        run: |
+          set -euo pipefail
+          START_TIME=$(( $(date +%s) - 900 ))000
+          EVENTS=""
+          for attempt in 1 2 3 4 5 6; do
+            EVENTS=$(aws logs filter-log-events \
+              --log-group-name "$API_LOG_GROUP" \
+              --start-time "$START_TIME" \
+              --filter-pattern 'bootstrap_admin_' \
+              --region "$AWS_REGION" \
+              --query 'events[].message' \
+              --output text 2>/dev/null || true)
+            if [[ -n "$EVENTS" && "$EVENTS" != "None" ]]; then
+              printf '%s\n' "$EVENTS"
+              break
+            fi
+            sleep 10
+          done
+          if [[ -z "$EVENTS" || "$EVENTS" == "None" ]]; then
+            echo "bootstrap_admin_event_not_observed"
+          fi
