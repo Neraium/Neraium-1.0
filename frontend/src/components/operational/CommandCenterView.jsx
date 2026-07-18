@@ -137,6 +137,52 @@ function statusExplanationForInsight(insight) {
   return "Operating behavior changed.";
 }
 
+function CommandBriefing({ model, status, firstInsight, helpers, onConnectLiveData, onFocusInvestigation }) {
+  const relationships = firstInsight ? helpers.insightRelationshipLabels(firstInsight) : [];
+  const title = firstInsight ? dashboardInsightTitle(firstInsight, relationships, helpers.formatInsightTitle(firstInsight)) : "No active investigation";
+  const summary = firstInsight
+    ? helpers.operatorSummaryBriefing(firstInsight, relationships)[0] || statusExplanationForInsight(firstInsight)
+    : model.analysisComplete
+      ? "Current behavior remains inside the learned baseline. Keep the baseline current with the next telemetry export."
+      : "No completed analysis is available yet. Import telemetry to build the baseline before decisions are made here.";
+  const attention = !model.analysisComplete
+    ? "Behavior baseline not established"
+    : firstInsight
+      ? `${severityLabel(firstInsight.severity)}: ${title}`
+      : "No active exceptions";
+  const openFirst = !model.analysisComplete ? "Datasets & Connectors" : firstInsight ? title : "Behavior Baseline";
+  const actionLabel = !model.analysisComplete ? "Import dataset" : firstInsight ? "Open first investigation" : "Import newer dataset";
+  const action = !model.analysisComplete || !firstInsight ? onConnectLiveData : onFocusInvestigation;
+
+  return (
+    <section className={`command-section command-section--briefing command-section--${status.tone}`} aria-labelledby="command-briefing-heading">
+      <div className="command-section__header">
+        <h2 id="command-briefing-heading">Operational Briefing</h2>
+        <p>Priority, cause, and first destination.</p>
+      </div>
+      <div className="command-briefing-grid">
+        <article>
+          <span>Needs attention</span>
+          <strong>{attention}</strong>
+        </article>
+        <article>
+          <span>Why</span>
+          <strong>{summary}</strong>
+        </article>
+        <article>
+          <span>Open first</span>
+          <strong>{openFirst}</strong>
+        </article>
+      </div>
+      {typeof action === "function" ? (
+        <div className="operational-actions command-briefing-actions">
+          <button type="button" className={!model.analysisComplete ? "command-button" : "secondary-command-button"} onClick={action}>{actionLabel}</button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function OperationalStatusSection({ model, status, onConnectLiveData }) {
   return (
     <section className={`command-section command-section--status command-section--${status.tone}`} aria-labelledby="operational-status-heading">
@@ -187,7 +233,7 @@ function OperationalFindings({ insights, selectedInsight, onSelectInsight, helpe
           <h2 id="operational-findings-heading">Operational Insights</h2>
           <p>None active</p>
         </div>
-        <p className="operational-findings-empty">Import telemetry to establish the baseline.</p>
+        <div className="operational-empty operational-empty--inline"><p className="operational-findings-empty">Import telemetry to establish the baseline.</p><p>No completed analysis is available yet.</p></div>
       </section>
     );
   }
@@ -254,7 +300,7 @@ function SystemOverview({ systems, model }) {
           ))}
         </div>
       ) : (
-        <p className="operational-findings-empty">{model.systemsSectionTitle}: {model.systemsSectionSubtitle}</p>
+        <p className="operational-findings-empty">No systems are listed because no completed telemetry analysis is active. Import a dataset or reopen a saved analysis.</p>
       )}
     </section>
   );
@@ -266,7 +312,7 @@ function AdvancedDashboardSection({ model }) {
     <section className="command-section command-section--advanced" aria-labelledby="dashboard-advanced-heading">
       <div className="command-section__header">
         <h2 id="dashboard-advanced-heading">Analysis Details</h2>
-        <p>History and diagnostics stay collapsed.</p>
+        <p>Open when the active finding needs escalation support.</p>
       </div>
       <div className="dashboard-advanced-stack">
         <details>
@@ -275,7 +321,7 @@ function AdvancedDashboardSection({ model }) {
             <ul className="dashboard-advanced-list">
               {history.slice(0, 6).map((item, index) => <li key={item.id ?? index}>{item.datasetName ?? item.title ?? item.detail ?? "Historical analysis"}</li>)}
             </ul>
-          ) : <p>No saved analysis history is available.</p>}
+          ) : <p>No saved analysis history is available because no completed analysis has been opened in this session.</p>}
         </details>
         <details>
           <summary>Dataset and Connector Details</summary>
@@ -296,7 +342,7 @@ function AdvancedDashboardSection({ model }) {
 
 function DetailRows({ rows = [], technical = false }) {
   const visibleRows = rows.filter(([label, value]) => label && value !== null && value !== undefined && value !== "");
-  if (!visibleRows.length) return <p>No details available.</p>;
+  if (!visibleRows.length) return <p>No diagnostic details are available for this analysis yet.</p>;
   return (
     <dl className={technical ? "dashboard-detail-rows dashboard-detail-rows--technical" : "dashboard-detail-rows"}>
       {visibleRows.map(([label, value], index) => (
@@ -309,7 +355,7 @@ function DetailRows({ rows = [], technical = false }) {
   );
 }
 
-export default function CommandCenterView({ model, helpers, selectedInsight, onSelectInsight, onConnectLiveData }) {
+export default function CommandCenterView({ model, helpers, selectedInsight, onSelectInsight, onConnectLiveData, onFocusInvestigation }) {
   const queue = useMemo(() => rankedInsights(model.insights), [model.insights]);
   const activeInsight = selectedInsight && queue.some((item) => item.id === selectedInsight.id)
     ? selectedInsight
@@ -319,6 +365,7 @@ export default function CommandCenterView({ model, helpers, selectedInsight, onS
 
   return (
     <div className="operational-command-center" data-testid="operational-command-center">
+      <CommandBriefing model={model} status={status} firstInsight={activeInsight} helpers={helpers} onConnectLiveData={onConnectLiveData} onFocusInvestigation={onFocusInvestigation} />
       <OperationalStatusSection model={model} status={status} onConnectLiveData={onConnectLiveData} />
       <OperationalFindings insights={queue} selectedInsight={activeInsight} onSelectInsight={onSelectInsight} helpers={helpers} />
       <SystemOverview systems={systems} model={model} />

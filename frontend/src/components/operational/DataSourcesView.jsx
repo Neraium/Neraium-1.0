@@ -40,14 +40,14 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
         <PanelHeader
           eyebrow="Telemetry"
           title="Data Availability"
-          subtitle="Connected data and next action."
+          subtitle="Shows what telemetry is available and the next import action."
         />
         <StatusBadge label={sourceHealth.label} tone={sourceHealth.tone} statusKey={sourceHealth.statusKey} />
         <DetailGrid rows={model.dataSourceRows} />
       </section>
 
       <section className="operational-panel operational-panel--wide data-source-actions-panel" aria-label="Dataset Analysis">
-        <PanelHeader eyebrow="Dataset Analysis" title="Import and Analyze a Dataset" subtitle="Choose a timestamped CSV to run analysis." />
+        <PanelHeader eyebrow="Dataset Analysis" title="Import and Analyze a Dataset" subtitle="Choose a timestamped CSV, validate processing, then return to Command Center." />
         <div className="data-source-action-grid data-source-action-grid--single">
           <button type="button" className="command-button data-source-action data-source-action--primary" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled} title={model.analyzeDisabled ? "Analysis is already in progress. Wait for it to finish before starting another." : "Choose a telemetry CSV to analyze."}>
             <strong>Choose Dataset</strong>

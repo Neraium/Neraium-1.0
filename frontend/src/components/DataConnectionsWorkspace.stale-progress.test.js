@@ -286,7 +286,7 @@ it("processing state uses the behavior baseline as the progress indicator", () =
     latestMessage: "Building behavior baseline...",
   });
 
-  expect(screen.getByText("Organizing System Behavior")).toBeTruthy();
+  expect(screen.getByText("Comparing operating periods")).toBeTruthy();
   expect(screen.getByText("Stage 3 of 4")).toBeTruthy();
   expect(screen.getByText("progress.csv")).toBeTruthy();
   expect(screen.getByText("1.0 KB")).toBeTruthy();
@@ -352,7 +352,7 @@ it("baseline renderer uses enhanced mode on mobile-capable constraints", () => {
   const renderer = document.querySelector(".upload-fingerprint-build");
   expect(renderer?.getAttribute("data-render-tier")).toBe("enhanced");
   expect(renderer?.querySelectorAll(".upload-fingerprint-build__particles span")).toHaveLength(3);
-  expect(screen.getByText("Organizing System Behavior")).toBeTruthy();
+  expect(screen.getByText("Comparing operating periods")).toBeTruthy();
 });
 
 it("maps backend worker states to current operator status copy", () => {
@@ -420,11 +420,11 @@ it("complete state shows the behavior baseline completion moment", () => {
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByRole("heading", { name: "Behavior Baseline Established" })).toBeTruthy();
-  expect(screen.getByText("The behavior baseline is ready. SII has learned how the facility systems normally behave together.")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Analysis Complete" })).toBeTruthy();
+  expect(screen.getByText("SII finished the analysis and saved the evidence record. Command Center is ready for operational triage.")).toBeTruthy();
   const labels = Array.from(document.querySelectorAll(".upload-result-summary__item span")).map((node) => node.textContent);
   expect(labels).toEqual(["Systems", "Insights", "Baseline"]);
-  expect(screen.getByRole("button", { name: "Review Analysis" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Open Command Center" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Analyze Another Dataset" })).toBeTruthy();
   const details = screen.getByText("Analysis Details").closest("details");
   expect(details.open).toBe(false);
@@ -503,8 +503,8 @@ it("shows finalizing results instead of fake zero counts before AnalysisResult i
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByLabelText("Analysis progress: Preparing Insights and Evidence...")).toBeTruthy();
-  expect(screen.getByText("Establishing Behavior Baseline")).toBeTruthy();
+  expect(screen.getByLabelText("Analysis progress: Preparing Command Center...")).toBeTruthy();
+  expect(screen.getByText("Saving evidence record")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Analysis Complete" })).toBeNull();
   expect(document.querySelector(".upload-result-summary")).toBeNull();
   expect(screen.getByLabelText("Analysis 99% complete")).toBeTruthy();
@@ -609,8 +609,8 @@ it("treats the first complete payload with a saved result as terminal and auto-o
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: false });
   });
 
-  expect(await screen.findByRole("button", { name: "Review Analysis" })).toBeTruthy();
-  expect(screen.getByText("The behavior baseline is ready. SII has learned how the facility systems normally behave together.")).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "Open Command Center" })).toBeTruthy();
+  expect(screen.getByText("SII finished the analysis and saved the evidence record. Command Center is ready for operational triage.")).toBeTruthy();
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: true });
@@ -702,7 +702,7 @@ it("renders intermediate processing progress without jumping to complete", () =>
   });
 
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
-  expect(screen.getByText("Organizing System Behavior")).toBeTruthy();
+  expect(screen.getByText("Comparing operating periods")).toBeTruthy();
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
   expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
 });

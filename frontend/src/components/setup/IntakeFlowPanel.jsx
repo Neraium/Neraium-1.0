@@ -62,13 +62,13 @@ function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) 
 
 function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }) {
   const cleanMessage = String(latestMessage || "").trim();
-  if (viewState === "uploading") return "Importing Dataset...";
+  if (viewState === "uploading") return "Validating and importing dataset...";
   if (viewState === "complete") return "Analysis Complete";
   if (viewState === "finalizing") {
     const normalized = primaryJobStatus(uploadJob, uploadState);
-    if (normalized === "saving_results") return "Saving Analysis";
-    if (normalized === "navigation_pending") return "Opening Analysis";
-    return "Preparing Insights and Evidence...";
+    if (normalized === "saving_results") return "Saving evidence record";
+    if (normalized === "navigation_pending") return "Opening Command Center";
+    return "Preparing Command Center...";
   }
   if (viewState === "failed") return "Dataset Import Failed";
   if (viewState === "completion_error") return "Analysis Saved, Results Not Opened";
@@ -76,13 +76,19 @@ function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }
 
   const normalized = primaryJobStatus(uploadJob, uploadState);
   if (["writing_state", "cognition_ready", "saving_result"].includes(normalized)) {
-    return "Preparing Insights and Evidence...";
+    return "Saving evidence record...";
   }
-  if (["building_fingerprint", "baseline_modeling", "building_baseline", "structural_scoring", "running_sii", "accepted", "queued", "validating_schema", "parsing", "processing"].includes(normalized)) {
-    return "Learning System Behavior...";
+  if (["accepted", "queued", "validating_schema", "parsing"].includes(normalized)) {
+    return "Preparing analysis...";
+  }
+  if (["processing", "baseline_modeling", "building_baseline"].includes(normalized)) {
+    return "Building operational baseline...";
+  }
+  if (["building_fingerprint", "structural_scoring", "running_sii"].includes(normalized)) {
+    return "Comparing operating periods...";
   }
 
-  return cleanMessage || "Learning System Behavior...";
+  return cleanMessage || "Preparing analysis...";
 }
 
 function resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent }) {
@@ -170,26 +176,26 @@ function completionSummary({ analysisResult }) {
 const FINGERPRINT_BUILD_STAGES = [
   {
     id: "evidence",
-    label: "Collecting Operational Evidence",
-    shortLabel: "Evidence",
+    label: "Preparing analysis",
+    shortLabel: "Prepare",
     states: ["uploading", "queued", "accepted", "validating_schema", "parsing", "validated"],
   },
   {
     id: "relationships",
-    label: "Discovering Operational Relationships",
-    shortLabel: "Relationships",
+    label: "Building operational baseline",
+    shortLabel: "Baseline",
     states: ["processing", "baseline_modeling"],
   },
   {
     id: "organization",
-    label: "Organizing System Behavior",
-    shortLabel: "Organization",
+    label: "Comparing operating periods",
+    shortLabel: "Compare",
     states: ["running_sii", "structural_scoring", "building_baseline", "building_fingerprint"],
   },
   {
     id: "baseline",
-    label: "Establishing Behavior Baseline",
-    shortLabel: "Baseline",
+    label: "Saving evidence record",
+    shortLabel: "Save",
     states: ["writing_state", "cognition_ready", "saving_result", "saving_results"],
   },
 ];
@@ -248,10 +254,10 @@ function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
   if (viewState === "finalizing") {
     const normalized = primaryJobStatus(uploadJob, uploadState);
     if (normalized === "saving_results") {
-      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Saving Analysis", index: 3 };
+      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Saving evidence record", index: 3 };
     }
     if (normalized === "navigation_pending") {
-      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Opening Analysis", index: 3 };
+      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Opening Command Center", index: 3 };
     }
     return { ...FINGERPRINT_BUILD_STAGES[3], index: 3 };
   }
@@ -379,12 +385,12 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
   const compatibilityMode = renderTier === "safe";
   const particleCount = FINGERPRINT_RENDERER_PARTICLES[renderTier] ?? 0;
   const statusTitle = complete
-    ? "Behavior Baseline Established"
+    ? "Analysis Complete"
     : compatibilityMode
       ? "Using an alternate processing path."
       : stage?.label || "Learning Operational Relationships";
   const statusDetail = complete
-    ? "The behavior baseline has been established"
+    ? "Command Center has the saved SII result"
     : compatibilityMode
       ? "Analysis quality is unchanged. Full SII results remain valid."
       : "Stage " + stageNumber + " of " + stageCount;
@@ -522,7 +528,7 @@ function uploadOrbStatus(viewState) {
 }
 
 function uploadFingerprintStatusText(viewState, hasSelectedFiles) {
-  if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Learning System Behavior";
+  if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Analysis in Progress";
   if (viewState === "complete") return "Behavior Baseline Active";
   if (viewState === "failed") return hasSelectedFiles ? "Dataset Ready" : "Awaiting Behavior Baseline";
   if (hasSelectedFiles) return "Dataset Ready";
@@ -540,6 +546,34 @@ function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queued
     ["Current step", propagationLabel],
     ["Operator message", latestMessage],
   ].filter(([, value]) => String(value ?? "").trim());
+}
+
+function buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage }) {
+  if (viewState === "completion_error") {
+    return [
+      ["What failed", "The analysis saved, but Command Center did not open the result."],
+      ["What still succeeded", "The behavior baseline and evidence record were saved."],
+      ["Next action", "Open the analysis again. If that fails, analyze another dataset or refresh."],
+    ];
+  }
+  return [
+    ["What failed", errorMessage || "The dataset could not finish import or processing."],
+    ["What still succeeded", hasSelectedFiles ? `${selectedFileLabel} is still selected for retry.` : "No dataset is currently selected."],
+    ["Next action", uploadJob?.job_id ? "Retry the analysis. If the job expired, choose the dataset again." : "Choose a dataset and start the analysis again."],
+  ];
+}
+
+function RecoverySummary({ rows }) {
+  return (
+    <dl className="upload-recovery-summary">
+      {rows.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 function AdvancedDetails({ latestUploadSnapshot, uploadJob, uploadState, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
@@ -622,6 +656,7 @@ export default function IntakeFlowPanel({
   const fingerprintBuildStage = resolveFingerprintBuildStage({ viewState, uploadJob, uploadState });
   const remaining = estimateRemaining(uploadTransfer);
   const errorMessage = String(latestMessage || "Choose another telemetry dataset and try again.").trim();
+  const failureRecoveryRows = buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage });
   const summary = analysisResult ? completionSummary({ analysisResult }) : [];
   const showProgress = viewState === "uploading" || viewState === "analyzing" || viewState === "finalizing";
   const fingerprintStatus = uploadFingerprintStatusText(viewState, hasSelectedFiles);
@@ -713,7 +748,7 @@ export default function IntakeFlowPanel({
                 <span className="upload-file-chip__meta">{selectedFileSize}</span>
               </div>
               <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} />
-              <p className="upload-simple-note upload-processing-status">{queuedWorkerDetail || statusText}</p>
+              <p className="upload-simple-note upload-processing-status"><strong>{queuedWorkerDetail || statusText}</strong></p>
               {remaining ? <p className="upload-simple-note">{remaining}</p> : null}
             </div>
           </section>
@@ -730,10 +765,10 @@ export default function IntakeFlowPanel({
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3>Behavior Baseline Established</h3>
+                <h3>Analysis Complete</h3>
                 <span className="upload-complete-filename" title={selectedFileLabel}>{selectedFileLabel}</span>
               </div>
-              <p className="upload-complete-message">The behavior baseline is ready. SII has learned how the facility systems normally behave together.</p>
+              <p className="upload-complete-message">SII finished the analysis and saved the evidence record. Command Center is ready for operational triage.</p>
               <div className="upload-result-summary">
                 {summary.map((item) => (
                   <div key={item.label} className="upload-result-summary__item">
@@ -743,7 +778,7 @@ export default function IntakeFlowPanel({
                 ))}
               </div>
               <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={onViewResults}>Review Analysis</button>
+                <button type="button" className="command-button" onClick={onViewResults}>Open Command Center</button>
                 <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Dataset</button>
               </div>
             </div>
@@ -765,6 +800,7 @@ export default function IntakeFlowPanel({
                 <span>{hasSelectedFiles ? selectedFileLabel : "Results saved"}</span>
               </div>
               <p className="upload-error-message">{errorMessage || "The analysis was saved, but its results could not be opened. Try opening the analysis again."}</p>
+              <RecoverySummary rows={failureRecoveryRows} />
               <div className="upload-simple-actions">
                 <button type="button" className="command-button" onClick={onViewResults}>Open Analysis Again</button>
                 <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Dataset</button>
@@ -794,6 +830,7 @@ export default function IntakeFlowPanel({
                 <span>{hasSelectedFiles ? selectedFileLabel : "No file selected"}</span>
               </div>
               <p className="upload-error-message">{errorMessage}</p>
+              <RecoverySummary rows={failureRecoveryRows} />
               <div className="upload-simple-actions">
                 <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles} title={!hasSelectedFiles ? "Choose the source dataset again before retrying." : "Retry this analysis."}>Retry Analysis</button>
                 <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose Dataset</button>

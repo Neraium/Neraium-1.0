@@ -156,6 +156,8 @@ export default function OperationalWorkflowWorkspace({
   const [activeSection, setActiveSection] = useState(() => readStoredOperationalSection());
   const [selectedInsightId, setSelectedInsightId] = useState(() => readStoredSelectedInsightId());
   const overviewUploadInputRef = useRef(null);
+  const mainContentRef = useRef(null);
+  const sectionFocusReadyRef = useRef(false);
   const resultsNavigationHandledRef = useRef(resultsNavigationKey);
 
   const deferredLiveOps = useDeferredValue(liveOps);
@@ -196,6 +198,17 @@ export default function OperationalWorkflowWorkspace({
   }, [model.insights, model.resultTabsReady, resultsNavigationKey]);
 
   const selectedInsight = selectedInsightId ? (model.insights.find((item) => item.id === selectedInsightId) ?? null) : null;
+
+  useEffect(() => {
+    if (!sectionFocusReadyRef.current) {
+      sectionFocusReadyRef.current = true;
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame?.(() => mainContentRef.current?.focus({ preventScroll: true }));
+    return () => {
+      if (frame && window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
+    };
+  }, [activeSection]);
 
   useEffect(() => {
     const handlePopState = () => setActiveSection(readStoredOperationalSection());
@@ -265,6 +278,14 @@ export default function OperationalWorkflowWorkspace({
     setActiveSection("command-center");
   }
 
+  function focusSelectedInvestigation() {
+    const target = document.querySelector(".selected-investigation-panel");
+    if (!target) return;
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    target.querySelector("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")?.focus?.({ preventScroll: true });
+  }
+
   function openOverviewFilePicker() {
     overviewUploadInputRef.current?.click();
   }
@@ -300,7 +321,18 @@ export default function OperationalWorkflowWorkspace({
     navigate("data-sources");
   }
 
+  function returnToCommandCenter() {
+    navigate("command-center");
+  }
+
   const sectionHeader = SECTION_HEADERS[visibleSection] ?? null;
+  const routeContext = buildRouteContext(visibleSection, model, selectedInsight, {
+    connectLiveData,
+    openOverviewFilePicker,
+    focusSelectedInvestigation,
+    viewFingerprint,
+    returnToCommandCenter,
+  });
 
   return (
     <>
@@ -340,7 +372,7 @@ export default function OperationalWorkflowWorkspace({
         </div>
       </aside>
 
-      <main id="main-content" className={visibleSection === "command-center" ? "operational-main operational-main--command-center" : "operational-main"} aria-label="Neraium platform workspace" tabIndex={-1}>
+      <main ref={mainContentRef} id="main-content" className={visibleSection === "command-center" ? "operational-main operational-main--command-center" : "operational-main"} aria-label="Neraium platform workspace" tabIndex={-1}>
         <input data-testid="overview-csv-upload-input" ref={overviewUploadInputRef} accept=".csv,text/csv" type="file" className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose telemetry dataset CSV" tabIndex={-1} onChange={handleOverviewFileSelection} />
         {visibleSection === "command-center" ? <h1 className="sr-only">Neraium Command Center</h1> : null}
         {visibleSection !== "command-center" ? <header className="operational-topbar">
@@ -367,6 +399,23 @@ export default function OperationalWorkflowWorkspace({
           ))}
         </nav>
 
+        <section className="operational-route-strip" aria-label="Workflow position">
+          <div>
+            <span className="section-token">Current workspace</span>
+            <strong>{routeContext.label}</strong>
+            <p>{routeContext.reason}</p>
+          </div>
+          <div>
+            <span className="section-token">Next step</span>
+            <strong>{routeContext.next}</strong>
+          </div>
+          {routeContext.action ? (
+            <button type="button" className={routeContext.primary ? "command-button" : "secondary-command-button"} onClick={routeContext.action}>
+              {routeContext.actionLabel}
+            </button>
+          ) : null}
+        </section>
+
         {visibleSection === "command-center" ? (
           <CommandCenterView
             model={model}
@@ -378,6 +427,7 @@ export default function OperationalWorkflowWorkspace({
             onResumePreviousSession={onResumePreviousSession}
             onViewSystems={viewSystems}
             onViewFingerprint={viewFingerprint}
+            onFocusInvestigation={focusSelectedInvestigation}
           />
         ) : null}
 
@@ -400,6 +450,60 @@ export default function OperationalWorkflowWorkspace({
       </PageContainer>
     </>
   );
+}
+
+function buildRouteContext(sectionId, model, selectedInsight, actions) {
+  const contexts = {
+    "command-center": {
+      label: "Command Center",
+      reason: model.analysisComplete ? "Triage active findings and choose the first investigation." : "Start by importing telemetry so SII can establish a behavior baseline.",
+      next: model.analysisComplete && selectedInsight ? "Open the highest-priority investigation" : "Import and analyze telemetry",
+      actionLabel: model.analysisComplete && selectedInsight ? "Review first finding" : "Import dataset",
+      action: model.analysisComplete && selectedInsight ? actions.focusSelectedInvestigation : actions.connectLiveData,
+      primary: !model.analysisComplete,
+    },
+    systems: {
+      label: "Systems",
+      reason: "Review which systems were discovered and which one owns each active finding.",
+      next: model.insights.length ? "Open the system with an active insight" : "Return to the baseline if no systems need action",
+      actionLabel: "View baseline",
+      action: actions.viewFingerprint,
+      primary: false,
+    },
+    insights: {
+      label: "Insights",
+      reason: "Compare findings in priority order before committing investigation time.",
+      next: selectedInsight ? "Inspect evidence for the selected finding" : "Select the top insight",
+      actionLabel: selectedInsight ? "Review first finding" : "Import dataset",
+      action: selectedInsight ? actions.returnToCommandCenter : actions.connectLiveData,
+      primary: false,
+    },
+    fingerprint: {
+      label: "Behavior Baseline",
+      reason: "Confirm what normal relationship behavior looks like before judging drift.",
+      next: model.insights.length ? "Return to the highest-priority finding" : "Keep monitoring or import a newer dataset",
+      actionLabel: model.insights.length ? "Review first finding" : "Import dataset",
+      action: model.insights.length ? actions.returnToCommandCenter : actions.connectLiveData,
+      primary: false,
+    },
+    "data-sources": {
+      label: "Datasets & Connectors",
+      reason: "Import telemetry, verify processing, and hand off completed analysis to Command Center.",
+      next: model.analysisComplete ? "Confirm analysis in Command Center" : "Choose a dataset and start analysis",
+      actionLabel: "",
+      action: null,
+      primary: false,
+    },
+    advanced: {
+      label: "Analysis Details",
+      reason: "Use diagnostics, evidence metadata, and raw results when a finding needs deeper support.",
+      next: model.insights.length ? "Return to the active investigation" : "Import telemetry if no analysis exists",
+      actionLabel: model.insights.length ? "Review first finding" : "Import dataset",
+      action: model.insights.length ? actions.returnToCommandCenter : actions.connectLiveData,
+      primary: false,
+    },
+  };
+  return contexts[sectionId] ?? contexts["command-center"];
 }
 
 function readStoredOperationalSection() {

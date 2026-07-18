@@ -111,7 +111,7 @@ export default function AppWorkspaceRouter({
     return (
       <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
         <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-          <Suspense fallback={renderLoadingPanel("Loading Neraium", "Preparing the application...")}>
+          <Suspense fallback={renderLoadingPanel("Preparing operations workspace", "Checking access and loading facility context...")}>
             <HomePage onLaunchWorkspace={() => setActiveWorkspace("system-body")} />
           </Suspense>
         </div>
@@ -129,7 +129,7 @@ export default function AppWorkspaceRouter({
         contextLabel="Datasets & Connectors"
         onHelp={() => setActiveWorkspace("help-changelog")}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Datasets & Connectors", "Preparing dataset import and connector setup...")}>
+        <Suspense fallback={renderLoadingPanel("Preparing telemetry intake", "Loading dataset validation and connector status...")}>
           <DataConnectionsWorkspace
             accessCode={accessCode}
             apiFetch={apiFetch}
@@ -165,7 +165,7 @@ export default function AppWorkspaceRouter({
         contextLabel="Analysis Details"
         onHelp={() => setActiveWorkspace("help-changelog")}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Analysis Details", "Preparing analysis history and support diagnostics...")}>
+        <Suspense fallback={renderLoadingPanel("Loading investigation record", "Preparing analysis history, evidence, and diagnostics...")}>
           <SystemStoryWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
@@ -215,7 +215,7 @@ export default function AppWorkspaceRouter({
         contextLabel="Administration"
         onHelp={() => setActiveWorkspace("help-changelog")}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Administration", "Preparing user access and intelligence governance...")}>
+        <Suspense fallback={renderLoadingPanel("Loading administration", "Preparing access controls and governance records...")}>
           <GovernanceAdminWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
@@ -239,7 +239,7 @@ export default function AppWorkspaceRouter({
         contextLabel="Insights"
         onHelp={() => setActiveWorkspace("help-changelog")}
       >
-        <Suspense fallback={renderLoadingPanel("Loading Insights", "Preparing operational insights and evidence...")}>
+        <Suspense fallback={renderLoadingPanel("Loading investigation", "Prioritizing findings and preparing evidence...")}>
           <ObservationCenterWorkspace
             apiFetch={apiFetch}
             accessCode={accessCode}
@@ -262,7 +262,7 @@ export default function AppWorkspaceRouter({
         handleRetryWorkspace={handleRetryWorkspace}
         contextLabel="Help & Status"
       >
-        <Suspense fallback={renderLoadingPanel("Loading Help & Status", "Preparing product guidance and service status...")}>
+        <Suspense fallback={renderLoadingPanel("Loading support status", "Checking service status and operator guidance...")}>
           <HelpChangelogWorkspace
             apiStatus={apiStatus}
             onBackToGate={() => setActiveWorkspace("system-body")}
@@ -276,7 +276,7 @@ export default function AppWorkspaceRouter({
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <Suspense fallback={renderLoadingPanel("Opening Command Center", "Loading facility state, systems, and insights...")}>
+        <Suspense fallback={renderLoadingPanel("Opening Command Center", "Prioritizing findings and loading facility state...")}>
           <OperationalWorkflowWorkspace
             liveOps={{
               ...liveOps,

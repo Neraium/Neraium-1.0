@@ -332,6 +332,26 @@ function focusInvestigationSection(sectionId) {
   target.focus({ preventScroll: true });
 }
 
+function InvestigationDecisionPath({ evidenceCount, relationshipCount }) {
+  const steps = [
+    ["1", "Understand change", "Confirm the affected subsystem and operating status."],
+    ["2", "Verify evidence", `${relationshipCount || "No"} relationship${relationshipCount === 1 ? "" : "s"} and ${evidenceCount || "no"} evidence record${evidenceCount === 1 ? "" : "s"} support this finding.`],
+    ["3", "Run checks", "Start with the highest-impact operator check before broad troubleshooting."],
+    ["4", "Close the loop", "Export the report or inspect raw metrics if the decision needs escalation."],
+  ];
+  return (
+    <nav className="investigation-decision-path" aria-label="Investigation decision path">
+      {steps.map(([index, label, detail]) => (
+        <button type="button" key={label} onClick={() => focusInvestigationSection(index === "2" ? "insight-evidence" : index === "3" ? "recommended-investigation" : index === "4" ? "relationship-explorer" : "insight-situation")}> 
+          <span>{index}</span>
+          <strong>{label}</strong>
+          <small>{detail}</small>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function OperatorActions({ insight, subsystem }) {
   const exportReport = () => {
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), subsystem, insight }, null, 2)], { type: "application/json" });
@@ -438,7 +458,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
 
   const body = (
     <div className="insight-layered">
-      <section className="insight-situation-card" aria-labelledby="insight-situation-title">
+      <section id="insight-situation" className="insight-situation-card" aria-labelledby="insight-situation-title" tabIndex={-1}>
         <span className="insight-summary-card__eyebrow">What happened</span>
         <div className="insight-situation-card__meta">
           <span className={`insight-severity insight-severity--${severity.toLowerCase()}`}>{operationalStatus}</span>
@@ -448,7 +468,9 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         <p id="insight-situation-title" className="insight-situation-card__summary">{behavioralSummary}</p>
       </section>
 
-      <section id="insight-evidence" className="insight-summary-card insight-summary-card--evidence" aria-labelledby="key-evidence-title">
+      <InvestigationDecisionPath evidenceCount={evidence.length} relationshipCount={relationships.length} />
+
+      <section id="insight-evidence" className="insight-summary-card insight-summary-card--evidence" aria-labelledby="key-evidence-title" tabIndex={-1}>
         <span className="insight-summary-card__eyebrow">Why Neraium flagged this</span>
         <h4 id="key-evidence-title">Key evidence</h4>
         <div className="investigation-evidence-grid">
@@ -472,7 +494,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
         </div>
       </section>
 
-      <section className="insight-summary-card insight-summary-card--action" aria-labelledby="recommended-investigation-title">
+      <section id="recommended-investigation" className="insight-summary-card insight-summary-card--action" aria-labelledby="recommended-investigation-title" tabIndex={-1}>
         <span className="insight-summary-card__eyebrow">What to check next</span>
         <h4 id="recommended-investigation-title">Recommended checks</h4>
         <PriorityActions actions={investigationActions} signals={supportingSignals} impacts={expectedImpacts} explain />

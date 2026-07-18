@@ -12,8 +12,8 @@ export default function InsightsView({ model, helpers, selectedInsight, onSelect
         </div>
         <InsightList
           insights={model.insights}
-          empty={model.analysisComplete ? "No active insights." : "Import telemetry to establish the baseline."}
-          emptyTitle="No insights yet"
+          empty={model.analysisComplete ? "Analysis completed and no relationships are outside the learned baseline. Import a newer dataset when the next operating period is ready." : "No completed telemetry analysis exists yet. Import a dataset to establish the baseline and generate evidence-backed insights."}
+          emptyTitle={model.analysisComplete ? "No active findings" : "Analysis required"}
           onOpenInsight={onSelectInsight}
           selectedId={selectedInsight?.id}
           renderInsightDetail={(insight) => <OperatorInsightDetail insight={insight} defaultOpen />}

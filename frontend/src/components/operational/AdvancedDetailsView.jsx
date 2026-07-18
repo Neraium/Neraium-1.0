@@ -4,7 +4,7 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
   return (
     <div className="operational-grid operational-grid--overview">
       <section className="operational-panel operational-panel--wide" aria-label="Analysis Details">
-        <PanelHeader eyebrow="Analysis Details" title="Analysis Details" subtitle="Metadata and diagnostics are collapsed." />
+        <PanelHeader eyebrow="Analysis Details" title="Analysis Details" subtitle="Use this view when a finding needs diagnostics, evidence metadata, or raw result verification." />
         <details className="advanced-details-panel">
           <summary>Analysis Metadata</summary>
           <DetailGrid rows={model.analysisMetadataRows} technical />
@@ -95,7 +95,7 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
 
 function AnalysisHistoryList({ history = [], onReopen, onDelete }) {
   if (!history.length) {
-    return <div className="operational-empty"><strong>No saved analyses</strong><p>Completed analyses appear here.</p></div>;
+    return <div className="operational-empty"><strong>No saved analyses</strong><p>No completed analysis has been saved in this browser session. Import telemetry or reopen a persisted session to build history.</p></div>;
   }
   return (
     <div className="analysis-history-list">

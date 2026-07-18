@@ -48,7 +48,7 @@ export default function SystemsView({ model, helpers, onOpenInsight }) {
             ))}
           </div>
         ) : (
-          <EmptyOperationalState title={model.systemsSectionTitle} body={model.systemsSectionSubtitle} />
+          <EmptyOperationalState title={model.systemsSectionTitle} body={`${model.systemsSectionSubtitle} Import telemetry or reopen a completed analysis to populate system ownership.`} />
         )}
       </section>
     </div>
