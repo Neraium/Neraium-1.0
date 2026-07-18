@@ -174,7 +174,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(onCsvSelected.mock.calls[0][0]).toEqual([file]);
     expect(onTelemetrySelected).not.toHaveBeenCalled();
     expect(input.value).toBe("");
-    expect(screen.getByRole("heading", { name: "Data Availability" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Data Source Status" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Baseline Needed" })).toBeNull();
   });
 
@@ -193,26 +193,55 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     expect(onCsvSelected).toHaveBeenCalledTimes(1);
     expect(onCsvSelected.mock.calls[0][0]).toEqual([file]);
-    expect(screen.getByRole("heading", { name: "Data Availability" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Data Source Status" })).toBeTruthy();
   });
 
-  it("Datasets & Connectors owns CSV import and planned telemetry connectors", () => {
+  it("Datasets & Connectors owns CSV import, dataset status, and connector catalog only", () => {
     renderWorkspace();
 
     clickNav("Datasets & Connectors");
-    expect(screen.getByRole("heading", { name: "Data Availability" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Data Source Status" })).toBeTruthy();
+    expect(screen.getByText("Dataset import")).toBeTruthy();
+    expect(screen.getByText("Imported rows")).toBeTruthy();
+    expect(screen.getByText("Last dataset import")).toBeTruthy();
+    expect(screen.getByText("Connector health")).toBeTruthy();
+    expect(screen.getByText("Last connector sync")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Choose Dataset/i })).toBeTruthy();
     expect(screen.getAllByText("Import and Analyze a Dataset").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Historical Analysis")).toBeNull();
-    expect(screen.queryByText("Analyze New Dataset")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Import Historical CSV/i })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Available Imports" })).toBeTruthy();
+    expect(screen.getByText("CSV dataset import")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Configured Connectors" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Planned Connectors" })).toBeTruthy();
     expect(screen.getByText("OPC UA")).toBeTruthy();
     expect(screen.getByText("MQTT")).toBeTruthy();
     expect(screen.getByText("Enterprise historians")).toBeTruthy();
     expect(screen.getByText("BACnet")).toBeTruthy();
-    expect(screen.getByText("PLC commands disabled")).toBeTruthy();
-    expect(screen.getByText("SCADA commands disabled")).toBeTruthy();
-    expect(screen.getAllByText("Read-only Control Boundary").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Historical Analysis")).toBeNull();
+    expect(screen.queryByText("Analyze New Dataset")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Import Historical CSV/i })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Facility Status" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Analysis Summary" })).toBeNull();
+    expect(screen.queryByText("PLC commands disabled")).toBeNull();
+    expect(screen.queryByText("SCADA commands disabled")).toBeNull();
+    expect(screen.queryByText("BMS commands disabled")).toBeNull();
+    expect(screen.queryByText("Equipment controller commands disabled")).toBeNull();
+    expect(screen.queryByText("Read-only Control Boundary")).toBeNull();
+    expect(screen.queryByText("Current workspace")).toBeNull();
+    expect(screen.getByText("Import and analyze a dataset")).toBeTruthy();
+  });
+
+  it("keeps the mobile Datasets & Connectors layout compact and usable", () => {
+    window.innerWidth = 390;
+    renderWorkspace();
+
+    clickNav("Datasets & Connectors");
+    expect(screen.getByRole("button", { name: /Choose Dataset/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Data Source Status" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Available Imports" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Configured Connectors" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Planned Connectors" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Facility Status" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Analysis Summary" })).toBeNull();
   });
 
   it("Systems view shows discovery guidance before telemetry", () => {
@@ -337,7 +366,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("What changed")).toBeTruthy();
 
     clickNav("Datasets & Connectors");
-    expect(screen.getByRole("heading", { name: "Data Availability" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Data Source Status" })).toBeTruthy();
 
     clickNav("Analysis Details");
     expect(screen.getAllByRole("heading", { name: "Analysis Details" }).length).toBeGreaterThan(0);

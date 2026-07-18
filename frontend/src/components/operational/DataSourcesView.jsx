@@ -1,8 +1,8 @@
-const AVAILABLE_SOURCES = [
+const AVAILABLE_IMPORTS = [
   {
     icon: "CSV",
     label: "CSV dataset import",
-    detail: "Import a timestamped telemetry dataset for one SII analysis.",
+    detail: "Timestamped telemetry dataset for one analysis.",
     status: "Available",
   },
 ];
@@ -21,91 +21,97 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
     : !["None", "Not connected"].includes(model.sourceLabel)
       ? { label: "Dataset imported", tone: "ready", statusKey: "ready" }
       : { label: "No telemetry data", tone: "unknown", statusKey: "waiting" };
-  const findingRows = model.analysisComplete
+  const configuredConnectors = model.telemetryConnected
     ? [
-        ["Insights", model.insights.length ? `${model.insights.length} active` : "No active insights"],
-        ["Highest severity", model.highestSeverity],
-        ["Behavior state", model.behaviorState],
-        ["Baseline", model.baselineAvailable ? "Established" : "Pending"],
+        {
+          icon: "LIVE",
+          label: model.sourceLabel || "Live telemetry connector",
+          status: "Configured",
+          rows: [
+            ["Health", "Healthy"],
+            ["Access", "Read-only"],
+          ],
+        },
       ]
-    : [
-        ["Insights", "Available after analysis"],
-        ["Behavior state", "Not analyzed"],
-        ["Baseline", "Pending"],
-      ];
+    : [];
 
   return (
     <div className="operational-grid operational-grid--data-sources">
-      <section className="operational-panel operational-panel--wide data-source-status-panel" aria-label="Data Availability">
+      <section className="operational-panel operational-panel--wide data-source-status-panel" aria-label="Data Source Status">
         <PanelHeader
-          eyebrow="Telemetry"
-          title="Data Availability"
-          subtitle="Shows what telemetry is available and the next import action."
+          eyebrow="Status"
+          title="Data Source Status"
         />
         <StatusBadge label={sourceHealth.label} tone={sourceHealth.tone} statusKey={sourceHealth.statusKey} />
         <DetailGrid rows={model.dataSourceRows} />
       </section>
 
       <section className="operational-panel operational-panel--wide data-source-actions-panel" aria-label="Dataset Analysis">
-        <PanelHeader eyebrow="Dataset Analysis" title="Import and Analyze a Dataset" subtitle="Choose a timestamped CSV, validate processing, then return to Command Center." />
+        <PanelHeader eyebrow="Primary Action" title="Import and Analyze a Dataset" />
         <div className="data-source-action-grid data-source-action-grid--single">
           <button type="button" className="command-button data-source-action data-source-action--primary" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled} title={model.analyzeDisabled ? "Analysis is already in progress. Wait for it to finish before starting another." : "Choose a telemetry CSV to analyze."}>
             <strong>Choose Dataset</strong>
-            <span>Run analysis and save evidence.</span>
+            <span>Import CSV telemetry and run analysis.</span>
           </button>
         </div>
       </section>
 
-      <section className="operational-panel" aria-label="Dataset Imports">
-        <PanelHeader eyebrow="Datasets" title="Dataset Imports" subtitle="Available now." />
+      <section className="operational-panel" aria-label="Available Imports">
+        <PanelHeader eyebrow="Imports" title="Available Imports" />
         <div className="telemetry-source-grid telemetry-source-grid--compact">
-          {AVAILABLE_SOURCES.map((source) => (
+          {AVAILABLE_IMPORTS.map((source) => (
             <ConnectorCard key={source.label} {...source} available />
           ))}
         </div>
       </section>
 
-      <section className="operational-panel" aria-label="Planned Live Connectors">
-        <PanelHeader eyebrow="Connectors" title="Planned Live Connectors" subtitle="Not available in this release." />
+      <section className="operational-panel" aria-label="Configured Connectors">
+        <PanelHeader eyebrow="Connectors" title="Configured Connectors" />
+        {configuredConnectors.length ? (
+          <div className="telemetry-source-grid telemetry-source-grid--compact">
+            {configuredConnectors.map((connector) => (
+              <ConnectorCard key={connector.label} {...connector} configured />
+            ))}
+          </div>
+        ) : (
+          <div className="connector-empty-row" role="status">
+            <strong>No configured connectors</strong>
+            <span>CSV import is available.</span>
+          </div>
+        )}
+      </section>
+
+      <section className="operational-panel" aria-label="Planned Connectors">
+        <PanelHeader eyebrow="Connectors" title="Planned Connectors" />
         <div className="telemetry-source-grid telemetry-source-grid--compact">
           {PLANNED_CONNECTORS.map((source) => (
             <ConnectorCard key={source.label} {...source} status="Planned" />
           ))}
         </div>
       </section>
-
-      <section className="operational-panel" aria-label="Facility Status">
-        <PanelHeader eyebrow="Facility Status" title="Facility Status" subtitle="Current operating context." />
-        <DetailGrid rows={model.dashboardSummaryRows} />
-      </section>
-
-      <section className="operational-panel" aria-label="Analysis Summary">
-        <PanelHeader eyebrow="Analysis" title="Analysis Summary" subtitle="Current analysis facts." />
-        <DetailGrid rows={findingRows} />
-      </section>
-
-      <section className="operational-panel operational-panel--wide read-only-architecture" aria-label="Read-only enforcement">
-        <PanelHeader eyebrow="Safety Boundary" title="Read-only Control Boundary" subtitle="Decision support only. No commands or setpoints are written." />
-        <ul className="compact-list compact-list--safety">
-          <li>PLC commands disabled</li>
-          <li>SCADA commands disabled</li>
-          <li>BMS commands disabled</li>
-          <li>Equipment controller commands disabled</li>
-        </ul>
-      </section>
     </div>
   );
 }
 
-function ConnectorCard({ icon, label, detail, status, available = false }) {
+function ConnectorCard({ icon, label, detail, status, rows = [], available = false, configured = false }) {
   return (
-    <article className={available ? "telemetry-source-card telemetry-source-card--available" : "telemetry-source-card telemetry-source-card--planned"}>
+    <article className={available || configured ? "telemetry-source-card telemetry-source-card--available" : "telemetry-source-card telemetry-source-card--planned"}>
       <div className="telemetry-source-card__header">
         <span className="telemetry-source-card__icon" aria-hidden="true">{icon}</span>
         <small>{status}</small>
       </div>
       <strong>{label}</strong>
-      <span>{detail}</span>
+      {detail ? <span>{detail}</span> : null}
+      {rows.length ? (
+        <dl className="connector-compact-rows">
+          {rows.map(([rowLabel, value]) => (
+            <div key={rowLabel}>
+              <dt>{rowLabel}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
     </article>
   );
 }

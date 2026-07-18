@@ -333,6 +333,7 @@ export default function OperationalWorkflowWorkspace({
     viewFingerprint,
     returnToCommandCenter,
   });
+  const showRouteWorkspaceContext = visibleSection !== "data-sources";
 
   return (
     <>
@@ -399,12 +400,14 @@ export default function OperationalWorkflowWorkspace({
           ))}
         </nav>
 
-        <section className="operational-route-strip" aria-label="Workflow position">
-          <div>
-            <span className="section-token">Current workspace</span>
-            <strong>{routeContext.label}</strong>
-            <p>{routeContext.reason}</p>
-          </div>
+        <section className={showRouteWorkspaceContext ? "operational-route-strip" : "operational-route-strip operational-route-strip--next-only"} aria-label="Workflow position">
+          {showRouteWorkspaceContext ? (
+            <div>
+              <span className="section-token">Current workspace</span>
+              <strong>{routeContext.label}</strong>
+              <p>{routeContext.reason}</p>
+            </div>
+          ) : null}
           <div>
             <span className="section-token">Next step</span>
             <strong>{routeContext.next}</strong>
@@ -488,8 +491,8 @@ function buildRouteContext(sectionId, model, selectedInsight, actions) {
     },
     "data-sources": {
       label: "Datasets & Connectors",
-      reason: "Import telemetry, verify processing, and hand off completed analysis to Command Center.",
-      next: model.analysisComplete ? "Confirm analysis in Command Center" : "Choose a dataset and start analysis",
+      reason: "Manage telemetry imports and connector sources.",
+      next: model.analysisComplete ? "Review Command Center when ready" : "Import and analyze a dataset",
       actionLabel: "",
       action: null,
       primary: false,
@@ -796,12 +799,11 @@ function buildDataSourceRows({ sourceLabel, lastAnalysis, sourceRowCount, teleme
     ? lastAnalysis
     : "No import yet";
   return [
-    ["Dataset import", historicalImported ? "Telemetry dataset imported" : "No dataset imported"],
-    ["Imported rows", historicalImported && sourceRowCount ? String(sourceRowCount) : "No dataset imported"],
-    ["Connector health", telemetryConnected ? "Healthy" : "Not configured"],
+    ["Dataset import", historicalImported ? "Imported" : "Not imported"],
+    ["Imported rows", historicalImported && sourceRowCount ? String(sourceRowCount) : "0"],
     ["Last dataset import", lastImport],
+    ["Connector health", telemetryConnected ? "Healthy" : "Not configured"],
     ["Last connector sync", telemetryConnected ? lastAnalysis : "No connector sync yet"],
-    ["Control access", "Read-only"],
   ];
 }
 

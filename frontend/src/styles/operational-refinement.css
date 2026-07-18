@@ -410,6 +410,11 @@
   min-width: 0;
 }
 
+.operational-route-strip--next-only {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
 .operational-route-strip strong,
 .command-briefing-grid strong,
 .upload-recovery-summary dd,
