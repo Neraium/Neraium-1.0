@@ -76,11 +76,11 @@ function rankedInsights(insights) {
 function operationalStatus(model, queue) {
   if (model.uiState?.key === "analyzing") {
     return {
-      label: "Analyzing Operational Behavior",
+      label: "Analyzing operation",
       tone: "loading",
       orbStatus: "learning",
-      stage: "Evidence > Relationships > System organization > Behavior baseline",
-      explanation: "Neraium is comparing facility behavior against learned operational relationships.",
+      stage: "Evidence → relationships → baseline",
+      explanation: "Comparing current operation with the baseline.",
     };
   }
 
@@ -90,7 +90,7 @@ function operationalStatus(model, queue) {
       tone: "neutral",
       orbStatus: "awaiting",
       stage: null,
-      explanation: model.commandCenterMessage || "Connect telemetry or analyze historical data to establish the learned behavior baseline.",
+      explanation: model.commandCenterMessage || "Import telemetry to establish the operating baseline.",
     };
   }
 
@@ -132,9 +132,9 @@ function operationalStatus(model, queue) {
 
 function statusExplanationForInsight(insight) {
   const relationshipCount = Number(insight?.changedRelationshipCount ?? insight?.affectedRelationships?.length ?? insight?.contributingRelationships?.length ?? 0);
-  if (relationshipCount > 1) return "Operational relationships no longer match the learned baseline.";
-  if (relationshipCount === 1) return "A key operational relationship no longer matches the learned baseline.";
-  return "Historical operating behavior changed.";
+  if (relationshipCount > 1) return "Several relationships moved off baseline.";
+  if (relationshipCount === 1) return "One key relationship moved off baseline.";
+  return "Operating behavior changed.";
 }
 
 function OperationalStatusSection({ model, status, onConnectLiveData }) {
@@ -185,9 +185,9 @@ function OperationalFindings({ insights, selectedInsight, onSelectInsight, helpe
       <section className="command-section command-section--findings" aria-labelledby="operational-findings-heading">
         <div className="command-section__header">
           <h2 id="operational-findings-heading">Operational Insights</h2>
-          <p>No active insights.</p>
+          <p>None active</p>
         </div>
-        <p className="operational-findings-empty">Import a current dataset to establish the baseline and surface evidence-backed operational changes.</p>
+        <p className="operational-findings-empty">Import telemetry to establish the baseline.</p>
       </section>
     );
   }
@@ -198,7 +198,7 @@ function OperationalFindings({ insights, selectedInsight, onSelectInsight, helpe
     <section className="command-section command-section--findings" aria-labelledby="operational-findings-heading">
       <div className="command-section__header">
         <h2 id="operational-findings-heading">Operational Insights</h2>
-        <p>Sorted by severity, then confidence.</p>
+        <p>Highest priority first.</p>
       </div>
       <div className="operational-findings-list" role="list" ref={queueRef} onKeyDown={handleKeyDown}>
         {insights.map((insight, index) => {
@@ -241,7 +241,7 @@ function SystemOverview({ systems, model }) {
     <section className="command-section command-section--systems" aria-labelledby="system-overview-heading">
       <div className="command-section__header">
         <h2 id="system-overview-heading">Discovered Systems</h2>
-        <p>Systems identified from the analyzed dataset.</p>
+        <p>Detected in the dataset.</p>
       </div>
       {systems.length ? (
         <div className="system-overview-list" role="list">
@@ -266,7 +266,7 @@ function AdvancedDashboardSection({ model }) {
     <section className="command-section command-section--advanced" aria-labelledby="dashboard-advanced-heading">
       <div className="command-section__header">
         <h2 id="dashboard-advanced-heading">Analysis Details</h2>
-        <p>Analysis history, source details, evidence metadata, and support diagnostics.</p>
+        <p>History and diagnostics stay collapsed.</p>
       </div>
       <div className="dashboard-advanced-stack">
         <details>

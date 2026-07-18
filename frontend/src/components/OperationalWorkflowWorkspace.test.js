@@ -131,9 +131,9 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
     expect(screen.getByTestId("operational-orb")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Operational Status" })).toBeTruthy();
-    expect(screen.getByText("Import a telemetry dataset, then run an analysis to establish the facility's behavior baseline.")).toBeTruthy();
+    expect(screen.getByText("Import telemetry to establish the baseline.")).toBeTruthy();
     expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("No active insights.")).toBeTruthy();
+    expect(screen.getByText("None active")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Discovered Systems" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Analysis Details" })).toBeTruthy();
@@ -384,7 +384,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.queryByText("Investigation Timeline")).toBeNull();
     expect(screen.queryByText("Prioritized Investigation Workflow")).toBeNull();
     expect(screen.getByRole("button", { name: "Inspect affected equipment" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Compare fingerprints" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Compare baseline" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "View related subsystems" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Export investigation report" })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Ã|â|Â/);

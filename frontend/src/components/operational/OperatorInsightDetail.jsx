@@ -223,14 +223,14 @@ function defaultOperationalImpacts(causes, relationships) {
   const relationshipText = relationships.join(" ").toLowerCase();
   if (/filter|dp|pressure|pump|flow|hydraulic/.test(`${causeText} ${relationshipText}`)) {
     return [
-      "Operating behavior moved away from the learned baseline",
+      "Operating behavior moved away from baseline",
       "Efficiency or capacity may be degrading under comparable load",
       "Downstream control assumptions may be less reliable",
     ];
   }
   return [
-    "Continued movement away from the learned behavior baseline",
-    "Reduced confidence in downstream operating assumptions",
+    "Continued movement away from baseline",
+    "Downstream assumptions may be less reliable",
     "Higher likelihood of manual investigation on the next operating cycle",
   ];
 }
@@ -314,8 +314,8 @@ function PriorityActions({ actions, signals = [], impacts = [], explain = false 
           <strong>{action}</strong>
           {explain ? <dl className="investigation-card__details">
             <div><dt>Estimated impact</dt><dd>{impacts[index] || (index === 0 ? "High - validates the primary operational risk" : "Moderate - narrows the likely cause")}</dd></div>
-            <div><dt>Supporting signals</dt><dd>{signals[index] || signals[0] || "Relationship drift and persistence evidence"}</dd></div>
-            <div><dt>Expected validation</dt><dd>{index === 0 ? "Confirm whether the observed shift is present at the affected equipment." : "Confirm or rule out this cause against the current fingerprint."}</dd></div>
+            <div><dt>Supporting signals</dt><dd>{signals[index] || signals[0] || "Relationship change evidence"}</dd></div>
+            <div><dt>Expected validation</dt><dd>{index === 0 ? "Confirm whether the observed shift is present at the affected equipment." : "Confirm or rule out this cause against current operation."}</dd></div>
             <div><dt>Why this order</dt><dd>{reasons[index]}</dd></div>
           </dl> : null}
         </li>
@@ -344,9 +344,9 @@ function OperatorActions({ insight, subsystem }) {
   };
   return <div className="operator-quick-actions" role="group" aria-label="Operator actions">
     <button type="button" onClick={() => focusInvestigationSection("insight-evidence")}>Inspect affected equipment</button>
-    <button type="button" onClick={() => focusInvestigationSection("fingerprint-comparison")}>Compare fingerprints</button>
-    <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>View related subsystems</button>
-    <button type="button" onClick={exportReport}>Export investigation report</button>
+    <button type="button" onClick={() => focusInvestigationSection("fingerprint-comparison")}>Compare baseline</button>
+    <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>Related systems</button>
+    <button type="button" onClick={exportReport}>Export report</button>
   </div>;
 }
 
@@ -389,7 +389,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
   const historicalDetails = buildChangeContext(insight, evidence).filter(([label]) => !/Largest relationship change magnitude/.test(label));
   const operationalMemory = buildOperationalMemory(insight);
   const explicitSummary = text(insight?.behaviorInterpretation ?? insight?.whatHappened ?? insight?.rawSummary ?? insight?.summary);
-  const behavioralSummary = explicitSummary || `The ${subsystem} subsystem no longer behaves according to its learned behavior baseline.`;
+  const behavioralSummary = explicitSummary || `The ${subsystem} subsystem moved off its operating baseline.`;
   const operationalStatus = severity === "Critical" ? "Critical" : severity === "High" ? "Investigation Recommended" : severity === "Moderate" ? "Watch" : "Normal";
   const relationshipModels = relationships.map((label, index) => ({ label, evidence: evidence[index], measurement: relationshipMeasurement(evidence[index]) }));
   const supportingSignals = unique(evidence.flatMap((item) => toList(item?.supporting_signals, item?.supportingSignals, item?.source_columns, item?.sourceColumns)).map(signalName));
@@ -420,7 +420,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
   ].filter(Boolean);
   const historicalComparison = text(insight?.previousFingerprint)
     || text(insight?.healthyBaseline)
-    || "The current operating fingerprint is being compared with the learned baseline.";
+    || "Current operation is being compared with the baseline.";
   const confidenceRaises = unique(toList(
     insight?.confidenceIncreaseFactors,
     insight?.confidence_increase_factors,
@@ -439,7 +439,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
   const body = (
     <div className="insight-layered">
       <section className="insight-situation-card" aria-labelledby="insight-situation-title">
-        <span className="insight-summary-card__eyebrow">Investigation Summary</span>
+        <span className="insight-summary-card__eyebrow">What happened</span>
         <div className="insight-situation-card__meta">
           <span className={`insight-severity insight-severity--${severity.toLowerCase()}`}>{operationalStatus}</span>
           <span>Affected subsystem: {subsystem}</span>
@@ -449,8 +449,8 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
       </section>
 
       <section id="insight-evidence" className="insight-summary-card insight-summary-card--evidence" aria-labelledby="key-evidence-title">
-        <span className="insight-summary-card__eyebrow">Why investigate?</span>
-        <h4 id="key-evidence-title">Key Evidence</h4>
+        <span className="insight-summary-card__eyebrow">Why Neraium flagged this</span>
+        <h4 id="key-evidence-title">Key evidence</h4>
         <div className="investigation-evidence-grid">
           <section>
             <span>Largest relationship change</span>
@@ -473,23 +473,23 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
       </section>
 
       <section className="insight-summary-card insight-summary-card--action" aria-labelledby="recommended-investigation-title">
-        <span className="insight-summary-card__eyebrow">What should I do?</span>
-        <h4 id="recommended-investigation-title">Recommended Investigation</h4>
+        <span className="insight-summary-card__eyebrow">What to check next</span>
+        <h4 id="recommended-investigation-title">Recommended checks</h4>
         <PriorityActions actions={investigationActions} signals={supportingSignals} impacts={expectedImpacts} explain />
       </section>
 
       <OperatorActions insight={insight} subsystem={subsystem} />
 
       <div className="insight-disclosure-stack" role="region" aria-label="Technical investigation detail">
-        <Disclosure title="Technical Evidence">
+        <Disclosure title="Technical evidence">
           <section id="fingerprint-comparison" className="technical-evidence-section fingerprint-comparison" tabIndex={-1}>
-            <div className="technical-evidence-section__header"><span>Fingerprint comparison</span><p>Only material relationship differences are shown.</p></div>
-            <section><span>Current fingerprint</span><strong>{text(insight?.currentFingerprint) || "Current relationship strengths are shown in the raw metrics below."}</strong></section>
-            <section><span>Previous fingerprint</span><strong>{text(insight?.previousFingerprint) || "Behavior was closer to the learned operating pattern."}</strong></section>
-            <section><span>Healthy baseline</span><strong>{text(insight?.healthyBaseline) || "Relationships remained stable inside the learned range."}</strong></section>
+            <div className="technical-evidence-section__header"><span>Baseline comparison</span><p>Only material differences are shown.</p></div>
+            <section><span>Current pattern</span><strong>{text(insight?.currentFingerprint) || "Current relationship strengths are in raw metrics."}</strong></section>
+            <section><span>Previous pattern</span><strong>{text(insight?.previousFingerprint) || "Behavior was closer to baseline."}</strong></section>
+            <section><span>Healthy baseline</span><strong>{text(insight?.healthyBaseline) || "Relationships remained inside range."}</strong></section>
           </section>
           <section id="relationship-explorer" className="technical-evidence-section" tabIndex={-1}>
-            <div className="technical-evidence-section__header"><span>Relationship Explorer &amp; raw metrics</span><p>Inspect the source relationship strengths for each affected relationship.</p></div>
+            <div className="technical-evidence-section__header"><span>Relationships and raw metrics</span><p>Inspect source strengths for affected relationships.</p></div>
             <Suspense fallback={<p>Loading relationship explorer...</p>}><RelationshipExplorer relationships={relationshipModels} /></Suspense>
           </section>
           {historicalDetails.length || operationalMemory.rows.length || operationalMemory.similarEvents.length ? <section className="technical-evidence-section">
@@ -500,14 +500,14 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
           </section> : null}
         </Disclosure>
 
-        <Disclosure title="Advanced investigation details">
+        <Disclosure title="Advanced details">
           <section className="technical-evidence-section">
             <div className="technical-evidence-section__header"><span>Possible causes to rule out</span></div>
             <BulletList items={causes} />
           </section>
           <div className="confidence-drivers">
-            <section><h5>Evidence that would raise confidence</h5><CheckedList items={confidenceRaises} /></section>
-            <section><h5>Conditions that would lower confidence</h5><BulletList items={confidenceLowers} /></section>
+            <section><h5>Raises confidence</h5><CheckedList items={confidenceRaises} /></section>
+            <section><h5>Lowers confidence</h5><BulletList items={confidenceLowers} /></section>
           </div>
           {advancedMetadata.length ? <ContextGrid rows={advancedMetadata} /> : null}
           {evidence.map((item, index) => {

@@ -37,7 +37,7 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
       <section className="auth-panel">
         <p className="auth-kicker">{PRODUCT_NAME}</p>
         <h1 id="auth-title">Sign in to Neraium</h1>
-        <p className="auth-copy">Access the Neraium platform and its {PRODUCT_DESCRIPTOR}. Use the account provided by your facility administrator.</p>
+        <p className="auth-copy">Use your facility account.</p>
         {notice ? <p className="auth-notice" role="status">{notice}</p> : null}
         <form className="auth-form" onSubmit={handleSubmit} aria-busy={busy}>
           <label htmlFor="auth-email">Email</label>
@@ -49,7 +49,7 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
             {busy ? "Signing in..." : "Sign in"}
           </button>
         </form>
-        <p className="auth-help">Cannot sign in? Ask an administrator to confirm that your account is active or revoke your previous sessions.</p>
+        <p className="auth-help">Need access? Ask an administrator to check your account or sessions.</p>
       </section>
     </main>
   );

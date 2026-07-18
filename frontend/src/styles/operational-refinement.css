@@ -289,3 +289,104 @@
 /* Solid completion surfaces keep status badges from affecting following content. */
 .operational-workflow .operational-panel.operational-panel--hero { background: #0d141f; background-image: none; }
 .operational-workflow .operator-completion-list li { background: #121d2c; background-image: none; }
+
+/* App-wide UX polish: lighter wrappers, denser rows, and quieter helper copy. */
+.operational-grid {
+  gap: clamp(14px, 1.8vw, 22px);
+}
+
+.operational-panel {
+  padding: clamp(16px, 2vw, 22px);
+  border-color: rgba(132, 145, 165, 0.16);
+  background: rgba(12, 18, 28, 0.74);
+}
+
+.operational-panel--wide + .operational-panel--wide,
+.command-section + .command-section {
+  margin-top: 0;
+}
+
+.operational-view-identity,
+.command-section__header,
+.ops-panel__header {
+  margin-bottom: var(--space-12);
+}
+
+.operational-view-identity p,
+.command-section__header p,
+.ops-panel__header p,
+.auth-copy,
+.auth-help {
+  max-width: 62ch;
+  line-height: 1.45;
+}
+
+.telemetry-source-card,
+.analysis-history-card,
+.relationship-row,
+.feed-item,
+.metric-cell,
+.investigation-card,
+.evidence-group,
+.advanced-details-panel,
+.insight-summary-card,
+.insight-situation-card {
+  border-color: rgba(132, 145, 165, 0.14);
+  background: rgba(8, 13, 21, 0.5);
+  box-shadow: none;
+}
+
+.telemetry-source-card,
+.metric-cell,
+.investigation-card {
+  padding: var(--space-12);
+}
+
+.command-section--findings::before {
+  border-color: rgba(132, 145, 165, 0.12);
+  background: rgba(8, 13, 21, 0.34);
+}
+
+.operational-finding-row {
+  grid-template-columns: minmax(160px, 1fr) auto auto;
+  gap: var(--space-8) var(--space-12);
+}
+
+.operational-finding-row__summary {
+  grid-column: 1 / -1;
+  max-width: 78ch;
+}
+
+.insight-layered {
+  gap: var(--space-14);
+}
+
+.insight-disclosure-stack details:not([open]) {
+  padding-block: var(--space-10);
+}
+
+.advanced-details-panel > summary,
+.insight-disclosure-stack summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.auth-panel {
+  max-width: 430px;
+  padding: clamp(24px, 4vw, 38px);
+}
+
+@media (max-width: 760px) {
+  .operational-panel {
+    padding: var(--space-14);
+  }
+
+  .operational-finding-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .operational-finding-row__confidence,
+  .operational-finding-row__summary {
+    grid-column: 1 / -1;
+  }
+}

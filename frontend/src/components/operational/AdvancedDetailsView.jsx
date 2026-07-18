@@ -4,7 +4,7 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
   return (
     <div className="operational-grid operational-grid--overview">
       <section className="operational-panel operational-panel--wide" aria-label="Analysis Details">
-        <PanelHeader eyebrow="Analysis Details" title="Analysis Details" subtitle="Analysis metadata and service diagnostics are collapsed until opened." />
+        <PanelHeader eyebrow="Analysis Details" title="Analysis Details" subtitle="Metadata and diagnostics are collapsed." />
         <details className="advanced-details-panel">
           <summary>Analysis Metadata</summary>
           <DetailGrid rows={model.analysisMetadataRows} technical />
@@ -69,7 +69,7 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
       </section>
 
       <section className="operational-panel" aria-label="Analysis history">
-        <PanelHeader eyebrow="History" title="Analysis History" subtitle="Completed analyses can be reopened without reprocessing source telemetry." />
+        <PanelHeader eyebrow="History" title="Analysis History" subtitle="Reopen completed analyses." />
         <AnalysisHistoryList
           history={model.analysisHistory}
           onReopen={onReopenHistoricalAnalysis}
@@ -95,7 +95,7 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
 
 function AnalysisHistoryList({ history = [], onReopen, onDelete }) {
   if (!history.length) {
-    return <div className="operational-empty"><strong>No saved analyses</strong><p>Completed behavior baselines will appear here after analysis.</p></div>;
+    return <div className="operational-empty"><strong>No saved analyses</strong><p>Completed analyses appear here.</p></div>;
   }
   return (
     <div className="analysis-history-list">
