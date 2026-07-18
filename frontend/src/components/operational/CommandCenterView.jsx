@@ -50,10 +50,10 @@ function dashboardInsightTitle(insight, relationships, fallback) {
   const relationshipContext = (relationships ?? []).join(" ").toLowerCase();
   const context = [insight?.system, insight?.rawSystemName, insight?.title, insight?.summary, relationshipContext].join(" ").toLowerCase();
   if (/conductivity|chemical|chlor|dose|quality|ph|orp/.test(relationshipContext)) return "Control relationship changed";
-  if (/(filter|differential pressure|dp)/.test(relationshipContext)) return "Resistance relationship changed";
-  if (/pump|vfd|motor|power/.test(context)) return "Power relationship changed";
-  if (/(flow|pressure|hydraulic)/.test(relationshipContext)) return "Flow and pressure relationship changed";
-  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Thermal relationship changed";
+  if (/(filter|differential pressure|dp)/.test(relationshipContext)) return "Primary operational relationship changed";
+  if (/pump|vfd|motor|power/.test(context)) return "Equipment energy relationship changed";
+  if (/(flow|pressure|hydraulic)/.test(relationshipContext)) return "Operating process relationship changed";
+  if (/cool|chill|tower|thermal|condenser/.test(context)) return "Performance subsystem relationship changed";
   return String(fallback ?? "Operating behavior changed").replace(/Relationship Changed/i, "relationship changed");
 }
 

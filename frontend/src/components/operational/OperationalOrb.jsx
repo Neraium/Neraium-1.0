@@ -34,11 +34,11 @@ const ORB_STATUS = {
 };
 
 const SYSTEM_HOTSPOT_POSITIONS = {
-  "flow-pressure": { x: 70, y: 34, scale: 1, subsystem: "Flow & Pressure" },
-  "water-quality": { x: 38, y: 66, scale: 0.84, subsystem: "Water Quality" },
-  pumping: { x: 62, y: 70, scale: 1.12, subsystem: "Pumping System" },
-  electrical: { x: 31, y: 39, scale: 0.76, subsystem: "Electrical" },
-  hvac: { x: 77, y: 57, scale: 0.92, subsystem: "HVAC" },
+  "flow-pressure": { x: 70, y: 34, scale: 1, subsystem: "Process Relationship" },
+  "water-quality": { x: 38, y: 66, scale: 0.84, subsystem: "Quality Control" },
+  pumping: { x: 62, y: 70, scale: 1.12, subsystem: "Equipment Group" },
+  electrical: { x: 31, y: 39, scale: 0.76, subsystem: "Utility System" },
+  hvac: { x: 77, y: 57, scale: 0.92, subsystem: "Control Subsystem" },
 };
 
 export const FINGERPRINT_RIDGES = [

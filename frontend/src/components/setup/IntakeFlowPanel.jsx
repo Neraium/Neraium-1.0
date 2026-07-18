@@ -62,7 +62,7 @@ function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) 
 
 function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }) {
   const cleanMessage = String(latestMessage || "").trim();
-  if (viewState === "uploading") return "Validating and importing dataset...";
+  if (viewState === "uploading") return "Importing Dataset...";
   if (viewState === "complete") return "Analysis Complete";
   if (viewState === "finalizing") {
     const normalized = primaryJobStatus(uploadJob, uploadState);
@@ -176,19 +176,20 @@ function completionSummary({ analysisResult }) {
 const FINGERPRINT_BUILD_STAGES = [
   {
     id: "evidence",
-    label: "Preparing analysis",
+    label: "Importing Dataset...",
     shortLabel: "Prepare",
     states: ["uploading", "queued", "accepted", "validating_schema", "parsing", "validated"],
   },
   {
     id: "relationships",
-    label: "Building operational baseline",
+    label: "Learning Operational Relationships",
     shortLabel: "Baseline",
     states: ["processing", "baseline_modeling"],
   },
   {
     id: "organization",
-    label: "Comparing operating periods",
+    label: "Preparing Insights and Evidence...",
+    displayLabel: "Comparing operating periods",
     shortLabel: "Compare",
     states: ["running_sii", "structural_scoring", "building_baseline", "building_fingerprint"],
   },
@@ -388,7 +389,7 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
     ? "Analysis Complete"
     : compatibilityMode
       ? "Using an alternate processing path."
-      : stage?.label || "Learning Operational Relationships";
+      : stage?.displayLabel || stage?.label || "Learning Operational Relationships";
   const statusDetail = complete
     ? "Command Center has the saved SII result"
     : compatibilityMode

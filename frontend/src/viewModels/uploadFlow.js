@@ -436,7 +436,7 @@ function uploadStageDetail(stage, index, job, roomContext) {
     ["accepted", "queued", "validating_schema"].includes(jobStatus) ? job.progress_label : "Telemetry structure and key fields are being validated.",
     ["parsing", "processing"].includes(jobStatus) ? job.progress_label : "Telemetry is being normalized for relationship inference.",
     jobStatus === "baseline_modeling" ? job.progress_label : "Operational relationships are being inferred from the evidence.",
-    jobStatus === "structural_scoring" ? job.progress_label : "Relationship changes are being organized into subsystem behavior.",
+    jobStatus === "structural_scoring" ? job.progress_label : "Relationship changes are being organized into system behavior.",
     jobStatus === "building_fingerprint" ? job.progress_label : "The behavior baseline is being established from normalized telemetry.",
     jobStatus === "writing_state" ? job.progress_label : "Insights and supporting evidence are being prepared from observed behavior.",
     ["cognition_ready", "saving_result"].includes(jobStatus) ? job.progress_label : "The behavior baseline is being persisted for Command Center review.",

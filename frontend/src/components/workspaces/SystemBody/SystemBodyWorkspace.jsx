@@ -639,14 +639,14 @@ function buildFindingBriefing(finding, evidenceReport) {
 
 function buildFindingSummaryLines(finding) {
   const lines = splitSentences(finding?.summary).slice(0, 2);
-  return lines.length ? lines : ["The subsystem no longer follows its historical operating pattern."];
+  return lines.length ? lines : ["The operational system no longer follows its historical operating pattern."];
 }
 
 function buildPossibleOperationalCauses(finding, evidenceReport) {
   const text = briefingSearchText(finding, evidenceReport);
   const causes = [];
-  if (/filter|pressure|dp|differential/.test(text)) causes.push("Filter fouling", "Increased hydraulic resistance");
-  if (/pump|speed|vfd|flow/.test(text)) causes.push("Pump efficiency degradation", "Instrument drift");
+  if (/filter|pressure|dp|differential/.test(text)) causes.push("Performance restriction", "Increased process resistance");
+  if (/pump|speed|vfd|flow/.test(text)) causes.push("Equipment efficiency changed", "Instrument drift");
   if (/valve|damper/.test(text)) causes.push("Valve position changed");
   if (/temperature|cool|chw|thermal/.test(text)) causes.push("Heat transfer changed", "Process load changed");
   if (/sensor|missing|timestamp|telemetry/.test(text)) causes.push("Sensor calibration drift", "Telemetry quality issue");
@@ -679,13 +679,13 @@ function buildRecommendedInvestigation(finding, evidenceReport) {
   if (/filter|pressure|dp|differential|pump|flow|valve|vfd/.test(text)) {
     return [
       "Review recent maintenance activity",
-      "Inspect filter condition and differential pressure trend",
-      "Verify pump loading and operating setpoints",
+      "Inspect the affected equipment condition and process trend",
+      "Verify equipment loading and operating setpoints",
     ];
   }
   if (/temperature|cool|chw|thermal/.test(text)) {
     return [
-      "Review temperature approach trend",
+      "Review performance approach trend",
       "Verify equipment staging and valve positions",
       "Compare with recent load changes",
     ];
@@ -762,13 +762,13 @@ function formatIssueSeverity(status) {
 }
 
 function buildActionGroups({ finding, evidenceReport }) {
-  const equipmentText = String(evidenceReport?.affectedVariables || finding?.title || "Building system");
+  const equipmentText = String(evidenceReport?.affectedVariables || finding?.title || "Operational system");
   const equipment = inferEquipmentLabel(equipmentText);
   const text = `${equipmentText} ${finding?.summary ?? ""} ${finding?.reviewNext ?? ""}`.toLowerCase();
-  const checks = ["Compare BAS values", "Verify sensor calibration"];
-  if (text.includes("valve")) checks.push("Review valve position");
-  if (text.includes("pump") || text.includes("speed") || text.includes("flow")) checks.push("Check pump speed vs flow");
-  if (text.includes("filter") || text.includes("pressure")) checks.push("Inspect filter pressure");
+  const checks = ["Compare source values", "Verify sensor calibration"];
+if (text.includes("valve")) checks.push("Review valve position");
+  if (text.includes("pump") || text.includes("speed") || text.includes("flow")) checks.push("Check equipment command versus process response");
+  if (text.includes("filter") || text.includes("pressure")) checks.push("Inspect process restriction indicators");
   checks.push("Review recent maintenance");
   return [{ equipment, items: [...new Set(checks)] }];
 }
@@ -778,9 +778,9 @@ function inferEquipmentLabel(text) {
   if (value.includes("pump")) return "Pumps";
   if (value.includes("valve")) return "Valves";
   if (value.includes("filter")) return "Filters";
-  if (value.includes("chw") || value.includes("chiller") || value.includes("temperature")) return "Chilled water loop";
-  if (value.includes("flow")) return "Flow loop";
-  return "Building system";
+  if (value.includes("chw") || value.includes("chiller") || value.includes("temperature")) return value.includes("chw") || value.includes("chiller") ? "Chilled water loop" : "Thermal process";
+  if (value.includes("flow")) return "Operating process";
+  return "Operational system";
 }
 
 function compactRows(rows) {

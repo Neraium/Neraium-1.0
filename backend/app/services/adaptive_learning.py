@@ -79,7 +79,7 @@ def derive_interpretive_archetypes(result: dict[str, Any]) -> list[dict[str, Any
     if "airflow" in driver or "flow" in evidence_blob:
         add("airflow imbalance", "relationship learning", ["Driver attribution indicates airflow restriction.", "Evidence memory shows flow-related change."])
     if "hvac" in driver or "temperature" in warnings:
-        add("cooling response lag", "adaptive baseline", ["HVAC instability is recurring relative to baseline timing.", "Temperature behavior is slower than the operational fingerprint."])
+        add("conditioning response lag", "adaptive baseline", ["Environmental control instability is recurring relative to baseline timing.", "Temperature behavior is slower than the operational fingerprint."])
     if "relationship" in evidence_blob or "drift" in warnings:
         add("relationship decay", "evidence memory", ["Structural relationships changed versus baseline norms.", "Evidence history contains relationship drift markers."])
     if "humidity" in driver or "thermal" in evidence_blob:

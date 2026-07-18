@@ -340,7 +340,7 @@ function buildHypotheses({ variables, evidence, domainMode }) {
   if (text.includes("valve") || text.includes("flow") || text.includes("chw")) hypotheses.push({ rank: "Most likely", label: "Valve control issue", detail: "Flow response appears inconsistent with the expected command or load pattern." });
   if (text.includes("pump") || text.includes("vfd") || text.includes("speed")) hypotheses.push({ rank: hypotheses.length ? "Possible" : "Most likely", label: "Pump or VFD response change", detail: "Pump behavior may no longer match its historical response curve." });
   if (text.includes("temperature") || text.includes("sensor") || text.includes("humidity")) hypotheses.push({ rank: hypotheses.length ? "Possible" : "Most likely", label: "Sensor drift", detail: "A measurement point may be biasing the interpretation if calibration has shifted." });
-  hypotheses.push({ rank: hypotheses.length ? "Possible" : "Most likely", label: "Reduced flow", detail: "Hydraulic or process movement may be lower than expected for the current operating condition." });
+  hypotheses.push({ rank: hypotheses.length ? "Possible" : "Most likely", label: "Reduced process response", detail: "Operational movement may be lower than expected for the current operating condition." });
   hypotheses.push({ rank: "Possible", label: "Changing load conditions", detail: "A real load change may explain the new pattern without an equipment fault." });
   return hypotheses.slice(0, 4);
 }
@@ -388,7 +388,7 @@ function chooseTrendLabels(variables) {
   if (text.includes("load")) labels.push("Load");
   if (text.includes("power") || text.includes("kw")) labels.push("Power");
   if (text.includes("temp") || text.includes("chw")) labels.push("Temperature");
-  return [...new Set(labels.length ? labels : ["Flow", "Pump speed", "Delta-T", "Load", "Power", "Temperature"])].slice(0, 6);
+  return [...new Set(labels.length ? labels : ["Signal A", "Signal B", "Load", "Power", "Response", "Temperature"])].slice(0, 6);
 }
 
 function trendValueForFrame(frame, index, offset) {
@@ -413,7 +413,7 @@ function collectVariables({ evidenceRun, activeFrame, currentSession }) {
 function inferEquipmentName(variables, domainMode) {
   const text = `${variables.join(" ")} ${domainMode ?? ""}`.toLowerCase();
   if (text.includes("chw") || text.includes("chiller")) return "The chilled water loop";
-  if (text.includes("pump")) return "Pump 2";
+  if (text.includes("pump")) return "Detected pump group";
   if (text.includes("pool") || text.includes("orp") || text.includes("chlorine")) return "The aquatic treatment loop";
   if (text.includes("air") || text.includes("ahu")) return "The air handling system";
   return "The building system";

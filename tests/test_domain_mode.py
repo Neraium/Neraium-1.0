@@ -153,11 +153,11 @@ def test_domain_mode_reports_auto_detected_when_no_upload_exists(tmp_path) -> No
 
     assert status.status_code == 200
     payload = status.json()
-    assert payload["mode"] == "aquatic"
+    assert payload["mode"] == "infrastructure"
     assert payload["source"] == "unclassified"
     assert payload["confidence"] == 0
     assert payload["evidence"] == []
-    assert "Commercial water systems" in payload["profile"]["subtitle"]
+    assert "Enterprise operations intelligence" in payload["profile"]["subtitle"]
 
 
 def test_domain_mode_ignores_stale_latest_result_without_active_upload_marker(tmp_path) -> None:
@@ -185,8 +185,8 @@ def test_domain_mode_ignores_stale_latest_result_without_active_upload_marker(tm
 
     assert status.status_code == 200
     payload = status.json()
-    assert payload["mode"] == "aquatic"
+    assert payload["mode"] == "infrastructure"
     assert payload["source"] == "unclassified"
     assert payload["confidence"] == 0
     assert payload["evidence"] == []
-    assert "Commercial water systems" in payload["profile"]["subtitle"]
+    assert "Enterprise operations intelligence" in payload["profile"]["subtitle"]

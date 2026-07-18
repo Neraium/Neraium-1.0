@@ -375,7 +375,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     clickNav("Insights");
     expect(screen.getByText("What happened")).toBeTruthy();
-    expect(screen.getByText(/Affected subsystem:/)).toBeTruthy();
+    expect(screen.getByText(/Affected operational system:/)).toBeTruthy();
     expect(screen.getByText("Key evidence")).toBeTruthy();
     expect(screen.getByText("Largest relationship change")).toBeTruthy();
     expect(screen.getByText("Recommended checks")).toBeTruthy();
@@ -383,7 +383,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("Advanced details")).toBeTruthy();
     expect(screen.queryByText("Investigation Timeline")).toBeNull();
     expect(screen.queryByText("Prioritized Investigation Workflow")).toBeNull();
-    expect(screen.getByRole("button", { name: "Inspect affected equipment" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Inspect affected system" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Compare baseline" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Related systems" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Export report" })).toBeTruthy();
