@@ -283,11 +283,11 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
-    expect(screen.getByText("Investigation Summary")).toBeTruthy();
-    expect(screen.getByText("Key Evidence")).toBeTruthy();
+    expect(screen.getByText("What happened")).toBeTruthy();
+    expect(screen.getByText("Key evidence")).toBeTruthy();
     expect(screen.getAllByText(/degraded operating performance/).length).toBeGreaterThan(0);
-    expect(screen.getByText("Recommended Investigation")).toBeTruthy();
-    expect(screen.getByText("Advanced investigation details")).toBeTruthy();
+    expect(screen.getByText("Recommended checks")).toBeTruthy();
+    expect(screen.getByText("Advanced details")).toBeTruthy();
     expect(screen.queryByText("Confidence Breakdown")).toBeNull();
     expect(screen.queryByRole("button", { name: "Open Insight" })).toBeNull();
     expect(hasActiveNavButton(/Command Center/)).toBe(true);
@@ -307,8 +307,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
-    expect(screen.getByText("Investigation Summary")).toBeTruthy();
-    expect(screen.getByText("Key Evidence")).toBeTruthy();
+    expect(screen.getByText("What happened")).toBeTruthy();
+    expect(screen.getByText("Key evidence")).toBeTruthy();
     expect(hasActiveNavButton(/Command Center/)).toBe(true);
     expect(hasActiveNavButton(/Systems\s+1\b/)).toBe(false);
   });
@@ -329,12 +329,12 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     clickNav("Insights");
     expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("Key Evidence")).toBeTruthy();
+    expect(screen.getByText("Key evidence")).toBeTruthy();
 
     clickNav("Behavior Baseline");
     expect(screen.getAllByRole("heading", { name: "Behavior Baseline" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Behavior Windows")).toBeTruthy();
-    expect(screen.getByText("System Relationship Changes")).toBeTruthy();
+    expect(screen.getByText("What changed")).toBeTruthy();
 
     clickNav("Datasets & Connectors");
     expect(screen.getByRole("heading", { name: "Data Availability" })).toBeTruthy();
@@ -353,11 +353,11 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     clickNav("Insights");
     expect(screen.getAllByText(/Pressure and Flow Behavior Changed/i).length).toBeGreaterThan(0);
-    expect(screen.getByText("Investigation Summary")).toBeTruthy();
-    expect(screen.getByText("Key Evidence")).toBeTruthy();
-    expect(screen.getByText("Recommended Investigation")).toBeTruthy();
-    expect(screen.getByText("Technical Evidence")).toBeTruthy();
-    expect(screen.getByText("Advanced investigation details")).toBeTruthy();
+    expect(screen.getByText("What happened")).toBeTruthy();
+    expect(screen.getByText("Key evidence")).toBeTruthy();
+    expect(screen.getByText("Recommended checks")).toBeTruthy();
+    expect(screen.getByText("Technical evidence")).toBeTruthy();
+    expect(screen.getByText("Advanced details")).toBeTruthy();
     expect(screen.getAllByText(/Confidence/).length).toBeGreaterThan(0);
     expect(screen.queryByText("Investigation Timeline")).toBeNull();
     expect(screen.getAllByText("pressure \u2194 flow").length).toBeGreaterThan(0);
@@ -374,19 +374,19 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     });
 
     clickNav("Insights");
-    expect(screen.getByText("Investigation Summary")).toBeTruthy();
+    expect(screen.getByText("What happened")).toBeTruthy();
     expect(screen.getByText(/Affected subsystem:/)).toBeTruthy();
-    expect(screen.getByText("Key Evidence")).toBeTruthy();
+    expect(screen.getByText("Key evidence")).toBeTruthy();
     expect(screen.getByText("Largest relationship change")).toBeTruthy();
-    expect(screen.getByText("Recommended Investigation")).toBeTruthy();
-    expect(screen.getByText("Technical Evidence")).toBeTruthy();
-    expect(screen.getByText("Advanced investigation details")).toBeTruthy();
+    expect(screen.getByText("Recommended checks")).toBeTruthy();
+    expect(screen.getByText("Technical evidence")).toBeTruthy();
+    expect(screen.getByText("Advanced details")).toBeTruthy();
     expect(screen.queryByText("Investigation Timeline")).toBeNull();
     expect(screen.queryByText("Prioritized Investigation Workflow")).toBeNull();
     expect(screen.getByRole("button", { name: "Inspect affected equipment" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Compare baseline" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "View related subsystems" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Export investigation report" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Related systems" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Export report" })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Ã|â|Â/);
   });
 
@@ -403,7 +403,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
     clickNav("Insights");
-    fireEvent.click(screen.getByRole("button", { name: "Export investigation report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export report" }));
 
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(anchorClick).toHaveBeenCalledTimes(1);
@@ -446,8 +446,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Insights");
     const text = screen.getByLabelText("Neraium platform workspace").textContent;
     expect(text).toContain("0.84");
-    expect(screen.getByText("Technical Evidence")).toBeTruthy();
-    expect(screen.getByText("Advanced investigation details")).toBeTruthy();
+    expect(screen.getByText("Technical evidence")).toBeTruthy();
+    expect(screen.getByText("Advanced details")).toBeTruthy();
     expect(text).toMatch(/0\.775497|0\.063807|0\.839304/);
   });
 

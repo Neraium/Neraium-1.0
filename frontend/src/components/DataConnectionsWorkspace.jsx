@@ -67,7 +67,7 @@ function formatUploadTransferLabel(progress) {
 }
 
 function formatFileSize(bytes) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "Awaiting file";
+  if (!Number.isFinite(bytes) || bytes <= 0) return "No file";
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${Math.max(bytes / 1024, 1).toFixed(1)} KB`;
@@ -78,15 +78,15 @@ function isLargeOperationalUpload(file) {
 }
 
 function uploadReadinessMessage(file) {
-  if (!file) return "Choose a telemetry file to begin.";
+  if (!file) return "Choose a telemetry file.";
   if (isLargeOperationalUpload(file)) {
     return "Large telemetry export detected. Processing continues in the background.";
   }
-  return "Telemetry export validated.";
+  return "Telemetry file ready.";
 }
 
 function validateTelemetryFile(file, kind) {
-  if (!file) return "Choose a telemetry file to analyze.";
+  if (!file) return "Choose a telemetry file.";
   if (file.size > MAX_UPLOAD_BYTES) return `High-volume export above ${formatFileSize(MAX_UPLOAD_BYTES)}. Use partitioned export or enterprise batch intake.`;
   const filename = String(file.name ?? "").toLowerCase();
   const mime = String(file.type ?? "").toLowerCase();
@@ -108,7 +108,7 @@ function boundedFailureDelay(failureCount) {
 export function queuedWorkerMessage(uploadJob) {
   const workerState = String(uploadJob?.worker_state ?? uploadJob?.workerState ?? "").toLowerCase();
   const lastUpdate = uploadJob?.worker_last_update_at ?? uploadJob?.worker_last_update ?? uploadJob?.updated_at ?? "";
-  if (workerState === "starting") return "Preparing analysis resources...";
+  if (workerState === "starting") return "Preparing analysis resources";
   if (workerState === "active" || workerState === "running") return "Analysis active - last update " + (lastUpdate || "just now");
   if (workerState === "queued" || normalizeUploadStatus(uploadJob?.status) === "queued") return "Preparing analysis resources";
   if (workerState === "stalled") return "No recent progress update; analysis may still be continuing.";
@@ -786,7 +786,7 @@ export default function DataConnectionsWorkspace({
       return;
     }
     if (!selectedFiles.length) {
-      setUploadError("Choose a telemetry file before analysis.");
+      setUploadError("Choose a telemetry file.");
       return;
     }
     const file = selectedFiles[0];

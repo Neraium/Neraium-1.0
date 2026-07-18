@@ -356,7 +356,7 @@ it("baseline renderer uses enhanced mode on mobile-capable constraints", () => {
 });
 
 it("maps backend worker states to current operator status copy", () => {
-  expect(queuedWorkerMessage({ worker_state: "starting" })).toBe("Preparing analysis resources...");
+  expect(queuedWorkerMessage({ worker_state: "starting" })).toBe("Preparing analysis resources");
   expect(queuedWorkerMessage({ worker_state: "active", worker_last_update_at: "12:03" })).toBe("Analysis active - last update 12:03");
   expect(queuedWorkerMessage({ worker_state: "queued" })).toBe("Preparing analysis resources");
   expect(queuedWorkerMessage({ worker_state: "stalled" })).toBe("No recent progress update; analysis may still be continuing.");
@@ -369,11 +369,11 @@ it("shows queued worker status as one visible processing line", () => {
     selectedFiles: [selectedCsv("queued.csv")],
     selectedFileSize: "1.0 KB",
     uploadJob: { job_id: "queued-job", status: "QUEUED", worker_state: "starting" },
-    queuedWorkerDetail: "Preparing analysis resources...",
+    queuedWorkerDetail: "Preparing analysis resources",
   });
 
   const statusLine = document.querySelector(".upload-processing-status");
-  expect(statusLine?.textContent).toBe("Preparing analysis resources...");
+  expect(statusLine?.textContent).toBe("Preparing analysis resources");
   expect(document.querySelector(".metadata-text")).toBeNull();
 });
 
