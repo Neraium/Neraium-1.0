@@ -127,12 +127,12 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
   it("opens to a focused Command Center with status, insights, and system sections", () => {
     renderWorkspace();
 
-    expect(screen.getByText("Baseline Needed")).toBeTruthy();
+    expect(screen.getByText("Watching")).toBeTruthy();
     expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
-    expect(screen.getByTestId("operational-orb")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Operational Status" })).toBeTruthy();
-    expect(screen.getByText("Import telemetry to establish the baseline.")).toBeTruthy();
-    expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
+    expect(screen.queryByTestId("operational-orb")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Operational Fingerprint Summary" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Subsystem Behavior" })).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "Engineering Findings" }).length).toBeGreaterThan(0);
     expect(screen.getByText("None active")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Discovered Systems" })).toBeTruthy();
@@ -304,12 +304,9 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    const priorityButton = screen.getAllByRole("button").find((button) => button.dataset.priorityItem === "true");
-    expect(priorityButton.textContent).toMatch(/relationship changed|behavior changed/i);
-    expect(priorityButton.getAttribute("aria-expanded")).toBe("true");
-    expect(priorityButton.getAttribute("aria-controls")).toMatch(/^selected-investigation-/);
+    expect(screen.getByRole("button", { name: "Open finding" })).toBeTruthy();
 
-    expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("heading", { name: "Engineering Findings" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
     expect(screen.getByText("What happened")).toBeTruthy();
@@ -317,10 +314,12 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getAllByText(/degraded operating performance/).length).toBeGreaterThan(0);
     expect(screen.getByText("Recommended checks")).toBeTruthy();
     expect(screen.getByText("Advanced details")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Similar Verified Investigations" })).toBeTruthy();
+    expect(screen.getByText("No verified similar investigations are available yet.")).toBeTruthy();
     expect(screen.queryByText("Confidence Breakdown")).toBeNull();
     expect(screen.queryByRole("button", { name: "Open Insight" })).toBeNull();
     expect(hasActiveNavButton(/Command Center/)).toBe(true);
-    expect(hasActiveNavButton(/Insights\s+1\b/)).toBe(false);
+    expect(hasActiveNavButton(/Engineering Findings\s+1\b/)).toBe(false);
   });
 
   it("keeps Systems card Open Insight wired to the command-center selected investigation", () => {
@@ -333,7 +332,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Systems");
     fireEvent.click(screen.getByRole("button", { name: "Open Insight" }));
 
-    expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("heading", { name: "Engineering Findings" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
     expect(screen.getByText("What happened")).toBeTruthy();
@@ -349,15 +348,15 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByText("Operational Insights")).toBeTruthy();
+    expect(screen.getAllByText("Engineering Findings").length).toBeGreaterThan(0);
     expect(screen.queryByText("Selected Investigation")).toBeNull();
 
     clickNav("Systems");
     expect(screen.getAllByRole("heading", { name: "Operational Systems Identified" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Primary Insight")).toBeTruthy();
 
-    clickNav("Insights");
-    expect(screen.getAllByRole("heading", { name: "Operational Insights" }).length).toBeGreaterThan(0);
+    clickNav("Engineering Findings");
+    expect(screen.getAllByRole("heading", { name: "Engineering Findings" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Key evidence")).toBeTruthy();
 
     clickNav("Behavior Baseline");
@@ -380,7 +379,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    clickNav("Insights");
+    clickNav("Engineering Findings");
     expect(screen.getAllByText(/Pressure and Flow Behavior Changed/i).length).toBeGreaterThan(0);
     expect(screen.getByText("What happened")).toBeTruthy();
     expect(screen.getByText("Key evidence")).toBeTruthy();
@@ -402,7 +401,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    clickNav("Insights");
+    clickNav("Engineering Findings");
     expect(screen.getByText("What happened")).toBeTruthy();
     expect(screen.getByText(/Affected subsystem:/)).toBeTruthy();
     expect(screen.getByText("Key evidence")).toBeTruthy();
@@ -431,7 +430,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       effectiveLatestUploadSnapshot: completeSnapshot(),
       currentSession: { hasReliableOperatorEvidence: true },
     });
-    clickNav("Insights");
+    clickNav("Engineering Findings");
     fireEvent.click(screen.getByRole("button", { name: "Export report" }));
 
     expect(createObjectURL).toHaveBeenCalledTimes(1);
@@ -447,7 +446,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    clickNav("Insights");
+    clickNav("Engineering Findings");
     expect(screen.getAllByText("Pump Power \u2194 Filter DP").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Pump Power \u2194 Flow").length).toBeGreaterThan(0);
     expect(screen.getByText("Largest relationship change")).toBeTruthy();
@@ -461,7 +460,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    clickNav("Insights");
+    clickNav("Engineering Findings");
     expect(screen.getByText(/Pump Power \u2194 Flow: no quantitative measurement was included/)).toBeTruthy();
   });
 
@@ -472,7 +471,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    clickNav("Insights");
+    clickNav("Engineering Findings");
     const text = screen.getByLabelText("Neraium platform workspace").textContent;
     expect(text).toContain("0.84");
     expect(screen.getByText("Technical evidence")).toBeTruthy();
@@ -487,7 +486,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    clickNav("Insights");
+    clickNav("Engineering Findings");
     expect(screen.getByText(/Pump Power \u2194 Flow: the relationship reversed direction/)).toBeTruthy();
   });
 
@@ -567,7 +566,7 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     });
 
     const workspaceText = screen.getByLabelText("Neraium platform workspace").textContent;
-    expect(screen.getByText("Operational Insights")).toBeTruthy();
+    expect(screen.getAllByText("Engineering Findings").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Discovered Systems" })).toBeTruthy();
     expect(workspaceText).toContain("Flow & Pressure");
     expect(workspaceText).toContain("Disinfection");
@@ -596,7 +595,7 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    clickNav("Insights");
+    clickNav("Engineering Findings");
     expect(screen.getAllByText(/Delta pH Operating Behavior Changed/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Signal 4/)).toBeNull();
   });

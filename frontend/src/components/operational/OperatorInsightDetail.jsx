@@ -502,6 +502,12 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
 
       <OperatorActions insight={insight} subsystem={subsystem} />
 
+      <section className="insight-summary-card similar-investigations" aria-labelledby="similar-investigations-title">
+        <span className="insight-summary-card__eyebrow">Operational memory</span>
+        <h4 id="similar-investigations-title">Similar Verified Investigations</h4>
+        <p>No verified similar investigations are available yet.</p>
+      </section>
+
       <div className="insight-disclosure-stack" role="region" aria-label="Technical investigation detail">
         <Disclosure title="Technical evidence">
           <section id="fingerprint-comparison" className="technical-evidence-section fingerprint-comparison" tabIndex={-1}>

@@ -17,7 +17,7 @@ import "../styles/operational-refinement.css";
 const NAV_ITEMS = [
   { id: "command-center", label: "Command Center" },
   { id: "systems", label: "Systems" },
-  { id: "insights", label: "Insights" },
+  { id: "insights", label: "Engineering Findings" },
   { id: "fingerprint", label: "Behavior Baseline" },
   { id: "data-sources", label: "Datasets & Connectors" },
   { id: "advanced", label: "Analysis Details" },
@@ -25,7 +25,7 @@ const NAV_ITEMS = [
 
 const SECTION_HEADERS = {
   systems: { eyebrow: "Systems", title: "Discovered Systems", subtitle: "Systems identified from analyzed telemetry and their active insights." },
-  insights: { eyebrow: "SII Intelligence", title: "Operational Insights", subtitle: "Prioritized changes identified by Systemic Infrastructure Intelligence, with evidence for operator review." },
+  insights: { eyebrow: "Engineering review", title: "Engineering Findings", subtitle: "Prioritized behavioral changes with evidence for engineer review." },
   fingerprint: { eyebrow: "Reference", title: "Behavior Baseline", subtitle: "The learned reference for how system relationships normally move together." },
   "data-sources": { eyebrow: "Telemetry", title: "Datasets & Connectors", subtitle: "Import a telemetry dataset or review the health of a configured read-only connector." },
   advanced: { eyebrow: "Analysis", title: "Analysis Details", subtitle: "Review analysis history, source information, evidence metadata, and support diagnostics." },
@@ -688,6 +688,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     signals,
     historyItems,
     analysisHistory,
+    dataCoveragePercent: quality.rowsReceived && quality.rowsUsed !== null ? Math.round((quality.rowsUsed / quality.rowsReceived) * 100) : null,
     qualityWarnings: quality.warnings,
     missingValues: quality.missingValues,
     timestampNotes: quality.timestampNotes,

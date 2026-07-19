@@ -30,7 +30,7 @@ test.describe("Frontend production resilience", () => {
     await page.goto("/workspace/insights", { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Loading insights and supporting evidence...")).toBeVisible();
     releaseInitialRequest();
-    await expect(page.getByRole("heading", { name: "Operational Insights" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Engineering Findings" })).toBeVisible();
     await page.unroute(evidencePattern);
 
     await page.route(evidencePattern, (route) => route.abort("connectionfailed"));
@@ -40,7 +40,7 @@ test.describe("Frontend production resilience", () => {
     await page.unroute(evidencePattern);
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Operational Insights" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Engineering Findings" })).toBeVisible();
     await expect(page.getByText("Filter and search insights")).toBeVisible();
   });
 
