@@ -143,7 +143,7 @@ test.describe("Responsive layout audit", () => {
       expect(metrics.mainRight, viewport.name).toBeLessThanOrEqual(metrics.viewportWidth + 1);
       expect(metrics.heroLeft, viewport.name).toBeGreaterThanOrEqual(0);
       expect(metrics.heroRight, viewport.name).toBeLessThanOrEqual(metrics.viewportWidth + 1);
-      await expect(page.getByRole("heading", { name: "Operational Status" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Operational Fingerprint Summary" })).toBeVisible();
     }
   });
 
