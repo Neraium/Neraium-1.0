@@ -276,7 +276,7 @@ async function fetchUploadScopedTimeline({ apiFetch, accessCode, jobId = null })
     const terminalOrFetchable = ["COMPLETE", "FAILED", "ACTIVE"].includes(status) || timelineReady || resultAvailable;
     if (status && !terminalOrFetchable) pendingMessage = `Advanced details are still building for this upload job (${status.toLowerCase()}).`;
   }
-  const timelineResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}?mode=${encodeURIComponent("live")}&replay_compression=${encodeURIComponent(String(1))}`, { accessCode });
+  const timelineResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}`, { accessCode });
   if (!timelineResponse.ok) throw new Error("The behavior timeline could not be loaded. Refresh and retry.");
   const payload = await timelineResponse.json();
   const timeline = Array.isArray(payload?.timeline) ? payload.timeline : [];

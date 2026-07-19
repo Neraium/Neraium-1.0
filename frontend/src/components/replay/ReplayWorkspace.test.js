@@ -129,7 +129,8 @@ describe("Analysis Details workspace", () => {
     renderStory(baseProps({ apiFetch: fetchMock, currentSession: { latestUploadResult: { job_id: "job-scoped" } } }));
 
     await waitFor(() => expect(screen.getByText("1 minute")).toBeTruthy());
-    expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/data/replay/job-scoped"))).toBe(true);
+    expect(fetchMock.mock.calls.some(([path]) => String(path) === "/api/data/replay/job-scoped")).toBe(true);
+    expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/data/replay/job-scoped?"))).toBe(false);
     expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/replay/timeline"))).toBe(false);
   });
 
