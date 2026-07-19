@@ -134,6 +134,56 @@ describe("Analysis Details workspace", () => {
     expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/replay/timeline"))).toBe(false);
   });
 
+  it("does not request a missing replay artifact for the production zero-frame upload", async () => {
+    const productionJobId = "6978182b61ab41e6898a259e31070fac";
+    const productionFilename = "neraium chilled water dataset blind.csv";
+    const fetchMock = vi.fn(async (path) => {
+      if (String(path).startsWith(`/api/data/upload-status/${productionJobId}`)) {
+        return createResponse({
+          job_id: productionJobId,
+          filename: productionFilename,
+          status: "COMPLETE",
+          processing_state: "complete",
+          result_available: true,
+          sii_completed: true,
+          sii_reliable_enough_to_show: true,
+          replay_ready: false,
+          replay_frame_count: 0,
+          latest_replay_frames: 0,
+          row_count: 5856,
+          column_count: 19,
+        });
+      }
+      if (String(path).startsWith(`/api/data/replay/${productionJobId}`)) {
+        return createResponse({ detail: "Replay was not found." }, 404);
+      }
+      if (String(path) === "/api/evidence/runs") return createResponse({ runs: [] });
+      return createResponse({}, 404);
+    });
+
+    renderStory(baseProps({
+      apiFetch: fetchMock,
+      currentSession: {
+        latestUploadResult: {
+          job_id: productionJobId,
+          filename: productionFilename,
+          status: "COMPLETE",
+          replay_ready: false,
+          replay_frame_count: 0,
+          replay_timeline: { timeline: [] },
+          row_count: 5856,
+          column_count: 19,
+          sii_reliable_enough_to_show: true,
+        },
+        hasReliableOperatorEvidence: true,
+      },
+    }));
+
+    await waitFor(() => expect(screen.getByText("Behavior timeline details will appear when this session has enough telemetry.")).toBeTruthy());
+    expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith(`/api/data/upload-status/${productionJobId}`))).toBe(true);
+    expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith(`/api/data/replay/${productionJobId}`))).toBe(false);
+  });
+
   it("does not refetch the story when only the error formatter prop changes", async () => {
     const fetchMock = createStoryApiFetch(1);
     const currentSession = { latestUploadResult: { job_id: "job-stable" } };
