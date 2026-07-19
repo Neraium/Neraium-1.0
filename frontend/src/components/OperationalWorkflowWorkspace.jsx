@@ -677,7 +677,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     relationshipChangeRows,
     dataSourceRows,
     behaviorWindowRows: buildBehaviorWindowRows(analysisExplanation),
-    rawResultJson: compactJson({ result, snapshot, analysisExplanation }),
+    rawResultJson: compactDiagnosticJson({ result, snapshot, analysisExplanation }),
     analysisMetadataRows: buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }),
     systemCards,
     systemsSectionTitle: systemSummary.sectionTitle,
@@ -2510,12 +2510,93 @@ function EvidenceDetails({ evidence }) {
   );
 }
 
+const DIAGNOSTIC_JSON_LIMITS = {
+  maxDepth: 3,
+  maxArrayItems: 3,
+  maxObjectKeys: 8,
+  maxStringLength: 120,
+  maxPreviewCharacters: 15000,
+  maxNodes: 400,
+};
+
 function compactJson(value) {
   try {
     return JSON.stringify(value, null, 2);
   } catch {
     return "";
   }
+}
+
+function compactDiagnosticJson(value) {
+  const state = { truncated: false, seen: new WeakSet(), characters: 0, nodes: 0 };
+  const preview = buildDiagnosticPreview(value, state, 0);
+  return compactJson({
+    _diagnostic_truncated: state.truncated,
+    _diagnostic_note: state.truncated
+      ? "Large analysis payloads are summarized here to keep the Command Center responsive. Use API diagnostics or exported evidence records for full raw payload review."
+      : "Diagnostic payload preview.",
+    preview,
+  });
+}
+
+function buildDiagnosticPreview(value, state, depth) {
+  if (state.characters >= DIAGNOSTIC_JSON_LIMITS.maxPreviewCharacters || state.nodes >= DIAGNOSTIC_JSON_LIMITS.maxNodes) {
+    state.truncated = true;
+    return "[diagnostic preview budget exhausted]";
+  }
+  state.nodes += 1;
+  if (value === null || value === undefined) return value ?? null;
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const remaining = Math.max(0, DIAGNOSTIC_JSON_LIMITS.maxPreviewCharacters - state.characters);
+    const limit = Math.min(DIAGNOSTIC_JSON_LIMITS.maxStringLength, remaining);
+    state.characters += Math.min(value.length, limit);
+    if (value.length <= limit) return value;
+    state.truncated = true;
+    return value.slice(0, limit) + "... [truncated " + (value.length - limit) + " characters]";
+  }
+  if (typeof value !== "object") return String(value);
+
+  if (state.seen.has(value)) {
+    state.truncated = true;
+    return "[repeated object omitted]";
+  }
+  state.seen.add(value);
+
+  if (Array.isArray(value)) {
+    if (depth >= DIAGNOSTIC_JSON_LIMITS.maxDepth) {
+      state.truncated = true;
+      return { _type: "array", _items: value.length, _omitted: true };
+    }
+    const items = value
+      .slice(0, DIAGNOSTIC_JSON_LIMITS.maxArrayItems)
+      .map((item) => buildDiagnosticPreview(item, state, depth + 1));
+    if (value.length > DIAGNOSTIC_JSON_LIMITS.maxArrayItems) {
+      state.truncated = true;
+      items.push({ _omitted_items: value.length - DIAGNOSTIC_JSON_LIMITS.maxArrayItems });
+    }
+    return items;
+  }
+
+  const keys = Object.keys(value);
+  if (depth >= DIAGNOSTIC_JSON_LIMITS.maxDepth) {
+    state.truncated = true;
+    return {
+      _type: "object",
+      _keys: keys.slice(0, DIAGNOSTIC_JSON_LIMITS.maxObjectKeys),
+      _omitted: true,
+    };
+  }
+
+  const output = {};
+  for (const key of keys.slice(0, DIAGNOSTIC_JSON_LIMITS.maxObjectKeys)) {
+    output[key] = buildDiagnosticPreview(value[key], state, depth + 1);
+  }
+  if (keys.length > DIAGNOSTIC_JSON_LIMITS.maxObjectKeys) {
+    state.truncated = true;
+    output._omitted_keys = keys.length - DIAGNOSTIC_JSON_LIMITS.maxObjectKeys;
+  }
+  return output;
 }
 
 function hasDisplayValue(value) {

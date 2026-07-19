@@ -116,6 +116,75 @@ function analysisWithRelationshipEvidence() {
   };
 }
 
+// Redacted from the production latest-upload shape: duplicated result aliases plus large diagnostic collections.
+function productionOversizedPayloadShape() {
+  const relationshipGraph = {
+    nodes: [
+      { id: "chw_flow_gpm", label: "Chilled water flow" },
+      { id: "chiller_power_kW", label: "Chiller power" },
+    ],
+    edges: Array.from({ length: 180 }, (_, index) => ({
+      id: "redacted-edge-" + index,
+      source: "chw_flow_gpm",
+      target: "chiller_power_kW",
+      description: "Redacted production relationship evidence ".repeat(30),
+      statistics: { baseline_strength: 0.77, current_strength: 0.06, correlation_delta: 0.83 },
+    })),
+  };
+  const productionAnalysis = {
+    ...analysisWithRelationshipEvidence(),
+    relationship_graph: relationshipGraph,
+  };
+  const productionResult = completeResult({
+    analysis_result: productionAnalysis,
+    analysis_explanation: productionAnalysis,
+    analysis: productionAnalysis,
+    baseline_analysis: {
+      status: "available",
+      relationship_graph: relationshipGraph,
+      relationship_drift: productionAnalysis.relationships,
+    },
+    relationship_model: { relationship_graph: relationshipGraph },
+    sii_intelligence: {
+      facility_state: "needs review",
+      baseline: { state: "changed", confidence: 0.82 },
+      telemetry_integrity: {
+        enabled: true,
+        status: "good",
+        signal_integrity: Array.from({ length: 80 }, (_, index) => ({
+          signal_id: "redacted_signal_" + index,
+          source_id: "redacted-production-upload.csv",
+          completeness: 1,
+          samples_expected: 5856,
+          samples_received: 5856,
+          notes: "Redacted integrity row ".repeat(20),
+        })),
+      },
+    },
+  });
+  const currentUpload = {
+    job_id: "redacted-production-job",
+    filename: "redacted-production-upload.csv",
+    result: productionResult,
+  };
+  const productionSnapshot = completeSnapshot({
+    current_upload: currentUpload,
+    analysis_result: productionAnalysis,
+    history: [{ job_id: "redacted-history-job", result: productionResult }],
+  });
+  return {
+    payload: {
+      latest_result: productionResult,
+      latestResult: productionResult,
+      current_result: productionResult,
+      current_upload: currentUpload,
+      snapshot: productionSnapshot,
+    },
+    productionResult,
+    productionSnapshot,
+  };
+}
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
@@ -570,6 +639,24 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     expect(screen.getByRole("heading", { name: "Discovered Systems" })).toBeTruthy();
     expect(workspaceText).toContain("Flow & Pressure");
     expect(workspaceText).toContain("Disinfection");
+  });
+
+  it("keeps the production saved-payload diagnostic record bounded", () => {
+    const { payload, productionResult, productionSnapshot } = productionOversizedPayloadShape();
+    expect(JSON.stringify(payload).length).toBeGreaterThan(100000);
+
+    renderWorkspace({
+      effectiveLatestUploadResult: productionResult,
+      effectiveLatestUploadSnapshot: productionSnapshot,
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByTestId("operational-command-center")).toBeTruthy();
+    const analysisRecord = screen.getByText("Analysis Record").closest("details");
+    expect(analysisRecord).toBeTruthy();
+    expect(analysisRecord.textContent.length).toBeLessThan(20000);
+    expect(analysisRecord.textContent).toContain("_diagnostic_truncated");
+    expect(analysisRecord.textContent).toContain("_omitted");
   });
 
   it("uses evidence source identifiers instead of Signal N fallback titles", () => {
