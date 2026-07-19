@@ -271,10 +271,19 @@ async function fetchUploadScopedTimeline({ apiFetch, accessCode, jobId = null })
   if (statusResponse.ok) {
     const statusPayload = await statusResponse.json();
     const status = String(statusPayload?.status ?? "").toUpperCase();
-    const timelineReady = Boolean(statusPayload?.replay_ready) || Number(statusPayload?.replay_frame_count ?? 0) > 0;
+    const replayFrameCount = Number(statusPayload?.replay_frame_count ?? statusPayload?.latest_replay_frames ?? 0) || 0;
+    const timelineReady = Boolean(statusPayload?.replay_ready) || replayFrameCount > 0;
     const resultAvailable = Boolean(statusPayload?.result_available);
     const terminalOrFetchable = ["COMPLETE", "FAILED", "ACTIVE"].includes(status) || timelineReady || resultAvailable;
     if (status && !terminalOrFetchable) pendingMessage = `Advanced details are still building for this upload job (${status.toLowerCase()}).`;
+    if (status === "COMPLETE" && resultAvailable && statusPayload?.replay_ready === false && replayFrameCount === 0) {
+      return {
+        jobId: targetJobId,
+        timeline: [],
+        meta: { frame_count: 0 },
+        message: "Behavior timeline details will appear when this session has enough telemetry.",
+      };
+    }
   }
   const timelineResponse = await apiFetch(`/api/data/replay/${encodeURIComponent(targetJobId)}`, { accessCode });
   if (!timelineResponse.ok) throw new Error("The behavior timeline could not be loaded. Refresh and retry.");
