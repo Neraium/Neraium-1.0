@@ -33,9 +33,14 @@ export default function ReplayWorkspace({
   const [notesBySession, setNotesBySession] = useState(() => loadJsonStorage(STORY_NOTES_STORAGE_KEY, {}));
   const [learningBySession, setLearningBySession] = useState(() => loadJsonStorage(STORY_LEARNING_STORAGE_KEY, {}));
   const sessionKeyRef = useRef(null);
+  const normalizeErrorMessageRef = useRef(normalizeErrorMessage);
   const sessionJobId = useMemo(() => resolveSessionJobId(currentSession), [currentSession]);
   const shouldRequestStory = Boolean(sessionJobId || hasActiveSession || hasCurrentUploadResult || hasResumedSession || hasRealSiiOutput);
   const reviewReady = currentSession?.hasReliableOperatorEvidence === true;
+
+  useEffect(() => {
+    normalizeErrorMessageRef.current = normalizeErrorMessage;
+  }, [normalizeErrorMessage]);
 
   useEffect(() => {
     if (typeof window !== "undefined") window.localStorage.setItem(STORY_NOTES_STORAGE_KEY, JSON.stringify(notesBySession));
@@ -76,12 +81,12 @@ export default function ReplayWorkspace({
         setMeta({});
         setCurrentFrameIndex(0);
         setEvidenceRun(null);
-        setError(buildStoryNotice(loadError, normalizeErrorMessage));
+        setError(buildStoryNotice(loadError, normalizeErrorMessageRef.current));
       }
     }
     loadStorySource();
     return () => { cancelled = true; };
-  }, [accessCode, apiFetch, normalizeErrorMessage, reviewReady, sessionJobId, shouldRequestStory]);
+  }, [accessCode, apiFetch, reviewReady, sessionJobId, shouldRequestStory]);
 
   const activeFrame = timeline[Math.min(currentFrameIndex, Math.max(0, timeline.length - 1))] ?? null;
   const storySessionKey = String(sessionJobId ?? meta.job_id ?? "active-session");
