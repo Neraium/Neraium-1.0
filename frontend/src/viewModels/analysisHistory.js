@@ -9,7 +9,7 @@ export function readAnalysisHistory() {
   if (typeof window === "undefined") return [];
   try {
     const parsed = JSON.parse(window.localStorage.getItem(ANALYSIS_HISTORY_STORAGE_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed.filter(isAnalysisRecord).slice(0, MAX_ANALYSIS_HISTORY) : [];
+    return compactAnalysisRecords(Array.isArray(parsed) ? parsed : []);
   } catch {
     return [];
   }
@@ -160,15 +160,53 @@ function compactAnalysisRecords(records) {
 function compactAnalysisRecord(record) {
   const result = compactResult(record.result);
   const snapshot = compactSnapshot(record.snapshot, result);
+  const analysis = extractAnalysis(result, snapshot);
+  const timestamp = firstDisplayText(
+    record.timestamp,
+    record.savedAt,
+    result?.completed_at,
+    result?.processed_at,
+    result?.last_processed_at,
+    snapshot?.last_processed_at,
+    snapshot?.last_upload_at,
+    new Date().toISOString(),
+  );
+  const datasetName = firstDisplayText(
+    record.datasetName,
+    record.filename,
+    result?.source_file,
+    result?.filename,
+    snapshot?.filename,
+    snapshot?.last_filename,
+    snapshot?.current_upload?.filename,
+    "Operational dataset",
+  );
+  const jobId = firstDisplayText(
+    record.jobId,
+    record.job_id,
+    result?.job_id,
+    result?.upload_id,
+    result?.run_id,
+    snapshot?.current_upload?.job_id,
+    snapshot?.job_id,
+    analysis?.analysis_id,
+    timestamp,
+  );
   return {
-    id: record.id,
-    jobId: record.jobId,
-    datasetName: record.datasetName,
-    timestamp: record.timestamp,
-    fingerprintStatus: record.fingerprintStatus,
-    systemsCount: record.systemsCount,
-    insightsCount: record.insightsCount,
-    savedAt: record.savedAt,
+    id: firstDisplayText(record.id, stableRecordId(jobId, datasetName, timestamp)),
+    jobId,
+    datasetName,
+    timestamp,
+    fingerprintStatus: formatStatus(firstDisplayText(
+      record.fingerprintStatus,
+      record.fingerprint_status,
+      analysis?.fingerprint?.drift_status,
+      analysis?.fingerprint?.status,
+      "Active",
+    )),
+    systemsCount: firstCount(record.systemsCount, analysis?.systems?.length, 0),
+    insightsCount: firstCount(record.insightsCount, analysis?.insights?.length, 0),
+    savedAt: firstDisplayText(record.savedAt, timestamp),
     result,
     snapshot,
   };
@@ -335,4 +373,61 @@ function firstText(...values) {
     if (text) return text;
   }
   return "";
+}
+
+function firstDisplayText(...values) {
+  for (const value of values) {
+    const text = displayText(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function displayText(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value).trim();
+  }
+  if (Array.isArray(value)) {
+    return value.map(displayText).filter(Boolean).join(", ");
+  }
+  if (typeof value === "object") {
+    return firstDisplayText(
+      value.filename,
+      value.last_filename,
+      value.source_file,
+      value.source,
+      value.name,
+      value.label,
+      value.title,
+      value.status,
+      value.processing_state,
+      value.processed_at,
+      value.last_processed_at,
+      value.timestamp,
+      value.value,
+    );
+  }
+  return String(value ?? "").trim();
+}
+
+function firstCount(...values) {
+  for (const value of values) {
+    const count = countValue(value);
+    if (count !== null) return count;
+  }
+  return 0;
+}
+
+function countValue(value) {
+  const direct = Number(value);
+  if (Number.isFinite(direct)) return Math.max(0, Math.round(direct));
+  if (Array.isArray(value)) return value.length;
+  if (value && typeof value === "object") {
+    for (const candidate of [value.count, value.value, value.length, value.total]) {
+      const nested = Number(candidate);
+      if (Number.isFinite(nested)) return Math.max(0, Math.round(nested));
+    }
+  }
+  return null;
 }
