@@ -87,14 +87,15 @@ function OperationalFingerprintSummary({ model, status, queue, topInsight, helpe
   );
 }
 
-function SubsystemBehavior({ systems }) {
+function SubsystemBehavior({ systems = [] }) {
+  const safeSystems = Array.isArray(systems) ? systems.filter(Boolean) : [];
   return (
     <section className="command-section subsystem-behavior" aria-labelledby="subsystem-behavior-heading">
       <div className="command-section__header"><h2 id="subsystem-behavior-heading">Subsystem Behavior</h2><p>Current state by area, based on analyzed relationships.</p></div>
-      {systems.length ? <div className="subsystem-behavior__list" role="list">{systems.map((system) => (
-        <div className="subsystem-behavior__row" role="listitem" key={system.id}>
-          <span className={`subsystem-behavior__indicator subsystem-behavior__indicator--${system.status.toLowerCase().replace(/\s+/g, "-")}`} aria-hidden="true" />
-          <strong>{system.name}</strong><span className="subsystem-behavior__state">{system.status}</span>
+      {safeSystems.length ? <div className="subsystem-behavior__list" role="list">{safeSystems.map((system, index) => (
+        <div className="subsystem-behavior__row" role="listitem" key={system.id || system.name || `subsystem-${index}`}>
+          <span className={`subsystem-behavior__indicator subsystem-behavior__indicator--${String(system.status || "Stable").toLowerCase().replace(/\s+/g, "-")}`} aria-hidden="true" />
+          <strong>{system.name || "Unnamed subsystem"}</strong><span className="subsystem-behavior__state">{system.status || "Stable"}</span>
           {Number(system.activeInsights) > 0 ? <small>{system.activeInsights} active finding{String(system.activeInsights) === "1" ? "" : "s"}</small> : null}
         </div>
       ))}</div> : <p className="operational-findings-empty">Subsystem behavior will appear after a completed telemetry analysis.</p>}
@@ -152,7 +153,10 @@ export default function CommandCenterView({ model, helpers, selectedInsight, onS
   const top = queue[0] ?? null;
   const active = selectedInsight && queue.some((item) => item.id === selectedInsight.id) ? selectedInsight : top;
   const status = useMemo(() => operationalStatus(model, queue), [model, queue]);
-  const systems = model.analysisComplete ? model.dashboardSystemCards : [];
+  const systems =
+    model.analysisComplete && Array.isArray(model.dashboardSystemCards)
+      ? model.dashboardSystemCards.filter(Boolean)
+      : [];
   const remaining = top ? queue.filter((item) => item.id !== top.id) : [];
   return <div className="operational-command-center" data-testid="operational-command-center">
     <OperationalFingerprintSummary model={model} status={status} queue={queue} topInsight={top} helpers={helpers} onConnectLiveData={onConnectLiveData} />
