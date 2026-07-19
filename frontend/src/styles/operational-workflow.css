@@ -3853,6 +3853,41 @@ button.insight-card {
   overflow-wrap: anywhere;
 }
 
+.analysis-record-preview {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.analysis-record-preview__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.analysis-record-preview__header p {
+  margin: 0;
+}
+
+.advanced-json {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--ops-line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  margin: 0;
+  padding: 12px;
+}
+
+.advanced-json code {
+  color: var(--ops-ink-soft);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .operational-orb--minimal {
   width: min(26vw, 176px);
   min-width: 132px;

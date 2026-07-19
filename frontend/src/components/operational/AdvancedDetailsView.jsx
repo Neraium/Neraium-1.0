@@ -1,3 +1,5 @@
+import AnalysisRecordDetails from "./AnalysisRecordDetails";
+
 export default function AdvancedDetailsView({ model, helpers, selectedInsightId, onAnalyzeSystem, onResumePreviousSession, onReopenHistoricalAnalysis, onDeleteHistoricalAnalysis }) {
   const { DetailGrid, EvidencePanel, PanelHeader, QualityList, StatusBadge, Timeline, formatConfidenceDisplay, prioritizeEvidenceGroups, severityToTone } = helpers;
   const groups = prioritizeEvidenceGroups(model.evidenceGroups, selectedInsightId);
@@ -49,10 +51,7 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
             </div>
           </details>
         ) : null}
-        <details className="advanced-details-panel">
-          <summary>Analysis Result JSON</summary>
-          <pre className="advanced-json"><code>{model.rawResultJson}</code></pre>
-        </details>
+        <AnalysisRecordDetails className="advanced-details-panel" summary="Analysis Result JSON" payload={model.rawAnalysisPayload} fileName={model.rawAnalysisFilename} />
       </section>
 
       <section className="operational-panel" aria-label="Telemetry source details">

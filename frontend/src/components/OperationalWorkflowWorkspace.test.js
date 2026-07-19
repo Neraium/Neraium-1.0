@@ -116,6 +116,75 @@ function analysisWithRelationshipEvidence() {
   };
 }
 
+// Redacted from the production latest-upload shape: duplicated result aliases plus large diagnostic collections.
+function productionOversizedPayloadShape() {
+  const relationshipGraph = {
+    nodes: [
+      { id: "chw_flow_gpm", label: "Chilled water flow" },
+      { id: "chiller_power_kW", label: "Chiller power" },
+    ],
+    edges: Array.from({ length: 180 }, (_, index) => ({
+      id: "redacted-edge-" + index,
+      source: "chw_flow_gpm",
+      target: "chiller_power_kW",
+      description: "Redacted production relationship evidence ".repeat(30),
+      statistics: { baseline_strength: 0.77, current_strength: 0.06, correlation_delta: 0.83 },
+    })),
+  };
+  const productionAnalysis = {
+    ...analysisWithRelationshipEvidence(),
+    relationship_graph: relationshipGraph,
+  };
+  const productionResult = completeResult({
+    analysis_result: productionAnalysis,
+    analysis_explanation: productionAnalysis,
+    analysis: productionAnalysis,
+    baseline_analysis: {
+      status: "available",
+      relationship_graph: relationshipGraph,
+      relationship_drift: productionAnalysis.relationships,
+    },
+    relationship_model: { relationship_graph: relationshipGraph },
+    sii_intelligence: {
+      facility_state: "needs review",
+      baseline: { state: "changed", confidence: 0.82 },
+      telemetry_integrity: {
+        enabled: true,
+        status: "good",
+        signal_integrity: Array.from({ length: 80 }, (_, index) => ({
+          signal_id: "redacted_signal_" + index,
+          source_id: "redacted-production-upload.csv",
+          completeness: 1,
+          samples_expected: 5856,
+          samples_received: 5856,
+          notes: "Redacted integrity row ".repeat(20),
+        })),
+      },
+    },
+  });
+  const currentUpload = {
+    job_id: "redacted-production-job",
+    filename: "redacted-production-upload.csv",
+    result: productionResult,
+  };
+  const productionSnapshot = completeSnapshot({
+    current_upload: currentUpload,
+    analysis_result: productionAnalysis,
+    history: [{ job_id: "redacted-history-job", result: productionResult }],
+  });
+  return {
+    payload: {
+      latest_result: productionResult,
+      latestResult: productionResult,
+      current_result: productionResult,
+      current_upload: currentUpload,
+      snapshot: productionSnapshot,
+    },
+    productionResult,
+    productionSnapshot,
+  };
+}
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
@@ -570,6 +639,103 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     expect(screen.getByRole("heading", { name: "Discovered Systems" })).toBeTruthy();
     expect(workspaceText).toContain("Flow & Pressure");
     expect(workspaceText).toContain("Disinfection");
+  });
+
+  it("keeps the production saved-payload analysis record lazy and bounded", async () => {
+    const { payload, productionResult, productionSnapshot } = productionOversizedPayloadShape();
+    expect(JSON.stringify(payload).length).toBeGreaterThan(100000);
+
+    renderWorkspace({
+      liveOps: { session: { payload: { snapshot: payload } } },
+      effectiveLatestUploadResult: productionResult,
+      effectiveLatestUploadSnapshot: productionSnapshot,
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByTestId("operational-command-center")).toBeTruthy();
+    const analysisRecord = screen.getByText("Analysis Record").closest("details");
+    expect(analysisRecord).toBeTruthy();
+    expect(analysisRecord.open).toBe(false);
+    expect(analysisRecord.querySelector("pre")).toBeNull();
+    expect(analysisRecord.textContent).toBe("Analysis Record");
+    expect(document.querySelector("details:not([open]) pre.advanced-json")).toBeNull();
+    expect(document.body.textContent).not.toContain("Redacted production relationship evidence Redacted production relationship evidence");
+
+    analysisRecord.open = true;
+    fireEvent(analysisRecord, new Event("toggle", { bubbles: true }));
+
+    const preview = await screen.findByTestId("analysis-record-preview");
+    expect(preview.textContent.length).toBeLessThanOrEqual(5000);
+    expect(preview.textContent).toContain("truncated_preview");
+    expect(preview.textContent).toContain("_omitted");
+    expect(screen.getByText(/Truncated preview/)).toBeTruthy();
+    expect(document.querySelectorAll("details:not([open]) pre.advanced-json").length).toBe(0);
+    expect(Array.from(document.querySelectorAll("pre.advanced-json")).every((node) => node.textContent.length <= 5000)).toBe(true);
+  });
+
+  it("downloads the full production-shaped analysis JSON only after user action", async () => {
+    const { payload, productionResult, productionSnapshot } = productionOversizedPayloadShape();
+    const payloadWithResponseDiagnostics = {
+      ...payload,
+      response_status: 200,
+      failure_url: "/api/data/latest-upload?include_persisted=1",
+      failure_phase: "result",
+      raw_response_body: JSON.stringify(payload).slice(0, 4000),
+      response_content_type: "application/json",
+      non_json_response: false,
+      html_response: false,
+    };
+    const createObjectURL = vi.fn(() => "blob:analysis-record");
+    const revokeObjectURL = vi.fn();
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
+
+    renderWorkspace({
+      liveOps: { session: { payload: { snapshot: payloadWithResponseDiagnostics } } },
+      effectiveLatestUploadResult: productionResult,
+      effectiveLatestUploadSnapshot: productionSnapshot,
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    const analysisRecord = screen.getByText("Analysis Record").closest("details");
+    analysisRecord.open = true;
+    fireEvent(analysisRecord, new Event("toggle", { bubbles: true }));
+    fireEvent.click(await screen.findByRole("button", { name: "Download full JSON" }));
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    const blob = createObjectURL.mock.calls[0][0];
+    const downloaded = await blob.text();
+    expect(downloaded.length).toBeGreaterThan(100000);
+    expect(downloaded).toBe(JSON.stringify(payload, null, 2));
+    expect(downloaded).toContain("Redacted production relationship evidence Redacted production relationship evidence");
+    const exported = JSON.parse(downloaded);
+    expect(exported.response_status).toBeUndefined();
+    expect(exported.raw_response_body).toBeUndefined();
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:analysis-record");
+    anchorClick.mockRestore();
+  });
+
+  it("renders the Command Center on a mobile viewport with a closed oversized analysis record", () => {
+    const { payload, productionResult, productionSnapshot } = productionOversizedPayloadShape();
+    window.innerWidth = 390;
+    window.innerHeight = 844;
+
+    renderWorkspace({
+      liveOps: { session: { payload: { snapshot: payload } } },
+      effectiveLatestUploadResult: productionResult,
+      effectiveLatestUploadSnapshot: productionSnapshot,
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByTestId("operational-command-center")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operational Fingerprint Summary" })).toBeTruthy();
+    const analysisRecord = screen.getByText("Analysis Record").closest("details");
+    expect(analysisRecord.open).toBe(false);
+    expect(analysisRecord.querySelector("pre")).toBeNull();
+    expect(document.body.textContent.length).toBeLessThan(50000);
   });
 
   it("uses evidence source identifiers instead of Signal N fallback titles", () => {

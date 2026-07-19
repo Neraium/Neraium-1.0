@@ -677,7 +677,8 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     relationshipChangeRows,
     dataSourceRows,
     behaviorWindowRows: buildBehaviorWindowRows(analysisExplanation),
-    rawResultJson: compactJson({ result, snapshot, analysisExplanation }),
+    rawAnalysisPayload: resolveRawAnalysisPayload({ liveOps, result, snapshot, analysisExplanation }),
+    rawAnalysisFilename: buildAnalysisRecordFilename({ result, snapshot }),
     analysisMetadataRows: buildAnalysisMetadataRows({ result, snapshot, analysisExplanation }),
     systemCards,
     systemsSectionTitle: systemSummary.sectionTitle,
@@ -2516,6 +2517,50 @@ function compactJson(value) {
   } catch {
     return "";
   }
+}
+
+function resolveRawAnalysisPayload({ liveOps, result, snapshot, analysisExplanation }) {
+  const sessionPayload = liveOps?.session?.payload ?? null;
+  const sessionSnapshot = sessionPayload?.snapshot ?? null;
+  if (isLatestUploadPayload(sessionSnapshot)) return stripFrontendResponseDiagnostics(sessionSnapshot);
+  if (isLatestUploadPayload(snapshot)) return stripFrontendResponseDiagnostics(snapshot);
+  if (isLatestUploadPayload(sessionPayload)) return stripFrontendResponseDiagnostics(sessionPayload);
+  return { result, snapshot, analysisExplanation };
+}
+
+function isLatestUploadPayload(value) {
+  if (!value || typeof value !== "object") return false;
+  return Boolean(value.latest_result || value.latestResult || value.current_result || value.current_upload || value.snapshot);
+}
+
+function stripFrontendResponseDiagnostics(payload) {
+  const output = { ...payload };
+  delete output.response_status;
+  delete output.failure_url;
+  delete output.failure_phase;
+  delete output.raw_response_body;
+  delete output.response_content_type;
+  delete output.non_json_response;
+  delete output.html_response;
+  return output;
+}
+
+function buildAnalysisRecordFilename({ result, snapshot }) {
+  const jobId = firstText(
+    snapshot?.current_upload?.job_id,
+    snapshot?.job_id,
+    result?.job_id,
+    result?.run_id,
+    "analysis-record",
+  );
+  return "neraium-analysis-record-" + sanitizeFilenameToken(jobId) + ".json";
+}
+
+function sanitizeFilenameToken(value) {
+  let sanitized = String(value ?? "analysis-record").trim().replace(/[^a-z0-9_-]+/gi, "-").slice(0, 80);
+  while (sanitized.startsWith("-")) sanitized = sanitized.slice(1);
+  while (sanitized.endsWith("-")) sanitized = sanitized.slice(0, -1);
+  return sanitized || "analysis-record";
 }
 
 function hasDisplayValue(value) {
