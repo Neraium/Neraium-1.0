@@ -641,11 +641,12 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     expect(workspaceText).toContain("Disinfection");
   });
 
-  it("keeps the production saved-payload diagnostic record bounded", () => {
+  it("keeps the production saved-payload analysis record lazy and bounded", async () => {
     const { payload, productionResult, productionSnapshot } = productionOversizedPayloadShape();
     expect(JSON.stringify(payload).length).toBeGreaterThan(100000);
 
     renderWorkspace({
+      liveOps: { session: { payload: { snapshot: payload } } },
       effectiveLatestUploadResult: productionResult,
       effectiveLatestUploadSnapshot: productionSnapshot,
       currentSession: { hasReliableOperatorEvidence: true },
@@ -654,9 +655,73 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     expect(screen.getByTestId("operational-command-center")).toBeTruthy();
     const analysisRecord = screen.getByText("Analysis Record").closest("details");
     expect(analysisRecord).toBeTruthy();
-    expect(analysisRecord.textContent.length).toBeLessThan(20000);
-    expect(analysisRecord.textContent).toContain("_diagnostic_truncated");
-    expect(analysisRecord.textContent).toContain("_omitted");
+    expect(analysisRecord.open).toBe(false);
+    expect(analysisRecord.querySelector("pre")).toBeNull();
+    expect(analysisRecord.textContent).toBe("Analysis Record");
+    expect(document.querySelector("details:not([open]) pre.advanced-json")).toBeNull();
+    expect(document.body.textContent).not.toContain("Redacted production relationship evidence Redacted production relationship evidence");
+
+    analysisRecord.open = true;
+    fireEvent(analysisRecord, new Event("toggle", { bubbles: true }));
+
+    const preview = await screen.findByTestId("analysis-record-preview");
+    expect(preview.textContent.length).toBeLessThanOrEqual(5000);
+    expect(preview.textContent).toContain("truncated_preview");
+    expect(preview.textContent).toContain("_omitted");
+    expect(screen.getByText(/Truncated preview/)).toBeTruthy();
+    expect(document.querySelectorAll("details:not([open]) pre.advanced-json").length).toBe(0);
+    expect(Array.from(document.querySelectorAll("pre.advanced-json")).every((node) => node.textContent.length <= 5000)).toBe(true);
+  });
+
+  it("downloads the full production-shaped analysis JSON only after user action", async () => {
+    const { payload, productionResult, productionSnapshot } = productionOversizedPayloadShape();
+    const createObjectURL = vi.fn(() => "blob:analysis-record");
+    const revokeObjectURL = vi.fn();
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
+
+    renderWorkspace({
+      liveOps: { session: { payload: { snapshot: payload } } },
+      effectiveLatestUploadResult: productionResult,
+      effectiveLatestUploadSnapshot: productionSnapshot,
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    const analysisRecord = screen.getByText("Analysis Record").closest("details");
+    analysisRecord.open = true;
+    fireEvent(analysisRecord, new Event("toggle", { bubbles: true }));
+    fireEvent.click(await screen.findByRole("button", { name: "Download full JSON" }));
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    const blob = createObjectURL.mock.calls[0][0];
+    const downloaded = await blob.text();
+    expect(downloaded.length).toBeGreaterThan(100000);
+    expect(downloaded).toContain("Redacted production relationship evidence Redacted production relationship evidence");
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:analysis-record");
+    anchorClick.mockRestore();
+  });
+
+  it("renders the Command Center on a mobile viewport with a closed oversized analysis record", () => {
+    const { payload, productionResult, productionSnapshot } = productionOversizedPayloadShape();
+    window.innerWidth = 390;
+    window.innerHeight = 844;
+
+    renderWorkspace({
+      liveOps: { session: { payload: { snapshot: payload } } },
+      effectiveLatestUploadResult: productionResult,
+      effectiveLatestUploadSnapshot: productionSnapshot,
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByTestId("operational-command-center")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operational Fingerprint Summary" })).toBeTruthy();
+    const analysisRecord = screen.getByText("Analysis Record").closest("details");
+    expect(analysisRecord.open).toBe(false);
+    expect(analysisRecord.querySelector("pre")).toBeNull();
+    expect(document.body.textContent.length).toBeLessThan(50000);
   });
 
   it("uses evidence source identifiers instead of Signal N fallback titles", () => {
