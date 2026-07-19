@@ -666,7 +666,6 @@ def _ensure_bootstrap_user(backend: _BaseAuthBackend, *, email: str, password: s
         if not str(existing.get("name") or "").strip() and name:
             payload["name"] = name
             changed = True
-            operational_changed = True
         if not bool(existing.get("bootstrap_managed")):
             payload["bootstrap_managed"] = True
             changed = True
@@ -729,20 +728,16 @@ def _ensure_bootstrap_admin(backend: _BaseAuthBackend) -> None:
 
         payload = dict(existing)
         changed = False
-        operational_changed = False
         if normalize_role(existing.get("role"), "operator") != "admin":
             payload["role"] = "admin"
             changed = True
-            operational_changed = True
         if not bool(existing.get("is_active", True)):
             payload["is_active"] = True
             payload["deactivated_at"] = None
             changed = True
-            operational_changed = True
         if not str(existing.get("name") or "").strip() and name:
             payload["name"] = name
             changed = True
-            operational_changed = True
         if not bool(existing.get("bootstrap_managed")):
             payload["bootstrap_managed"] = True
             changed = True
@@ -757,11 +752,10 @@ def _ensure_bootstrap_admin(backend: _BaseAuthBackend) -> None:
             payload["salt"] = salt
             payload["password_hash"] = _hash_password(password, salt)
             changed = True
-            operational_changed = True
 
         if changed:
             backend.upsert_user(payload)
-            _log_bootstrap_event("bootstrap_admin_updated" if operational_changed else "bootstrap_admin_already_exists", normalized_email)
+            _log_bootstrap_event("bootstrap_admin_updated", normalized_email)
         else:
             _log_bootstrap_event("bootstrap_admin_already_exists", normalized_email)
     except Exception:

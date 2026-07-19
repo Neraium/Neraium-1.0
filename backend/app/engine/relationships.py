@@ -102,10 +102,10 @@ def evaluate_relationships(
             signals.append({
                 "type": "relationship_graph_deformation",
                 "level": "review" if graph_summary["deformation_score"] < 0.75 else "elevated",
-                "message": "Multiple signal relationships are deforming together at the operational system level.",
+                "message": "Multiple signal relationships are deforming together at subsystem level.",
                 "subsystems": graph_summary["dominant_subsystems"],
             })
-            recommended_checks.append("Review the dominant operational relationship cluster before treating this as an isolated sensor issue.")
+            recommended_checks.append("Review the dominant subsystem relationship cluster before treating this as an isolated sensor issue.")
     else:
         audit_trace.append("relationships.skipped:no_comparable_pairs")
         audit_trace.append("relationship_checks_skipped:no_comparable_pairs")

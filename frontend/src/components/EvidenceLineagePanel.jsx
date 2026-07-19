@@ -43,7 +43,7 @@ export default function EvidenceLineagePanel({ frame, lineage = null }) {
       <p className="evidence-lineage-panel__title">{sanitizeOperatorText(first.target ?? "Evidence Target")}</p>
       <ul className="system-body-timeline-list">
         {renderLineageItem("Contributing relationships", sources.supporting_signals ?? [])}
-        {renderLineageItem("System corroboration", sources.subsystem_corroboration ?? [])}
+        {renderLineageItem("Subsystem corroboration", sources.subsystem_corroboration ?? [])}
         {renderLineageItem("Historical comparison evidence", sources.topology_evidence ?? [])}
         {renderLineageItem("Persistence", sources.persistence_evidence ?? [])}
         {renderLineageItem("Change support", sources.propagation_evidence ?? [])}

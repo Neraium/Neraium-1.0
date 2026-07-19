@@ -6,7 +6,7 @@ from typing import Any
 
 
 CUMULATIVE_COUNTER_PATTERN = re.compile(
-    r"(^|[_\s-])(cum|cumulative|totalizer|totalized|total|counter|meter|odometer|accum|accumulated|usage|consumption)([_\s-]|$)"
+    r"(^|[_\s-])(cumulative|totalizer|totalized|total|counter|meter|odometer|accum|accumulated|usage|consumption)([_\s-]|$)"
 )
 
 

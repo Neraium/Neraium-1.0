@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { loginUser } from "../services/api/authApi";
-import { PRODUCT_NAME } from "../content/productLanguage";
+import { PRODUCT_DESCRIPTOR, PRODUCT_NAME } from "../content/productLanguage";
 
 const LAST_EMAIL_KEY = "neraium.auth.last_email";
 

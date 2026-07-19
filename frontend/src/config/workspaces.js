@@ -39,20 +39,20 @@ export const WORKSPACES = [
 
 export const FALLBACK_SYSTEMS = [
   {
-    name: "Operational Systems",
-    scope: "Equipment groups, control subsystems, operating processes, and load response.",
+    name: "Central Plant and Airside Systems",
+    scope: "Thermal production, airside delivery, equipment staging, and load response.",
   },
   {
-    name: "Guest Infrastructure",
-    scope: "Guest-facing systems, service availability, comfort, safety, and operating response.",
+    name: "Aquatic Amenities and Water Features",
+    scope: "Circulation, heat load, treatment response, and guest-facing water systems.",
   },
   {
-    name: "Utility Systems",
-    scope: "Water, gas, electrical, thermal, fuel, and other utility distribution behavior.",
+    name: "Process Water and Pumping",
+    scope: "Flow, pressure, treatment performance, pump energy, and process response.",
   },
   {
-    name: "Mechanical Systems",
-    scope: "Mechanical equipment groups, runtime behavior, staging, and service response.",
+    name: "Heat Rejection Systems",
+    scope: "Thermal rejection behavior, approach temperature, staging, and load response.",
   },
   {
     name: "Building Control Systems",
@@ -63,8 +63,8 @@ export const FALLBACK_SYSTEMS = [
     scope: "Electrical load behavior, demand response, meter relationships, and generation assets.",
   },
   {
-    name: "Environmental Systems",
-    scope: "Water, air, waste, treatment, compliance, and environmental operating behavior.",
+    name: "Utility Distribution",
+    scope: "Water, gas, electrical, and thermal utility distribution behavior across the facility.",
   },
 ];
 

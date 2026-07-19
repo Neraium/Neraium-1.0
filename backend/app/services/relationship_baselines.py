@@ -54,63 +54,6 @@ def _pearson_corr(left: list[float], right: list[float]) -> float | None:
     return sum(a * b for a, b in zip(centered_left, centered_right)) / denom
 
 
-def _series_stats(values: pd.Series) -> dict[str, float | int | bool]:
-    numeric = pd.to_numeric(values, errors="coerce").dropna()
-    count = int(numeric.count())
-    if count <= 0:
-        return {"count": 0, "span": 0.0, "std": 0.0, "flat": False}
-    span = float(numeric.max() - numeric.min())
-    std = float(numeric.std(ddof=0)) if count > 1 else 0.0
-    flat = count >= 3 and span <= max(1e-9, abs(float(numeric.mean())) * 0.002)
-    return {"count": count, "span": span, "std": std, "flat": flat}
-
-
-def _flat_response_decoupling_edge(
-    *,
-    left_col: str,
-    right_col: str,
-    baseline_frame: pd.DataFrame,
-    recent_frame: pd.DataFrame,
-) -> dict[str, Any] | None:
-    text = f"{left_col} {right_col}".lower()
-    chemistry_pair = (
-        "orp" in text
-        and any(token in text for token in ("chlor", "free_chlorine", "sanitizer", "disinfect"))
-    )
-    if not chemistry_pair:
-        return None
-
-    baseline_left = _series_stats(baseline_frame[left_col])
-    baseline_right = _series_stats(baseline_frame[right_col])
-    recent_left = _series_stats(recent_frame[left_col])
-    recent_right = _series_stats(recent_frame[right_col])
-    if min(int(baseline_left["count"]), int(baseline_right["count"]), int(recent_left["count"]), int(recent_right["count"])) < 6:
-        return None
-
-    left_flat = bool(recent_left["flat"])
-    right_flat = bool(recent_right["flat"])
-    if left_flat == right_flat:
-        return None
-
-    moving_recent = recent_right if left_flat else recent_left
-    moving_baseline = baseline_right if left_flat else baseline_left
-    movement = float(moving_recent["span"])
-    movement_floor = max(5.0, float(moving_baseline["std"]) * 2.0, float(moving_baseline["span"]) * 0.35)
-    if movement < movement_floor:
-        return None
-
-    severity = min(1.0, movement / max(movement_floor, 1e-9))
-    return {
-        "baseline_strength": 1.0,
-        "current_strength": 0.0,
-        "correlation_delta": round(max(0.75, severity), 6),
-        "signed_correlation_delta": round(-max(0.75, severity), 6),
-        "change_type": "disrupted",
-        "direction": "flat_setpoint_response_break",
-        "relationship_subtype": "flat_setpoint_response_decoupling",
-    }
-
-
 def _select_numeric_columns_for_relationships(
     numeric_columns: list[str],
     *,
@@ -129,13 +72,6 @@ def _select_numeric_columns_for_relationships(
         return numeric_columns, False
     return numeric_columns[:max_relationship_columns], True
 
-
-
-def _relationship_keep_constant_column(column: str, classification: dict[str, Any]) -> bool:
-    if classification.get("category") != "constant":
-        return False
-    text = str(column or "").lower()
-    return any(token in text for token in ("orp", "chlor", "free_chlorine", "sanitizer", "disinfect"))
 
 
 def _source_row_anchor(row: dict[str, Any] | None, window: str) -> dict[str, Any]:
@@ -262,8 +198,6 @@ def _system_label_for_columns(left_col: str, right_col: str) -> str:
 def _relationship_summary(left_col: str, right_col: str, edge: dict[str, Any]) -> str:
     change_type = str(edge.get("change_type") or "changed").replace("_", " ")
     pair = f"{left_col} and {right_col}"
-    if edge.get("relationship_subtype") == "flat_setpoint_response_decoupling":
-        return f"{pair} decoupled: one signal held flat while the other moved materially during the current window."
     if change_type == "missing":
         return f"The historical relationship between {pair} no longer follows its established operating pattern."
     if change_type == "weakened":
@@ -420,11 +354,11 @@ def _relationship_importance_rationale(
     if classification["context_driver_involved"]:
         return (
             f"This relationship is useful because {label} {change_type} while equipment/process telemetry is involved. "
-            "Context/load movement may explain part of the change, so Neraium treats it as supporting system evidence."
+            "Context/load movement may explain part of the change, so Neraium treats it as supporting subsystem evidence."
         )
     return (
         f"This relationship is important because {label} {change_type} while equipment/process signals changed together, "
-        "which can indicate system behavior changing before a single sensor explains it."
+        "which can indicate subsystem behavior changing before a single sensor explains it."
     )
 
 
@@ -502,10 +436,7 @@ def build_relationship_baseline(
     relationship_numeric_columns = []
     for column in numeric_columns:
         classification = signal_classification(column, signal_catalog)
-        if (
-            column in cumulative_counter_columns
-            or ((classification.get("category") in NON_OPERATOR_RELATIONSHIP_CATEGORIES or classification.get("is_ignored")) and not _relationship_keep_constant_column(column, classification))
-        ):
+        if column in cumulative_counter_columns or classification.get("category") in NON_OPERATOR_RELATIONSHIP_CATEGORIES or classification.get("is_ignored"):
             excluded_structural_columns.append(
                 {
                     "column": column,
@@ -599,34 +530,18 @@ def build_relationship_baseline(
         for right_col in selected_numeric_columns[idx + 1 :]:
             baseline_corr = baseline_corr_matrix.at[left_col, right_col] if left_col in baseline_corr_matrix.index and right_col in baseline_corr_matrix.columns else None
             recent_corr = recent_corr_matrix.at[left_col, right_col] if left_col in recent_corr_matrix.index and right_col in recent_corr_matrix.columns else None
+            if baseline_corr is None or recent_corr is None or pd.isna(baseline_corr) or pd.isna(recent_corr):
+                continue
+
             baseline_sample_size = int(baseline_counts.at[left_col, right_col]) if left_col in baseline_counts.index and right_col in baseline_counts.columns else 0
             recent_sample_size = int(recent_counts.at[left_col, right_col]) if left_col in recent_counts.index and right_col in recent_counts.columns else 0
             if baseline_sample_size < 3 or recent_sample_size < 3:
                 continue
 
-            flat_decoupling = None
-            if baseline_corr is None or recent_corr is None or pd.isna(baseline_corr) or pd.isna(recent_corr):
-                flat_decoupling = _flat_response_decoupling_edge(
-                    left_col=left_col,
-                    right_col=right_col,
-                    baseline_frame=baseline_frame,
-                    recent_frame=recent_frame,
-                )
-                if flat_decoupling is None:
-                    continue
-                baseline_corr_value = float(flat_decoupling["baseline_strength"])
-                recent_corr_value = float(flat_decoupling["current_strength"])
-                baseline_strength = float(flat_decoupling["baseline_strength"])
-                current_strength = float(flat_decoupling["current_strength"])
-                drift = float(flat_decoupling["correlation_delta"])
-                change_type = str(flat_decoupling["change_type"])
-            else:
-                baseline_corr_value = float(baseline_corr)
-                recent_corr_value = float(recent_corr)
-                baseline_strength = abs(baseline_corr_value)
-                current_strength = abs(recent_corr_value)
-                drift = abs(recent_corr_value - baseline_corr_value)
-                change_type = _relationship_change_type(baseline_corr_value, recent_corr_value)
+            baseline_strength = abs(float(baseline_corr))
+            current_strength = abs(float(recent_corr))
+            drift = abs(float(recent_corr) - float(baseline_corr))
+            change_type = _relationship_change_type(float(baseline_corr), float(recent_corr))
             confidence_score = _confidence_score(baseline_sample_size, recent_sample_size, drift)
             time_window = _source_time_window(source_rows)
             edge = _compact(
@@ -639,14 +554,13 @@ def build_relationship_baseline(
                     "strength": round(float(current_strength), 6),
                     "baseline_strength": round(float(baseline_strength), 6),
                     "current_strength": round(float(current_strength), 6),
-                    "direction": str(flat_decoupling.get("direction")) if flat_decoupling else _relationship_direction(baseline_corr_value, recent_corr_value),
-                    "relationship_subtype": flat_decoupling.get("relationship_subtype") if flat_decoupling else None,
+                    "direction": _relationship_direction(float(baseline_corr), float(recent_corr)),
                     "confidence": confidence_score,
                     "confidence_level": _confidence_level(confidence_score),
-                    "baseline_correlation": round(float(baseline_corr_value), 6),
-                    "recent_correlation": round(float(recent_corr_value), 6),
+                    "baseline_correlation": round(float(baseline_corr), 6),
+                    "recent_correlation": round(float(recent_corr), 6),
                     "correlation_delta": round(float(drift), 6),
-                    "signed_correlation_delta": round(float(flat_decoupling["signed_correlation_delta"]), 6) if flat_decoupling else round(float(recent_corr_value) - float(baseline_corr_value), 6),
+                    "signed_correlation_delta": round(float(recent_corr) - float(baseline_corr), 6),
                     "change_percentage": _change_percentage(baseline_strength, current_strength),
                     "supporting_metric_pairs": [
                         {
@@ -654,8 +568,8 @@ def build_relationship_baseline(
                             "right": right_col,
                             "left_display_name": signal_display_name(left_col, signal_catalog),
                             "right_display_name": signal_display_name(right_col, signal_catalog),
-                            "baseline_correlation": round(float(baseline_corr_value), 6),
-                            "recent_correlation": round(float(recent_corr_value), 6),
+                            "baseline_correlation": round(float(baseline_corr), 6),
+                            "recent_correlation": round(float(recent_corr), 6),
                             "baseline_sample_size": baseline_sample_size,
                             "recent_sample_size": recent_sample_size,
                         }
@@ -667,10 +581,6 @@ def build_relationship_baseline(
             display_columns = [signal_display_name(left_col, signal_catalog), signal_display_name(right_col, signal_catalog)]
             importance = score_relationship_importance([left_col, right_col], edge, baseline_drift_by_column, signal_catalog)
             edge.update(importance)
-            if edge.get("relationship_subtype") == "flat_setpoint_response_decoupling":
-                relationship_context = edge.get("relationship_context") if isinstance(edge.get("relationship_context"), dict) else {}
-                relationship_context.update({"operator_primary_eligible": True, "context_only": False, "equipment_process_involved": True})
-                edge["relationship_context"] = relationship_context
             edge["display_columns"] = display_columns
             edge["source_column_metadata"] = [signal_metadata(left_col, signal_catalog), signal_metadata(right_col, signal_catalog)]
             graph_edges.append(edge)
@@ -691,13 +601,12 @@ def build_relationship_baseline(
                     "display_relationship": f"{display_columns[0]} <-> {display_columns[1]}",
                     "display_columns": display_columns,
                     "source_column_metadata": edge.get("source_column_metadata"),
-                    "baseline_correlation": round(float(baseline_corr_value), 6),
-                    "recent_correlation": round(float(recent_corr_value), 6),
+                    "baseline_correlation": round(float(baseline_corr), 6),
+                    "recent_correlation": round(float(recent_corr), 6),
                     "correlation_delta": round(float(drift), 6),
-                    "signed_correlation_delta": round(float(flat_decoupling["signed_correlation_delta"]), 6) if flat_decoupling else round(float(recent_corr_value) - float(baseline_corr_value), 6),
+                    "signed_correlation_delta": round(float(recent_corr) - float(baseline_corr), 6),
                     "coupling_strength": round(float(baseline_strength), 6),
                     "relationship_type": "linear_correlation",
-                    "relationship_subtype": edge.get("relationship_subtype"),
                     "change_type": change_type,
                     "strength": round(float(current_strength), 6),
                     "baseline_strength": round(float(baseline_strength), 6),
@@ -721,16 +630,16 @@ def build_relationship_baseline(
                             "column": left_col,
                             "display_name": signal_display_name(left_col, signal_catalog),
                             "role": "left_variable",
-                            "baseline_window": {"rows": baseline_sample_size, "correlation": round(float(baseline_corr_value), 6)},
-                            "recent_window": {"rows": recent_sample_size, "correlation": round(float(recent_corr_value), 6)},
+                            "baseline_window": {"rows": baseline_sample_size, "correlation": round(float(baseline_corr), 6)},
+                            "recent_window": {"rows": recent_sample_size, "correlation": round(float(recent_corr), 6)},
                             "source_rows": source_rows,
                         },
                         {
                             "column": right_col,
                             "display_name": signal_display_name(right_col, signal_catalog),
                             "role": "right_variable",
-                            "baseline_window": {"rows": baseline_sample_size, "correlation": round(float(baseline_corr_value), 6)},
-                            "recent_window": {"rows": recent_sample_size, "correlation": round(float(recent_corr_value), 6)},
+                            "baseline_window": {"rows": baseline_sample_size, "correlation": round(float(baseline_corr), 6)},
+                            "recent_window": {"rows": recent_sample_size, "correlation": round(float(recent_corr), 6)},
                             "source_rows": source_rows,
                         },
                     ],

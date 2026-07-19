@@ -30,7 +30,7 @@ MOTIFS: tuple[SubsystemMotif, ...] = (
             ("makeup", "makeup-water demand increase", ("water_level", "makeup_water", "makeup_water_flow", "fill_valve", "tank_level", "level")),
             ("thermal", "heater runtime divergence", ("heater_runtime", "pool_temperature", "spa_temperature", "pool_water_temp", "spa_water_temp")),
         ),
-        next_operator_move="Inspect circulation behavior, confirm makeup-water demand, and compare heater runtime against turnover recovery.",
+        next_operator_move="Inspect circulation hydraulics, confirm makeup-water demand, and compare heater runtime against turnover recovery.",
         confidence_basis="Multi-family pool infrastructure evidence aligned across circulation, persistence, and corroborating relationship changes.",
         base_evidence=(
             "Circulation-side signals are moving together rather than as an isolated sensor excursion.",
@@ -47,7 +47,7 @@ MOTIFS: tuple[SubsystemMotif, ...] = (
             ("runtime", "compressor runtime divergence", ("compressor_runtime", "hvac_runtime", "dehu_runtime", "cycle", "runtime")),
         ),
         next_operator_move="Inspect air-handler delivery, compare supply-return split, and review compressor/runtime loading against static-pressure response.",
-        confidence_basis="Multi-family air-distribution evidence aligned across air delivery, thermal split, and runtime corroboration.",
+        confidence_basis="Multi-family HVAC evidence aligned across air delivery, thermal split, and runtime corroboration.",
         base_evidence=(
             "Air-distribution signals are drifting together rather than as a single-point sensor change.",
         ),

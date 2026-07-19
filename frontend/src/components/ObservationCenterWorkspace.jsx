@@ -193,8 +193,8 @@ function buildObservationBriefing(finding, run) {
 function buildObservationCauses(finding, run) {
   const text = observationBriefingText(finding, run);
   const causes = [];
-  if (/filter|pressure|dp|differential/.test(text)) causes.push("Performance restriction", "Increased process resistance");
-  if (/pump|speed|vfd|flow/.test(text)) causes.push("Equipment efficiency changed", "Instrument drift");
+  if (/filter|pressure|dp|differential/.test(text)) causes.push("Filter fouling", "Increased hydraulic resistance");
+  if (/pump|speed|vfd|flow/.test(text)) causes.push("Pump efficiency degradation", "Instrument drift");
   if (/valve|damper/.test(text)) causes.push("Valve position changed");
   if (/temperature|cool|chw|thermal|humidity/.test(text)) causes.push("Load shift", "Heat transfer changed");
   if (/sensor|missing|timestamp|telemetry/.test(text)) causes.push("Sensor calibration drift", "Telemetry quality issue");
@@ -217,7 +217,7 @@ function buildObservationRelationships(finding, run) {
 function buildObservationInvestigation(finding, run) {
   const text = observationBriefingText(finding, run);
   if (/filter|pressure|dp|differential|pump|flow|valve|vfd/.test(text)) {
-    return ["Review recent maintenance activity", "Inspect the affected equipment condition and process trend", "Verify equipment loading and operating setpoints"];
+    return ["Review recent maintenance activity", "Inspect filter condition and differential pressure trend", "Verify pump loading and operating setpoints"];
   }
   if (/temperature|cool|chw|thermal|humidity/.test(text)) {
     return ["Review affected trend lines", "Verify current equipment mode", "Compare with recent load changes"];

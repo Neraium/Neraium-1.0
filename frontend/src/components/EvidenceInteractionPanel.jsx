@@ -23,7 +23,7 @@ function chipsForFrame(frame) {
   const pressure = [{
     id: "pressure",
     label: sanitizeOperatorText(frame?.subsystem_pressure?.compression_intensity ?? "Compression"),
-    type: "Operational Pressure",
+    type: "Subsystem Pressure",
     payload: frame?.subsystem_pressure ?? {},
   }];
   const cognition = [{

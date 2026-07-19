@@ -4,7 +4,7 @@
 
 Neraium is the platform for Systemic Infrastructure Intelligence (SII). It analyzes multivariable telemetry to identify behavior changes, instability, weak signals, and operational risk before conventional threshold alarms or visible symptoms reveal a problem.
 
-The platform is designed for enterprise operations teams analyzing telemetry-heavy resort infrastructure: utilities, mechanical systems, electrical distribution, water systems, transportation, guest infrastructure, energy, environmental systems, and other operating processes.
+The platform is designed first for commercial water systems where pumps, tanks, filtration, treatment, pressure, temperature, flow, chemistry, and equipment signals interact continuously. The same SII intelligence can extend to other telemetry-heavy infrastructure, but commercial water operations are the primary use case.
 
 ---
 
@@ -41,7 +41,7 @@ Current capabilities include:
 
 ## Primary CSV Upload Workflow
 
-The core product workflow imports a telemetry dataset from an operational system and turns it into evidence-backed SII insights.
+The core product workflow imports a telemetry dataset from a commercial water system and turns it into evidence-backed SII insights.
 
 Recommended operator flow:
 
