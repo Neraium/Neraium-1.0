@@ -63,8 +63,14 @@ function firstAction(insight) {
   return insight?.recommendedFirstAction || insight?.recommendedAction || insight?.operatorCheck || insight?.recommendedInvestigation?.[0] || "Review the supporting evidence and compare the affected signals with current operating context.";
 }
 
-function OperationalFingerprintSummary({ model, status, queue, topInsight, helpers, onConnectLiveData }) {
-  const affected = topInsight?.system || model.dashboardSystemCards?.find((system) => Number(system.activeInsights) > 0)?.name;
+function normalizedSystemCards(model) {
+  return model?.analysisComplete && Array.isArray(model?.dashboardSystemCards)
+    ? model.dashboardSystemCards.filter(Boolean)
+    : [];
+}
+
+function OperationalFingerprintSummary({ model, status, queue, topInsight, helpers, systems, onConnectLiveData }) {
+  const affected = topInsight?.system || systems.find((system) => Number(system.activeInsights) > 0)?.name;
   const coverage = model.dataCoveragePercent;
   return (
     <section className={`command-section fingerprint-summary command-section--${status.tone}`} aria-labelledby="fingerprint-summary-heading">
@@ -153,13 +159,10 @@ export default function CommandCenterView({ model, helpers, selectedInsight, onS
   const top = queue[0] ?? null;
   const active = selectedInsight && queue.some((item) => item.id === selectedInsight.id) ? selectedInsight : top;
   const status = useMemo(() => operationalStatus(model, queue), [model, queue]);
-  const systems =
-    model.analysisComplete && Array.isArray(model.dashboardSystemCards)
-      ? model.dashboardSystemCards.filter(Boolean)
-      : [];
+  const systems = normalizedSystemCards(model);
   const remaining = top ? queue.filter((item) => item.id !== top.id) : [];
   return <div className="operational-command-center" data-testid="operational-command-center">
-    <OperationalFingerprintSummary model={model} status={status} queue={queue} topInsight={top} helpers={helpers} onConnectLiveData={onConnectLiveData} />
+    <OperationalFingerprintSummary model={model} status={status} queue={queue} topInsight={top} helpers={helpers} systems={systems} onConnectLiveData={onConnectLiveData} />
     <SubsystemBehavior systems={systems} />
     <PriorityFinding insight={top} model={model} helpers={helpers} onOpen={() => { onSelectInsight?.(top?.id); onFocusInvestigation?.(); }} />
     {top ? <div className="selected-investigation-panel"><OperatorInsightDetail insight={top} inline focusMode /></div> : null}
