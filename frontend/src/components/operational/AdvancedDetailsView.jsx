@@ -102,11 +102,11 @@ function AnalysisHistoryList({ history = [], onReopen, onDelete }) {
         <article className="analysis-history-card" key={entry.id}>
           <div className="analysis-history-card__main">
             <span className="section-token">{formatHistoryTimestamp(entry.timestamp)}</span>
-            <strong>{entry.datasetName}</strong>
+            <strong>{historyDisplayText(entry.datasetName, "Operational dataset")}</strong>
             <dl>
-              <div><dt>Baseline</dt><dd>{entry.fingerprintStatus}</dd></div>
-              <div><dt>Systems</dt><dd>{entry.systemsCount}</dd></div>
-              <div><dt>Insights</dt><dd>{entry.insightsCount}</dd></div>
+              <div><dt>Baseline</dt><dd>{historyDisplayText(entry.fingerprintStatus, "Active")}</dd></div>
+              <div><dt>Systems</dt><dd>{historyDisplayText(entry.systemsCount, "0")}</dd></div>
+              <div><dt>Insights</dt><dd>{historyDisplayText(entry.insightsCount, "0")}</dd></div>
             </dl>
           </div>
           <div className="analysis-history-card__actions">
@@ -120,7 +120,21 @@ function AnalysisHistoryList({ history = [], onReopen, onDelete }) {
 }
 
 function formatHistoryTimestamp(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value || "Analysis saved";
+  const text = historyDisplayText(value, "");
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text || "Analysis saved";
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+function historyDisplayText(value, fallback = "") {
+  if (value === null || value === undefined) return fallback;
+  if (["string", "number", "boolean"].includes(typeof value)) return String(value).trim() || fallback;
+  if (Array.isArray(value)) return value.map((item) => historyDisplayText(item, "")).filter(Boolean).join(", ") || fallback;
+  if (typeof value === "object") {
+    return historyDisplayText(
+      value.filename ?? value.last_filename ?? value.source_file ?? value.name ?? value.label ?? value.title ?? value.detail ?? value.status ?? value.processed_at ?? value.last_processed_at ?? value.value,
+      fallback,
+    );
+  }
+  return String(value ?? "").trim() || fallback;
 }

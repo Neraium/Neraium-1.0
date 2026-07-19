@@ -153,7 +153,19 @@ function EngineeringFindings({ insights, selectedInsight, onSelectInsight, helpe
 }
 
 function DetailRows({ rows = [], technical = false }) { const visible = rows.filter(([label, value]) => label && value !== null && value !== undefined && value !== ""); return visible.length ? <dl className={technical ? "dashboard-detail-rows dashboard-detail-rows--technical" : "dashboard-detail-rows"}>{visible.map(([label, value], index) => <div key={`${label}-${index}`}><dt>{label}</dt><dd>{technical ? <code>{String(value)}</code> : String(value)}</dd></div>)}</dl> : <p>No diagnostic details are available for this analysis yet.</p>; }
-function AdvancedDashboardSection({ model }) { const history = model.analysisHistory?.length ? model.analysisHistory : model.historyItems; return <section className="command-section command-section--advanced" aria-labelledby="dashboard-advanced-heading"><div className="command-section__header"><h2 id="dashboard-advanced-heading">Analysis Details</h2><p>Supporting records and diagnostics.</p></div><div className="dashboard-advanced-stack"><details><summary>Analysis History</summary>{history?.length ? <ul className="dashboard-advanced-list">{history.slice(0, 6).map((item, index) => <li key={item.id ?? index}>{item.datasetName ?? item.title ?? item.detail ?? "Historical analysis"}</li>)}</ul> : <p>No saved analysis history is available.</p>}</details><details><summary>Dataset and Connector Details</summary><DetailRows rows={model.dataSourceRows} /></details><details><summary>Support Diagnostics</summary><DetailRows rows={[...model.analysisMetadataRows, ...model.behaviorWindowRows]} technical /></details><AnalysisRecordDetails summary="Analysis Record" payload={model.rawAnalysisPayload} fileName={model.rawAnalysisFilename} /></div></section>; }
+function historyDisplayText(value) {
+  if (value === null || value === undefined) return "";
+  if (["string", "number", "boolean"].includes(typeof value)) return String(value).trim();
+  if (Array.isArray(value)) return value.map(historyDisplayText).filter(Boolean).join(", ");
+  if (typeof value === "object") return historyDisplayText(value.filename ?? value.last_filename ?? value.source_file ?? value.name ?? value.label ?? value.title ?? value.detail ?? value.status ?? value.value);
+  return String(value ?? "").trim();
+}
+
+function historyItemLabel(item) {
+  return historyDisplayText(item?.datasetName) || historyDisplayText(item?.title) || historyDisplayText(item?.detail) || "Historical analysis";
+}
+
+function AdvancedDashboardSection({ model }) { const history = model.analysisHistory?.length ? model.analysisHistory : model.historyItems; return <section className="command-section command-section--advanced" aria-labelledby="dashboard-advanced-heading"><div className="command-section__header"><h2 id="dashboard-advanced-heading">Analysis Details</h2><p>Supporting records and diagnostics.</p></div><div className="dashboard-advanced-stack"><details><summary>Analysis History</summary>{history?.length ? <ul className="dashboard-advanced-list">{history.slice(0, 6).map((item, index) => <li key={historyDisplayText(item?.id) || index}>{historyItemLabel(item)}</li>)}</ul> : <p>No saved analysis history is available.</p>}</details><details><summary>Dataset and Connector Details</summary><DetailRows rows={model.dataSourceRows} /></details><details><summary>Support Diagnostics</summary><DetailRows rows={[...model.analysisMetadataRows, ...model.behaviorWindowRows]} technical /></details><AnalysisRecordDetails summary="Analysis Record" payload={model.rawAnalysisPayload} fileName={model.rawAnalysisFilename} /></div></section>; }
 
 export default function CommandCenterView({ model, helpers, selectedInsight, onSelectInsight, onConnectLiveData, onFocusInvestigation }) {
   const queue = useMemo(() => rankedInsights(model.insights), [model.insights]);

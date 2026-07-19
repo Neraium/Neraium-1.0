@@ -738,6 +738,37 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     expect(document.body.textContent.length).toBeLessThan(50000);
   });
 
+  it("renders production legacy analysis history object fields without invoking recovery", () => {
+    const { payload, productionResult, productionSnapshot } = productionOversizedPayloadShape();
+    const legacyHistory = [{
+      id: "legacy-production-payload-object-display",
+      jobId: { job_id: "redacted-production-job" },
+      datasetName: { filename: "redacted-production-upload.csv", job_id: "redacted-production-job" },
+      timestamp: { processed_at: "2026-07-19T06:00:00Z" },
+      fingerprintStatus: { status: "changed" },
+      systemsCount: { count: 1 },
+      insightsCount: { count: 1 },
+      savedAt: { processed_at: "2026-07-19T06:00:00Z" },
+      result: productionResult,
+      snapshot: productionSnapshot,
+    }];
+
+    renderWorkspace({
+      liveOps: { session: { payload: { snapshot: payload } }, analysisHistory: legacyHistory },
+      effectiveLatestUploadResult: productionResult,
+      effectiveLatestUploadSnapshot: productionSnapshot,
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByTestId("operational-command-center")).toBeTruthy();
+    expect(screen.getByText("redacted-production-upload.csv")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("[object Object]");
+
+    clickNav("Analysis Details");
+    expect(screen.getAllByText("redacted-production-upload.csv").length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toContain("[object Object]");
+  });
+
   it("uses evidence source identifiers instead of Signal N fallback titles", () => {
     const metricAnalysis = {
       systems: [{ id: "quality", name: "Water Quality" }],
