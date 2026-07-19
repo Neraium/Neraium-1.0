@@ -133,6 +133,25 @@ describe("Analysis Details workspace", () => {
     expect(fetchMock.mock.calls.some(([path]) => String(path).startsWith("/api/replay/timeline"))).toBe(false);
   });
 
+  it("does not refetch the story when only the error formatter prop changes", async () => {
+    const fetchMock = createStoryApiFetch(1);
+    const currentSession = { latestUploadResult: { job_id: "job-stable" } };
+    const { rerender } = renderStory(baseProps({ apiFetch: fetchMock, currentSession }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([path]) => String(path).startsWith("/api/data/replay/job-stable"))).toHaveLength(1);
+    });
+
+    rerender(h(ReplayWorkspace, {
+      ...baseProps({ apiFetch: fetchMock, currentSession }),
+      normalizeErrorMessage: (value) => `updated:${String(value ?? "")}`,
+    }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(fetchMock.mock.calls.filter(([path]) => String(path).startsWith("/api/data/upload-status/job-stable"))).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([path]) => String(path).startsWith("/api/data/replay/job-stable"))).toHaveLength(1);
+  });
+
   it("shows pending verification in story language", async () => {
     renderStory(baseProps({
       apiFetch: createStoryApiFetch(2),
