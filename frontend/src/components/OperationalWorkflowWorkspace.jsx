@@ -2522,15 +2522,27 @@ function compactJson(value) {
 function resolveRawAnalysisPayload({ liveOps, result, snapshot, analysisExplanation }) {
   const sessionPayload = liveOps?.session?.payload ?? null;
   const sessionSnapshot = sessionPayload?.snapshot ?? null;
-  if (isLatestUploadPayload(sessionSnapshot)) return sessionSnapshot;
-  if (isLatestUploadPayload(snapshot)) return snapshot;
-  if (isLatestUploadPayload(sessionPayload)) return sessionPayload;
+  if (isLatestUploadPayload(sessionSnapshot)) return stripFrontendResponseDiagnostics(sessionSnapshot);
+  if (isLatestUploadPayload(snapshot)) return stripFrontendResponseDiagnostics(snapshot);
+  if (isLatestUploadPayload(sessionPayload)) return stripFrontendResponseDiagnostics(sessionPayload);
   return { result, snapshot, analysisExplanation };
 }
 
 function isLatestUploadPayload(value) {
   if (!value || typeof value !== "object") return false;
   return Boolean(value.latest_result || value.latestResult || value.current_result || value.current_upload || value.snapshot);
+}
+
+function stripFrontendResponseDiagnostics(payload) {
+  const output = { ...payload };
+  delete output.response_status;
+  delete output.failure_url;
+  delete output.failure_phase;
+  delete output.raw_response_body;
+  delete output.response_content_type;
+  delete output.non_json_response;
+  delete output.html_response;
+  return output;
 }
 
 function buildAnalysisRecordFilename({ result, snapshot }) {

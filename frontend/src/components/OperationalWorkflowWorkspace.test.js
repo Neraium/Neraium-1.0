@@ -675,6 +675,16 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
 
   it("downloads the full production-shaped analysis JSON only after user action", async () => {
     const { payload, productionResult, productionSnapshot } = productionOversizedPayloadShape();
+    const payloadWithResponseDiagnostics = {
+      ...payload,
+      response_status: 200,
+      failure_url: "/api/data/latest-upload?include_persisted=1",
+      failure_phase: "result",
+      raw_response_body: JSON.stringify(payload).slice(0, 4000),
+      response_content_type: "application/json",
+      non_json_response: false,
+      html_response: false,
+    };
     const createObjectURL = vi.fn(() => "blob:analysis-record");
     const revokeObjectURL = vi.fn();
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
@@ -682,7 +692,7 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
 
     renderWorkspace({
-      liveOps: { session: { payload: { snapshot: payload } } },
+      liveOps: { session: { payload: { snapshot: payloadWithResponseDiagnostics } } },
       effectiveLatestUploadResult: productionResult,
       effectiveLatestUploadSnapshot: productionSnapshot,
       currentSession: { hasReliableOperatorEvidence: true },
@@ -698,7 +708,11 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     const blob = createObjectURL.mock.calls[0][0];
     const downloaded = await blob.text();
     expect(downloaded.length).toBeGreaterThan(100000);
+    expect(downloaded).toBe(JSON.stringify(payload, null, 2));
     expect(downloaded).toContain("Redacted production relationship evidence Redacted production relationship evidence");
+    const exported = JSON.parse(downloaded);
+    expect(exported.response_status).toBeUndefined();
+    expect(exported.raw_response_body).toBeUndefined();
     expect(anchorClick).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:analysis-record");
     anchorClick.mockRestore();
