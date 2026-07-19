@@ -153,11 +153,10 @@ export default function CommandCenterView({ model, helpers, selectedInsight, onS
   const top = queue[0] ?? null;
   const active = selectedInsight && queue.some((item) => item.id === selectedInsight.id) ? selectedInsight : top;
   const status = useMemo(() => operationalStatus(model, queue), [model, queue]);
-  // Analysis data can arrive before its derived system cards during hydration. Keep the
-  // briefing renderable instead of letting a transient or legacy payload blank the app.
-  const systems = model.analysisComplete && Array.isArray(model.dashboardSystemCards)
-    ? model.dashboardSystemCards.filter(Boolean)
-    : [];
+  const systems =
+    model.analysisComplete && Array.isArray(model.dashboardSystemCards)
+      ? model.dashboardSystemCards.filter(Boolean)
+      : [];
   const remaining = top ? queue.filter((item) => item.id !== top.id) : [];
   return <div className="operational-command-center" data-testid="operational-command-center">
     <OperationalFingerprintSummary model={model} status={status} queue={queue} topInsight={top} helpers={helpers} onConnectLiveData={onConnectLiveData} />
