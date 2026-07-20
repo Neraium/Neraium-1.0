@@ -357,7 +357,9 @@ describe("App telemetry completion navigation", () => {
       await waitFor(() => {
         expect(screen.getByTestId("app-render-fallback")).toBeTruthy();
       });
-      expect(screen.getByText(/workspace recovery/i)).toBeTruthy();
+      expect(screen.getAllByText(/Workspace temporarily unavailable/i).length).toBeGreaterThan(0);
+      expect(screen.getByText(/connected data and existing analysis/i)).toBeTruthy();
+      expect(screen.queryByText(/reopen the upload view/i)).toBeNull();
       expectOnlyExpectedRenderErrors(consoleErrorSpy);
     } finally {
       restoreWindowError();
@@ -379,13 +381,41 @@ describe("App telemetry completion navigation", () => {
       });
 
       runtimeState.throwGateError = false;
-      fireEvent.click(screen.getByRole("button", { name: "Retry Workspace" }));
+      fireEvent.click(screen.getByRole("button", { name: "Retry latest telemetry" }));
 
       await waitFor(() => {
         expect(screen.getByTestId("gate-workspace")).toBeTruthy();
       });
       expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
       expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledWith({ forceRefresh: true });
+      expectOnlyExpectedRenderErrors(consoleErrorSpy);
+    } finally {
+      restoreWindowError();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+
+  it("uses the last available state from the render fallback without forcing a telemetry refetch", async () => {
+    runtimeState.throwGateError = true;
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const restoreWindowError = suppressExpectedGateRenderWindowError();
+
+    try {
+      render(h(App));
+      await launchWorkspace();
+
+      await waitFor(() => {
+        expect(screen.getByTestId("app-render-fallback")).toBeTruthy();
+      });
+
+      runtimeState.throwGateError = false;
+      fireEvent.click(screen.getByRole("button", { name: "Use last available state" }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("gate-workspace")).toBeTruthy();
+      });
+      expect(runtimeMocks.loadLatestUploadState).not.toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
       expectOnlyExpectedRenderErrors(consoleErrorSpy);
     } finally {
       restoreWindowError();

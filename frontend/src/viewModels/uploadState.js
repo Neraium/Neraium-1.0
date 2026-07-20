@@ -447,3 +447,168 @@ function normalizeErrorMessage(message) {
   if (message == null) return "Upload failed.";
   return normalizeUploadContractErrorMessage(message);
 }
+
+const TELEMETRY_BOUNDARY_SUPPORTED_SCHEMA_PREFIXES = ["1", "2", "2026"];
+const TELEMETRY_BOUNDARY_MAX_ISSUES = 40;
+
+function boundaryIssue(issues, path, reason) {
+  if (issues.length >= TELEMETRY_BOUNDARY_MAX_ISSUES) return;
+  issues.push({ path, reason });
+}
+
+function isTelemetryObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function telemetryArray(value, issues, path, { objectEntries = false } = {}) {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => normalizeTelemetryCollectionEntry(item, issues, `${path}[${index}]`, { objectEntries }));
+  }
+  if (value === null || value === undefined || value === "") return [];
+  boundaryIssue(issues, path, "expected_array");
+  return normalizeTelemetryCollectionEntry(value, issues, path, { objectEntries });
+}
+
+function normalizeTelemetryCollectionEntry(value, issues, path, { objectEntries = false } = {}) {
+  if (isTelemetryObject(value)) return [{ ...value }];
+  if (value === null || value === undefined || value === "") {
+    boundaryIssue(issues, path, "missing_collection_entry");
+    return [];
+  }
+  boundaryIssue(issues, path, "coerced_unexpected_collection_entry");
+  if (!objectEntries) return [value];
+  return [{ id: path.replace(/[^a-z0-9_-]+/gi, "-"), name: String(value), label: String(value), type: "unknown" }];
+}
+
+function normalizeTelemetryDataQuality(value, issues, path) {
+  const dataQuality = isTelemetryObject(value) ? { ...value } : {};
+  if (value !== null && value !== undefined && !isTelemetryObject(value)) boundaryIssue(issues, path, "expected_object");
+  dataQuality.warnings = telemetryArray(dataQuality.warnings, issues, `${path}.warnings`);
+  dataQuality.missing_values = telemetryArray(dataQuality.missing_values, issues, `${path}.missing_values`);
+  dataQuality.missing_value_warnings = telemetryArray(dataQuality.missing_value_warnings, issues, `${path}.missing_value_warnings`);
+  dataQuality.signal_integrity = telemetryArray(dataQuality.signal_integrity, issues, `${path}.signal_integrity`, { objectEntries: true });
+  return dataQuality;
+}
+
+function normalizeTelemetryAnalysis(value, issues, path) {
+  const analysis = isTelemetryObject(value) ? { ...value } : {};
+  if (value !== null && value !== undefined && !isTelemetryObject(value)) boundaryIssue(issues, path, "expected_object");
+  analysis.systems = telemetryArray(analysis.systems, issues, `${path}.systems`, { objectEntries: true });
+  analysis.relationships = telemetryArray(analysis.relationships, issues, `${path}.relationships`, { objectEntries: true });
+  analysis.insights = telemetryArray(analysis.insights, issues, `${path}.insights`, { objectEntries: true });
+  analysis.evidence_index = isTelemetryObject(analysis.evidence_index) ? analysis.evidence_index : {};
+  analysis.fingerprint = isTelemetryObject(analysis.fingerprint) ? analysis.fingerprint : {};
+  analysis.data_quality = normalizeTelemetryDataQuality(analysis.data_quality, issues, `${path}.data_quality`);
+  if (isTelemetryObject(analysis.normalized_telemetry)) {
+    analysis.normalized_telemetry = {
+      ...analysis.normalized_telemetry,
+      tags: telemetryArray(analysis.normalized_telemetry.tags, issues, `${path}.normalized_telemetry.tags`, { objectEntries: true }),
+    };
+  }
+  return analysis;
+}
+
+function normalizeTelemetryResult(value, issues, path) {
+  if (!isTelemetryObject(value)) {
+    if (value !== null && value !== undefined) boundaryIssue(issues, path, "expected_object");
+    return null;
+  }
+  const result = { ...value };
+  result.columns = telemetryArray(result.columns, issues, `${path}.columns`);
+  result.detected_columns = telemetryArray(result.detected_columns, issues, `${path}.detected_columns`);
+  result.data_quality = normalizeTelemetryDataQuality(result.data_quality, issues, `${path}.data_quality`);
+  if (result.analysis_result !== undefined) result.analysis_result = normalizeTelemetryAnalysis(result.analysis_result, issues, `${path}.analysis_result`);
+  if (result.analysis_explanation !== undefined) result.analysis_explanation = normalizeTelemetryAnalysis(result.analysis_explanation, issues, `${path}.analysis_explanation`);
+  if (result.analysis !== undefined) result.analysis = normalizeTelemetryAnalysis(result.analysis, issues, `${path}.analysis`);
+  if (isTelemetryObject(result.baseline_analysis)) {
+    result.baseline_analysis = {
+      ...result.baseline_analysis,
+      relationship_drift: telemetryArray(result.baseline_analysis.relationship_drift, issues, `${path}.baseline_analysis.relationship_drift`, { objectEntries: true }),
+    };
+  }
+  return result;
+}
+
+function firstTelemetryMeta(...values) {
+  for (const value of values) {
+    if (value !== null && value !== undefined && String(value).trim()) return String(value).trim();
+  }
+  return null;
+}
+
+function telemetryReferenceId(seed) {
+  const source = String(seed ?? Date.now());
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = ((hash << 5) - hash + source.charCodeAt(index)) | 0;
+  }
+  return `NRA-${Math.abs(hash).toString(36).slice(0, 7).toUpperCase()}`;
+}
+
+export function normalizeLatestUploadPayload(payload) {
+  const issues = [];
+  const snapshot = isTelemetryObject(payload) ? { ...payload } : buildEmptyLatestUploadSnapshot();
+  if (!isTelemetryObject(payload)) boundaryIssue(issues, "payload", "expected_object");
+
+  snapshot.current_upload = isTelemetryObject(snapshot.current_upload) ? { ...snapshot.current_upload } : null;
+  if (snapshot.current_upload?.result !== undefined) {
+    snapshot.current_upload.result = normalizeTelemetryResult(snapshot.current_upload.result, issues, "current_upload.result");
+  }
+  snapshot.latest_result = normalizeTelemetryResult(snapshot.latest_result, issues, "latest_result");
+  if (snapshot.latestResult !== undefined) snapshot.latestResult = normalizeTelemetryResult(snapshot.latestResult, issues, "latestResult");
+  if (snapshot.current_result !== undefined) snapshot.current_result = normalizeTelemetryResult(snapshot.current_result, issues, "current_result");
+  if (snapshot.analysis_result !== undefined) snapshot.analysis_result = normalizeTelemetryAnalysis(snapshot.analysis_result, issues, "snapshot.analysis_result");
+  snapshot.history = telemetryArray(snapshot.history, issues, "history", { objectEntries: true });
+
+  const schemaVersion = firstTelemetryMeta(
+    snapshot.schema_version,
+    snapshot.schemaVersion,
+    snapshot.latest_result?.schema_version,
+    snapshot.latest_result?.schemaVersion,
+    snapshot.latest_result?.analysis_result?.schema_version,
+    snapshot.latest_result?.analysis_result?.schemaVersion,
+  );
+  const schemaSupported = !schemaVersion || TELEMETRY_BOUNDARY_SUPPORTED_SCHEMA_PREFIXES.some((prefix) => schemaVersion === prefix || schemaVersion.startsWith(`${prefix}-`) || schemaVersion.startsWith(`${prefix}.`));
+  if (!schemaSupported) boundaryIssue(issues, "schema_version", "schema_version_mismatch");
+
+  const telemetryTimestamp = firstTelemetryMeta(
+    snapshot.telemetry_timestamp,
+    snapshot.telemetryTimestamp,
+    snapshot.last_processed_at,
+    snapshot.processed_at,
+    snapshot.latest_result?.processed_at,
+    snapshot.latest_result?.timestamp_profile?.last_timestamp,
+  );
+  const requestCorrelationId = firstTelemetryMeta(
+    snapshot.request_correlation_id,
+    snapshot.requestCorrelationId,
+    snapshot.correlation_id,
+    snapshot.correlationId,
+    snapshot.latest_result?.request_correlation_id,
+    snapshot.latest_result?.correlation_id,
+  );
+  const referenceId = telemetryReferenceId([requestCorrelationId, telemetryTimestamp, schemaVersion, issues.map((issue) => `${issue.path}:${issue.reason}`).join("|")].filter(Boolean).join("|"));
+  snapshot._neraiumTelemetryBoundary = {
+    valid: issues.length === 0,
+    renderable: !issues.some((issue) => issue.path === "payload"),
+    issues,
+    referenceId,
+    workspaceId: firstTelemetryMeta(snapshot.workspace_id, snapshot.workspaceId, snapshot.latest_result?.workspace_id, "system-body"),
+    telemetryTimestamp,
+    schemaVersion,
+    requestCorrelationId,
+  };
+  return snapshot;
+}
+
+export function extractTelemetryBoundaryMeta(snapshot, result = null) {
+  const meta = snapshot?._neraiumTelemetryBoundary ?? {};
+  return {
+    referenceId: meta.referenceId ?? telemetryReferenceId(result?.job_id ?? snapshot?.job_id ?? "workspace"),
+    workspaceId: meta.workspaceId ?? firstTelemetryMeta(snapshot?.workspace_id, result?.workspace_id, "system-body"),
+    telemetryTimestamp: meta.telemetryTimestamp ?? firstTelemetryMeta(snapshot?.telemetry_timestamp, snapshot?.last_processed_at, result?.processed_at),
+    schemaVersion: meta.schemaVersion ?? firstTelemetryMeta(snapshot?.schema_version, result?.schema_version, result?.analysis_result?.schema_version),
+    requestCorrelationId: meta.requestCorrelationId ?? firstTelemetryMeta(snapshot?.request_correlation_id, result?.request_correlation_id, snapshot?.correlation_id, result?.correlation_id),
+    issues: Array.isArray(meta.issues) ? meta.issues : [],
+  };
+}

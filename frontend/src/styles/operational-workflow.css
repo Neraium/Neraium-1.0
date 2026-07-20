@@ -4424,3 +4424,46 @@ button.insight-card {
     grid-template-columns: 1fr;
   }
 }
+
+.workspace-recovery-shell {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  padding: clamp(16px, 4vw, 32px);
+}
+
+.workspace-recovery-panel,
+.workspace-panel-recovery {
+  overflow-wrap: anywhere;
+}
+
+.workspace-recovery-reference {
+  margin: 8px 0 0;
+  color: var(--text-muted, #667085);
+  font-size: 0.82rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.workspace-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 18px;
+}
+
+@media (max-width: 520px) {
+  .workspace-recovery-shell {
+    padding: 14px;
+  }
+
+  .workspace-recovery-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workspace-recovery-actions .command-button,
+  .workspace-recovery-actions .secondary-command-button {
+    width: 100%;
+    min-height: 44px;
+  }
+}

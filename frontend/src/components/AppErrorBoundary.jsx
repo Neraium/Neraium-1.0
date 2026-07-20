@@ -3,6 +3,13 @@ import { EmptyState, Panel } from "./workspacePrimitives";
 
 const CHUNK_RELOAD_KEY_PREFIX = "neraium.chunk-reload:";
 
+const WORKSPACE_RECOVERY_COPY = {
+  title: "Workspace temporarily unavailable",
+  message: "We couldn’t load the latest workspace state. Your connected data and existing analysis are still available. Retry the latest telemetry or continue with the last available state.",
+  primaryAction: "Retry latest telemetry",
+  secondaryAction: "Use last available state",
+};
+
 export function isChunkLoadError(error) {
   const message = String(error?.message ?? error ?? "");
   return /(?:failed to fetch dynamically imported module|error loading dynamically imported module|loading chunk \d+ failed|chunkloaderror|importing a module script failed)/i.test(message);
@@ -12,20 +19,37 @@ function reloadPage() {
   if (typeof window !== "undefined") window.location.reload();
 }
 
+function makeReferenceId(seed) {
+  const source = String(seed ?? Date.now());
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = ((hash << 5) - hash + source.charCodeAt(index)) | 0;
+  }
+  return `NRA-${Math.abs(hash).toString(36).slice(0, 7).toUpperCase()}`;
+}
+
 export default class AppErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { error: null };
+    this.state = { error: null, referenceId: null };
     this.handleRetry = this.handleRetry.bind(this);
+    this.handleUseLastAvailable = this.handleUseLastAvailable.bind(this);
   }
 
   static getDerivedStateFromError(error) {
-    return { error };
+    return { error, referenceId: makeReferenceId(error?.message) };
   }
 
   componentDidCatch(error, info) {
+    const context = this.props.errorContext ?? {};
     console.error("[neraium] render fallback activated", {
       message: error?.message ?? "Render failure",
+      workspaceId: context.workspaceId ?? this.props.workspaceId ?? "workspace",
+      failingComponent: context.failingComponent ?? "AppErrorBoundary",
+      telemetryTimestamp: context.telemetryTimestamp ?? null,
+      schemaVersion: context.schemaVersion ?? null,
+      requestCorrelationId: context.requestCorrelationId ?? null,
+      referenceId: this.state.referenceId,
       componentStack: info?.componentStack ?? "",
     });
 
@@ -43,7 +67,7 @@ export default class AppErrorBoundary extends React.Component {
 
   componentDidUpdate(prevProps) {
     if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
-      this.setState({ error: null });
+      this.setState({ error: null, referenceId: null });
     }
   }
 
@@ -53,7 +77,7 @@ export default class AppErrorBoundary extends React.Component {
       return;
     }
 
-    this.setState({ error: null });
+    this.setState({ error: null, referenceId: null });
     if (typeof this.props.onRetry === "function") {
       this.props.onRetry();
       return;
@@ -61,26 +85,38 @@ export default class AppErrorBoundary extends React.Component {
     reloadPage();
   }
 
+  handleUseLastAvailable() {
+    this.setState({ error: null, referenceId: null });
+    if (typeof this.props.onUseLastAvailableState === "function") {
+      this.props.onUseLastAvailableState();
+    }
+  }
+
   render() {
     if (this.state.error) {
-      const chunkFailure = isChunkLoadError(this.state.error);
       return (
         <div data-testid="app-render-fallback">
-          <div className="workspace-grid">
-            <Panel title="Workspace Recovery" className="span-12">
+          <div className="workspace-grid workspace-recovery-shell">
+            <Panel title={WORKSPACE_RECOVERY_COPY.title} className="span-12 workspace-recovery-panel">
               <EmptyState
-                title={chunkFailure ? "The workspace was updated" : "We hit a workspace error"}
-                body={chunkFailure
-                  ? "Reload the workspace to open the latest version."
-                  : "The latest telemetry state could not be rendered safely. Refresh the workspace or reopen the upload view."}
+                title={WORKSPACE_RECOVERY_COPY.title}
+                body={WORKSPACE_RECOVERY_COPY.message}
               />
-              <div className="panel-actions">
+              <p className="workspace-recovery-reference">Reference {this.state.referenceId ?? "NRA-WORKSPACE"}</p>
+              <div className="panel-actions workspace-recovery-actions">
                 <button
                   type="button"
                   className="command-button"
                   onClick={this.handleRetry}
                 >
-                  {chunkFailure ? "Reload Workspace" : "Retry Workspace"}
+                  {WORKSPACE_RECOVERY_COPY.primaryAction}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-command-button"
+                  onClick={this.handleUseLastAvailable}
+                >
+                  {WORKSPACE_RECOVERY_COPY.secondaryAction}
                 </button>
               </div>
             </Panel>

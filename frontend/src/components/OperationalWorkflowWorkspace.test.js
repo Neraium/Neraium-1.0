@@ -738,6 +738,51 @@ describe("OperationalWorkflowWorkspace bug regressions", () => {
     expect(document.body.textContent.length).toBeLessThan(50000);
   });
 
+  it("keeps rendering when the latest telemetry contains malformed system entries", () => {
+    const malformedAnalysis = {
+      ...analysisWithRelationshipEvidence(),
+      schema_version: "2099-unknown",
+      systems: [null, "unsupported live system type", { id: "flow-pressure", name: "Flow and pressure system" }],
+      relationships: [null, "pressure / flow", { id: "relationship-0", columns: ["pressure", "flow"], change_type: "unsupported_relationship_type" }],
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: malformedAnalysis }),
+      effectiveLatestUploadSnapshot: completeSnapshot({
+        request_correlation_id: "corr-malformed-system",
+        telemetry_timestamp: "2026-07-19T06:00:00Z",
+      }),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByTestId("operational-command-center")).toBeTruthy();
+    expect(screen.getByLabelText("Neraium platform workspace").textContent).toContain("Flow and pressure system");
+  });
+
+
+  it("keeps rendering the same malformed telemetry state on mobile", () => {
+    window.innerWidth = 390;
+    window.innerHeight = 844;
+    const malformedAnalysis = {
+      ...analysisWithRelationshipEvidence(),
+      schema_version: "2099-unknown",
+      systems: [null, "unsupported live system type", { id: "flow-pressure", name: "Flow and pressure system" }],
+      relationships: [null, "pressure / flow", { id: "relationship-0", columns: ["pressure", "flow"], change_type: "unsupported_relationship_type" }],
+    };
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: malformedAnalysis }),
+      effectiveLatestUploadSnapshot: completeSnapshot({
+        request_correlation_id: "corr-malformed-system",
+        telemetry_timestamp: "2026-07-19T06:00:00Z",
+      }),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.getByTestId("operational-command-center")).toBeTruthy();
+    expect(screen.queryByText(/Workspace temporarily unavailable/i)).toBeNull();
+  });
+
   it("renders production legacy analysis history object fields without invoking recovery", () => {
     const { payload, productionResult, productionSnapshot } = productionOversizedPayloadShape();
     const legacyHistory = [{

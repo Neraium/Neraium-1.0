@@ -3,6 +3,7 @@ import { Suspense, lazy } from "react";
 import AppErrorBoundary from "./AppErrorBoundary";
 import SkipToMainContent from "./SkipToMainContent";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
+import { extractTelemetryBoundaryMeta } from "../viewModels/uploadState";
 
 const HomePage = lazy(() => import("./HomePage"));
 const DataConnectionsWorkspace = lazy(() => import("./DataConnectionsWorkspace"));
@@ -31,11 +32,13 @@ function WorkspaceWithBackControl({
   handleBackToGate,
   handleRetryWorkspace,
   contextLabel,
+  errorContext,
+  activeWorkspace,
   onHelp,
   children,
 }) {
   return (
-    <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
+    <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace} errorContext={{ ...errorContext, workspaceId: activeWorkspace }}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
         <SkipToMainContent />
         <div className="workspace-shell-with-back">
@@ -107,6 +110,8 @@ export default function AppWorkspaceRouter({
   setPendingUploadFiles = () => {},
   resultsNavigationKey = 0,
 }) {
+  const errorContext = extractTelemetryBoundaryMeta(effectiveLatestUploadSnapshot, effectiveLatestUploadResult);
+
   if (activeWorkspace === "home") {
     return (
       <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
@@ -127,6 +132,8 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         contextLabel="Datasets & Connectors"
+        errorContext={errorContext}
+        activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
       >
         <Suspense fallback={renderLoadingPanel("Preparing telemetry intake", "Loading dataset validation and connector status...")}>
@@ -163,6 +170,8 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         contextLabel="Analysis Details"
+        errorContext={errorContext}
+        activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
       >
         <Suspense fallback={renderLoadingPanel("Loading investigation record", "Preparing analysis history, evidence, and diagnostics...")}>
@@ -198,6 +207,8 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         contextLabel="Administration"
+        errorContext={errorContext}
+        activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
       >
         <EmptyState title="Administrator access required" body="Your account can review operational results, but only administrators can manage users, sessions, and governance records." />
@@ -213,6 +224,8 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         contextLabel="Administration"
+        errorContext={errorContext}
+        activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
       >
         <Suspense fallback={renderLoadingPanel("Loading administration", "Preparing access controls and governance records...")}>
@@ -237,6 +250,8 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         contextLabel="Insights"
+        errorContext={errorContext}
+        activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
       >
         <Suspense fallback={renderLoadingPanel("Loading investigation", "Prioritizing findings and preparing evidence...")}>
@@ -261,6 +276,8 @@ export default function AppWorkspaceRouter({
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         contextLabel="Help & Status"
+        errorContext={errorContext}
+        activeWorkspace={activeWorkspace}
       >
         <Suspense fallback={renderLoadingPanel("Loading support status", "Checking service status and operator guidance...")}>
           <HelpChangelogWorkspace
@@ -274,7 +291,7 @@ export default function AppWorkspaceRouter({
   }
 
   return (
-    <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
+    <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace} errorContext={{ ...errorContext, workspaceId: activeWorkspace }}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
         <Suspense fallback={renderLoadingPanel("Opening Command Center", "Prioritizing findings and loading facility state...")}>
           <OperationalWorkflowWorkspace
@@ -304,6 +321,7 @@ export default function AppWorkspaceRouter({
             onResumePreviousSession={handleResumePreviousSession}
             onReopenHistoricalAnalysis={handleReopenHistoricalAnalysis}
             onDeleteHistoricalAnalysis={handleDeleteHistoricalAnalysis}
+            onRetryLatestTelemetry={handleRetryWorkspace}
           />
           {pendingUploadFiles.length > 0 ? (
             <DataConnectionsWorkspace

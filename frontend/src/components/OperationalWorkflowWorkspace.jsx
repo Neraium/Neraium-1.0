@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import PageContainer from "./layout/PageContainer";
 import SkipToMainContent from "./SkipToMainContent";
@@ -11,6 +11,7 @@ import SystemsView from "./operational/SystemsView";
 import { FALLBACK_SYSTEMS } from "../config/workspaces";
 import { PRODUCT_DESCRIPTOR } from "../content/productLanguage";
 import { sanitizeOperatorText } from "../viewModels/operatorFinding";
+import { extractTelemetryBoundaryMeta, normalizeLatestUploadPayload, resolveCurrentUploadResult } from "../viewModels/uploadState";
 import "../styles/operational-workflow.css";
 import "../styles/operational-refinement.css";
 
@@ -129,6 +130,68 @@ const SYSTEMS_PENDING = {
   summary: "Systems will be identified automatically after the first successful telemetry analysis.",
 };
 
+const WORKSPACE_RECOVERY_COPY = {
+  title: "Workspace temporarily unavailable",
+  message: "We couldn’t load the latest workspace state. Your connected data and existing analysis are still available. Retry the latest telemetry or continue with the last available state.",
+  primaryAction: "Retry latest telemetry",
+  secondaryAction: "Use last available state",
+};
+
+function logWorkspaceRenderFailure(error, context = {}) {
+  console.error("[neraium] workspace render failure", {
+    message: error?.message ?? "Workspace render failure",
+    workspaceId: context.workspaceId ?? "system-body",
+    failingComponent: context.failingComponent ?? "workspace",
+    telemetryTimestamp: context.telemetryTimestamp ?? null,
+    schemaVersion: context.schemaVersion ?? null,
+    requestCorrelationId: context.requestCorrelationId ?? null,
+    referenceId: context.referenceId ?? null,
+    issues: context.issues ?? [],
+  });
+}
+
+class WorkspaceSectionBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error) {
+    logWorkspaceRenderFailure(error, {
+      ...(this.props.errorContext ?? {}),
+      failingComponent: this.props.name,
+    });
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    const referenceId = this.props.errorContext?.referenceId ?? "NRA-WORKSPACE";
+    return (
+      <section className="operational-panel operational-panel--wide workspace-panel-recovery" role="status" aria-live="polite">
+        <div className="operational-panel__header">
+          <span className="section-token">Reference {referenceId}</span>
+          <h2>{WORKSPACE_RECOVERY_COPY.title}</h2>
+          <p>{WORKSPACE_RECOVERY_COPY.message}</p>
+        </div>
+        <div className="workspace-recovery-actions">
+          <button type="button" className="command-button" onClick={this.props.onRetry}>{WORKSPACE_RECOVERY_COPY.primaryAction}</button>
+          <button type="button" className="secondary-command-button" onClick={() => this.setState({ error: null })}>{WORKSPACE_RECOVERY_COPY.secondaryAction}</button>
+        </div>
+      </section>
+    );
+  }
+}
+
 export default function OperationalWorkflowWorkspace({
   liveOps,
   canonicalFinding,
@@ -144,6 +207,7 @@ export default function OperationalWorkflowWorkspace({
   onResumePreviousSession,
   onReopenHistoricalAnalysis,
   onDeleteHistoricalAnalysis,
+  onRetryLatestTelemetry,
   onSignOut,
   signOutPending = false,
   currentUser = null,
@@ -169,12 +233,36 @@ export default function OperationalWorkflowWorkspace({
   const deferredDomainDetection = useDeferredValue(domainDetection);
   const deferredGateProcessing = useDeferredValue(gateProcessing);
 
+  const telemetryBoundarySnapshot = useMemo(() => normalizeLatestUploadPayload({
+    ...(deferredLatestUploadSnapshot && typeof deferredLatestUploadSnapshot === "object" ? deferredLatestUploadSnapshot : {}),
+    latest_result: deferredLatestUploadResult ?? deferredLatestUploadSnapshot?.latest_result ?? null,
+    current_upload: deferredLatestUploadSnapshot?.current_upload
+      ? { ...deferredLatestUploadSnapshot.current_upload, result: deferredLatestUploadSnapshot.current_upload.result ?? deferredLatestUploadResult ?? null }
+      : { result: deferredLatestUploadResult ?? null },
+  }), [deferredLatestUploadResult, deferredLatestUploadSnapshot]);
+  const telemetryBoundaryResult = useMemo(
+    () => resolveCurrentUploadResult(telemetryBoundarySnapshot) ?? telemetryBoundarySnapshot.latest_result ?? deferredLatestUploadResult,
+    [deferredLatestUploadResult, telemetryBoundarySnapshot],
+  );
+  const telemetryBoundaryMeta = useMemo(
+    () => extractTelemetryBoundaryMeta(telemetryBoundarySnapshot, telemetryBoundaryResult),
+    [telemetryBoundaryResult, telemetryBoundarySnapshot],
+  );
+
+  useEffect(() => {
+    if (!telemetryBoundaryMeta.issues.length) return;
+    logWorkspaceRenderFailure(new Error("Telemetry payload normalized before workspace render"), {
+      ...telemetryBoundaryMeta,
+      failingComponent: "telemetry-boundary",
+    });
+  }, [telemetryBoundaryMeta]);
+
   const model = useMemo(() => buildOperationalModel({
     liveOps: deferredLiveOps,
     canonicalFinding: deferredCanonicalFinding,
     currentSession: deferredCurrentSession,
-    effectiveLatestUploadResult: deferredLatestUploadResult,
-    effectiveLatestUploadSnapshot: deferredLatestUploadSnapshot,
+    effectiveLatestUploadResult: telemetryBoundaryResult,
+    effectiveLatestUploadSnapshot: telemetryBoundarySnapshot,
     roomContext: deferredRoomContext,
     domainDetection: deferredDomainDetection,
     gateProcessing: deferredGateProcessing,
@@ -182,8 +270,8 @@ export default function OperationalWorkflowWorkspace({
     deferredLiveOps,
     deferredCanonicalFinding,
     deferredCurrentSession,
-    deferredLatestUploadResult,
-    deferredLatestUploadSnapshot,
+    telemetryBoundaryResult,
+    telemetryBoundarySnapshot,
     deferredRoomContext,
     deferredDomainDetection,
     deferredGateProcessing,
@@ -326,6 +414,8 @@ export default function OperationalWorkflowWorkspace({
   }
 
   const sectionHeader = SECTION_HEADERS[visibleSection] ?? null;
+  const sectionBoundaryResetKey = `${visibleSection}:${telemetryBoundaryMeta.referenceId}:${resultsNavigationKey}`;
+  const retryLatestTelemetry = typeof onRetryLatestTelemetry === "function" ? onRetryLatestTelemetry : undefined;
   const routeContext = buildRouteContext(visibleSection, model, selectedInsight, {
     connectLiveData,
     openOverviewFilePicker,
@@ -420,34 +510,50 @@ export default function OperationalWorkflowWorkspace({
         </section>
 
         {visibleSection === "command-center" ? (
-          <CommandCenterView
-            model={model}
-            helpers={viewHelpers}
-            onOpenInsight={openInsight}
-            selectedInsight={selectedInsight}
-            onSelectInsight={setSelectedInsightId}
-            onConnectLiveData={connectLiveData}
-            onResumePreviousSession={onResumePreviousSession}
-            onViewSystems={viewSystems}
-            onViewFingerprint={viewFingerprint}
-            onFocusInvestigation={focusSelectedInvestigation}
-          />
+          <WorkspaceSectionBoundary name="CommandCenterView" resetKey={sectionBoundaryResetKey} errorContext={telemetryBoundaryMeta} onRetry={retryLatestTelemetry}>
+            <CommandCenterView
+              model={model}
+              helpers={viewHelpers}
+              onOpenInsight={openInsight}
+              selectedInsight={selectedInsight}
+              onSelectInsight={setSelectedInsightId}
+              onConnectLiveData={connectLiveData}
+              onResumePreviousSession={onResumePreviousSession}
+              onViewSystems={viewSystems}
+              onViewFingerprint={viewFingerprint}
+              onFocusInvestigation={focusSelectedInvestigation}
+            />
+          </WorkspaceSectionBoundary>
         ) : null}
 
-        {visibleSection === "systems" ? <SystemsView model={model} helpers={viewHelpers} onOpenInsight={openInsight} /> : null}
+        {visibleSection === "systems" ? (
+          <WorkspaceSectionBoundary name="SystemsView" resetKey={sectionBoundaryResetKey} errorContext={telemetryBoundaryMeta} onRetry={retryLatestTelemetry}>
+            <SystemsView model={model} helpers={viewHelpers} onOpenInsight={openInsight} />
+          </WorkspaceSectionBoundary>
+        ) : null}
 
         {visibleSection === "insights" ? (
-          <InsightsView model={model} helpers={viewHelpers} selectedInsight={selectedInsight} onSelectInsight={setSelectedInsightId} />
+          <WorkspaceSectionBoundary name="InsightsView" resetKey={sectionBoundaryResetKey} errorContext={telemetryBoundaryMeta} onRetry={retryLatestTelemetry}>
+            <InsightsView model={model} helpers={viewHelpers} selectedInsight={selectedInsight} onSelectInsight={setSelectedInsightId} />
+          </WorkspaceSectionBoundary>
         ) : null}
 
-        {visibleSection === "fingerprint" ? <FingerprintView model={model} helpers={viewHelpers} /> : null}
+        {visibleSection === "fingerprint" ? (
+          <WorkspaceSectionBoundary name="FingerprintView" resetKey={sectionBoundaryResetKey} errorContext={telemetryBoundaryMeta} onRetry={retryLatestTelemetry}>
+            <FingerprintView model={model} helpers={viewHelpers} />
+          </WorkspaceSectionBoundary>
+        ) : null}
 
         {visibleSection === "data-sources" ? (
-          <DataSourcesView model={model} helpers={viewHelpers} onAnalyzeHistoricalData={openOverviewFilePicker} onSelectCsv={openOverviewFilePicker} />
+          <WorkspaceSectionBoundary name="DataSourcesView" resetKey={sectionBoundaryResetKey} errorContext={telemetryBoundaryMeta} onRetry={retryLatestTelemetry}>
+            <DataSourcesView model={model} helpers={viewHelpers} onAnalyzeHistoricalData={openOverviewFilePicker} onSelectCsv={openOverviewFilePicker} />
+          </WorkspaceSectionBoundary>
         ) : null}
 
         {visibleSection === "advanced" ? (
-          <AdvancedDetailsView model={model} helpers={viewHelpers} selectedInsightId={selectedInsightId} onAnalyzeSystem={analyzeSystem} onResumePreviousSession={onResumePreviousSession} onReopenHistoricalAnalysis={onReopenHistoricalAnalysis} onDeleteHistoricalAnalysis={onDeleteHistoricalAnalysis} />
+          <WorkspaceSectionBoundary name="AdvancedDetailsView" resetKey={sectionBoundaryResetKey} errorContext={telemetryBoundaryMeta} onRetry={retryLatestTelemetry}>
+            <AdvancedDetailsView model={model} helpers={viewHelpers} selectedInsightId={selectedInsightId} onAnalyzeSystem={analyzeSystem} onResumePreviousSession={onResumePreviousSession} onReopenHistoricalAnalysis={onReopenHistoricalAnalysis} onDeleteHistoricalAnalysis={onDeleteHistoricalAnalysis} />
+          </WorkspaceSectionBoundary>
         ) : null}
       </main>
       </PageContainer>
@@ -1318,12 +1424,16 @@ function conciseOperatorSentence(...values) {
 function collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExplanation }) {
   const explanatorySystems = Array.isArray(analysisExplanation?.systems) ? analysisExplanation.systems : [];
   if (explanatorySystems.length > 0) {
-    return explanatorySystems.map((system, index) => {
+    return explanatorySystems.map((rawSystem, index) => {
+      const system = rawSystem && typeof rawSystem === "object"
+        ? rawSystem
+        : { id: "unknown-system-" + index, name: firstText(rawSystem, "System " + (index + 1)), type: "unknown" };
       const relationshipChanges = Array.isArray(system.relationship_changes) ? system.relationship_changes : [];
       const relationshipSummaries = relationshipChanges
+        .filter((item) => item && typeof item === "object")
         .map((item) => firstText(item.explanation, item.what_changed, item.summary, item.change_type))
         .filter(Boolean);
-      const name = formatDisplayName(firstText(system.name, system.label), "System " + (index + 1));
+      const name = formatDisplayName(firstText(system.name, system.label, system.system_name), "System " + (index + 1));
       return {
         ...system,
         id: system.id ?? system.name ?? "system-" + index,
@@ -1343,11 +1453,16 @@ function collectIdentifiedSystems({ liveOps, result, primarySystem, analysisExpl
   ];
   const systems = candidates.find((items) => Array.isArray(items) && items.length > 0) ?? [];
   if (systems.length > 0) {
-    return systems.map((system, index) => ({
-      ...system,
-      id: system.id ?? system.name ?? system.label ?? `system-${index}`,
-      name: formatDisplayName(firstText(system.name, system.label, system.system_name), `System ${index + 1}`),
-    }));
+    return systems.map((rawSystem, index) => {
+      const system = rawSystem && typeof rawSystem === "object"
+        ? rawSystem
+        : { id: `unknown-system-${index}`, name: firstText(rawSystem, `System ${index + 1}`), type: "unknown" };
+      return {
+        ...system,
+        id: system.id ?? system.name ?? system.label ?? `system-${index}`,
+        name: formatDisplayName(firstText(system.name, system.label, system.system_name), `System ${index + 1}`),
+      };
+    });
   }
   return [{ id: "primary", name: formatDisplayName(primarySystem, UNASSIGNED_SYSTEM_NAME) }];
 }

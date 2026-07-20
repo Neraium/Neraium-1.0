@@ -58,6 +58,7 @@ export default function useFacilityRuntime({
   const healthCheckAttemptsRef = useRef(0);
   const latestStabilityRef = useRef({ hasData: false, dataStreak: 0, emptyStreak: 0 });
   const latestUploadResultRef = useRef(null);
+  const lastKnownGoodTelemetryRef = useRef({ latestResult: null, snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(), sessionStore: buildEmptySessionStore() });
   const apiStateRef = useRef("checking");
   const healthRequestInFlightRef = useRef(false);
   const systemsRequestInFlightRef = useRef(false);
@@ -68,6 +69,7 @@ export default function useFacilityRuntime({
     setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
     setSessionStore(buildEmptySessionStore());
     latestUploadResultRef.current = null;
+    lastKnownGoodTelemetryRef.current = { latestResult: null, snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(), sessionStore: buildEmptySessionStore() };
     latestStabilityRef.current = { hasData: false, dataStreak: 0, emptyStreak: 0 };
   }, []);
 
@@ -183,6 +185,21 @@ export default function useFacilityRuntime({
     const shouldIncludePersisted = typeof includePersisted === "boolean" ? includePersisted : allowPersistedLatest;
     try {
       const payload = await fetchLatestUploadState({ apiFetch, accessCode, includePersisted: shouldIncludePersisted, forceRefresh });
+      const boundaryMeta = payload.snapshot?._neraiumTelemetryBoundary ?? {};
+      if (boundaryMeta.renderable === false && lastKnownGoodTelemetryRef.current?.snapshot) {
+        console.warn("[neraium] latest telemetry rejected by workspace boundary", {
+          referenceId: boundaryMeta.referenceId ?? null,
+          workspaceId: boundaryMeta.workspaceId ?? "system-body",
+          telemetryTimestamp: boundaryMeta.telemetryTimestamp ?? null,
+          schemaVersion: boundaryMeta.schemaVersion ?? null,
+          requestCorrelationId: boundaryMeta.requestCorrelationId ?? null,
+          issues: boundaryMeta.issues ?? [],
+        });
+        return latestReturn(Boolean(lastKnownGoodTelemetryRef.current.sessionStore?.hasRuntimeData), {
+          snapshot: lastKnownGoodTelemetryRef.current.snapshot,
+          latestResult: lastKnownGoodTelemetryRef.current.latestResult,
+        });
+      }
       const nextHasData = Boolean(
         uploadStateView.hasFullUploadResult(payload.latestResult)
         || uploadStateView.hasActiveTelemetrySnapshot(payload.snapshot),
@@ -210,13 +227,29 @@ export default function useFacilityRuntime({
       setLatestUploadResult(payload.latestResult);
       setSessionStore(nextSessionStore);
       latestUploadResultRef.current = payload.latestResult;
+      if (nextHasData && payload.snapshot?._neraiumTelemetryBoundary?.renderable !== false) {
+        lastKnownGoodTelemetryRef.current = { latestResult: payload.latestResult, snapshot: payload.snapshot, sessionStore: nextSessionStore };
+      }
       return latestReturn(Boolean(nextSessionStore.hasRuntimeData), payload);
-    } catch {
+    } catch (error) {
       if (!shouldIncludePersisted) {
         clearUploadSessionState();
         return latestReturn(false);
       }
-      return latestReturn(Boolean(latestUploadResultRef.current));
+      const lastGood = lastKnownGoodTelemetryRef.current;
+      console.warn("[neraium] latest telemetry refresh failed; retaining last available state", {
+        message: error?.message ?? "Latest telemetry refresh failed",
+        status: error?.status ?? null,
+        referenceId: lastGood?.snapshot?._neraiumTelemetryBoundary?.referenceId ?? null,
+        workspaceId: lastGood?.snapshot?._neraiumTelemetryBoundary?.workspaceId ?? "system-body",
+        telemetryTimestamp: lastGood?.snapshot?._neraiumTelemetryBoundary?.telemetryTimestamp ?? null,
+        schemaVersion: lastGood?.snapshot?._neraiumTelemetryBoundary?.schemaVersion ?? null,
+        requestCorrelationId: lastGood?.snapshot?._neraiumTelemetryBoundary?.requestCorrelationId ?? null,
+      });
+      return latestReturn(Boolean(lastGood?.sessionStore?.hasRuntimeData ?? latestUploadResultRef.current), {
+        snapshot: lastGood?.snapshot ?? latestUploadSnapshot,
+        latestResult: lastGood?.latestResult ?? latestUploadResultRef.current,
+      });
     } finally {
       latestUploadRequestInFlightRef.current = false;
     }

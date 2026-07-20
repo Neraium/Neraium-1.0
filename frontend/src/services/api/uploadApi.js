@@ -17,6 +17,24 @@ import {
 } from "../../viewModels/uploadFlow";
 
 const LATEST_UPLOAD_DEDUPE_TTL_MS = 4000;
+const LATEST_UPLOAD_MAX_RETRIES = 2;
+
+function latestUploadRetryDelayMs(attempt) {
+  return [500, 1200][attempt] ?? 1200;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientLatestUploadError(error) {
+  const status = Number(error?.status ?? error?.responseStatus ?? 0);
+  return error?.name === "ApiTimeoutError"
+    || error?.name === "ApiNetworkError"
+    || status === 408
+    || status === 429
+    || (status >= 500 && status <= 504);
+}
 const latestUploadInflight = new Map();
 const latestUploadCache = new Map();
 
@@ -42,22 +60,35 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
 
   const request = (async () => {
     const path = `/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`;
-    const response = await apiFetch(path, { accessCode });
-    const payload = await readJsonPayload(response, { route: path, phase: "result" });
-    if (!response.ok) {
-      const requestError = buildUploadRequestError(response, payload, "result");
-      throw Object.assign(new Error(requestError.detail || "Analysis results could not be loaded. Refresh and retry."), requestError);
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= LATEST_UPLOAD_MAX_RETRIES; attempt += 1) {
+      try {
+        const response = await apiFetch(path, { accessCode });
+        const rawPayload = await readJsonPayload(response, { route: path, phase: "result" });
+        if (!response.ok) {
+          const requestError = buildUploadRequestError(response, rawPayload, "result");
+          throw Object.assign(new Error(requestError.detail || "Analysis results could not be loaded. Refresh and retry."), requestError);
+        }
+
+        const normalizedSnapshot = uploadStateView.normalizeLatestUploadPayload(rawPayload);
+        const latestResult = uploadStateView.resolveCurrentUploadResult(normalizedSnapshot);
+        const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null;
+        const value = {
+          snapshot: normalizedSnapshot,
+          latestResult: normalizedLatestResult,
+        };
+        latestUploadCache.set(key, { expiresAt: Date.now() + LATEST_UPLOAD_DEDUPE_TTL_MS, value });
+        return value;
+      } catch (error) {
+        lastError = error;
+        if (attempt >= LATEST_UPLOAD_MAX_RETRIES || !isTransientLatestUploadError(error)) break;
+        console.info("[neraium] latest telemetry retry scheduled", { attempt: attempt + 1, status: error?.status ?? null });
+        await sleep(latestUploadRetryDelayMs(attempt));
+      }
     }
 
-    const latestResult = uploadStateView.resolveCurrentUploadResult(payload);
-    const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null;
-    const normalizedSnapshot = payload ?? uploadStateView.buildEmptyLatestUploadSnapshot();
-    const value = {
-      snapshot: normalizedSnapshot,
-      latestResult: normalizedLatestResult,
-    };
-    latestUploadCache.set(key, { expiresAt: Date.now() + LATEST_UPLOAD_DEDUPE_TTL_MS, value });
-    return value;
+    throw lastError;
   })();
 
   latestUploadInflight.set(key, request);

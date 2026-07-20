@@ -149,3 +149,81 @@ describe("fetchLatestUploadState", () => {
     }
   });
 });
+
+describe("latest telemetry retry and failure handling", () => {
+  beforeEach(() => {
+    clearLatestUploadStateCache();
+    vi.useRealTimers();
+  });
+
+  it("recovers latest telemetry after a transient live connection failure", async () => {
+    vi.useFakeTimers();
+    const apiFetch = vi.fn()
+      .mockResolvedValueOnce(createHtmlResponse(503))
+      .mockResolvedValueOnce(createResponse({
+        status: "complete",
+        request_correlation_id: "corr-retry-success",
+        latest_result: { job_id: "job-after-retry", filename: "live.csv", sii_intelligence: { facility_state: "stable" } },
+      }));
+
+    const promise = fetchLatestUploadState({ apiFetch, accessCode: "", includePersisted: true, forceRefresh: true });
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await promise;
+
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+    expect(result.latestResult.job_id).toBe("job-after-retry");
+    expect(result.snapshot._neraiumTelemetryBoundary.requestCorrelationId).toBe("corr-retry-success");
+    vi.useRealTimers();
+  });
+
+  it("retries network timeout before returning latest telemetry", async () => {
+    vi.useFakeTimers();
+    const timeout = Object.assign(new Error("timeout"), { name: "ApiTimeoutError", status: 408 });
+    const apiFetch = vi.fn()
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce(createResponse({
+        status: "complete",
+        latest_result: { job_id: "job-timeout-recovered", filename: "timeout.csv", sii_intelligence: { facility_state: "stable" } },
+      }));
+
+    const promise = fetchLatestUploadState({ apiFetch, accessCode: "", includePersisted: true, forceRefresh: true });
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await promise;
+
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+    expect(result.latestResult.job_id).toBe("job-timeout-recovered");
+    vi.useRealTimers();
+  });
+
+  it("stops retrying failed latest live connection after sensible limits", async () => {
+    vi.useFakeTimers();
+    const apiFetch = vi.fn()
+      .mockResolvedValueOnce(createHtmlResponse(503))
+      .mockResolvedValueOnce(createHtmlResponse(503))
+      .mockResolvedValueOnce(createHtmlResponse(503));
+
+    const promise = fetchLatestUploadState({ apiFetch, accessCode: "", includePersisted: true, forceRefresh: true });
+    const rejection = expect(promise).rejects.toMatchObject({ status: 503 });
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1200);
+    await rejection;
+    expect(apiFetch).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+});
+
+describe("file ingestion failure handling", () => {
+  it("surfaces failed file-based ingestion without retrying non-transient validation errors", async () => {
+    const xhr = installXhrSequence([{ status: 400, body: JSON.stringify({ detail: "Invalid telemetry file" }), headers: { "content-type": "application/json" } }]);
+
+    try {
+      await expect(uploadTelemetryFileWithProgress({
+        file: new File(["not,csv"], "bad.csv", { type: "text/csv" }),
+        accessCode: "",
+      })).rejects.toMatchObject({ status: 400 });
+      expect(xhr.instances).toHaveLength(1);
+    } finally {
+      xhr.restore();
+    }
+  });
+});
