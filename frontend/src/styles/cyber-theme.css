@@ -1,0 +1,129 @@
+/* Final palette normalization. Component layout remains owned by the existing design system. */
+:root[data-domain-mode="aquatic"],
+:root[data-domain-mode="cultivation"] {
+  --mode-accent-rgb: var(--blue-primary-rgb);
+  --mode-accent-soft-rgb: 170, 180, 195;
+  --mode-bg-tint: rgba(var(--blue-primary-rgb), 0.08);
+}
+
+html, body, #root { background: var(--bg-app); }
+body { color: var(--text-primary); }
+
+.ui-card, .ops-panel, .operational-panel, .section-card, .hero-panel,
+.metric-cell, .telemetry-card, .workflow-step, .feed-item, .timeline-item,
+.empty-state, .table-shell, .status-tile, .onboarding-card, .auth-panel,
+.post-upload-overview, .post-upload-section, .finding-card, .system-story-chart {
+  border-color: var(--surface-border);
+  background: linear-gradient(180deg, var(--bg-panel-alt), var(--bg-panel));
+  box-shadow: var(--shadow-panel), inset 0 1px 0 rgba(245, 247, 250, 0.025);
+}
+
+button, [role="button"], input, select, textarea, .tab, [role="tab"] {
+  border-color: var(--surface-border);
+}
+button:focus-visible, [role="button"]:focus-visible, a:focus-visible,
+input:focus-visible, select:focus-visible, textarea:focus-visible, [role="tab"]:focus-visible {
+  outline: 2px solid var(--blue-glow);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus);
+}
+
+.primary-button, .button--primary, .operational-button--primary,
+[aria-current="page"], [role="tab"][aria-selected="true"], .is-active {
+  border-color: var(--surface-border-strong);
+  color: var(--text-primary);
+  background-color: var(--blue-deep);
+  box-shadow: var(--glow-blue);
+}
+
+a, .text-link, .operational-link-button, .section-token, .workspace-header__kicker {
+  color: var(--blue-glow);
+}
+
+/* Charts and relationship views share the same coordinated electric-blue family. */
+svg .chart-line, svg .relationship-line, svg .topology-edge,
+svg [class*="connection"], svg [class*="relationship"] {
+  stroke: var(--blue-primary);
+}
+svg .chart-point, svg .topology-node, svg [class*="active-node"] { fill: var(--blue-glow); }
+
+[role="tooltip"], .tooltip, .chart-tooltip {
+  border: 1px solid var(--surface-border-strong);
+  background: var(--surface-overlay);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lux);
+}
+
+/* Infrastructure constellation loader. Legacy root class remains for state compatibility. */
+.upload-fingerprint-build {
+  min-height: clamp(330px, 44vw, 430px);
+  border: 1px solid var(--surface-border);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(var(--blue-deep-rgb), .12), transparent 44%),
+    linear-gradient(180deg, var(--color-neutral-900), var(--color-neutral-950));
+  box-shadow: inset 0 0 32px rgba(var(--blue-primary-rgb), .04), var(--shadow-lux);
+}
+.upload-fingerprint-build::before {
+  inset: 12%;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--blue-primary-rgb), .07), transparent 68%);
+  box-shadow: none;
+  animation: constellation-field-breathe 5s ease-in-out infinite;
+}
+.upload-fingerprint-build__halo {
+  inset: 8%;
+  border-radius: 50%;
+  background: radial-gradient(circle, transparent 52%, rgba(var(--blue-primary-rgb), .08) 72%, transparent 74%);
+  opacity: .6;
+  animation: constellation-field-breathe 6s ease-in-out infinite reverse;
+}
+.upload-fingerprint-build__print {
+  width: min(92%, 410px);
+  filter: drop-shadow(0 0 10px rgba(var(--blue-primary-rgb), .18));
+  animation: none;
+}
+.upload-fingerprint-build__field { fill: rgba(var(--blue-deep-rgb), .055); }
+.upload-fingerprint-build__relationship-links path {
+  stroke: var(--blue-primary);
+  stroke-width: 1.05;
+  stroke-dasharray: 100;
+  stroke-dashoffset: var(--network-offset, 100);
+  opacity: .68;
+  filter: drop-shadow(0 0 3px rgba(var(--blue-glow-rgb), .5));
+}
+.upload-fingerprint-build__network-node { opacity: 0; animation: constellation-node-arrive .65s ease-out forwards; animation-delay: calc(var(--point-index) * 130ms); }
+.upload-fingerprint-build__node-orbit { fill: none; stroke: rgba(var(--blue-glow-rgb), .38); stroke-width: .7; animation: constellation-node-pulse 3.2s ease-in-out infinite; }
+.upload-fingerprint-build__node-core { fill: var(--text-primary); stroke: var(--blue-glow); stroke-width: .8; }
+.upload-fingerprint-build__network-node--core .upload-fingerprint-build__node-core,
+.upload-fingerprint-build__network-node--system .upload-fingerprint-build__node-core { fill: var(--blue-glow); }
+.upload-fingerprint-build__network-node--core .upload-fingerprint-build__node-orbit { stroke: var(--blue-primary); }
+.upload-fingerprint-build__signal { fill: var(--text-primary); filter: drop-shadow(0 0 4px var(--blue-glow)); opacity: 0; }
+.upload-fingerprint-build[data-build-stage="relationships"] .upload-fingerprint-build__signal,
+.upload-fingerprint-build[data-build-stage="organization"] .upload-fingerprint-build__signal,
+.upload-fingerprint-build[data-build-stage="baseline"] .upload-fingerprint-build__signal,
+.upload-fingerprint-build[data-build-stage="complete"] .upload-fingerprint-build__signal { opacity: 1; animation: constellation-signal 3.6s linear infinite; }
+.upload-fingerprint-build__particles span { background: var(--blue-glow); box-shadow: 0 0 10px rgba(var(--blue-glow-rgb), .7); }
+.upload-fingerprint-build__nodes span.is-complete::before,
+.upload-fingerprint-build__nodes span.is-active::before { background: var(--blue-primary); box-shadow: 0 0 10px rgba(var(--blue-primary-rgb), .35); }
+.upload-fingerprint-build__nodes span.is-complete i,
+.upload-fingerprint-build__nodes span.is-active i,
+.upload-fingerprint-build__nodes span.is-active i { border-color: var(--text-primary); background: var(--blue-primary); box-shadow: 0 0 12px rgba(var(--blue-glow-rgb), .5); }
+.upload-fingerprint-build--complete { box-shadow: inset 0 0 38px rgba(var(--blue-glow-rgb), .12), 0 0 36px rgba(var(--blue-primary-rgb), .16), var(--shadow-lux); animation: constellation-complete .9s ease-out both; }
+.upload-fingerprint-build__check { border-color: var(--blue-glow); background: var(--color-neutral-950); color: var(--text-primary); box-shadow: 0 0 34px rgba(var(--blue-glow-rgb), .4); }
+.upload-fingerprint-build__ripple { border-color: rgba(var(--blue-glow-rgb), .5); }
+
+@keyframes constellation-node-arrive { from { opacity: 0; transform: scale(.35); } to { opacity: 1; transform: scale(1); } }
+@keyframes constellation-node-pulse { 0%,100% { opacity: .24; transform: scale(.8); } 50% { opacity: .85; transform: scale(1.18); } }
+@keyframes constellation-signal { 0% { offset-distance: 0%; } 100% { offset-distance: 100%; } }
+@keyframes constellation-field-breathe { 0%,100% { opacity: .34; transform: scale(.98); } 50% { opacity: .7; transform: scale(1.02); } }
+@keyframes constellation-complete { 0% { filter: brightness(1); } 45% { filter: brightness(1.3); } 100% { filter: brightness(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-fingerprint-build::before, .upload-fingerprint-build__halo,
+  .upload-fingerprint-build__network-node, .upload-fingerprint-build__node-orbit,
+  .upload-fingerprint-build__signal, .upload-fingerprint-build--complete { animation: none !important; }
+  .upload-fingerprint-build__network-node { opacity: 1; }
+  .upload-fingerprint-build__signal { display: none; }
+  .upload-fingerprint-build__relationship-links path { transition: none; }
+}
