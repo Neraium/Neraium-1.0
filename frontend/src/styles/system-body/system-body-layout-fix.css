@@ -322,3 +322,69 @@
     white-space: normal;
   }
 }
+
+/* Neraium electric-blue system body theme finalization. Color-only overrides. */
+.system-body,
+.system-body--gate,
+.workspace-view--system-body {
+  background: var(--bg-app);
+  color: var(--text-primary);
+}
+
+.system-body-hero,
+.system-body-summary-card,
+.system-body-evidence-card,
+.system-body-timeline-card,
+.system-body-metric,
+.system-gate__hero,
+.system-gate__panel,
+.system-gate__stat-card,
+.system-gate__nav-card,
+.post-upload-section,
+.post-upload-overview {
+  border-color: var(--surface-border);
+  background: var(--surface-b);
+  color: var(--text-primary);
+}
+
+.system-body-hero::before {
+  opacity: 0.42;
+}
+
+.system-body-status-light__dot--gray {
+  color: var(--text-muted);
+  background: var(--text-muted);
+}
+
+.system-body-status-light__dot--stable {
+  color: var(--color-brand);
+  background: var(--color-brand);
+}
+
+.system-body-status-light__dot--yellow {
+  color: var(--color-warning);
+  background: var(--color-warning);
+}
+
+.system-body-status-light__dot--red {
+  color: var(--color-danger);
+  background: var(--color-danger);
+}
+
+.system-body-orb-panel {
+  border-color: var(--surface-border);
+  background: radial-gradient(circle at center, var(--glow-blue-subtle), transparent 66%), var(--surface-a);
+}
+
+.system-body-orb-panel__lattice span,
+.system-body-orb-panel__sync strong {
+  background: var(--color-brand);
+  box-shadow: 0 0 14px var(--glow-blue-soft);
+}
+
+.system-body-orb-panel__telemetry,
+.system-body-orb-panel__sync,
+.system-body-orb-panel__meta {
+  border-color: var(--surface-divider);
+  background: rgb(var(--rgb-surface-primary) / 0.64);
+}

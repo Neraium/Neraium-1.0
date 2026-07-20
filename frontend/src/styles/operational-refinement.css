@@ -44,9 +44,9 @@
 
 .operational-nav button.is-active,
 .operational-mobile-nav button.is-active {
-  border-color: rgba(22, 135, 127, 0.24);
-  background: rgba(22, 135, 127, 0.13);
-  color: #8fd4ce;
+  border-color: rgba(var(--mode-accent-rgb), 0.24);
+  background: rgba(var(--mode-accent-rgb), 0.13);
+  color: var(--color-cyan-highlight);
 }
 
 .operational-main {
@@ -297,7 +297,7 @@
 
 .operational-panel {
   padding: clamp(16px, 2vw, 22px);
-  border-color: rgba(132, 145, 165, 0.16);
+  border-color: rgba(130, 176, 255, 0.16);
   background: rgba(12, 18, 28, 0.74);
 }
 
@@ -331,7 +331,7 @@
 .advanced-details-panel,
 .insight-summary-card,
 .insight-situation-card {
-  border-color: rgba(132, 145, 165, 0.14);
+  border-color: rgba(130, 176, 255, 0.14);
   background: rgba(8, 13, 21, 0.5);
   box-shadow: none;
 }
@@ -343,7 +343,7 @@
 }
 
 .command-section--findings::before {
-  border-color: rgba(132, 145, 165, 0.12);
+  border-color: rgba(130, 176, 255, 0.12);
   background: rgba(8, 13, 21, 0.34);
 }
 
@@ -444,7 +444,7 @@
 .upload-recovery-summary div,
 .investigation-decision-path button {
   min-width: 0;
-  border: 1px solid rgba(132, 145, 165, 0.14);
+  border: 1px solid rgba(130, 176, 255, 0.14);
   border-radius: var(--radius-md);
   background: rgba(8, 13, 21, 0.5);
 }
@@ -524,7 +524,7 @@
 
 .investigation-decision-path button:hover,
 .investigation-decision-path button:focus-visible {
-  border-color: rgba(92, 193, 167, 0.55);
+  border-color: rgb(var(--rgb-blue-primary) / 0.55);
 }
 
 @media (max-width: 900px) {
@@ -564,7 +564,7 @@
 .subsystem-behavior__row strong { min-width: 0; overflow-wrap: anywhere; }
 .subsystem-behavior__row small { color: var(--text-muted); }
 .subsystem-behavior__indicator { width: 8px; height: 8px; border-radius: 50%; background: #718096; }
-.subsystem-behavior__indicator--stable { background: var(--color-success, #5cbda7); }
+.subsystem-behavior__indicator--stable { background: var(--color-success, var(--color-success)); }
 .subsystem-behavior__indicator--watching { background: #a69b79; }
 .subsystem-behavior__indicator--changing,
 .subsystem-behavior__indicator--investigation-recommended { background: #b8895a; }
@@ -575,7 +575,7 @@
 .priority-finding__heading p { margin: var(--space-4) 0; color: var(--text-secondary); }
 .priority-finding__heading h3 { margin: 0; font-size: var(--type-title-lg); line-height: 1.2; overflow-wrap: anywhere; }
 .priority-finding__severity { flex: 0 0 auto; padding: 5px 9px; border: 1px solid currentColor; border-radius: 999px; color: #c39a6a; font-size: var(--type-label-sm); }
-.priority-finding__severity--normal { color: var(--color-success, #5cbda7); }
+.priority-finding__severity--normal { color: var(--color-success, var(--color-success)); }
 .priority-finding__severity--critical,
 .priority-finding__severity--error { color: var(--color-danger, #dc6b6b); }
 .priority-finding__explanation { max-width: 78ch; margin: 0; color: var(--text-secondary); line-height: 1.55; }
@@ -598,4 +598,83 @@
   .operational-finding-row__severity,
   .operational-finding-row__confidence,
   .operational-finding-row__summary { grid-column: 1; justify-self: start; text-align: left; }
+}
+
+/* Neraium electric-blue operational theme finalization. Color-only overrides. */
+.operational-workflow {
+  --ops-bg: var(--bg-app);
+  --ops-page: var(--bg-app);
+  --ops-surface: var(--surface-a);
+  --ops-surface-elevated: var(--surface-b);
+  --ops-surface-subtle: var(--surface-c);
+  --ops-ink: var(--text-primary);
+  --ops-ink-soft: var(--text-secondary);
+  --ops-ink-muted: var(--text-muted);
+  --ops-line: var(--surface-divider);
+  --ops-line-strong: var(--surface-border-strong);
+  --ops-accent: var(--color-blue-royal);
+  --ops-accent-strong: var(--color-brand);
+  --ops-accent-soft: var(--glow-blue-soft);
+  --ops-focus: var(--glow-blue-strong);
+  --ops-surface-hover: rgb(var(--rgb-surface-hover) / 0.92);
+  --ops-success: var(--color-success);
+  --ops-success-soft: rgb(var(--rgb-success) / 0.13);
+  --ops-warning: var(--color-warning);
+  --ops-warning-soft: rgb(var(--rgb-warning) / 0.14);
+  --ops-danger: var(--color-danger);
+  --ops-danger-soft: rgb(var(--rgb-danger) / 0.13);
+  --ops-neutral-soft: rgb(var(--rgb-text-muted) / 0.12);
+  background: var(--bg-app);
+  color: var(--text-primary);
+}
+
+.operational-sidebar,
+.operational-topbar,
+.operational-main,
+.operational-mobile-nav {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+}
+
+.operational-panel,
+.operational-block,
+.insight-card,
+.system-summary-row,
+.telemetry-card,
+.zone-summary-card,
+.fingerprint-status,
+.status-tile,
+.priority-finding__card {
+  border-color: var(--surface-border);
+  background: var(--surface-b);
+}
+
+.operational-panel--hero,
+.operator-completion-list li {
+  background: var(--surface-a);
+}
+
+.operational-nav button.is-active,
+.operational-mobile-nav button.is-active {
+  border-color: var(--surface-border-strong);
+  background: rgba(7, 86, 216, 0.24);
+  color: var(--text-bright);
+  box-shadow: inset 3px 0 0 var(--color-brand), 0 0 18px var(--glow-blue-soft);
+}
+
+.operational-nav button:hover,
+.operational-mobile-nav button:hover {
+  border-color: var(--color-brand-hover);
+  background: rgba(var(--mode-accent-rgb), 0.14);
+}
+
+.intake-flow__timeline path,
+.intake-flow__timeline line,
+.observation-explorer__chart polyline {
+  stroke: var(--graph-line-primary);
+}
+
+.intake-flow__timeline circle {
+  fill: var(--graph-node-core);
+  filter: drop-shadow(0 0 10px var(--graph-node-halo));
 }

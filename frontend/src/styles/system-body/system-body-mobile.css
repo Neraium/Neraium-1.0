@@ -120,7 +120,7 @@
     display: grid;
     gap: 12px;
     padding: 10px;
-    border: 1px solid rgba(143, 168, 164, 0.12);
+    border: 1px solid rgba(130, 176, 255, 0.12);
     border-radius: 14px;
     background: linear-gradient(180deg, rgba(16, 23, 28, 0.96), rgba(8, 12, 15, 0.94));
   }
@@ -227,7 +227,7 @@
     gap: 2px;
     justify-content: center;
     overflow: visible;
-    border-color: rgba(143, 168, 164, 0.09);
+    border-color: rgba(130, 176, 255, 0.09);
     background: rgba(9, 14, 18, 0.42);
   }
 
@@ -290,7 +290,7 @@
   .system-body-summary-mobile {
     display: grid;
     order: 3;
-    border: 1px solid rgba(143, 168, 164, 0.12);
+    border: 1px solid rgba(130, 176, 255, 0.12);
     border-radius: 12px;
     background: rgba(7, 11, 14, 0.42);
   }

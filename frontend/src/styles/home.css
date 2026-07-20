@@ -1,22 +1,22 @@
 .home-page {
-  --home-bg: #04070c;
-  --home-surface: rgba(9, 16, 25, 0.78);
-  --home-surface-strong: rgba(13, 25, 37, 0.92);
-  --home-line: rgba(121, 150, 164, 0.18);
-  --home-line-strong: rgba(52, 210, 197, 0.34);
-  --home-ink: #f4f8fb;
-  --home-ink-soft: #c2ced7;
-  --home-ink-muted: #7f94a3;
-  --home-accent: #00a39a;
-  --home-accent-dark: #007a74;
-  --home-accent-soft: rgba(0, 163, 154, 0.15);
-  --home-warm: #d6a94f;
-  --home-warm-soft: rgba(214, 169, 79, 0.12);
+  --home-bg: var(--bg-app);
+  --home-surface: rgb(var(--rgb-surface-card) / 0.78);
+  --home-surface-strong: rgb(var(--rgb-surface-hover) / 0.92);
+  --home-line: var(--surface-divider);
+  --home-line-strong: var(--surface-border-strong);
+  --home-ink: var(--text-primary);
+  --home-ink-soft: var(--text-secondary);
+  --home-ink-muted: var(--text-muted);
+  --home-accent: var(--color-brand);
+  --home-accent-dark: var(--color-blue-royal);
+  --home-accent-soft: rgb(var(--rgb-blue-primary) / 0.15);
+  --home-warm: var(--color-warning);
+  --home-warm-soft: rgb(var(--rgb-warning) / 0.12);
   min-height: 100svh;
   background:
-    radial-gradient(circle at 50% 10%, rgba(0, 163, 154, 0.12), transparent 28rem),
-    radial-gradient(circle at 82% 24%, rgba(214, 169, 79, 0.08), transparent 20rem),
-    linear-gradient(180deg, #061018 0%, var(--home-bg) 52%, #020409 100%);
+    radial-gradient(circle at 50% 10%, rgb(var(--rgb-blue-primary) / 0.12), transparent 28rem),
+    radial-gradient(circle at 82% 24%, rgb(var(--rgb-warning) / 0.08), transparent 20rem),
+    linear-gradient(180deg, var(--surface-a) 0%, var(--home-bg) 52%, var(--bg-app) 100%);
   color: var(--home-ink);
   overflow-x: hidden;
 }
@@ -61,12 +61,12 @@
 .home-brand__mark {
   width: 24px;
   height: 24px;
-  border: 1px solid rgba(118, 238, 229, 0.42);
+  border: 1px solid var(--surface-border-strong);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 38% 30%, #e7fffb 0 10%, #4fd7ce 22%, transparent 48%),
-    radial-gradient(circle, rgba(0, 163, 154, 0.32), rgba(0, 122, 116, 0.08) 64%, transparent 68%);
-  box-shadow: 0 0 18px rgba(0, 163, 154, 0.32);
+    radial-gradient(circle at 38% 30%, var(--text-bright) 0 10%, var(--color-cyan-highlight) 22%, transparent 48%),
+    radial-gradient(circle, rgb(var(--rgb-blue-primary) / 0.32), rgba(var(--mode-accent-rgb), 0.08) 64%, transparent 68%);
+  box-shadow: 0 0 18px rgb(var(--rgb-blue-primary) / 0.32);
 }
 
 .home-nav__links {
@@ -108,7 +108,7 @@
   border: 1px solid var(--home-accent-dark);
   background: linear-gradient(180deg, var(--home-accent), var(--home-accent-dark));
   color: #ffffff;
-  box-shadow: 0 14px 32px rgba(0, 122, 116, 0.24);
+  box-shadow: 0 14px 32px rgba(var(--mode-accent-rgb), 0.24);
 }
 
 .home-secondary {
@@ -262,14 +262,14 @@
 
 .home-orb__energy--outer {
   inset: 2%;
-  background: radial-gradient(circle, rgba(0, 163, 154, 0.14), rgba(0, 122, 116, 0.06) 42%, transparent 70%);
+  background: radial-gradient(circle, rgb(var(--rgb-blue-primary) / 0.14), rgba(var(--mode-accent-rgb), 0.06) 42%, transparent 70%);
   filter: blur(18px);
   animation: homeOrbField 10s ease-in-out infinite;
 }
 
 .home-orb__energy--inner {
   inset: 18%;
-  background: conic-gradient(from 0deg, transparent 0 18%, rgba(88, 235, 223, 0.18) 24%, transparent 34%, rgba(214, 169, 79, 0.12) 58%, transparent 72% 100%);
+  background: conic-gradient(from 0deg, transparent 0 18%, rgb(var(--rgb-cyan-highlight) / 0.18) 24%, transparent 34%, rgb(var(--rgb-warning) / 0.12) 58%, transparent 72% 100%);
   filter: blur(12px);
   opacity: 0.58;
   animation: homeOrbFlow 18s linear infinite;
@@ -277,7 +277,7 @@
 
 .home-orb__trace {
   inset: 9%;
-  border: 1px solid rgba(103, 226, 217, 0.12);
+  border: 1px solid rgba(130, 176, 255, 0.12);
   transform: rotate(12deg);
 }
 
@@ -287,7 +287,7 @@
 
 .home-orb__trace--b {
   inset: 16%;
-  border-color: rgba(190, 255, 249, 0.12);
+  border-color: rgba(190, 220, 255, 0.12);
   animation: homeOrbTrace 15s ease-in-out infinite reverse;
 }
 
@@ -450,4 +450,46 @@
     transition: none;
     transform: none;
   }
+}
+
+/* Neraium electric-blue home theme finalization. Color-only overrides. */
+.home-page {
+  --home-bg: var(--bg-app);
+  --home-surface: rgb(var(--rgb-surface-card) / 0.78);
+  --home-surface-strong: rgb(var(--rgb-surface-hover) / 0.92);
+  --home-line: var(--surface-divider);
+  --home-line-strong: var(--surface-border-strong);
+  --home-ink: var(--text-primary);
+  --home-ink-soft: var(--text-secondary);
+  --home-ink-muted: var(--text-muted);
+  --home-accent: var(--color-brand);
+  --home-accent-dark: var(--color-blue-royal);
+  --home-accent-soft: var(--glow-blue-soft);
+  --home-warm: var(--color-warning);
+  --home-warm-soft: rgb(var(--rgb-warning) / 0.12);
+  background: var(--bg-app);
+}
+
+.home-nav,
+.home-card,
+.home-panel,
+.home-shell,
+.home-hero-card {
+  border-color: var(--surface-border);
+  background-color: var(--surface-b);
+  color: var(--text-primary);
+}
+
+.home-primary-link,
+.home-button--primary {
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+  color: var(--text-bright);
+}
+
+.home-primary-link:hover,
+.home-button--primary:hover {
+  border-color: var(--color-brand-hover);
+  background: var(--color-brand-hover);
+  box-shadow: 0 0 20px var(--glow-blue-soft);
 }

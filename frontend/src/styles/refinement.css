@@ -293,7 +293,7 @@ summary { min-height: 44px; align-content: center; cursor: pointer; }
 .connector-health__status--ready,
 .connector-health__status--healthy,
 .connector-health__status--connected {
-  color: #7bd0a9;
+  color: var(--color-success);
 }
 
 .connector-health__status--offline,
@@ -358,7 +358,7 @@ summary { min-height: 44px; align-content: center; cursor: pointer; }
 .intervention-card--selected,
 .observation-history-card[aria-pressed="true"] {
   border-color: rgba(28, 154, 145, 0.46);
-  background: rgba(22, 135, 127, 0.1);
+  background: rgba(var(--mode-accent-rgb), 0.1);
   box-shadow: inset 3px 0 0 var(--color-brand-hover);
 }
 
@@ -616,4 +616,254 @@ summary { min-height: 44px; align-content: center; cursor: pointer; }
   .observation-history-card[aria-pressed="true"] {
     border: 2px solid ButtonText;
   }
+}
+
+/* Neraium electric-blue theme finalization. Color-only overrides. */
+:root {
+  color-scheme: dark;
+  accent-color: var(--color-brand);
+}
+
+html,
+body,
+#root {
+  background: var(--bg-app);
+  color: var(--text-primary);
+}
+
+::selection {
+  background: rgba(var(--mode-accent-rgb), 0.32);
+  color: var(--text-bright);
+}
+
+* {
+  scrollbar-color: var(--color-blue-royal) var(--bg-app);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--bg-app);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid var(--bg-app);
+  border-radius: var(--radius-pill);
+  background: var(--color-blue-royal);
+}
+
+a[href],
+.operational-link-button,
+.workspace-back-control__help,
+.auth-switch {
+  color: var(--color-brand);
+}
+
+a[href]:hover,
+.operational-link-button:hover,
+.workspace-back-control__help:hover,
+.auth-switch:hover {
+  color: var(--color-brand-hover);
+}
+
+.ui-card,
+.ops-panel,
+.operational-panel,
+.section-card,
+.hero-panel,
+.metric-cell,
+.zone-summary-card,
+.telemetry-card,
+.workflow-step,
+.feed-item,
+.timeline-item,
+.empty-state,
+.table-shell,
+.status-tile,
+.fingerprint-status,
+.system-summary-row,
+.insight-card,
+.operational-empty,
+.operational-block,
+.observation-center__snapshot,
+.observation-center__summary,
+.observation-detail-callout,
+.upload-file-card,
+.onboarding-card,
+.onboarding-header,
+.auth-panel,
+.system-gate__panel,
+.system-gate__hero,
+.system-gate__stat-card,
+.system-gate__nav-card,
+.post-upload-overview,
+.post-upload-section,
+.finding-card,
+.post-upload-metric,
+.replay-discovery-card {
+  border-color: var(--surface-border);
+  background: var(--surface-b);
+  color: var(--text-primary);
+}
+
+.operational-sidebar,
+.operational-topbar,
+.operational-mobile-nav,
+.mobile-status-bar,
+.top-status,
+.workspace-drawer,
+.system-gate__settings-panel,
+.system-gate__detail,
+.modal,
+[role="dialog"] {
+  border-color: var(--surface-border);
+  background: rgb(var(--rgb-surface-primary) / 0.96);
+  color: var(--text-primary);
+}
+
+.command-button,
+.auth-submit,
+.primary-button,
+button[type="submit"] {
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+  color: var(--text-bright);
+}
+
+.command-button:hover:enabled,
+.auth-submit:hover:enabled,
+.primary-button:hover:enabled,
+button[type="submit"]:hover:enabled {
+  border-color: var(--color-brand-hover);
+  background: var(--color-brand-hover);
+  box-shadow: 0 0 0 1px rgba(var(--mode-accent-rgb), 0.3), 0 0 20px var(--glow-blue-soft);
+}
+
+.secondary-command-button,
+.btn,
+.ui-button,
+.workspace-menu-button,
+.system-gate__settings,
+.system-gate__settings-action {
+  border-color: var(--surface-border-strong);
+  background: rgb(var(--rgb-surface-card) / 0.78);
+  color: var(--text-primary);
+}
+
+.secondary-command-button:hover:enabled,
+.btn:hover:enabled,
+.ui-button:hover:enabled,
+.workspace-menu-button:hover:enabled,
+.system-gate__settings-action:hover:not(:disabled) {
+  border-color: var(--color-brand-hover);
+  background: rgba(var(--mode-accent-rgb), 0.14);
+  color: var(--text-bright);
+}
+
+.operational-nav button.is-active,
+.operational-mobile-nav button.is-active,
+.result-section-tabs button.is-active,
+.onboarding-choice.is-selected,
+.cultivation-tab.is-active,
+.operator-status-controls button.is-active,
+.operator-action-button--active,
+.workspace-nav__item--active {
+  border-color: var(--surface-border-strong);
+  background: rgba(7, 86, 216, 0.24);
+  color: var(--text-bright);
+  box-shadow: inset 3px 0 0 var(--color-brand), 0 0 18px var(--glow-blue-soft);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+select,
+textarea {
+  border-color: var(--surface-border);
+  background: rgb(var(--rgb-surface-primary) / 0.92);
+  color: var(--text-primary);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-disabled);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled,
+button:disabled {
+  color: var(--text-disabled);
+  border-color: rgba(130, 176, 255, 0.12);
+  background: rgb(var(--rgb-surface-primary) / 0.58);
+}
+
+a[href]:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-brand-hover);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus);
+}
+
+.data-table th,
+.data-table td,
+.operational-detail-grid div,
+.compact-list li,
+.operational-list li {
+  border-color: var(--surface-divider);
+}
+
+.data-table th {
+  background: rgb(var(--rgb-surface-hover) / 0.42);
+  color: var(--text-secondary);
+}
+
+.data-table tr:hover td {
+  background: rgb(var(--rgb-surface-hover) / 0.34);
+}
+
+.tooltip,
+[role="tooltip"] {
+  border: 1px solid var(--chart-tooltip-border);
+  background: var(--chart-tooltip-bg);
+  color: var(--text-primary);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34);
+}
+
+.progress-bar,
+.meter,
+.workspace-loading-panel__meter {
+  background: rgb(var(--rgb-surface-hover) / 0.72);
+}
+
+.progress-bar span,
+.meter span,
+.workspace-loading-panel__meter span {
+  background: linear-gradient(90deg, var(--chart-supporting), var(--chart-primary), var(--chart-secondary));
+}
+
+.observation-explorer__chart,
+.relationship-explorer svg,
+.system-story-chart svg {
+  color: var(--chart-primary);
+}
+
+.observation-explorer__chart polyline,
+.relationship-explorer path,
+.relationship-explorer line,
+.system-story-chart path,
+.system-story-chart line {
+  stroke: var(--graph-line-primary);
+}
+
+.relationship-explorer circle,
+.system-story-chart circle {
+  fill: var(--graph-node-core);
+  filter: drop-shadow(0 0 10px var(--graph-node-halo));
 }

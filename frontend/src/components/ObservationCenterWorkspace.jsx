@@ -906,7 +906,7 @@ export default function ObservationCenterWorkspace({
           ) : (
             <>
               <svg viewBox="0 0 420 120" className="observation-explorer__chart" role="img" aria-label="Pattern history for the selected variables">
-                <polyline fill="none" stroke="rgba(59, 122, 140, 0.92)" strokeWidth="3" points={relationshipPoints} />
+                <polyline fill="none" stroke="rgb(var(--rgb-blue-royal) / 0.92)" strokeWidth="3" points={relationshipPoints} />
               </svg>
               <ul className="compact-list">
                 {relationshipSeries.slice(-6).reverse().map((item) => (

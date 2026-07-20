@@ -144,8 +144,8 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 18% 12%, rgba(108, 186, 156, 0.055), transparent 28%),
-    radial-gradient(circle at 82% 4%, rgba(138, 184, 196, 0.052), transparent 30%),
+    radial-gradient(circle at 18% 12%, rgb(var(--rgb-blue-primary) / 0.055), transparent 28%),
+    radial-gradient(circle at 82% 4%, rgb(var(--rgb-text-secondary) / 0.052), transparent 30%),
     linear-gradient(120deg, transparent 0 42%, rgba(255, 255, 255, 0.018) 50%, transparent 58% 100%);
   opacity: 0.46;
   transform: translate3d(0, 0, 0);

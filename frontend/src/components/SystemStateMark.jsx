@@ -12,36 +12,36 @@ function paletteFor(state) {
   if (state === "neutral") {
     return {
       className: "system-mark--neutral",
-      accent: "#8a98a6",
-      accentSoft: "rgba(138, 152, 166, 0.18)",
-      track: "rgba(138, 152, 166, 0.42)",
-      core: "#c3ccd5",
+      accent: "var(--text-muted)",
+      accentSoft: "rgb(var(--rgb-text-muted) / 0.18)",
+      track: "rgb(var(--rgb-text-muted) / 0.42)",
+      core: "var(--text-secondary)",
     };
   }
   if (state === "alert") {
     return {
       className: "system-mark--alert",
-      accent: "#d45f55",
-      accentSoft: "rgba(212, 95, 85, 0.3)",
-      track: "rgba(212, 95, 85, 0.54)",
-      core: "#ffd6d0",
+      accent: "var(--color-danger)",
+      accentSoft: "rgb(var(--rgb-danger) / 0.3)",
+      track: "rgb(var(--rgb-danger) / 0.54)",
+      core: "var(--color-danger-text)",
     };
   }
   if (state === "watch") {
     return {
       className: "system-mark--watch",
-      accent: "#d3a547",
-      accentSoft: "rgba(211, 165, 71, 0.28)",
-      track: "rgba(211, 165, 71, 0.52)",
-      core: "#ffe7b5",
+      accent: "var(--color-warning)",
+      accentSoft: "rgb(var(--rgb-warning) / 0.28)",
+      track: "rgb(var(--rgb-warning) / 0.52)",
+      core: "var(--color-warning-text)",
     };
   }
   return {
     className: "system-mark--stable",
-    accent: "#35a7a0",
-    accentSoft: "rgba(53, 167, 160, 0.26)",
-    track: "rgba(87, 190, 196, 0.5)",
-    core: "#d9fbf8",
+    accent: "var(--color-blue-primary)",
+    accentSoft: "var(--glow-blue-soft)",
+    track: "var(--graph-line-primary)",
+    core: "var(--text-bright)",
   };
 }
 
@@ -63,12 +63,12 @@ export default function SystemStateMark({ systemState = "neutral", intensity = 0
   };
   const tileBackgroundStyle = {
     fill: `url(#${frameGradientId})`,
-    stroke: "rgba(255, 255, 255, 0.08)",
+    stroke: "rgba(190, 220, 255, 0.12)",
     strokeWidth: 1,
   };
   const tileRimStyle = {
-    fill: "rgba(255, 255, 255, 0.02)",
-    stroke: "rgba(255, 255, 255, 0.14)",
+    fill: "rgb(var(--rgb-surface-card) / 0.52)",
+    stroke: "var(--surface-border)",
     strokeWidth: 1,
   };
   const mazeOuterStyle = {
@@ -77,7 +77,7 @@ export default function SystemStateMark({ systemState = "neutral", intensity = 0
   };
   const mazeInnerStyle = {
     fill: "none",
-    stroke: "rgba(255, 255, 255, 0.3)",
+    stroke: "rgba(190, 220, 255, 0.46)",
     strokeWidth: 1.5,
     strokeLinecap: "round",
     strokeLinejoin: "round",
@@ -85,14 +85,14 @@ export default function SystemStateMark({ systemState = "neutral", intensity = 0
   };
   const mazeCircuitStyle = {
     fill: "none",
-    stroke: "rgba(255, 255, 255, 0.22)",
+    stroke: "rgba(190, 220, 255, 0.34)",
     strokeWidth: 1.1,
     strokeLinecap: "round",
     vectorEffect: "non-scaling-stroke",
   };
   const scanStyle = {
     fill: "none",
-    stroke: "rgba(255, 255, 255, 0.28)",
+    stroke: "rgba(190, 220, 255, 0.42)",
     strokeWidth: 1,
     strokeLinecap: "round",
     opacity: 0.78,
@@ -124,9 +124,9 @@ export default function SystemStateMark({ systemState = "neutral", intensity = 0
       >
         <defs>
           <linearGradient id={frameGradientId} x1="42" y1="34" x2="278" y2="286" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.18" />
+            <stop offset="0%" stopColor="var(--text-bright)" stopOpacity="0.18" />
             <stop offset="38%" stopColor="var(--mark-accent)" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="#03080e" stopOpacity="0.92" />
+            <stop offset="100%" stopColor="var(--bg-app)" stopOpacity="0.92" />
           </linearGradient>
           <linearGradient id={markGradientId} x1="83" y1="78" x2="238" y2="246" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="var(--mark-core)" />

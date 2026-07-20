@@ -1,26 +1,26 @@
 .operational-workflow {
-  --ops-bg: #060910;
-  --ops-page: #080c14;
-  --ops-surface: #0d141f;
-  --ops-surface-elevated: #111b2a;
-  --ops-surface-subtle: #121d2c;
-  --ops-ink: #f4f7fb;
-  --ops-ink-soft: #c5cfdd;
-  --ops-ink-muted: #8f9bad;
-  --ops-line: rgba(148, 163, 184, 0.16);
-  --ops-line-strong: rgba(148, 163, 184, 0.28);
-  --ops-accent: #007A74;
-  --ops-accent-strong: #00A39A;
-  --ops-accent-soft: rgba(0, 122, 116, 0.18);
-  --ops-focus: rgba(120, 247, 239, 0.46);
-  --ops-surface-hover: rgba(18, 29, 44, 0.92);
-  --ops-success: #34d399;
-  --ops-success-soft: rgba(52, 211, 153, 0.13);
-  --ops-warning: #f59e0b;
-  --ops-warning-soft: rgba(245, 158, 11, 0.14);
-  --ops-danger: #f87171;
-  --ops-danger-soft: rgba(248, 113, 113, 0.13);
-  --ops-neutral-soft: rgba(148, 163, 184, 0.12);
+  --ops-bg: var(--bg-app);
+  --ops-page: var(--bg-sidebar);
+  --ops-surface: var(--surface-a);
+  --ops-surface-elevated: var(--surface-b);
+  --ops-surface-subtle: var(--surface-c);
+  --ops-ink: var(--text-primary);
+  --ops-ink-soft: var(--text-secondary);
+  --ops-ink-muted: var(--text-muted);
+  --ops-line: var(--surface-divider);
+  --ops-line-strong: var(--surface-border-strong);
+  --ops-accent: var(--color-blue-royal);
+  --ops-accent-strong: var(--color-brand);
+  --ops-accent-soft: rgba(var(--mode-accent-rgb), 0.18);
+  --ops-focus: var(--glow-blue-strong);
+  --ops-surface-hover: rgb(var(--rgb-surface-hover) / 0.92);
+  --ops-success: var(--color-success);
+  --ops-success-soft: rgb(var(--rgb-success) / 0.13);
+  --ops-warning: var(--color-warning);
+  --ops-warning-soft: rgb(var(--rgb-warning) / 0.14);
+  --ops-danger: var(--color-danger);
+  --ops-danger-soft: rgb(var(--rgb-danger) / 0.13);
+  --ops-neutral-soft: rgb(var(--rgb-text-muted) / 0.12);
   --ops-radius: 8px;
   --ops-space: 16px;
   --ops-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 18px 42px rgba(0, 0, 0, 0.28);
@@ -692,8 +692,8 @@
 }
 
 .telemetry-source-card--available {
-  border-color: rgba(0, 163, 154, 0.34);
-  background: linear-gradient(180deg, rgba(0, 122, 116, 0.14), var(--ops-surface-subtle));
+  border-color: rgb(var(--rgb-blue-primary) / 0.34);
+  background: linear-gradient(180deg, rgba(var(--mode-accent-rgb), 0.14), var(--ops-surface-subtle));
 }
 
 .telemetry-source-card--planned {
@@ -748,7 +748,7 @@
 }
 
 .telemetry-source-card--available small {
-  border-color: rgba(0, 163, 154, 0.24);
+  border-color: rgb(var(--rgb-blue-primary) / 0.24);
   background: var(--ops-accent-soft);
   color: var(--ops-accent-strong);
 }
@@ -1351,14 +1351,14 @@ button.insight-card {
 .insight-card.is-selected,
 .insight-card:hover,
 .system-summary-row:hover {
-  border-color: rgba(0, 163, 154, 0.42);
+  border-color: rgb(var(--rgb-blue-primary) / 0.42);
   box-shadow: var(--ops-shadow-strong);
 }
 
 .insight-card.is-selected {
   border-left: 3px solid var(--ops-accent-strong);
   background:
-    linear-gradient(180deg, rgba(0, 122, 116, 0.13), transparent 40%),
+    linear-gradient(180deg, rgba(var(--mode-accent-rgb), 0.13), transparent 40%),
     var(--ops-surface-subtle);
 }
 
@@ -1581,7 +1581,7 @@ button.insight-card {
   border: 1px solid var(--ops-accent);
   background: var(--ops-accent);
   color: #ffffff;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 8px 18px rgba(0, 122, 116, 0.22);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 8px 18px rgba(var(--mode-accent-rgb), 0.22);
 }
 
 .command-button:hover {
@@ -1595,7 +1595,7 @@ button.insight-card {
 }
 
 .secondary-command-button:hover {
-  border-color: rgba(0, 122, 116, 0.34);
+  border-color: rgba(var(--mode-accent-rgb), 0.34);
   background: var(--ops-accent-soft);
   color: var(--ops-accent-strong);
 }
@@ -2439,7 +2439,7 @@ button.insight-card {
   overflow: hidden;
   border-color: rgba(120, 247, 239, 0.18);
   background:
-    radial-gradient(circle at 18% 42%, rgba(0, 163, 154, 0.16), transparent 34%),
+    radial-gradient(circle at 18% 42%, rgb(var(--rgb-blue-primary) / 0.16), transparent 34%),
     radial-gradient(circle at 82% 12%, rgba(245, 158, 11, 0.08), transparent 28%),
     linear-gradient(180deg, rgba(17, 27, 42, 0.98), rgba(8, 12, 20, 0.98));
 }
@@ -2515,9 +2515,9 @@ button.insight-card {
 }
 
 .operational-panel--top-insight {
-  border-color: rgba(0, 163, 154, 0.34);
+  border-color: rgb(var(--rgb-blue-primary) / 0.34);
   background:
-    linear-gradient(180deg, rgba(0, 122, 116, 0.14), rgba(17, 27, 42, 0.98) 46%, var(--ops-surface));
+    linear-gradient(180deg, rgba(var(--mode-accent-rgb), 0.14), rgba(17, 27, 42, 0.98) 46%, var(--ops-surface));
   box-shadow: var(--ops-shadow-strong);
 }
 
@@ -3146,7 +3146,7 @@ button.insight-card {
 
   .operational-orb__surface {
     background: radial-gradient(circle at 52% 48%, var(--orb-base) 0%, var(--orb-base-deep) 58%, var(--orb-base-dark) 100%);
-    box-shadow: inset 0 0 0 1px rgba(218, 255, 249, 0.12);
+    box-shadow: inset 0 0 0 1px rgb(var(--rgb-text-primary) / 0.12);
     transform: none;
     transition: none;
     animation: none;
@@ -4133,7 +4133,7 @@ button.insight-card {
 }
 
 .insight-summary-card--action {
-  border-color: rgba(92, 193, 167, 0.32);
+  border-color: rgb(var(--rgb-blue-primary) / 0.32);
 }
 
 .insight-summary-card--why {

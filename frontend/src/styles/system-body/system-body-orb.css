@@ -179,7 +179,7 @@
   display: grid;
   gap: 2px;
   padding: 9px 0 9px 12px;
-  border-bottom: 1px solid rgba(143, 168, 164, 0.1);
+  border-bottom: 1px solid rgba(130, 176, 255, 0.1);
 }
 
 .system-body-orb-panel__telemetry strong {

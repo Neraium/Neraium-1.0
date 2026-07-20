@@ -209,14 +209,14 @@ export default function ReplayCognitionField({ timeline, frameIndex, isPlaying, 
       <svg className="replay-cognition-field__svg" viewBox="0 0 720 460" role="img" aria-label="System behavior change, operating pattern, and recovery trajectory">
         <defs>
           <radialGradient id="replayFieldGlow" cx="50%" cy="48%" r="58%">
-            <stop offset="0%" stopColor="rgba(138, 184, 196, 0.28)" />
-            <stop offset="58%" stopColor="rgba(108, 186, 156, 0.08)" />
-            <stop offset="100%" stopColor="rgba(8, 12, 15, 0)" />
+            <stop offset="0%" stopColor="rgb(var(--rgb-text-secondary) / 0.28)" />
+            <stop offset="58%" stopColor="rgb(var(--rgb-blue-primary) / 0.08)" />
+            <stop offset="100%" stopColor="rgb(var(--rgb-bg-app) / 0)" />
           </radialGradient>
           <linearGradient id="replayTraceGradient" x1="0%" x2="100%" y1="0%" y2="0%">
-            <stop offset="0%" stopColor="rgba(108, 186, 156, 0.18)" />
-            <stop offset="48%" stopColor="rgba(138, 184, 196, 0.92)" />
-            <stop offset="100%" stopColor="rgba(211, 170, 103, 0.88)" />
+            <stop offset="0%" stopColor="rgb(var(--rgb-blue-primary) / 0.18)" />
+            <stop offset="48%" stopColor="rgb(var(--rgb-text-secondary) / 0.92)" />
+            <stop offset="100%" stopColor="var(--chart-secondary)" stopOpacity="0.88" />
           </linearGradient>
           <filter id="replaySoftGlow" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="6" result="blur" />
