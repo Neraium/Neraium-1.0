@@ -14,24 +14,24 @@
   --color-neutral-0: #ffffff;
 
   --color-blue-primary: #168cff;
-  --color-blue-bright: #1e9bff;
+  --color-blue-bright: #2ea8ff;
   --color-blue-royal: #0756d8;
   --color-blue-deep: #043ca8;
-  --color-cyan-highlight: #28b6ff;
+  --color-blue-pale: #8acbff;
   --blue-deep: var(--color-blue-royal);
   --blue-primary: var(--color-blue-primary);
   --blue-glow: var(--color-blue-bright);
   --blue-primary-rgb: 22, 140, 255;
-  --blue-glow-rgb: 30, 155, 255;
+  --blue-glow-rgb: 46, 168, 255;
   --blue-deep-rgb: 7, 86, 216;
   --color-brand: var(--color-blue-primary);
   --color-brand-hover: var(--color-blue-bright);
   --color-brand-strong: var(--color-blue-royal);
-  --color-success: #5fae84;
+  --color-success: var(--color-blue-primary);
   --color-warning: #d6a85f;
   --color-danger: #e06a67;
-  --color-info: var(--color-cyan-highlight);
-  --color-success-text: #c7ecd9;
+  --color-info: var(--color-blue-bright);
+  --color-success-text: var(--color-blue-pale);
   --color-warning-text: #f6ddb0;
   --color-danger-text: #ffd9d8;
 
@@ -44,10 +44,10 @@
   --rgb-text-secondary: 182 191 206;
   --rgb-text-muted: 127 138 156;
   --rgb-blue-primary: 22 140 255;
-  --rgb-blue-bright: 30 155 255;
+  --rgb-blue-bright: 46 168 255;
   --rgb-blue-royal: 7 86 216;
-  --rgb-cyan-highlight: 40 182 255;
-  --rgb-success: 95 174 132;
+  --rgb-blue-pale: 138 203 255;
+  --rgb-success: 22 140 255;
   --rgb-warning: 214 168 95;
   --rgb-danger: 224 106 103;
 
@@ -61,21 +61,21 @@
   --surface-b: var(--color-neutral-850);
   --surface-c: var(--color-neutral-800);
   --surface-overlay: #0e182b;
-  --surface-border: rgba(130, 176, 255, 0.22);
-  --surface-border-strong: rgba(116, 174, 255, 0.55);
-  --surface-border-highlight: rgba(190, 220, 255, 0.9);
+  --surface-border: rgba(75, 132, 220, 0.28);
+  --surface-border-strong: rgba(46, 168, 255, 0.65);
+  --surface-border-highlight: rgba(138, 203, 255, 0.9);
   --surface-divider: rgba(145, 170, 210, 0.16);
   --border-soft: var(--surface-border);
   --border-strong: var(--surface-border-strong);
 
-  --text-primary: #f4f6fa;
+  --text-primary: #f5f7fa;
   --text-bright: #ffffff;
   --text-secondary: #b6bfce;
   --text-muted: #7f8a9c;
   --text-disabled: #566173;
 
-  --accent-green: var(--color-success);
-  --accent-cyan: var(--color-cyan-highlight);
+  --accent-blue: var(--color-blue-primary);
+  --accent-blue-bright: var(--color-blue-bright);
   --accent-amber: var(--color-warning);
   --accent-red: var(--color-danger);
   --accent-red-deep: #9f3e42;
@@ -83,11 +83,11 @@
   --brand-thread: rgba(22, 140, 255, 0.18);
 
   --glow-blue-strong: rgba(22, 140, 255, 0.55);
-  --glow-blue-soft: rgba(22, 140, 255, 0.18);
-  --glow-blue-subtle: rgba(22, 140, 255, 0.1);
+  --glow-blue-medium: rgba(22, 140, 255, 0.3);
+  --glow-blue-soft: rgba(22, 140, 255, 0.14);
 
   --chart-primary: var(--color-blue-primary);
-  --chart-secondary: var(--color-cyan-highlight);
+  --chart-secondary: var(--color-blue-bright);
   --chart-supporting: var(--color-blue-royal);
   --chart-baseline: var(--text-muted);
   --chart-grid: rgba(145, 170, 210, 0.14);
@@ -96,15 +96,14 @@
 
   --graph-line-deep: rgba(7, 86, 216, 0.54);
   --graph-line-primary: rgba(22, 140, 255, 0.72);
-  --graph-line-highlight: rgba(40, 182, 255, 0.9);
+  --graph-line-highlight: rgba(138, 203, 255, 0.9);
   --graph-node-core: var(--color-blue-bright);
   --graph-node-halo: rgba(22, 140, 255, 0.22);
 
   --shadow-panel: 0 10px 28px rgba(0, 0, 0, 0.18);
   --shadow-lux: 0 20px 52px rgba(0, 0, 0, 0.28);
   --shadow-rail: 10px 0 28px rgba(0, 0, 0, 0.2);
-  --glow-green: 0 0 0 1px rgba(95, 174, 132, 0.22);
-  --glow-cyan: 0 0 0 1px rgba(40, 182, 255, 0.24);
+  --glow-blue-border: 0 0 0 1px rgba(46, 168, 255, 0.24);
   --glow-amber: 0 0 0 1px rgba(214, 168, 95, 0.22);
   --glow-red: 0 0 0 1px rgba(224, 106, 103, 0.22);
 

@@ -64,7 +64,7 @@
   border: 1px solid var(--surface-border-strong);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 38% 30%, var(--text-bright) 0 10%, var(--color-cyan-highlight) 22%, transparent 48%),
+    radial-gradient(circle at 38% 30%, var(--text-bright) 0 10%, var(--color-blue-pale) 22%, transparent 48%),
     radial-gradient(circle, rgb(var(--rgb-blue-primary) / 0.32), rgba(var(--mode-accent-rgb), 0.08) 64%, transparent 68%);
   box-shadow: 0 0 18px rgb(var(--rgb-blue-primary) / 0.32);
 }
@@ -269,7 +269,7 @@
 
 .home-orb__energy--inner {
   inset: 18%;
-  background: conic-gradient(from 0deg, transparent 0 18%, rgb(var(--rgb-cyan-highlight) / 0.18) 24%, transparent 34%, rgb(var(--rgb-warning) / 0.12) 58%, transparent 72% 100%);
+  background: conic-gradient(from 0deg, transparent 0 18%, rgb(var(--rgb-blue-pale) / 0.18) 24%, transparent 34%, rgb(var(--rgb-warning) / 0.12) 58%, transparent 72% 100%);
   filter: blur(12px);
   opacity: 0.58;
   animation: homeOrbFlow 18s linear infinite;

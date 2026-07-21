@@ -576,7 +576,7 @@
   font-weight: 600;
 }
 
-.post-upload-status--ready { border-color: rgba(93, 202, 154, 0.34); }
+.post-upload-status--ready { border-color: rgba(22, 140, 255, 0.34); }
 .post-upload-status--warning { border-color: rgba(196, 170, 108, 0.42); }
 .post-upload-status--pending { border-color: rgba(130, 176, 255, 0.34); }
 .post-upload-status--error { border-color: rgba(224, 102, 102, 0.42); }

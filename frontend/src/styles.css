@@ -286,7 +286,7 @@ body {
   border: 1px solid var(--color-brand);
   background: var(--color-brand);
   color: var(--text-primary);
-  box-shadow: var(--glow-cyan);
+  box-shadow: var(--glow-blue-border);
 }
 
 .secondary-command-button {

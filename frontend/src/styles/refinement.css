@@ -254,9 +254,9 @@ summary { min-height: 44px; align-content: center; cursor: pointer; }
 
 .connector-notice,
 .auth-notice {
-  border: 1px solid rgba(42, 168, 118, 0.32);
-  background: rgba(42, 168, 118, 0.1);
-  color: #bce9d6;
+  border: 1px solid rgba(22, 140, 255, 0.32);
+  background: rgba(22, 140, 255, 0.1);
+  color: #8acbff;
 }
 
 .auth-error {
@@ -357,7 +357,7 @@ summary { min-height: 44px; align-content: center; cursor: pointer; }
 
 .intervention-card--selected,
 .observation-history-card[aria-pressed="true"] {
-  border-color: rgba(28, 154, 145, 0.46);
+  border-color: rgba(46, 168, 255, 0.46);
   background: rgba(var(--mode-accent-rgb), 0.1);
   box-shadow: inset 3px 0 0 var(--color-brand-hover);
 }
@@ -438,8 +438,8 @@ summary { min-height: 44px; align-content: center; cursor: pointer; }
 .operational-status--normal,
 .status-badge--active,
 .status-badge--healthy {
-  border-color: rgba(42, 168, 118, 0.34);
-  color: #8cd7b6;
+  border-color: rgba(22, 140, 255, 0.34);
+  color: #8acbff;
 }
 
 .operational-status--changed,

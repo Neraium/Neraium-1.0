@@ -369,7 +369,7 @@
   inset: 0 0 auto;
   height: 1px;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(120, 247, 239, 0.22), transparent 58%);
+  background: linear-gradient(90deg, rgba(46, 168, 255, 0.22), transparent 58%);
   pointer-events: none;
 }
 
@@ -1053,8 +1053,8 @@
 }
 
 .facility-fingerprint-mark {
-  --mark-fingerprint: #78f7ef;
-  --mark-fingerprint-soft: rgba(120, 247, 239, 0.24);
+  --mark-fingerprint: #2ea8ff;
+  --mark-fingerprint-soft: rgba(46, 168, 255, 0.24);
   --mark-changed: #f2bd4d;
   display: inline-grid;
   flex: 0 0 auto;
@@ -1099,13 +1099,13 @@
 }
 
 .facility-fingerprint-mark--learning {
-  --mark-fingerprint: #8dfff5;
-  --mark-fingerprint-soft: rgba(141, 255, 245, 0.32);
+  --mark-fingerprint: #8acbff;
+  --mark-fingerprint-soft: rgba(138, 203, 255, 0.32);
 }
 
 .facility-fingerprint-mark--critical {
-  --mark-fingerprint: #8ff4f0;
-  --mark-fingerprint-soft: rgba(143, 244, 240, 0.18);
+  --mark-fingerprint: #8acbff;
+  --mark-fingerprint-soft: rgba(138, 203, 255, 0.18);
   --mark-changed: #ff4f43;
   border-color: color-mix(in srgb, var(--mark-changed) 34%, transparent);
 }
@@ -2114,7 +2114,7 @@ button.insight-card {
   position: absolute;
   left: 0;
   top: 0;
-  color: #21c7ac;
+  color: #2ea8ff;
   font-weight: 800;
 }
 
@@ -2122,9 +2122,9 @@ button.insight-card {
   display: inline-grid;
   gap: 2px;
   min-width: 150px;
-  border: 1px solid rgba(33, 199, 172, 0.28);
+  border: 1px solid rgba(46, 168, 255, 0.28);
   border-radius: 8px;
-  background: rgba(33, 199, 172, 0.08);
+  background: rgba(46, 168, 255, 0.08);
   padding: 10px 12px;
 }
 
@@ -2437,7 +2437,7 @@ button.insight-card {
 .operational-panel--command {
   grid-column: span 2;
   overflow: hidden;
-  border-color: rgba(120, 247, 239, 0.18);
+  border-color: rgba(46, 168, 255, 0.18);
   background:
     radial-gradient(circle at 18% 42%, rgb(var(--rgb-blue-primary) / 0.16), transparent 34%),
     radial-gradient(circle at 82% 12%, rgba(245, 158, 11, 0.08), transparent 28%),
@@ -2656,17 +2656,17 @@ button.insight-card {
 }
 
 .operational-orb {
-  --orb-base: #18c9bd;
-  --orb-base-deep: #055c61;
-  --orb-base-dark: #041217;
-  --orb-rim: rgba(139, 247, 239, 0.42);
-  --orb-glow: rgba(64, 190, 255, 0.32);
-  --orb-glow-soft: rgba(52, 211, 235, 0.14);
-  --orb-highlight: rgba(235, 255, 252, 0.26);
-  --orb-fingerprint: #78f7ef;
-  --orb-fingerprint-soft: rgba(120, 247, 239, 0.24);
+  --orb-base: #168cff;
+  --orb-base-deep: #043ca8;
+  --orb-base-dark: #010308;
+  --orb-rim: rgba(138, 203, 255, 0.42);
+  --orb-glow: rgba(22, 140, 255, 0.32);
+  --orb-glow-soft: rgba(22, 140, 255, 0.14);
+  --orb-highlight: rgba(245, 247, 250, 0.26);
+  --orb-fingerprint: #2ea8ff;
+  --orb-fingerprint-soft: rgba(46, 168, 255, 0.24);
   --orb-fingerprint-changed: #f6c35f;
-  --orb-particle: #c7fffb;
+  --orb-particle: #ffffff;
   --orb-motion-duration: 10.8s;
   --orb-breath-scale: 1.01;
   --orb-particle-opacity: 0.44;
@@ -2878,7 +2878,7 @@ button.insight-card {
   z-index: 1;
   max-width: 9.8rem;
   padding: 0 12px;
-  color: rgba(237, 252, 250, 0.94);
+  color: rgba(245, 247, 250, 0.94);
   font-size: 0.72rem;
   font-weight: 650;
   letter-spacing: 0;
@@ -2928,12 +2928,12 @@ button.insight-card {
 }
 
 .operational-orb--learning {
-  --orb-base: #13c9bf;
-  --orb-base-deep: #056c71;
-  --orb-glow: rgba(32, 214, 206, 0.34);
-  --orb-glow-soft: rgba(32, 214, 206, 0.16);
-  --orb-fingerprint: #8dfff5;
-  --orb-fingerprint-soft: rgba(141, 255, 245, 0.32);
+  --orb-base: #168cff;
+  --orb-base-deep: #043ca8;
+  --orb-glow: rgba(22, 140, 255, 0.34);
+  --orb-glow-soft: rgba(22, 140, 255, 0.16);
+  --orb-fingerprint: #8acbff;
+  --orb-fingerprint-soft: rgba(138, 203, 255, 0.32);
   --orb-motion-duration: 7.2s;
   --orb-breath-scale: 1.018;
   --orb-particle-opacity: 0.5;
@@ -2948,27 +2948,27 @@ button.insight-card {
 }
 
 .operational-orb--healthy {
-  --orb-base: #14b8a6;
-  --orb-base-deep: #075c57;
-  --orb-base-dark: #041319;
+  --orb-base: #168cff;
+  --orb-base-deep: #043ca8;
+  --orb-base-dark: #010308;
   --orb-glow: rgba(80, 178, 255, 0.28);
-  --orb-glow-soft: rgba(56, 189, 248, 0.12);
-  --orb-fingerprint: #8ff4f0;
-  --orb-fingerprint-soft: rgba(143, 244, 240, 0.28);
-  --orb-particle: #d7fffb;
+  --orb-glow-soft: rgba(22, 140, 255, 0.12);
+  --orb-fingerprint: #8acbff;
+  --orb-fingerprint-soft: rgba(138, 203, 255, 0.28);
+  --orb-particle: #ffffff;
   --orb-motion-duration: 12.5s;
   --orb-breath-scale: 1.005;
 }
 
 .operational-orb--warning,
 .operational-orb--elevated {
-  --orb-base: #16b8a7;
-  --orb-base-deep: #08615d;
-  --orb-base-dark: #061419;
+  --orb-base: #168cff;
+  --orb-base-deep: #043ca8;
+  --orb-base-dark: #010308;
   --orb-glow: rgba(236, 178, 80, 0.3);
   --orb-glow-soft: rgba(236, 178, 80, 0.13);
-  --orb-fingerprint: #78f7ef;
-  --orb-fingerprint-soft: rgba(120, 247, 239, 0.22);
+  --orb-fingerprint: #2ea8ff;
+  --orb-fingerprint-soft: rgba(46, 168, 255, 0.22);
   --orb-fingerprint-changed: #f2bd4d;
   --orb-particle: #ffe9aa;
   --orb-motion-duration: 8.7s;
@@ -2988,7 +2988,7 @@ button.insight-card {
   background:
     radial-gradient(circle at 42% 42%, rgba(242, 189, 77, 0.28), transparent 32%),
     radial-gradient(circle at 70% 32%, rgba(251, 146, 60, 0.42), transparent 27%),
-    radial-gradient(circle at 58% 66%, #119789 0%, #6a3b18 58%, var(--orb-base-dark) 100%);
+    radial-gradient(circle at 58% 66%, #0756d8 0%, #6a3b18 58%, var(--orb-base-dark) 100%);
 }
 
 .operational-orb--critical {
@@ -2999,8 +2999,8 @@ button.insight-card {
   --orb-glow: rgba(239, 68, 68, 0.38);
   --orb-glow-soft: rgba(249, 115, 22, 0.16);
   --orb-highlight: rgba(255, 190, 174, 0.24);
-  --orb-fingerprint: #8ff4f0;
-  --orb-fingerprint-soft: rgba(143, 244, 240, 0.2);
+  --orb-fingerprint: #8acbff;
+  --orb-fingerprint-soft: rgba(138, 203, 255, 0.2);
   --orb-fingerprint-changed: #ff4f43;
   --orb-particle: #ffb180;
   --orb-motion-duration: 6.2s;
@@ -3592,7 +3592,7 @@ button.insight-card {
 }
 
 .command-section--healthy .operational-status-value {
-  color: #8de3a7;
+  color: #8acbff;
 }
 
 .command-section--warning .operational-status-value {
@@ -3688,7 +3688,7 @@ button.insight-card {
 }
 
 .operational-finding-row__severity--normal {
-  color: #8de3a7;
+  color: #8acbff;
 }
 
 .operational-finding-row__severity--changed {
@@ -3891,11 +3891,11 @@ button.insight-card {
 .operational-orb--minimal {
   width: min(26vw, 176px);
   min-width: 132px;
-  --orb-base: #0f9f95;
-  --orb-base-deep: #087068;
-  --orb-base-dark: #06313a;
-  --orb-rim: rgba(173, 225, 221, 0.28);
-  --orb-highlight: rgba(226, 255, 250, 0.22);
+  --orb-base: #168cff;
+  --orb-base-deep: #043ca8;
+  --orb-base-dark: #030712;
+  --orb-rim: rgba(138, 203, 255, 0.28);
+  --orb-highlight: rgba(245, 247, 250, 0.22);
   --orb-motion-duration: 9.5s;
   --orb-breath-scale: 1.012;
 }
@@ -3935,10 +3935,10 @@ button.insight-card {
 }
 
 .operational-orb--minimal.operational-orb--healthy {
-  --orb-base: #35b46f;
-  --orb-base-deep: #177246;
-  --orb-base-dark: #092918;
-  --orb-rim: rgba(141, 227, 167, 0.3);
+  --orb-base: #168cff;
+  --orb-base-deep: #043ca8;
+  --orb-base-dark: #010308;
+  --orb-rim: rgba(138, 203, 255, 0.3);
 }
 
 .operational-orb--minimal.operational-orb--warning,
@@ -3958,10 +3958,10 @@ button.insight-card {
 
 .operational-orb--minimal.operational-orb--learning,
 .operational-orb--minimal.operational-orb--awaiting {
-  --orb-base: #159f97;
-  --orb-base-deep: #0a6965;
-  --orb-base-dark: #072c34;
-  --orb-rim: rgba(141, 224, 218, 0.26);
+  --orb-base: #168cff;
+  --orb-base-deep: #043ca8;
+  --orb-base-dark: #030712;
+  --orb-rim: rgba(138, 203, 255, 0.26);
   --orb-motion-duration: 11.5s;
   --orb-breath-scale: 1.009;
 }
@@ -4089,7 +4089,7 @@ button.insight-card {
 }
 
 .insight-severity--moderate { color: #f0c06a; }
-.insight-severity--low { color: #8de3a7; }
+.insight-severity--low { color: #8acbff; }
 
 .insight-situation-card h3 {
   max-width: 760px;
@@ -4305,7 +4305,7 @@ button.insight-card {
 .insight-primary-relationship span, .fingerprint-comparison span { color:var(--ops-ink-muted); font-size:.72rem; font-weight:720; letter-spacing:.08em; text-transform:uppercase; }
 .operator-quick-actions { display:flex; flex-wrap:wrap; gap:10px; }
 .operator-quick-actions button, .relationship-explorer__list button { min-height:44px; border:1px solid var(--ops-line); border-radius:8px; background:rgba(255,255,255,.025); color:var(--ops-ink-soft); padding:10px 14px; cursor:pointer; }
-.operator-quick-actions button:hover, .operator-quick-actions button:focus-visible, .relationship-explorer__list button[aria-pressed="true"] { border-color:rgba(92,193,167,.55); color:var(--ops-ink); }
+.operator-quick-actions button:hover, .operator-quick-actions button:focus-visible, .relationship-explorer__list button[aria-pressed="true"] { border-color:rgba(22,140,255,.55); color:var(--ops-ink); }
 .investigation-card__details { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0 0; }
 .investigation-card__details div { border-left:2px solid var(--ops-line); padding-left:10px; }
 .investigation-card__details dt { color:var(--ops-ink-muted); font-size:.72rem; text-transform:uppercase; }
@@ -4313,7 +4313,7 @@ button.insight-card {
 .investigation-timeline { display:grid; gap:0; margin:0; padding:0; list-style:none; }
 .investigation-timeline li { border-left:1px solid var(--ops-line); padding:0 0 14px 18px; }
 .investigation-timeline summary { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; cursor:pointer; }
-.investigation-timeline summary > span { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; background:rgba(92,193,167,.14); color:#8de3c8; }
+.investigation-timeline summary > span { display:grid; place-items:center; width:24px; height:24px; border-radius:50%; background:rgba(22,140,255,.14); color:#8acbff; }
 .investigation-timeline time { color:var(--ops-ink-muted); font-size:.8rem; }
 .investigation-timeline p { margin:10px 0 0 34px; color:var(--ops-ink-soft); }
 .relationship-explorer { display:grid; grid-template-columns:minmax(190px,.35fr) minmax(0,1fr); gap:18px; }

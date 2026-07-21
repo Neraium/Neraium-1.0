@@ -17,7 +17,7 @@
 
 .onboarding-header h1 {
   margin: 0;
-  color: rgba(242, 248, 248, 0.98);
+  color: rgba(245, 247, 250, 0.98);
   font-size: 1.5rem;
   line-height: 1.1;
   letter-spacing: 0;
@@ -67,7 +67,7 @@
 }
 
 .onboarding-stepper li.is-active {
-  border-color: rgba(140, 198, 178, 0.52);
+  border-color: rgba(46, 168, 255, 0.52);
   background: rgba(10, 20, 19, 0.88);
 }
 
@@ -89,7 +89,7 @@
 
 .onboarding-section h2 {
   margin: 0;
-  color: rgba(243, 249, 249, 0.98);
+  color: rgba(245, 247, 250, 0.98);
   font-size: 1.15rem;
   line-height: 1.2;
 }
@@ -113,7 +113,7 @@
 }
 
 .onboarding-choice.is-selected {
-  border-color: rgba(126, 208, 176, 0.54);
+  border-color: rgba(46, 168, 255, 0.54);
   background: rgba(12, 25, 22, 0.9);
 }
 
@@ -142,7 +142,7 @@
   border: 1px solid rgb(var(--rgb-text-secondary) / 0.18);
   border-radius: 8px;
   background: rgba(7, 11, 14, 0.9);
-  color: rgba(236, 244, 244, 0.94);
+  color: rgba(245, 247, 250, 0.94);
   padding: 8px 10px;
   font-size: 0.86rem;
 }
@@ -202,7 +202,7 @@
 }
 
 .onboarding-checklist li.ok {
-  border-color: rgba(126, 208, 176, 0.36);
+  border-color: rgba(46, 168, 255, 0.36);
 }
 
 .onboarding-checklist li.warn {
@@ -215,7 +215,7 @@
 }
 
 .onboarding-summary li strong {
-  color: rgba(238, 246, 246, 0.95);
+  color: rgba(245, 247, 250, 0.95);
   font-size: 0.82rem;
   text-align: right;
 }
@@ -254,7 +254,7 @@
   padding: 24px;
   background:
     radial-gradient(1200px 500px at 85% -10%, rgba(17, 128, 255, 0.18), transparent 70%),
-    radial-gradient(900px 450px at 10% 120%, rgba(13, 245, 162, 0.16), transparent 65%),
+    radial-gradient(900px 450px at 10% 120%, rgba(22, 140, 255, 0.16), transparent 65%),
     linear-gradient(160deg, #08131d 0%, #0b1c2b 45%, #09121d 100%);
 }
 

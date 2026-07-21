@@ -465,8 +465,8 @@
 }
 
 .system-gate__freshness--live {
-  border-color: rgba(123, 179, 154, 0.5);
-  color: rgba(178, 231, 208, 0.92);
+  border-color: rgba(46, 168, 255, 0.5);
+  color: rgba(138, 203, 255, 0.92);
 }
 
 .system-gate__freshness--aging {
@@ -486,7 +486,7 @@
 }
 
 .system-gate__heartbeat--online .system-gate__heartbeat-dot {
-  background: #8aa0a3;
+  background: #7f8a9c;
 }
 
 .system-gate__heartbeat--degraded .system-gate__heartbeat-dot,
@@ -638,12 +638,12 @@ body.views-overlay-open {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(126, 186, 204, 0.78), rgba(151, 215, 196, 0.88));
-  box-shadow: 0 0 12px rgba(120, 196, 186, 0.34);
+  background: linear-gradient(90deg, rgba(22, 140, 255, 0.78), rgba(138, 203, 255, 0.88));
+  box-shadow: 0 0 12px rgba(22, 140, 255, 0.34);
 }
 
 .system-gate__upload-progress-label {
-  color: rgba(225, 236, 235, 0.86);
+  color: rgba(182, 191, 206, 0.86);
   font-size: 0.66rem;
   letter-spacing: 0.08em;
   font-weight: 700;
@@ -980,7 +980,7 @@ body.views-overlay-open {
     letter-spacing: 0.12em;
     border-color: rgba(149, 184, 196, 0.3);
     background: rgba(8, 12, 15, 0.84);
-    color: rgba(226, 237, 236, 0.82);
+    color: rgba(182, 191, 206, 0.82);
   }
 
   .system-gate__settings-overlay {
