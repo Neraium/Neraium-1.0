@@ -26,6 +26,7 @@ env:
   UPLOAD_STATE_BUCKET: ${{ secrets.NERAIUM_UPLOAD_STATE_BUCKET }}
   NERAIUM_RUNTIME_DIR: /mnt/neraium-runtime
   CORS_ORIGINS: https://app.neraium.com
+  API_CONTAINER_PORT: "8080"
   NERAIUM_MAX_UPLOAD_SIZE_BYTES: "262144000"
   NERAIUM_MAX_PENDING_UPLOAD_JOBS: "50"
   LOG_LEVEL: INFO
@@ -44,10 +45,10 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -55,7 +56,7 @@ jobs:
 
       - name: Login to Amazon ECR
         id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@b040164c4934333d597f3f9c67502ff28f814e9c # v2.1.6
 
       - name: Resolve production AWS settings
         run: |
@@ -140,8 +141,38 @@ jobs:
             exit 1
           }
 
-          echo "Validated cluster, services, and task families:"
+          API_SERVICE_LOAD_BALANCER_COUNT=$(jq --arg api "$ECS_API_SERVICE" '[.services[] | select(.serviceName == $api) | .loadBalancers[]?] | length' current-services.json)
+          test "$API_SERVICE_LOAD_BALANCER_COUNT" = "1"
+
+          API_TARGET_GROUP_ARN=$(jq -r --arg api "$ECS_API_SERVICE" '.services[] | select(.serviceName == $api) | .loadBalancers[0].targetGroupArn' current-services.json)
+          test -n "$API_TARGET_GROUP_ARN"
+          test "$API_TARGET_GROUP_ARN" != "null"
+
+          CURRENT_API_CONTAINER_NAME=$(jq -r --arg api "$ECS_API_SERVICE" '.services[] | select(.serviceName == $api) | .loadBalancers[0].containerName' current-services.json)
+          test -n "$CURRENT_API_CONTAINER_NAME"
+          test "$CURRENT_API_CONTAINER_NAME" != "null"
+          echo "API_TARGET_GROUP_ARN=$API_TARGET_GROUP_ARN" >> "$GITHUB_ENV"
+          echo "API_LOAD_BALANCER_CONTAINER_NAME=$CURRENT_API_CONTAINER_NAME" >> "$GITHUB_ENV"
+
+          aws elbv2 describe-target-groups \
+            --target-group-arns "$API_TARGET_GROUP_ARN" \
+            --region "$AWS_REGION" > api-target-group.json
+
+          jq -e '.TargetGroups[0].HealthCheckPath == "/api/health"' api-target-group.json >/dev/null
+          jq -e --arg port "$API_CONTAINER_PORT" '.TargetGroups[0].HealthCheckPort == "traffic-port" or .TargetGroups[0].HealthCheckPort == $port' api-target-group.json >/dev/null
+
+          LOAD_BALANCER_ARN=$(jq -r '.TargetGroups[0].LoadBalancerArns[0]' api-target-group.json)
+          test -n "$LOAD_BALANCER_ARN"
+          test "$LOAD_BALANCER_ARN" != "null"
+          aws elbv2 describe-listeners \
+            --load-balancer-arn "$LOAD_BALANCER_ARN" \
+            --region "$AWS_REGION" > api-load-balancer-listeners.json
+
+          jq -e '[.Listeners[].Port] | index(80) != null and index(443) != null' api-load-balancer-listeners.json >/dev/null
+
+          echo "Validated cluster, services, task families, and API load balancer assumptions:"
           jq -r '.services[] | "  - \(.serviceName): \(.status) taskDef=\(.taskDefinition)"' current-services.json
+          jq -r '.TargetGroups[0] | "  - targetGroup=\(.TargetGroupArn) healthPath=\(.HealthCheckPath) healthPort=\(.HealthCheckPort)"' api-target-group.json
 
       - name: Ensure ECR repository exists
         run: |
@@ -171,7 +202,7 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
           echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_URL_SECRET_ARN "$AUTH_DATABASE_URL_SECRET_ARN" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_URL_SECRET_ARN "$AUTH_DATABASE_URL_SECRET_ARN" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg BACKEND_PORT "$API_CONTAINER_PORT" --argjson CONTAINER_PORT "$API_CONTAINER_PORT" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
             | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .containerDefinitions = (.containerDefinitions | map(
@@ -179,10 +210,12 @@ jobs:
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "BACKEND_HOST" and .name != "BACKEND_PORT" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD"))
                     + [
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "api"},
                       {"name": "APP_ENV", "value": "prod"},
+                      {"name": "BACKEND_HOST", "value": "0.0.0.0"},
+                      {"name": "BACKEND_PORT", "value": $BACKEND_PORT},
                       {"name": "NERAIUM_UPLOAD_STATE_BUCKET", "value": $UPLOAD_STATE_BUCKET},
                       {"name": "NERAIUM_RUNTIME_DIR", "value": $NERAIUM_RUNTIME_DIR},
                       {"name": "CORS_ORIGINS", "value": $CORS_ORIGINS},
@@ -194,6 +227,14 @@ jobs:
                       {"name": "NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "value": $BOOTSTRAP_ADMIN_EMAIL},
                       {"name": "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD", "value": $BOOTSTRAP_ADMIN_RESET_PASSWORD}
                     ])
+                | .portMappings = [{"containerPort": $CONTAINER_PORT, "hostPort": $CONTAINER_PORT, "protocol": "tcp"}]
+                | .healthCheck = {
+                    "command": ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=5).read()\" || exit 1"],
+                    "interval": 30,
+                    "timeout": 10,
+                    "retries": 3,
+                    "startPeriod": 10
+                  }
                 | .secrets = ((.secrets // [])
                     | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD"))
                     + [
@@ -229,6 +270,7 @@ jobs:
             --output text)
 
           echo "API_TASK_DEF=$API_TASK_DEF" >> "$GITHUB_ENV"
+          echo "API_CONTAINER_NAME=$CONTAINER_NAME" >> "$GITHUB_ENV"
 
       - name: Register worker task definition with new backend image
         run: |
@@ -298,10 +340,17 @@ jobs:
         run: |
           set -euo pipefail
 
+          jq -n --arg targetGroupArn "$API_TARGET_GROUP_ARN" --arg containerName "$API_CONTAINER_NAME" --argjson containerPort "$API_CONTAINER_PORT" '[{
+            targetGroupArn: $targetGroupArn,
+            containerName: $containerName,
+            containerPort: $containerPort
+          }]' > api-load-balancers.json
+
           aws ecs update-service \
             --cluster "$ECS_CLUSTER" \
             --service "$ECS_API_SERVICE" \
             --task-definition "$API_TASK_DEF" \
+            --load-balancers file://api-load-balancers.json \
             --force-new-deployment \
             --region "$AWS_REGION"
 

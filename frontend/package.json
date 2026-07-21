@@ -11,7 +11,8 @@
     "lint:ci": "npm exec eslint -- src --ext .jsx,.js --max-warnings=0",
     "test": "vitest --environment jsdom",
     "test:e2e": "playwright test",
-    "setup:codex": "npm ci && npx playwright install --with-deps chromium",
+    "playwright:install": "playwright install --with-deps",
+    "setup:codex": "npm ci && npm run playwright:install -- chromium",
     "verify": "npm run lint:ci && npm run build && npm run perf:budget && npm test -- --run",
     "perf:budget": "node scripts/check-performance-budgets.cjs"
   },
