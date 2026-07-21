@@ -293,33 +293,54 @@ function ContextGrid({ rows }) {
 function Disclosure({ title, children, className = "", defaultOpen = false }) {
   return (
     <details className={`insight-disclosure ${className}`.trim()} open={defaultOpen}>
-      <summary><span>{title}</span><span className="insight-disclosure__chevron" aria-hidden="true">?</span></summary>
+      <summary><span>{title}</span><span className="insight-disclosure__chevron" aria-hidden="true">v</span></summary>
       <div className="insight-disclosure__body">{children}</div>
     </details>
   );
 }
 
+function compactCheckTitle(action) {
+  return text(action)
+    .replace(/,?\s*operational changes,?\s*or\s*recent operating changes/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function PriorityActions({ actions, signals = [], impacts = [], explain = false }) {
-  const labels = ["Priority 1", "Priority 2", "Priority 3"];
   const reasons = [
-    "Tests the strongest observed relationship change directly before other conditions can obscure it.",
-    "Determines whether an operating or control change explains the deviation.",
-    "Rules out equipment or instrumentation effects if the first checks do not explain the change.",
+    "It checks the strongest relationship change first.",
+    "It tests whether the deviation matches current operating context.",
+    "It narrows equipment or instrumentation effects after the primary checks.",
+  ];
+  const expected = [
+    "Confirm the trend is present at the affected equipment.",
+    "Confirm or rule out a known operating condition.",
+    "Confirm whether the signal is operational or instrumentation-related.",
   ];
   return (
     <ol className={explain ? "investigation-priorities investigation-priorities--explained" : "investigation-priorities"}>
-      {actions.slice(0, 3).map((action, index) => (
-        <li key={action} className="investigation-card">
-          {explain ? <span>{labels[index]}</span> : null}
-          <strong>{action}</strong>
-          {explain ? <dl className="investigation-card__details">
-            <div><dt>Estimated impact</dt><dd>{impacts[index] || (index === 0 ? "High - validates the primary operational risk" : "Moderate - narrows the likely cause")}</dd></div>
-            <div><dt>Supporting signals</dt><dd>{signals[index] || signals[0] || "Relationship change evidence"}</dd></div>
-            <div><dt>Expected validation</dt><dd>{index === 0 ? "Confirm whether the observed shift is present at the affected equipment." : "Confirm or rule out this cause against current operation."}</dd></div>
-            <div><dt>Why this order</dt><dd>{reasons[index]}</dd></div>
-          </dl> : null}
-        </li>
-      ))}
+      {actions.slice(0, 3).map((action, index) => {
+        const title = compactCheckTitle(action);
+        return (
+          <li key={`${title}-${index}`} className="investigation-card">
+            {explain ? (
+              <details>
+                <summary>
+                  <span>Priority {index + 1}</span>
+                  <strong>{title}</strong>
+                  <small>{expected[index]}</small>
+                </summary>
+                <dl className="investigation-card__details">
+                  <div><dt>Why this check comes first</dt><dd>{reasons[index]}</dd></div>
+                  <div><dt>Expected confirmation</dt><dd>{expected[index]}</dd></div>
+                  <div><dt>Supporting signal</dt><dd>{signals[index] || signals[0] || "Changed relationship evidence"}</dd></div>
+                  <div><dt>Estimated impact</dt><dd>{impacts[index] || (index === 0 ? "High" : "Moderate")}</dd></div>
+                </dl>
+              </details>
+            ) : <strong>{title}</strong>}
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -334,19 +355,21 @@ function focusInvestigationSection(sectionId) {
 
 function InvestigationDecisionPath({ evidenceCount, relationshipCount }) {
   const steps = [
-    ["1", "Understand change", "Confirm the affected subsystem and operating status."],
-    ["2", "Verify evidence", `${relationshipCount || "No"} relationship${relationshipCount === 1 ? "" : "s"} and ${evidenceCount || "no"} evidence record${evidenceCount === 1 ? "" : "s"} support this finding.`],
-    ["3", "Run checks", "Start with the highest-impact operator check before broad troubleshooting."],
-    ["4", "Close the loop", "Export the report or inspect raw metrics if the decision needs escalation."],
+    ["1", "Understand the change", "Confirm subsystem, status, and first detected time.", "insight-situation"],
+    ["2", "Verify evidence", `${relationshipCount || "No"} changed relationship${relationshipCount === 1 ? "" : "s"}; ${evidenceCount || "no"} evidence record${evidenceCount === 1 ? "" : "s"}.`, "insight-evidence"],
+    ["3", "Run checks", "Start with the highest-impact operator check.", "recommended-investigation"],
+    ["4", "Close the loop", "Export or inspect raw metrics for escalation.", "relationship-explorer"],
   ];
   return (
     <nav className="investigation-decision-path" aria-label="Investigation decision path">
-      {steps.map(([index, label, detail]) => (
-        <button type="button" key={label} onClick={() => focusInvestigationSection(index === "2" ? "insight-evidence" : index === "3" ? "recommended-investigation" : index === "4" ? "relationship-explorer" : "insight-situation")}> 
-          <span>{index}</span>
-          <strong>{label}</strong>
-          <small>{detail}</small>
-        </button>
+      {steps.map(([index, label, detail, target], stepIndex) => (
+        <details key={label} className={stepIndex === 0 ? "is-current" : ""} open={stepIndex === 0}>
+          <summary onClick={() => focusInvestigationSection(target)}>
+            <span>{index}</span>
+            <strong>{label}</strong>
+          </summary>
+          <p>{detail}</p>
+        </details>
       ))}
     </nav>
   );
@@ -362,12 +385,20 @@ function OperatorActions({ insight, subsystem }) {
     anchor.click();
     URL.revokeObjectURL(url);
   };
-  return <div className="operator-quick-actions" role="group" aria-label="Operator actions">
-    <button type="button" onClick={() => focusInvestigationSection("insight-evidence")}>Inspect affected equipment</button>
-    <button type="button" onClick={() => focusInvestigationSection("fingerprint-comparison")}>Compare baseline</button>
-    <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>Related systems</button>
-    <button type="button" onClick={exportReport}>Export report</button>
-  </div>;
+  return <section className="operator-action-groups" aria-label="Operator actions">
+    <div className="operator-action-groups__primary">
+      <button type="button" className="command-button" onClick={() => focusInvestigationSection("recommended-investigation")}>Begin investigation</button>
+    </div>
+    <div className="operator-action-groups__secondary" role="group" aria-label="Secondary investigation actions">
+      <button type="button" onClick={() => focusInvestigationSection("insight-evidence")}>Inspect affected equipment</button>
+      <button type="button" onClick={() => focusInvestigationSection("fingerprint-comparison")}>Compare baseline</button>
+      <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>View related systems</button>
+    </div>
+    <div className="operator-action-groups__utility" role="group" aria-label="Utility actions">
+      <button type="button" onClick={exportReport}>Export report</button>
+      <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>View technical evidence</button>
+    </div>
+  </section>;
 }
 
 export default function OperatorInsightDetail({ insight, defaultOpen = false, inline = false, focusMode = false }) {
@@ -394,7 +425,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
     "Operating mode change", "Hydraulic restriction", "Equipment wear", "Valve configuration change", "Instrumentation issue",
   ]).slice(0, 6);
   const severity = insightSeverityLabel(insight);
-  const confidenceValue = confidencePercent(insight) || confidenceLabel(insight);
+  const confidenceValue = confidenceLabel(insight) || confidencePercent(insight);
   const subsystem = text(insight?.system || insight?.rawSystemName) || "Operational subsystem";
   const measurements = evidence.map(relationshipMeasurement).filter((item) => item.delta !== null);
   const largestDelta = measurements.length ? Math.max(...measurements.map((item) => item.delta)) : null;
@@ -458,15 +489,15 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
 
   const body = (
     <div className="insight-layered">
-      <section id="insight-situation" className="insight-situation-card" aria-labelledby="insight-situation-title" tabIndex={-1}>
+      {!focusMode ? <section id="insight-situation" className="insight-situation-card" aria-labelledby="insight-situation-title" tabIndex={-1}>
         <span className="insight-summary-card__eyebrow">What happened</span>
         <div className="insight-situation-card__meta">
           <span className={`insight-severity insight-severity--${severity.toLowerCase()}`}>{operationalStatus}</span>
           <span>Affected subsystem: {subsystem}</span>
-          {confidenceValue ? <span>Confidence {confidenceValue}</span> : null}
+          {confidenceValue ? <span>Finding confidence {confidenceValue}</span> : null}
         </div>
         <p id="insight-situation-title" className="insight-situation-card__summary">{behavioralSummary}</p>
-      </section>
+      </section> : null}
 
       <InvestigationDecisionPath evidenceCount={evidence.length} relationshipCount={relationships.length} />
 
@@ -480,18 +511,25 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
             {primaryRelationship ? <p>{primaryRelationship}</p> : null}
           </section>
           <section>
-            <span>Primary signals</span>
-            <BulletList items={supportingSignals.length ? supportingSignals : relationships} />
+            <span>Primary changed relationships</span>
+            <BulletList items={relationships.slice(0, 3)} />
           </section>
-          {supportingObservations.length ? <section>
-            <span>Supporting observations</span>
-            <BulletList items={supportingObservations} />
-          </section> : null}
           <section>
-            <span>Historical comparison</span>
+            <span>Supporting observation summary</span>
+            <p>{supportingObservations[0] || "Supporting observations are available in the full evidence view."}</p>
+          </section>
+          <section>
+            <span>Baseline comparison status</span>
             <p>{historicalComparison}</p>
           </section>
         </div>
+        <Disclosure title="View full evidence" className="insight-disclosure--compact">
+          <div className="full-evidence-stack">
+            <section><span>Monitored signals</span><BulletList items={supportingSignals.length ? supportingSignals : relationships} /></section>
+            {supportingObservations.length ? <section><span>Supporting observations</span><BulletList items={supportingObservations} /></section> : null}
+            {relationshipCoverageNotes.length ? <section><span>Relationship notes</span><BulletList items={relationshipCoverageNotes} /></section> : null}
+          </div>
+        </Disclosure>
       </section>
 
       <section id="recommended-investigation" className="insight-summary-card insight-summary-card--action" aria-labelledby="recommended-investigation-title" tabIndex={-1}>

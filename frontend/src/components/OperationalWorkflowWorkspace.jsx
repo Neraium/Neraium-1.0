@@ -32,7 +32,6 @@ const SECTION_HEADERS = {
   advanced: { eyebrow: "Analysis", title: "Analysis Details", subtitle: "Review analysis history, source information, evidence metadata, and support diagnostics." },
 };
 
-const MOBILE_PRIMARY_NAV = NAV_ITEMS;
 const ACTIVE_SECTION_STORAGE_KEY = "neraium.operational.active_section";
 const SELECTED_INSIGHT_STORAGE_KEY = "neraium.operational.selected_insight";
 
@@ -219,6 +218,7 @@ export default function OperationalWorkflowWorkspace({
 
   const [activeSection, setActiveSection] = useState(() => readStoredOperationalSection());
   const [selectedInsightId, setSelectedInsightId] = useState(() => readStoredSelectedInsightId());
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const overviewUploadInputRef = useRef(null);
   const mainContentRef = useRef(null);
   const sectionFocusReadyRef = useRef(false);
@@ -307,6 +307,7 @@ export default function OperationalWorkflowWorkspace({
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(ACTIVE_SECTION_STORAGE_KEY, activeSection);
+    setMobileNavOpen(false);
   }, [activeSection]);
 
   useEffect(() => {
@@ -414,6 +415,7 @@ export default function OperationalWorkflowWorkspace({
   }
 
   const sectionHeader = SECTION_HEADERS[visibleSection] ?? null;
+  const mobileTitle = visibleSection === "command-center" ? "Command Center" : sectionHeader?.title || "Command Center";
   const sectionBoundaryResetKey = `${visibleSection}:${telemetryBoundaryMeta.referenceId}:${resultsNavigationKey}`;
   const retryLatestTelemetry = typeof onRetryLatestTelemetry === "function" ? onRetryLatestTelemetry : undefined;
   const routeContext = buildRouteContext(visibleSection, model, selectedInsight, {
@@ -424,6 +426,7 @@ export default function OperationalWorkflowWorkspace({
     returnToCommandCenter,
   });
   const showRouteWorkspaceContext = visibleSection !== "data-sources";
+  const showRouteStrip = visibleSection !== "command-center";
 
   return (
     <>
@@ -474,8 +477,33 @@ export default function OperationalWorkflowWorkspace({
           </div>
         </header> : null}
 
-        <nav className="operational-mobile-nav" aria-label="Mobile workflow navigation">
-          {MOBILE_PRIMARY_NAV.map((item) => (
+        <header className="operational-mobile-topbar">
+          <div className="operational-mobile-topbar__identity">
+            <strong>Neraium</strong>
+            <span>{mobileTitle}</span>
+          </div>
+          {model.siteLabel && model.siteLabel !== PRODUCT_DESCRIPTOR ? <span className="operational-mobile-topbar__workspace">{model.siteLabel}</span> : null}
+          <button
+            type="button"
+            className="operational-mobile-topbar__menu"
+            aria-label={mobileNavOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={mobileNavOpen}
+            aria-controls="operational-mobile-drawer"
+            onClick={() => setMobileNavOpen((value) => !value)}
+          >
+            <span aria-hidden="true" />
+            <span aria-hidden="true" />
+            <span aria-hidden="true" />
+          </button>
+        </header>
+
+        {mobileNavOpen ? <button type="button" className="operational-mobile-drawer-backdrop" aria-label="Close navigation menu" onClick={() => setMobileNavOpen(false)} /> : null}
+        <nav id="operational-mobile-drawer" className={mobileNavOpen ? "operational-mobile-nav is-open" : "operational-mobile-nav"} aria-label="Mobile workflow navigation" aria-hidden={!mobileNavOpen}>
+          <div className="operational-mobile-nav__header">
+            <span className="section-token">Navigation</span>
+            <strong>{model.siteLabel || "Neraium workspace"}</strong>
+          </div>
+          {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -490,7 +518,7 @@ export default function OperationalWorkflowWorkspace({
           ))}
         </nav>
 
-        <section className={showRouteWorkspaceContext ? "operational-route-strip" : "operational-route-strip operational-route-strip--next-only"} aria-label="Workflow position">
+        {showRouteStrip ? <section className={showRouteWorkspaceContext ? "operational-route-strip" : "operational-route-strip operational-route-strip--next-only"} aria-label="Workflow position">
           {showRouteWorkspaceContext ? (
             <div>
               <span className="section-token">Current workspace</span>
@@ -507,7 +535,7 @@ export default function OperationalWorkflowWorkspace({
               {routeContext.actionLabel}
             </button>
           ) : null}
-        </section>
+        </section> : null}
 
         {visibleSection === "command-center" ? (
           <WorkspaceSectionBoundary name="CommandCenterView" resetKey={sectionBoundaryResetKey} errorContext={telemetryBoundaryMeta} onRetry={retryLatestTelemetry}>

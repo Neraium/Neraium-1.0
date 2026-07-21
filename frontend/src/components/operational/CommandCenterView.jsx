@@ -3,13 +3,6 @@ import { useMemo, useRef } from "react";
 import AnalysisRecordDetails from "./AnalysisRecordDetails";
 import OperatorInsightDetail from "./OperatorInsightDetail";
 
-function confidencePercent(insight) {
-  const score = Number(insight?.confidenceScore ?? insight?.confidence_score);
-  if (!Number.isFinite(score)) return "";
-  const normalized = score > 1 ? score : score * 100;
-  return `${Math.round(Math.max(0, Math.min(100, normalized)))}%`;
-}
-
 function severityLabel(value) {
   const text = String(value ?? "").trim().toLowerCase();
   if (text.includes("critical")) return "Critical";
@@ -33,6 +26,19 @@ function confidenceRank(insight) {
   return 0;
 }
 
+function findingConfidenceLabel(insight) {
+  const explicit = String(insight?.confidence ?? "").trim().toLowerCase();
+  if (explicit.includes("high")) return "High";
+  if (explicit.includes("moderate")) return "Moderate";
+  if (explicit.includes("low")) return "Low";
+  const score = Number(insight?.confidenceScore ?? insight?.confidence_score);
+  if (!Number.isFinite(score)) return "Unavailable";
+  const normalized = score > 1 ? score / 100 : score;
+  if (normalized >= 0.85) return "High";
+  if (normalized >= 0.6) return "Moderate";
+  return "Low";
+}
+
 function rankedInsights(insights) {
   return [...(insights ?? [])].sort((left, right) =>
     severityRank(right?.severity) - severityRank(left?.severity)
@@ -43,7 +49,7 @@ function rankedInsights(insights) {
 
 function operationalStatus(model, queue) {
   if (model.uiState?.key === "analyzing") return { label: "Changing", tone: "loading", explanation: "Comparing current operation with the learned baseline." };
-  if (!model.analysisComplete) return { label: "Watching", tone: "neutral", explanation: model.commandCenterMessage || "Import telemetry to establish the operating baseline." };
+  if (!model.analysisComplete) return { label: "Watching", tone: "neutral", explanation: model.commandCenterMessage || "Connect telemetry to establish the operating baseline." };
   const critical = queue.filter((item) => severityLabel(item?.severity) === "Critical").length;
   const high = queue.filter((item) => severityLabel(item?.severity) === "High").length;
   if (critical || high > 1) return { label: "Urgent", tone: "critical", explanation: "The highest-severity behavioral changes should be reviewed promptly." };
@@ -70,67 +76,142 @@ function normalizedSystemCards(model) {
     : [];
 }
 
-function OperationalFingerprintSummary({ model, status, queue, topInsight, helpers, systems, onConnectLiveData }) {
+function formatDetectedAt(value) {
+  if (!value) return "Unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+}
+
+function countSupportingObservations(insight) {
+  return new Set([...(insight?.observedFacts ?? []), ...(insight?.publicEvidenceItems ?? []), ...(insight?.evidence ?? [])].filter(Boolean)).size;
+}
+
+function evidenceQuality(model) {
+  if (model?.dataQualityNotice?.tone === "warning") {
+    return { label: "Reduced", reason: model.dataQualityNotice.detail || "One or more monitored signals contained quality limitations." };
+  }
+  if (model?.telemetryStatus?.label) {
+    return { label: model.telemetryStatus.label, reason: model.telemetryStatus.detail || "Operational data was sufficient for review." };
+  }
+  return { label: "Unavailable", reason: "Evidence quality has not been reported for this analysis." };
+}
+
+function OperatingStateSummary({ model, status, topInsight, helpers, systems, onConnectLiveData, onOpenInvestigation, onViewEvidence }) {
   const affected = topInsight?.system || systems.find((system) => Number(system.activeInsights) > 0)?.name;
+  const summary = topInsight && affected
+    ? `The ${affected} subsystem moved away from its learned operating baseline.`
+    : status.explanation;
+  const quality = evidenceQuality(model);
   const coverage = model.dataCoveragePercent;
+  const primaryAction = topInsight ? firstAction(topInsight) : "Connect telemetry or import operational data to establish the first behavior baseline.";
+
   return (
-    <section className={`command-section fingerprint-summary command-section--${status.tone}`} aria-labelledby="fingerprint-summary-heading">
-      <div className="command-section__header">
-        <p className="command-section__label">Operational Fingerprint</p>
-        <h2 id="fingerprint-summary-heading">Operational Fingerprint Summary</h2>
-        <p>{status.explanation}</p>
+    <section className={`command-section operating-state-card command-section--${status.tone}`} aria-labelledby="operating-state-heading">
+      <h2 id="operating-state-heading" className="sr-only">Operational Fingerprint Summary</h2>
+      <div className="operating-state-card__main">
+        <p className="command-section__label">Current operating state</p>
+        <strong className="operating-state-card__status">{status.label}</strong>
+        <p>{summary}</p>
       </div>
-      <div className="fingerprint-summary__status"><span>Overall status</span><strong>{status.label}</strong></div>
-      <dl className="fingerprint-summary__facts">
-        <div><dt>Active findings</dt><dd>{queue.length}</dd></div>
-        {affected ? <div><dt>Most affected subsystem</dt><dd>{affected}</dd></div> : null}
+      <dl className="operating-state-card__meta">
         {topInsight ? <div><dt>Highest-priority finding</dt><dd>{titleFor(topInsight, helpers)}</dd></div> : null}
-        <div><dt>Last analysis</dt><dd>{model.lastAnalysis}</dd></div>
-        <div><dt>Data quality</dt><dd>{model.telemetryStatus?.label || "Unavailable"}</dd></div>
+        {affected ? <div><dt>Affected subsystem</dt><dd>{affected}</dd></div> : null}
+        {topInsight ? <div><dt>Severity</dt><dd>{severityLabel(topInsight.severity)}</dd></div> : null}
+        {topInsight ? <div><dt>Finding confidence</dt><dd>{findingConfidenceLabel(topInsight)}</dd></div> : null}
+        {topInsight ? <div><dt>First detected</dt><dd>{formatDetectedAt(topInsight.detectedAt)}</dd></div> : null}
         {coverage !== null && coverage !== undefined ? <div><dt>Data coverage</dt><dd>{coverage}%</dd></div> : null}
+        <div><dt>Evidence quality</dt><dd>{quality.label}</dd></div>
       </dl>
-      {!model.analysisComplete && status.tone !== "loading" ? <div className="operational-actions fingerprint-summary__actions"><button type="button" className="command-button" onClick={onConnectLiveData}>Import and Analyze Dataset</button><button type="button" className="secondary-command-button" onClick={onConnectLiveData}>Connect Live Telemetry</button></div> : null}
+      <div className="operating-state-card__action">
+        <span>Primary recommended action</span>
+        <strong>{primaryAction}</strong>
+        <div className="operating-state-card__buttons">
+          {topInsight ? <button type="button" className="command-button" onClick={onOpenInvestigation}>Open investigation</button> : <button type="button" className="command-button" onClick={onConnectLiveData}>Connect telemetry</button>}
+          {topInsight ? <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onViewEvidence}>View supporting evidence</button> : <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onConnectLiveData}>Import operational data</button>}
+        </div>
+      </div>
+      <p className="operating-state-card__quality-note">Evidence quality is separate from finding confidence. {quality.reason}</p>
+      {!model.analysisComplete && status.tone !== "loading" ? <p className="operating-state-card__quality-note">Neraium monitors connected telemetry, historians, databases, APIs, sensors, and imported datasets as read-only operational data sources.</p> : null}
     </section>
   );
+}
+
+function subsystemTone(system) {
+  const status = String(system?.status || "").toLowerCase();
+  const active = Number(system?.activeInsights) > 0;
+  if (/critical|high|urgent/.test(status)) return "high";
+  if (/investigation|changing|degrad|drift|review/.test(status)) return "investigation";
+  if (/watch|elevated|moderate/.test(status) || active) return "watch";
+  return "normal";
+}
+
+function subsystemStatus(system) {
+  const status = String(system?.status || "").trim();
+  if (!status) return Number(system?.activeInsights) > 0 ? "Watch" : "Normal";
+  if (/critical/i.test(status)) return "High severity";
+  if (/stable|healthy|normal/i.test(status)) return "Normal";
+  if (/changing|investigation|review|degrad|drift/i.test(status)) return "Investigation recommended";
+  return status;
 }
 
 function SubsystemBehavior({ systems = [] }) {
   const safeSystems = Array.isArray(systems) ? systems.filter(Boolean) : [];
   return (
     <section className="command-section subsystem-behavior" aria-labelledby="subsystem-behavior-heading">
-      <div className="command-section__header"><h2 id="subsystem-behavior-heading">Subsystem Behavior</h2><p>Current state by area, based on analyzed relationships.</p></div>
-      {safeSystems.length ? <div className="subsystem-behavior__list" role="list">{safeSystems.map((system, index) => (
-        <div className="subsystem-behavior__row" role="listitem" key={system.id || system.name || `subsystem-${index}`}>
-          <span className={`subsystem-behavior__indicator subsystem-behavior__indicator--${String(system.status || "Stable").toLowerCase().replace(/\s+/g, "-")}`} aria-hidden="true" />
-          <strong>{system.name || "Unnamed subsystem"}</strong><span className="subsystem-behavior__state">{system.status || "Stable"}</span>
-          {Number(system.activeInsights) > 0 ? <small>{system.activeInsights} active finding{String(system.activeInsights) === "1" ? "" : "s"}</small> : null}
-        </div>
-      ))}</div> : <p className="operational-findings-empty">Subsystem behavior will appear after a completed telemetry analysis.</p>}
+      <div className="command-section__header"><h2 id="subsystem-behavior-heading">Subsystem Status</h2><p>Compact view of active findings by subsystem.</p></div>
+      {safeSystems.length ? <div className="subsystem-behavior__list" role="list">{safeSystems.map((system, index) => {
+        const activeCount = Number(system.activeInsights) || 0;
+        return (
+          <div className={`subsystem-behavior__row subsystem-behavior__row--${subsystemTone(system)}`} role="listitem" key={system.id || system.name || `subsystem-${index}`}>
+            <span className="subsystem-behavior__indicator" aria-hidden="true" />
+            <div className="subsystem-behavior__identity"><strong>{system.name || "Unnamed subsystem"}</strong><span>{activeCount > 0 ? "Trend changed" : "Aligned"}</span></div>
+            <span className="subsystem-behavior__state">{subsystemStatus(system)}</span>
+            <small>{activeCount} active finding{activeCount === 1 ? "" : "s"}</small>
+          </div>
+        );
+      })}</div> : <p className="operational-findings-empty">Subsystem status will appear after connected telemetry or operational data is analyzed.</p>}
     </section>
   );
 }
 
 function PriorityFinding({ insight, model, helpers, onOpen }) {
   if (!insight) return null;
-  const confidence = confidencePercent(insight) || helpers.formatConfidenceDisplay(insight.confidence, insight.confidenceScore);
-  const supportingCount = new Set([...(insight.observedFacts ?? []), ...(insight.publicEvidenceItems ?? [])].filter(Boolean)).size;
+  const supportingCount = countSupportingObservations(insight);
+  const changedCount = Number(insight.changedRelationshipCount) || 0;
+  const quality = evidenceQuality(model);
   return (
     <section className="command-section priority-finding" aria-labelledby="priority-finding-heading">
-      <div className="command-section__header"><p className="command-section__label">Review first</p><h2 id="priority-finding-heading">Prioritized Finding</h2><p>Highest severity and confidence are reviewed first.</p></div>
+      <div className="command-section__header"><p className="command-section__label">Review first</p><h2 id="priority-finding-heading">Prioritized Finding</h2><p>Highest operator priority based on severity and confidence.</p></div>
       <article className="priority-finding__card">
         <div className="priority-finding__heading"><div><span>Affected subsystem</span><p>{insight.system || "Unavailable"}</p><h3>{titleFor(insight, helpers)}</h3></div><span className={`priority-finding__severity priority-finding__severity--${helpers.severityToTone(insight.severity)}`}>{severityLabel(insight.severity)}</span></div>
         <p className="priority-finding__explanation">{summaryFor(insight, helpers)}</p>
         <dl className="priority-finding__trust">
-          <div><dt>Severity</dt><dd>{severityLabel(insight.severity)}</dd></div>
-          {confidence ? <div><dt>Confidence</dt><dd>{confidence}</dd></div> : null}
-          <div><dt>First detected</dt><dd>{insight.detectedAt || "Unavailable"}</dd></div>
-          {model.telemetryStatus?.label ? <div><dt>Evidence quality</dt><dd>{model.telemetryStatus.label}</dd></div> : null}
-          {model.dataCoveragePercent !== null && model.dataCoveragePercent !== undefined ? <div><dt>Data coverage</dt><dd>{model.dataCoveragePercent}%</dd></div> : null}
-          {supportingCount > 0 ? <div><dt>Supporting observations</dt><dd>{supportingCount}</dd></div> : null}
-          {Number(insight.changedRelationshipCount) > 0 ? <div><dt>Changed relationships</dt><dd>{insight.changedRelationshipCount}</dd></div> : null}
+          <div><dt>Finding confidence</dt><dd>{findingConfidenceLabel(insight)}</dd></div>
+          <div><dt>First detected</dt><dd>{formatDetectedAt(insight.detectedAt)}</dd></div>
+          <div><dt>Changed relationships</dt><dd>{changedCount || "Not reported"}</dd></div>
+          <div><dt>Supporting observations</dt><dd>{supportingCount || "Not reported"}</dd></div>
         </dl>
         <div className="priority-finding__action"><span>Recommended first action</span><strong>{firstAction(insight)}</strong></div>
-        <button type="button" className="command-button" onClick={onOpen}>Open finding</button>
+        <div className="priority-finding__footer">
+          <button type="button" className="command-button" onClick={onOpen}>Open finding</button>
+          <details className="priority-finding__details">
+            <summary>Analysis details</summary>
+            <dl>
+              <div><dt>Severity</dt><dd>{severityLabel(insight.severity)}</dd></div>
+              <div><dt>Evidence quality</dt><dd>{quality.label}</dd></div>
+              {model.dataCoveragePercent !== null && model.dataCoveragePercent !== undefined ? <div><dt>Data coverage</dt><dd>{model.dataCoveragePercent}%</dd></div> : null}
+              {model.telemetryStatus?.label ? <div><dt>Data quality</dt><dd>{model.telemetryStatus.label}</dd></div> : null}
+            </dl>
+          </details>
+        </div>
       </article>
     </section>
   );
@@ -147,8 +228,8 @@ function EngineeringFindings({ insights, selectedInsight, onSelectInsight, helpe
     buttons[next]?.focus();
   }
   return <section className="command-section command-section--findings" aria-labelledby="engineering-findings-heading">
-    <div className="command-section__header"><h2 id="engineering-findings-heading">Engineering Findings</h2><p>{insights.length ? "Remaining findings, highest priority first." : "None active"}</p></div>
-    {insights.length ? <div className="operational-findings-list" role="list" ref={queueRef} onKeyDown={handleKeyDown}>{insights.map((insight, index) => <div role="listitem" className="operational-finding-row-wrap" key={insight.id || index}><button type="button" className={selectedInsight?.id === insight.id ? "operational-finding-row is-selected" : "operational-finding-row"} data-priority-item="true" onClick={() => onSelectInsight?.(insight.id)}><span className="operational-finding-row__title">{titleFor(insight, helpers)}</span><span className={`operational-finding-row__severity operational-finding-row__severity--${helpers.severityToTone(insight.severity)}`}>{severityLabel(insight.severity)}</span><span className="operational-finding-row__confidence">{confidencePercent(insight) ? `Confidence ${confidencePercent(insight)}` : "Confidence unavailable"}</span><span className="operational-finding-row__summary">{summaryFor(insight, helpers)}</span></button></div>)}</div> : <div className="operational-empty operational-empty--inline"><p className="operational-findings-empty">{selectedInsight ? "No additional findings require review." : "Import telemetry to establish the baseline."}</p></div>}
+    <div className="command-section__header"><h2 id="engineering-findings-heading">Engineering Findings</h2><p>{insights.length ? "Additional findings in priority order." : "No additional active findings."}</p></div>
+    {insights.length ? <div className="operational-findings-list" role="list" ref={queueRef} onKeyDown={handleKeyDown}>{insights.map((insight, index) => <div role="listitem" className="operational-finding-row-wrap" key={insight.id || index}><button type="button" className={selectedInsight?.id === insight.id ? "operational-finding-row is-selected" : "operational-finding-row"} data-priority-item="true" onClick={() => onSelectInsight?.(insight.id)}><span className="operational-finding-row__title">{titleFor(insight, helpers)}</span><span className={`operational-finding-row__severity operational-finding-row__severity--${helpers.severityToTone(insight.severity)}`}>{severityLabel(insight.severity)}</span><span className="operational-finding-row__confidence">Finding confidence {findingConfidenceLabel(insight)}</span><span className="operational-finding-row__summary">{summaryFor(insight, helpers)}</span></button></div>)}</div> : <div className="operational-empty operational-empty--inline"><p className="operational-findings-empty">{selectedInsight ? "No additional findings require review." : "Connect telemetry to establish the baseline."}</p></div>}
   </section>;
 }
 
@@ -174,14 +255,27 @@ export default function CommandCenterView({ model, helpers, selectedInsight, onS
   const status = useMemo(() => operationalStatus(model, queue), [model, queue]);
   const systems = normalizedSystemCards(model);
   const remaining = top ? queue.filter((item) => item.id !== top.id) : [];
+  const openTop = () => { onSelectInsight?.(top?.id); onFocusInvestigation?.(); };
+  const viewEvidence = () => {
+    onSelectInsight?.(top?.id);
+    const target = document.getElementById("insight-evidence");
+    if (target) {
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+      target.focus({ preventScroll: true });
+    } else {
+      onFocusInvestigation?.();
+    }
+  };
+
   return <div className="operational-command-center" data-testid="operational-command-center">
-    <OperationalFingerprintSummary model={model} status={status} queue={queue} topInsight={top} helpers={helpers} systems={systems} onConnectLiveData={onConnectLiveData} />
+    <OperatingStateSummary model={model} status={status} topInsight={top} helpers={helpers} systems={systems} onConnectLiveData={onConnectLiveData} onOpenInvestigation={openTop} onViewEvidence={viewEvidence} />
     <SubsystemBehavior systems={systems} />
-    <PriorityFinding insight={top} model={model} helpers={helpers} onOpen={() => { onSelectInsight?.(top?.id); onFocusInvestigation?.(); }} />
+    <PriorityFinding insight={top} model={model} helpers={helpers} onOpen={openTop} />
     {top ? <div className="selected-investigation-panel"><OperatorInsightDetail insight={top} inline focusMode /></div> : null}
     <EngineeringFindings insights={remaining} selectedInsight={active?.id === top?.id ? null : active} onSelectInsight={onSelectInsight} helpers={helpers} />
     {active && active.id !== top?.id ? <div className="selected-investigation-panel"><OperatorInsightDetail insight={active} inline focusMode /></div> : null}
-    <section className="command-section command-section--systems" aria-labelledby="system-overview-heading"><div className="command-section__header"><h2 id="system-overview-heading">Discovered Systems</h2><p>Detected in the dataset.</p></div>{systems.length ? <div className="system-overview-list" role="list">{systems.map((system) => <div className="system-overview-row" role="listitem" key={system.id}><strong>{system.name}</strong><span>{system.status}</span><span>{system.activeInsights} active finding{String(system.activeInsights) === "1" ? "" : "s"}</span></div>)}</div> : <p className="operational-findings-empty">No systems are listed because no completed telemetry analysis is active.</p>}</section>
+    <section className="command-section command-section--systems" aria-labelledby="system-overview-heading"><div className="command-section__header"><h2 id="system-overview-heading">Discovered Systems</h2><p>Detected in the operational data.</p></div>{systems.length ? <div className="system-overview-list" role="list">{systems.map((system) => <div className="system-overview-row" role="listitem" key={system.id}><strong>{system.name}</strong><span>{subsystemStatus(system)}</span><span>{Number(system.activeInsights) || 0} active finding{String(Number(system.activeInsights) || 0) === "1" ? "" : "s"}</span></div>)}</div> : <p className="operational-findings-empty">No systems are listed because no completed telemetry analysis is active.</p>}</section>
     <AdvancedDashboardSection model={model} />
   </div>;
 }
