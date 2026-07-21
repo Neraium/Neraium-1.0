@@ -69,7 +69,7 @@ All values are read at process startup. Invalid enums, booleans, ports, positive
 |---|---|---|
 | `APP_ENV` | `production` or `prod` | Enables production validation and controls |
 | `BACKEND_HOST` | `0.0.0.0` | Bind address |
-| `BACKEND_PORT` | `80` | Bind port, 1-65535 |
+| `BACKEND_PORT` | `8080` | Bind port, 1-65535 |
 | `CORS_ORIGINS` | comma-separated explicit origins | Browser allowlist; `*` is rejected in production |
 | `CORS_ORIGIN_REGEX` | valid Python regex | Optional domain allowlist; defaults to Neraium domains |
 | `NERAIUM_RUNTIME_DIR` | `/mnt/neraium-runtime` | Explicit writable runtime path; required in production |

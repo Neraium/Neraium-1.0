@@ -7,7 +7,8 @@ This document captures the active AWS deployment path for Neraium-1.0. Productio
 - Backend: Amazon ECS Express Mode / ECS Fargate
 - Backend container image registry: Amazon ECR
 - Frontend: AWS Amplify Hosting
-- Production backend port: `80`
+- Production backend container port: `8080`
+- Public load balancer listeners: `80` and `443`, forwarding to the `8080` container target
 - Local backend port: `8010`
 - Local frontend port: `3010`
 
@@ -30,7 +31,7 @@ docker build -t neraium-backend:local .\\backend
 2. Create an Amazon ECR repository for the backend image.
 3. Tag and push the backend image to Amazon ECR.
 4. Create an Amazon ECS Express Mode service from the ECR image.
-5. Configure the container port as `80`.
+5. Configure the container port as `8080`.
 6. Configure the health check path as `/api/health`.
 7. Confirm the ECS-generated public HTTPS URL returns a healthy response:
 
@@ -43,7 +44,7 @@ Required backend environment variables:
 ```text
 APP_ENV=production
 BACKEND_HOST=0.0.0.0
-BACKEND_PORT=80
+BACKEND_PORT=8080
 CORS_ORIGINS=https://<amplify-frontend-domain>
 NERAIUM_RUNTIME_DIR=/mnt/neraium-runtime
 NERAIUM_UPLOAD_CHUNK_SIZE_ROWS=10000
@@ -171,7 +172,7 @@ docker build -t neraium-backend:local .\\backend
 Run the backend container locally on the production container port:
 
 ```powershell
-docker run --rm -p 8080:80 neraium-backend:local
+docker run --rm -p 8080:8080 neraium-backend:local
 ```
 
 Then check:

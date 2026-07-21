@@ -39,15 +39,15 @@ Configuration is centralized in `backend/app/core/config.py` and read from envir
 - CSV analysis and SII ingestion use all cleaned rows from the upload; there is no analysis-row or SII-row sampling cap.
 - `NERAIUM_MAX_UPLOAD_SIZE_BYTES` defaults to `10737418240` (10 GiB) and is enforced while streaming uploads to disk.
 
-For Amazon ECS Express Mode / ECS Fargate, set `APP_ENV=production`, `BACKEND_HOST=0.0.0.0`, `BACKEND_PORT=80`, `CORS_ORIGINS` to the deployed Amplify frontend origin, `CORS_ORIGIN_REGEX` to `^https://([a-z0-9-]+\.)?neraium\.com$`, and `NERAIUM_RUNTIME_DIR` to the container's writable runtime path. Do not set `NERAIUM_START_DATA_POLLER=true` unless a customer REST telemetry source has been explicitly configured.
+For Amazon ECS Express Mode / ECS Fargate, set `APP_ENV=production`, `BACKEND_HOST=0.0.0.0`, `BACKEND_PORT=8080`, `CORS_ORIGINS` to the deployed Amplify frontend origin, `CORS_ORIGIN_REGEX` to `^https://([a-z0-9-]+\.)?neraium\.com$`, and `NERAIUM_RUNTIME_DIR` to the container's writable runtime path. Do not set `NERAIUM_START_DATA_POLLER=true` unless a customer REST telemetry source has been explicitly configured.
 
 ## Container Build
 
-The backend includes a Dockerfile for Amazon ECS Express Mode / ECS Fargate preparation. The container serves `app.main:app` with uvicorn and defaults to port `80`.
+The backend includes a Dockerfile for Amazon ECS Express Mode / ECS Fargate preparation. The container serves `app.main:app` with uvicorn and defaults to port `8080`.
 
 ```powershell
 docker build -t neraium-backend:local .\backend
-docker run --rm -p 8080:80 neraium-backend:local
+docker run --rm -p 8080:8080 neraium-backend:local
 ```
 
 ## Endpoints

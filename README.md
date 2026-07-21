@@ -250,7 +250,7 @@ Deployment notes and runbooks are available in:
 - `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md`
 - `docs/PRODUCTION_OPERATOR_FLOW_CHECKLIST.md`
 
-Local backend development runs on port `8010`. Local frontend development runs on port `3010`. The backend container is prepared for cloud deployment on port `80`.
+Local backend development runs on port `8010`. Local frontend development runs on port `3010`. The backend container is prepared for cloud deployment on internal container port `8080`.
 
 ---
 
