@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from tempfile import NamedTemporaryFile
 from pathlib import Path
 from typing import Any
+from app.core.path_safety import safe_upload_suffix
 from app.services.analysis_explanations import build_analysis_explanation
 from app.services.analysis_result_contract import attach_analysis_result, build_normalized_telemetry
 from app.services.baseline_analysis import build_baseline_analysis
@@ -965,7 +966,7 @@ def _build_csv_result(
 def process_upload_bytes(filename: str, content: bytes, *, job_id: str | None = None) -> dict[str, Any]:
     if not content.strip():
         raise ValueError("CSV file is empty.")
-    with NamedTemporaryFile(delete=False, suffix=Path(filename).suffix or ".csv") as temp:
+    with NamedTemporaryFile(delete=False, suffix=safe_upload_suffix(filename)) as temp:
         temp.write(content)
         temp_path = Path(temp.name)
     try:

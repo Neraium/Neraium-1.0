@@ -250,12 +250,13 @@ def test_retry_upload_analysis_requeues_current_uploaded_dataset(tmp_path) -> No
     settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8010, cors_origins=["*"], runtime_dir=tmp_path)
     client = TestClient(create_app(settings))
     job_id = "a" * 32
-    source_path = tmp_path / "retry-source.csv"
+    source_path = tmp_path / "uploads" / "retry-source.csv"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
     source_path.write_text("timestamp,room,temperature,humidity\n2026-05-01T08:00:00Z,Plant,74,55\n2026-05-01T08:05:00Z,Plant,75,56\n", encoding="utf-8")
     write_job({
         "job_id": job_id,
         "filename": "retry-source.csv",
-        "file_path": str(source_path),
+        "file_path": source_path.name,
         "status": "FAILED",
         "processing_state": "failed",
         "error_type": "processing_error",
@@ -2608,13 +2609,14 @@ def test_worker_processing_exception_marks_job_failed_instead_of_leaving_pending
     settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
     create_app(settings)
 
-    upload_path = tmp_path / "broken.csv"
+    upload_path = tmp_path / "uploads" / "broken.csv"
+    upload_path.parent.mkdir(parents=True, exist_ok=True)
     upload_path.write_text("timestamp,temperature\n2026-05-01T08:00:00Z,75\n", encoding="utf-8")
     job_id = "worker-processing-fail-job"
     upload_jobs.write_job({
         "job_id": job_id,
         "filename": "broken.csv",
-        "file_path": str(upload_path),
+        "file_path": upload_path.name,
         "status": "PENDING",
         "processing_state": "queued",
         "propagation_stage": "queued",
@@ -2768,7 +2770,8 @@ def test_refresh_after_completion_recovers_finished_analysis() -> None:
 
 def test_queue_worker_preserves_canonical_completed_status(tmp_path) -> None:
     client = TestClient(create_app())
-    upload_path = tmp_path / "queued-terminal.csv"
+    upload_path = upload_jobs.UPLOAD_DIR / "queued-terminal.csv"
+    upload_path.parent.mkdir(parents=True, exist_ok=True)
     rows = "\n".join(
         f"2026-05-01T10:{index:02d}:00Z,Zone A,{72 + index * 0.1:.1f},{52 + index * 0.2:.1f}"
         for index in range(9)
@@ -2779,7 +2782,7 @@ def test_queue_worker_preserves_canonical_completed_status(tmp_path) -> None:
         {
             "job_id": job_id,
             "filename": upload_path.name,
-            "file_path": str(upload_path),
+            "file_path": upload_path.name,
             "status": "PENDING",
             "processing_state": "queued",
             "propagation_stage": "queued",

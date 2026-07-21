@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from app.core.path_safety import StoragePathError, resolve_existing_storage_path, storage_key_for_server_path
 from app.services.runtime_db import (
     claim_next_upload_job,
     complete_upload_queue_job,
@@ -41,7 +42,7 @@ class UploadQueueLifecycleService:
         write_job: Callable[[dict[str, Any]], None],
         process_json_payload: Callable[..., dict[str, Any]],
         process_csv_file: Callable[..., dict[str, Any]],
-        restore_upload_source: Callable[[str, str], Path],
+        restore_upload_source: Callable[..., Path],
         delete_upload_source: Callable[[str | None], None],
     ) -> None:
         self.runtime_state = runtime_state
@@ -72,17 +73,20 @@ class UploadQueueLifecycleService:
 
     def _resolve_processing_path(self, job_id: str, metadata: dict[str, Any]) -> Path | None:
         file_path = metadata.get("file_path")
-        path = Path(str(file_path)) if file_path else None
-        if path and path.exists():
-            return path
+        if file_path:
+            try:
+                return resolve_existing_storage_path(self.runtime_state.upload_dir, file_path)
+            except StoragePathError:
+                pass
 
         source_key = str(metadata.get("shared_upload_source_key") or "").strip()
         if not source_key:
             return None
 
-        restored = self.restore_upload_source(job_id, source_key)
-        metadata["file_path"] = str(restored)
-        self.write_job({**metadata, "job_id": job_id, "file_path": str(restored)})
+        restored = self.restore_upload_source(job_id, source_key, filename=metadata.get("filename"))
+        restored_key = storage_key_for_server_path(self.runtime_state.upload_dir, restored)
+        metadata["file_path"] = restored_key
+        self.write_job({**metadata, "job_id": job_id, "file_path": restored_key})
         return restored
 
     def process_next_queued_upload_job(self) -> bool:
@@ -203,7 +207,7 @@ class UploadQueueLifecycleService:
                 {
                     **metadata,
                     "job_id": job_id,
-                    "file_path": str(path),
+                    "file_path": storage_key_for_server_path(self.runtime_state.upload_dir, path),
                     "status": "PROCESSING",
                     "processing_state": "parsing_telemetry",
                     "percent": 20,

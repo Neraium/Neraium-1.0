@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from app.services.evidence_store import read_evidence_run, upsert_evidence_run
 from app.services.analysis_result_contract import ensure_analysis_result
 from app.core.security import _strict_auth_mode, require_operator_role
+from app.core.path_safety import StoragePathError, ensure_storage_root, resolve_existing_storage_path, safe_upload_suffix, storage_key_for_server_path
 from app.services import upload_jobs
 from app.services.upload_evidence import build_evidence_record_from_result
 from app.services.upload_persistence import summarize_result
@@ -44,6 +45,17 @@ UPLOAD_STATUS_RATE_WINDOW_SECONDS = 60
 _UPLOAD_WORKERS: set[threading.Thread] = set()
 _UPLOAD_WORKERS_LOCK = threading.Lock()
 UploadJobPath = Annotated[str, ApiPath(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
+
+
+def _upload_storage_root(runtime_dir: Path) -> Path:
+    return ensure_storage_root(Path(runtime_dir) / "uploads")
+
+
+def _resolve_upload_source_path(runtime_dir: Path, file_path: Any) -> Path | None:
+    try:
+        return resolve_existing_storage_path(_upload_storage_root(runtime_dir), file_path)
+    except StoragePathError:
+        return None
 
 
 def format_upload_capacity(size_bytes: int) -> str:
@@ -239,10 +251,10 @@ def _extract_timeline(result: dict | None, job_id: str | None = None) -> list[di
 
 def _process_upload_inline(job_id: str, status: dict) -> dict:
     file_path = status.get("file_path")
-    if not file_path or not Path(str(file_path)).exists():
+    path = _resolve_upload_source_path(UPLOAD_RUNTIME_STATE.runtime_dir, file_path)
+    if path is None:
         return status
     try:
-        path = Path(str(file_path))
         filename = status.get("filename") or path.name
         if path.suffix.lower() == ".json":
             upload_jobs.process_json_payload(path.read_text(encoding="utf-8"), filename=filename, job_id=job_id)
@@ -525,15 +537,17 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
     )
     file_size_bytes = 0
     csv_has_non_whitespace = False
+    job_id = uuid.uuid4().hex
     temp_path = ""
+    upload_storage_key: str | None = None
     summary: dict[str, Any] = {}
     try:
-        spool_dir = Path(settings.runtime_dir) / "uploads"
-        spool_dir.mkdir(parents=True, exist_ok=True)
+        spool_dir = _upload_storage_root(settings.runtime_dir)
         with NamedTemporaryFile(
             delete=False,
             dir=spool_dir,
-            suffix=Path(filename).suffix or ".csv",
+            prefix=f"{job_id}-",
+            suffix=safe_upload_suffix(filename),
         ) as temp:
             temp_path = temp.name
             while True:
@@ -576,9 +590,10 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 },
             )
 
+        upload_storage_key = storage_key_for_server_path(spool_dir, temp_path)
+
         _log_upload_event("request_bytes_received", request_id=request_id, endpoint="/api/data/upload", filename=filename, file_size_bytes=file_size_bytes, content_type=content_type or "unknown", processing_stage="spooled")
 
-        job_id = uuid.uuid4().hex
         request.state.upload_session_id = job_id
         shared_upload_source_key = None
         if shared_state_configured():
@@ -592,7 +607,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         processing_file_path = (
             None
             if worker_dispatch_status == "external_worker_queue" and shared_upload_source_key
-            else temp_path
+            else upload_storage_key
         )
         summary = {
             "job_id": job_id,
@@ -806,7 +821,7 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
     status_payload = upload_jobs.read_upload_status(requested_job_id) or {}
     file_path = status_payload.get("file_path")
     shared_upload_source_key = str(status_payload.get("shared_upload_source_key") or "").strip()
-    has_local_file = bool(file_path and Path(str(file_path)).exists())
+    has_local_file = _resolve_upload_source_path(settings.runtime_dir, file_path) is not None
     if not status_payload or (not has_local_file and not shared_upload_source_key):
         return JSONResponse(
             status_code=404,
@@ -969,15 +984,16 @@ def rebuild_upload_replay_from_source(job_id: str | dict | None = None, *args, *
     payload = job_id if isinstance(job_id, dict) else {}
     requested_job_id = str(payload.get("job_id") or job_id or "")
     file_path = payload.get("file_path")
-    if not file_path:
+    path = _resolve_upload_source_path(UPLOAD_RUNTIME_STATE.runtime_dir, file_path)
+    if path is None:
         return read_replay_payload(requested_job_id or None)
 
-    result = upload_jobs.process_csv_file(Path(file_path))
+    result = upload_jobs.process_csv_file(path)
     replay = result.get("replay_timeline") or {}
     timeline = replay.get("timeline", []) if isinstance(replay, dict) else []
     replay_mode = "minimal_timestamp_fallback"
     try:
-        lines = Path(file_path).read_text(encoding="utf-8", errors="replace").splitlines()
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         if lines:
             headers = [h.strip().lower() for h in lines[0].split(",")]
             ts_idx = next((idx for idx, value in enumerate(headers) if "time" in value or "date" in value), 0)

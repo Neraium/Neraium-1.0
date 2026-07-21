@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
+from app.core.path_safety import ensure_storage_root, safe_upload_suffix
 from app.services.runtime_db import (
     delete_latest_payload_prefix,
     read_latest_payload,
@@ -104,13 +105,13 @@ def persist_upload_source(job_id: str, source_path: str | os.PathLike[str], *, f
 
 
 def restore_upload_source(job_id: str, source_key: str, *, filename: str | None = None) -> Path:
-    del job_id
     client = _get_s3_client()
     bucket = _upload_state_bucket()
     if client is None or not bucket:
         raise RuntimeError("shared_upload_source_client_unavailable")
-    suffix = Path(str(filename or source_key)).suffix or ".csv"
-    with NamedTemporaryFile(delete=False, suffix=suffix) as temp:
+    upload_root = ensure_storage_root(runtime_state().upload_dir)
+    suffix = safe_upload_suffix(filename or source_key)
+    with NamedTemporaryFile(delete=False, dir=upload_root, prefix=f"{job_id}-", suffix=suffix) as temp:
         temp_path = Path(temp.name)
     try:
         with temp_path.open("wb") as handle:

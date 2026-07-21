@@ -10,7 +10,8 @@ from app.services.upload_jobs import read_job, write_job, write_latest_upload_re
 
 
 def test_rebuild_upload_replay_from_source(tmp_path: Path) -> None:
-    csv_path = tmp_path / "telemetry.csv"
+    csv_path = upload_jobs.UPLOAD_DIR / "telemetry.csv"
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
     rows = "\n".join(
         f"2026-05-21T08:{minute:02d}:00Z,{72 + (minute % 5)},{48 + (minute % 7)}"
         for minute in range(60)
@@ -19,7 +20,7 @@ def test_rebuild_upload_replay_from_source(tmp_path: Path) -> None:
 
     payload = rebuild_upload_replay_from_source({
         "job_id": "job-123",
-        "file_path": str(csv_path),
+        "file_path": csv_path.name,
         "filename": "telemetry.csv",
     })
 
@@ -31,7 +32,8 @@ def test_rebuild_upload_replay_from_source(tmp_path: Path) -> None:
 
 
 def test_rebuild_upload_replay_from_source_uses_minimal_fallback_when_numeric_signal_is_sparse(tmp_path: Path) -> None:
-    csv_path = tmp_path / "events.csv"
+    csv_path = upload_jobs.UPLOAD_DIR / "events.csv"
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
     rows = "\n".join(
         f"2026-05-21T08:{minute:02d}:00Z,phaseA,statusON"
         for minute in range(40)
@@ -40,7 +42,7 @@ def test_rebuild_upload_replay_from_source_uses_minimal_fallback_when_numeric_si
 
     payload = rebuild_upload_replay_from_source({
         "job_id": "job-fallback",
-        "file_path": str(csv_path),
+        "file_path": csv_path.name,
         "filename": "events.csv",
     })
 
@@ -52,7 +54,8 @@ def test_rebuild_upload_replay_from_source_uses_minimal_fallback_when_numeric_si
 
 
 def test_rebuild_upload_replay_from_source_parses_mixed_numeric_formats_and_non_hint_timestamp(tmp_path: Path) -> None:
-    csv_path = tmp_path / "plant.csv"
+    csv_path = upload_jobs.UPLOAD_DIR / "plant.csv"
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
     rows = "\n".join(
         f"2026-05-21 08:{minute:02d}:00,\"{1200 + minute * 0.5:.1f} kW\",\"{45 + (minute % 5):.1f}%\""
         for minute in range(50)
@@ -61,7 +64,7 @@ def test_rebuild_upload_replay_from_source_parses_mixed_numeric_formats_and_non_
 
     payload = rebuild_upload_replay_from_source({
         "job_id": "job-mixed-numeric",
-        "file_path": str(csv_path),
+        "file_path": csv_path.name,
         "filename": "plant.csv",
     })
 
@@ -337,6 +340,8 @@ def test_historian_style_csv_upload_persists_replay_after_source_removed() -> No
     job_metadata = read_job(job_id)
     assert isinstance(job_metadata, dict)
     source_path = Path(str(job_metadata.get("file_path")))
+    if not source_path.is_absolute():
+        source_path = upload_jobs.UPLOAD_DIR / source_path
     if source_path.exists():
         source_path.unlink()
 

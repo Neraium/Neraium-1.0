@@ -6,16 +6,18 @@ from pathlib import Path
 from typing import Any
 
 from app.connectors.models import ConnectorHealthStatus
+from app.core.path_safety import ensure_storage_root, resolve_storage_path
 
 
 def connectors_runtime_dir(runtime_dir: Path) -> Path:
-    path = runtime_dir / "connectors"
+    root = ensure_storage_root(runtime_dir)
+    path = resolve_storage_path(root, "connectors")
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def health_state_path(runtime_dir: Path) -> Path:
-    return connectors_runtime_dir(runtime_dir) / "health.json"
+    return resolve_storage_path(connectors_runtime_dir(runtime_dir), "health.json")
 
 
 def read_health_state(runtime_dir: Path) -> dict[str, Any]:
