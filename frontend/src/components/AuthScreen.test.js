@@ -19,6 +19,13 @@ describe("AuthScreen", () => {
     const onAuthenticated = vi.fn();
     render(h(AuthScreen, { notice: "Your session expired. Sign in again to continue.", onAuthenticated }));
 
+    expect(screen.getByText("Neraium")).toBeTruthy();
+    expect(screen.getByText("Systemic Infrastructure Intelligence")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Welcome back" })).toBeTruthy();
+    expect(screen.getByText("Sign in to continue.")).toBeTruthy();
+    expect(screen.queryByText(/See the behavior behind the system\./i)).toBeNull();
+    expect(screen.queryByText(/decision environment/i)).toBeNull();
+
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(screen.getByRole("alert").textContent).toContain("email and password");
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "admin@example.com" } });
