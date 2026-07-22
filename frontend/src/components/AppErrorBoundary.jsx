@@ -10,14 +10,6 @@ const WORKSPACE_RECOVERY_COPY = {
   secondaryAction: "Use last available state",
 };
 
-const CHUNK_RECOVERY_COPY = {
-  title: "The workspace was updated",
-  bodyTitle: "Reload required",
-  message: "Reload the workspace to fetch the current application bundle. Your connected data and existing analysis are still available.",
-  primaryAction: "Reload Workspace",
-  secondaryAction: "Use last available state",
-};
-
 export function isChunkLoadError(error) {
   const message = String(error?.message ?? error ?? "");
   return /(?:failed to fetch dynamically imported module|error loading dynamically imported module|loading chunk \d+ failed|chunkloaderror|importing a module script failed)/i.test(message);
@@ -102,14 +94,13 @@ export default class AppErrorBoundary extends React.Component {
 
   render() {
     if (this.state.error) {
-      const recoveryCopy = isChunkLoadError(this.state.error) ? CHUNK_RECOVERY_COPY : WORKSPACE_RECOVERY_COPY;
       return (
         <div data-testid="app-render-fallback">
           <div className="workspace-grid workspace-recovery-shell">
-            <Panel title={recoveryCopy.title} className="span-12 workspace-recovery-panel">
+            <Panel title={WORKSPACE_RECOVERY_COPY.title} className="span-12 workspace-recovery-panel">
               <EmptyState
-                title={recoveryCopy.bodyTitle ?? recoveryCopy.title}
-                body={recoveryCopy.message}
+                title={WORKSPACE_RECOVERY_COPY.title}
+                body={WORKSPACE_RECOVERY_COPY.message}
               />
               <p className="workspace-recovery-reference">Reference {this.state.referenceId ?? "NRA-WORKSPACE"}</p>
               <div className="panel-actions workspace-recovery-actions">
@@ -118,14 +109,14 @@ export default class AppErrorBoundary extends React.Component {
                   className="command-button"
                   onClick={this.handleRetry}
                 >
-                  {recoveryCopy.primaryAction}
+                  {WORKSPACE_RECOVERY_COPY.primaryAction}
                 </button>
                 <button
                   type="button"
                   className="secondary-command-button"
                   onClick={this.handleUseLastAvailable}
                 >
-                  {recoveryCopy.secondaryAction}
+                  {WORKSPACE_RECOVERY_COPY.secondaryAction}
                 </button>
               </div>
             </Panel>

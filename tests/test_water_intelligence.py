@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
+from app.domain_interpretation import DomainInterpretationContext, DomainInterpreterSpec, attach_domain_interpretations, interpret_domain_layers
 from app.engine import run_engine_analysis
 from app.services.analysis_result_contract import build_analysis_result
 from app.services.baseline_analysis import build_baseline_analysis
@@ -10,6 +13,7 @@ from app.services.data_quality import build_data_quality, profile_numeric_column
 from app.services.upload_evidence import build_evidence_record_from_result
 from app.water_intelligence import WaterIntelligenceContext, interpret_water_intelligence
 from app.water_intelligence.models import apply_confirmation_status
+from app.water_intelligence.units import normalize_unit
 
 
 def _catalog(columns, units):
@@ -250,3 +254,83 @@ def test_no_water_prior_applies_gracefully():
     result = interpret_water_intelligence(_context(columns, rows, units, finding))
     assert result["no_applicable_prior"] is True
     assert result["insights"] == []
+
+
+
+def _generic_domain_context():
+    return DomainInterpretationContext(
+        columns=["timestamp", "generic_a", "generic_b"],
+        engine_result={"evidence": [{"id": "sii-generic-1", "type": "relationship_change", "columns": ["generic_a", "generic_b"]}]},
+        relationship_model={"top_relationship_changes": [{"id": "sii-generic-1", "columns": ["generic_a", "generic_b"]}]},
+        baseline_analysis={},
+        data_quality={"readiness": "ready"},
+        upload_id="generic-upload",
+        analysis_id="generic-analysis",
+    )
+
+
+def test_domain_interpreter_registry_supports_other_domain_packs_without_new_orchestration():
+    context = _generic_domain_context()
+    result = interpret_domain_layers(
+        context,
+        interpreters=[
+            DomainInterpreterSpec(key="alpha", interpret=lambda _context: {"insights": []}),
+            DomainInterpreterSpec(key="beta", legacy_result_key="beta_payload", interpret=lambda _context: {"insights": [{"id": "beta-1"}]}),
+        ],
+    )
+    assert set(result["domain_interpretations"]) == {"alpha", "beta"}
+    assert result["legacy_fields"]["beta_payload"]["insights"][0]["id"] == "beta-1"
+    assert result["domain_interpretation_errors"] == []
+
+
+def test_domain_interpreter_failure_preserves_original_sii_result_and_allows_other_interpreters():
+    context = _generic_domain_context()
+    sii_result = {"sii_intelligence": {"supporting_evidence": ["original"]}, "engine_result": context.engine_result}
+
+    def fail(_context):
+        raise RuntimeError("domain pack failed")
+
+    updated = attach_domain_interpretations(
+        sii_result,
+        context,
+        interpreters=[
+            DomainInterpreterSpec(key="failing", legacy_result_key="failing_payload", interpret=fail),
+            DomainInterpreterSpec(key="secondary", interpret=lambda _context: {"insights": [{"id": "secondary-1"}]}),
+        ],
+    )
+
+    assert updated["sii_intelligence"] == {"supporting_evidence": ["original"]}
+    assert updated["engine_result"] == context.engine_result
+    assert "failing_payload" not in updated
+    assert updated["domain_interpretations"]["secondary"]["insights"][0]["id"] == "secondary-1"
+    assert updated["domain_interpretation_errors"][0]["effect"] == "domain_interpretation_skipped_original_sii_result_preserved"
+
+
+def test_prior_parameters_override_evidence_windows_and_confidence_reduction_limits():
+    context = _pump_fixture()
+    context.config = {
+        "prior_overrides": {
+            "water.pump_hydraulic_behavior": {
+                "baseline_window_fraction": 0.5,
+                "current_window_min_fraction": 0.25,
+                "max_reduced_confidence_reasons": 1,
+            }
+        }
+    }
+    insight = interpret_water_intelligence(context)["insights"][0]
+    metric = next(item for item in insight["derived_metrics"] if item["name"] == "hydraulic_output_proxy")
+    assert metric["known_inputs"][0]["evidence_window"]["baseline_fraction"] == 0.5
+    assert metric["known_inputs"][0]["evidence_window"]["current_min_fraction"] == 0.25
+    assert len(insight["confidence_and_uncertainty"]["reduced_confidence"]) <= 1
+
+
+def test_unit_conversion_is_explicit_and_rejects_incompatible_units():
+    converted = normalize_unit(value=10, source_unit="lpm", expected_dimension="flow")
+    assert converted["status"] == "ok"
+    assert converted["normalized_unit"] == "gpm"
+    assert converted["conversion_applied"] == "lpm_to_gpm"
+    assert converted["normalized_value"] == pytest.approx(2.64172052)
+
+    incompatible = normalize_unit(value=10, source_unit="psi", expected_dimension="flow")
+    assert incompatible["status"] == "incompatible"
+    assert incompatible["normalized_value"] is None

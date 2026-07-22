@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense } from "react";
 
 const RelationshipExplorer = lazy(() => import("./RelationshipExplorer"));
 
@@ -249,7 +249,6 @@ function usefulDiagnosticEntries(evidence) {
     ["Time window", text(evidence?.time_window ?? evidence?.timeWindow)],
     ["Persistence / duration", text(evidence?.persistence_duration ?? evidence?.persistenceDuration)],
     ["Calculated percent change", evidence?.calculated_percent_delta ?? evidence?.calculatedPercentDelta],
-    ["Calculated delta", evidence?.calculated_delta ?? evidence?.calculatedDelta],
     ["Signal identifiers", toList(evidence?.source_columns, evidence?.sourceColumns, evidence?.source_metrics, evidence?.sourceMetrics, evidence?.source_tags, evidence?.sourceTags)],
     ["Internal metric names", toList(evidence?.metric_delta, evidence?.relevant_metric_changes, evidence?.relevantMetricChanges)],
   ];
@@ -337,12 +336,11 @@ function WaterIntelligencePanel({ insight }) {
   );
 }
 
-function Disclosure({ title, children, className = "", defaultOpen = false, lazyRender = false }) {
-  const [expanded, setExpanded] = useState(Boolean(defaultOpen));
+function Disclosure({ title, children, className = "", defaultOpen = false }) {
   return (
-    <details className={`insight-disclosure ${className}`.trim()} open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
+    <details className={`insight-disclosure ${className}`.trim()} open={defaultOpen}>
       <summary><span>{title}</span><span className="insight-disclosure__chevron" aria-hidden="true">v</span></summary>
-      <div className="insight-disclosure__body">{!lazyRender || expanded ? children : null}</div>
+      <div className="insight-disclosure__body">{children}</div>
     </details>
   );
 }
@@ -440,7 +438,7 @@ function OperatorActions({ insight, subsystem }) {
     <div className="operator-action-groups__secondary" role="group" aria-label="Secondary investigation actions">
       <button type="button" onClick={() => focusInvestigationSection("insight-evidence")}>Inspect affected equipment</button>
       <button type="button" onClick={() => focusInvestigationSection("fingerprint-comparison")}>Compare baseline</button>
-      <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>Related systems</button>
+      <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>View related systems</button>
     </div>
     <div className="operator-action-groups__utility" role="group" aria-label="Utility actions">
       <button type="button" onClick={exportReport}>Export report</button>
@@ -473,7 +471,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
     "Operating mode change", "Hydraulic restriction", "Equipment wear", "Valve configuration change", "Instrumentation issue",
   ]).slice(0, 6);
   const severity = insightSeverityLabel(insight);
-  const confidenceValue = [confidenceLabel(insight), confidencePercent(insight)].filter(Boolean).join(" · ");
+  const confidenceValue = confidenceLabel(insight) || confidencePercent(insight);
   const subsystem = text(insight?.system || insight?.rawSystemName) || "Operational subsystem";
   const measurements = evidence.map(relationshipMeasurement).filter((item) => item.delta !== null);
   const largestDelta = measurements.length ? Math.max(...measurements.map((item) => item.delta)) : null;
@@ -537,7 +535,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
 
   const body = (
     <div className="insight-layered">
-      <section id="insight-situation" className="insight-situation-card" aria-labelledby="insight-situation-title" tabIndex={-1}>
+      {!focusMode ? <section id="insight-situation" className="insight-situation-card" aria-labelledby="insight-situation-title" tabIndex={-1}>
         <span className="insight-summary-card__eyebrow">What happened</span>
         <div className="insight-situation-card__meta">
           <span className={`insight-severity insight-severity--${severity.toLowerCase()}`}>{operationalStatus}</span>
@@ -545,7 +543,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
           {confidenceValue ? <span>Finding confidence {confidenceValue}</span> : null}
         </div>
         <p id="insight-situation-title" className="insight-situation-card__summary">{behavioralSummary}</p>
-      </section>
+      </section> : null}
 
       <InvestigationDecisionPath evidenceCount={evidence.length} relationshipCount={relationships.length} />
 
@@ -571,8 +569,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
             <p>{historicalComparison}</p>
           </section>
         </div>
-        <BulletList items={relationshipCoverageNotes} />
-        <Disclosure title="View full evidence" className="insight-disclosure--compact" lazyRender>
+        <Disclosure title="View full evidence" className="insight-disclosure--compact">
           <div className="full-evidence-stack">
             <section><span>Monitored signals</span><BulletList items={supportingSignals.length ? supportingSignals : relationships} /></section>
             {supportingObservations.length ? <section><span>Supporting observations</span><BulletList items={supportingObservations} /></section> : null}
@@ -639,7 +636,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
           })}
         </Disclosure>
 
-        <Disclosure title="Raw analysis payload" className="insight-disclosure--raw" lazyRender>
+        <Disclosure title="Raw analysis payload" className="insight-disclosure--raw">
           <pre><code>{JSON.stringify(insight, null, 2)}</code></pre>
         </Disclosure>
       </div>

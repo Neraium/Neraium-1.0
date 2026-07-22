@@ -63,7 +63,7 @@ from app.services.upload_state_repository import (
 )
 from app.services.upload_replay import build_replay, detect_numeric_columns, detect_timestamp_column as detect_replay_timestamp_column, minimal_replay, population_std, to_float
 from app.services.upload_validator import detect_delimiter, looks_like_header, normalized_columns, row_tokens, stream_csv_snapshot
-from app.water_intelligence import WaterIntelligenceContext, interpret_water_intelligence
+from app.domain_interpretation import DomainInterpretationContext, attach_domain_interpretations
 from app.services.upload_state import (
     build_empty_latest_upload_record,
     build_session_scope,
@@ -932,8 +932,9 @@ def _build_csv_result(
         source_file=filename,
         telemetry_signal_catalog=telemetry_signal_catalog,
     )
-    result["water_intelligence"] = interpret_water_intelligence(
-        WaterIntelligenceContext(
+    result = attach_domain_interpretations(
+        result,
+        DomainInterpretationContext(
             columns=columns,
             engine_result=engine_result,
             relationship_model=relationship_model if isinstance(relationship_model, dict) else {},
@@ -945,7 +946,7 @@ def _build_csv_result(
             operating_mode=data_quality.get("operating_mode") if isinstance(data_quality, dict) else None,
             upload_id=job_id,
             analysis_id=job_id,
-        )
+        ),
     )
     result["analysis_explanation"] = build_analysis_explanation(result)
     result["analysis"] = result["analysis_explanation"]

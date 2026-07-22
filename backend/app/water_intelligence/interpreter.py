@@ -25,6 +25,64 @@ from app.water_intelligence.units import normalize_unit
 SCHEMA_VERSION = "water-intelligence-v1"
 
 
+DEFAULT_INTERPRETATION_PARAMETERS: dict[str, Any] = {
+    "max_findings_per_prior": 2,
+    "minimum_proposed_graph_evidence_types": 3,
+    "minimum_non_statistical_evidence_types_for_operator_insight": 2,
+    "minimum_relevant_signal_matches": 2,
+    "minimum_tower_context_signal_matches": 2,
+    "max_asset_matches_per_signal": 1,
+    "max_increased_confidence_reasons": 6,
+    "max_reduced_confidence_reasons": 8,
+    "sensor_uncertainty_fraction": 0.05,
+    "model_uncertainty_fraction": 0.2,
+    "baseline_window_fraction": 0.7,
+    "current_window_min_fraction": 0.33,
+    "filter_similar_flow_relative_change": 0.1,
+    "max_recommended_checks": 8,
+    "max_affected_assets": 6,
+    "default_sii_score": 0.45,
+    "confidence_thresholds": {"high": 0.72, "medium": 0.45},
+    "severity_thresholds": {"high": 0.8, "moderate": 0.45},
+    "severe_uncertainty_confidence_cap": 0.58,
+    "confidence_increase_score_threshold": 0.62,
+    "signal_quality_scores": {
+        "ok": 0.85,
+        "unknown_unit": 0.6,
+        "incompatible_unit": 0.45,
+        "not_ready_cap": 0.35,
+    },
+    "prior_applicability_scores": {"applicable": 0.85, "not_applicable": 0.2},
+    "context_completeness_scores": {
+        "base": 0.35,
+        "supporting_signal_weight": 0.45,
+        "operating_mode_bonus": 0.1,
+        "cap": 0.9,
+    },
+    "graph_trust_scores": {
+        GRAPH_TRUST_TRUSTED: 0.9,
+        GRAPH_TRUST_PROPOSED: 0.65,
+        GRAPH_TRUST_SPECULATIVE: 0.2,
+    },
+    "supporting_evidence_scores": {
+        "base": 0.45,
+        "source_evidence_bonus": 0.2,
+        "optional_signal_weight": 0.06,
+        "optional_signal_cap": 0.25,
+        "cap": 0.9,
+    },
+    "confounder_severity_scores": {
+        "none": 0.9,
+        "base_with_active": 0.75,
+        "per_active_reduction": 0.12,
+        "floor": 0.25,
+        "medium_active_count_max": 2,
+    },
+    "model_or_residual_uncertainty_scores": {"high": 0.35, "medium": 0.75},
+    "numeric_zero_epsilon": 1e-9,
+}
+
+
 @dataclass
 class WaterIntelligenceContext:
     columns: list[str]
@@ -64,12 +122,12 @@ def interpret_water_intelligence(context: WaterIntelligenceContext) -> dict[str,
         if not applicability["applicable"]:
             skipped_priors.append(_skip(prior, applicability["reason"], applicability["missing_required_signals"], applicability["invalid_conditions"]))
             continue
-        relevant = _relevant_findings(prior, findings, signal_matches)
+        relevant = _relevant_findings(prior, findings, signal_matches, params)
         if not relevant:
             skipped_priors.append(_skip(prior, "No SII relationship-drift finding involved the required water signals.", [], []))
             continue
         emitted = False
-        for finding_index, finding in enumerate(relevant[:2]):
+        for finding_index, finding in enumerate(relevant[:_int_param(params, "max_findings_per_prior")]):
             finding_signals = _finding_signal_names(finding, signal_matches)
             trust = infer_graph_trust(finding=finding, prior=prior, matched_signal_names=finding_signals, context=context, parameters=params)
             matched_edges.append({"sii_finding_id": _finding_id(finding, finding_index), "relationship_prior_id": prior.prior_id, "graph_trust": trust})
@@ -136,7 +194,7 @@ def infer_graph_trust(*, finding: dict[str, Any], prior: RelationshipPrior, matc
         reason = "Edge is explicitly marked speculative."
     else:
         statistical_only = evidence_types == {"statistical_association"}
-        required_count = int(parameters.get("minimum_proposed_graph_evidence_types") or 3)
+        required_count = _int_param(parameters, "minimum_proposed_graph_evidence_types")
         if "validated_topology" in evidence_types or "operator_confirmation" in evidence_types:
             tier = GRAPH_TRUST_TRUSTED
             reason = "Edge has validated topology or operator confirmation evidence."
@@ -146,7 +204,10 @@ def infer_graph_trust(*, finding: dict[str, Any], prior: RelationshipPrior, matc
         else:
             tier = GRAPH_TRUST_SPECULATIVE
             reason = "Edge is suggested from limited evidence; correlation alone cannot promote it."
-    eligible = tier == GRAPH_TRUST_TRUSTED or (tier == GRAPH_TRUST_PROPOSED and len(evidence_types - {"statistical_association"}) >= 2)
+    eligible = tier == GRAPH_TRUST_TRUSTED or (
+        tier == GRAPH_TRUST_PROPOSED
+        and len(evidence_types - {"statistical_association"}) >= _int_param(parameters, "minimum_non_statistical_evidence_types_for_operator_insight")
+    )
     return {
         "tier": tier,
         "eligible_for_operator_insight": eligible,
@@ -160,26 +221,26 @@ def infer_graph_trust(*, finding: dict[str, Any], prior: RelationshipPrior, matc
 def _build_water_insight(*, prior: RelationshipPrior, finding: dict[str, Any], finding_index: int, context: WaterIntelligenceContext, signal_matches: dict[str, list[SignalMatch]], graph_trust: dict[str, Any], applicability: dict[str, Any], parameters: dict[str, Any], generated_at: str) -> dict[str, Any]:
     active_confounders = _active_confounders(prior, context, signal_matches, finding)
     derived_metrics = _derived_metrics(prior, signal_matches, context, parameters)
-    dimensions = _confidence_dimensions(prior=prior, finding=finding, context=context, signal_matches=signal_matches, graph_trust=graph_trust, active_confounders=active_confounders, derived_metrics=derived_metrics, applicability=applicability)
-    confidence = build_confidence_summary(dimensions, preserved_sii_confidence=_sii_confidence(finding))
+    dimensions = _confidence_dimensions(prior=prior, finding=finding, context=context, signal_matches=signal_matches, graph_trust=graph_trust, active_confounders=active_confounders, derived_metrics=derived_metrics, applicability=applicability, parameters=parameters)
+    confidence = build_confidence_summary(dimensions, preserved_sii_confidence=_sii_confidence(finding), parameters=parameters)
     first_detected, last_observed = _finding_times(finding, context)
     affected_system = _affected_system(prior)
     observed_evidence = _observed_evidence(prior, finding, signal_matches, graph_trust, context)
     explanations = _possible_explanations(prior, derived_metrics, active_confounders)
-    checks = _recommended_checks(prior, active_confounders)
+    checks = _recommended_checks(prior, active_confounders, parameters)
     insight_id = f"water-{_slug(prior.prior_id)}-{_slug(_finding_id(finding, finding_index))}"
     what_changed = _what_changed(prior, finding)
     why_matters = _why_it_matters(prior)
     return {
         "id": insight_id,
         "title": f"Water interpretation: {prior.name}",
-        "severity": _severity_from_finding(finding),
+        "severity": _severity_from_finding(finding, parameters),
         "confidence": confidence["overall"],
         "confidence_rationale": confidence["explanation"],
         "sii_finding_id": _finding_id(finding, finding_index),
         "affected_system": affected_system,
         "affected_systems": [affected_system],
-        "affected_assets": _affected_assets(prior, context, signal_matches),
+        "affected_assets": _affected_assets(prior, context, signal_matches, parameters),
         "relationship_prior_id": prior.prior_id,
         "relationship_prior_version": prior.version,
         "operating_mode": _operating_mode(context),
@@ -275,16 +336,18 @@ def _prior_applicability(prior: RelationshipPrior, context: WaterIntelligenceCon
     return {"applicable": applicable, "reason": "Applicable" if applicable else "Prior applicability requirements were not met.", "missing_required_signals": missing, "invalid_conditions": invalid_conditions, "matched_required_signals": sorted(prior.required_signal_names - set(missing))}
 
 
-def _relevant_findings(prior: RelationshipPrior, findings: list[dict[str, Any]], signal_matches: dict[str, list[SignalMatch]]) -> list[dict[str, Any]]:
+def _relevant_findings(prior: RelationshipPrior, findings: list[dict[str, Any]], signal_matches: dict[str, list[SignalMatch]], parameters: dict[str, Any]) -> list[dict[str, Any]]:
     relevant_columns = columns_for_signals(signal_matches, prior.all_signal_names)
+    minimum_signal_matches = _int_param(parameters, "minimum_relevant_signal_matches")
+    minimum_tower_context_matches = _int_param(parameters, "minimum_tower_context_signal_matches")
     relevant: list[dict[str, Any]] = []
     for finding in findings:
         columns = set(_finding_columns(finding))
         finding_signals = _finding_signal_names(finding, signal_matches)
         if prior.prior_id == "water.cooling_tower_mass_balance":
-            if signal_matches.get("makeup_flow") and (columns & relevant_columns or len(signal_matches) >= 2):
+            if signal_matches.get("makeup_flow") and (columns & relevant_columns or len(signal_matches) >= minimum_tower_context_matches):
                 relevant.append(finding)
-        elif len(finding_signals & prior.all_signal_names) >= 2 and prior.required_signal_names.issubset(set(signal_matches)):
+        elif len(finding_signals & prior.all_signal_names) >= minimum_signal_matches and prior.required_signal_names.issubset(set(signal_matches)):
             relevant.append(finding)
     return relevant
 
@@ -384,20 +447,20 @@ def _conductivity_confounder_active(context: WaterIntelligenceContext, signal_ma
 
 def _derived_metrics(prior: RelationshipPrior, signal_matches: dict[str, list[SignalMatch]], context: WaterIntelligenceContext, parameters: dict[str, Any]) -> list[dict[str, Any]]:
     if prior.prior_id == "water.pump_hydraulic_behavior":
-        return _pump_metrics(signal_matches, context)
+        return _pump_metrics(signal_matches, context, parameters)
     if prior.prior_id == "water.chilled_water_thermal_behavior":
-        return _chilled_water_metrics(signal_matches, context)
+        return _chilled_water_metrics(signal_matches, context, parameters)
     if prior.prior_id == "water.filter_differential_pressure":
-        return _filter_metrics(signal_matches, context)
+        return _filter_metrics(signal_matches, context, parameters)
     if prior.prior_id == "water.cooling_tower_mass_balance":
         return _tower_mass_balance_metrics(signal_matches, context, parameters)
     return []
 
 
-def _pump_metrics(signal_matches: dict[str, list[SignalMatch]], context: WaterIntelligenceContext) -> list[dict[str, Any]]:
-    flow = _window_stat(signal_matches, context, "flow")
-    dp = _window_stat(signal_matches, context, "differential_pressure")
-    power = _window_stat(signal_matches, context, "pump_power")
+def _pump_metrics(signal_matches: dict[str, list[SignalMatch]], context: WaterIntelligenceContext, parameters: dict[str, Any]) -> list[dict[str, Any]]:
+    flow = _window_stat(signal_matches, context, "flow", parameters)
+    dp = _window_stat(signal_matches, context, "differential_pressure", parameters)
+    power = _window_stat(signal_matches, context, "pump_power", parameters)
     if flow and dp and flow.get("current_average") is not None and dp.get("current_average") is not None:
         baseline_proxy = _product(flow.get("baseline_average"), dp.get("baseline_average"))
         current_proxy = _product(flow.get("current_average"), dp.get("current_average"))
@@ -409,11 +472,11 @@ def _pump_metrics(signal_matches: dict[str, list[SignalMatch]], context: WaterIn
     return [_unknown_metric("hydraulic_output_proxy", "Flow and differential pressure values are not both identifiable from normalized telemetry.")]
 
 
-def _chilled_water_metrics(signal_matches: dict[str, list[SignalMatch]], context: WaterIntelligenceContext) -> list[dict[str, Any]]:
-    supply = _window_stat(signal_matches, context, "supply_temperature")
-    ret = _window_stat(signal_matches, context, "return_temperature")
-    flow = _window_stat(signal_matches, context, "flow")
-    delta = _window_stat(signal_matches, context, "delta_t")
+def _chilled_water_metrics(signal_matches: dict[str, list[SignalMatch]], context: WaterIntelligenceContext, parameters: dict[str, Any]) -> list[dict[str, Any]]:
+    supply = _window_stat(signal_matches, context, "supply_temperature", parameters)
+    ret = _window_stat(signal_matches, context, "return_temperature", parameters)
+    flow = _window_stat(signal_matches, context, "flow", parameters)
+    delta = _window_stat(signal_matches, context, "delta_t", parameters)
     metrics: list[dict[str, Any]] = []
     if supply and ret and supply.get("current_average") is not None and ret.get("current_average") is not None:
         baseline_delta = _subtract(ret.get("baseline_average"), supply.get("baseline_average"))
@@ -426,34 +489,34 @@ def _chilled_water_metrics(signal_matches: dict[str, list[SignalMatch]], context
     return metrics or [_unknown_metric("chilled_water_thermal_metrics", "Supply, return, flow, or delta-T values are incomplete.")]
 
 
-def _filter_metrics(signal_matches: dict[str, list[SignalMatch]], context: WaterIntelligenceContext) -> list[dict[str, Any]]:
-    dp = _window_stat(signal_matches, context, "filter_differential_pressure")
-    flow = _window_stat(signal_matches, context, "flow")
+def _filter_metrics(signal_matches: dict[str, list[SignalMatch]], context: WaterIntelligenceContext, parameters: dict[str, Any]) -> list[dict[str, Any]]:
+    dp = _window_stat(signal_matches, context, "filter_differential_pressure", parameters)
+    flow = _window_stat(signal_matches, context, "flow", parameters)
     if not dp or not flow:
         return [_unknown_metric("filter_flow_normalized_context", "Filter differential pressure and flow are not both available.")]
     flow_change = _relative_change(flow.get("baseline_average"), flow.get("current_average"))
     dp_change = _relative_change(dp.get("baseline_average"), dp.get("current_average"))
-    similar = flow_change is not None and abs(flow_change) <= 0.1
+    similar = flow_change is not None and abs(flow_change) <= _float_param(parameters, "filter_similar_flow_relative_change")
     return [_metric(name="filter_dp_at_comparable_flow_context", formula="site-specific SII baseline comparison; no universal dP-flow squared model is assumed", known_inputs=[dp, flow], value={"flow_relative_change": flow_change, "differential_pressure_relative_change": dp_change, "similar_flow": similar}, baseline_value=None, normalized_unit=None, explanation="A differential-pressure rise at similar flow can support a restriction/loading hypothesis, but does not confirm filter loading." if similar else "Flow is not similar enough for a simple flow-normalized comparison; use the SII state-conditioned baseline.")]
 
 
 def _tower_mass_balance_metrics(signal_matches: dict[str, list[SignalMatch]], context: WaterIntelligenceContext, parameters: dict[str, Any]) -> list[dict[str, Any]]:
-    makeup = _window_stat(signal_matches, context, "makeup_flow")
+    makeup = _window_stat(signal_matches, context, "makeup_flow", parameters)
     if not makeup or makeup.get("current_average") is None:
         return [_unknown_metric("cooling_tower_mass_balance", "Makeup flow is required and not identifiable.")]
     term_names = ("evaporation_flow", "blowdown_flow", "drift_flow", "leak_flow", "overflow_flow", "storage_change")
     known_terms = []
     missing_terms = []
     for term in term_names:
-        stat = _window_stat(signal_matches, context, term)
+        stat = _window_stat(signal_matches, context, term, parameters)
         if stat and stat.get("current_average") is not None:
             known_terms.append(stat)
         else:
             missing_terms.append(term)
     known_total = sum(float(term["current_average"]) for term in known_terms)
     residual = round(float(makeup["current_average"]) - known_total, 6)
-    sensor_uncertainty = float(parameters.get("sensor_uncertainty_fraction") or 0.05)
-    model_uncertainty = float(parameters.get("model_uncertainty_fraction") or 0.2)
+    sensor_uncertainty = _float_param(parameters, "sensor_uncertainty_fraction")
+    model_uncertainty = _float_param(parameters, "model_uncertainty_fraction")
     uncertainty = abs(residual) * (sensor_uncertainty + model_uncertainty)
     return [{"name": "unmeasured_outflow", "formula": "makeup - measured_evaporation - measured_blowdown - measured_drift - measured_leaks - measured_overflow - measured_storage_change", "known_inputs": [makeup, *known_terms], "missing_inputs": missing_terms, "value": residual, "source_units": [item.get("source_unit") for item in [makeup, *known_terms] if item.get("source_unit")], "normalized_unit": makeup.get("normalized_unit"), "conversion_applied": [item.get("conversion_applied") for item in [makeup, *known_terms] if item.get("conversion_applied")], "calculation_version": "water.mass_balance.residual.v1", "sensor_uncertainty": {"fraction": sensor_uncertainty, "basis": "configurable default unless site/asset override supplies a value"}, "model_uncertainty": {"fraction": model_uncertainty, "basis": "residual combines non-identifiable terms"}, "uncertainty_range": [round(residual - uncertainty, 6), round(residual + uncertainty, 6)], "identifiability": "not_separable" if missing_terms else "separable_for_measured_terms", "explanation": "Individual evaporation, blowdown, drift, leakage, overflow, and storage components cannot be separated without enough independent measurements.", "conductivity_cycles_supporting_evidence": _conductivity_support(signal_matches, context)}]
 
@@ -464,31 +527,57 @@ def _conductivity_support(signal_matches: dict[str, list[SignalMatch]], context:
     return {"eligible": bool(signal_matches.get("makeup_conductivity") and signal_matches.get("circulating_conductivity") and all(conditions.values())), "role": "supporting_only", "conditions": conditions, "chemical_feed_pump_note": "A chemical-feed pump running does not automatically invalidate conductivity cycles; treatment chemistry must be reviewed for tracer validity."}
 
 
-def _confidence_dimensions(*, prior: RelationshipPrior, finding: dict[str, Any], context: WaterIntelligenceContext, signal_matches: dict[str, list[SignalMatch]], graph_trust: dict[str, Any], active_confounders: list[dict[str, Any]], derived_metrics: list[dict[str, Any]], applicability: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _confidence_dimensions(*, prior: RelationshipPrior, finding: dict[str, Any], context: WaterIntelligenceContext, signal_matches: dict[str, list[SignalMatch]], graph_trust: dict[str, Any], active_confounders: list[dict[str, Any]], derived_metrics: list[dict[str, Any]], applicability: dict[str, Any], parameters: dict[str, Any]) -> dict[str, dict[str, Any]]:
     dimensions = empty_confidence_dimensions()
-    sii_score = _sii_score(finding)
-    dimensions["sii_finding_strength"] = {"state": _score_state(sii_score), "score": sii_score, "explanation": "SII relationship finding strength was preserved from the generic engine output."}
+    sii_score = _sii_score(finding, parameters)
+    dimensions["sii_finding_strength"] = {"state": _score_state(sii_score, parameters), "score": sii_score, "explanation": "SII relationship finding strength was preserved from the generic engine output."}
     bad_units = [item for matches in signal_matches.values() for item in matches if item.unit_status in {"unknown", "incompatible"}]
-    signal_score = 0.85
+    signal_scores = _dict_param(parameters, "signal_quality_scores")
+    signal_score = float(signal_scores.get("ok", 0.85))
     if bad_units:
-        signal_score = 0.45 if any(item.unit_status == "incompatible" for item in bad_units) else 0.6
+        signal_score = float(signal_scores.get("incompatible_unit", 0.45)) if any(item.unit_status == "incompatible" for item in bad_units) else float(signal_scores.get("unknown_unit", 0.6))
     if str((context.data_quality or {}).get("readiness") or "ready").lower() == "not_ready":
-        signal_score = min(signal_score, 0.35)
-    dimensions["signal_quality"] = {"state": _score_state(signal_score), "score": signal_score, "explanation": "Signal quality reflects data readiness plus unit validation and normalization status."}
-    applicability_score = 0.85 if applicability.get("applicable") else 0.2
-    dimensions["prior_applicability"] = {"state": _score_state(applicability_score), "score": applicability_score, "explanation": "Prior applicability is based on required water signals, valid operating mode, and invalidation checks."}
+        signal_score = min(signal_score, float(signal_scores.get("not_ready_cap", 0.35)))
+    dimensions["signal_quality"] = {"state": _score_state(signal_score, parameters), "score": signal_score, "explanation": "Signal quality reflects data readiness plus unit validation and normalization status."}
+    applicability_scores = _dict_param(parameters, "prior_applicability_scores")
+    applicability_score = float(applicability_scores.get("applicable", 0.85)) if applicability.get("applicable") else float(applicability_scores.get("not_applicable", 0.2))
+    dimensions["prior_applicability"] = {"state": _score_state(applicability_score, parameters), "score": applicability_score, "explanation": "Prior applicability is based on required water signals, valid operating mode, and invalidation checks."}
     optional_present = len([name for name in prior.optional_signal_names if signal_matches.get(name)])
     optional_total = max(1, len(prior.optional_signal_names))
-    context_score = min(0.9, 0.35 + (optional_present / optional_total) * 0.45 + (0.1 if _operating_mode(context) != "unknown" else 0.0))
-    dimensions["context_completeness"] = {"state": _score_state(context_score), "score": round(context_score, 4), "explanation": "Context completeness reflects operating mode and supporting signals such as valves, staging, maintenance, or chemistry context."}
-    graph_score = {GRAPH_TRUST_TRUSTED: 0.9, GRAPH_TRUST_PROPOSED: 0.65, GRAPH_TRUST_SPECULATIVE: 0.2}.get(graph_trust.get("tier"), 0.2)
+    context_scores = _dict_param(parameters, "context_completeness_scores")
+    context_score = min(
+        float(context_scores.get("cap", 0.9)),
+        float(context_scores.get("base", 0.35))
+        + (optional_present / optional_total) * float(context_scores.get("supporting_signal_weight", 0.45))
+        + (float(context_scores.get("operating_mode_bonus", 0.1)) if _operating_mode(context) != "unknown" else 0.0),
+    )
+    dimensions["context_completeness"] = {"state": _score_state(context_score, parameters), "score": round(context_score, 4), "explanation": "Context completeness reflects operating mode and supporting signals such as valves, staging, maintenance, or chemistry context."}
+    graph_scores = _dict_param(parameters, "graph_trust_scores")
+    graph_score = float(graph_scores.get(graph_trust.get("tier"), graph_scores.get(GRAPH_TRUST_SPECULATIVE, 0.2)))
     dimensions["graph_trust"] = {"state": str(graph_trust.get("tier") or GRAPH_TRUST_SPECULATIVE), "score": graph_score, "explanation": graph_trust.get("explanation")}
-    supporting_score = 0.45 + (0.2 if finding.get("evidence_refs") or finding.get("source_rows") else 0.0) + min(0.25, optional_present * 0.06)
-    dimensions["supporting_evidence"] = {"state": _score_state(supporting_score), "score": round(min(0.9, supporting_score), 4), "explanation": "Supporting evidence reflects SII evidence references, source rows, and available supporting water context."}
+    supporting_scores = _dict_param(parameters, "supporting_evidence_scores")
+    supporting_score = (
+        float(supporting_scores.get("base", 0.45))
+        + (float(supporting_scores.get("source_evidence_bonus", 0.2)) if finding.get("evidence_refs") or finding.get("source_rows") else 0.0)
+        + min(float(supporting_scores.get("optional_signal_cap", 0.25)), optional_present * float(supporting_scores.get("optional_signal_weight", 0.06)))
+    )
+    dimensions["supporting_evidence"] = {"state": _score_state(supporting_score, parameters), "score": round(min(float(supporting_scores.get("cap", 0.9)), supporting_score), 4), "explanation": "Supporting evidence reflects SII evidence references, source rows, and available supporting water context."}
     active_count = len([item for item in active_confounders if item.get("state") == "active"])
-    dimensions["confounder_severity"] = {"state": "low" if active_count == 0 else ("medium" if active_count <= 2 else "high"), "score": round(0.9 if active_count == 0 else max(0.25, 0.75 - active_count * 0.12), 4), "explanation": "Active confounders reduce confidence until operators separate operating context, instrumentation, or topology effects."}
+    confounder_scores = _dict_param(parameters, "confounder_severity_scores")
+    medium_max = int(confounder_scores.get("medium_active_count_max", 2))
+    dimensions["confounder_severity"] = {
+        "state": "low" if active_count == 0 else ("medium" if active_count <= medium_max else "high"),
+        "score": round(
+            float(confounder_scores.get("none", 0.9))
+            if active_count == 0
+            else max(float(confounder_scores.get("floor", 0.25)), float(confounder_scores.get("base_with_active", 0.75)) - active_count * float(confounder_scores.get("per_active_reduction", 0.12))),
+            4,
+        ),
+        "explanation": "Active confounders reduce confidence until operators separate operating context, instrumentation, or topology effects.",
+    }
     high_uncertainty = any(metric.get("identifiability") == "not_separable" for metric in derived_metrics)
-    dimensions["model_or_residual_uncertainty"] = {"state": "high" if high_uncertainty else "medium", "score": 0.35 if high_uncertainty else 0.75, "explanation": "Residual/model uncertainty is high when balance terms or derived components are not independently identifiable."}
+    uncertainty_scores = _dict_param(parameters, "model_or_residual_uncertainty_scores")
+    dimensions["model_or_residual_uncertainty"] = {"state": "high" if high_uncertainty else "medium", "score": float(uncertainty_scores.get("high", 0.35)) if high_uncertainty else float(uncertainty_scores.get("medium", 0.75)), "explanation": "Residual/model uncertainty is high when balance terms or derived components are not independently identifiable."}
     return {name: dimensions[name] for name in CONFIDENCE_DIMENSIONS}
 
 
@@ -503,35 +592,60 @@ def _possible_explanations(prior: RelationshipPrior, derived_metrics: list[dict[
     return [{"explanation": explanation, "hypothesis_state": "supported" if _tokens(explanation) & tokens else HYPOTHESIS_SUSPECTED, "confirmation_state": "not_confirmed", "separation": "hypothesis", "note": "This is a possible operational explanation to investigate, not a confirmed cause."} for explanation in prior.possible_explanations]
 
 
-def _recommended_checks(prior: RelationshipPrior, active_confounders: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _recommended_checks(prior: RelationshipPrior, active_confounders: list[dict[str, Any]], parameters: dict[str, Any]) -> list[dict[str, Any]]:
     checks = [{"check": check, "purpose": "Separate observed relationship drift from possible causes before confirmation.", "confirmation_required": "operator confirmation, physical inspection, maintenance/work-order evidence, validated diagnostic test, or authoritative equipment/control event", "separation": "recommended_check"} for check in prior.recommended_checks]
-    checks.extend({"check": f"Resolve or document confounder: {item.get('condition')}.", "purpose": item.get("explanation"), "confirmation_required": "operator review", "separation": "recommended_check"} for item in active_confounders if item.get("state") == "active")
-    return _dedupe_dicts(checks, key="check")[:8]
+    checks.extend({"check": "Resolve or document confounder: " + str(item.get("condition")) + ".", "purpose": item.get("explanation"), "confirmation_required": "operator review", "separation": "recommended_check"} for item in active_confounders if item.get("state") == "active")
+    return _dedupe_dicts(checks, key="check")[:_int_param(parameters, "max_recommended_checks")]
 
 
-def _window_stat(signal_matches: dict[str, list[SignalMatch]], context: WaterIntelligenceContext, signal_name: str) -> dict[str, Any] | None:
+def _window_stat(signal_matches: dict[str, list[SignalMatch]], context: WaterIntelligenceContext, signal_name: str, parameters: dict[str, Any]) -> dict[str, Any] | None:
     match = best_signal(signal_matches, signal_name)
     if match is None:
         return None
     records = (context.normalized_telemetry or {}).get("records", []) if isinstance(context.normalized_telemetry, dict) else []
     values: list[float] = []
+    rejected_records = 0
     for record in records:
         if not isinstance(record, dict) or str(record.get("source_column")) != match.source_column:
             continue
         try:
             numeric = float(record.get("value"))
         except (TypeError, ValueError):
+            rejected_records += 1
             continue
         unit_result = normalize_unit(value=numeric, source_unit=record.get("unit") or match.source_unit, expected_dimension=match.unit_dimension)
         if unit_result.get("status") == "ok" and unit_result.get("normalized_value") is not None:
             values.append(float(unit_result["normalized_value"]))
-    base = {"signal": signal_name, "source_column": match.source_column, "source_unit": match.source_unit, "normalized_unit": match.normalized_unit, "conversion_applied": match.conversion_applied, "record_count": len(values), "calculation_version": "water.window_stat.v1"}
+        else:
+            rejected_records += 1
+    baseline_fraction = _float_param(parameters, "baseline_window_fraction")
+    current_min_fraction = _float_param(parameters, "current_window_min_fraction")
+    base = {
+        "signal": signal_name,
+        "source_column": match.source_column,
+        "source_unit": match.source_unit,
+        "normalized_unit": match.normalized_unit,
+        "conversion_applied": match.conversion_applied,
+        "record_count": len(values),
+        "rejected_record_count": rejected_records,
+        "calculation_version": "water.window_stat.v1",
+        "evidence_window": {
+            "baseline_fraction": baseline_fraction,
+            "current_min_fraction": current_min_fraction,
+            "source": "configurable_prior_parameters",
+        },
+    }
     if not values:
         return {**base, "baseline_average": None, "current_average": None}
-    split = max(1, int(len(values) * 0.7))
+    split = max(1, int(len(values) * baseline_fraction))
     baseline_values = values[:split]
-    current_values = values[split:] or values[-max(1, len(values) // 3):]
-    return {**base, "baseline_average": round(sum(baseline_values) / len(baseline_values), 6), "current_average": round(sum(current_values) / len(current_values), 6)}
+    current_values = values[split:] or values[-max(1, int(len(values) * current_min_fraction)):]
+    return {
+        **base,
+        "baseline_average": round(sum(baseline_values) / len(baseline_values), 6),
+        "current_average": round(sum(current_values) / len(current_values), 6),
+        "evidence_window": {**base["evidence_window"], "baseline_record_count": len(baseline_values), "current_record_count": len(current_values)},
+    }
 
 
 def _metric(*, name: str, formula: str, known_inputs: list[dict[str, Any]], value: Any, baseline_value: Any, normalized_unit: str | None, explanation: str) -> dict[str, Any]:
@@ -543,7 +657,8 @@ def _unknown_metric(name: str, reason: str) -> dict[str, Any]:
 
 
 def _resolved_prior_parameters(prior: RelationshipPrior, context: WaterIntelligenceContext) -> dict[str, Any]:
-    merged = dict(prior.parameters)
+    merged = dict(DEFAULT_INTERPRETATION_PARAMETERS)
+    _deep_update(merged, dict(prior.parameters))
     config = context.config if isinstance(context.config, dict) else {}
     _deep_update(merged, config.get("prior_overrides", {}).get(prior.prior_id, {}) if isinstance(config.get("prior_overrides"), dict) else {})
     for scope_name, scope_id in (("site_overrides", context.site_id), ("system_overrides", context.system_id), ("asset_overrides", context.asset_id), ("operating_mode_overrides", _operating_mode(context))):
@@ -592,7 +707,7 @@ def _sii_confidence(finding: dict[str, Any]) -> Any:
     return finding.get("confidence_score", finding.get("confidence", finding.get("confidence_level")))
 
 
-def _sii_score(finding: dict[str, Any]) -> float:
+def _sii_score(finding: dict[str, Any], parameters: dict[str, Any] | None = None) -> float:
     for key in ("confidence_score", "confidence", "correlation_delta", "change"):
         try:
             score = abs(float(finding.get(key)))
@@ -601,20 +716,22 @@ def _sii_score(finding: dict[str, Any]) -> float:
         if score > 1.0 and score <= 100.0:
             score /= 100.0
         return max(0.0, min(1.0, score))
-    return 0.45
+    return _float_param(parameters or DEFAULT_INTERPRETATION_PARAMETERS, "default_sii_score")
 
 
-def _score_state(score: float) -> str:
-    if score >= 0.72:
+def _score_state(score: float, parameters: dict[str, Any]) -> str:
+    thresholds = _dict_param(parameters, "confidence_thresholds")
+    if score >= float(thresholds.get("high", 0.72)):
         return "high"
-    if score >= 0.45:
+    if score >= float(thresholds.get("medium", 0.45)):
         return "medium"
     return "low"
 
 
-def _severity_from_finding(finding: dict[str, Any]) -> str:
-    score = _sii_score(finding)
-    return "high" if score >= 0.8 else "moderate" if score >= 0.45 else "low"
+def _severity_from_finding(finding: dict[str, Any], parameters: dict[str, Any]) -> str:
+    score = _sii_score(finding, parameters)
+    thresholds = _dict_param(parameters, "severity_thresholds")
+    return "high" if score >= float(thresholds.get("high", 0.8)) else "moderate" if score >= float(thresholds.get("moderate", 0.45)) else "low"
 
 
 def _operating_mode(context: WaterIntelligenceContext) -> str:
@@ -662,14 +779,14 @@ def _affected_system(prior: RelationshipPrior) -> str:
     return {"water.pump_hydraulic_behavior": "Pumping", "water.chilled_water_thermal_behavior": "Chilled water loop", "water.filter_differential_pressure": "Filtration", "water.cooling_tower_mass_balance": "Cooling tower"}.get(prior.prior_id, "Water system")
 
 
-def _affected_assets(prior: RelationshipPrior, context: WaterIntelligenceContext, signal_matches: dict[str, list[SignalMatch]]) -> list[dict[str, Any]]:
+def _affected_assets(prior: RelationshipPrior, context: WaterIntelligenceContext, signal_matches: dict[str, list[SignalMatch]], parameters: dict[str, Any]) -> list[dict[str, Any]]:
     if context.asset_id:
         return [{"asset_id": context.asset_id, "asset_class": (prior.applicable_asset_classes or ("water_asset",))[0]}]
     assets = []
     for signal in sorted(prior.all_signal_names):
-        for match in signal_matches.get(signal, [])[:1]:
+        for match in signal_matches.get(signal, [])[:_int_param(parameters, "max_asset_matches_per_signal")]:
             assets.append({"asset_class": (prior.applicable_asset_classes or ("water_asset",))[0], "signal": signal, "source_column": match.source_column})
-    return assets[:6]
+    return assets[:_int_param(parameters, "max_affected_assets")]
 
 
 def _relationship_contribution(finding: dict[str, Any], signal_matches: dict[str, list[SignalMatch]]) -> dict[str, Any]:
@@ -706,7 +823,7 @@ def _relative_change(baseline: Any, current: Any) -> float | None:
     try:
         baseline_f = float(baseline)
         current_f = float(current)
-        if abs(baseline_f) < 1e-9:
+        if abs(baseline_f) < _float_param(DEFAULT_INTERPRETATION_PARAMETERS, "numeric_zero_epsilon"):
             return None
         return round((current_f - baseline_f) / abs(baseline_f), 6)
     except (TypeError, ValueError):
@@ -735,3 +852,22 @@ def _dedupe_dicts(items: list[dict[str, Any]], *, key: str) -> list[dict[str, An
 
 def _skip(prior: RelationshipPrior, reason: str, missing: list[str], invalid: list[str]) -> dict[str, Any]:
     return {"relationship_prior_id": prior.prior_id, "relationship_prior_version": prior.version, "reason": reason, "missing_required_signals": missing, "invalid_conditions": invalid}
+
+
+def _dict_param(parameters: dict[str, Any], key: str) -> dict[str, Any]:
+    value = parameters.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _int_param(parameters: dict[str, Any], key: str) -> int:
+    try:
+        return max(1, int(parameters.get(key, DEFAULT_INTERPRETATION_PARAMETERS[key])))
+    except (KeyError, TypeError, ValueError):
+        return max(1, int(DEFAULT_INTERPRETATION_PARAMETERS[key]))
+
+
+def _float_param(parameters: dict[str, Any], key: str) -> float:
+    try:
+        return float(parameters.get(key, DEFAULT_INTERPRETATION_PARAMETERS[key]))
+    except (KeyError, TypeError, ValueError):
+        return float(DEFAULT_INTERPRETATION_PARAMETERS[key])

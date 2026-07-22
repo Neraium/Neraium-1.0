@@ -187,7 +187,12 @@ def empty_confidence_dimensions() -> dict[str, dict[str, Any]]:
     }
 
 
-def categorical_confidence(dimensions: dict[str, dict[str, Any]]) -> str:
+def categorical_confidence(dimensions: dict[str, dict[str, Any]], parameters: dict[str, Any] | None = None) -> str:
+    parameters = parameters or {}
+    thresholds = parameters.get("confidence_thresholds") if isinstance(parameters.get("confidence_thresholds"), dict) else {}
+    high_threshold = float(thresholds.get("high", 0.72))
+    medium_threshold = float(thresholds.get("medium", 0.45))
+    severe_cap = float(parameters.get("severe_uncertainty_confidence_cap", 0.58))
     scores: list[float] = []
     severe_confounder = False
     severe_uncertainty = False
@@ -205,10 +210,10 @@ def categorical_confidence(dimensions: dict[str, dict[str, Any]]) -> str:
         return CONFIDENCE_LOW
     average = sum(scores) / len(scores)
     if severe_confounder or severe_uncertainty:
-        average = min(average, 0.58)
-    if average >= 0.72:
+        average = min(average, severe_cap)
+    if average >= high_threshold:
         return CONFIDENCE_HIGH
-    if average >= 0.45:
+    if average >= medium_threshold:
         return CONFIDENCE_MEDIUM
     return CONFIDENCE_LOW
 
@@ -217,7 +222,10 @@ def build_confidence_summary(
     dimensions: dict[str, dict[str, Any]],
     *,
     preserved_sii_confidence: Any,
+    parameters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    parameters = parameters or {}
+    high_evidence_threshold = float(parameters.get("confidence_increase_score_threshold", 0.62))
     increases: list[str] = []
     reductions: list[str] = []
     for name in CONFIDENCE_DIMENSIONS:
@@ -227,22 +235,24 @@ def build_confidence_summary(
             continue
         score = item.get("score")
         state = str(item.get("state") or "").lower()
-        if isinstance(score, (int, float)) and score >= 0.62 and state not in {"high", "severe", "reduced"}:
+        if isinstance(score, (int, float)) and score >= high_evidence_threshold and state not in {"high", "severe", "reduced"}:
             increases.append(explanation)
         else:
             reductions.append(explanation)
+    max_increases = max(1, int(parameters.get("max_increased_confidence_reasons", 6)))
+    max_reductions = max(1, int(parameters.get("max_reduced_confidence_reasons", 8)))
     return {
-        "overall": categorical_confidence(dimensions),
+        "overall": categorical_confidence(dimensions, parameters),
         "dimensions": dimensions,
         "preserved_sii_confidence": preserved_sii_confidence,
-        "increased_confidence": list(dict.fromkeys(increases))[:6],
-        "reduced_confidence": list(dict.fromkeys(reductions))[:8],
-        "explanation": confidence_sentence(dimensions, preserved_sii_confidence=preserved_sii_confidence),
+        "increased_confidence": list(dict.fromkeys(increases))[:max_increases],
+        "reduced_confidence": list(dict.fromkeys(reductions))[:max_reductions],
+        "explanation": confidence_sentence(dimensions, preserved_sii_confidence=preserved_sii_confidence, parameters=parameters),
     }
 
 
-def confidence_sentence(dimensions: dict[str, dict[str, Any]], *, preserved_sii_confidence: Any) -> str:
-    overall = categorical_confidence(dimensions)
+def confidence_sentence(dimensions: dict[str, dict[str, Any]], *, preserved_sii_confidence: Any, parameters: dict[str, Any] | None = None) -> str:
+    overall = categorical_confidence(dimensions, parameters)
     reduced = []
     for name in CONFIDENCE_DIMENSIONS:
         if name not in dimensions:
@@ -258,7 +268,7 @@ def confidence_sentence(dimensions: dict[str, dict[str, Any]], *, preserved_sii_
             reduced.append(str(dimensions[name].get("explanation")))
     suffix = f" SII confidence was preserved as {preserved_sii_confidence}." if preserved_sii_confidence is not None else ""
     if reduced:
-        return f"Water interpretation confidence is {overall}; reduced by {reduced[0].rstrip('.')}.{suffix}".strip()
+        return f"Water interpretation confidence is {overall}; reduced by {reduced[0].rstrip(".")}.{suffix}".strip()
     return f"Water interpretation confidence is {overall} based on SII finding strength, signal quality, applicability, and graph trust.{suffix}".strip()
 
 

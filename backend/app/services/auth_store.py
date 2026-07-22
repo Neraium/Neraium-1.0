@@ -738,7 +738,7 @@ def _ensure_bootstrap_admin(backend: _BaseAuthBackend) -> None:
         if not str(existing.get("name") or "").strip() and name:
             payload["name"] = name
             changed = True
-        if reset_password and not bool(existing.get("bootstrap_managed")):
+        if not bool(existing.get("bootstrap_managed")):
             payload["bootstrap_managed"] = True
             changed = True
 
