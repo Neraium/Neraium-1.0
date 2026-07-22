@@ -194,6 +194,10 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     expect(screen.getByText("Watching")).toBeTruthy();
     expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
+    const mobileIdentity = document.querySelector(".operational-mobile-topbar__identity");
+    expect(mobileIdentity).toBeTruthy();
+    expect(mobileIdentity.querySelector(".operational-mobile-topbar__brand-mark")).toBeTruthy();
+    expect(mobileIdentity.querySelector(".operational-mobile-topbar__page-label")?.textContent).toBe("Command Center");
     expect(screen.queryByTestId("operational-orb")).toBeNull();
     expect(screen.getByRole("heading", { name: "Current state" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Subsystems" })).toBeTruthy();

@@ -116,7 +116,9 @@ async function commandCenterMobileMetrics(page) {
       });
     const header = document.querySelector(".operational-mobile-topbar")?.getBoundingClientRect() ?? null;
     const identity = document.querySelector(".operational-mobile-topbar__identity")?.getBoundingClientRect() ?? null;
+    const brandMark = document.querySelector(".operational-mobile-topbar__brand-mark")?.getBoundingClientRect() ?? null;
     const menu = document.querySelector(".operational-mobile-topbar__menu")?.getBoundingClientRect() ?? null;
+    const firstCard = content?.firstElementChild?.getBoundingClientRect() ?? null;
     return {
       clientWidth: root.clientWidth,
       scrollWidth: root.scrollWidth,
@@ -125,7 +127,12 @@ async function commandCenterMobileMetrics(page) {
       contentRight: contentRect?.right ?? null,
       cards: cardRects,
       headerHeight: header?.height ?? null,
-      identityCenter: identity ? identity.left + (identity.width / 2) : null,
+      headerBottom: header?.bottom ?? null,
+      identityLeft: identity?.left ?? null,
+      brandMarkWidth: brandMark?.width ?? null,
+      firstCardTop: firstCard?.top ?? null,
+      menuWidth: menu?.width ?? null,
+      menuHeight: menu?.height ?? null,
       menuRight: menu?.right ?? null,
     };
   }, PRINCIPAL_CARD_SELECTOR);
@@ -195,6 +202,16 @@ test.describe("Responsive layout audit", () => {
     expect(metrics.mainRight).toBeLessThanOrEqual(metrics.viewportWidth);
     expect(metrics.heroRight).toBeLessThanOrEqual(metrics.viewportWidth);
 
+    const menuButton = page.getByRole("button", { name: "Open navigation menu" });
+    await menuButton.focus();
+    await expect(menuButton).toBeFocused();
+    const focusStyle = await menuButton.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return { outlineStyle: style.outlineStyle, outlineWidth: Number.parseFloat(style.outlineWidth) };
+    });
+    expect(focusStyle.outlineStyle).not.toBe("none");
+    expect(focusStyle.outlineWidth).toBeGreaterThanOrEqual(2);
+
     const mobileNav = await openMobileWorkflowNavigation(page);
     await expect(mobileNav.getByRole("button", { name: /Datasets & Connectors/i })).toBeVisible();
   });
@@ -217,9 +234,14 @@ test.describe("Responsive layout audit", () => {
       }
 
       if (viewport.width <= 768) {
-        expect(Math.abs(metrics.identityCenter - (metrics.clientWidth / 2)), `${viewport.name}: centered header identity`).toBeLessThanOrEqual(1);
+        expect(metrics.identityLeft, `${viewport.name}: left-aligned header identity`).toBeGreaterThanOrEqual(15);
+        expect(metrics.identityLeft, `${viewport.name}: left-aligned header identity`).toBeLessThanOrEqual(20);
+        expect(metrics.brandMarkWidth, `${viewport.name}: visible brand mark`).toBeGreaterThanOrEqual(28);
+        expect(metrics.menuWidth, `${viewport.name}: menu touch width`).toBeGreaterThanOrEqual(44);
+        expect(metrics.menuHeight, `${viewport.name}: menu touch height`).toBeGreaterThanOrEqual(44);
         expect(metrics.menuRight, `${viewport.name}: menu button right edge`).toBeLessThanOrEqual(metrics.clientWidth);
         expect(metrics.headerHeight, `${viewport.name}: compact mobile header`).toBeLessThanOrEqual(64);
+        expect(metrics.firstCardTop - metrics.headerBottom, `${viewport.name}: header-to-card gap`).toBeLessThanOrEqual(12);
       }
 
       const finalSection = await scrollFinalSectionAboveBrowserControls(page);
