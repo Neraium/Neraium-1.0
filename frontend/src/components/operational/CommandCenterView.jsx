@@ -105,26 +105,32 @@ function evidenceQuality(model) {
   return { label: "Unavailable", reason: "Evidence quality has not been reported for this analysis." };
 }
 
-function EmptyOperatingStateSummary({ onConnectLiveData }) {
+function EmptyOperatingStateSummary({ model, onConnectLiveData }) {
+  const emptyWorkspace = model?.uiState?.key === "noTelemetry";
+  const statusLabel = emptyWorkspace ? "Awaiting data" : "Watching";
+  const evidenceQualityLabel = emptyWorkspace ? "No data available" : "No telemetry";
+  const primaryActionLabel = emptyWorkspace ? "Import dataset" : "Connect telemetry";
+  const secondaryActionLabel = emptyWorkspace ? "Connect telemetry" : "Import dataset";
+
   return (
     <section className="command-section operating-state-card operating-state-card--empty command-section--neutral" aria-label="Operational Status">
       <h2 id="operating-state-heading" className="sr-only">Current state</h2>
       <div className="operating-state-card__main">
         <p className="command-section__label">Current state</p>
-        <strong className="operating-state-card__status">Watching</strong>
+        <strong className="operating-state-card__status">{statusLabel}</strong>
       </div>
       <dl className="operating-state-card__meta">
         <div><dt>Baseline</dt><dd>Not established</dd></div>
-        <div><dt>Evidence quality</dt><dd>No telemetry</dd></div>
+        <div><dt>Evidence quality</dt><dd>{evidenceQualityLabel}</dd></div>
       </dl>
       <div className="operating-state-card__actions">
         <div className="operating-state-card__action-group">
           <span>Primary action</span>
-          <button type="button" className="command-button" onClick={onConnectLiveData}>Connect telemetry</button>
+          <button type="button" className="command-button" onClick={onConnectLiveData}>{primaryActionLabel}</button>
         </div>
         <div className="operating-state-card__action-group">
           <span>Secondary action</span>
-          <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onConnectLiveData}>Import dataset</button>
+          <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onConnectLiveData}>{secondaryActionLabel}</button>
         </div>
       </div>
     </section>
@@ -132,7 +138,7 @@ function EmptyOperatingStateSummary({ onConnectLiveData }) {
 }
 
 function OperatingStateSummary({ model, status, topInsight, helpers, systems, onConnectLiveData, onOpenInvestigation, onViewEvidence, emptyState }) {
-  if (emptyState) return <EmptyOperatingStateSummary onConnectLiveData={onConnectLiveData} />;
+  if (emptyState) return <EmptyOperatingStateSummary model={model} onConnectLiveData={onConnectLiveData} />;
 
   const affected = topInsight?.system || systems.find((system) => Number(system.activeInsights) > 0)?.name;
   const summary = topInsight && affected

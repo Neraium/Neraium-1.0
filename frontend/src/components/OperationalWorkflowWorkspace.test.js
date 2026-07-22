@@ -192,7 +192,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
   it("opens to a focused Command Center with status, insights, and system sections", () => {
     renderWorkspace();
 
-    expect(screen.getByText("Watching")).toBeTruthy();
+    expect(screen.getByText("Awaiting data")).toBeTruthy();
     expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
     const mobileIdentity = document.querySelector(".operational-mobile-topbar__identity");
     expect(mobileIdentity).toBeTruthy();
