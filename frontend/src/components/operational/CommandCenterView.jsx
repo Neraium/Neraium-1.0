@@ -28,15 +28,17 @@ function confidenceRank(insight) {
 
 function findingConfidenceLabel(insight) {
   const explicit = String(insight?.confidence ?? "").trim().toLowerCase();
-  if (explicit.includes("high")) return "High";
-  if (explicit.includes("moderate")) return "Moderate";
-  if (explicit.includes("low")) return "Low";
   const score = Number(insight?.confidenceScore ?? insight?.confidence_score);
-  if (!Number.isFinite(score)) return "Unavailable";
-  const normalized = score > 1 ? score / 100 : score;
-  if (normalized >= 0.85) return "High";
-  if (normalized >= 0.6) return "Moderate";
-  return "Low";
+  const percent = Number.isFinite(score) ? Math.round(Math.max(0, Math.min(100, score > 1 ? score : score * 100))) : null;
+  let label = "Unavailable";
+  if (explicit.includes("high")) label = "High";
+  else if (explicit.includes("moderate")) label = "Moderate";
+  else if (explicit.includes("low")) label = "Low";
+  else if (Number.isFinite(score)) {
+    const normalized = score > 1 ? score / 100 : score;
+    label = normalized >= 0.85 ? "High" : normalized >= 0.6 ? "Moderate" : "Low";
+  }
+  return percent === null ? label : `${label} · ${percent}%`;
 }
 
 function rankedInsights(insights) {
@@ -114,11 +116,12 @@ function OperatingStateSummary({ model, status, topInsight, helpers, systems, on
   const primaryAction = topInsight ? firstAction(topInsight) : "Connect telemetry or import operational data to establish the first behavior baseline.";
 
   return (
-    <section className={`command-section operating-state-card command-section--${status.tone}`} aria-labelledby="operating-state-heading">
+    <section className={`command-section operating-state-card command-section--${status.tone}`} aria-label="Operational Status">
       <h2 id="operating-state-heading" className="sr-only">Operational Fingerprint Summary</h2>
       <div className="operating-state-card__main">
         <p className="command-section__label">Current operating state</p>
         <strong className="operating-state-card__status">{status.label}</strong>
+        {!model.analysisComplete ? <span className="operating-state-card__baseline-needed">Baseline Needed</span> : null}
         <p>{summary}</p>
       </div>
       <dl className="operating-state-card__meta">
@@ -134,8 +137,8 @@ function OperatingStateSummary({ model, status, topInsight, helpers, systems, on
         <span>Primary recommended action</span>
         <strong>{primaryAction}</strong>
         <div className="operating-state-card__buttons">
-          {topInsight ? <button type="button" className="command-button" onClick={onOpenInvestigation}>Open investigation</button> : <button type="button" className="command-button" onClick={onConnectLiveData}>Connect telemetry</button>}
-          {topInsight ? <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onViewEvidence}>View supporting evidence</button> : <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onConnectLiveData}>Import operational data</button>}
+          {topInsight ? <button type="button" className="command-button" onClick={onOpenInvestigation}>Open investigation</button> : <button type="button" className="command-button" onClick={onConnectLiveData}>Connect Live Telemetry</button>}
+          {topInsight ? <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onViewEvidence}>View supporting evidence</button> : <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onConnectLiveData}>Import and Analyze Dataset</button>}
         </div>
       </div>
       <p className="operating-state-card__quality-note">Evidence quality is separate from finding confidence. {quality.reason}</p>
@@ -166,7 +169,7 @@ function SubsystemBehavior({ systems = [] }) {
   const safeSystems = Array.isArray(systems) ? systems.filter(Boolean) : [];
   return (
     <section className="command-section subsystem-behavior" aria-labelledby="subsystem-behavior-heading">
-      <div className="command-section__header"><h2 id="subsystem-behavior-heading">Subsystem Status</h2><p>Compact view of active findings by subsystem.</p></div>
+      <div className="command-section__header"><h2 id="subsystem-behavior-heading">Subsystem Behavior</h2><p>Compact view of active findings by subsystem.</p></div>
       {safeSystems.length ? <div className="subsystem-behavior__list" role="list">{safeSystems.map((system, index) => {
         const activeCount = Number(system.activeInsights) || 0;
         return (
@@ -177,7 +180,7 @@ function SubsystemBehavior({ systems = [] }) {
             <small>{activeCount} active finding{activeCount === 1 ? "" : "s"}</small>
           </div>
         );
-      })}</div> : <p className="operational-findings-empty">Subsystem status will appear after connected telemetry or operational data is analyzed.</p>}
+      })}</div> : <div><strong>None active</strong><p className="operational-findings-empty">Subsystem status will appear after connected telemetry or operational data is analyzed.</p></div>}
     </section>
   );
 }
