@@ -100,7 +100,7 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
           <p className="auth-help">Need access? Contact your Neraium administrator.</p>
         </section>
       </section>
-      <p className="auth-legal">Neraium operational intelligence · All activity is securely logged</p>
+      <p className="auth-legal">Neraium operations intelligence · All activity is securely logged</p>
     </main>
   );
 }

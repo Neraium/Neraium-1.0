@@ -268,7 +268,7 @@ def confidence_sentence(dimensions: dict[str, dict[str, Any]], *, preserved_sii_
             reduced.append(str(dimensions[name].get("explanation")))
     suffix = f" SII confidence was preserved as {preserved_sii_confidence}." if preserved_sii_confidence is not None else ""
     if reduced:
-        return f"Water interpretation confidence is {overall}; reduced by {reduced[0].rstrip(".")}.{suffix}".strip()
+        return f"Water interpretation confidence is {overall}; reduced by {reduced[0].rstrip('.')}.{suffix}".strip()
     return f"Water interpretation confidence is {overall} based on SII finding strength, signal quality, applicability, and graph trust.{suffix}".strip()
 
 

@@ -478,10 +478,15 @@ export default function OperationalWorkflowWorkspace({
         </header> : null}
 
         <header className="operational-mobile-topbar">
-          <div className="operational-mobile-topbar__identity">
+          <button
+            type="button"
+            className="operational-mobile-topbar__identity"
+            aria-label="Command Center Overview"
+            onClick={() => navigate("command-center")}
+          >
             <strong>Neraium</strong>
             <span>{mobileTitle}</span>
-          </div>
+          </button>
           {model.siteLabel && model.siteLabel !== PRODUCT_DESCRIPTOR ? <span className="operational-mobile-topbar__workspace">{model.siteLabel}</span> : null}
           <button
             type="button"

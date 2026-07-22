@@ -438,7 +438,7 @@ function OperatorActions({ insight, subsystem }) {
     <div className="operator-action-groups__secondary" role="group" aria-label="Secondary investigation actions">
       <button type="button" onClick={() => focusInvestigationSection("insight-evidence")}>Inspect affected equipment</button>
       <button type="button" onClick={() => focusInvestigationSection("fingerprint-comparison")}>Compare baseline</button>
-      <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>View related systems</button>
+      <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>Related systems</button>
     </div>
     <div className="operator-action-groups__utility" role="group" aria-label="Utility actions">
       <button type="button" onClick={exportReport}>Export report</button>
@@ -502,7 +502,6 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
   const supportingObservations = unique([
     ...observedFacts,
     ...evidence.map((item) => text(item?.description ?? item?.summary)),
-    ...relationshipCoverageNotes,
   ]).filter((item) => {
     const observation = item.toLowerCase();
     const summary = behavioralSummary.toLowerCase();
@@ -535,7 +534,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
 
   const body = (
     <div className="insight-layered">
-      {!focusMode ? <section id="insight-situation" className="insight-situation-card" aria-labelledby="insight-situation-title" tabIndex={-1}>
+      <section id="insight-situation" className="insight-situation-card" aria-labelledby="insight-situation-title" tabIndex={-1}>
         <span className="insight-summary-card__eyebrow">What happened</span>
         <div className="insight-situation-card__meta">
           <span className={`insight-severity insight-severity--${severity.toLowerCase()}`}>{operationalStatus}</span>
@@ -543,7 +542,7 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
           {confidenceValue ? <span>Finding confidence {confidenceValue}</span> : null}
         </div>
         <p id="insight-situation-title" className="insight-situation-card__summary">{behavioralSummary}</p>
-      </section> : null}
+      </section>
 
       <InvestigationDecisionPath evidenceCount={evidence.length} relationshipCount={relationships.length} />
 

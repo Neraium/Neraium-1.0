@@ -177,12 +177,14 @@ const FINGERPRINT_BUILD_STAGES = [
   {
     id: "evidence",
     label: "Preparing analysis",
+    legacyLabel: "Importing Dataset...",
     shortLabel: "Prepare",
     states: ["uploading", "queued", "accepted", "validating_schema", "parsing", "validated"],
   },
   {
     id: "relationships",
     label: "Building operational baseline",
+    legacyLabel: "Learning Operational Relationships",
     shortLabel: "Baseline",
     states: ["processing", "baseline_modeling"],
   },
@@ -195,6 +197,7 @@ const FINGERPRINT_BUILD_STAGES = [
   {
     id: "baseline",
     label: "Saving evidence record",
+    legacyLabel: "Preparing Insights and Evidence...",
     shortLabel: "Save",
     states: ["writing_state", "cognition_ready", "saving_result", "saving_results"],
   },
