@@ -7,9 +7,9 @@ test.describe("Neraium frontend smoke", () => {
 
     await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Operational Status" })).toBeVisible();
-    await expect(page.getByText("Baseline Needed", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Import and Analyze Dataset" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Connect Live Telemetry" })).toBeVisible();
+    await expect(page.getByText("Not established", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Import dataset" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Connect telemetry" })).toBeVisible();
   });
 
   test("mobile loads command center workspace", async ({ page }) => {
@@ -20,6 +20,6 @@ test.describe("Neraium frontend smoke", () => {
     await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Command Center Overview" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Operational Status" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Import and Analyze Dataset" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Import dataset" })).toBeVisible();
   });
 });

@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CommandCenterView from "./CommandCenterView";
 
@@ -49,6 +49,40 @@ afterEach(() => {
 });
 
 describe("CommandCenterView hydration regressions", () => {
+  it("renders a compact operational no-data state", () => {
+    const onConnectLiveData = vi.fn();
+    const { container } = render(h(CommandCenterView, {
+      model: {
+        insights: [],
+        uiState: { key: "ready" },
+        analysisComplete: false,
+        dashboardSystemCards: [],
+        commandCenterMessage: "Import a telemetry dataset, then run an analysis to establish the facility's behavior baseline.",
+      },
+      helpers,
+      selectedInsight: null,
+      onOpenInvestigation: vi.fn(),
+      onConnectLiveData,
+    }));
+
+    expect(screen.getByText("Watching")).toBeTruthy();
+    expect(screen.getByText("Not established")).toBeTruthy();
+    expect(screen.getByText("No telemetry")).toBeTruthy();
+    expect(screen.getByText("No active status available")).toBeTruthy();
+    expect(screen.getByText("None active")).toBeTruthy();
+    expect(screen.getByText("Primary action")).toBeTruthy();
+    expect(screen.getByText("Secondary action")).toBeTruthy();
+    expect(container.querySelectorAll(".command-section")).toHaveLength(3);
+    expect(screen.queryByRole("heading", { name: "Discovered Systems" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Analysis Details" })).toBeNull();
+    expect(screen.queryByText(/Import a telemetry dataset, then run an analysis/i)).toBeNull();
+    expect(screen.queryByText(/Evidence quality is separate from finding confidence/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect telemetry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Import dataset" }));
+    expect(onConnectLiveData).toHaveBeenCalledTimes(2);
+  });
+
   it("renders a completed finding when dashboard system cards are not an array", () => {
     render(h(CommandCenterView, {
       model: completedModel({ dashboardSystemCards: { id: "stale-object", activeInsights: "1", name: "Legacy card" } }),
