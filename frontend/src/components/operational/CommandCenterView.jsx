@@ -106,32 +106,20 @@ function evidenceQuality(model) {
 }
 
 function EmptyOperatingStateSummary({ model, onConnectLiveData }) {
-  const emptyWorkspace = model?.uiState?.key === "noTelemetry";
-  const statusLabel = emptyWorkspace ? "Awaiting data" : "Watching";
-  const evidenceQualityLabel = emptyWorkspace ? "No data available" : "No telemetry";
-  const primaryActionLabel = emptyWorkspace ? "Import dataset" : "Connect telemetry";
-  const secondaryActionLabel = emptyWorkspace ? "Connect telemetry" : "Import dataset";
-
   return (
     <section className="command-section operating-state-card operating-state-card--empty command-section--neutral" aria-label="Operational Status">
       <h2 id="operating-state-heading" className="sr-only">Current state</h2>
       <div className="operating-state-card__main">
         <p className="command-section__label">Current state</p>
-        <strong className="operating-state-card__status">{statusLabel}</strong>
+        <strong className="operating-state-card__status">Awaiting data</strong>
       </div>
       <dl className="operating-state-card__meta">
         <div><dt>Baseline</dt><dd>Not established</dd></div>
-        <div><dt>Evidence quality</dt><dd>{evidenceQualityLabel}</dd></div>
+        <div><dt>Evidence quality</dt><dd>No data available</dd></div>
       </dl>
       <div className="operating-state-card__actions">
-        <div className="operating-state-card__action-group">
-          <span>Primary action</span>
-          <button type="button" className="command-button" onClick={onConnectLiveData}>{primaryActionLabel}</button>
-        </div>
-        <div className="operating-state-card__action-group">
-          <span>Secondary action</span>
-          <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onConnectLiveData}>{secondaryActionLabel}</button>
-        </div>
+        <button type="button" className="command-button" onClick={onConnectLiveData}>Import dataset</button>
+        <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onConnectLiveData}>Connect telemetry</button>
       </div>
     </section>
   );
@@ -305,7 +293,7 @@ export default function CommandCenterView({ model, helpers, selectedInsight, onO
   const status = useMemo(() => operationalStatus(model, queue), [model, queue]);
   const systems = normalizedSystemCards(model);
   const remaining = top ? queue.filter((item) => item.id !== top.id) : [];
-  const emptyState = !model.analysisComplete && status.tone !== "loading";
+  const emptyState = model.uiState?.key === "noTelemetry";
   const openTop = () => onOpenInvestigation?.(top?.id);
   const viewEvidence = () => onOpenInvestigation?.(top?.id, { focusTarget: "insight-evidence" });
 
