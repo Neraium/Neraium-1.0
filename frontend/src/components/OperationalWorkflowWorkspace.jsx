@@ -652,8 +652,11 @@ export default function OperationalWorkflowWorkspace({
             aria-label="Command Center Overview"
             onClick={() => navigate("command-center")}
           >
-            <strong>Neraium</strong>
-            <span>{mobileTitle}</span>
+            <span className="operational-mobile-topbar__brand-mark" aria-hidden="true" />
+            <span className="operational-mobile-topbar__identity-copy">
+              <strong>Neraium</strong>
+              <span className="operational-mobile-topbar__page-label">{mobileTitle}</span>
+            </span>
           </button>
           {model.siteLabel && model.siteLabel !== PRODUCT_DESCRIPTOR ? <span className="operational-mobile-topbar__workspace">{model.siteLabel}</span> : null}
           <button
