@@ -50,11 +50,12 @@ afterEach(() => {
 
 describe("CommandCenterView hydration regressions", () => {
   it("renders a compact operational no-data state", () => {
+    const onImportDataset = vi.fn();
     const onConnectLiveData = vi.fn();
     const { container } = render(h(CommandCenterView, {
       model: {
         insights: [],
-        uiState: { key: "ready" },
+        uiState: { key: "noTelemetry" },
         analysisComplete: false,
         dashboardSystemCards: [],
         commandCenterMessage: "Import a telemetry dataset, then run an analysis to establish the facility's behavior baseline.",
@@ -62,25 +63,66 @@ describe("CommandCenterView hydration regressions", () => {
       helpers,
       selectedInsight: null,
       onOpenInvestigation: vi.fn(),
+      onImportDataset,
       onConnectLiveData,
     }));
 
-    expect(screen.getByText("Watching")).toBeTruthy();
+    expect(screen.getByText("Awaiting data")).toBeTruthy();
+    expect(screen.queryByText("Watching")).toBeNull();
     expect(screen.getByText("Not established")).toBeTruthy();
-    expect(screen.getByText("No telemetry")).toBeTruthy();
+    expect(screen.getByText("No data available")).toBeTruthy();
     expect(screen.getByText("No active status available")).toBeTruthy();
     expect(screen.getByText("None active")).toBeTruthy();
-    expect(screen.getByText("Primary action")).toBeTruthy();
-    expect(screen.getByText("Secondary action")).toBeTruthy();
+    expect(screen.queryByText("Primary action")).toBeNull();
+    expect(screen.queryByText("Secondary action")).toBeNull();
+    const actionButtons = container.querySelectorAll(".operating-state-card__actions button");
+    expect(actionButtons).toHaveLength(2);
+    expect(actionButtons[0].textContent).toBe("Import dataset");
+    expect(actionButtons[0].classList.contains("command-button")).toBe(true);
+    expect(actionButtons[1].textContent).toBe("Connect telemetry");
+    expect(actionButtons[1].classList.contains("secondary-command-button")).toBe(true);
     expect(container.querySelectorAll(".command-section")).toHaveLength(3);
     expect(screen.queryByRole("heading", { name: "Discovered Systems" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Analysis Details" })).toBeNull();
     expect(screen.queryByText(/Import a telemetry dataset, then run an analysis/i)).toBeNull();
     expect(screen.queryByText(/Evidence quality is separate from finding confidence/i)).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Connect telemetry" }));
     fireEvent.click(screen.getByRole("button", { name: "Import dataset" }));
-    expect(onConnectLiveData).toHaveBeenCalledTimes(2);
+    expect(onImportDataset).toHaveBeenCalledTimes(1);
+    expect(onConnectLiveData).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect telemetry" }));
+    expect(onConnectLiveData).toHaveBeenCalledTimes(1);
+    expect(onImportDataset).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["an imported dataset", false],
+    ["connected telemetry", true],
+  ])("preserves the pre-analysis actions for %s", (_state, telemetryConnected) => {
+    render(h(CommandCenterView, {
+      model: {
+        insights: [],
+        uiState: { key: "readyToAnalyze" },
+        analysisComplete: false,
+        telemetryConnected,
+        dashboardSystemCards: [],
+        telemetryStatus: { label: "No telemetry" },
+        analysisMetadataRows: [],
+        behaviorWindowRows: [],
+      },
+      helpers,
+      selectedInsight: null,
+      onOpenInvestigation: vi.fn(),
+      onConnectLiveData: vi.fn(),
+    }));
+
+    expect(screen.getByText("Watching")).toBeTruthy();
+    expect(screen.getByText("No telemetry")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Connect Live Telemetry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import and Analyze Dataset" })).toBeTruthy();
+    expect(screen.queryByText("Awaiting data")).toBeNull();
+    expect(screen.queryByText("No data available")).toBeNull();
   });
 
   it("renders a completed finding when dashboard system cards are not an array", () => {

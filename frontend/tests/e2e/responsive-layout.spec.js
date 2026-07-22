@@ -255,8 +255,39 @@ test.describe("Responsive layout audit", () => {
     await openWorkspace(page, { width: 390, height: 844 });
     const mobileNav = await openMobileWorkflowNavigation(page);
     await mobileNav.getByRole("button", { name: /Datasets & Connectors/i }).click();
-    await expect(page.getByRole("region", { name: "Dataset Analysis" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Choose Dataset/i })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Import a dataset" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Choose CSV file" })).toBeVisible();
+  });
+
+  test("empty Command Center import action opens the upload card at the top on mobile", async ({ page }) => {
+    await openWorkspace(page, { width: 390, height: 844 });
+    await expect(page.getByText("Awaiting data", { exact: true })).toBeVisible();
+    await expect(page.getByText("Watching", { exact: true })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Import dataset" }).click();
+
+    const importCard = page.getByRole("region", { name: "Import a dataset" });
+    const sourceStatus = page.getByRole("region", { name: "Data Source Status" });
+    await expect(importCard).toBeVisible();
+    await expect(page.getByRole("button", { name: "Choose CSV file" })).toBeVisible();
+    await expect(page).toHaveURL(/section=data-sources.*#import-dataset$/);
+    await expect(page.getByRole("heading", { name: "Available Imports" })).toHaveCount(0);
+
+    const metrics = await page.evaluate(() => {
+      const card = document.querySelector("#import-dataset")?.getBoundingClientRect();
+      const status = document.querySelector('[aria-label="Data Source Status"]')?.getBoundingClientRect();
+      const header = document.querySelector(".operational-mobile-topbar")?.getBoundingClientRect();
+      return {
+        cardTop: card?.top ?? null,
+        cardBottom: card?.bottom ?? null,
+        statusTop: status?.top ?? null,
+        headerBottom: header?.bottom ?? null,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    expect(metrics.cardTop).toBeGreaterThanOrEqual(metrics.headerBottom - 1);
+    expect(metrics.cardBottom).toBeLessThan(metrics.viewportHeight);
+    expect(metrics.cardBottom).toBeLessThan(metrics.statusTop);
   });
 
   test("required production viewports avoid document overflow and clipping", async ({ page }) => {

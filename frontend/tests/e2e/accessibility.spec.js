@@ -40,7 +40,7 @@ test.describe("Accessibility audit", () => {
     const dataSourcesButton = page.getByRole("button", { name: /Datasets & Connectors/ });
     await dataSourcesButton.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { name: "Import and Analyze a Dataset" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Import a dataset" })).toBeVisible();
   });
 
   test("command center, data sources, and home pass automated WCAG rules", async ({ page }) => {
@@ -49,7 +49,7 @@ test.describe("Accessibility audit", () => {
     await expectNoWcagViolations(page);
 
     await page.getByRole("button", { name: /Datasets & Connectors/ }).click();
-    await expect(page.getByRole("heading", { name: "Import and Analyze a Dataset" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Import a dataset" })).toBeVisible();
     await expectNoWcagViolations(page);
 
     const homePage = await page.context().newPage();

@@ -192,7 +192,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
   it("opens to a focused Command Center with status, insights, and system sections", () => {
     renderWorkspace();
 
-    expect(screen.getByText("Watching")).toBeTruthy();
+    expect(screen.getByText("Awaiting data")).toBeTruthy();
+    expect(screen.queryByText("Watching")).toBeNull();
     expect(screen.getAllByText("Neraium").length).toBeGreaterThan(0);
     const mobileIdentity = document.querySelector(".operational-mobile-topbar__identity");
     expect(mobileIdentity).toBeTruthy();
@@ -223,6 +224,84 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(commandCenter.textContent).not.toContain("resort chw hvac synthetic fouling.csv");
   });
 
+  it("navigates the prominent empty-state action directly to the dataset import card", async () => {
+    renderWorkspace();
+
+    const actions = document.querySelectorAll(".operating-state-card__actions button");
+    expect(actions).toHaveLength(2);
+    expect(actions[0].textContent).toBe("Import dataset");
+    expect(actions[0].classList.contains("command-button")).toBe(true);
+    expect(actions[1].textContent).toBe("Connect telemetry");
+    expect(actions[1].classList.contains("secondary-command-button")).toBe(true);
+    expect(screen.queryByText("Primary action")).toBeNull();
+    expect(screen.queryByText("Secondary action")).toBeNull();
+
+    fireEvent.click(actions[0]);
+
+    const importCard = screen.getByRole("region", { name: "Import a dataset" });
+    expect(importCard).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Choose CSV file" })).toBeTruthy();
+    expect(window.location.search).toContain("section=data-sources");
+    expect(window.location.hash).toBe("#import-dataset");
+    await waitFor(() => expect(document.activeElement).toBe(importCard));
+  });
+
+  it("keeps connector-only workspaces out of the true empty state", () => {
+    renderWorkspace({
+      liveOps: {
+        telemetrySession: { source: "REST telemetry connector", sessionMode: "live" },
+      },
+      effectiveLatestUploadResult: {
+        job_id: "rest-poll-job",
+        status: "complete",
+        result_source: "rest_poll",
+        source: "rest_poll",
+        processed_at: "2026-06-23T12:00:00Z",
+        row_count: 3,
+        columns: ["timestamp", "flow", "pressure"],
+        ingestion_metadata: { source_type: "external_rest_api" },
+      },
+      effectiveLatestUploadSnapshot: {
+        status: "complete",
+        result_source: "rest_poll",
+        baseline_source: "live_rest",
+        current_upload: { job_id: "rest-poll-job", source: "rest_poll", row_count: 3 },
+      },
+    });
+
+    expect(screen.getByText("Watching")).toBeTruthy();
+    expect(screen.queryByText("Awaiting data")).toBeNull();
+
+    clickNav("Datasets & Connectors");
+    const sourceStatus = screen.getByLabelText("Data Source Status");
+    expect(sourceStatus.textContent).toContain("DatasetNot imported");
+    expect(sourceStatus.textContent).toContain("ConnectorConfigured");
+    expect(screen.getByText("REST telemetry connector")).toBeTruthy();
+    expect(screen.queryByText("No configured connectors")).toBeNull();
+  });
+
+  it("preserves the combined dataset and connector state", () => {
+    renderWorkspace({
+      liveOps: {
+        telemetryConnected: true,
+        connectionStatus: "connected",
+        telemetrySession: { connected: true, source: "OPC UA connector", sessionMode: "live" },
+      },
+      effectiveLatestUploadResult: completeResult(),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    expect(screen.queryByText("Awaiting data")).toBeNull();
+    expect(document.querySelector(".operating-state-card__status")?.textContent).toBe("Stable");
+
+    clickNav("Datasets & Connectors");
+    const sourceStatus = screen.getByLabelText("Data Source Status");
+    expect(sourceStatus.textContent).toContain("Dataset importImported");
+    expect(sourceStatus.textContent).toContain("Connector healthHealthy");
+    expect(screen.getByText("OPC UA connector")).toBeTruthy();
+  });
+
   it("shows imported metadata in both Datasets and Command Center for the active result", () => {
     const importedResult = completeResult({ processed_at: "2026-06-23T12:00:00Z" });
     renderWorkspace({
@@ -251,7 +330,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     const input = screen.getByTestId("overview-csv-upload-input");
     const inputClick = vi.spyOn(input, "click");
     clickNav("Datasets & Connectors");
-    fireEvent.click(screen.getByRole("button", { name: /Choose Dataset/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose CSV file" }));
     expect(inputClick).toHaveBeenCalledTimes(1);
 
     const file = new File(["timestamp,flow\n2026-01-01,1"], "ops.csv", { type: "text/csv" });
@@ -284,7 +363,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Datasets & Connectors");
     const input = screen.getByTestId("overview-csv-upload-input");
     const inputClick = vi.spyOn(input, "click");
-    fireEvent.click(screen.getByRole("button", { name: /Choose Dataset/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose CSV file" }));
     expect(inputClick).toHaveBeenCalledTimes(1);
 
     const file = new File(["timestamp,flow\n2026-01-01,2"], "sources.csv", { type: "text/csv" });
@@ -295,43 +374,44 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Data Source Status" })).toBeTruthy();
   });
 
-  it("Datasets & Connectors owns CSV import, dataset status, and connector catalog only", () => {
+  it("puts one CSV import workflow before status and de-emphasizes planned connectors in the no-data state", () => {
     renderWorkspace();
 
     clickNav("Datasets & Connectors");
-    expect(screen.getByRole("heading", { name: "Data Source Status" })).toBeTruthy();
-    expect(screen.getByText("Dataset import")).toBeTruthy();
-    expect(screen.getByText("Imported rows")).toBeTruthy();
-    expect(screen.getByText("Last dataset import")).toBeTruthy();
+    expect(screen.getByText("Import historical telemetry to establish a baseline, or manage a read-only connector.")).toBeTruthy();
+
+    const importCard = screen.getByRole("region", { name: "Import a dataset" });
     const sourceStatus = screen.getByLabelText("Data Source Status");
-    expect(sourceStatus.textContent).toContain("Dataset importNot imported");
+    expect(importCard.compareDocumentPosition(sourceStatus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Choose CSV file" })).toBeTruthy();
+    expect(sourceStatus.textContent).toContain("DatasetNot imported");
     expect(sourceStatus.textContent).toContain("Imported rows0");
-    expect(sourceStatus.textContent).toContain("Last dataset importNone");
+    expect(sourceStatus.textContent).toContain("Last importNone");
+    expect(sourceStatus.textContent).toContain("ConnectorNot configured");
+    expect(sourceStatus.textContent).not.toContain("Last connector sync");
     expect(sourceStatus.textContent).not.toContain("4032");
-    expect(screen.getByText("Connector health")).toBeTruthy();
-    expect(screen.getByText("Last connector sync")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Choose Dataset/i })).toBeTruthy();
-    expect(screen.getAllByText("Import and Analyze a Dataset").length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: "Available Imports" })).toBeTruthy();
-    expect(screen.getByText("CSV dataset import")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Configured Connectors" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Planned Connectors" })).toBeTruthy();
+    expect(screen.queryByText("No telemetry data")).toBeNull();
+
+    expect(screen.queryByRole("heading", { name: "Available Imports" })).toBeNull();
+    expect(screen.queryByText("CSV dataset import")).toBeNull();
+    expect(screen.queryByText("Import and Analyze a Dataset")).toBeNull();
+    expect(screen.queryByText("Choose Dataset")).toBeNull();
+    expect(screen.queryByText("Next step")).toBeNull();
+    expect(screen.queryByText("Primary Action")).toBeNull();
+
+    expect(screen.getByRole("heading", { name: "Configured connectors" })).toBeTruthy();
+    expect(screen.getByText("No configured connectors")).toBeTruthy();
+    expect(screen.getByText("Connectors can be added when continuous read-only telemetry is needed.")).toBeTruthy();
+    expect(screen.queryByText("CSV import is available.")).toBeNull();
+
+    const plannedSection = screen.getByLabelText("Planned connectors");
+    expect(plannedSection.classList.contains("data-source-planned-panel")).toBe(true);
+    expect(screen.getByRole("heading", { name: "Planned connectors" })).toBeTruthy();
     expect(screen.getByText("OPC UA")).toBeTruthy();
     expect(screen.getByText("MQTT")).toBeTruthy();
     expect(screen.getByText("Enterprise historians")).toBeTruthy();
     expect(screen.getByText("BACnet")).toBeTruthy();
-    expect(screen.queryByText("Historical Analysis")).toBeNull();
-    expect(screen.queryByText("Analyze New Dataset")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Import Historical CSV/i })).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Facility Status" })).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Analysis Summary" })).toBeNull();
-    expect(screen.queryByText("PLC commands disabled")).toBeNull();
-    expect(screen.queryByText("SCADA commands disabled")).toBeNull();
-    expect(screen.queryByText("BMS commands disabled")).toBeNull();
-    expect(screen.queryByText("Equipment controller commands disabled")).toBeNull();
-    expect(screen.queryByText("Read-only Control Boundary")).toBeNull();
-    expect(screen.queryByText("Current workspace")).toBeNull();
-    expect(screen.getByText("Import and analyze a dataset")).toBeTruthy();
+    expect(plannedSection.querySelectorAll(".telemetry-source-card--planned")).toHaveLength(4);
   });
 
   it("keeps the mobile Datasets & Connectors layout compact and usable", () => {
@@ -339,11 +419,12 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     renderWorkspace();
 
     clickNav("Datasets & Connectors");
-    expect(screen.getByRole("button", { name: /Choose Dataset/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Choose CSV file" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Import a dataset" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Data Source Status" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Available Imports" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Configured Connectors" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Planned Connectors" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Available Imports" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Configured connectors" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Planned connectors" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Facility Status" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Analysis Summary" })).toBeNull();
   });

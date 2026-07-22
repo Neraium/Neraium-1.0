@@ -4,6 +4,7 @@ import { buildIntakeStages, normalizeUploadStatus as normalizeUploadLifecycle } 
 import OperationalOrb from "../operational/OperationalOrb";
 import { Panel } from "../workspacePrimitives";
 import "../../styles/operational-workflow.css";
+import "../../styles/upload-intelligence.css";
 
 const hiddenFileInputStyle = {
   position: "absolute",
@@ -385,15 +386,16 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
   const [renderProfile, setRenderProfile] = useState(() => forcedTier ? { tier: forcedTier, reason: recoveryReason || "renderer-recovery" } : detectFingerprintRenderTier());
   const renderTier = forcedTier || renderProfile.tier;
   const compatibilityMode = renderTier === "safe";
+  const rendererRecoveryMode = compatibilityMode && renderProfile.reason !== "reduced-motion";
   const particleCount = FINGERPRINT_RENDERER_PARTICLES[renderTier] ?? 0;
   const statusTitle = complete
     ? "Behavior baseline established"
-    : compatibilityMode
+    : rendererRecoveryMode
       ? "Using an alternate processing path."
       : stage?.label || "Learning Operational Relationships";
   const statusDetail = complete
     ? "Evidence record saved"
-    : compatibilityMode
+    : rendererRecoveryMode
       ? "Analysis quality is unchanged. Full SII results remain valid."
       : "Stage " + stageNumber + " of " + stageCount;
 
@@ -459,19 +461,42 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
       ) : null}
       <div className="upload-fingerprint-build__status">
         <strong>{statusTitle}</strong>
-        <span>{statusDetail}</span>
-        {compatibilityMode && !complete ? (
+        <span className="upload-fingerprint-build__stage-readout"><i aria-hidden="true" />{statusDetail}</span>
+        {rendererRecoveryMode && !complete ? (
           <small>Analysis quality is unchanged. Full SII results remain valid. No action is required.</small>
         ) : null}
       </div>
       <svg className="upload-fingerprint-build__print upload-fingerprint-build__constellation" viewBox="0 0 180 140" aria-hidden="true" focusable="false">
         <defs>
+          <linearGradient id="upload-baseline-link" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="var(--blue-primary)" stopOpacity="0.22" />
+            <stop offset="0.52" stopColor="var(--blue-glow)" stopOpacity="0.96" />
+            <stop offset="1" stopColor="var(--blue-primary)" stopOpacity="0.38" />
+          </linearGradient>
+          <radialGradient id="upload-intelligence-field" cx="50%" cy="48%" r="64%">
+            <stop offset="0" stopColor="var(--blue-primary)" stopOpacity="0.1" />
+            <stop offset="0.68" stopColor="var(--blue-deep)" stopOpacity="0.035" />
+            <stop offset="1" stopColor="var(--blue-deep)" stopOpacity="0" />
+          </radialGradient>
+          <pattern id="upload-intelligence-grid" width="12" height="12" patternUnits="userSpaceOnUse">
+            <path d="M12 0H0V12" fill="none" stroke="var(--blue-glow)" strokeOpacity="0.075" strokeWidth="0.35" />
+          </pattern>
           <filter id="upload-baseline-node-glow" x="-200%" y="-200%" width="500%" height="500%">
             <feGaussianBlur stdDeviation="1.8" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
         </defs>
         <rect className="upload-fingerprint-build__field" x="2" y="2" width="176" height="136" rx="18" />
+        <rect className="upload-fingerprint-build__field-light" x="2" y="2" width="176" height="136" rx="18" fill="url(#upload-intelligence-field)" />
+        <rect className="upload-fingerprint-build__grid" x="10" y="10" width="160" height="120" rx="12" fill="url(#upload-intelligence-grid)" />
+        <g className="upload-fingerprint-build__coordinates">
+          <path d="M90 12V25M90 115V128M14 70H28M152 70H166" />
+          <circle cx="90" cy="70" r="50" />
+          <circle cx="90" cy="70" r="28" />
+        </g>
+        <g className="upload-fingerprint-build__relationship-ghosts">
+          {BASELINE_NETWORK_LINKS.map((link) => <path key={`ghost-${link.path}`} d={link.path} />)}
+        </g>
         <g className="upload-fingerprint-build__relationship-links">
           {BASELINE_NETWORK_LINKS.map((link, index) => {
             const fill = networkProgress({ displayPercent, phase: link.phase, stageIndex, complete });
@@ -598,7 +623,7 @@ function AdvancedDetails({ latestUploadSnapshot, uploadJob, uploadState, uploadT
 
   return (
     <details className="upload-advanced-details">
-      <summary>Analysis Details</summary>
+      <summary><span className="upload-advanced-details__summary-label"><i aria-hidden="true" />Analysis Details</span><span className="upload-advanced-details__chevron" aria-hidden="true" /></summary>
       {rows.length ? (
         <dl className="upload-advanced-details__grid">
           {rows.map(([label, value]) => (
@@ -736,8 +761,11 @@ export default function IntakeFlowPanel({
                 <DatasetFileRow filename={selectedFileLabel} size={selectedFileSize} status="Ready" />
               ) : (
                 <div className="upload-analysis-card__file">
-                  <span>Dataset</span>
-                  <strong>{selectedFileDetail}</strong>
+                  <i className="upload-analysis-card__file-icon" aria-hidden="true" />
+                  <span className="upload-analysis-card__file-copy">
+                    <span>Dataset</span>
+                    <strong>{selectedFileDetail}</strong>
+                  </span>
                 </div>
               )}
 
@@ -759,8 +787,10 @@ export default function IntakeFlowPanel({
                 size={selectedFileSize}
                 status={fingerprintBuildStage?.shortLabel || "Processing"}
               />
-              <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} />
-              <p className="upload-simple-note upload-processing-status"><strong>{queuedWorkerDetail || statusText}</strong></p>
+              <div className="upload-analysis-card__intelligence">
+                <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} />
+              </div>
+              <p className="upload-simple-note upload-processing-status"><span className="upload-processing-status__signal" aria-hidden="true" /><strong>{queuedWorkerDetail || statusText}</strong></p>
               {remaining ? <p className="upload-simple-note">{remaining}</p> : null}
             </div>
           </section>
