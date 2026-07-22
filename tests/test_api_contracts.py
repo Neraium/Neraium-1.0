@@ -21,7 +21,7 @@ def production_client(monkeypatch, tmp_path: Path) -> TestClient:
         cors_origins=["https://app.neraium.com"],
         runtime_dir=tmp_path,
     )
-    return TestClient(create_app(settings))
+    return TestClient(create_app(settings), base_url="https://testserver")
 
 
 def test_unknown_body_and_query_fields_are_rejected(client: TestClient) -> None:

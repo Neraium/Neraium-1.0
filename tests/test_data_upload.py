@@ -56,11 +56,17 @@ def large_upload_timestamp(index: int) -> str:
     return (datetime(2026, 5, 1, tzinfo=timezone.utc) + timedelta(minutes=index)).isoformat().replace("+00:00", "Z")
 
 
-def wait_for_terminal_upload_status(client: TestClient, status_url: str, timeout_seconds: float = 15.0) -> dict:
+def wait_for_terminal_upload_status(
+    client: TestClient,
+    status_url: str,
+    timeout_seconds: float = 15.0,
+    *,
+    headers: dict[str, str] | None = None,
+) -> dict:
     deadline = time.time() + timeout_seconds
     last_payload = None
     while time.time() < deadline:
-        response = client.get(status_url)
+        response = client.get(status_url, headers=headers)
         assert response.status_code == 200
         last_payload = response.json()
         if last_payload["status"] in {"COMPLETE", "FAILED", "TIMEOUT", "CANCELLED"}:
@@ -195,7 +201,11 @@ def test_upload_uses_local_queue_when_split_role_production_has_no_shared_bucket
     assert payload["status"] == "PENDING"
     assert payload["job_id"]
 
-    status_payload = wait_for_terminal_upload_status(client, payload["status_url"])
+    status_payload = wait_for_terminal_upload_status(
+        client,
+        payload["status_url"],
+        headers={"X-Neraium-Access-Code": "expected-secret"},
+    )
     assert status_payload["status"] == "COMPLETE"
     assert status_payload["result_available"] is True
     assert status_payload["job_id"] == payload["job_id"]
@@ -468,7 +478,7 @@ def test_upload_accepts_authenticated_session_in_production(monkeypatch, tmp_pat
         cors_origins=["https://app.neraium.com"],
         runtime_dir=tmp_path,
     )
-    client = TestClient(create_app(settings))
+    client = TestClient(create_app(settings), base_url="https://testserver")
     login = client.post("/api/auth/login", json={"email": "operator@example.com", "password": "password123"})
     assert login.status_code == 200
 
@@ -481,16 +491,21 @@ def test_upload_accepts_authenticated_session_in_production(monkeypatch, tmp_pat
     assert response.json()["status_url"].startswith("/api/data/upload-status/")
 
 
-def test_upload_status_accepts_existing_session_cookie_in_production(tmp_path) -> None:
+def test_upload_status_accepts_existing_session_cookie_in_production(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
+    from app.services.auth_store import create_user
+    from app.services.dataset_scope import build_dataset_scope, set_current_dataset_scope
+
+    create_user("status-operator@example.com", "password123", role="operator")
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
-
         runtime_dir=tmp_path,
     )
-    client = TestClient(create_app(settings))
+    set_current_dataset_scope(build_dataset_scope(user_id="status-operator@example.com"))
     job = {
         "job_id": "session-job",
         "filename": "session.csv",
@@ -503,6 +518,13 @@ def test_upload_status_accepts_existing_session_cookie_in_production(tmp_path) -
         "error": None,
     }
     write_job(job)
+    client = TestClient(create_app(settings), base_url="https://testserver")
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "status-operator@example.com", "password": "password123"},
+    )
+    assert login.status_code == 200
+
     response = client.get("/api/data/upload-status/session-job")
 
     assert response.status_code == 200
@@ -871,7 +893,11 @@ def test_upload_records_authenticated_actor_in_evidence() -> None:
         files={"file": ("actor.csv", f"timestamp,room,temperature,humidity\n{rows}", "text/csv")},
     )
     run_id = upload.json()["job_id"]
-    wait_for_terminal_upload_status(client, upload.json()["status_url"])
+    wait_for_terminal_upload_status(
+        client,
+        upload.json()["status_url"],
+        headers={"X-Neraium-User": "operator@example.com"},
+    )
     detail = client.get(f"/api/evidence/runs/{run_id}")
 
     assert detail.status_code == 200
@@ -1094,7 +1120,11 @@ def test_observability_summary_reports_queue_and_audit_counts() -> None:
         files={"file": ("obs.csv", f"timestamp,room,temperature,humidity\n{rows}", "text/csv")},
     )
     run_id = upload.json()["job_id"]
-    wait_for_terminal_upload_status(client, upload.json()["status_url"])
+    wait_for_terminal_upload_status(
+        client,
+        upload.json()["status_url"],
+        headers={"X-Neraium-User": "ops@example.com"},
+    )
     client.get(f"/api/evidence/export/{run_id}", headers={"X-Neraium-User": "ops@example.com"})
 
     response = client.get("/api/observability/summary")
@@ -2279,7 +2309,7 @@ def _build_interpretation_result_for_state(state: str) -> dict:
 
 def test_latest_upload_ignores_stale_result_without_active_session_marker(tmp_path: Path) -> None:
     settings = Settings(
-        app_env="production",
+        app_env="development",
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],
@@ -2307,7 +2337,7 @@ def test_latest_upload_ignores_stale_result_without_active_session_marker(tmp_pa
 
 def test_latest_upload_always_returns_system_interpretation_for_no_active_session(tmp_path: Path) -> None:
     settings = Settings(
-        app_env="production",
+        app_env="development",
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["https://app.neraium.com"],

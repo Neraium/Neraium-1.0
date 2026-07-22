@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.services import upload_jobs
+from app.services.dataset_scope import payload_matches_dataset_scope
 from app.services.analysis_result_contract import empty_analysis_result, ensure_analysis_result
 from app.services.runtime_db import (
     queue_metrics,
@@ -270,13 +271,13 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
         return _empty_response(include_persisted=use_persisted, request_id=request_id)
 
     canonical = read_latest_upload_record() if use_persisted else build_empty_latest_upload_record()
-    if state_backend == "local" and use_persisted and not (UPLOAD_RUNTIME_STATE.runtime_dir / "latest_upload.json").exists():
-        canonical = build_empty_latest_upload_record()
     if not isinstance(canonical, dict):
         canonical = build_empty_latest_upload_record()
 
     summary = canonical.get("summary") if isinstance(canonical.get("summary"), dict) else {}
     canonical_job_id = str(canonical.get("job_id") or summary.get("job_id") or "").strip() or None
+    if not canonical_job_id:
+        return _empty_response(include_persisted=use_persisted, request_id=request_id)
 
     memory_summary = read_upload_status(canonical_job_id) if canonical_job_id else None
     memory_result = read_upload_result_by_job_id(canonical_job_id) if canonical_job_id else None
@@ -300,16 +301,10 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
         elif isinstance(persisted_result, dict) and has_active_session_artifact(persisted_result, job_id=canonical_job_id):
             result = persisted_result
         working_record = build_latest_upload_record(summary=working_summary, result=result)
-    elif canonical_job_id and (isinstance(persisted_result, dict) or isinstance(summary, dict) and summary):
+    elif canonical_job_id and isinstance(persisted_result, dict):
         source = SESSION_SOURCE_PERSISTED
-        result = persisted_result if isinstance(persisted_result, dict) else None
+        result = persisted_result
         working_record = canonical
-    elif history:
-        source = SESSION_SOURCE_HISTORY
-        working_record = _record_from_history(history[0])
-        working_summary = working_record.get("summary") if isinstance(working_record.get("summary"), dict) else {}
-        result = working_record.get("result") if isinstance(working_record.get("result"), dict) else None
-
     if source == SESSION_SOURCE_EMPTY:
         return _empty_response(include_persisted=use_persisted, request_id=request_id)
 
@@ -450,6 +445,10 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
     current_snapshot = current.get("snapshot") if isinstance(current.get("snapshot"), dict) else {}
     status_payload = read_upload_status(requested_id) or upload_jobs.read_upload_status(requested_id)
     result_payload = read_upload_result_by_job_id(requested_id)
+    if isinstance(status_payload, dict) and not payload_matches_dataset_scope(status_payload):
+        status_payload = None
+    if isinstance(result_payload, dict) and not payload_matches_dataset_scope(result_payload):
+        result_payload = None
     if not isinstance(status_payload, dict) and requested_id == current_job_id and isinstance(current_snapshot, dict) and current_snapshot:
         status_payload = dict(current_snapshot)
 

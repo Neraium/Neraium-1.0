@@ -15,8 +15,9 @@ import re
 from fastapi import APIRouter, Depends, File, HTTPException, Path as ApiPath, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.services.evidence_store import read_evidence_run, upsert_evidence_run
+from app.services.dataset_scope import payload_matches_dataset_scope
 from app.services.analysis_result_contract import ensure_analysis_result
-from app.core.security import _strict_auth_mode, require_operator_role
+from app.core.security import _strict_auth_mode, require_api_access, require_operator_role
 from app.core.path_safety import StoragePathError, ensure_storage_root, resolve_existing_storage_path, safe_upload_suffix, storage_key_for_server_path
 from app.services import upload_jobs
 from app.services.upload_evidence import build_evidence_record_from_result
@@ -35,7 +36,7 @@ from app.services.rate_limiter import consume_rate_limit
 from app.services.latest_upload_state import resolve_latest_upload_payload
 from app.services.upload_session_service import resolve_upload_status
 
-router = APIRouter(prefix="/data", tags=["data"])
+router = APIRouter(prefix="/data", tags=["data"], dependencies=[Depends(require_api_access)])
 logger = logging.getLogger(__name__)
 UPLOAD_JOB_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$", re.IGNORECASE)
 UPLOAD_RATE_LIMIT = 20
@@ -819,6 +820,8 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         )
 
     status_payload = upload_jobs.read_upload_status(requested_job_id) or {}
+    if status_payload and not payload_matches_dataset_scope(status_payload):
+        status_payload = {}
     file_path = status_payload.get("file_path")
     shared_upload_source_key = str(status_payload.get("shared_upload_source_key") or "").strip()
     has_local_file = _resolve_upload_source_path(settings.runtime_dir, file_path) is not None
@@ -962,7 +965,7 @@ async def data_replay(job_id: UploadJobPath):
 @router.get("/intake/{job_id}/result")
 async def intake_result(job_id: UploadJobPath):
     result = read_upload_result_by_job_id(job_id)
-    if not result:
+    if not result or not payload_matches_dataset_scope(result):
         raise HTTPException(status_code=404, detail="Upload result was not found.")
     return {
         "job_id": job_id,

@@ -30,8 +30,10 @@ from app.services.upload_persistence import read_upload_history as read_upload_h
 from app.services.upload_persistence import summarize_result as summarize_result_payload
 from app.services.upload_queue_lifecycle import UploadQueueLifecycleService
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
+from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope, dataset_scope_from_payload
 from app.services.upload_lifecycle import VISIBLE_UPLOAD_STATES, canonical_stage_payload
 from app.services.upload_state_repository import (
+    cache_latest_upload_payload,
     clear_reset_block_persisted,
     configure_runtime_dir as configure_runtime_state_dir,
     delete_upload_source,
@@ -176,6 +178,8 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     Persist upload progress so live uploads always have a job id/status.
     This restores the status helper used by process_upload_bytes().
     """
+    existing = read_upload_status(job_id) or {}
+    scope = dataset_scope_from_payload(existing) or current_dataset_scope()
     payload = {
         "job_id": job_id,
         "run_id": job_id,
@@ -187,13 +191,14 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
         "message": message,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    payload["session_scope"] = build_session_scope(job_id, filename=payload.get("filename"), status=str(status).lower())
+    payload["session_scope"] = build_session_scope(job_id, filename=payload.get("filename"), status=str(status).lower(), dataset_scope=scope)
+    payload = attach_dataset_scope(payload, scope=scope, dataset_id=job_id)
     UPLOAD_RUNTIME_STATE.cache_job(job_id, payload)
     JOB_RUNTIME_DIRS[job_id] = RUNTIME_DIR
     while len(JOB_RUNTIME_DIRS) > UPLOAD_RUNTIME_STATE.max_cached_jobs:
         JOB_RUNTIME_DIRS.pop(next(iter(JOB_RUNTIME_DIRS)))
     repository_write_upload_status_progress(job_id, payload, latest_summary=payload, keep_result=False)
-    UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = payload
+    cache_latest_upload_payload("summary", payload)
     upsert_upload_job(payload)
     return payload
 
@@ -215,8 +220,8 @@ def _complete_with_partial_result(
     )
     repository_write_upload_completion(job_id, result=result, summary=summary)
     UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
-    UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
-    UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
+    cache_latest_upload_payload("result", result)
+    cache_latest_upload_payload("summary", summary)
 
     try:
         upsert_upload_job(summary)
@@ -234,8 +239,8 @@ def _persist_completed_upload(job_id: str, *, result: dict[str, Any], summary: d
     except Exception:
         pass
     UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
-    UPLOAD_RUNTIME_STATE.latest_upload_cache["result"] = result
-    UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = summary
+    cache_latest_upload_payload("result", result)
+    cache_latest_upload_payload("summary", summary)
 
 
 
@@ -910,7 +915,10 @@ def _build_csv_result(
         "request_id": request_id,
         "upload_session_id": upload_session_id,
     }
-    result["session_scope"] = build_session_scope(job_id, filename=filename, status="active")
+    job_scope = dataset_scope_from_payload(job_context) or current_dataset_scope()
+    result["initiated_by"] = initiated_by
+    result["session_scope"] = build_session_scope(job_id, filename=filename, status="active", dataset_scope=job_scope)
+    result = attach_dataset_scope(result, scope=job_scope, dataset_id=job_id)
     result["traceability"] = build_traceability_packet(job_id=job_id, filename=filename, result=result)
     result["decision_integrity"] = dict(result["traceability"])
     if isinstance(latest_runner_state, dict):
@@ -961,7 +969,9 @@ def _build_csv_result(
 
     summary = {"job_id": job_id, "run_id": job_id, "upload_id": job_id, "upload_session_id": upload_session_id, "request_id": request_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Analysis ready.", "message": "Analysis ready.", "progress_label": "Analysis ready.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": bool(baseline_reliable), "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}, "evidence_persisted": False, "report_finalization": dict(result["report_finalization"]) }
     summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label="Analysis ready."))
-    summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active")
+    summary["initiated_by"] = initiated_by
+    summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active", dataset_scope=job_scope)
+    summary = attach_dataset_scope(summary, scope=job_scope, dataset_id=job_id)
     summary["traceability"] = dict(result["traceability"])
     summary["decision_integrity"] = dict(result["traceability"])
 
@@ -1126,6 +1136,20 @@ def read_upload_cache_stats() -> dict[str, int]:
 def reset_latest_upload_state(*, purge_job_records: bool = False) -> None:
     reset_upload_state()
     if purge_job_records:
+        UPLOAD_RUNTIME_STATE.jobs.clear()
+        JOB_RUNTIME_DIRS.clear()
+        for pattern in ("upload_status_*.json", "upload_result_*.json"):
+            for path in RUNTIME_DIR.glob(pattern):
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        for directory in (JOB_DIR, LEGACY_JOB_DIR):
+            for path in directory.glob("*.json"):
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
         try:
             from app.services.runtime_db import clear_upload_runtime_tables
 
@@ -1181,7 +1205,6 @@ def parse_positive_int_env(name: str, default: int) -> int:
 
 
 def write_job(*args) -> None:
-    clear_reset_block_persisted()
     if len(args) == 1 and isinstance(args[0], dict):
         payload = dict(args[0])
         job_id = str(payload.get("job_id") or uuid.uuid4().hex)
@@ -1190,6 +1213,9 @@ def write_job(*args) -> None:
         job_id = str(args[0])
         payload = dict(args[1])
         payload["job_id"] = job_id
+    existing = repository_read_upload_status(job_id) or {}
+    scope = dataset_scope_from_payload(payload) or dataset_scope_from_payload(existing) or current_dataset_scope()
+    clear_reset_block_persisted(scope)
     payload["run_id"] = job_id
     payload["upload_id"] = job_id
     payload.setdefault("upload_session_id", job_id)
@@ -1197,7 +1223,9 @@ def write_job(*args) -> None:
         job_id,
         filename=payload.get("filename"),
         status=str(payload.get("processing_state") or payload.get("status") or "active").lower(),
+        dataset_scope=scope,
     )
+    payload = attach_dataset_scope(payload, scope=scope, dataset_id=job_id)
     UPLOAD_RUNTIME_STATE.cache_job(job_id, payload)
     JOB_RUNTIME_DIRS[job_id] = RUNTIME_DIR
     while len(JOB_RUNTIME_DIRS) > UPLOAD_RUNTIME_STATE.max_cached_jobs:
@@ -1209,7 +1237,7 @@ def write_job(*args) -> None:
         or processing_state in VISIBLE_UPLOAD_STATES
     ):
         latest_summary = dict(payload)
-        latest_summary.setdefault("session_scope", build_session_scope(job_id, filename=latest_summary.get("filename"), status=processing_state or status_text.lower() or "active"))
+        latest_summary.setdefault("session_scope", build_session_scope(job_id, filename=latest_summary.get("filename"), status=processing_state or status_text.lower() or "active", dataset_scope=scope))
         latest_summary.setdefault("status_url", f"/api/data/upload-status/{job_id}")
         latest_summary.setdefault("percent", latest_summary.get("progress", 0))
         latest_summary.setdefault("progress", latest_summary.get("percent", 0))
@@ -1231,7 +1259,7 @@ def write_job(*args) -> None:
         )
 
         repository_write_upload_status_progress(job_id, payload, latest_summary=latest_summary, keep_result=False)
-        UPLOAD_RUNTIME_STATE.latest_upload_cache["summary"] = latest_summary
+        cache_latest_upload_payload("summary", latest_summary)
     else:
         write_upload_status(job_id, payload)
     try:

@@ -8,6 +8,13 @@ from tempfile import NamedTemporaryFile
 from typing import Any
 
 from app.core.path_safety import ensure_storage_root, safe_upload_suffix
+from app.services.dataset_scope import (
+    DatasetScope,
+    attach_dataset_scope,
+    current_dataset_scope,
+    dataset_scope_from_payload,
+    payload_matches_dataset_scope,
+)
 from app.services.runtime_db import (
     delete_latest_payload_prefix,
     read_latest_payload,
@@ -27,6 +34,59 @@ from app.services.upload_state import (
 
 
 logger = logging.getLogger(__name__)
+
+
+_SCOPED_LATEST_NAMES = {
+    "latest_upload",
+    "latest_upload_result",
+    "latest_upload_summary",
+}
+
+
+def _state_scope(*, scope: DatasetScope | None = None, payload: dict[str, Any] | None = None) -> DatasetScope:
+    return scope or dataset_scope_from_payload(payload) or current_dataset_scope()
+
+
+def _state_name(name: str, *, scope: DatasetScope | None = None, payload: dict[str, Any] | None = None) -> str:
+    raw_name = str(name).replace(".json", "")
+    if raw_name not in _SCOPED_LATEST_NAMES:
+        return raw_name
+    resolved = _state_scope(scope=scope, payload=payload)
+    return f"scopes/{resolved.storage_id}/{raw_name}"
+
+
+def _local_state_name(name: str, *, scope: DatasetScope | None = None, payload: dict[str, Any] | None = None) -> str:
+    normalized = _state_name(name, scope=scope, payload=payload)
+    return f"{normalized}.json"
+
+
+def _cache_key(kind: str, scope: DatasetScope | None = None) -> str:
+    return f"{kind}:{(scope or current_dataset_scope()).storage_id}"
+
+
+def _cache_set(kind: str, payload: dict[str, Any] | None, *, scope: DatasetScope | None = None) -> None:
+    resolved = _state_scope(scope=scope, payload=payload)
+    state = runtime_state()
+    state.latest_upload_cache[_cache_key(kind, resolved)] = payload
+    # Compatibility slot for older internal writers. Reads never trust it unless
+    # the embedded scope matches the current request.
+    state.latest_upload_cache[kind] = payload
+
+
+def _cache_get(kind: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
+    resolved = scope or current_dataset_scope()
+    state = runtime_state()
+    scoped = state.latest_upload_cache.get(_cache_key(kind, resolved))
+    if isinstance(scoped, dict) and payload_matches_dataset_scope(scoped, resolved):
+        return scoped
+    legacy_slot = state.latest_upload_cache.get(kind)
+    if isinstance(legacy_slot, dict) and payload_matches_dataset_scope(legacy_slot, resolved):
+        return legacy_slot
+    return None
+
+
+def cache_latest_upload_payload(kind: str, payload: dict[str, Any] | None) -> None:
+    _cache_set(kind, payload)
 
 
 def runtime_state() -> UploadRuntimeState:
@@ -76,9 +136,10 @@ def _s3_object_key(name: str) -> str:
     return f"{_upload_state_prefix()}{_shared_key(name)}.json"
 
 
-def _upload_source_object_key(job_id: str, filename: str | None = None) -> str:
+def _upload_source_object_key(job_id: str, filename: str | None = None, *, scope: DatasetScope | None = None) -> str:
     suffix = Path(str(filename or "upload.csv")).suffix or ".csv"
-    return f"{_upload_state_prefix()}upload-sources/{job_id}{suffix}"
+    resolved = scope or current_dataset_scope()
+    return f"{_upload_state_prefix()}scopes/{resolved.storage_id}/upload-sources/{job_id}{suffix}"
 
 
 def persist_upload_source(job_id: str, source_path: str | os.PathLike[str], *, filename: str, content_type: str | None = None) -> str:
@@ -170,8 +231,8 @@ def _shared_state_error_code(error: Exception) -> str:
 def _is_missing_shared_state_error(error: Exception) -> bool:
     return _shared_state_error_code(error) in {"404", "NoSuchKey", "NotFound"}
 
-def read_local_json(name: str) -> dict[str, Any] | None:
-    path = runtime_state().runtime_dir / name
+def read_local_json(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
+    path = runtime_state().runtime_dir / _local_state_name(name, scope=scope)
     if not path.exists():
         return None
     try:
@@ -181,19 +242,21 @@ def read_local_json(name: str) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def write_local_json(name: str, payload: dict[str, Any]) -> None:
+def write_local_json(name: str, payload: dict[str, Any], *, scope: DatasetScope | None = None) -> None:
     state = runtime_state()
-    state.runtime_dir.mkdir(parents=True, exist_ok=True)
-    (state.runtime_dir / name).write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    path = state.runtime_dir / _local_state_name(name, scope=scope, payload=payload)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
 
-def read_shared_state(name: str) -> dict[str, Any] | None:
+def read_shared_state(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
+    storage_name = _state_name(name, scope=scope)
     bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
     if bucket:
         client = _get_s3_client()
         if client is not None:
             try:
-                response = client.get_object(Bucket=bucket, Key=_s3_object_key(name))
+                response = client.get_object(Bucket=bucket, Key=_s3_object_key(storage_name))
                 body = response["Body"].read().decode("utf-8")
                 payload = json.loads(body)
                 if isinstance(payload, dict):
@@ -203,31 +266,32 @@ def read_shared_state(name: str) -> dict[str, Any] | None:
                     logger.warning(
                         "shared_state_read_failed backend=s3 bucket=%s key=%s",
                         bucket,
-                        _s3_object_key(name),
+                        _s3_object_key(storage_name),
                         exc_info=error,
                     )
     if _runtime_db_latest_enabled():
         try:
-            payload = read_latest_payload(_shared_key(name))
+            payload = read_latest_payload(_shared_key(storage_name))
             if isinstance(payload, dict):
                 return payload
         except Exception as error:
             logger.warning(
                 "shared_state_read_failed backend=runtime_db key=%s",
-                _shared_key(name),
+                _shared_key(storage_name),
                 exc_info=error,
             )
     return None
 
 
-def write_shared_state(name: str, payload: dict[str, Any]) -> None:
+def write_shared_state(name: str, payload: dict[str, Any], *, scope: DatasetScope | None = None) -> None:
     normalized = dict(payload or {})
+    storage_name = _state_name(name, scope=scope, payload=normalized)
     try:
-        upsert_latest_payload(_shared_key(name), normalized)
+        upsert_latest_payload(_shared_key(storage_name), normalized)
     except Exception as error:
         logger.exception(
             "shared_state_write_failed backend=runtime_db key=%s",
-            _shared_key(name),
+            _shared_key(storage_name),
             exc_info=error,
         )
     bucket = _upload_state_bucket()
@@ -237,7 +301,7 @@ def write_shared_state(name: str, payload: dict[str, Any]) -> None:
             try:
                 client.put_object(
                     Bucket=bucket,
-                    Key=_s3_object_key(name),
+                    Key=_s3_object_key(storage_name),
                     Body=json.dumps(normalized, indent=2, default=str).encode("utf-8"),
                     ContentType="application/json",
                 )
@@ -245,19 +309,21 @@ def write_shared_state(name: str, payload: dict[str, Any]) -> None:
                 logger.exception(
                     "shared_state_write_failed backend=s3 bucket=%s key=%s",
                     bucket,
-                    _s3_object_key(name),
+                    _s3_object_key(storage_name),
                     exc_info=error,
                 )
 
 
 def write_upload_result(job_id: str, payload: dict[str, Any]) -> None:
-    write_local_json(f"upload_result_{job_id}.json", payload)
-    write_shared_state(f"upload_result_{job_id}", payload)
+    normalized = attach_dataset_scope(dict(payload or {}), dataset_id=job_id)
+    write_local_json(f"upload_result_{job_id}.json", normalized)
+    write_shared_state(f"upload_result_{job_id}", normalized)
 
 
 def write_upload_status(job_id: str, payload: dict[str, Any]) -> None:
-    write_local_json(f"upload_status_{job_id}.json", payload)
-    write_shared_state(f"upload_status_{job_id}", payload)
+    normalized = attach_dataset_scope(dict(payload or {}), dataset_id=job_id)
+    write_local_json(f"upload_status_{job_id}.json", normalized)
+    write_shared_state(f"upload_status_{job_id}", normalized)
 
 
 def write_upload_status_progress(
@@ -277,20 +343,43 @@ def write_upload_status_progress(
 
 
 def write_latest_upload_result_payload(payload: dict[str, Any]) -> None:
-    write_local_json("latest_upload_result.json", payload)
-    write_shared_state("latest_upload_result", payload)
-    runtime_state().latest_upload_cache["result"] = payload
+    normalized = attach_dataset_scope(dict(payload or {}), dataset_id=payload.get("dataset_id") or payload.get("job_id"))
+    scope = _state_scope(payload=normalized)
+    write_local_json("latest_upload_result.json", normalized, scope=scope)
+    write_shared_state("latest_upload_result", normalized, scope=scope)
+    _cache_set("result", normalized, scope=scope)
 
 
 def write_latest_upload_summary_payload(payload: dict[str, Any]) -> None:
-    write_local_json("latest_upload_summary.json", payload)
-    write_shared_state("latest_upload_summary", payload)
-    runtime_state().latest_upload_cache["summary"] = payload
+    normalized = attach_dataset_scope(dict(payload or {}), dataset_id=payload.get("dataset_id") or payload.get("job_id"))
+    scope = _state_scope(payload=normalized)
+    write_local_json("latest_upload_summary.json", normalized, scope=scope)
+    write_shared_state("latest_upload_summary", normalized, scope=scope)
+    _cache_set("summary", normalized, scope=scope)
 
 
 def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dict[str, Any]) -> None:
-    normalized_result = dict(result or {}) if isinstance(result, dict) else {}
-    normalized_summary = dict(summary or {}) if isinstance(summary, dict) else {}
+    scope = _state_scope(payload=result or summary)
+    normalized_result = attach_dataset_scope(dict(result or {}) if isinstance(result, dict) else {}, scope=scope, dataset_id=job_id)
+    normalized_summary = attach_dataset_scope(dict(summary or {}) if isinstance(summary, dict) else {}, scope=scope, dataset_id=job_id)
+    normalized_result.setdefault("job_id", str(job_id))
+    normalized_result.setdefault("run_id", str(job_id))
+    normalized_result.setdefault("upload_id", str(job_id))
+    normalized_result["session_scope"] = build_session_scope(
+        str(job_id),
+        filename=normalized_result.get("filename"),
+        status="active",
+        dataset_scope=scope,
+    )
+    normalized_summary.setdefault("job_id", str(job_id))
+    normalized_summary.setdefault("run_id", str(job_id))
+    normalized_summary.setdefault("upload_id", str(job_id))
+    normalized_summary["session_scope"] = build_session_scope(
+        str(job_id),
+        filename=normalized_summary.get("filename") or normalized_result.get("filename"),
+        status=str(normalized_summary.get("processing_state") or normalized_summary.get("status") or "active").lower(),
+        dataset_scope=scope,
+    )
     write_upload_result(job_id, normalized_result)
     write_upload_status(job_id, normalized_summary)
     write_latest_upload_result_payload(normalized_result)
@@ -300,22 +389,27 @@ def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dic
 
 def write_latest_upload_record(record: dict[str, Any] | None) -> dict[str, Any]:
     payload = build_empty_latest_upload_record() if not isinstance(record, dict) else dict(record)
-    write_local_json("latest_upload.json", payload)
-    write_shared_state("latest_upload", payload)
-    runtime_state().latest_upload_cache["canonical"] = payload
+    payload = attach_dataset_scope(payload, dataset_id=payload.get("dataset_id") or payload.get("job_id"))
+    scope = _state_scope(payload=payload)
+    write_local_json("latest_upload.json", payload, scope=scope)
+    write_shared_state("latest_upload", payload, scope=scope)
+    _cache_set("canonical", payload, scope=scope)
+    runtime_state().reset_blocked_scopes.discard(scope.storage_id)
     _invalidate_router_latest_cache()
     return payload
 
 
 def read_latest_upload_record() -> dict[str, Any] | None:
-    persisted = read_shared_state("latest_upload")
-    if isinstance(persisted, dict):
-        runtime_state().latest_upload_cache["canonical"] = persisted
+    scope = current_dataset_scope()
+    persisted = read_shared_state("latest_upload", scope=scope)
+    if isinstance(persisted, dict) and payload_matches_dataset_scope(persisted, scope):
+        _cache_set("canonical", persisted, scope=scope)
         return persisted
-    cached = runtime_state().latest_upload_cache.get("canonical")
+    cached = _cache_get("canonical", scope=scope)
     if isinstance(cached, dict):
         return cached
-    return read_local_json("latest_upload.json")
+    local = read_local_json("latest_upload.json", scope=scope)
+    return local if payload_matches_dataset_scope(local, scope) else None
 
 
 def read_current_upload_result() -> dict[str, Any] | None:
@@ -357,8 +451,10 @@ def resolve_upload_artifacts(job_id: str | None = None) -> dict[str, Any]:
     summary = record.get("summary") if isinstance(record.get("summary"), dict) else None
     record_result = record.get("result") if isinstance(record.get("result"), dict) else None
     result = read_upload_result_by_job_id(requested_id) if requested_id else None
+    if isinstance(result, dict) and not payload_matches_dataset_scope(result):
+        result = None
     if not isinstance(result, dict):
-        result = record_result if isinstance(record_result, dict) else None
+        result = record_result if isinstance(record_result, dict) and payload_matches_dataset_scope(record_result) else None
 
     canonical_job_id, canonical_run_id, canonical_upload_id = normalize_upload_identity(result or summary or record)
     active_result = result if has_active_session_artifact(result, job_id=canonical_job_id or requested_id or None) else None
@@ -408,10 +504,13 @@ def persist_latest_upload_state(
     result: dict[str, Any] | None = None,
     keep_result: bool = True,
 ) -> dict[str, Any]:
+    scope = _state_scope(payload=result or summary)
     retained_result = result
     if keep_result and retained_result is None:
-        cached_result = runtime_state().latest_upload_cache.get("result")
+        cached_result = _cache_get("result", scope=scope)
         retained_result = cached_result if isinstance(cached_result, dict) else read_latest_upload_result()
+    if isinstance(retained_result, dict) and not payload_matches_dataset_scope(retained_result, scope):
+        retained_result = None
     evidence_record = None
     job_id, _, _ = normalize_upload_identity(retained_result or summary)
     if job_id:
@@ -431,31 +530,38 @@ def persist_latest_upload_state(
 
 def warm_latest_upload_cache() -> None:
     state = runtime_state()
-    state.latest_upload_cache["summary"] = read_shared_state("latest_upload_summary") or read_local_json("latest_upload_summary.json")
-    state.latest_upload_cache["result"] = read_shared_state("latest_upload_result") or read_local_json("latest_upload_result.json")
-    state.latest_upload_cache["canonical"] = read_shared_state("latest_upload") or read_local_json("latest_upload.json")
-    # Runtime-path changes block stale state inside long-lived test/dev processes.
-    # Startup warm-up establishes the configured persistence boundary and may
-    # safely expose state recovered from that boundary after a process restart.
+    # Startup has no authenticated workspace. Do not hydrate an arbitrary global
+    # latest object; scoped records are restored lazily for the requesting scope.
+    state.latest_upload_cache.clear()
+    state.latest_upload_cache.update({"summary": None, "result": None, "canonical": None})
+    state.reset_blocked_scopes.clear()
     state.reset_block_persisted = False
 
 
 def read_latest_upload_result() -> dict[str, Any] | None:
-    persisted = read_shared_state("latest_upload_result")
-    if isinstance(persisted, dict):
-        runtime_state().latest_upload_cache["result"] = persisted
+    scope = current_dataset_scope()
+    persisted = read_shared_state("latest_upload_result", scope=scope)
+    if isinstance(persisted, dict) and payload_matches_dataset_scope(persisted, scope):
+        _cache_set("result", persisted, scope=scope)
         return persisted
-    cached = runtime_state().latest_upload_cache.get("result")
-    return cached if isinstance(cached, dict) else read_local_json("latest_upload_result.json")
+    cached = _cache_get("result", scope=scope)
+    if isinstance(cached, dict):
+        return cached
+    local = read_local_json("latest_upload_result.json", scope=scope)
+    return local if payload_matches_dataset_scope(local, scope) else None
 
 
 def read_latest_upload_summary() -> dict[str, Any] | None:
-    persisted = read_shared_state("latest_upload_summary")
-    if isinstance(persisted, dict):
-        runtime_state().latest_upload_cache["summary"] = persisted
+    scope = current_dataset_scope()
+    persisted = read_shared_state("latest_upload_summary", scope=scope)
+    if isinstance(persisted, dict) and payload_matches_dataset_scope(persisted, scope):
+        _cache_set("summary", persisted, scope=scope)
         return persisted
-    cached = runtime_state().latest_upload_cache.get("summary")
-    return cached if isinstance(cached, dict) else read_local_json("latest_upload_summary.json")
+    cached = _cache_get("summary", scope=scope)
+    if isinstance(cached, dict):
+        return cached
+    local = read_local_json("latest_upload_summary.json", scope=scope)
+    return local if payload_matches_dataset_scope(local, scope) else None
 
 
 def read_upload_result_by_job_id(job_id: str) -> dict[str, Any] | None:
@@ -476,12 +582,15 @@ def read_upload_status(job_id: str) -> dict[str, Any] | None:
     return read_local_json(f"upload_status_{job_id}.json")
 
 
-def clear_reset_block_persisted() -> None:
+def clear_reset_block_persisted(scope: DatasetScope | None = None) -> None:
+    resolved = scope or current_dataset_scope()
+    runtime_state().reset_blocked_scopes.discard(resolved.storage_id)
     runtime_state().reset_block_persisted = False
 
 
-def reset_block_persisted_active() -> bool:
-    return bool(runtime_state().reset_block_persisted)
+def reset_block_persisted_active(scope: DatasetScope | None = None) -> bool:
+    resolved = scope or current_dataset_scope()
+    return resolved.storage_id in runtime_state().reset_blocked_scopes
 
 
 def _attach_traceability(payload: dict[str, Any]) -> dict[str, Any]:
@@ -503,7 +612,6 @@ def _attach_traceability(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def write_latest_upload_result(*args) -> None:
-    clear_reset_block_persisted()
     result = args[0] if len(args) == 1 else args[1] if len(args) >= 2 else {}
     payload = dict(result or {}) if isinstance(result, dict) else {}
 
@@ -513,11 +621,15 @@ def write_latest_upload_result(*args) -> None:
         payload["run_id"] = job_id
         payload["upload_id"] = job_id
 
+    scope = _state_scope(payload=payload)
+    clear_reset_block_persisted(scope)
     payload["session_scope"] = build_session_scope(
         payload.get("job_id"),
         filename=payload.get("filename"),
         status="active",
+        dataset_scope=scope,
     )
+    payload = attach_dataset_scope(payload, scope=scope, dataset_id=payload.get("job_id"))
     payload = _attach_traceability(payload)
 
     if payload.get("job_id"):
@@ -535,7 +647,6 @@ def write_latest_upload_result(*args) -> None:
 
 def write_latest_upload_summary(*args, **kwargs) -> None:
     del kwargs
-    clear_reset_block_persisted()
     summary = args[0] if len(args) == 1 else args[1] if len(args) >= 2 else {}
     payload = dict(summary or {}) if isinstance(summary, dict) else {}
 
@@ -546,11 +657,15 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
         payload["upload_id"] = job_id
 
     payload.setdefault("status", "COMPLETE")
+    scope = _state_scope(payload=payload)
+    clear_reset_block_persisted(scope)
     payload["session_scope"] = build_session_scope(
         payload.get("job_id"),
         filename=payload.get("filename"),
         status="active",
+        dataset_scope=scope,
     )
+    payload = attach_dataset_scope(payload, scope=scope, dataset_id=payload.get("job_id"))
     if payload.get("job_id") and "status_url" not in payload:
         payload["status_url"] = f"/api/data/upload-status/{payload['job_id']}"
 
@@ -568,22 +683,38 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
 
 def reset_upload_state() -> None:
     state = runtime_state()
-    state.jobs.clear()
-    for path in state.runtime_dir.glob("*upload*"):
+    scope = current_dataset_scope()
+    scope_prefix = f"scopes/{scope.storage_id}/"
+    for kind in ("summary", "result", "canonical"):
+        state.latest_upload_cache.pop(_cache_key(kind, scope), None)
+        cached = state.latest_upload_cache.get(kind)
+        if isinstance(cached, dict) and payload_matches_dataset_scope(cached, scope):
+            state.latest_upload_cache[kind] = None
+    local_scope_dir = state.runtime_dir / "scopes" / scope.storage_id
+    for name in _SCOPED_LATEST_NAMES:
         try:
-            path.unlink()
+            (local_scope_dir / f"{name}.json").unlink(missing_ok=True)
         except OSError:
             pass
-    state.latest_upload_cache["summary"] = None
-    state.latest_upload_cache["result"] = None
-    state.latest_upload_cache["canonical"] = None
     try:
-        delete_latest_payload_prefix("upload_")
-        delete_latest_payload_prefix("latest_upload_")
-        delete_latest_payload_prefix("latest_upload")
+        delete_latest_payload_prefix(scope_prefix)
     except Exception:
         pass
-    state.reset_block_persisted = True
+    bucket = _upload_state_bucket()
+    client = _get_s3_client() if bucket else None
+    if client is not None and bucket:
+        for name in _SCOPED_LATEST_NAMES:
+            try:
+                client.delete_object(Bucket=bucket, Key=_s3_object_key(f"{scope_prefix}{name}"))
+            except Exception:
+                logger.exception(
+                    "scoped_upload_state_delete_failed bucket=%s scope=%s name=%s",
+                    bucket,
+                    scope.storage_id,
+                    name,
+                )
+    state.reset_blocked_scopes.add(scope.storage_id)
+    state.reset_block_persisted = False
     _invalidate_router_latest_cache()
 
 

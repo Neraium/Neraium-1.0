@@ -1,3 +1,5 @@
+import { getCurrentWorkspaceId } from "./services/datasetSessionCache";
+
 const STALE_API_HOST = ["api", "neraium", "com"].join(".");
 
 function normalizeConfiguredApiBaseUrl(value = "") {
@@ -47,10 +49,7 @@ function timeoutMessage(timeoutMs, path) {
 function isPublicReadonlyPath(path) {
   const normalized = String(path || "").toLowerCase();
   return (
-    normalized.startsWith("/api/data/latest-upload")
-    || normalized.startsWith("/api/data/upload-status/")
-    || normalized.startsWith("/api/facility/systems")
-    || normalized.startsWith("/api/health")
+    normalized.startsWith("/api/health")
     || normalized.startsWith("/api/domain/mode")
     || normalized.startsWith("/api/intelligence/engine-identity")
   );
@@ -187,6 +186,7 @@ export async function apiFetch(path, options = {}) {
       credentials: "include",
       cache: rest.cache ?? (normalizedMethod === "GET" || normalizedMethod === "HEAD" ? "no-store" : undefined),
       headers: {
+        "X-Neraium-Workspace-Id": getCurrentWorkspaceId(),
         ...accessHeaders,
         ...(addNoCacheHeaders
           ? { "Cache-Control": "no-cache", Pragma: "no-cache" }

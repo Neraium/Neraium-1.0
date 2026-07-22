@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
+from app.services.dataset_scope import payload_matches_dataset_scope
 from app.services.upload_state import build_session_scope
 
 
@@ -59,6 +60,8 @@ def read_upload_history(
         try:
             result = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
+            continue
+        if not payload_matches_dataset_scope(result):
             continue
 
         replay = (

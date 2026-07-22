@@ -81,7 +81,7 @@ vi.mock("./hooks/useFacilityRuntime", () => ({
 }));
 
 vi.mock("./components/OperationalWorkflowWorkspace", () => ({
-  default: ({ liveOps, onWorkspaceNavigate, onResumePreviousSession, gateProcessing, onCsvSelected }) => {
+  default: ({ liveOps, onWorkspaceNavigate, onResumePreviousSession, onSignOut, gateProcessing, onCsvSelected }) => {
     if (runtimeState.throwGateError) {
       throw new Error("gate render failed");
     }
@@ -105,6 +105,7 @@ vi.mock("./components/OperationalWorkflowWorkspace", () => ({
       }),
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open telemetry intake"),
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open insights"),
+      h("button", { type: "button", onClick: onSignOut }, "Sign out test user"),
     );
   },
 }));
@@ -170,6 +171,32 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+
+it("does not restore stale local analysis history as the active dataset", async () => {
+  window.localStorage.setItem("neraium.dataset_cache_scope", "operator@facility.com::default");
+  window.localStorage.setItem("neraium.completed_analysis_history", JSON.stringify([{
+    id: "stale-history-record",
+    jobId: "stale-job-4032",
+    datasetName: "resort chw hvac synthetic fouling.csv",
+    timestamp: "2026-07-20T06:32:53.260378+00:00",
+    savedAt: "2026-07-20T06:32:53.260378+00:00",
+    result: {
+      job_id: "stale-job-4032",
+      filename: "resort chw hvac synthetic fouling.csv",
+      row_count: 4032,
+      status: "complete",
+      sii_completed: true,
+      sii_intelligence: { facility_state: "Monitoring" },
+    },
+    snapshot: { status: "complete", sii_completed: true, current_upload: { job_id: "stale-job-4032" } },
+  }]));
+
+  render(h(App));
+  await launchWorkspace();
+
+  expect(screen.getByTestId("gate-result").textContent).toBe("empty");
+  expect(screen.getByTestId("gate-session-job").textContent).toBe("empty");
+});
 
 it("starts on the operational workspace at the root route", async () => {
   render(h(App));
@@ -457,6 +484,40 @@ describe("App telemetry completion navigation", () => {
     await waitFor(() => expect(screen.getByTestId("observation-workspace")).toBeTruthy());
     expect(screen.getByTestId("observation-finding-summary").textContent).toBe(gateSummary);
     expect(screen.getByTestId("observation-finding-confidence").textContent).toBe("High");
+  });
+
+  it("clears stale dataset cache when the authenticated session is revoked", async () => {
+    render(h(App));
+    await launchWorkspace();
+    window.localStorage.setItem("neraium.completed_analysis_history", "[{\"rows\":4032}]");
+    window.localStorage.setItem("neraium.last_upload_job_id", "stale-job");
+    window.sessionStorage.setItem("neraium.session_intent", "current");
+
+    window.dispatchEvent(new CustomEvent("neraium:session-expired"));
+
+    await waitFor(() => expect(screen.getByTestId("auth-screen")).toBeTruthy());
+    expect(window.localStorage.getItem("neraium.completed_analysis_history")).toBeNull();
+    expect(window.localStorage.getItem("neraium.last_upload_job_id")).toBeNull();
+    expect(window.localStorage.getItem("neraium.dataset_cache_scope")).toBeNull();
+    expect(window.sessionStorage.getItem("neraium.session_intent")).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("session expired");
+  });
+
+  it("clears stale dataset cache on logout before showing the sign-in screen", async () => {
+    render(h(App));
+    await launchWorkspace();
+    window.localStorage.setItem("neraium.completed_analysis_history", "[{\"rows\":4032}]");
+    window.localStorage.setItem("neraium.last_upload_job_id", "stale-job");
+    window.sessionStorage.setItem("neraium.session_intent", "resumed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out test user" }));
+
+    await waitFor(() => expect(screen.getByTestId("auth-screen")).toBeTruthy());
+    expect(window.localStorage.getItem("neraium.completed_analysis_history")).toBeNull();
+    expect(window.localStorage.getItem("neraium.last_upload_job_id")).toBeNull();
+    expect(window.localStorage.getItem("neraium.dataset_cache_scope")).toBeNull();
+    expect(window.sessionStorage.getItem("neraium.session_intent")).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("signed out");
   });
 
   it("keeps insights pending when telemetry exists but operator review is not yet evidence-ready", async () => {

@@ -1116,7 +1116,7 @@ function buildDataSourceRows({ sourceLabel, lastAnalysis, sourceRowCount, teleme
   const historicalImported = !["None", "Not connected"].includes(sourceLabel);
   const lastImport = historicalImported && !["No analysis yet", "Not analyzed yet", "Analysis in progress"].includes(lastAnalysis)
     ? lastAnalysis
-    : "No import yet";
+    : "None";
   return [
     ["Dataset import", historicalImported ? "Imported" : "Not imported"],
     ["Imported rows", historicalImported && sourceRowCount ? String(sourceRowCount) : "0"],

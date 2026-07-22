@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.core.path_safety import StoragePathError, resolve_existing_storage_path, storage_key_for_server_path
+from app.services.dataset_scope import dataset_scope_from_payload, set_current_dataset_scope
 from app.services.runtime_db import (
     claim_next_upload_job,
     complete_upload_queue_job,
@@ -95,6 +96,12 @@ class UploadQueueLifecycleService:
         if not job_id:
             return False
         metadata = self._read_processing_metadata(job_id)
+        dataset_scope = dataset_scope_from_payload(metadata)
+        if dataset_scope is None:
+            mark_queue_job_failed(job_id, "missing_dataset_scope")
+            self.logger.error("upload_queue_job_missing_dataset_scope job_id=%s", job_id)
+            return False
+        set_current_dataset_scope(dataset_scope)
         filename = metadata.get("filename")
         request_id = metadata.get("request_id")
         _log_queue_event(

@@ -14,7 +14,7 @@ from starlette.datastructures import Headers
 from app.contracts import ErrorResponse, enforce_query_contract, validate_contract_headers
 from app.core.config import Settings, get_settings
 from app.core.logging_config import bind_log_context, configure_logging, reset_log_context
-from app.core.security import require_admin_role
+from app.core.security import require_admin_role, require_api_access
 from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay
 from app.routers.data import wait_for_upload_workers
 from app.services.auth_store import initialize_auth_store
@@ -415,11 +415,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Legacy frontend compatibility aliases. Older bundles may call shorthand
     # endpoints without the "/api/..." prefix.
-    @app.get("/latest-upload", deprecated=True)
-    async def latest_upload_alias(include_persisted: bool = Query(True)):
-        return await data.latest_upload(include_persisted=include_persisted)
+    @app.get("/latest-upload", deprecated=True, dependencies=[Depends(require_api_access)])
+    async def latest_upload_alias(request: Request, include_persisted: bool = Query(True)):
+        return await data.latest_upload(include_persisted=include_persisted, request=request)
 
-    @app.get("/systems", deprecated=True)
+    @app.get("/systems", deprecated=True, dependencies=[Depends(require_api_access)])
     def systems_alias(
         include_persisted: bool = Query(True),
         domain_mode: str | None = Query(default=None, pattern=r"^(aquatic|cultivation)$"),

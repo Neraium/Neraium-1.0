@@ -4,22 +4,13 @@ import uuid
 from fastapi import HTTPException, Request, Response
 
 from app.services.auth_store import get_user_by_session, normalize_role, session_cookie_name
+from app.services.dataset_scope import WORKSPACE_HEADER, dataset_scope_from_auth_context, set_current_dataset_scope
 
 _PUBLIC_READONLY_PATHS = (
     "/api/health",
     "/api/ready",
     "/api/domain/mode",
     "/api/intelligence/engine-identity",
-    "/api/data/latest-upload",
-    "/api/data/upload-status/",
-    "/api/data/upload-stream/",
-    "/api/data/replay/",
-    "/api/data/system-interpretation",
-    "/api/facility/systems",
-    "/api/facility/intelligence-status",
-    "/api/facility/cognition-state",
-    "/latest-upload",
-    "/systems",
 )
 _ROLE_ORDER = {"viewer": 0, "operator": 1, "admin": 2}
 
@@ -68,9 +59,15 @@ def _set_auth_context(request: Request, *, subject: str, role: str, source: str,
         "client_ip": _client_ip(request),
         "authenticated": authenticated,
     }
+    dataset_scope = dataset_scope_from_auth_context(
+        request.state.auth_context,
+        request.headers.get(WORKSPACE_HEADER),
+    )
+    request.state.dataset_scope = dataset_scope
+    set_current_dataset_scope(dataset_scope)
 
 
-def require_api_access(request: Request, response: Response) -> None:
+async def require_api_access(request: Request, response: Response) -> None:
     if _is_public_readonly_request(request):
         _set_auth_context(
             request,
@@ -142,9 +139,9 @@ def require_api_access(request: Request, response: Response) -> None:
     )
 
 
-def _require_minimum_role(request: Request, minimum_role: str) -> None:
+async def _require_minimum_role(request: Request, minimum_role: str) -> None:
     if not hasattr(request.state, "auth_context"):
-        require_api_access(request, Response())
+        await require_api_access(request, Response())
     if not _strict_auth_mode(request):
         return
     auth_context = getattr(request.state, "auth_context", {})
@@ -153,9 +150,9 @@ def _require_minimum_role(request: Request, minimum_role: str) -> None:
         raise HTTPException(status_code=403, detail=f"{minimum_role.title()} access required.")
 
 
-def require_operator_role(request: Request) -> None:
-    _require_minimum_role(request, "operator")
+async def require_operator_role(request: Request) -> None:
+    await _require_minimum_role(request, "operator")
 
 
-def require_admin_role(request: Request) -> None:
-    _require_minimum_role(request, "admin")
+async def require_admin_role(request: Request) -> None:
+    await _require_minimum_role(request, "admin")

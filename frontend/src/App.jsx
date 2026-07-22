@@ -7,6 +7,12 @@ import AuthScreen from "./components/AuthScreen";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import useWorkspaceSessionController, { readStoredAllowPersistedLatest } from "./hooks/useWorkspaceSessionController";
 import { fetchCurrentUser, logoutUser } from "./services/api/authApi";
+import {
+  CURRENT_WORKSPACE_STORAGE_KEY,
+  activateDatasetCacheScope,
+  clearDatasetSessionCache,
+  getCurrentWorkspaceId,
+} from "./services/datasetSessionCache";
 import { resolveSessionStore } from "./viewModels/sessionState";
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
 
@@ -37,6 +43,7 @@ function App() {
   const [appReady, setAppReady] = useState(false);
   const [authState, setAuthState] = useState({ status: "checking", user: null, notice: "" });
   const [signOutPending, setSignOutPending] = useState(false);
+  const [datasetScopeKey, setDatasetScopeKey] = useState("signed-out");
   const initialAllowPersistedLatest = readStoredAllowPersistedLatest();
   const hasAccess = authState.status === "authenticated" && Boolean(authState.user);
 
@@ -111,6 +118,7 @@ function App() {
     handleRetryWorkspace,
   } = useWorkspaceSessionController({
     activeWorkspace,
+    datasetScopeKey,
     setActiveWorkspace,
     apiFetch,
     accessCode,
@@ -222,7 +230,9 @@ function App() {
     setSignOutPending(true);
     try {
       await logoutUser();
+      clearDatasetSessionCache();
       clearUploadSessionState();
+      setDatasetScopeKey("signed-out");
       setAuthState({ status: "signed-out", user: null, notice: "You have been signed out." });
     } catch (error) {
       setAuthState((current) => ({ ...current, notice: String(error?.message ?? "Sign out failed. Try again.") }));
@@ -230,6 +240,14 @@ function App() {
       setSignOutPending(false);
     }
   }, [clearUploadSessionState, signOutPending]);
+
+  const handleAuthenticated = useCallback((user) => {
+    const scope = activateDatasetCacheScope(user);
+    clearUploadSessionState();
+    setAllowPersistedLatest(true);
+    setDatasetScopeKey(scope.scopeKey);
+    setAuthState({ status: "authenticated", user, notice: "" });
+  }, [clearUploadSessionState, setAllowPersistedLatest]);
 
   const handleTelemetryAnalysisComplete = useCallback(async (completedPayload = null, options = {}) => {
     await handleGateUploadComplete(completedPayload, options);
@@ -244,24 +262,56 @@ function App() {
     fetchCurrentUser()
       .then((payload) => {
         if (cancelled) return;
-        setAuthState(payload?.authenticated && payload?.user
-          ? { status: "authenticated", user: payload.user, notice: "" }
-          : { status: "signed-out", user: null, notice: "Sign in to continue." });
+        if (payload?.authenticated && payload?.user) {
+          handleAuthenticated(payload.user);
+        } else {
+          clearDatasetSessionCache();
+          setDatasetScopeKey("signed-out");
+          setAuthState({ status: "signed-out", user: null, notice: "Sign in to continue." });
+        }
       })
       .catch((error) => {
-        if (!cancelled) setAuthState({ status: "signed-out", user: null, notice: String(error?.message ?? "Unable to verify your session.") });
+        if (!cancelled) {
+          clearDatasetSessionCache();
+          clearUploadSessionState();
+          setDatasetScopeKey("signed-out");
+          setAuthState({ status: "signed-out", user: null, notice: String(error?.message ?? "Unable to verify your session.") });
+        }
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [clearUploadSessionState, handleAuthenticated]);
 
   useEffect(() => {
     const handleSessionExpired = () => {
+      clearDatasetSessionCache();
       clearUploadSessionState();
+      setDatasetScopeKey("signed-out");
       setAuthState({ status: "signed-out", user: null, notice: "Your session expired. Sign in again to continue." });
     };
     window.addEventListener("neraium:session-expired", handleSessionExpired);
     return () => window.removeEventListener("neraium:session-expired", handleSessionExpired);
   }, [clearUploadSessionState]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !authState.user) return undefined;
+    const applyWorkspaceChange = () => {
+      const scope = activateDatasetCacheScope(authState.user, getCurrentWorkspaceId());
+      clearUploadSessionState();
+      setAllowPersistedLatest(true);
+      setDatasetScopeKey(scope.scopeKey);
+      void loadLatestUploadState({ includePersisted: true, forceRefresh: true });
+      void loadFacilitySystems({ forceRefresh: true });
+    };
+    const handleStorage = (event) => {
+      if (event.key === CURRENT_WORKSPACE_STORAGE_KEY) applyWorkspaceChange();
+    };
+    window.addEventListener("neraium:workspace-changed", applyWorkspaceChange);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("neraium:workspace-changed", applyWorkspaceChange);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [authState.user, clearUploadSessionState, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -294,7 +344,7 @@ function App() {
   }
 
   if (!hasAccess) {
-    return <AuthScreen notice={authState.notice} onAuthenticated={(user) => setAuthState({ status: "authenticated", user, notice: "" })} />;
+    return <AuthScreen notice={authState.notice} onAuthenticated={handleAuthenticated} />;
   }
 
   return (

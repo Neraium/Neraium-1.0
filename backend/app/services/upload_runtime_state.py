@@ -19,6 +19,7 @@ class UploadRuntimeState:
         default_factory=lambda: {"summary": None, "result": None, "canonical": None}
     )
     reset_block_persisted: bool = False
+    reset_blocked_scopes: set[str] = field(default_factory=set)
     upload_state_s3_client: Any | None = None
     max_cached_jobs: int = DEFAULT_MAX_CACHED_UPLOAD_JOBS
 
@@ -45,9 +46,9 @@ class UploadRuntimeState:
         self.job_dir.mkdir(parents=True, exist_ok=True)
         self.legacy_job_dir.mkdir(parents=True, exist_ok=True)
         self.jobs.clear()
-        self.latest_upload_cache["summary"] = None
-        self.latest_upload_cache["result"] = None
-        self.latest_upload_cache["canonical"] = None
+        self.latest_upload_cache.clear()
+        self.latest_upload_cache.update({"summary": None, "result": None, "canonical": None})
+        self.reset_blocked_scopes.clear()
         self.upload_state_s3_client = None
         if runtime_changed:
             self.reset_block_persisted = True

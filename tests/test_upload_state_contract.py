@@ -382,14 +382,14 @@ def test_upload_state_missing_persisted_data_fails_safely() -> None:
     assert payload["job_id"] is None
 
 
-def test_repository_latest_result_fallback_remains_available_without_canonical_record() -> None:
+def test_repository_rejects_unscoped_latest_result_without_canonical_record() -> None:
     job_id = "legacy-latest-result-only"
     stale = _persisted_result(job_id, filename="legacy.csv")
 
     upload_state_repository.write_local_json("latest_upload_result.json", stale)
     upload_state_repository.write_shared_state("latest_upload_result", stale)
 
-    assert upload_state_repository.read_latest_upload_result()["job_id"] == job_id
+    assert upload_state_repository.read_latest_upload_result() is None
     assert upload_state_repository.read_current_upload_result() is None
 
 
@@ -503,4 +503,5 @@ def test_write_shared_state_logs_runtime_db_failures(monkeypatch, caplog) -> Non
     with caplog.at_level("ERROR"):
         upload_state_repository.write_shared_state("latest_upload_result", {"job_id": "log-runtime-db"})
 
-    assert "shared_state_write_failed backend=runtime_db key=latest_upload_result" in caplog.text
+    assert "shared_state_write_failed backend=runtime_db key=scopes/" in caplog.text
+    assert "/latest_upload_result" in caplog.text

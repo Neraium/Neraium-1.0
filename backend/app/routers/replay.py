@@ -3,13 +3,13 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from app.core.config import get_settings
-from app.services.sii_runner import read_latest_sii_state
+from app.core.security import require_api_access
 from app.services.upload_state_repository import read_replay_payload, resolve_upload_artifacts
 
-router = APIRouter(prefix="/replay", tags=["replay"])
+router = APIRouter(prefix="/replay", tags=["replay"], dependencies=[Depends(require_api_access)])
 ReplayMode = Literal["live", "demo", "aquatic_demo", "live_causal"]
 ReplayJobId = Annotated[str, Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
 
@@ -32,21 +32,11 @@ async def replay_timeline(
         }
 
     artifacts = resolve_upload_artifacts()
-    canonical = artifacts.get("record") if isinstance(artifacts.get("record"), dict) else {}
     canonical_result = artifacts.get("active_result") if isinstance(artifacts.get("active_result"), dict) else None
-    canonical_job_id = str(artifacts.get("job_id") or "").strip()
-    has_canonical_session = bool(canonical_job_id or canonical_result)
     replay_payload = artifacts.get("replay") if canonical_result else {}
     timeline = replay_payload.get("timeline", []) if isinstance(replay_payload, dict) else []
     timeline = timeline if isinstance(timeline, list) else []
     source = "uploaded" if timeline else "empty"
-
-    if not timeline and not has_canonical_session:
-        state = read_latest_sii_state() or {}
-        replay = (state.get("replay_timeline") if isinstance(state, dict) else {}) or {}
-        timeline = replay.get("timeline") if isinstance(replay, dict) else []
-        timeline = timeline if isinstance(timeline, list) else []
-        source = state.get("source", "uploaded") if timeline else "empty"
 
     if normalized_mode == "live_causal":
         timeline = [{**frame, "live_causal": {"lookahead_free": True}} for frame in (timeline or []) if isinstance(frame, dict)]

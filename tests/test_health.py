@@ -451,7 +451,7 @@ def test_upload_status_preflight_succeeds_without_auth_for_local_vite(tmp_path) 
     assert response.headers["access-control-allow-credentials"] == "true"
 
 
-def test_facility_systems_allows_requests_without_shared_secret_in_production(tmp_path) -> None:
+def test_facility_systems_requires_authentication_in_production(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -463,11 +463,11 @@ def test_facility_systems_allows_requests_without_shared_secret_in_production(tm
 
     response = client.get("/api/facility/systems")
 
-    assert response.status_code == 200
-    assert response.json()["systems"] == []
+    assert response.status_code == 401
+    assert response.json()["error_type"] == "auth"
 
 
-def test_facility_systems_ignores_bearer_secret_in_production(tmp_path) -> None:
+def test_facility_systems_rejects_unconfigured_bearer_secret_in_production(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -482,11 +482,11 @@ def test_facility_systems_ignores_bearer_secret_in_production(tmp_path) -> None:
         headers={"Authorization": "Bearer expected-secret"},
     )
 
-    assert response.status_code == 200
-    assert response.json()["systems"] == []
+    assert response.status_code == 401
+    assert response.json()["error_type"] == "auth"
 
 
-def test_access_header_is_ignored_without_refreshing_auth_cookie(tmp_path) -> None:
+def test_unconfigured_access_header_is_rejected_without_refreshing_auth_cookie(tmp_path) -> None:
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -501,7 +501,7 @@ def test_access_header_is_ignored_without_refreshing_auth_cookie(tmp_path) -> No
         headers={"X-Neraium-Access-Code": "expected-secret"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 401
     assert "set-cookie" not in response.headers
 
 
@@ -524,7 +524,7 @@ def test_engine_identity_accepts_access_header_in_production(tmp_path) -> None:
     assert response.json()["engine_name"] == "Neraium SII"
 
 
-def test_wrong_bearer_code_does_not_block_production_requests(tmp_path, caplog) -> None:
+def test_wrong_bearer_code_is_rejected_without_logging_secrets(tmp_path, caplog) -> None:
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -542,8 +542,8 @@ def test_wrong_bearer_code_does_not_block_production_requests(tmp_path, caplog) 
         },
     )
 
-    assert response.status_code == 200
-    assert response.json()["systems"] == []
+    assert response.status_code == 401
+    assert response.json()["error_type"] == "auth"
     log_text = caplog.text
     assert "wrong-secret" not in log_text
     assert "expected-secret" not in log_text

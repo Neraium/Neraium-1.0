@@ -94,6 +94,7 @@ def validate_contract_headers(request: Request) -> None:
         "x-request-id": 128,
         "x-upload-session-id": 128,
         "x-neraium-user": 320,
+        "x-neraium-workspace-id": 128,
         "x-authenticated-user": 320,
         "x-forwarded-email": 320,
         "authorization": 4096,
@@ -106,3 +107,6 @@ def validate_contract_headers(request: Request) -> None:
     request_id = request.headers.get("x-request-id")
     if request_id and not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", request_id):
         raise HTTPException(status_code=400, detail="X-Request-Id contains invalid characters.")
+    workspace_id = request.headers.get("x-neraium-workspace-id")
+    if workspace_id and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", workspace_id):
+        raise HTTPException(status_code=400, detail="X-Neraium-Workspace-Id contains invalid characters.")
