@@ -54,7 +54,7 @@ describe("CommandCenterView hydration regressions", () => {
     const { container } = render(h(CommandCenterView, {
       model: {
         insights: [],
-        uiState: { key: "ready" },
+        uiState: { key: "noTelemetry" },
         analysisComplete: false,
         dashboardSystemCards: [],
         commandCenterMessage: "Import a telemetry dataset, then run an analysis to establish the facility's behavior baseline.",
@@ -65,13 +65,18 @@ describe("CommandCenterView hydration regressions", () => {
       onConnectLiveData,
     }));
 
-    expect(screen.getByText("Watching")).toBeTruthy();
+    expect(screen.getByText("Awaiting data")).toBeTruthy();
     expect(screen.getByText("Not established")).toBeTruthy();
-    expect(screen.getByText("No telemetry")).toBeTruthy();
+    expect(screen.getByText("No data available")).toBeTruthy();
     expect(screen.getByText("No active status available")).toBeTruthy();
     expect(screen.getByText("None active")).toBeTruthy();
     expect(screen.getByText("Primary action")).toBeTruthy();
     expect(screen.getByText("Secondary action")).toBeTruthy();
+    const actionGroups = container.querySelectorAll(".operating-state-card__action-group");
+    expect(actionGroups[0].textContent).toContain("Primary actionImport dataset");
+    expect(actionGroups[0].querySelector("button").classList.contains("command-button")).toBe(true);
+    expect(actionGroups[1].textContent).toContain("Secondary actionConnect telemetry");
+    expect(actionGroups[1].querySelector("button").classList.contains("secondary-command-button")).toBe(true);
     expect(container.querySelectorAll(".command-section")).toHaveLength(3);
     expect(screen.queryByRole("heading", { name: "Discovered Systems" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Analysis Details" })).toBeNull();
@@ -81,6 +86,31 @@ describe("CommandCenterView hydration regressions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Connect telemetry" }));
     fireEvent.click(screen.getByRole("button", { name: "Import dataset" }));
     expect(onConnectLiveData).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["an imported dataset", false],
+    ["connected telemetry", true],
+  ])("preserves the pre-analysis actions for %s", (_state, telemetryConnected) => {
+    const { container } = render(h(CommandCenterView, {
+      model: {
+        insights: [],
+        uiState: { key: "readyToAnalyze" },
+        analysisComplete: false,
+        telemetryConnected,
+        dashboardSystemCards: [],
+      },
+      helpers,
+      selectedInsight: null,
+      onOpenInvestigation: vi.fn(),
+      onConnectLiveData: vi.fn(),
+    }));
+
+    expect(screen.getByText("Watching")).toBeTruthy();
+    expect(screen.getByText("No telemetry")).toBeTruthy();
+    const actionGroups = container.querySelectorAll(".operating-state-card__action-group");
+    expect(actionGroups[0].textContent).toContain("Primary actionConnect telemetry");
+    expect(actionGroups[1].textContent).toContain("Secondary actionImport dataset");
   });
 
   it("renders a completed finding when dashboard system cards are not an array", () => {
