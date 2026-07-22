@@ -1,4 +1,4 @@
-export default function PageContainer({ className = "", children }) {
+export default function PageContainer({ className = "", children, ...props }) {
   const classes = `page-container ${className}`.trim();
-  return <div className={classes}>{children}</div>;
+  return <div className={classes} {...props}>{children}</div>;
 }
