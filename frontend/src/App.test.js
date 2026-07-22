@@ -495,7 +495,7 @@ describe("App telemetry completion navigation", () => {
 
     window.dispatchEvent(new CustomEvent("neraium:session-expired"));
 
-    await waitFor(() => expect(screen.getByTestId("auth-screen")).toBeTruthy());
+    expect(await screen.findByTestId("auth-screen")).toBeTruthy();
     expect(window.localStorage.getItem("neraium.completed_analysis_history")).toBeNull();
     expect(window.localStorage.getItem("neraium.last_upload_job_id")).toBeNull();
     expect(window.localStorage.getItem("neraium.dataset_cache_scope")).toBeNull();
@@ -512,7 +512,7 @@ describe("App telemetry completion navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Sign out test user" }));
 
-    await waitFor(() => expect(screen.getByTestId("auth-screen")).toBeTruthy());
+    expect(await screen.findByTestId("auth-screen")).toBeTruthy();
     expect(window.localStorage.getItem("neraium.completed_analysis_history")).toBeNull();
     expect(window.localStorage.getItem("neraium.last_upload_job_id")).toBeNull();
     expect(window.localStorage.getItem("neraium.dataset_cache_scope")).toBeNull();

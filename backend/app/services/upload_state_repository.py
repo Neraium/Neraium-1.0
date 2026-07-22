@@ -231,6 +231,7 @@ def _shared_state_error_code(error: Exception) -> str:
 def _is_missing_shared_state_error(error: Exception) -> bool:
     return _shared_state_error_code(error) in {"404", "NoSuchKey", "NotFound"}
 
+
 def read_local_json(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
     path = runtime_state().runtime_dir / _local_state_name(name, scope=scope)
     if not path.exists():
@@ -249,38 +250,40 @@ def write_local_json(name: str, payload: dict[str, Any], *, scope: DatasetScope 
     path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
 
+def _read_s3_state(storage_name: str, bucket: str) -> dict[str, Any] | None:
+    client = _get_s3_client()
+    if client is None:
+        return None
+    try:
+        response = client.get_object(Bucket=bucket, Key=_s3_object_key(storage_name))
+        body = response["Body"].read().decode("utf-8")
+        payload = json.loads(body)
+        return payload if isinstance(payload, dict) else None
+    except Exception as error:
+        if not _is_missing_shared_state_error(error):
+            logger.warning("shared_state_read_failed backend=s3")
+        return None
+
+
+def _read_runtime_db_state(storage_name: str) -> dict[str, Any] | None:
+    if not _runtime_db_latest_enabled():
+        return None
+    try:
+        payload = read_latest_payload(_shared_key(storage_name))
+        return payload if isinstance(payload, dict) else None
+    except Exception:
+        logger.warning("shared_state_read_failed backend=runtime_db")
+        return None
+
+
 def read_shared_state(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
     storage_name = _state_name(name, scope=scope)
     bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
     if bucket:
-        client = _get_s3_client()
-        if client is not None:
-            try:
-                response = client.get_object(Bucket=bucket, Key=_s3_object_key(storage_name))
-                body = response["Body"].read().decode("utf-8")
-                payload = json.loads(body)
-                if isinstance(payload, dict):
-                    return payload
-            except Exception as error:
-                if not _is_missing_shared_state_error(error):
-                    logger.warning(
-                        "shared_state_read_failed backend=s3 bucket=%s key=%s",
-                        bucket,
-                        _s3_object_key(storage_name),
-                        exc_info=error,
-                    )
-    if _runtime_db_latest_enabled():
-        try:
-            payload = read_latest_payload(_shared_key(storage_name))
-            if isinstance(payload, dict):
-                return payload
-        except Exception as error:
-            logger.warning(
-                "shared_state_read_failed backend=runtime_db key=%s",
-                _shared_key(storage_name),
-                exc_info=error,
-            )
-    return None
+        payload = _read_s3_state(storage_name, bucket)
+        if isinstance(payload, dict):
+            return payload
+    return _read_runtime_db_state(storage_name)
 
 
 def write_shared_state(name: str, payload: dict[str, Any], *, scope: DatasetScope | None = None) -> None:
@@ -288,12 +291,8 @@ def write_shared_state(name: str, payload: dict[str, Any], *, scope: DatasetScop
     storage_name = _state_name(name, scope=scope, payload=normalized)
     try:
         upsert_latest_payload(_shared_key(storage_name), normalized)
-    except Exception as error:
-        logger.exception(
-            "shared_state_write_failed backend=runtime_db key=%s",
-            _shared_key(storage_name),
-            exc_info=error,
-        )
+    except Exception:
+        logger.error("shared_state_write_failed backend=runtime_db")
     bucket = _upload_state_bucket()
     if bucket:
         client = _get_s3_client()
@@ -305,13 +304,8 @@ def write_shared_state(name: str, payload: dict[str, Any], *, scope: DatasetScop
                     Body=json.dumps(normalized, indent=2, default=str).encode("utf-8"),
                     ContentType="application/json",
                 )
-            except Exception as error:
-                logger.exception(
-                    "shared_state_write_failed backend=s3 bucket=%s key=%s",
-                    bucket,
-                    _s3_object_key(storage_name),
-                    exc_info=error,
-                )
+            except Exception:
+                logger.error("shared_state_write_failed backend=s3")
 
 
 def write_upload_result(job_id: str, payload: dict[str, Any]) -> None:
@@ -681,38 +675,50 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
         persist_latest_upload_state(summary=payload, result=None, keep_result=True)
 
 
-def reset_upload_state() -> None:
-    state = runtime_state()
-    scope = current_dataset_scope()
-    scope_prefix = f"scopes/{scope.storage_id}/"
+def _clear_latest_cache_for_scope(state: UploadRuntimeState, scope: DatasetScope) -> None:
     for kind in ("summary", "result", "canonical"):
         state.latest_upload_cache.pop(_cache_key(kind, scope), None)
         cached = state.latest_upload_cache.get(kind)
         if isinstance(cached, dict) and payload_matches_dataset_scope(cached, scope):
             state.latest_upload_cache[kind] = None
+
+
+def _delete_local_latest_state(state: UploadRuntimeState, scope: DatasetScope) -> None:
     local_scope_dir = state.runtime_dir / "scopes" / scope.storage_id
     for name in _SCOPED_LATEST_NAMES:
         try:
             (local_scope_dir / f"{name}.json").unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def _delete_database_latest_state(scope_prefix: str) -> None:
     try:
         delete_latest_payload_prefix(scope_prefix)
     except Exception:
         pass
+
+
+def _delete_s3_latest_state(scope_prefix: str) -> None:
     bucket = _upload_state_bucket()
     client = _get_s3_client() if bucket else None
-    if client is not None and bucket:
-        for name in _SCOPED_LATEST_NAMES:
-            try:
-                client.delete_object(Bucket=bucket, Key=_s3_object_key(f"{scope_prefix}{name}"))
-            except Exception:
-                logger.exception(
-                    "scoped_upload_state_delete_failed bucket=%s scope=%s name=%s",
-                    bucket,
-                    scope.storage_id,
-                    name,
-                )
+    if client is None or not bucket:
+        return
+    for name in _SCOPED_LATEST_NAMES:
+        try:
+            client.delete_object(Bucket=bucket, Key=_s3_object_key(f"{scope_prefix}{name}"))
+        except Exception:
+            logger.error("scoped_upload_state_delete_failed backend=s3")
+
+
+def reset_upload_state() -> None:
+    state = runtime_state()
+    scope = current_dataset_scope()
+    scope_prefix = f"scopes/{scope.storage_id}/"
+    _clear_latest_cache_for_scope(state, scope)
+    _delete_local_latest_state(state, scope)
+    _delete_database_latest_state(scope_prefix)
+    _delete_s3_latest_state(scope_prefix)
     state.reset_blocked_scopes.add(scope.storage_id)
     state.reset_block_persisted = False
     _invalidate_router_latest_cache()

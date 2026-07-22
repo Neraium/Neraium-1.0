@@ -1133,29 +1133,38 @@ def read_upload_cache_stats() -> dict[str, int]:
 
 # --- Compatibility layer for existing Neraium imports ---
 
+def _purge_local_upload_job_records() -> None:
+    UPLOAD_RUNTIME_STATE.jobs.clear()
+    JOB_RUNTIME_DIRS.clear()
+    for pattern in ("upload_status_*.json", "upload_result_*.json"):
+        for path in RUNTIME_DIR.glob(pattern):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+    for directory in (JOB_DIR, LEGACY_JOB_DIR):
+        for path in directory.glob("*.json"):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _purge_upload_runtime_tables() -> None:
+    try:
+        from app.services.runtime_db import clear_upload_runtime_tables
+
+        clear_upload_runtime_tables()
+    except Exception:
+        logger.exception("reset_latest_upload_state_runtime_table_clear_failed")
+
+
 def reset_latest_upload_state(*, purge_job_records: bool = False) -> None:
     reset_upload_state()
-    if purge_job_records:
-        UPLOAD_RUNTIME_STATE.jobs.clear()
-        JOB_RUNTIME_DIRS.clear()
-        for pattern in ("upload_status_*.json", "upload_result_*.json"):
-            for path in RUNTIME_DIR.glob(pattern):
-                try:
-                    path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-        for directory in (JOB_DIR, LEGACY_JOB_DIR):
-            for path in directory.glob("*.json"):
-                try:
-                    path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-        try:
-            from app.services.runtime_db import clear_upload_runtime_tables
-
-            clear_upload_runtime_tables()
-        except Exception:
-            logger.exception("reset_latest_upload_state_runtime_table_clear_failed")
+    if not purge_job_records:
+        return
+    _purge_local_upload_job_records()
+    _purge_upload_runtime_tables()
 
 
 def summarize_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -1204,70 +1213,102 @@ def parse_positive_int_env(name: str, default: int) -> int:
         return default
 
 
-def write_job(*args) -> None:
+def _normalize_job_write_args(args: tuple[Any, ...]) -> tuple[str, dict[str, Any]]:
     if len(args) == 1 and isinstance(args[0], dict):
         payload = dict(args[0])
         job_id = str(payload.get("job_id") or uuid.uuid4().hex)
-        payload["job_id"] = job_id
     else:
         job_id = str(args[0])
         payload = dict(args[1])
-        payload["job_id"] = job_id
+    payload["job_id"] = job_id
+    return job_id, payload
+
+
+def _scope_job_payload(job_id: str, payload: dict[str, Any]) -> tuple[dict[str, Any], Any]:
     existing = repository_read_upload_status(job_id) or {}
     scope = dataset_scope_from_payload(payload) or dataset_scope_from_payload(existing) or current_dataset_scope()
     clear_reset_block_persisted(scope)
     payload["run_id"] = job_id
     payload["upload_id"] = job_id
     payload.setdefault("upload_session_id", job_id)
+    lifecycle_status = str(payload.get("processing_state") or payload.get("status") or "active").lower()
     payload["session_scope"] = build_session_scope(
         job_id,
         filename=payload.get("filename"),
-        status=str(payload.get("processing_state") or payload.get("status") or "active").lower(),
+        status=lifecycle_status,
         dataset_scope=scope,
     )
-    payload = attach_dataset_scope(payload, scope=scope, dataset_id=job_id)
+    return attach_dataset_scope(payload, scope=scope, dataset_id=job_id), scope
+
+
+def _cache_job_payload(job_id: str, payload: dict[str, Any]) -> None:
     UPLOAD_RUNTIME_STATE.cache_job(job_id, payload)
     JOB_RUNTIME_DIRS[job_id] = RUNTIME_DIR
     while len(JOB_RUNTIME_DIRS) > UPLOAD_RUNTIME_STATE.max_cached_jobs:
         JOB_RUNTIME_DIRS.pop(next(iter(JOB_RUNTIME_DIRS)))
-    status_text = str(payload.get("status") or "").upper()
-    processing_state = str(payload.get("processing_state") or "").lower()
-    if (
-        status_text in {"PENDING", "QUEUED", "PROCESSING", "RUNNING_SII", "COMPLETE", "FAILED"}
-        or processing_state in VISIBLE_UPLOAD_STATES
-    ):
-        latest_summary = dict(payload)
-        latest_summary.setdefault("session_scope", build_session_scope(job_id, filename=latest_summary.get("filename"), status=processing_state or status_text.lower() or "active", dataset_scope=scope))
-        latest_summary.setdefault("status_url", f"/api/data/upload-status/{job_id}")
-        latest_summary.setdefault("percent", latest_summary.get("progress", 0))
-        latest_summary.setdefault("progress", latest_summary.get("percent", 0))
-        latest_summary.setdefault("result_available", status_text == "COMPLETE")
-        latest_summary.setdefault("sii_completed", status_text == "COMPLETE")
-        latest_summary.setdefault("replay_ready", False)
-        latest_summary.setdefault("replay_frame_count", 0)
-        latest_summary.setdefault("latest_replay_frames", latest_summary.get("replay_frame_count", 0))
-        latest_summary.setdefault("propagation_stage", processing_state or "queued")
-        latest_summary.setdefault("propagation_progress", latest_summary.get("progress", 0))
-        latest_summary.setdefault("propagation_label", latest_summary.get("message") or "Queued.")
-        latest_summary.update(
-            canonical_stage_payload(
-                legacy_stage=latest_summary.get("propagation_stage"),
-                status=latest_summary.get("status"),
-                progress=latest_summary.get("propagation_progress"),
-                label=latest_summary.get("propagation_label"),
-            )
-        )
 
-        repository_write_upload_status_progress(job_id, payload, latest_summary=latest_summary, keep_result=False)
-        cache_latest_upload_payload("summary", latest_summary)
-    else:
-        write_upload_status(job_id, payload)
+
+def _job_updates_latest(status_text: str, processing_state: str) -> bool:
+    visible_statuses = {"PENDING", "QUEUED", "PROCESSING", "RUNNING_SII", "COMPLETE", "FAILED"}
+    return status_text in visible_statuses or processing_state in VISIBLE_UPLOAD_STATES
+
+
+def _latest_job_summary(job_id: str, payload: dict[str, Any], scope: Any, status_text: str, processing_state: str) -> dict[str, Any]:
+    latest_summary = dict(payload)
+    lifecycle_status = processing_state or status_text.lower() or "active"
+    latest_summary.setdefault(
+        "session_scope",
+        build_session_scope(
+            job_id,
+            filename=latest_summary.get("filename"),
+            status=lifecycle_status,
+            dataset_scope=scope,
+        ),
+    )
+    latest_summary.setdefault("status_url", f"/api/data/upload-status/{job_id}")
+    latest_summary.setdefault("percent", latest_summary.get("progress", 0))
+    latest_summary.setdefault("progress", latest_summary.get("percent", 0))
+    latest_summary.setdefault("result_available", status_text == "COMPLETE")
+    latest_summary.setdefault("sii_completed", status_text == "COMPLETE")
+    latest_summary.setdefault("replay_ready", False)
+    latest_summary.setdefault("replay_frame_count", 0)
+    latest_summary.setdefault("latest_replay_frames", latest_summary.get("replay_frame_count", 0))
+    latest_summary.setdefault("propagation_stage", processing_state or "queued")
+    latest_summary.setdefault("propagation_progress", latest_summary.get("progress", 0))
+    latest_summary.setdefault("propagation_label", latest_summary.get("message") or "Queued.")
+    latest_summary.update(
+        canonical_stage_payload(
+            legacy_stage=latest_summary.get("propagation_stage"),
+            status=latest_summary.get("status"),
+            progress=latest_summary.get("propagation_progress"),
+            label=latest_summary.get("propagation_label"),
+        )
+    )
+    return latest_summary
+
+
+def _persist_job_record(job_id: str, payload: dict[str, Any]) -> None:
     try:
         upsert_upload_job(payload)
     except Exception:
         pass
     JOB_DIR.mkdir(parents=True, exist_ok=True)
     (JOB_DIR / f"{job_id}.json").write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+
+
+def write_job(*args) -> None:
+    job_id, payload = _normalize_job_write_args(args)
+    payload, scope = _scope_job_payload(job_id, payload)
+    _cache_job_payload(job_id, payload)
+    status_text = str(payload.get("status") or "").upper()
+    processing_state = str(payload.get("processing_state") or "").lower()
+    if _job_updates_latest(status_text, processing_state):
+        latest_summary = _latest_job_summary(job_id, payload, scope, status_text, processing_state)
+        repository_write_upload_status_progress(job_id, payload, latest_summary=latest_summary, keep_result=False)
+        cache_latest_upload_payload("summary", latest_summary)
+    else:
+        write_upload_status(job_id, payload)
+    _persist_job_record(job_id, payload)
 
 
 def read_job(job_id: str) -> dict[str, Any] | None:

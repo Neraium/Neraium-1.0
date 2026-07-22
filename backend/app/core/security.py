@@ -1,7 +1,8 @@
+import asyncio
 import os
 import uuid
 
-from fastapi import HTTPException, Request, Response
+from fastapi import HTTPException, Request
 
 from app.services.auth_store import get_user_by_session, normalize_role, session_cookie_name
 from app.services.dataset_scope import WORKSPACE_HEADER, dataset_scope_from_auth_context, set_current_dataset_scope
@@ -67,7 +68,8 @@ def _set_auth_context(request: Request, *, subject: str, role: str, source: str,
     set_current_dataset_scope(dataset_scope)
 
 
-async def require_api_access(request: Request, response: Response) -> None:
+async def require_api_access(request: Request) -> None:
+    await asyncio.sleep(0)
     if _is_public_readonly_request(request):
         _set_auth_context(
             request,
@@ -141,7 +143,7 @@ async def require_api_access(request: Request, response: Response) -> None:
 
 async def _require_minimum_role(request: Request, minimum_role: str) -> None:
     if not hasattr(request.state, "auth_context"):
-        await require_api_access(request, Response())
+        await require_api_access(request)
     if not _strict_auth_mode(request):
         return
     auth_context = getattr(request.state, "auth_context", {})

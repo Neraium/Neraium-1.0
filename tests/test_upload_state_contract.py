@@ -503,5 +503,5 @@ def test_write_shared_state_logs_runtime_db_failures(monkeypatch, caplog) -> Non
     with caplog.at_level("ERROR"):
         upload_state_repository.write_shared_state("latest_upload_result", {"job_id": "log-runtime-db"})
 
-    assert "shared_state_write_failed backend=runtime_db key=scopes/" in caplog.text
-    assert "/latest_upload_result" in caplog.text
+    assert "shared_state_write_failed backend=runtime_db" in caplog.text
+    assert "scopes/" not in caplog.text
