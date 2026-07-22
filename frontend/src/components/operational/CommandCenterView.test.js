@@ -50,6 +50,7 @@ afterEach(() => {
 
 describe("CommandCenterView hydration regressions", () => {
   it("renders a compact operational no-data state", () => {
+    const onImportDataset = vi.fn();
     const onConnectLiveData = vi.fn();
     const { container } = render(h(CommandCenterView, {
       model: {
@@ -62,10 +63,12 @@ describe("CommandCenterView hydration regressions", () => {
       helpers,
       selectedInsight: null,
       onOpenInvestigation: vi.fn(),
+      onImportDataset,
       onConnectLiveData,
     }));
 
     expect(screen.getByText("Awaiting data")).toBeTruthy();
+    expect(screen.queryByText("Watching")).toBeNull();
     expect(screen.getByText("Not established")).toBeTruthy();
     expect(screen.getByText("No data available")).toBeTruthy();
     expect(screen.getByText("No active status available")).toBeTruthy();
@@ -84,9 +87,13 @@ describe("CommandCenterView hydration regressions", () => {
     expect(screen.queryByText(/Import a telemetry dataset, then run an analysis/i)).toBeNull();
     expect(screen.queryByText(/Evidence quality is separate from finding confidence/i)).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Connect telemetry" }));
     fireEvent.click(screen.getByRole("button", { name: "Import dataset" }));
-    expect(onConnectLiveData).toHaveBeenCalledTimes(2);
+    expect(onImportDataset).toHaveBeenCalledTimes(1);
+    expect(onConnectLiveData).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect telemetry" }));
+    expect(onConnectLiveData).toHaveBeenCalledTimes(1);
+    expect(onImportDataset).toHaveBeenCalledTimes(1);
   });
 
   it.each([

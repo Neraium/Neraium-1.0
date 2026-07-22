@@ -29,7 +29,7 @@ const SECTION_HEADERS = {
   systems: { eyebrow: "Systems", title: "Discovered Systems", subtitle: "Systems identified from analyzed telemetry and their active insights." },
   insights: { eyebrow: "Engineering review", title: "Engineering Findings", subtitle: "Prioritized behavioral changes with evidence for engineer review." },
   fingerprint: { eyebrow: "Reference", title: "Behavior Baseline", subtitle: "The learned reference for how system relationships normally move together." },
-  "data-sources": { eyebrow: "Telemetry", title: "Datasets & Connectors", subtitle: "Import a telemetry dataset or review the health of a configured read-only connector." },
+  "data-sources": { eyebrow: "Telemetry", title: "Datasets & Connectors", subtitle: "Import historical telemetry to establish a baseline, or manage a read-only connector." },
   advanced: { eyebrow: "Analysis", title: "Analysis Details", subtitle: "Review analysis history, source information, evidence metadata, and support diagnostics." },
 };
 
@@ -278,6 +278,7 @@ export default function OperationalWorkflowWorkspace({
   const [selectedInsightId, setSelectedInsightId] = useState(() => readInvestigationRoute()?.id ?? readStoredSelectedInsightId());
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const overviewUploadInputRef = useRef(null);
+  const datasetImportCardRef = useRef(null);
   const mainContentRef = useRef(null);
   const sectionFocusReadyRef = useRef(false);
   const resultsNavigationHandledRef = useRef(resultsNavigationKey);
@@ -354,6 +355,17 @@ export default function OperationalWorkflowWorkspace({
       return undefined;
     }
     const frame = window.requestAnimationFrame?.(() => mainContentRef.current?.focus({ preventScroll: true }));
+    return () => {
+      if (frame && window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
+    };
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (activeSection !== "data-sources" || window.location.hash !== "#import-dataset") return undefined;
+    const frame = window.requestAnimationFrame?.(() => {
+      datasetImportCardRef.current?.focus({ preventScroll: true });
+      datasetImportCardRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    });
     return () => {
       if (frame && window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
     };
@@ -451,7 +463,7 @@ export default function OperationalWorkflowWorkspace({
   const visibleSection = activeSection;
   const shellClassName = "operational-workflow";
 
-  function navigate(sectionId, { replace = false } = {}) {
+  function navigate(sectionId, { replace = false, hash = "" } = {}) {
     if (sectionId === "insights" && !model.insights.some((item) => item.id === selectedInsightId)) {
       setSelectedInsightId(model.insights[0]?.id ?? null);
     }
@@ -460,7 +472,8 @@ export default function OperationalWorkflowWorkspace({
       const url = new URL(window.location.href);
       if (sectionId === "command-center") url.searchParams.delete("section");
       else url.searchParams.set("section", sectionId);
-      window.history[replace ? "replaceState" : "pushState"]({}, "", `${url.pathname}${url.search}`);
+      url.hash = hash;
+      window.history[replace ? "replaceState" : "pushState"]({}, "", `${url.pathname}${url.search}${url.hash}`);
     }
   }
 
@@ -568,6 +581,10 @@ export default function OperationalWorkflowWorkspace({
     navigate("fingerprint");
   }
 
+  function importDataset() {
+    navigate("data-sources", { hash: "import-dataset" });
+  }
+
   function connectLiveData() {
     navigate("data-sources");
   }
@@ -588,7 +605,7 @@ export default function OperationalWorkflowWorkspace({
     returnToCommandCenter,
   });
   const showRouteWorkspaceContext = visibleSection !== "data-sources";
-  const showRouteStrip = visibleSection !== "command-center";
+  const showRouteStrip = !["command-center", "data-sources"].includes(visibleSection);
   const investigationInsight = investigationRoute
     ? model.insights.find((item) => item.id === investigationRoute.id) ?? null
     : null;
@@ -721,6 +738,7 @@ export default function OperationalWorkflowWorkspace({
               onOpenInsight={openInsight}
               selectedInsight={selectedInsight}
               onOpenInvestigation={openInvestigation}
+              onImportDataset={importDataset}
               onConnectLiveData={connectLiveData}
               onResumePreviousSession={onResumePreviousSession}
               onViewSystems={viewSystems}
@@ -749,7 +767,7 @@ export default function OperationalWorkflowWorkspace({
 
         {visibleSection === "data-sources" ? (
           <WorkspaceSectionBoundary name="DataSourcesView" resetKey={sectionBoundaryResetKey} errorContext={telemetryBoundaryMeta} onRetry={retryLatestTelemetry}>
-            <DataSourcesView model={model} helpers={viewHelpers} onAnalyzeHistoricalData={openOverviewFilePicker} onSelectCsv={openOverviewFilePicker} />
+            <DataSourcesView model={model} helpers={viewHelpers} onAnalyzeHistoricalData={openOverviewFilePicker} importCardRef={datasetImportCardRef} />
           </WorkspaceSectionBoundary>
         ) : null}
 
@@ -854,8 +872,9 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const canonicalRelationships = Array.isArray(analysisExplanation?.relationships) ? analysisExplanation.relationships : [];
   const relationshipRows = canonicalRelationships.length ? canonicalRelationships : (Array.isArray(liveOps?.relationshipRows) ? liveOps.relationshipRows : []);
   const quality = collectQuality(result, snapshot);
-  const telemetryAvailable = hasTelemetry(result, snapshot, liveOps);
-  const telemetryConnected = isTelemetryConnected(liveOps);
+  const datasetImported = hasImportedDataset(result, snapshot, liveOps);
+  const telemetryConnected = isTelemetryConnected(liveOps, result, snapshot);
+  const telemetryAvailable = datasetImported || telemetryConnected;
   const analysisRunning = isAnalysisRunning({ gateProcessing, result, snapshot, currentSession, liveOps });
   const completedSiiAnalysis = telemetryAvailable && hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps });
   const uiState = deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysisComplete: completedSiiAnalysis, telemetryConnected });
@@ -886,6 +905,13 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const siteLabel = facilityName || PRODUCT_DESCRIPTOR;
   const headerTitle = facilityName || (analysisComplete ? ANALYSIS_COMPLETE_STATUS.label : "Command Center");
   const sourceLabel = deriveSourceLabel({ uiState, result, snapshot, liveOps });
+  const connectorLabel = telemetryConnected
+    ? firstMeaningfulText(
+        liveOps?.telemetrySession?.source,
+        isConnectorTelemetrySource(result, snapshot) ? sourceLabel : null,
+        "Live telemetry connector"
+      )
+    : null;
   const contextLabel = "Site: " + siteLabel + " | Data source: " + sourceLabel;
   const sourceRowCount = deriveSourceRowCount({ result, snapshot });
   const overviewState = deriveOverviewState(uiState.key);
@@ -936,7 +962,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
   const orb = deriveOrbState({ uiState, analysisComplete, fingerprintDrift, telemetryConnected, insights });
   const fingerprintRows = buildFingerprintRows({ fingerprintDrift, analysisComplete, baselineAvailable, behaviorState, relationshipRows });
   const relationshipChangeRows = buildRelationshipChangeRows(relationshipRows);
-  const dataSourceRows = buildDataSourceRows({ sourceLabel, telemetryStatus, lastAnalysis, sourceRowCount, telemetryConnected });
+  const dataSourceRows = buildDataSourceRows({ lastAnalysis, sourceRowCount, telemetryConnected, datasetImported });
   const commandCenterMessage = buildCommandCenterMessage({ uiState, analysisComplete, insights, behaviorState });
   const emptyInsightMessage = analysisComplete ? "Current relationships remain within the learned behavior baseline." : "Insights are generated automatically once a learned behavior baseline has been established.";
 
@@ -946,6 +972,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     siteLabel,
     domainLabel,
     sourceLabel,
+    connectorLabel,
     contextLabel,
     headerEyebrow: "Status",
     headerTitle,
@@ -986,6 +1013,7 @@ function buildOperationalModel({ liveOps, canonicalFinding, currentSession, effe
     analysisComplete,
     baselineAvailable,
     telemetryConnected,
+    datasetImported,
     identifiedSystemCount,
     fingerprintDrift,
     fingerprintStatusLabel: fingerprintDrift.label === "Not analyzed" ? EMPTY_TELEMETRY_COPY.label : fingerprintDrift.label,
@@ -1112,14 +1140,23 @@ function buildRelationshipChangeRows(relationshipRows) {
     .slice(0, 12);
 }
 
-function buildDataSourceRows({ sourceLabel, lastAnalysis, sourceRowCount, telemetryConnected }) {
-  const historicalImported = !["None", "Not connected"].includes(sourceLabel);
-  const lastImport = historicalImported && !["No analysis yet", "Not analyzed yet", "Analysis in progress"].includes(lastAnalysis)
+function buildDataSourceRows({ lastAnalysis, sourceRowCount, telemetryConnected, datasetImported }) {
+  if (!datasetImported) {
+    return [
+      ["Dataset", "Not imported"],
+      ["Imported rows", "0"],
+      ["Last import", "None"],
+      ["Connector", telemetryConnected ? "Configured" : "Not configured"],
+      ...(telemetryConnected ? [["Last connector sync", lastAnalysis]] : []),
+    ];
+  }
+
+  const lastImport = !["No analysis yet", "Not analyzed yet", "Analysis in progress"].includes(lastAnalysis)
     ? lastAnalysis
     : "None";
   return [
-    ["Dataset import", historicalImported ? "Imported" : "Not imported"],
-    ["Imported rows", historicalImported && sourceRowCount ? String(sourceRowCount) : "0"],
+    ["Dataset import", "Imported"],
+    ["Imported rows", sourceRowCount ? String(sourceRowCount) : "0"],
     ["Last dataset import", lastImport],
     ["Connector health", telemetryConnected ? "Healthy" : "Not configured"],
     ["Last connector sync", telemetryConnected ? lastAnalysis : "No connector sync yet"],
@@ -1208,6 +1245,14 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
 
 function deriveSourceLabel({ uiState, result, snapshot, liveOps }) {
   if (uiState.key === "noTelemetry") return "Not connected";
+  if (isConnectorTelemetrySource(result, snapshot)) {
+    return firstMeaningfulText(
+      liveOps?.telemetrySession?.source,
+      result?.ingestion_metadata?.source_name,
+      snapshot?.connection_name,
+      "Read-only telemetry connector"
+    );
+  }
   return firstMeaningfulText(
     result?.analysis_result?.source_file,
     result?.result_source,
@@ -3158,7 +3203,7 @@ function DetailGrid({ rows, technical = false }) {
 function PanelHeader({ eyebrow, title, subtitle }) {
   return (
     <div className="operational-panel__header">
-      <span className="section-token">{eyebrow}</span>
+      {eyebrow ? <span className="section-token">{eyebrow}</span> : null}
       <h2>{title}</h2>
       {subtitle ? <p>{subtitle}</p> : null}
     </div>
@@ -3988,15 +4033,40 @@ function isPlaceholderValue(value) {
   return !text || ["empty", "none", "null", "undefined", "no_data", "no data", "n/a", "na"].includes(text);
 }
 
-function isTelemetryConnected(liveOps) {
+function isTelemetryConnected(liveOps, result = null, snapshot = null) {
   const text = `${liveOps?.connectionTone ?? ""} ${liveOps?.connectionStatusLine ?? ""} ${liveOps?.connectionSummary ?? ""} ${liveOps?.telemetrySession?.sessionMode ?? ""}`.toLowerCase();
   return Boolean(
     liveOps?.telemetryConnected === true
     || liveOps?.connectionStatus === "connected"
     || liveOps?.connectionStatus === "live"
     || liveOps?.telemetrySession?.connected === true
+    || isConnectorTelemetrySource(result, snapshot)
     || text.includes("connected")
     || text.includes("live telemetry")
+  );
+}
+
+function isConnectorTelemetrySource(result, snapshot) {
+  const markers = [
+    result?.result_source,
+    snapshot?.result_source,
+    result?.source,
+    snapshot?.source,
+    result?.sii_intelligence?.source,
+    result?.ingestion_metadata?.source_type,
+    snapshot?.baseline_source,
+  ].map((value) => String(value ?? "").trim().toLowerCase());
+
+  return markers.some((value) =>
+    value === "rest_poll"
+    || value === "live_rest"
+    || value === "external_rest_api"
+    || value === "opcua"
+    || value === "opc_ua"
+    || value === "mqtt"
+    || value === "bacnet"
+    || value === "enterprise_historian"
+    || value === "database_connector"
   );
 }
 
@@ -4071,8 +4141,8 @@ function hasCompletedSiiAnalysis({ result, snapshot, currentSession, liveOps }) 
   return hasIntelligenceData && completed;
 }
 
-function hasTelemetry(result, snapshot, liveOps) {
-  if (isTelemetryConnected(liveOps)) return true;
+function hasImportedDataset(result, snapshot, liveOps) {
+  if (isConnectorTelemetrySource(result, snapshot)) return false;
 
   const snapshotStatus = String(snapshot?.status ?? "").trim().toLowerCase();
   const resultStatus = String(result?.status ?? result?.processing_state ?? "").trim().toLowerCase();
@@ -4096,9 +4166,7 @@ function hasTelemetry(result, snapshot, liveOps) {
     result?.filename,
     snapshot?.filename,
     currentUpload?.filename,
-    currentUpload?.source,
-    liveOps?.telemetrySession?.source,
-    liveOps?.telemetrySession?.sessionMode
+    currentUpload?.source
   ));
   const hasRowsIfReported = [
     result?.row_count,

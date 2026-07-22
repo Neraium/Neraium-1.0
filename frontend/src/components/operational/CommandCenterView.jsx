@@ -105,7 +105,7 @@ function evidenceQuality(model) {
   return { label: "Unavailable", reason: "Evidence quality has not been reported for this analysis." };
 }
 
-function EmptyOperatingStateSummary({ model, onConnectLiveData }) {
+function EmptyOperatingStateSummary({ onImportDataset, onConnectLiveData }) {
   return (
     <section className="command-section operating-state-card operating-state-card--empty command-section--neutral" aria-label="Operational Status">
       <h2 id="operating-state-heading" className="sr-only">Current state</h2>
@@ -118,15 +118,15 @@ function EmptyOperatingStateSummary({ model, onConnectLiveData }) {
         <div><dt>Evidence quality</dt><dd>No data available</dd></div>
       </dl>
       <div className="operating-state-card__actions">
-        <button type="button" className="command-button" onClick={onConnectLiveData}>Import dataset</button>
+        <button type="button" className="command-button" onClick={onImportDataset}>Import dataset</button>
         <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onConnectLiveData}>Connect telemetry</button>
       </div>
     </section>
   );
 }
 
-function OperatingStateSummary({ model, status, topInsight, helpers, systems, onConnectLiveData, onOpenInvestigation, onViewEvidence, emptyState }) {
-  if (emptyState) return <EmptyOperatingStateSummary model={model} onConnectLiveData={onConnectLiveData} />;
+function OperatingStateSummary({ model, status, topInsight, helpers, systems, onImportDataset, onConnectLiveData, onOpenInvestigation, onViewEvidence, emptyState }) {
+  if (emptyState) return <EmptyOperatingStateSummary onImportDataset={onImportDataset} onConnectLiveData={onConnectLiveData} />;
 
   const affected = topInsight?.system || systems.find((system) => Number(system.activeInsights) > 0)?.name;
   const summary = topInsight && affected
@@ -286,7 +286,7 @@ function historyItemLabel(item) {
 
 function AdvancedDashboardSection({ model }) { const history = model.analysisHistory?.length ? model.analysisHistory : model.historyItems; return <section className="command-section command-section--advanced" aria-labelledby="dashboard-advanced-heading"><div className="command-section__header"><h2 id="dashboard-advanced-heading">Analysis Details</h2><p>Supporting records and diagnostics.</p></div><div className="dashboard-advanced-stack"><details><summary>Analysis History</summary>{history?.length ? <ul className="dashboard-advanced-list">{history.slice(0, 6).map((item, index) => <li key={historyDisplayText(item?.id) || index}>{historyItemLabel(item)}</li>)}</ul> : <p>No saved analysis history is available.</p>}</details><details><summary>Dataset and Connector Details</summary><DetailRows rows={model.dataSourceRows} /></details><details><summary>Support Diagnostics</summary><DetailRows rows={[...model.analysisMetadataRows, ...model.behaviorWindowRows]} technical /></details><AnalysisRecordDetails summary="Analysis Record" payload={model.rawAnalysisPayload} fileName={model.rawAnalysisFilename} /></div></section>; }
 
-export default function CommandCenterView({ model, helpers, selectedInsight, onOpenInvestigation, onConnectLiveData }) {
+export default function CommandCenterView({ model, helpers, selectedInsight, onOpenInvestigation, onImportDataset, onConnectLiveData }) {
   const queue = useMemo(() => rankedInsights(model.insights), [model.insights]);
   const top = queue[0] ?? null;
   const active = selectedInsight && queue.some((item) => item.id === selectedInsight.id) ? selectedInsight : top;
@@ -298,7 +298,7 @@ export default function CommandCenterView({ model, helpers, selectedInsight, onO
   const viewEvidence = () => onOpenInvestigation?.(top?.id, { focusTarget: "insight-evidence" });
 
   return <div className={emptyState ? "operational-command-center operational-command-center--empty" : "operational-command-center"} data-testid="operational-command-center">
-    <OperatingStateSummary model={model} status={status} topInsight={top} helpers={helpers} systems={systems} onConnectLiveData={onConnectLiveData} onOpenInvestigation={openTop} onViewEvidence={viewEvidence} emptyState={emptyState} />
+    <OperatingStateSummary model={model} status={status} topInsight={top} helpers={helpers} systems={systems} onImportDataset={onImportDataset} onConnectLiveData={onConnectLiveData} onOpenInvestigation={openTop} onViewEvidence={viewEvidence} emptyState={emptyState} />
     <SubsystemBehavior systems={systems} emptyState={emptyState} />
     <PriorityFinding insight={top} model={model} helpers={helpers} onOpen={openTop} />
     <EngineeringFindings insights={remaining} selectedInsight={active?.id === top?.id ? null : active} onSelectInsight={(insightId) => onOpenInvestigation?.(insightId)} helpers={helpers} emptyState={emptyState} />
