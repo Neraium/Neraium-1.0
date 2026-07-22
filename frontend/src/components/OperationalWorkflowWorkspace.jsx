@@ -4,6 +4,7 @@ import PageContainer from "./layout/PageContainer";
 import SkipToMainContent from "./SkipToMainContent";
 import AdvancedDetailsView from "./operational/AdvancedDetailsView";
 import CommandCenterView from "./operational/CommandCenterView";
+import InvestigationDrawer from "./operational/InvestigationDrawer";
 import DataSourcesView from "./operational/DataSourcesView";
 import FingerprintView from "./operational/FingerprintView";
 import InsightsView from "./operational/InsightsView";
@@ -34,6 +35,8 @@ const SECTION_HEADERS = {
 
 const ACTIVE_SECTION_STORAGE_KEY = "neraium.operational.active_section";
 const SELECTED_INSIGHT_STORAGE_KEY = "neraium.operational.selected_insight";
+const INVESTIGATION_QUERY_KEY = "investigation";
+const INVESTIGATION_PATH_PREFIX = "/workspace/investigations/";
 
 const UNASSIGNED_SYSTEM_NAME = "Unassigned System";
 
@@ -136,6 +139,60 @@ const WORKSPACE_RECOVERY_COPY = {
   secondaryAction: "Use last available state",
 };
 
+function readInvestigationRoute() {
+  if (typeof window === "undefined") return null;
+
+  const pathname = window.location.pathname.replace(/\/+$/, "");
+  if (pathname.startsWith(INVESTIGATION_PATH_PREFIX)) {
+    const encodedId = pathname.slice(INVESTIGATION_PATH_PREFIX.length).split("/")[0];
+    if (!encodedId) return null;
+    try {
+      return {
+        id: decodeURIComponent(encodedId),
+        mode: "full",
+        focusTarget: window.history.state?.neraiumInvestigationFocusTarget ?? null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  const insightId = new URLSearchParams(window.location.search).get(INVESTIGATION_QUERY_KEY);
+  return insightId ? {
+    id: insightId,
+    mode: "drawer",
+    focusTarget: window.history.state?.neraiumInvestigationFocusTarget ?? null,
+  } : null;
+}
+
+function relativeLocation(url) {
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function commandCenterLocation() {
+  const url = new URL(window.location.href);
+  url.pathname = "/workspace";
+  url.searchParams.delete("section");
+  url.searchParams.delete(INVESTIGATION_QUERY_KEY);
+  return relativeLocation(url);
+}
+
+function investigationDrawerLocation(insightId) {
+  const url = new URL(window.location.href);
+  url.pathname = "/workspace";
+  url.searchParams.delete("section");
+  url.searchParams.set(INVESTIGATION_QUERY_KEY, insightId);
+  return relativeLocation(url);
+}
+
+function investigationWorkspaceLocation(insightId) {
+  const url = new URL(window.location.href);
+  url.pathname = `${INVESTIGATION_PATH_PREFIX}${encodeURIComponent(insightId)}`;
+  url.searchParams.delete("section");
+  url.searchParams.delete(INVESTIGATION_QUERY_KEY);
+  return relativeLocation(url);
+}
+
 function logWorkspaceRenderFailure(error, context = {}) {
   console.error("[neraium] workspace render failure", {
     message: error?.message ?? "Workspace render failure",
@@ -216,13 +273,17 @@ export default function OperationalWorkflowWorkspace({
     console.info("[neraium] route mounted", { route: "system-body" });
   }, []);
 
-  const [activeSection, setActiveSection] = useState(() => readStoredOperationalSection());
-  const [selectedInsightId, setSelectedInsightId] = useState(() => readStoredSelectedInsightId());
+  const [investigationRoute, setInvestigationRoute] = useState(() => readInvestigationRoute());
+  const [activeSection, setActiveSection] = useState(() => readInvestigationRoute() ? "command-center" : readStoredOperationalSection());
+  const [selectedInsightId, setSelectedInsightId] = useState(() => readInvestigationRoute()?.id ?? readStoredSelectedInsightId());
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const overviewUploadInputRef = useRef(null);
   const mainContentRef = useRef(null);
   const sectionFocusReadyRef = useRef(false);
   const resultsNavigationHandledRef = useRef(resultsNavigationKey);
+  const dashboardContextRef = useRef(null);
+  const pendingDashboardRestoreRef = useRef(null);
+  const investigationTriggerRef = useRef(null);
 
   const deferredLiveOps = useDeferredValue(liveOps);
   const deferredCanonicalFinding = useDeferredValue(canonicalFinding);
@@ -299,10 +360,52 @@ export default function OperationalWorkflowWorkspace({
   }, [activeSection]);
 
   useEffect(() => {
-    const handlePopState = () => setActiveSection(readStoredOperationalSection());
+    const handlePopState = (event) => {
+      const nextRoute = readInvestigationRoute();
+      setInvestigationRoute(nextRoute);
+
+      if (nextRoute) {
+        setActiveSection("command-center");
+        setSelectedInsightId(nextRoute.id);
+        return;
+      }
+
+      const context = event.state?.neraiumDashboardContext ?? dashboardContextRef.current;
+      if (context) {
+        dashboardContextRef.current = context;
+        pendingDashboardRestoreRef.current = context;
+        setActiveSection(context.activeSection || "command-center");
+        setSelectedInsightId(context.selectedInsightId ?? null);
+      } else {
+        setActiveSection(readStoredOperationalSection());
+      }
+    };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (!investigationRoute?.id || !model.insights.some((item) => item.id === investigationRoute.id)) return;
+    setActiveSection("command-center");
+    setSelectedInsightId(investigationRoute.id);
+  }, [investigationRoute?.id, model.insights]);
+
+  useEffect(() => {
+    if (investigationRoute || !pendingDashboardRestoreRef.current) return undefined;
+    const context = pendingDashboardRestoreRef.current;
+    pendingDashboardRestoreRef.current = null;
+    let secondFrame;
+    const firstFrame = window.requestAnimationFrame?.(() => {
+      secondFrame = window.requestAnimationFrame?.(() => {
+        window.scrollTo?.(context.scrollX ?? 0, context.scrollY ?? 0);
+        investigationTriggerRef.current?.focus?.({ preventScroll: true });
+      });
+    });
+    return () => {
+      if (firstFrame && window.cancelAnimationFrame) window.cancelAnimationFrame(firstFrame);
+      if (secondFrame && window.cancelAnimationFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [investigationRoute]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -361,18 +464,77 @@ export default function OperationalWorkflowWorkspace({
     }
   }
 
-  function openInsight(insightId) {
+  function openInvestigation(insightId, { focusTarget = null } = {}) {
     const resolvedInsight = model.insights.find((item) => item.id === insightId) ?? model.insights[0] ?? null;
-    setSelectedInsightId(resolvedInsight?.id ?? null);
+    if (!resolvedInsight?.id) return;
+
+    const context = {
+      activeSection: "command-center",
+      selectedInsightId: resolvedInsight.id,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    };
+    dashboardContextRef.current = context;
+    investigationTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    setSelectedInsightId(resolvedInsight.id);
     setActiveSection("command-center");
+    setMobileNavOpen(false);
+
+    const nextRoute = { id: resolvedInsight.id, mode: "drawer", focusTarget };
+    const currentState = window.history.state && typeof window.history.state === "object" ? window.history.state : {};
+    window.history.replaceState({
+      ...currentState,
+      neraiumInvestigation: false,
+      neraiumDashboardContext: context,
+    }, "", commandCenterLocation());
+    window.history.pushState({
+      neraiumInvestigation: true,
+      neraiumInvestigationMode: "drawer",
+      neraiumInvestigationFocusTarget: focusTarget,
+      neraiumDashboardContext: context,
+    }, "", investigationDrawerLocation(resolvedInsight.id));
+    setInvestigationRoute(nextRoute);
   }
 
-  function focusSelectedInvestigation() {
-    const target = document.querySelector(".selected-investigation-panel");
-    if (!target) return;
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
-    target.querySelector("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")?.focus?.({ preventScroll: true });
+  function openInsight(insightId) {
+    openInvestigation(insightId);
+  }
+
+  function expandInvestigation() {
+    if (!investigationRoute?.id) return;
+    const nextRoute = { ...investigationRoute, mode: "full" };
+    const currentState = window.history.state && typeof window.history.state === "object" ? window.history.state : {};
+    window.history.replaceState({
+      ...currentState,
+      neraiumInvestigation: true,
+      neraiumInvestigationMode: "full",
+      neraiumDashboardContext: dashboardContextRef.current ?? currentState.neraiumDashboardContext ?? null,
+    }, "", investigationWorkspaceLocation(investigationRoute.id));
+    setInvestigationRoute(nextRoute);
+  }
+
+  function restoreDashboardWithoutHistory(context) {
+    if (context) {
+      dashboardContextRef.current = context;
+      pendingDashboardRestoreRef.current = context;
+      setActiveSection(context.activeSection || "command-center");
+      setSelectedInsightId(context.selectedInsightId ?? null);
+    }
+    window.history.replaceState({
+      neraiumInvestigation: false,
+      neraiumDashboardContext: context ?? null,
+    }, "", commandCenterLocation());
+    setInvestigationRoute(null);
+  }
+
+  function closeInvestigation() {
+    const currentState = window.history.state && typeof window.history.state === "object" ? window.history.state : {};
+    if (currentState.neraiumInvestigation) {
+      window.history.back();
+      return;
+    }
+    restoreDashboardWithoutHistory(currentState.neraiumDashboardContext ?? dashboardContextRef.current);
   }
 
   function openOverviewFilePicker() {
@@ -421,17 +583,23 @@ export default function OperationalWorkflowWorkspace({
   const routeContext = buildRouteContext(visibleSection, model, selectedInsight, {
     connectLiveData,
     openOverviewFilePicker,
-    focusSelectedInvestigation,
+    openFirstInvestigation: () => openInvestigation(model.insights[0]?.id),
     viewFingerprint,
     returnToCommandCenter,
   });
   const showRouteWorkspaceContext = visibleSection !== "data-sources";
   const showRouteStrip = visibleSection !== "command-center";
+  const investigationInsight = investigationRoute
+    ? model.insights.find((item) => item.id === investigationRoute.id) ?? null
+    : null;
+  const investigationTitle = investigationInsight
+    ? formatInsightTitle(investigationInsight)
+    : "Investigation";
 
   return (
     <>
       <SkipToMainContent />
-      <PageContainer className={shellClassName}>
+      <PageContainer className={shellClassName} aria-hidden={investigationRoute ? "true" : undefined}>
       <aside className="operational-sidebar" aria-label="Neraium navigation">
         <div className="operational-sidebar__brand">
           <span className="section-token">Operations platform</span>
@@ -549,12 +717,11 @@ export default function OperationalWorkflowWorkspace({
               helpers={viewHelpers}
               onOpenInsight={openInsight}
               selectedInsight={selectedInsight}
-              onSelectInsight={setSelectedInsightId}
+              onOpenInvestigation={openInvestigation}
               onConnectLiveData={connectLiveData}
               onResumePreviousSession={onResumePreviousSession}
               onViewSystems={viewSystems}
               onViewFingerprint={viewFingerprint}
-              onFocusInvestigation={focusSelectedInvestigation}
             />
           </WorkspaceSectionBoundary>
         ) : null}
@@ -590,6 +757,13 @@ export default function OperationalWorkflowWorkspace({
         ) : null}
       </main>
       </PageContainer>
+      <InvestigationDrawer
+        route={investigationRoute}
+        insight={investigationInsight}
+        title={investigationTitle}
+        onClose={closeInvestigation}
+        onExpand={expandInvestigation}
+      />
     </>
   );
 }
@@ -601,7 +775,7 @@ function buildRouteContext(sectionId, model, selectedInsight, actions) {
       reason: model.analysisComplete ? "Triage active findings and choose the first investigation." : "Start by importing telemetry so SII can establish a behavior baseline.",
       next: model.analysisComplete && selectedInsight ? "Open the highest-priority investigation" : "Import and analyze telemetry",
       actionLabel: model.analysisComplete && selectedInsight ? "Review first finding" : "Import dataset",
-      action: model.analysisComplete && selectedInsight ? actions.focusSelectedInvestigation : actions.connectLiveData,
+      action: model.analysisComplete && selectedInsight ? actions.openFirstInvestigation : actions.connectLiveData,
       primary: !model.analysisComplete,
     },
     systems: {
@@ -650,6 +824,7 @@ function buildRouteContext(sectionId, model, selectedInsight, actions) {
 
 function readStoredOperationalSection() {
   if (typeof window === "undefined") return "command-center";
+  if (readInvestigationRoute()) return "command-center";
   const linked = new URLSearchParams(window.location.search).get("section");
   if (NAV_ITEMS.some((item) => item.id === linked)) return linked;
   const stored = window.localStorage.getItem(ACTIVE_SECTION_STORAGE_KEY);

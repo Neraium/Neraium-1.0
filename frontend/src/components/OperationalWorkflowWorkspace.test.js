@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import OperationalWorkflowWorkspace from "./OperationalWorkflowWorkspace";
 
@@ -61,10 +61,6 @@ function clickNav(label) {
   expect(button).toBeTruthy();
   fireEvent.click(button);
   return button;
-}
-
-function hasActiveNavButton(labelPattern) {
-  return screen.getAllByRole("button", { name: labelPattern }).some((button) => button.getAttribute("aria-current") === "page");
 }
 
 function analysisWithRelationshipEvidence() {
@@ -366,18 +362,24 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.queryByText("Central Plant and Airside Systems")).toBeNull();
   });
 
-  it("opens the top Command Center insight inline in the selected investigation", () => {
+  it("opens a Command Center finding in an accessible investigation drawer", () => {
     renderWorkspace({
       effectiveLatestUploadResult: completeResult({ analysis_result: analysisWithoutInsightIds() }),
       effectiveLatestUploadSnapshot: completeSnapshot(),
       currentSession: { hasReliableOperatorEvidence: true },
     });
 
-    expect(screen.getByRole("button", { name: "Open finding" })).toBeTruthy();
-
+    const openButton = screen.getByRole("button", { name: "Open finding" });
     expect(screen.getAllByRole("heading", { name: "Engineering Findings" }).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
+    expect(screen.queryByLabelText("Selected investigation detail")).toBeNull();
+
+    fireEvent.click(openButton);
+
+    expect(screen.getByRole("dialog", { name: "Pump relationships changed" })).toBeTruthy();
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close investigation drawer" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Expand investigation to full workspace" })).toBeTruthy();
+    expect(screen.getAllByText("Affected subsystem").length).toBeGreaterThan(0);
     expect(screen.getByText("What happened")).toBeTruthy();
     expect(screen.getByText("Key evidence")).toBeTruthy();
     expect(screen.getAllByText(/degraded operating performance/).length).toBeGreaterThan(0);
@@ -386,12 +388,12 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("heading", { name: "Similar Verified Investigations" })).toBeTruthy();
     expect(screen.getByText("No verified similar investigations are available yet.")).toBeTruthy();
     expect(screen.queryByText("Confidence Breakdown")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Open Insight" })).toBeNull();
-    expect(hasActiveNavButton(/Command Center/)).toBe(true);
-    expect(hasActiveNavButton(/Engineering Findings\s+1\b/)).toBe(false);
+    expect(document.querySelector("[data-testid='operational-command-center']")).toBeTruthy();
+    expect(document.querySelector(".page-container")?.getAttribute("aria-hidden")).toBe("true");
+    expect(window.location.search).toContain("investigation=");
   });
 
-  it("keeps Systems card Open Insight wired to the command-center selected investigation", () => {
+  it("keeps Systems card Open Insight wired to the mounted Command Center drawer", () => {
     renderWorkspace({
       effectiveLatestUploadResult: completeResult({ analysis_result: analysisWithoutInsightIds() }),
       effectiveLatestUploadSnapshot: completeSnapshot(),
@@ -401,13 +403,68 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Systems");
     fireEvent.click(screen.getByRole("button", { name: "Open Insight" }));
 
-    expect(screen.getAllByRole("heading", { name: "Engineering Findings" }).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("heading", { name: "Selected Investigation" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Pump relationships changed" })).toBeTruthy();
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
     expect(screen.getByText("What happened")).toBeTruthy();
     expect(screen.getByText("Key evidence")).toBeTruthy();
-    expect(hasActiveNavButton(/Command Center/)).toBe(true);
-    expect(hasActiveNavButton(/Systems\s+1\b/)).toBe(false);
+    expect(document.querySelector("[data-testid='operational-command-center']")).toBeTruthy();
+    expect(document.querySelector(".operational-nav button[aria-current='page']")?.textContent).toContain("Command Center");
+  });
+
+  it("supports Escape, outside click, and Close while moving focus into the drawer", async () => {
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysis() }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open finding" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close investigation drawer" })));
+
+    const historyBack = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(historyBack).toHaveBeenCalledTimes(1);
+
+    fireEvent.mouseDown(screen.getByTestId("investigation-surface"));
+    expect(historyBack).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close investigation drawer" }));
+    expect(historyBack).toHaveBeenCalledTimes(3);
+    historyBack.mockRestore();
+  });
+
+  it("expands to a dedicated route and Browser Back restores dashboard scroll, selection, and focus", async () => {
+    const scrollYDescriptor = Object.getOwnPropertyDescriptor(window, "scrollY");
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 420 });
+
+    renderWorkspace({
+      effectiveLatestUploadResult: completeResult({ analysis_result: analysis() }),
+      effectiveLatestUploadSnapshot: completeSnapshot(),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    const trigger = screen.getByRole("button", { name: "Open finding" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("button", { name: "Expand investigation to full workspace" }));
+
+    expect(window.location.pathname).toBe("/workspace/investigations/pump-relationships");
+    expect(screen.getByTestId("investigation-surface").getAttribute("data-investigation-mode")).toBe("full");
+    expect(screen.getByRole("button", { name: "Close full investigation workspace" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Expand investigation to full workspace" })).toBeNull();
+    expect(document.querySelector("[data-testid='operational-command-center']")).toBeTruthy();
+
+    window.history.back();
+
+    await waitFor(() => expect(window.location.pathname).toBe("/workspace"));
+    await waitFor(() => expect(document.querySelector(".page-container")?.hasAttribute("aria-hidden")).toBe(false));
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 420));
+    expect(document.activeElement).toBe(trigger);
+    expect(window.localStorage.getItem("neraium.operational.selected_insight")).toBe("pump-relationships");
+
+    scrollTo.mockRestore();
+    if (scrollYDescriptor) Object.defineProperty(window, "scrollY", scrollYDescriptor);
   });
 
   it("six primary views have distinct responsibilities and layouts", () => {

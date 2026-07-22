@@ -1,7 +1,6 @@
 import { useMemo, useRef } from "react";
 
 import AnalysisRecordDetails from "./AnalysisRecordDetails";
-import OperatorInsightDetail from "./OperatorInsightDetail";
 
 function severityLabel(value) {
   const text = String(value ?? "").trim().toLowerCase();
@@ -251,33 +250,21 @@ function historyItemLabel(item) {
 
 function AdvancedDashboardSection({ model }) { const history = model.analysisHistory?.length ? model.analysisHistory : model.historyItems; return <section className="command-section command-section--advanced" aria-labelledby="dashboard-advanced-heading"><div className="command-section__header"><h2 id="dashboard-advanced-heading">Analysis Details</h2><p>Supporting records and diagnostics.</p></div><div className="dashboard-advanced-stack"><details><summary>Analysis History</summary>{history?.length ? <ul className="dashboard-advanced-list">{history.slice(0, 6).map((item, index) => <li key={historyDisplayText(item?.id) || index}>{historyItemLabel(item)}</li>)}</ul> : <p>No saved analysis history is available.</p>}</details><details><summary>Dataset and Connector Details</summary><DetailRows rows={model.dataSourceRows} /></details><details><summary>Support Diagnostics</summary><DetailRows rows={[...model.analysisMetadataRows, ...model.behaviorWindowRows]} technical /></details><AnalysisRecordDetails summary="Analysis Record" payload={model.rawAnalysisPayload} fileName={model.rawAnalysisFilename} /></div></section>; }
 
-export default function CommandCenterView({ model, helpers, selectedInsight, onSelectInsight, onConnectLiveData, onFocusInvestigation }) {
+export default function CommandCenterView({ model, helpers, selectedInsight, onOpenInvestigation, onConnectLiveData }) {
   const queue = useMemo(() => rankedInsights(model.insights), [model.insights]);
   const top = queue[0] ?? null;
   const active = selectedInsight && queue.some((item) => item.id === selectedInsight.id) ? selectedInsight : top;
   const status = useMemo(() => operationalStatus(model, queue), [model, queue]);
   const systems = normalizedSystemCards(model);
   const remaining = top ? queue.filter((item) => item.id !== top.id) : [];
-  const openTop = () => { onSelectInsight?.(top?.id); onFocusInvestigation?.(); };
-  const viewEvidence = () => {
-    onSelectInsight?.(top?.id);
-    const target = document.getElementById("insight-evidence");
-    if (target) {
-      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-      target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
-      target.focus({ preventScroll: true });
-    } else {
-      onFocusInvestigation?.();
-    }
-  };
+  const openTop = () => onOpenInvestigation?.(top?.id);
+  const viewEvidence = () => onOpenInvestigation?.(top?.id, { focusTarget: "insight-evidence" });
 
   return <div className="operational-command-center" data-testid="operational-command-center">
     <OperatingStateSummary model={model} status={status} topInsight={top} helpers={helpers} systems={systems} onConnectLiveData={onConnectLiveData} onOpenInvestigation={openTop} onViewEvidence={viewEvidence} />
     <SubsystemBehavior systems={systems} />
     <PriorityFinding insight={top} model={model} helpers={helpers} onOpen={openTop} />
-    {top ? <div className="selected-investigation-panel"><OperatorInsightDetail insight={top} inline focusMode /></div> : null}
-    <EngineeringFindings insights={remaining} selectedInsight={active?.id === top?.id ? null : active} onSelectInsight={onSelectInsight} helpers={helpers} />
-    {active && active.id !== top?.id ? <div className="selected-investigation-panel"><OperatorInsightDetail insight={active} inline focusMode /></div> : null}
+    <EngineeringFindings insights={remaining} selectedInsight={active?.id === top?.id ? null : active} onSelectInsight={(insightId) => onOpenInvestigation?.(insightId)} helpers={helpers} />
     <section className="command-section command-section--systems" aria-labelledby="system-overview-heading"><div className="command-section__header"><h2 id="system-overview-heading">Discovered Systems</h2><p>Detected in the operational data.</p></div>{systems.length ? <div className="system-overview-list" role="list">{systems.map((system) => <div className="system-overview-row" role="listitem" key={system.id}><strong>{system.name}</strong><span>{subsystemStatus(system)}</span><span>{Number(system.activeInsights) || 0} active finding{String(Number(system.activeInsights) || 0) === "1" ? "" : "s"}</span></div>)}</div> : <p className="operational-findings-empty">No systems are listed because no completed telemetry analysis is active.</p>}</section>
     <AdvancedDashboardSection model={model} />
   </div>;
