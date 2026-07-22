@@ -31,6 +31,7 @@ export function readStoredAllowPersistedLatest() {
 
 export default function useWorkspaceSessionController({
   activeWorkspace,
+  datasetScopeKey,
   setActiveWorkspace,
   apiFetch,
   accessCode,
@@ -53,19 +54,30 @@ export default function useWorkspaceSessionController({
   const [analysisHistory, setAnalysisHistory] = useState(() => readAnalysisHistory());
   const [restoredAnalysisOverride, setRestoredAnalysisOverride] = useState(null);
 
+  useEffect(() => {
+    setSessionIntent(readStoredSessionIntent());
+    setHistorianReplayState({ enabled: false, frame: null, meta: null });
+    setResetGuardActive(false);
+    setCompletedUploadOverride(null);
+    setPostUploadPendingSnapshot(null);
+    setPostUploadExpectedJobId(null);
+    setGateUploadCompleteSeen(false);
+    setRestoredAnalysisOverride(null);
+    setAnalysisHistory(readAnalysisHistory());
+  }, [datasetScopeKey]);
+
   const canonicalLatestUploadJobId = sessionStore?.jobId ?? null;
   const pendingUploadJobId = uploadStateView.resolveCurrentUploadJobId(postUploadPendingSnapshot);
-  const localLatestCompletedAnalysis = allowPersistedLatest ? (analysisHistory[0] ?? null) : null;
   const restoredAnalysisResult = restoredAnalysisOverride?.result ?? null;
   const restoredAnalysisSnapshot = restoredAnalysisOverride?.snapshot ?? null;
-  const localLatestResult = localLatestCompletedAnalysis?.result ?? null;
-  const localLatestSnapshot = localLatestCompletedAnalysis?.snapshot ?? null;
+  // Analysis history is navigation-only. The backend canonical record is the
+  // authority for the active dataset, so stale browser history cannot revive it.
   const guardedLatestUploadResult = resetGuardActive
     ? null
-    : (completedUploadOverride ?? restoredAnalysisResult ?? sessionStore?.latestUploadResult ?? localLatestResult ?? null);
+    : (completedUploadOverride ?? restoredAnalysisResult ?? sessionStore?.latestUploadResult ?? null);
   const guardedLatestUploadSnapshot = resetGuardActive
     ? uploadStateView.buildEmptyLatestUploadSnapshot()
-    : (postUploadPendingSnapshot ?? restoredAnalysisSnapshot ?? sessionStore?.latestUploadSnapshot ?? localLatestSnapshot ?? uploadStateView.buildEmptyLatestUploadSnapshot());
+    : (postUploadPendingSnapshot ?? restoredAnalysisSnapshot ?? sessionStore?.latestUploadSnapshot ?? uploadStateView.buildEmptyLatestUploadSnapshot());
 
   const observableTelemetrySession = useMemo(
     () => uploadStateView.deriveTelemetrySessionState({

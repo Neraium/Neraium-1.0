@@ -214,6 +214,36 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.queryByRole("heading", { name: /Choose Dataset/i })).toBeNull();
   });
 
+  it("keeps the empty Command Center baseline free of stale dataset metadata", () => {
+    renderWorkspace();
+
+    const commandCenter = screen.getByTestId("operational-command-center");
+    expect(commandCenter.textContent).toContain("Import dataset");
+    expect(commandCenter.textContent).not.toContain("4032");
+    expect(commandCenter.textContent).not.toContain("resort chw hvac synthetic fouling.csv");
+  });
+
+  it("shows imported metadata in both Datasets and Command Center for the active result", () => {
+    const importedResult = completeResult({ processed_at: "2026-06-23T12:00:00Z" });
+    renderWorkspace({
+      effectiveLatestUploadResult: importedResult,
+      effectiveLatestUploadSnapshot: completeSnapshot({ current_upload: { job_id: "ready-job", filename: "uploaded telemetry.csv", row_count: 120 } }),
+      currentSession: { hasReliableOperatorEvidence: true },
+    });
+
+    const commandCenter = screen.getByTestId("operational-command-center");
+    expect(commandCenter.textContent).toContain("Dataset importImported");
+    expect(commandCenter.textContent).toContain("Imported rows120");
+    expect(commandCenter.textContent).toContain("Last dataset import");
+    expect(commandCenter.textContent).not.toContain("Last dataset importNone");
+
+    clickNav("Datasets & Connectors");
+    const sourceStatus = screen.getByLabelText("Data Source Status");
+    expect(sourceStatus.textContent).toContain("Dataset importImported");
+    expect(sourceStatus.textContent).toContain("Imported rows120");
+    expect(sourceStatus.textContent).not.toContain("Last dataset importNone");
+  });
+
   it("Datasets & Connectors analysis action opens the existing hidden file picker path", () => {
     const onCsvSelected = vi.fn();
     renderWorkspace({ onCsvSelected });
@@ -273,6 +303,11 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByText("Dataset import")).toBeTruthy();
     expect(screen.getByText("Imported rows")).toBeTruthy();
     expect(screen.getByText("Last dataset import")).toBeTruthy();
+    const sourceStatus = screen.getByLabelText("Data Source Status");
+    expect(sourceStatus.textContent).toContain("Dataset importNot imported");
+    expect(sourceStatus.textContent).toContain("Imported rows0");
+    expect(sourceStatus.textContent).toContain("Last dataset importNone");
+    expect(sourceStatus.textContent).not.toContain("4032");
     expect(screen.getByText("Connector health")).toBeTruthy();
     expect(screen.getByText("Last connector sync")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Choose Dataset/i })).toBeTruthy();

@@ -13,10 +13,12 @@ from app.services.runtime_db import configure_runtime_dir as configure_runtime_d
 from app.services.sii_runner import configure_runtime_dir as configure_sii_runner_dir
 from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir
 from app.services.runtime_db import init_runtime_db
+from app.services.dataset_scope import build_dataset_scope, set_current_dataset_scope
 
 
 @pytest.fixture(autouse=True)
 def isolate_runtime(monkeypatch, tmp_path):
+    set_current_dataset_scope(build_dataset_scope(user_id="anonymous"))
     monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "all")
     runtime_dir = tmp_path / "runtime"
     runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -33,6 +35,7 @@ def isolate_runtime(monkeypatch, tmp_path):
     yield
     # Prevent an old test's daemon worker from reconfiguring the next test's runtime path.
     wait_for_upload_workers()
+    set_current_dataset_scope(build_dataset_scope(user_id="anonymous"))
 
 
 @pytest.fixture

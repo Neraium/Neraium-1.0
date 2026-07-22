@@ -3,18 +3,33 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from app.services.dataset_scope import DatasetScope, attach_dataset_scope, current_dataset_scope, dataset_scope_from_payload
 from app.services.upload_lifecycle import ACTIVE_UPLOAD_STATUSES
 
 
-def build_session_scope(job_id: str | None, *, filename: str | None = None, status: str = "active") -> dict[str, Any]:
+def build_session_scope(
+    job_id: str | None,
+    *,
+    filename: str | None = None,
+    status: str = "active",
+    dataset_scope: DatasetScope | dict[str, Any] | None = None,
+) -> dict[str, Any]:
     normalized_job_id = str(job_id or "").strip()
+    if isinstance(dataset_scope, DatasetScope):
+        resolved_scope = dataset_scope
+    elif isinstance(dataset_scope, dict):
+        resolved_scope = dataset_scope_from_payload({"dataset_scope": dataset_scope}) or dataset_scope_from_payload({"session_scope": dataset_scope}) or current_dataset_scope()
+    else:
+        resolved_scope = current_dataset_scope()
     return {
         "active": bool(normalized_job_id),
         "status": str(status or "active"),
         "job_id": normalized_job_id,
         "run_id": normalized_job_id,
         "upload_id": normalized_job_id,
+        "dataset_id": normalized_job_id or None,
         "source_name": str(filename or "").strip() or None,
+        **resolved_scope.as_dict(),
     }
 
 
@@ -34,6 +49,7 @@ def has_active_session_artifact(candidate: dict[str, Any] | None, *, job_id: str
 def build_empty_latest_upload_record(*, status: str = "empty", message: str | None = None) -> dict[str, Any]:
     normalized_status = str(status or "empty").strip().lower() or "empty"
     normalized_message = message or ("No active upload session." if normalized_status == "empty" else None)
+    dataset_scope = current_dataset_scope()
     return {
         "version": 1,
         "status": normalized_status,
@@ -41,6 +57,8 @@ def build_empty_latest_upload_record(*, status: str = "empty", message: str | No
         "job_id": None,
         "run_id": None,
         "upload_id": None,
+        "dataset_id": None,
+        "dataset_scope": dataset_scope.as_dict(),
         "filename": None,
         "session_scope": {
             "active": False,
@@ -48,7 +66,9 @@ def build_empty_latest_upload_record(*, status: str = "empty", message: str | No
             "job_id": "",
             "run_id": "",
             "upload_id": "",
+            "dataset_id": None,
             "source_name": None,
+            **dataset_scope.as_dict(),
         },
         "traceability": {},
         "summary": None,
@@ -145,6 +165,7 @@ def build_latest_upload_record(
             else build_session_scope(job_id or None, filename=source_payload.get("filename"), status=record_status)
         )
     )
+    resolved_dataset_scope = dataset_scope_from_payload(source_payload) or dataset_scope_from_payload({"session_scope": session_scope}) or current_dataset_scope()
     session_scope = {
         **dict(session_scope or {}),
         "active": active,
@@ -152,16 +173,19 @@ def build_latest_upload_record(
         "job_id": job_id,
         "run_id": run_id or job_id,
         "upload_id": upload_id or job_id,
+        "dataset_id": source_payload.get("dataset_id") or job_id,
         "source_name": source_payload.get("filename") or session_scope.get("source_name"),
+        **resolved_dataset_scope.as_dict(),
     }
     replay_payload = build_replay_payload_from_result(normalized_result, job_id=job_id)
-    return {
+    record = {
         "version": 1,
         "status": record_status,
         "message": message or (normalized_summary or {}).get("message"),
         "job_id": job_id or None,
         "run_id": (run_id or job_id) or None,
         "upload_id": (upload_id or job_id) or None,
+        "dataset_id": source_payload.get("dataset_id") or job_id or None,
         "filename": source_payload.get("filename"),
         "session_scope": session_scope,
         "traceability": traceability,
@@ -171,6 +195,7 @@ def build_latest_upload_record(
         "evidence": dict(evidence or {}) if isinstance(evidence, dict) else None,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+    return attach_dataset_scope(record, scope=resolved_dataset_scope, dataset_id=record.get("dataset_id"))
 
 
 def select_current_upload_result(record: dict[str, Any] | None) -> dict[str, Any] | None:
