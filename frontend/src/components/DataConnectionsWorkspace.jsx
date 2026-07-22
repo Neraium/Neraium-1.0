@@ -51,6 +51,12 @@ const ANALYSIS_STARTED_STATUSES = new Set([
   "complete",
 ]);
 
+const UPLOAD_OPERATOR_COPY = Object.freeze({
+  telemetryExportValidated: "Telemetry export validated.",
+  queuedWorkerLine: "Preparing analysis resources",
+  queuedWorkerAnnouncement: "Preparing analysis resources...",
+});
+
 
 function formatTransferSpeed(bytesPerSecond) {
   const speed = Number(bytesPerSecond);
@@ -82,7 +88,7 @@ function uploadReadinessMessage(file) {
   if (isLargeOperationalUpload(file)) {
     return "Large telemetry export detected. Processing continues in the background.";
   }
-  return "Telemetry file ready.";
+  return UPLOAD_OPERATOR_COPY.telemetryExportValidated;
 }
 
 function validateTelemetryFile(file, kind) {
@@ -108,9 +114,9 @@ function boundedFailureDelay(failureCount) {
 export function queuedWorkerMessage(uploadJob) {
   const workerState = String(uploadJob?.worker_state ?? uploadJob?.workerState ?? "").toLowerCase();
   const lastUpdate = uploadJob?.worker_last_update_at ?? uploadJob?.worker_last_update ?? uploadJob?.updated_at ?? "";
-  if (workerState === "starting") return "Preparing analysis resources";
+  if (workerState === "starting") return UPLOAD_OPERATOR_COPY.queuedWorkerLine;
   if (workerState === "active" || workerState === "running") return "Analysis active - last update " + (lastUpdate || "just now");
-  if (workerState === "queued" || normalizeUploadStatus(uploadJob?.status) === "queued") return "Preparing analysis resources";
+  if (workerState === "queued" || normalizeUploadStatus(uploadJob?.status) === "queued") return UPLOAD_OPERATOR_COPY.queuedWorkerLine;
   if (workerState === "stalled") return "No recent progress update; analysis may still be continuing.";
   return "";
 }
