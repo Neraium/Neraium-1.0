@@ -63,6 +63,7 @@ from app.services.upload_state_repository import (
 )
 from app.services.upload_replay import build_replay, detect_numeric_columns, detect_timestamp_column as detect_replay_timestamp_column, minimal_replay, population_std, to_float
 from app.services.upload_validator import detect_delimiter, looks_like_header, normalized_columns, row_tokens, stream_csv_snapshot
+from app.domain_interpretation import DomainInterpretationContext, attach_domain_interpretations
 from app.services.upload_state import (
     build_empty_latest_upload_record,
     build_session_scope,
@@ -920,8 +921,6 @@ def _build_csv_result(
         result["sii_intelligence"]["projected_time_to_failure"] = result["sii_intelligence"]["review_window"]
         result["sii_intelligence"]["projected_time_to_failure_hours"] = result["sii_intelligence"]["review_window_hours"]
     result["sii_intelligence"]["decision_integrity"] = dict(result["traceability"])
-    result["analysis_explanation"] = build_analysis_explanation(result)
-    result["analysis"] = result["analysis_explanation"]
     normalized_telemetry = build_normalized_telemetry(
         rows=rows,
         columns=columns,
@@ -933,6 +932,24 @@ def _build_csv_result(
         source_file=filename,
         telemetry_signal_catalog=telemetry_signal_catalog,
     )
+    result = attach_domain_interpretations(
+        result,
+        DomainInterpretationContext(
+            columns=columns,
+            engine_result=engine_result,
+            relationship_model=relationship_model if isinstance(relationship_model, dict) else {},
+            baseline_analysis=baseline_analysis,
+            normalized_telemetry=normalized_telemetry,
+            telemetry_signal_catalog=telemetry_signal_catalog,
+            timestamp_profile=timestamp_profile,
+            data_quality=data_quality,
+            operating_mode=data_quality.get("operating_mode") if isinstance(data_quality, dict) else None,
+            upload_id=job_id,
+            analysis_id=job_id,
+        ),
+    )
+    result["analysis_explanation"] = build_analysis_explanation(result)
+    result["analysis"] = result["analysis_explanation"]
     result = attach_analysis_result(result, normalized_telemetry=normalized_telemetry)
 
     result["sii_reliable_enough_to_show"] = bool(baseline_reliable)

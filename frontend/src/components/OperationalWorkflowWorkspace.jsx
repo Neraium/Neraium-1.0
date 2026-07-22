@@ -1590,6 +1590,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         status: normalizeInsightStatus(item.status ?? item.severity),
         severity: normalizeSeverity(item.severity),
         rawSummary: firstText(item.primary_finding, item.primaryFinding, item.title, item.explanation),
+        whatChanged: firstText(item.what_changed, item.whatChanged),
         whatHappened: operatorText(item.what_happened, item.what_changed, item.whatChanged, item.explanation),
         observedFacts: dedupeText(toList(item.observed, item.observed_facts, item.observedFacts).flatMap(formatEvidenceItems).map(operatorText)),
         whyItMatters: operatorText(item.why_it_matters, item.possible_operational_consequence, item.possible_consequence, item.possibleConsequence, item.likely_cause, item.why_neraium_thinks_it_happened, item.why_neraium_thinks, item.likelyCause),
@@ -1624,6 +1625,22 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         telemetryNote: telemetryStatus.detail,
         detectedAt: lastAnalysis,
         type: getInsightType(item),
+        siiFindingId: item.sii_finding_id,
+        affectedAssets: toList(item.affected_assets),
+        relationshipPriorId: item.relationship_prior_id,
+        relationshipPriorVersion: item.relationship_prior_version,
+        operatingMode: item.operating_mode,
+        graphTrust: item.graph_trust,
+        firstDetectedAt: item.first_detected_at,
+        lastObservedAt: item.last_observed_at,
+        hypothesisStatus: item.status ?? item.hypothesis_state,
+        observedEvidence: toList(item.observed_evidence),
+        derivedMetrics: toList(item.derived_metrics),
+        possibleExplanations: toList(item.possible_explanations),
+        confoundingConditions: toList(item.confounding_conditions),
+        recommendedChecksStructured: toList(item.recommended_checks),
+        confidenceAndUncertainty: item.confidence_and_uncertainty,
+        waterInterpretation: item.water_interpretation,
       };
       applyCumulativeRelationshipConfidenceCap(insight);
       insight.system = resolveSystemName(insight, systems, signals);
@@ -3536,6 +3553,8 @@ function whatChangedBriefing(insight, relationships) {
     const scopeText = relationships.length === 1
       ? "One operating relationship changed enough to warrant field review."
       : relationships.length + " operating relationships changed together, which may point to a system-level behavior change.";
+    const supplied = briefingSentences(firstText(insight.whatChanged), 1);
+    if (supplied.length) return [supplied[0], scopeText];
     return [relationshipText, scopeText];
   }
 
