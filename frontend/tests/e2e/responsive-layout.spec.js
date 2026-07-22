@@ -90,6 +90,15 @@ async function openWorkspace(page, viewport) {
   await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
 }
 
+async function openMobileWorkflowNavigation(page) {
+  const menuButton = page.getByRole("button", { name: "Open navigation menu" });
+  await expect(menuButton).toBeVisible();
+  await menuButton.click();
+  const mobileNav = page.getByRole("navigation", { name: "Mobile workflow navigation" });
+  await expect(mobileNav).toBeVisible();
+  return mobileNav;
+}
+
 test.describe("Responsive layout audit", () => {
   test("desktop operational workspace uses full available width", async ({ page }) => {
     await openWorkspace(page, { width: 1440, height: 900 });
@@ -123,12 +132,14 @@ test.describe("Responsive layout audit", () => {
     expect(metrics.mainRight).toBeLessThanOrEqual(metrics.viewportWidth);
     expect(metrics.heroRight).toBeLessThanOrEqual(metrics.viewportWidth);
 
-    await expect(page.getByRole("button", { name: /Datasets & Connectors/i }).first()).toBeVisible();
+    const mobileNav = await openMobileWorkflowNavigation(page);
+    await expect(mobileNav.getByRole("button", { name: /Datasets & Connectors/i })).toBeVisible();
   });
 
   test("mobile workflow navigation remains visible and usable", async ({ page }) => {
     await openWorkspace(page, { width: 390, height: 844 });
-    await page.getByRole("button", { name: /Datasets & Connectors/i }).first().click();
+    const mobileNav = await openMobileWorkflowNavigation(page);
+    await mobileNav.getByRole("button", { name: /Datasets & Connectors/i }).click();
     await expect(page.getByRole("region", { name: "Dataset Analysis" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Choose Dataset/i })).toBeVisible();
   });

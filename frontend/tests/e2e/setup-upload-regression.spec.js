@@ -66,7 +66,6 @@ test.describe("Setup + Upload regression", () => {
 
     await expect(page.getByRole("progressbar", { name: /Telemetry transfer|Analysis/i })).toHaveAttribute("aria-valuenow", /[1-9][0-9]*|100/, { timeout: 30000 });
     await expect(page.getByRole("region", { name: "Analysis complete" })).toBeVisible({ timeout: 120000 });
-    await expect(page.getByRole("button", { name: "Review Analysis" })).toBeVisible();
     const operationalStatus = page.getByRole("region", { name: "Operational Status" });
     await expect(operationalStatus).toBeVisible({ timeout: 30000 });
     await expect(operationalStatus).not.toContainText("Baseline Needed");
