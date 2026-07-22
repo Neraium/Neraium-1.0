@@ -20,7 +20,7 @@ def _production_client(monkeypatch, tmp_path) -> TestClient:
         cors_origins=["https://app.neraium.com"],
         runtime_dir=tmp_path,
     )
-    return TestClient(create_app(settings))
+    return TestClient(create_app(settings), base_url="https://testserver")
 
 
 def test_auth_store_migrates_legacy_json_to_auth_db(monkeypatch, tmp_path) -> None:

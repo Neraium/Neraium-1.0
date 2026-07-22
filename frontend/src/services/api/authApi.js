@@ -1,12 +1,16 @@
 import { apiFetch } from "../../config";
 
 const LOCAL_AUTH_SESSION_KEY = "neraium.local_auth.session";
+const SIGN_IN_SERVICE_UNAVAILABLE = "The sign-in service is temporarily unavailable. Try again.";
+const SESSION_SERVICE_UNAVAILABLE = "The session service is temporarily unavailable. Refresh and retry.";
 
-async function safeAuthFetch(path, options) {
+async function authFetch(path, options, unavailableMessage) {
   try {
-    return await apiFetch(path, options);
+    const response = await apiFetch(path, options);
+    if (!response) throw new Error(unavailableMessage);
+    return response;
   } catch {
-    return null;
+    throw new Error(unavailableMessage);
   }
 }
 
@@ -34,32 +38,52 @@ function setLocalSessionEmail(email) {
 }
 
 export async function fetchCurrentUser() {
-  const response = await safeAuthFetch("/api/auth/me", { cache: "no-store" });
-  if (!response) throw new Error("The sign-in service is unavailable. Check the connection and retry.");
+  const response = await authFetch(
+    "/api/auth/me",
+    { cache: "no-store" },
+    SESSION_SERVICE_UNAVAILABLE,
+  );
   const payload = await readJson(response);
-  if (!response.ok) throw new Error(detailMessage(payload, "Unable to verify your session."));
+  if (!response.ok) {
+    if (response.status >= 500) throw new Error(SESSION_SERVICE_UNAVAILABLE);
+    throw new Error(detailMessage(payload, "Unable to verify your session."));
+  }
   return payload;
 }
 
 export async function loginUser({ email, password }) {
   const normalizedEmail = String(email ?? "").trim().toLowerCase();
-  const response = await safeAuthFetch("/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: normalizedEmail, password }),
-  });
+  const response = await authFetch(
+    "/api/auth/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail, password }),
+    },
+    SIGN_IN_SERVICE_UNAVAILABLE,
+  );
   const payload = await readJson(response);
-  if (!response || !response.ok) {
-    throw new Error(detailMessage(payload, response?.status === 429 ? "Too many sign-in attempts. Wait and try again." : "Invalid email or password."));
+  if (!response.ok) {
+    if (response.status >= 500) throw new Error(SIGN_IN_SERVICE_UNAVAILABLE);
+    if (response.status === 429) {
+      throw new Error(detailMessage(payload, "Too many sign-in attempts. Wait and try again."));
+    }
+    if (response.status === 401) {
+      throw new Error(detailMessage(payload, "Invalid email or password."));
+    }
+    throw new Error(detailMessage(payload, "Sign in failed. Check your details and try again."));
   }
   setLocalSessionEmail(normalizedEmail);
   return payload;
 }
 
 export async function logoutUser() {
-  const response = await safeAuthFetch("/api/auth/logout", { method: "POST" });
+  const response = await authFetch(
+    "/api/auth/logout",
+    { method: "POST" },
+    "The sign-out service is unavailable. Check the connection and try again.",
+  );
   const payload = await readJson(response);
-  if (!response) throw new Error("The sign-out service is unavailable. Check the connection and try again.");
   if (!response.ok) throw new Error(detailMessage(payload, "Sign out failed. Try again."));
   setLocalSessionEmail("");
   return payload;

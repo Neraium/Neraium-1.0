@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
@@ -35,6 +36,7 @@ from app.services.rate_limiter import consume_rate_limit, reset_rate_limit
 from app.services.runtime_db import record_audit_event
 
 router = APIRouter(tags=["auth"])
+logger = logging.getLogger(__name__)
 _LOGIN_IP_LIMIT = 5
 _LOGIN_IP_WINDOW_SECONDS = 300
 _LOGIN_EMAIL_LIMIT = 10
@@ -65,8 +67,15 @@ class AuthSessionRevokeRequest(ContractModel):
 EmailPath = Annotated[str, Path(min_length=5, max_length=320, pattern=r"^[^/\s@]+@[^/\s@]+\.[^/\s@]+$")]
 
 
+def _session_cookie_secure(request: Request) -> bool:
+    settings = getattr(request.app.state, "settings", None)
+    app_env = str(getattr(settings, "app_env", "") or "").strip().lower()
+    forwarded_scheme = str(request.headers.get("X-Forwarded-Proto") or "").split(",", 1)[0].strip().lower()
+    return app_env in {"prod", "production"} or request.url.scheme == "https" or forwarded_scheme == "https"
+
+
 def _apply_session_cookie(response: Response, session_id: str, request: Request) -> None:
-    secure = request.url.scheme == "https"
+    secure = _session_cookie_secure(request)
     expires_at = datetime.now(timezone.utc) + timedelta(days=14)
     response.set_cookie(
         key=session_cookie_name(),
@@ -83,7 +92,7 @@ def _clear_session_cookie(response: Response, request: Request) -> None:
     response.delete_cookie(
         key=session_cookie_name(),
         httponly=True,
-        secure=request.url.scheme == "https",
+        secure=_session_cookie_secure(request),
         samesite="lax",
         path="/",
     )
@@ -154,11 +163,31 @@ def _reset_login_rate_limit(request: Request, email: str) -> None:
     reset_rate_limit("auth.login.email", str(email or "").strip().lower())
 
 
+def _raise_auth_store_unavailable(operation: str, request: Request, error: Exception) -> None:
+    logger.exception(
+        "auth_store_request_failed",
+        extra={
+            "event": "auth_store_request_failed",
+            "operation": operation,
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Authentication service temporarily unavailable.",
+    ) from error
+
+
 @router.get("/auth/me")
 def read_auth_me(request: Request) -> dict[str, Any]:
     session_id = request.cookies.get(session_cookie_name())
-    user = get_user_by_session(session_id)
-    session = get_session_record(session_id)
+    if not session_id:
+        return {"authenticated": False, "user": None, "session": None}
+    try:
+        user = get_user_by_session(session_id)
+        session = get_session_record(session_id)
+    except Exception as error:
+        _raise_auth_store_unavailable("verify_session", request, error)
     return {"authenticated": bool(user), "user": user, "session": session}
 
 
@@ -275,7 +304,10 @@ def login(payload: LoginRequest, request: Request, response: Response) -> dict[s
     retry_after = _enforce_login_rate_limit(request, payload.email)
     if retry_after is not None:
         raise HTTPException(status_code=429, detail="Too many sign-in attempts. Wait a few minutes and try again.", headers={"Retry-After": str(retry_after)})
-    user = authenticate_user(payload.email, payload.password)
+    try:
+        user = authenticate_user(payload.email, payload.password)
+    except Exception as error:
+        _raise_auth_store_unavailable("authenticate_user", request, error)
     if not user:
         _record_auth_event(
             actor=str(payload.email or "").strip().lower() or "unknown",
@@ -287,10 +319,12 @@ def login(payload: LoginRequest, request: Request, response: Response) -> dict[s
     _reset_login_rate_limit(request, payload.email)
     try:
         session_id = create_session(user["email"])
+        session = get_session_record(session_id)
     except ValueError as error:
         raise HTTPException(status_code=403, detail=str(error)) from error
+    except Exception as error:
+        _raise_auth_store_unavailable("create_session", request, error)
     _apply_session_cookie(response, session_id, request)
-    session = get_session_record(session_id)
     _record_auth_event(
         actor=user["email"],
         action="auth.login.succeeded",

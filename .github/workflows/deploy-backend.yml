@@ -164,6 +164,37 @@ jobs:
           LOAD_BALANCER_ARN=$(jq -r '.TargetGroups[0].LoadBalancerArns[0]' api-target-group.json)
           test -n "$LOAD_BALANCER_ARN"
           test "$LOAD_BALANCER_ARN" != "null"
+
+          API_TASK_SECURITY_GROUP_ID=$(jq -r --arg api "$ECS_API_SERVICE" '.services[] | select(.serviceName == $api) | .networkConfiguration.awsvpcConfiguration.securityGroups[0]' current-services.json)
+          LOAD_BALANCER_SECURITY_GROUP_ID=$(aws elbv2 describe-load-balancers \
+            --load-balancer-arns "$LOAD_BALANCER_ARN" \
+            --region "$AWS_REGION" \
+            --query 'LoadBalancers[0].SecurityGroups[0]' \
+            --output text)
+          test -n "$API_TASK_SECURITY_GROUP_ID"
+          test "$API_TASK_SECURITY_GROUP_ID" != "null"
+          test -n "$LOAD_BALANCER_SECURITY_GROUP_ID"
+          test "$LOAD_BALANCER_SECURITY_GROUP_ID" != "None"
+
+          aws ec2 describe-security-groups \
+            --group-ids "$API_TASK_SECURITY_GROUP_ID" \
+            --region "$AWS_REGION" > api-task-security-group.json
+          if ! jq -e --argjson port "$API_CONTAINER_PORT" --arg source "$LOAD_BALANCER_SECURITY_GROUP_ID" '
+            [
+              .SecurityGroups[0].IpPermissions[]?
+              | select(.IpProtocol == "tcp" and .FromPort <= $port and .ToPort >= $port)
+              | .UserIdGroupPairs[]?
+              | select(.GroupId == $source)
+            ] | length > 0
+          ' api-task-security-group.json >/dev/null; then
+            aws ec2 authorize-security-group-ingress \
+              --group-id "$API_TASK_SECURITY_GROUP_ID" \
+              --protocol tcp \
+              --port "$API_CONTAINER_PORT" \
+              --source-group "$LOAD_BALANCER_SECURITY_GROUP_ID" \
+              --region "$AWS_REGION"
+          fi
+
           aws elbv2 describe-listeners \
             --load-balancer-arn "$LOAD_BALANCER_ARN" \
             --region "$AWS_REGION" > api-load-balancer-listeners.json
@@ -202,7 +233,7 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
           echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_URL_SECRET_ARN "$AUTH_DATABASE_URL_SECRET_ARN" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg BACKEND_PORT "$API_CONTAINER_PORT" --argjson CONTAINER_PORT "$API_CONTAINER_PORT" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_URL_SECRET_ARN "$AUTH_DATABASE_URL_SECRET_ARN" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg BACKEND_PORT "$API_CONTAINER_PORT" --argjson CONTAINER_PORT "$API_CONTAINER_PORT" --arg HEALTHCHECK_COMMAND "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${API_CONTAINER_PORT}/api/health', timeout=5).read()\" || exit 1" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
             | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .containerDefinitions = (.containerDefinitions | map(
@@ -229,7 +260,7 @@ jobs:
                     ])
                 | .portMappings = [{"containerPort": $CONTAINER_PORT, "hostPort": $CONTAINER_PORT, "protocol": "tcp"}]
                 | .healthCheck = {
-                    "command": ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=5).read()\" || exit 1"],
+                    "command": ["CMD-SHELL", $HEALTHCHECK_COMMAND],
                     "interval": 30,
                     "timeout": 10,
                     "retries": 3,
