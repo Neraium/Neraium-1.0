@@ -243,7 +243,7 @@ def test_frontend_displays_queued_worker_visibility_messages() -> None:
     panel = read_frontend(ROOT / "frontend" / "src" / "components" / "setup" / "IntakeFlowPanel.jsx")
 
     assert "Preparing analysis resources..." in source
-    assert "Analysis active - last update" in source
+    assert "Analysis active · updated" in source
     assert "Preparing analysis resources" in source
     assert "No recent progress update; analysis may still be continuing." in source
     assert "queuedWorkerDetail" in panel

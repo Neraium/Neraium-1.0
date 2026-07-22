@@ -2,7 +2,7 @@
 import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import DataConnectionsWorkspace, { queuedWorkerMessage } from "./DataConnectionsWorkspace";
+import DataConnectionsWorkspace, { formatAnalysisUpdateTime, queuedWorkerMessage } from "./DataConnectionsWorkspace";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { SERVICE_UNAVAILABLE_RETRY_MESSAGE, SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
@@ -248,7 +248,7 @@ it("selected file state shows filename, size, and analysis action", () => {
   });
 
   expect(screen.getByText("operators.csv")).toBeTruthy();
-  expect(screen.getByText("CSV dataset, 15.7 MB")).toBeTruthy();
+  expect(screen.getByLabelText("operators.csv, 15.7 MB, Ready")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Choose Dataset" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Analyze Dataset" })).toBeTruthy();
   expect(screen.getByText("Dataset Ready")).toBeTruthy();
@@ -286,7 +286,7 @@ it("processing state uses the behavior baseline as the progress indicator", () =
     latestMessage: "Building behavior baseline...",
   });
 
-  expect(screen.getByText("Comparing operating periods")).toBeTruthy();
+  expect(screen.getByText("Comparing relationships")).toBeTruthy();
   expect(screen.getByText("Stage 3 of 4")).toBeTruthy();
   expect(screen.getByText("progress.csv")).toBeTruthy();
   expect(screen.getByText("1.0 KB")).toBeTruthy();
@@ -352,14 +352,17 @@ it("baseline renderer uses enhanced mode on mobile-capable constraints", () => {
   const renderer = document.querySelector(".upload-fingerprint-build");
   expect(renderer?.getAttribute("data-render-tier")).toBe("enhanced");
   expect(renderer?.querySelectorAll(".upload-fingerprint-build__particles span")).toHaveLength(3);
-  expect(screen.getByText("Comparing operating periods")).toBeTruthy();
+  expect(screen.getByText("Comparing relationships")).toBeTruthy();
 });
 
-it("maps backend worker states to current operator status copy", () => {
-  expect(queuedWorkerMessage({ worker_state: "starting" })).toBe("Preparing analysis resources");
-  expect(queuedWorkerMessage({ worker_state: "active", worker_last_update_at: "12:03" })).toBe("Analysis active - last update 12:03");
-  expect(queuedWorkerMessage({ worker_state: "queued" })).toBe("Preparing analysis resources");
-  expect(queuedWorkerMessage({ worker_state: "stalled" })).toBe("No recent progress update; analysis may still be continuing.");
+it("maps backend worker states to human-readable operator status copy", () => {
+  const now = Date.parse("2026-07-22T21:30:01.070Z");
+  expect(queuedWorkerMessage({ worker_state: "starting" }, now)).toBe("Preparing analysis resources");
+  expect(queuedWorkerMessage({ worker_state: "active", worker_last_update_at: "2026-07-22T21:28:01.070289+00:00" }, now)).toBe("Analysis active · updated 2 minutes ago");
+  expect(queuedWorkerMessage({ worker_state: "running", updated_at: "2026-07-22T21:29:50Z" }, now)).toBe("Analysis active · updated just now");
+  expect(formatAnalysisUpdateTime("2026-07-22T19:30:01Z", now)).toBe("2 hours ago");
+  expect(queuedWorkerMessage({ worker_state: "queued" }, now)).toBe("Preparing analysis resources");
+  expect(queuedWorkerMessage({ worker_state: "stalled" }, now)).toBe("No recent progress update; analysis may still be continuing.");
 });
 
 
@@ -420,12 +423,21 @@ it("complete state shows the behavior baseline completion moment", () => {
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByRole("heading", { name: "Analysis Complete" })).toBeTruthy();
-  expect(screen.getByText("SII finished the analysis and saved the evidence record. Command Center is ready for operational triage.")).toBeTruthy();
-  const labels = Array.from(document.querySelectorAll(".upload-result-summary__item span")).map((node) => node.textContent);
-  expect(labels).toEqual(["Systems", "Insights", "Baseline"]);
-  expect(screen.getByRole("button", { name: "Open Command Center" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Analyze Another Dataset" })).toBeTruthy();
+  expect(screen.getAllByRole("heading", { name: "Analysis Complete" })).toHaveLength(1);
+  expect(screen.getByText("Behavior baseline established and evidence saved.")).toBeTruthy();
+  const labels = Array.from(document.querySelectorAll(".upload-result-summary__item dt")).map((node) => node.textContent);
+  expect(labels).toEqual(["Systems analyzed", "Insights generated", "Relationship change"]);
+  expect(screen.getByLabelText("complete.csv, 8.4 MB, Complete")).toBeTruthy();
+  const completedStages = document.querySelector(".upload-fingerprint-build__nodes").querySelectorAll("li.is-complete");
+  expect(completedStages).toHaveLength(4);
+  expect(Array.from(completedStages).map((node) => node.getAttribute("aria-label"))).toEqual([
+    "Prepare: completed", "Baseline: completed", "Compare: completed", "Save: completed",
+  ]);
+  expect(completedStages[3].classList.contains("is-final")).toBe(true);
+  const primary = screen.getByRole("button", { name: "Open Command Center" });
+  const secondary = screen.getByRole("button", { name: "Analyze Another Dataset" });
+  expect(primary.classList.contains("upload-completion-actions__primary")).toBe(true);
+  expect(secondary.classList.contains("upload-completion-actions__secondary")).toBe(true);
   const details = screen.getByText("Analysis Details").closest("details");
   expect(details.open).toBe(false);
 });
@@ -480,12 +492,41 @@ it("completed upload screen count matches AnalysisResult insights length", () =>
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  const item = screen.getByText("Insights").closest(".upload-result-summary__item");
+  const item = screen.getByText("Insights generated").closest(".upload-result-summary__item");
   expect(item.textContent).toContain("4");
 
-  const baselineItem = Array.from(document.querySelectorAll(".upload-result-summary__item"))
-    .find((item) => item.textContent.startsWith("Baseline"));
-  expect(baselineItem.textContent).toContain("Changed");
+  const relationshipItem = screen.getByText("Relationship change").closest(".upload-result-summary__item");
+  expect(relationshipItem.textContent).toContain("Detected");
+});
+
+it("uses the analysis result for not-detected relationship wording", () => {
+  renderPanel({
+    uploadState: "complete",
+    selectedFiles: [selectedCsv("stable.csv")],
+    selectedFileSize: "4.2 MB",
+    latestUploadSnapshot: {
+      latest_result: {
+        analysis_result: {
+          systems: [{ name: "Stable loop" }],
+          insights: [{ id: "baseline-stable", severity: "low", title: "Operating fingerprint remains stable" }],
+          relationships: [],
+          fingerprint: { drift_status: "stable" },
+        },
+      },
+    },
+    uploadJob: { job_id: "stable-job", status: "COMPLETE", result_available: true },
+  });
+
+  const relationshipItem = screen.getByText("Relationship change").closest(".upload-result-summary__item");
+  expect(relationshipItem.textContent).toContain("Not detected");
+});
+
+it("keeps telemetry connector setup out of the dataset workflow", () => {
+  renderWorkspace({ currentUser: { role: "admin" } });
+  expect(screen.queryByRole("heading", { name: "Telemetry Connector Setup" })).toBeNull();
+  const workspace = screen.getByTestId("upload-workspace");
+  expect(workspace.children).toHaveLength(1);
+  expect(workspace.querySelector(".connector-setup")).toBeNull();
 });
 
 it("shows finalizing results instead of fake zero counts before AnalysisResult is available", () => {
@@ -610,7 +651,7 @@ it("treats the first complete payload with a saved result as terminal and auto-o
   });
 
   expect(await screen.findByRole("button", { name: "Open Command Center" })).toBeTruthy();
-  expect(screen.getByText("SII finished the analysis and saved the evidence record. Command Center is ready for operational triage.")).toBeTruthy();
+  expect(screen.getByText("Behavior baseline established and evidence saved.")).toBeTruthy();
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: true });
@@ -702,7 +743,7 @@ it("renders intermediate processing progress without jumping to complete", () =>
   });
 
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
-  expect(screen.getByText("Comparing operating periods")).toBeTruthy();
+  expect(screen.getByText("Comparing relationships")).toBeTruthy();
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
   expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
 });

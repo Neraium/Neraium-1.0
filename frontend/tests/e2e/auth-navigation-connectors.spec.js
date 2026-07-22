@@ -107,7 +107,10 @@ test.describe("Authentication, navigation, connectors, and permissions", () => {
 
   test("administrator can test and normalize a sample connector with refreshed health", async ({ page }) => {
     await page.goto("/workspace/data-sources");
-    await expect(page.getByRole("heading", { name: "Telemetry connector setup" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Telemetry connector setup/i })).toHaveCount(0);
+
+    await page.goto("/workspace/admin");
+    await expect(page.getByRole("heading", { name: /Telemetry connector setup/i })).toBeVisible();
     await page.getByLabel("Connector type").selectOption("database");
     await page.getByLabel("Database URL").fill(e2eDatabaseURL);
     await page.getByRole("button", { name: "Test connection" }).click();

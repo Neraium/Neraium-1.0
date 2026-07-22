@@ -17,7 +17,6 @@ import {
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
 import { retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
-import ConnectorSetupPanel from "./ConnectorSetupPanel";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
 const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
@@ -111,11 +110,24 @@ function boundedFailureDelay(failureCount) {
   return Math.min(Math.max(backoff, 1000), 45000);
 }
 
-export function queuedWorkerMessage(uploadJob) {
+export function formatAnalysisUpdateTime(value, now = Date.now()) {
+  const updatedAt = Date.parse(String(value ?? ""));
+  if (!Number.isFinite(updatedAt)) return "just now";
+  const elapsedSeconds = Math.max(0, Math.floor((Number(now) - updatedAt) / 1000));
+  if (elapsedSeconds < 60) return "just now";
+  const minutes = Math.floor(elapsedSeconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+export function queuedWorkerMessage(uploadJob, now = Date.now()) {
   const workerState = String(uploadJob?.worker_state ?? uploadJob?.workerState ?? "").toLowerCase();
   const lastUpdate = uploadJob?.worker_last_update_at ?? uploadJob?.worker_last_update ?? uploadJob?.updated_at ?? "";
   if (workerState === "starting") return UPLOAD_OPERATOR_COPY.queuedWorkerLine;
-  if (workerState === "active" || workerState === "running") return "Analysis active - last update " + (lastUpdate || "just now");
+  if (workerState === "active" || workerState === "running") return `Analysis active · updated ${formatAnalysisUpdateTime(lastUpdate, now)}`;
   if (workerState === "queued" || normalizeUploadStatus(uploadJob?.status) === "queued") return UPLOAD_OPERATOR_COPY.queuedWorkerLine;
   if (workerState === "stalled") return "No recent progress update; analysis may still be continuing.";
   return "";
@@ -200,7 +212,6 @@ export default function DataConnectionsWorkspace({
   sessionStore,
   onUploadComplete,
   onResetDemo,
-  currentUser = null,
   initialSelectedFiles = [],
   onInitialSelectedFilesConsumed,
   autoStartInitialFiles = false,
@@ -1044,7 +1055,6 @@ export default function DataConnectionsWorkspace({
         onResetWorkspace={() => { void clearUploadClientState(); }}
         onViewResults={() => { void viewCompletedResults(); }}
       />
-      <ConnectorSetupPanel apiFetch={apiFetch} accessCode={accessCode} currentUser={currentUser} />
     </div>
   );
 }

@@ -118,21 +118,25 @@ function estimateRemaining(uploadTransfer) {
   );
 }
 
-function valueOrDash(value) {
-  const text = String(value ?? "").trim();
-  return text || "--";
-}
+function relationshipChangeDetected(analysisResult) {
+  const explicit = analysisResult?.relationship_change_detected
+    ?? analysisResult?.relationshipChangeDetected
+    ?? analysisResult?.fingerprint?.relationship_change_detected
+    ?? analysisResult?.fingerprint?.change_detected;
+  if (typeof explicit === "boolean") return explicit;
 
-function formatFingerprintStatus(value) {
-  const text = valueOrDash(value)
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (text === "--") return text;
-  if (/^changed$/i.test(text)) return "Changed";
-  if (/^established$/i.test(text)) return "Established";
-  if (/^stable$/i.test(text)) return "Stable";
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  const fingerprintStatus = String(
+    analysisResult?.fingerprint?.status
+      ?? analysisResult?.fingerprint?.drift_status
+      ?? analysisResult?.fingerprint?.label
+      ?? ""
+  ).trim().toLowerCase();
+  if (["changed", "drifting", "review", "unstable", "detected", "elevated", "alert", "watch"].includes(fingerprintStatus)) return true;
+  if (["stable", "established", "unchanged", "not detected", "nominal"].includes(fingerprintStatus)) return false;
+  if (Array.isArray(analysisResult?.relationships) && analysisResult.relationships.length > 0) return true;
+
+  const primaryInsight = analysisResult?.insights?.find((insight) => insight && insight.id !== "baseline-stable");
+  return Boolean(primaryInsight && String(primaryInsight.severity || "").toLowerCase() !== "low");
 }
 
 function isFinalAnalysisResult(value) {
@@ -158,18 +162,10 @@ function finalAnalysisResult(latestUploadSnapshot, uploadJob) {
 }
 
 function completionSummary({ analysisResult }) {
-  const fingerprint = analysisResult?.fingerprint ?? {};
-  const fingerprintStatus = formatFingerprintStatus(
-    fingerprint?.status
-      ?? fingerprint?.drift_status
-      ?? fingerprint?.label
-      ?? "Established"
-  );
-
   return [
-    { label: "Systems", value: String(analysisResult.systems.length) },
-    { label: "Insights", value: String(analysisResult.insights.length) },
-    { label: "Baseline", value: fingerprintStatus },
+    { label: "Systems analyzed", value: String(analysisResult.systems.length) },
+    { label: "Insights generated", value: String(analysisResult.insights.length) },
+    { label: "Relationship change", value: relationshipChangeDetected(analysisResult) ? "Detected" : "Not detected" },
   ];
 }
 
@@ -183,14 +179,14 @@ const FINGERPRINT_BUILD_STAGES = [
   },
   {
     id: "relationships",
-    label: "Building operational baseline",
+    label: "Establishing behavior baseline",
     legacyLabel: "Learning Operational Relationships",
     shortLabel: "Baseline",
     states: ["processing", "baseline_modeling"],
   },
   {
     id: "organization",
-    label: "Comparing operating periods",
+    label: "Comparing relationships",
     shortLabel: "Compare",
     states: ["running_sii", "structural_scoring", "building_baseline", "building_fingerprint"],
   },
@@ -391,12 +387,12 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
   const compatibilityMode = renderTier === "safe";
   const particleCount = FINGERPRINT_RENDERER_PARTICLES[renderTier] ?? 0;
   const statusTitle = complete
-    ? "Analysis Complete"
+    ? "Behavior baseline established"
     : compatibilityMode
       ? "Using an alternate processing path."
       : stage?.label || "Learning Operational Relationships";
   const statusDetail = complete
-    ? "Command Center has the saved SII result"
+    ? "Evidence record saved"
     : compatibilityMode
       ? "Analysis quality is unchanged. Full SII results remain valid."
       : "Stage " + stageNumber + " of " + stageCount;
@@ -496,19 +492,23 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
           ))}
         </g>
       </svg>
-      {complete ? <div className="upload-fingerprint-build__ripple" aria-hidden="true" /> : null}
       {complete ? <div className="upload-fingerprint-build__check" aria-hidden="true">✓</div> : null}
-      <div className="upload-fingerprint-build__nodes" aria-hidden="true">
-        {FINGERPRINT_BUILD_STAGES.map((item, index) => (
-          <span
-            key={item.id}
-            className={index < stageIndex ? "is-complete" : index === stageIndex ? "is-active" : ""}
-          >
-            <i />
-            <b>{item.shortLabel}</b>
-          </span>
-        ))}
-      </div>
+      <ol className="upload-fingerprint-build__nodes" aria-label="Analysis stages">
+        {FINGERPRINT_BUILD_STAGES.map((item, index) => {
+          const state = complete || index < stageIndex ? "complete" : index === stageIndex ? "active" : "pending";
+          return (
+            <li
+              key={item.id}
+              className={`${state === "complete" ? "is-complete" : state === "active" ? "is-active" : ""}${index === FINGERPRINT_BUILD_STAGES.length - 1 ? " is-final" : ""}`}
+              aria-label={`${item.shortLabel}: ${state === "complete" ? "completed" : state}`}
+              aria-current={state === "active" ? "step" : undefined}
+            >
+              <i aria-hidden="true">{state === "complete" ? "✓" : ""}</i>
+              <b>{item.shortLabel}</b>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
@@ -555,6 +555,20 @@ function buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLab
     ["What still succeeded", hasSelectedFiles ? `${selectedFileLabel} is still selected for retry.` : "No dataset is currently selected."],
     ["Next action", uploadJob?.job_id ? "Retry the analysis. If the job expired, choose the dataset again." : "Choose a dataset and start the analysis again."],
   ];
+}
+
+function DatasetFileRow({ filename, size, status }) {
+  const fullLabel = `${filename}, ${size}, ${status}`;
+  return (
+    <div className="upload-dataset-file" title={filename} aria-label={fullLabel}>
+      <span className="upload-dataset-file__icon" aria-hidden="true" />
+      <span className="upload-dataset-file__identity">
+        <strong>{filename}</strong>
+        <small>{size}</small>
+      </span>
+      <span className="upload-dataset-file__status">{status}</span>
+    </div>
+  );
 }
 
 function RecoverySummary({ rows }) {
@@ -718,10 +732,14 @@ export default function IntakeFlowPanel({
                 </ul>
               </div>
 
-              <div className="upload-analysis-card__file">
-                <span>{selectedFileLabel}</span>
-                <strong>{selectedFileDetail}</strong>
-              </div>
+              {hasSelectedFiles ? (
+                <DatasetFileRow filename={selectedFileLabel} size={selectedFileSize} status="Ready" />
+              ) : (
+                <div className="upload-analysis-card__file">
+                  <span>Dataset</span>
+                  <strong>{selectedFileDetail}</strong>
+                </div>
+              )}
 
               <div className="upload-simple-actions upload-analysis-card__actions">
                 <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
@@ -736,11 +754,11 @@ export default function IntakeFlowPanel({
         {showProgress ? (
           <section className="upload-analysis-card upload-analysis-card--processing" aria-live="polite" aria-label={`Analysis progress: ${statusText}`}>
             <div className="upload-analysis-card__content">
-              <div className="upload-file-chip" title={`${selectedFileLabel} - ${selectedFileSize}`}>
-                <span className="upload-file-chip__icon" aria-hidden="true" />
-                <span className="upload-file-chip__name">{selectedFileLabel}</span>
-                <span className="upload-file-chip__meta">{selectedFileSize}</span>
-              </div>
+              <DatasetFileRow
+                filename={selectedFileLabel}
+                size={selectedFileSize}
+                status={fingerprintBuildStage?.shortLabel || "Processing"}
+              />
               <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} />
               <p className="upload-simple-note upload-processing-status"><strong>{queuedWorkerDetail || statusText}</strong></p>
               {remaining ? <p className="upload-simple-note">{remaining}</p> : null}
@@ -749,31 +767,27 @@ export default function IntakeFlowPanel({
         ) : null}
 
         {viewState === "complete" ? (
-          <section className="upload-analysis-card upload-simple-card--complete" aria-label="Analysis complete">
+          <section className="upload-analysis-card upload-simple-card--complete" aria-labelledby="analysis-complete-heading" aria-live="polite">
             <div className="upload-analysis-card__visual">
               <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
-              <div className="upload-analysis-card__status">
-                <span>Status</span>
-                <strong>Behavior Baseline Established</strong>
-              </div>
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3>Analysis Complete</h3>
-                <span className="upload-complete-filename" title={selectedFileLabel}>{selectedFileLabel}</span>
+                <h3 id="analysis-complete-heading">Analysis Complete</h3>
+                <p>Behavior baseline established and evidence saved.</p>
               </div>
-              <p className="upload-complete-message">SII finished the analysis and saved the evidence record. Command Center is ready for operational triage.</p>
-              <div className="upload-result-summary">
+              <DatasetFileRow filename={selectedFileLabel} size={selectedFileSize} status="Complete" />
+              <dl className="upload-result-summary" aria-label="Analysis result summary">
                 {summary.map((item) => (
                   <div key={item.label} className="upload-result-summary__item">
-                    <span>{item.label}</span>
-                    <strong>{item.value}</strong>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
                   </div>
                 ))}
-              </div>
-              <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={onViewResults}>Open Command Center</button>
-                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Dataset</button>
+              </dl>
+              <div className="upload-simple-actions upload-completion-actions">
+                <button type="button" className="command-button upload-completion-actions__primary" onClick={onViewResults}>Open Command Center</button>
+                <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onResetWorkspace}>Analyze Another Dataset</button>
               </div>
             </div>
           </section>

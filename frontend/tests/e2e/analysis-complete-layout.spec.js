@@ -11,26 +11,43 @@ async function renderCompletionFixture(page) {
     document.body.innerHTML = `
       <main data-testid="completion-fixture" style="width: 100%; max-width: 100vw; padding: 12px;">
         <form class="intake-flow intake-flow--simple intake-flow--complete" style="width: 100%; max-width: 100%;">
-          <section class="upload-simple-card upload-simple-card--complete" aria-label="Analysis complete">
-            <div class="upload-complete-header">
-              <h3>Analysis Complete</h3>
-              <span class="upload-complete-filename" title="north-campus-central-plant-telemetry-export-with-an-unusually-long-facility-and-system-identifier-2026-07-16.csv">north-campus-central-plant-telemetry-export-with-an-unusually-long-facility-and-system-identifier-2026-07-16.csv</span>
+          <section class="upload-analysis-card upload-simple-card--complete" aria-labelledby="analysis-complete-heading">
+            <div class="upload-analysis-card__visual">
+              <div class="upload-fingerprint-build upload-fingerprint-build--complete" role="progressbar" aria-label="Analysis 100% complete" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                <div class="upload-fingerprint-build__status"><strong>Behavior baseline established</strong><span>Evidence record saved</span></div>
+                <svg class="upload-fingerprint-build__print" viewBox="0 0 180 140" aria-hidden="true"><path d="M19 65L52 48L90 70L146 76L164 111" /></svg>
+                <ol class="upload-fingerprint-build__nodes" aria-label="Analysis stages">
+                  <li class="is-complete"><i>✓</i><b>Prepare</b></li>
+                  <li class="is-complete"><i>✓</i><b>Baseline</b></li>
+                  <li class="is-complete"><i>✓</i><b>Compare</b></li>
+                  <li class="is-complete is-final"><i>✓</i><b>Save</b></li>
+                </ol>
+              </div>
             </div>
-            <div class="upload-result-summary">
-              <div class="upload-result-summary__item"><span>Systems</span><strong>4</strong></div>
-              <div class="upload-result-summary__item"><span>Insights</span><strong>2</strong></div>
-              <div class="upload-result-summary__item"><span>Baseline</span><strong>Changed</strong></div>
-            </div>
-            <div class="upload-simple-actions">
-              <button type="button" class="command-button">View Results</button>
-              <button type="button" class="secondary-command-button">Analyze New Telemetry</button>
+            <div class="upload-analysis-card__content">
+              <div class="upload-complete-header">
+                <h3 id="analysis-complete-heading">Analysis Complete</h3>
+                <p>Behavior baseline established and evidence saved.</p>
+              </div>
+              <div class="upload-dataset-file" title="north-campus-central-plant-telemetry-export-with-an-unusually-long-facility-and-system-identifier-2026-07-16.csv" aria-label="north-campus-central-plant-telemetry-export-with-an-unusually-long-facility-and-system-identifier-2026-07-16.csv, 8.4 MB, Complete">
+                <span class="upload-dataset-file__icon" aria-hidden="true"></span>
+                <span class="upload-dataset-file__identity"><strong>north-campus-central-plant-telemetry-export-with-an-unusually-long-facility-and-system-identifier-2026-07-16.csv</strong><small>8.4 MB</small></span>
+                <span class="upload-dataset-file__status">Complete</span>
+              </div>
+              <dl class="upload-result-summary" aria-label="Analysis result summary">
+                <div class="upload-result-summary__item"><dt>Systems analyzed</dt><dd>4</dd></div>
+                <div class="upload-result-summary__item"><dt>Insights generated</dt><dd>2</dd></div>
+                <div class="upload-result-summary__item"><dt>Relationship change</dt><dd>Detected</dd></div>
+              </dl>
+              <div class="upload-simple-actions upload-completion-actions">
+                <button type="button" class="command-button upload-completion-actions__primary">Open Command Center</button>
+                <button type="button" class="secondary-command-button upload-completion-actions__secondary">Analyze Another Dataset</button>
+              </div>
             </div>
           </section>
           <details class="upload-advanced-details">
             <summary>Analysis Details</summary>
-            <dl class="upload-advanced-details__grid">
-              <div><dt>Upload ID</dt><dd>job-complete</dd></div>
-            </dl>
+            <dl class="upload-advanced-details__grid"><div><dt>Upload ID</dt><dd>job-complete</dd></div></dl>
           </details>
         </form>
       </main>
@@ -208,7 +225,7 @@ test.describe("Analysis complete mobile layout", () => {
     expect(metrics.cardLeft).toBeGreaterThanOrEqual(0);
     expect(metrics.cardRight).toBeLessThanOrEqual(metrics.viewportWidth);
 
-    const filename = page.locator(".upload-complete-filename");
+    const filename = page.locator(".upload-dataset-file");
     await expect(filename).toHaveAttribute("title", LONG_FILENAME);
     const filenameBox = await filename.boundingBox();
     expect(filenameBox).not.toBeNull();
@@ -233,11 +250,13 @@ test.describe("Analysis complete mobile layout", () => {
   test("keeps primary transition controls and secondary details in the right state", async ({ page }) => {
     await renderCompletionFixture(page);
 
-    await expect(page.getByRole("button", { name: "View Results" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze New Telemetry" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open Command Center" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Analyze Another Dataset" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Analysis Complete" })).toHaveCount(1);
+    await expect(page.getByText("Behavior baseline established and evidence saved.")).toBeVisible();
 
-    const fingerprintValue = page.locator(".upload-result-summary__item", { hasText: "Baseline" }).locator("strong");
-    await expect(fingerprintValue).toHaveText("Changed");
+    const fingerprintValue = page.locator(".upload-result-summary__item", { hasText: "Relationship change" }).locator("dd");
+    await expect(fingerprintValue).toHaveText("Detected");
     expect(await visibleAtCenter(fingerprintValue)).toBe(true);
 
     const buttonRects = await page.locator(".upload-simple-actions button").evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().top));

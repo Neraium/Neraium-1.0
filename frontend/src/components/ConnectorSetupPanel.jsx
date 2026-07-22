@@ -105,9 +105,7 @@ export default function ConnectorSetupPanel({ apiFetch, accessCode, currentUser 
     }
   }
 
-  if (!isAdmin) {
-    return <section className="connector-setup" aria-label="Telemetry connector permissions"><h2>Telemetry connectors</h2><p>Only administrators can configure connectors or review connector health. Import a CSV dataset for analysis, or ask an administrator to configure a supported read-only connector.</p></section>;
-  }
+  if (!isAdmin) return null;
 
   const functionalTypes = types.filter((item) => item.functional && ["rest", "database"].includes(item.connector_type));
   return (

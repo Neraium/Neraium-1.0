@@ -109,7 +109,7 @@ test.describe("Frontend production resilience", () => {
     const retryGate = new Promise((resolve) => { releaseRetry = resolve; });
     const connectorPattern = "**/api/connectors/database/test";
 
-    await page.goto("/workspace/data-sources", { waitUntil: "domcontentloaded" });
+    await page.goto("/workspace/admin", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Telemetry Connector Setup" })).toBeVisible();
     await page.getByLabel("Connector type").selectOption("database");
     await page.getByLabel("Database URL").fill(e2eDatabaseURL);

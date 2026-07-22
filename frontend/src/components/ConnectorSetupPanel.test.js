@@ -12,10 +12,11 @@ const reply = (payload, status = 200) => ({ ok: status >= 200 && status < 300, s
 afterEach(() => { cleanup(); window.sessionStorage.clear(); vi.clearAllMocks(); });
 
 describe("ConnectorSetupPanel", () => {
-  it("explains operator permissions without calling admin endpoints", () => {
+  it("renders nothing for non-administrators and does not call admin endpoints", () => {
     const apiFetch = vi.fn();
-    render(h(ConnectorSetupPanel, { apiFetch, currentUser: { role: "operator" } }));
-    expect(screen.getByText(/Only administrators can configure connectors/i)).toBeTruthy();
+    const { container } = render(h(ConnectorSetupPanel, { apiFetch, currentUser: { role: "operator" } }));
+    expect(container.innerHTML).toBe("");
+    expect(screen.queryByRole("heading", { name: /Telemetry connector/i })).toBeNull();
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
