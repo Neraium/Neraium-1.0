@@ -134,7 +134,8 @@ async function commandCenterMobileMetrics(page) {
 async function scrollFinalSectionAboveBrowserControls(page) {
   return page.evaluate(() => {
     window.scrollTo(0, document.documentElement.scrollHeight);
-    const finalSection = document.querySelector(".command-section--advanced");
+    const sections = Array.from(document.querySelectorAll(".operational-command-center > .command-section"));
+    const finalSection = sections.at(-1);
     const rect = finalSection?.getBoundingClientRect() ?? null;
     return {
       top: rect?.top ?? null,
@@ -246,7 +247,7 @@ test.describe("Responsive layout audit", () => {
       expect(metrics.mainRight, viewport.name).toBeLessThanOrEqual(metrics.viewportWidth + 1);
       expect(metrics.heroLeft, viewport.name).toBeGreaterThanOrEqual(0);
       expect(metrics.heroRight, viewport.name).toBeLessThanOrEqual(metrics.viewportWidth + 1);
-      await expect(page.getByRole("heading", { name: "Operational Fingerprint Summary" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Current state" })).toBeVisible();
     }
   });
 

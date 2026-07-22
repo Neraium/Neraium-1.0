@@ -105,7 +105,35 @@ function evidenceQuality(model) {
   return { label: "Unavailable", reason: "Evidence quality has not been reported for this analysis." };
 }
 
-function OperatingStateSummary({ model, status, topInsight, helpers, systems, onConnectLiveData, onOpenInvestigation, onViewEvidence }) {
+function EmptyOperatingStateSummary({ onConnectLiveData }) {
+  return (
+    <section className="command-section operating-state-card operating-state-card--empty command-section--neutral" aria-label="Operational Status">
+      <h2 id="operating-state-heading" className="sr-only">Current state</h2>
+      <div className="operating-state-card__main">
+        <p className="command-section__label">Current state</p>
+        <strong className="operating-state-card__status">Watching</strong>
+      </div>
+      <dl className="operating-state-card__meta">
+        <div><dt>Baseline</dt><dd>Not established</dd></div>
+        <div><dt>Evidence quality</dt><dd>No telemetry</dd></div>
+      </dl>
+      <div className="operating-state-card__actions">
+        <div className="operating-state-card__action-group">
+          <span>Primary action</span>
+          <button type="button" className="command-button" onClick={onConnectLiveData}>Connect telemetry</button>
+        </div>
+        <div className="operating-state-card__action-group">
+          <span>Secondary action</span>
+          <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onConnectLiveData}>Import dataset</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OperatingStateSummary({ model, status, topInsight, helpers, systems, onConnectLiveData, onOpenInvestigation, onViewEvidence, emptyState }) {
+  if (emptyState) return <EmptyOperatingStateSummary onConnectLiveData={onConnectLiveData} />;
+
   const affected = topInsight?.system || systems.find((system) => Number(system.activeInsights) > 0)?.name;
   const summary = topInsight && affected
     ? `The ${affected} subsystem moved away from its learned operating baseline.`
@@ -164,7 +192,16 @@ function subsystemStatus(system) {
   return status;
 }
 
-function SubsystemBehavior({ systems = [] }) {
+function SubsystemBehavior({ systems = [], emptyState = false }) {
+  if (emptyState) {
+    return (
+      <section className="command-section subsystem-behavior subsystem-behavior--empty" aria-labelledby="subsystem-behavior-heading">
+        <div className="command-section__header"><h2 id="subsystem-behavior-heading">Subsystems</h2></div>
+        <strong className="command-empty-status">No active status available</strong>
+      </section>
+    );
+  }
+
   const safeSystems = Array.isArray(systems) ? systems.filter(Boolean) : [];
   return (
     <section className="command-section subsystem-behavior" aria-labelledby="subsystem-behavior-heading">
@@ -219,7 +256,7 @@ function PriorityFinding({ insight, model, helpers, onOpen }) {
   );
 }
 
-function EngineeringFindings({ insights, selectedInsight, onSelectInsight, helpers }) {
+function EngineeringFindings({ insights, selectedInsight, onSelectInsight, helpers, emptyState = false }) {
   const queueRef = useRef(null);
   function handleKeyDown(event) {
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
@@ -229,6 +266,11 @@ function EngineeringFindings({ insights, selectedInsight, onSelectInsight, helpe
     const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : event.key === "ArrowDown" ? Math.min(buttons.length - 1, index + 1) : Math.max(0, index - 1);
     buttons[next]?.focus();
   }
+  if (emptyState) return <section className="command-section command-section--findings command-section--findings-empty" aria-labelledby="engineering-findings-heading">
+    <div className="command-section__header"><h2 id="engineering-findings-heading">Engineering Findings</h2></div>
+    <strong className="command-empty-status">None active</strong>
+  </section>;
+
   return <section className="command-section command-section--findings" aria-labelledby="engineering-findings-heading">
     <div className="command-section__header"><h2 id="engineering-findings-heading">Engineering Findings</h2><p>{insights.length ? "Additional findings in priority order." : "No additional active findings."}</p></div>
     {insights.length ? <div className="operational-findings-list" role="list" ref={queueRef} onKeyDown={handleKeyDown}>{insights.map((insight, index) => <div role="listitem" className="operational-finding-row-wrap" key={insight.id || index}><button type="button" className={selectedInsight?.id === insight.id ? "operational-finding-row is-selected" : "operational-finding-row"} data-priority-item="true" onClick={() => onSelectInsight?.(insight.id)}><span className="operational-finding-row__title">{titleFor(insight, helpers)}</span><span className={`operational-finding-row__severity operational-finding-row__severity--${helpers.severityToTone(insight.severity)}`}>{severityLabel(insight.severity)}</span><span className="operational-finding-row__confidence">Finding confidence {findingConfidenceLabel(insight)}</span><span className="operational-finding-row__summary">{summaryFor(insight, helpers)}</span></button></div>)}</div> : <div className="operational-empty operational-empty--inline"><p className="operational-findings-empty">{selectedInsight ? "No additional findings require review." : "Connect telemetry to establish the baseline."}</p></div>}
@@ -257,15 +299,16 @@ export default function CommandCenterView({ model, helpers, selectedInsight, onO
   const status = useMemo(() => operationalStatus(model, queue), [model, queue]);
   const systems = normalizedSystemCards(model);
   const remaining = top ? queue.filter((item) => item.id !== top.id) : [];
+  const emptyState = !model.analysisComplete && status.tone !== "loading";
   const openTop = () => onOpenInvestigation?.(top?.id);
   const viewEvidence = () => onOpenInvestigation?.(top?.id, { focusTarget: "insight-evidence" });
 
-  return <div className="operational-command-center" data-testid="operational-command-center">
-    <OperatingStateSummary model={model} status={status} topInsight={top} helpers={helpers} systems={systems} onConnectLiveData={onConnectLiveData} onOpenInvestigation={openTop} onViewEvidence={viewEvidence} />
-    <SubsystemBehavior systems={systems} />
+  return <div className={emptyState ? "operational-command-center operational-command-center--empty" : "operational-command-center"} data-testid="operational-command-center">
+    <OperatingStateSummary model={model} status={status} topInsight={top} helpers={helpers} systems={systems} onConnectLiveData={onConnectLiveData} onOpenInvestigation={openTop} onViewEvidence={viewEvidence} emptyState={emptyState} />
+    <SubsystemBehavior systems={systems} emptyState={emptyState} />
     <PriorityFinding insight={top} model={model} helpers={helpers} onOpen={openTop} />
-    <EngineeringFindings insights={remaining} selectedInsight={active?.id === top?.id ? null : active} onSelectInsight={(insightId) => onOpenInvestigation?.(insightId)} helpers={helpers} />
-    <section className="command-section command-section--systems" aria-labelledby="system-overview-heading"><div className="command-section__header"><h2 id="system-overview-heading">Discovered Systems</h2><p>Detected in the operational data.</p></div>{systems.length ? <div className="system-overview-list" role="list">{systems.map((system) => <div className="system-overview-row" role="listitem" key={system.id}><strong>{system.name}</strong><span>{subsystemStatus(system)}</span><span>{Number(system.activeInsights) || 0} active finding{String(Number(system.activeInsights) || 0) === "1" ? "" : "s"}</span></div>)}</div> : <p className="operational-findings-empty">No systems are listed because no completed telemetry analysis is active.</p>}</section>
-    <AdvancedDashboardSection model={model} />
+    <EngineeringFindings insights={remaining} selectedInsight={active?.id === top?.id ? null : active} onSelectInsight={(insightId) => onOpenInvestigation?.(insightId)} helpers={helpers} emptyState={emptyState} />
+    {!emptyState ? <section className="command-section command-section--systems" aria-labelledby="system-overview-heading"><div className="command-section__header"><h2 id="system-overview-heading">Discovered Systems</h2><p>Detected in the operational data.</p></div>{systems.length ? <div className="system-overview-list" role="list">{systems.map((system) => <div className="system-overview-row" role="listitem" key={system.id}><strong>{system.name}</strong><span>{subsystemStatus(system)}</span><span>{Number(system.activeInsights) || 0} active finding{String(Number(system.activeInsights) || 0) === "1" ? "" : "s"}</span></div>)}</div> : <p className="operational-findings-empty">No systems are listed because no completed telemetry analysis is active.</p>}</section> : null}
+    {!emptyState ? <AdvancedDashboardSection model={model} /> : null}
   </div>;
 }

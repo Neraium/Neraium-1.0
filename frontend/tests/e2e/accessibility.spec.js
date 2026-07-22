@@ -23,8 +23,8 @@ test.describe("Accessibility audit", () => {
     const skipLink = page.getByRole("button", { name: "Skip to main content" });
     await expect(main).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Primary workflow navigation" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Operational Status" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Import and Analyze Dataset" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Current state" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Import dataset" })).toBeVisible();
 
     await page.keyboard.press("Tab");
     await expect(skipLink).toBeFocused();
@@ -64,7 +64,7 @@ test.describe("Accessibility audit", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
-    await expect(page.getByRole("heading", { name: "Operational Status" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Current state" })).toBeVisible();
 
     await page.setViewportSize({ width: 320, height: 800 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
