@@ -26,6 +26,9 @@ def build_analysis_explanation(result: dict[str, Any]) -> dict[str, Any]:
         intelligence=intelligence,
         result=result,
     )
+    water_insights = water_interpreted_insights(result.get("water_intelligence"))
+    if water_insights:
+        insights = [*water_insights, *insights]
     systems = build_systems(
         baseline=baseline,
         relationship_model=relationship_model,
@@ -112,6 +115,29 @@ def build_executive_summary(
         "recommended_action": recommendation,
     }
     return {key: value for key, value in summary.items() if value}
+
+
+def water_interpreted_insights(water_intelligence: Any) -> list[dict[str, Any]]:
+    if not isinstance(water_intelligence, dict):
+        return []
+    insights = []
+    for index, item in enumerate(water_intelligence.get("insights") or []):
+        if not isinstance(item, dict):
+            continue
+        insight = dict(item)
+        insight.setdefault("id", f"water-interpretation-{index}")
+        insight.setdefault("title", "Water interpretation")
+        insight.setdefault("system", insight.get("affected_system") or "Water system")
+        insight.setdefault("affected_systems", [insight.get("system") or "Water system"])
+        insight.setdefault("observed", insight.get("observed_evidence") or [])
+        insight.setdefault("evidence_items", insight.get("observed_evidence") or [])
+        insight.setdefault("evidence", insight.get("observed_evidence") or [])
+        insight.setdefault("recommended_operator_check", first_item([check.get("check") for check in insight.get("recommended_checks", []) if isinstance(check, dict)]))
+        insight.setdefault("recommended_investigation", [check.get("check") for check in insight.get("recommended_checks", []) if isinstance(check, dict) and check.get("check")])
+        insight.setdefault("possible_operational_causes", [item.get("explanation") for item in insight.get("possible_explanations", []) if isinstance(item, dict) and item.get("explanation")])
+        insight.setdefault("why_it_matters", insight.get("possible_operational_consequence"))
+        insights.append(compact_dict(insight))
+    return insights
 
 
 def build_insights(

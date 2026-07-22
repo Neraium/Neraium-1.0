@@ -30,7 +30,7 @@ def _observation_variables_from_result(result: dict[str, Any]) -> list[str]:
 
 def _data_conditions_from_result(result: dict[str, Any]) -> list[str]:
     data_quality = result.get("data_quality") or {}
-    warnings = data_quality.get("warnings") if isinstance(data_quality, dict) else []
+    warnings = (data_quality.get("warnings") if isinstance(data_quality, dict) else []) or []
     conditions = [str(item) for item in warnings if str(item).strip()]
     processing_trace = result.get("processing_trace") or {}
     if processing_trace.get("completed_with_partial_result"):
@@ -233,6 +233,16 @@ def build_evidence_record_from_result(
     primary_drivers = [str(sii.get("primary_driver"))] if sii.get("primary_driver") else []
     supporting_evidence = [str(item) for item in (sii.get("supporting_evidence") or [])[:6]]
     archetypes = [str(item) for item in (sii.get("structural_archetypes") or [])[:4]]
+    water_intelligence = result.get("water_intelligence") if isinstance(result.get("water_intelligence"), dict) else {}
+    water_prior_versions = [
+        {
+            "relationship_prior_id": item.get("relationship_prior_id"),
+            "relationship_prior_version": item.get("relationship_prior_version"),
+            "sii_finding_id": item.get("sii_finding_id"),
+        }
+        for item in water_intelligence.get("insights", [])
+        if isinstance(item, dict) and item.get("relationship_prior_id")
+    ]
     return {
         "run_id": run_id,
         "job_id": run_id,
@@ -274,4 +284,6 @@ def build_evidence_record_from_result(
         "regime_label": str(sii.get("baseline_regime") or sii.get("regime_label") or "State Group A"),
         "structural_state": structural_state,
         "deformation_started_at": _deformation_started_at(result),
+        "water_intelligence": water_intelligence,
+        "water_prior_versions": water_prior_versions,
     }
