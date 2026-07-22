@@ -67,17 +67,19 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
 async function startCommandCenterUpload(page, { name, csv }) {
   await page.goto("/", { waitUntil: "load" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-  await expect(page.getByRole("button", { name: "Import dataset" })).toBeVisible();
+  await page.getByRole("button", { name: "Data Connections" }).click();
+  await expect(page.getByRole("heading", { name: "Import and Analyze Dataset", level: 2 })).toBeVisible();
 
   const uploadAcceptedPromise = page.waitForResponse(
     (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
     { timeout: 30000 },
   );
-  await page.getByTestId("overview-csv-upload-input").setInputFiles({
+  await page.getByTestId("csv-upload-input").setInputFiles({
     name,
     mimeType: "text/csv",
     buffer: Buffer.from(csv, "utf8"),
   });
+  await page.getByRole("button", { name: "Analyze Dataset" }).click();
   await expect(page.getByTestId("upload-workspace")).toBeVisible({ timeout: 30000 });
   const uploadAccepted = await uploadAcceptedPromise;
   expect(uploadAccepted.ok()).toBeTruthy();
@@ -96,9 +98,10 @@ test.describe("Functional verification", () => {
     });
 
     await waitForUploadComplete(page, uploadJobId, 180000);
+    const viewResults = page.getByRole("button", { name: /View Results|Open Portfolio/i });
+    if (await viewResults.count()) await viewResults.first().click();
     await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible({ timeout: 30000 });
-    await expect(page.getByRole("region", { name: "Operational Status" })).not.toContainText("Baseline Needed");
-    await expect(page.getByTestId("operational-orb")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Behavior Baseline/i }).first()).toBeVisible();
+    await expect(page.getByTestId("engineering-reasoning-platform")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Where does the evidence warrant attention/i })).toBeVisible();
   });
 });

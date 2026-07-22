@@ -45,7 +45,7 @@ function suppressExpectedGateRenderWindowError() {
 }
 
 async function launchWorkspace() {
-  const launchButtons = screen.queryAllByRole("button", { name: "Open Command Center" });
+  const launchButtons = screen.queryAllByRole("button", { name: /Open Portfolio|Open Command Center/ });
   if (launchButtons.length) {
     fireEvent.click(launchButtons[0]);
   }
@@ -80,7 +80,7 @@ vi.mock("./hooks/useFacilityRuntime", () => ({
   }),
 }));
 
-vi.mock("./components/OperationalWorkflowWorkspace", () => ({
+vi.mock("./components/EngineeringReasoningWorkspace", () => ({
   default: ({ liveOps, onWorkspaceNavigate, onResumePreviousSession, onSignOut, gateProcessing, onCsvSelected }) => {
     if (runtimeState.throwGateError) {
       throw new Error("gate render failed");

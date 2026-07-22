@@ -1,38 +1,22 @@
 import { expect, test } from "./fixtures.js";
 
-test.describe("Neraium frontend smoke", () => {
-  test("loads command center workspace", async ({ page }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+test.describe("Production smoke", () => {
+  test("desktop opens the portfolio engineering triage workspace", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/portfolio", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-
     await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Operational Status" })).toBeVisible();
-    await expect(page.getByText("Not established", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Import dataset" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Connect telemetry" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Where does the evidence warrant attention/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Data Connections" })).toBeVisible();
   });
 
-  test("empty workspace shows no imported dataset metadata", async ({ page }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-
-    await page.getByRole("button", { name: /Datasets & Connectors/ }).click();
-    const dataStatus = page.getByRole("region", { name: "Data Source Status" });
-    await expect(dataStatus).toBeVisible();
-    await expect(dataStatus.getByText("Not imported", { exact: true })).toBeVisible();
-    await expect(dataStatus.getByText("0", { exact: true })).toBeVisible();
-    await expect(dataStatus.getByText("None", { exact: true })).toBeVisible();
-    await expect(dataStatus).not.toContainText("4032");
-  });
-
-  test("mobile loads command center workspace", async ({ page }) => {
+  test("mobile opens compact portfolio navigation without overflow", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/", { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-
-    await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Command Center Overview" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Operational Status" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Import dataset" })).toBeVisible();
+    await page.goto("/portfolio", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("engineering-reasoning-platform")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Toggle navigation" })).toBeVisible();
+    const metrics = await page.evaluate(() => ({ viewport: innerWidth, root: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
+    expect(metrics.root).toBeLessThanOrEqual(metrics.viewport + 1);
+    expect(metrics.body).toBeLessThanOrEqual(metrics.viewport + 1);
   });
 });

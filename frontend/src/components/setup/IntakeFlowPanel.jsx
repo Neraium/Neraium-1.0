@@ -68,8 +68,8 @@ function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }
   if (viewState === "finalizing") {
     const normalized = primaryJobStatus(uploadJob, uploadState);
     if (normalized === "saving_results") return "Saving evidence record";
-    if (normalized === "navigation_pending") return "Opening Command Center";
-    return "Preparing Command Center...";
+    if (normalized === "navigation_pending") return "Opening Portfolio";
+    return "Preparing Portfolio...";
   }
   if (viewState === "failed") return "Dataset Import Failed";
   if (viewState === "completion_error") return "Analysis Saved, Results Not Opened";
@@ -260,7 +260,7 @@ function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
       return { ...FINGERPRINT_BUILD_STAGES[3], label: "Saving evidence record", index: 3 };
     }
     if (normalized === "navigation_pending") {
-      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Opening Command Center", index: 3 };
+      return { ...FINGERPRINT_BUILD_STAGES[3], label: "Opening Portfolio", index: 3 };
     }
     return { ...FINGERPRINT_BUILD_STAGES[3], index: 3 };
   }
@@ -570,7 +570,7 @@ function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queued
 function buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage }) {
   if (viewState === "completion_error") {
     return [
-      ["What failed", "The analysis saved, but Command Center did not open the result."],
+      ["What failed", "The analysis saved, but Portfolio did not open the result."],
       ["What still succeeded", "The behavior baseline and evidence record were saved."],
       ["Next action", "Open the analysis again. If that fails, analyze another dataset or refresh."],
     ];
@@ -816,7 +816,7 @@ export default function IntakeFlowPanel({
                 ))}
               </dl>
               <div className="upload-simple-actions upload-completion-actions">
-                <button type="button" className="command-button upload-completion-actions__primary" onClick={onViewResults}>Open Command Center</button>
+                <button type="button" className="command-button upload-completion-actions__primary" onClick={onViewResults}>Open Portfolio</button>
                 <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onResetWorkspace}>Analyze Another Dataset</button>
               </div>
             </div>

@@ -1,27 +1,27 @@
 export const WORKSPACES = [
   {
     id: "system-body",
-    label: "Command Center",
-    eyebrow: "Operational State",
-    description: "Facility state, behavior baseline, discovered systems, and highest-priority insight.",
+    label: "Portfolio",
+    eyebrow: "Engineering Triage",
+    description: "Sites, structural stability, evidence quality, and bounded operational findings.",
   },
   {
     id: "data-connections",
-    label: "Datasets & Connectors",
+    label: "Data Connections",
     eyebrow: "Telemetry",
     description: "Import telemetry datasets and configure supported read-only connectors.",
   },
   {
     id: "observation-center",
-    label: "Insights",
-    eyebrow: "Review",
-    description: "Prioritized operational insights, evidence, and recommended investigations.",
+    label: "Investigations",
+    eyebrow: "Reasoning",
+    description: "Operational findings, relationship evidence, limitations, and investigation outcomes.",
   },
   {
     id: "system-story",
-    label: "Analysis Details",
-    eyebrow: "Analysis",
-    description: "Review analysis history, evidence metadata, source details, and support diagnostics.",
+    label: "Trace Mode",
+    eyebrow: "Audit",
+    description: "Review the read-only computational lineage behind a bounded conclusion.",
   },
   {
     id: "help-changelog",

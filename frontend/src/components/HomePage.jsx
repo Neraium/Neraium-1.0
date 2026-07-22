@@ -92,7 +92,7 @@ export default function HomePage({ onLaunchWorkspace }) {
           <button type="button" onClick={() => scrollToSection("systems")}>Systems</button>
           <button type="button" onClick={() => scrollToSection("about")}>About</button>
         </nav>
-        <button type="button" className="home-nav__launch" onClick={onLaunchWorkspace}>Open Command Center</button>
+        <button type="button" className="home-nav__launch" onClick={onLaunchWorkspace}>Open Portfolio</button>
       </header>
 
       <main id="main-content" tabIndex={-1}>
@@ -132,7 +132,7 @@ export default function HomePage({ onLaunchWorkspace }) {
           </div>
 
           <div className="home-hero__actions" role="group" aria-label="Primary actions">
-            <button type="button" className="home-command" onClick={onLaunchWorkspace}>Open Command Center</button>
+            <button type="button" className="home-command" onClick={onLaunchWorkspace}>Open Portfolio</button>
             <button type="button" className="home-secondary" onClick={() => scrollToSection("platform")}>View Platform</button>
           </div>
         </section>
@@ -186,7 +186,7 @@ export default function HomePage({ onLaunchWorkspace }) {
               Neraium presents SII analyses as prioritized insights with supporting evidence, while keeping every connector and recommendation read-only.
             </p>
           </div>
-          <button type="button" className="home-command" onClick={onLaunchWorkspace}>Open Command Center</button>
+          <button type="button" className="home-command" onClick={onLaunchWorkspace}>Open Portfolio</button>
         </section>
       </main>
     </div>

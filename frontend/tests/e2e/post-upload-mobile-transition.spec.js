@@ -68,16 +68,20 @@ async function startCommandCenterUpload(page, { name, csv }) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
   await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
+  await page.getByRole("button", { name: "Toggle navigation" }).click();
+  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "Data Connections" }).click();
+  await expect(page.getByRole("heading", { name: "Import and Analyze Dataset", level: 2 })).toBeVisible();
 
   const uploadAcceptedPromise = page.waitForResponse(
     (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
     { timeout: 30000 },
   );
-  await page.getByTestId("overview-csv-upload-input").setInputFiles({
+  await page.getByTestId("csv-upload-input").setInputFiles({
     name,
     mimeType: "text/csv",
     buffer: Buffer.from(csv, "utf8"),
   });
+  await page.getByRole("button", { name: "Analyze Dataset" }).click();
   await expect(page.getByTestId("upload-workspace")).toBeVisible({ timeout: 30000 });
   const uploadAccepted = await uploadAcceptedPromise;
   const uploadPayload = await uploadAccepted.json().catch(() => ({}));
@@ -103,9 +107,9 @@ test.describe("Mobile post-upload transition", () => {
     await waitForUploadComplete(page, uploadJobId, 180000);
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
 
-    const completionFallback = page.getByRole("button", { name: "Open Command Center" });
-    const commandCenter = page.getByRole("main", { name: "Neraium platform workspace" });
-    await expect(completionFallback.or(commandCenter).first()).toBeVisible({ timeout: 30000 });
+    const completionFallback = page.getByRole("button", { name: /View Results|Open Portfolio/i });
+    const workspace = page.getByRole("main", { name: "Neraium platform workspace" });
+    await expect(completionFallback.or(workspace).first()).toBeVisible({ timeout: 30000 });
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
   });
 });

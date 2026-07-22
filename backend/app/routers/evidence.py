@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.core.security import require_api_access, require_operator_role
 from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse, LatestEvidenceResponse, OperatorFeedbackRequest
-from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, latest_evidence_run, list_evidence_runs_page, read_evidence_run, record_operator_feedback
+from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, build_evidence_package_payload, build_evidence_package_pdf, latest_evidence_run, list_evidence_runs_page, read_evidence_run, record_operator_feedback, tag_evidence_for_audit
 from app.services.runtime_db import now_iso, record_audit_event
 from app.routers import data as data_router
 from app.services.upload_state_repository import read_evidence_by_identity
@@ -76,6 +76,54 @@ def export_evidence_run(request: Request, run_id: RunIdPath, format: Literal["ma
         media_type="text/markdown",
         headers={"Content-Disposition": f'attachment; filename="neraium-evidence-{run_id}.md"'},
     )
+
+
+@router.get("/evidence/package/{run_id}", response_model=None, dependencies=[Depends(require_operator_role)])
+def export_evidence_package(request: Request, run_id: RunIdPath, format: Literal["pdf", "json"] = Query(default="pdf")):
+    record = read_evidence_by_identity(run_id) or read_evidence_run(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Evidence run not found.")
+    package = build_evidence_package_payload(record)
+    auth_context = getattr(request.state, "auth_context", {})
+    record_audit_event(
+        actor=auth_context.get("auth_subject", record.get("initiated_by", "unknown")),
+        action="evidence.package.export",
+        resource_type="evidence_run",
+        resource_id=run_id,
+        request_id=auth_context.get("request_id"),
+        detail={"format": format, "raw_telemetry_included": package["governance"]["raw_telemetry_included"]},
+    )
+    if format == "json":
+        return JSONResponse(
+            content=package,
+            headers={"Content-Disposition": f'attachment; filename="neraium-evidence-{run_id}.json"'},
+        )
+    return Response(
+        content=build_evidence_package_pdf(record),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="neraium-evidence-{run_id}.pdf"'},
+    )
+
+
+@router.post("/evidence/runs/{run_id}/audit-tag", response_model=EvidenceRunResponse, dependencies=[Depends(require_operator_role)])
+def tag_evidence_run_for_audit(request: Request, run_id: RunIdPath) -> dict[str, Any]:
+    auth_context = getattr(request.state, "auth_context", {})
+    actor = auth_context.get("auth_subject", "operator")
+    try:
+        updated = tag_evidence_for_audit(run_id, actor, now_iso())
+    except ValueError as error:
+        if str(error) == "evidence_run_not_found":
+            raise HTTPException(status_code=404, detail="Evidence run not found.") from None
+        raise
+    record_audit_event(
+        actor=actor,
+        action="evidence.audit.tagged",
+        resource_type="evidence_run",
+        resource_id=run_id,
+        request_id=auth_context.get("request_id"),
+        detail={"tag_count": len(updated.get("audit_tags") or [])},
+    )
+    return updated
 
 
 @router.post("/evidence/runs/{run_id}/feedback", response_model=EvidenceRunResponse, dependencies=[Depends(require_operator_role)])

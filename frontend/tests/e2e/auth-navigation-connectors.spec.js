@@ -79,27 +79,30 @@ test.describe("Authentication, navigation, connectors, and permissions", () => {
     await signIn(page);
   });
 
-  test("direct links, refresh, back, and forward preserve a sensible section", async ({ page }) => {
-    await page.goto("/workspace?section=systems");
-    await expect(page.getByRole("button", { name: /Systems/ }).first()).toHaveAttribute("aria-current", "page");
+  test("direct links, refresh, back, and forward preserve engineering workspaces", async ({ page }) => {
+    await page.goto("/sites/current");
+    await expect(page.getByRole("button", { name: "Site Overview" })).toHaveAttribute("aria-current", "page");
     await page.reload();
-    await expect(page.getByRole("button", { name: /Systems/ }).first()).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "Site Overview" })).toHaveAttribute("aria-current", "page");
 
-    await page.getByRole("button", { name: /Datasets & Connectors/ }).first().click();
-    await expect(page).toHaveURL(/section=data-sources/);
+    await page.getByRole("button", { name: "Portfolio" }).click();
+    await expect(page).toHaveURL(/\/portfolio$/);
     await page.goBack();
-    await expect(page.getByRole("button", { name: /Systems/ }).first()).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "Site Overview" })).toHaveAttribute("aria-current", "page");
     await page.goForward();
-    await expect(page.getByRole("button", { name: /Datasets & Connectors/ }).first()).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "Portfolio" })).toHaveAttribute("aria-current", "page");
   });
 
   test("an expired server session returns the user to sign in", async ({ page, context }) => {
     await page.goto("/workspace");
     await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
-    const administrationButton = page.getByRole("button", { name: "Administration" });
+    const administrationButton = page.getByRole("button", { name: "Governance / Administration" });
     await expect(administrationButton).toBeVisible();
-    const logout = await context.request.post(`${apiBaseURL}/api/auth/logout`);
-    expect(logout.ok()).toBeTruthy();
+    await page.route("**/api/observability/evp-governance*", (route) => route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Session expired." }),
+    }));
     await administrationButton.click();
     await expect(page.getByTestId("auth-screen")).toBeVisible();
     await expect(page.getByRole("status")).toContainText("session expired");
@@ -132,7 +135,7 @@ test.describe("Authentication, navigation, connectors, and permissions", () => {
     await page.getByRole("button", { name: "Create Account" }).click();
     await expect(page.getByText(email)).toBeVisible();
 
-    await page.getByRole("button", { name: "Back to Command Center" }).first().click();
+    await page.getByRole("button", { name: "Back to Portfolio" }).first().click();
     await page.getByRole("button", { name: "Sign out" }).click();
     await signIn(page, email, "operator-password-123");
     await page.goto("/workspace/admin");

@@ -145,6 +145,10 @@ class EvidenceRunResponse(BaseModel):
     regime_label: str | None = None
     structural_state: str | None = None
     deformation_started_at: str | None = None
+    confidence_tier: str | None = None
+    governance_boundary: dict[str, Any] = Field(default_factory=dict)
+    engineering_priors_used: list[dict[str, Any] | str] = Field(default_factory=list)
+    audit_tags: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class OperatorFeedbackRequest(ContractModel):

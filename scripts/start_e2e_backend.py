@@ -7,7 +7,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
-os.environ.setdefault("APP_ENV", "production")
+os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("NERAIUM_RUNTIME_DIR", str(ROOT / ".playwright-runtime"))
 os.environ.setdefault("NERAIUM_START_BACKGROUND_WORKERS", "1")
 os.environ.setdefault("NERAIUM_START_DATA_POLLER", "0")

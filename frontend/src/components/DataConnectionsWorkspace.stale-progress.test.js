@@ -434,7 +434,7 @@ it("complete state shows the behavior baseline completion moment", () => {
     "Prepare: completed", "Baseline: completed", "Compare: completed", "Save: completed",
   ]);
   expect(completedStages[3].classList.contains("is-final")).toBe(true);
-  const primary = screen.getByRole("button", { name: "Open Command Center" });
+  const primary = screen.getByRole("button", { name: "Open Portfolio" });
   const secondary = screen.getByRole("button", { name: "Analyze Another Dataset" });
   expect(primary.classList.contains("upload-completion-actions__primary")).toBe(true);
   expect(secondary.classList.contains("upload-completion-actions__secondary")).toBe(true);
@@ -544,7 +544,7 @@ it("shows finalizing results instead of fake zero counts before AnalysisResult i
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByLabelText("Analysis progress: Preparing Command Center...")).toBeTruthy();
+  expect(screen.getByLabelText("Analysis progress: Preparing Portfolio...")).toBeTruthy();
   expect(screen.getByText("Saving evidence record")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Analysis Complete" })).toBeNull();
   expect(document.querySelector(".upload-result-summary")).toBeNull();
@@ -609,7 +609,7 @@ it("previous completed upload does not leak progress into new idle upload screen
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
 });
 
-it("treats the first complete payload with a saved result as terminal and auto-opens Command Center after the fallback is visible", async () => {
+it("treats the first complete payload with a saved result as terminal and auto-opens Portfolio after the fallback is visible", async () => {
   uploadTelemetryFileWithProgress.mockResolvedValue({
     ok: true,
     status: 202,
@@ -650,7 +650,7 @@ it("treats the first complete payload with a saved result as terminal and auto-o
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: false });
   });
 
-  expect(await screen.findByRole("button", { name: "Open Command Center" })).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "Open Portfolio" })).toBeTruthy();
   expect(screen.getByText("Behavior baseline established and evidence saved.")).toBeTruthy();
 
   await waitFor(() => {

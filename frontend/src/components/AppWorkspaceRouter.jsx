@@ -7,7 +7,7 @@ import { extractTelemetryBoundaryMeta } from "../viewModels/uploadState";
 
 const HomePage = lazy(() => import("./HomePage"));
 const DataConnectionsWorkspace = lazy(() => import("./DataConnectionsWorkspace"));
-const OperationalWorkflowWorkspace = lazy(() => import("./OperationalWorkflowWorkspace"));
+const EngineeringReasoningWorkspace = lazy(() => import("./EngineeringReasoningWorkspace"));
 const SystemStoryWorkspace = lazy(() => import("./SystemStoryWorkspace"));
 const GovernanceAdminWorkspace = lazy(() => import("./GovernanceAdminWorkspace"));
 const ObservationCenterWorkspace = lazy(() => import("./ObservationCenterWorkspace"));
@@ -48,9 +48,9 @@ function WorkspaceWithBackControl({
                 type="button"
                 className="workspace-back-control__button"
                 onClick={handleBackToGate}
-                aria-label="Back to Command Center"
+                aria-label="Back to Portfolio"
               >
-                Command Center
+                Portfolio
               </button>
               {contextLabel ? <span className="workspace-back-control__breadcrumb" aria-current="page">{contextLabel}</span> : null}
             </div>
@@ -131,7 +131,7 @@ export default function AppWorkspaceRouter({
         errorBoundaryResetKey={errorBoundaryResetKey}
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
-        contextLabel="Datasets & Connectors"
+        contextLabel="Data Connections"
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
@@ -293,8 +293,8 @@ export default function AppWorkspaceRouter({
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace} errorContext={{ ...errorContext, workspaceId: activeWorkspace }}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <Suspense fallback={renderLoadingPanel("Opening Command Center", "Prioritizing findings and loading facility state...")}>
-          <OperationalWorkflowWorkspace
+        <Suspense fallback={renderLoadingPanel("Opening engineering workspace", "Preparing site evidence and relationship context...")}>
+          <EngineeringReasoningWorkspace
             liveOps={{
               ...liveOps,
               replayOverlay: historianReplayState.frame ?? null,
@@ -314,6 +314,7 @@ export default function AppWorkspaceRouter({
             onSignOut={handleSignOut}
             signOutPending={signOutPending}
             currentUser={currentUser}
+            apiFetch={apiFetch}
             onCsvSelected={(files) => {
               setPendingUploadFiles(files);
               setActiveWorkspace("data-connections");

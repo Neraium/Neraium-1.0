@@ -19,7 +19,7 @@ import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/syst
 const HOME_PATH = "/";
 const WORKSPACE_PATHS = {
   home: "/home",
-  "system-body": "/workspace",
+  "system-body": "/portfolio",
   "data-connections": "/workspace/data-sources",
   "observation-center": "/workspace/insights",
   "system-story": "/workspace/advanced",
@@ -32,6 +32,7 @@ function readInitialWorkspaceRoute() {
   if (typeof window === "undefined") return "system-body";
   const pathname = window.location.pathname.replace(/\/+$/, "") || HOME_PATH;
   if (pathname === HOME_PATH || pathname === "/signin") return "system-body";
+  if (["/portfolio", "/workspace"].includes(pathname) || pathname.startsWith("/sites/") || pathname.startsWith("/investigations") || pathname.startsWith("/evidence") || pathname.startsWith("/trace")) return "system-body";
   return PATH_WORKSPACES[pathname] ?? "system-body";
 }
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import csv
 import logging
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -157,6 +158,19 @@ def record_operator_feedback(
     return read_evidence_run(run_id) or updated_record
 
 
+
+def tag_evidence_for_audit(run_id: str, actor: str, tagged_at: str) -> dict[str, Any]:
+    tag = {"actor": actor, "tagged_at": tagged_at}
+
+    def append_tag(record: dict[str, Any]) -> dict[str, Any]:
+        tags = [item for item in record.get("audit_tags", []) if isinstance(item, dict)]
+        return {**record, "audit_tags": [tag, *tags][:20]}
+
+    updated_record = mutate_evidence_run_db(run_id, append_tag)
+    if updated_record is None:
+        raise ValueError("evidence_run_not_found")
+    return read_evidence_run(run_id) or updated_record
+
 def build_evidence_export(record: dict[str, Any]) -> str:
     warnings = record.get("warnings") or []
     errors = record.get("errors") or []
@@ -282,6 +296,177 @@ def build_evidence_export_csv(record: dict[str, Any]) -> str:
     values = [csv_escape(flat[column]) for column in columns]
     return ",".join(columns) + "\n" + ",".join(values) + "\n"
 
+
+
+def build_evidence_package_payload(record: dict[str, Any]) -> dict[str, Any]:
+    """Build a governance-bounded evidence package from persisted evidence only."""
+    governance = record.get("governance_boundary") if isinstance(record.get("governance_boundary"), dict) else {}
+    raw_export_allowed = governance.get("raw_telemetry_export_allowed") is True
+    traceability = record.get("traceability") if isinstance(record.get("traceability"), dict) else {}
+    evidence_windows = [item for item in (record.get("evidence_windows") or []) if isinstance(item, dict)]
+    feedback = [item for item in (record.get("operator_feedback_history") or []) if isinstance(item, dict)]
+    confidence_tier = evidence_package_confidence_tier(record)
+    limitations = _package_unique([
+        *(record.get("warnings") or []),
+        *(record.get("errors") or []),
+        *(record.get("data_conditions") or []),
+    ])
+    gaps = [
+        item for item in evidence_windows
+        if str(item.get("type") or item.get("status") or "").strip().lower() in {"gap", "data_gap", "missing"}
+        or item.get("coverage_complete") is False
+    ]
+    lineage = traceability.get("lineage") or traceability.get("steps") or []
+    if not isinstance(lineage, list):
+        lineage = []
+    package = {
+        "package_type": "neraium_evidence_package",
+        "package_version": "1.0",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "finding_identity": {
+            "run_id": record.get("run_id"),
+            "observation_type": record.get("observation_type"),
+            "observation_status": record.get("observation_status"),
+            "structural_state": record.get("structural_state"),
+        },
+        "site_and_system_context": {
+            "site_key": record.get("adaptive_site_key"),
+            "system_id": record.get("system_id"),
+            "room": record.get("room"),
+            "source_type": record.get("source_type"),
+            "source_name": record.get("source_name"),
+        },
+        "comparison_window": {
+            "deformation_started_at": record.get("deformation_started_at"),
+            "created_at": record.get("created_at"),
+            "completed_at": record.get("completed_at"),
+            "windows": evidence_windows,
+        },
+        "evidence_lineage": lineage,
+        "observations_used": list(record.get("evidence_summary") or []),
+        "transformations_applied": traceability.get("transformations") or [],
+        "relationship_changes": dict(record.get("drift_metrics") or {}),
+        "confidence_tier": confidence_tier,
+        "limitations": limitations,
+        "data_gaps": gaps,
+        "engineering_priors_used": list(record.get("engineering_priors_used") or []),
+        "human_notes_and_outcomes": feedback,
+        "metadata": {
+            "input_hash": record.get("input_hash"),
+            "result_hash": record.get("result_hash"),
+            "model_version": traceability.get("model_version"),
+            "schema_version": traceability.get("schema_version"),
+            "created_at": record.get("created_at"),
+            "completed_at": record.get("completed_at"),
+        },
+        "governance": {
+            "statement": governance.get("statement") or governance.get("policy_statement") or "Package content is limited to persisted evidence under the configured governance boundary.",
+            "policy_id": governance.get("policy_id"),
+            "raw_telemetry_export_allowed": raw_export_allowed,
+            "raw_telemetry_included": False,
+        },
+    }
+    if raw_export_allowed and isinstance(record.get("raw_telemetry"), list):
+        package["raw_telemetry"] = record["raw_telemetry"]
+        package["governance"]["raw_telemetry_included"] = True
+    return package
+
+
+def evidence_package_confidence_tier(record: dict[str, Any]) -> str:
+    explicit = str(record.get("confidence_tier") or "").strip().lower()
+    tiers = {"confirmed": "Confirmed", "qualified": "Qualified", "narrowed": "Narrowed", "deferred": "Deferred", "withheld": "Withheld"}
+    evidence_count = len(record.get("evidence_summary") or [])
+    limitations = len(record.get("warnings") or []) + len(record.get("errors") or []) + len(record.get("data_conditions") or [])
+    if explicit in tiers:
+        if explicit == "confirmed" and limitations:
+            return "Qualified"
+        return tiers[explicit]
+    status = str(record.get("status") or "").lower()
+    if status in {"pending", "processing", "queued"}:
+        return "Deferred"
+    if not evidence_count or str(record.get("observation_status") or "").lower() in {"withheld", "insufficient"}:
+        return "Withheld"
+    if limitations:
+        return "Narrowed" if limitations >= evidence_count else "Qualified"
+    # A legacy numerical/high confidence value is not enough to claim complete context.
+    return "Qualified"
+
+
+def build_evidence_package_pdf(record: dict[str, Any]) -> bytes:
+    package = build_evidence_package_payload(record)
+    lines = [
+        "NERAIUM EVIDENCE PACKAGE",
+        f"Run: {package['finding_identity'].get('run_id') or 'Not supplied'}",
+        f"Generated: {package.get('generated_at')}",
+        f"Confidence tier: {package.get('confidence_tier')}",
+        "",
+        "OBSERVATIONS USED",
+        *([f"- {item}" for item in package.get("observations_used", [])] or ["- None supplied"]),
+        "",
+        "RELATIONSHIP CHANGES",
+        *([f"- {key}: {value}" for key, value in package.get("relationship_changes", {}).items()] or ["- None supplied"]),
+        "",
+        "LIMITATIONS",
+        *([f"- {item}" for item in package.get("limitations", [])] or ["- None supplied"]),
+        "",
+        "GOVERNANCE",
+        str(package["governance"].get("statement") or ""),
+        f"Raw telemetry included: {package['governance'].get('raw_telemetry_included')}",
+    ]
+    return _minimal_pdf(lines)
+
+
+def _minimal_pdf(lines: list[str]) -> bytes:
+    sanitized = []
+    for line in lines:
+        plain = str(line).encode("latin-1", "replace").decode("latin-1")
+        sanitized.append(plain.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)"))
+    pages = [sanitized[index:index + 46] for index in range(0, len(sanitized), 46)] or [["NERAIUM EVIDENCE PACKAGE"]]
+    objects: list[tuple[int, bytes]] = []
+    page_object_ids = []
+    font_id = 3 + len(pages) * 2
+    for index, page_lines in enumerate(pages):
+        page_id = 3 + index * 2
+        content_id = page_id + 1
+        page_object_ids.append(page_id)
+        stream_lines = ["BT", "/F1 9 Tf", "42 760 Td", "12 TL"]
+        for line in page_lines:
+            stream_lines.append(f"({line}) Tj")
+            stream_lines.append("T*")
+        stream_lines.append("ET")
+        stream = "\n".join(stream_lines).encode("latin-1")
+        objects.append((page_id, f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 {font_id} 0 R >> >> /Contents {content_id} 0 R >>".encode()))
+        objects.append((content_id, f"<< /Length {len(stream)} >>\nstream\n".encode() + stream + b"\nendstream"))
+    ordered = [
+        (1, b"<< /Type /Catalog /Pages 2 0 R >>"),
+        (2, f"<< /Type /Pages /Kids [{' '.join(f'{item} 0 R' for item in page_object_ids)}] /Count {len(pages)} >>".encode()),
+        *objects,
+        (font_id, b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+    ]
+    ordered.sort(key=lambda item: item[0])
+    payload = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = [0] * (font_id + 1)
+    for object_id, body in ordered:
+        offsets[object_id] = len(payload)
+        payload.extend(f"{object_id} 0 obj\n".encode())
+        payload.extend(body)
+        payload.extend(b"\nendobj\n")
+    xref = len(payload)
+    payload.extend(f"xref\n0 {font_id + 1}\n".encode())
+    payload.extend(b"0000000000 65535 f \n")
+    for object_id in range(1, font_id + 1):
+        payload.extend(f"{offsets[object_id]:010d} 00000 n \n".encode())
+    payload.extend(f"trailer\n<< /Size {font_id + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    return bytes(payload)
+
+
+def _package_unique(values: list[Any]) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        normalized = str(value or "").strip()
+        if normalized and normalized not in result:
+            result.append(normalized)
+    return result
 
 def digest_text(value: str) -> str:
     return sha256(value.encode("utf-8")).hexdigest()
