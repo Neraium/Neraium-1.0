@@ -92,12 +92,12 @@ def test_analysis_explanation_builds_operator_interpretation_report() -> None:
     assert report["confidence"] == "High"
     assert report["subsystem"] == "Flow & Pressure"
     assert "2 operational relationships changed" in report["what_changed"]
-    assert {"label": "Pump Power <-> Filter Differential Pressure"} in report["relationship_changes"]
-    assert analysis["insights"][0]["why_it_matters"].startswith("Operational impact: ")
-    assert "hydraulic resistance" in analysis["insights"][0]["why_it_matters"]
+    assert {"label": "Pump Power <-> Filter differential pressure"} in report["relationship_changes"]
+    assert analysis["insights"][0]["why_it_matters"].startswith("The hydraulic response no longer matches")
+    assert "operating-mode change" in analysis["insights"][0]["why_it_matters"]
     assert "Operating setpoint modification" in report["potential_operational_causes"]
     assert "Operator logs" in report["recommended_review"]
-    assert any("Pump Power <-> Filter Differential Pressure shifted" in item for item in report["advanced_details"]["raw_relationship_identifiers"])
+    assert any("Pump Power <-> Filter differential pressure shifted" in item for item in report["advanced_details"]["raw_relationship_identifiers"])
 
 
 def test_analysis_output_suppresses_cumulative_counter_artifacts() -> None:

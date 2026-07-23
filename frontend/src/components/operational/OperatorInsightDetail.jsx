@@ -13,44 +13,279 @@ function toList(...values) {
 function text(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string" || typeof value === "number") return String(value).trim();
-  if (typeof value === "object") {
-    return text(value.description ?? value.summary ?? value.what_changed ?? value.whatChanged);
-  }
+  if (typeof value === "object") return text(value.description ?? value.summary ?? value.what_changed ?? value.whatChanged);
   return "";
 }
 
-function unique(values) {
+function unique(values, key = (value) => text(value).toLowerCase()) {
   const seen = new Set();
   return values.filter((value) => {
-    const clean = text(value);
-    if (!clean || seen.has(clean.toLowerCase())) return false;
-    seen.add(clean.toLowerCase());
+    const clean = key(value);
+    if (!clean || seen.has(clean)) return false;
+    seen.add(clean);
     return true;
   });
 }
 
-function humanize(value) {
-  return text(value)
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+function sentenceCase(value) {
+  const clean = text(value).replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+  const lower = clean.toLowerCase();
+  return `${lower.charAt(0).toUpperCase()}${lower.slice(1)}`
+    .replace(/\borp\b/gi, "ORP")
+    .replace(/\bph\b/gi, "pH")
+    .replace(/\bvfd\b/gi, "VFD");
 }
 
-function confidenceLabel(insight) {
-  const explicit = humanize(insight?.confidence);
-  if (explicit) return explicit;
-  const score = Number(insight?.confidenceScore);
-  if (!Number.isFinite(score)) return "";
-  const normalized = score > 1 ? score / 100 : score;
-  if (normalized >= 0.85) return "High";
-  if (normalized >= 0.6) return "Moderate";
-  return "Low";
+function signalName(value) {
+  return sentenceCase(value)
+    .replace(/\bFilter (?:dp|differential pressure)\b/i, "Filter differential pressure")
+    .replace(/\bPump speed rpm\b/i, "Pump speed")
+    .replace(/\bDp\b/g, "differential pressure")
+    .replace(/\s+rpm\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function confidencePercent(insight) {
-  const score = Number(insight?.confidenceScore ?? insight?.confidence_score);
-  if (!Number.isFinite(score)) return "";
-  const normalized = score > 1 ? score : score * 100;
-  return `${Math.round(Math.max(0, Math.min(100, normalized)))}%`;
+function lowerFirst(value) {
+  const clean = text(value);
+  return clean ? `${clean.charAt(0).toLowerCase()}${clean.slice(1)}` : "";
+}
+
+function cleanSentence(value) {
+  const clean = text(value)
+    .replace(/\bFilter dp\b/gi, "Filter differential pressure")
+    .replace(/\bPump speed rpm\b/gi, "Pump speed")
+    .replace(/\b(increased|decreased)\s+(?:by\s+)?[+-](?=\d)/gi, "$1 ")
+    .replace(/\s+([,.!?;:])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!clean) return "";
+  return /[.!?]$/.test(clean) ? clean : `${clean}.`;
+}
+
+function parseMetricObservation(value) {
+  const clean = cleanSentence(value).replace(/[.]$/, "");
+  const match = clean.match(/^(.+?)\s+(increased|decreased)\s+(?:by\s+)?([+-]?\d+(?:\.\d+)?)%$/i);
+  if (!match) return null;
+  const amount = Math.abs(Number(match[3]));
+  if (!Number.isFinite(amount)) return null;
+  return {
+    signal: signalName(match[1]),
+    direction: match[2].toLowerCase(),
+    amount: Number.isInteger(amount) ? String(amount) : amount.toFixed(1).replace(/\.0$/, ""),
+  };
+}
+
+function metricSentence(metric) {
+  return `${metric.signal} ${metric.direction} ${metric.amount}%`;
+}
+
+function relationshipEndpoints(value, index = 0) {
+  if (value && typeof value === "object") {
+    const columns = toList(
+      value.display_columns,
+      value.displayColumns,
+      value.source_tag_display_names,
+      value.sourceTagDisplayNames,
+      value.columns,
+      value.source_columns,
+      value.sourceColumns,
+      value.source,
+      value.target,
+    ).map(signalName).filter(Boolean);
+    if (columns.length >= 2) return columns.slice(0, 2);
+  }
+
+  let raw = text(value)
+    .replace(/^The historical relationship between\s+/i, "")
+    .replace(/^The relationship between\s+/i, "")
+    .replace(/^A (?:new|stronger) relationship (?:emerged )?between\s+/i, "")
+    .replace(/\s+operating coupling\b.*$/i, "")
+    .replace(/\s+(?:weakened|shifted|changed|emerged|no longer follows)\b.*$/i, "")
+    .replace(/[.]$/, "");
+  const parts = raw.split(/\s*↔\s*|\s*<->\s*|\s+\/\s+|\s+and\s+/i).map(signalName).filter(Boolean);
+  return parts.length >= 2 ? parts.slice(0, 2) : [`Relationship ${index + 1}`];
+}
+
+function strengthWord(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const clean = text(value).toLowerCase();
+  if (["strong", "moderate", "weak"].includes(clean)) return clean;
+  const numeric = Math.abs(Number(value));
+  if (!Number.isFinite(numeric)) return "";
+  if (numeric >= 0.65) return "strong";
+  if (numeric >= 0.35) return "moderate";
+  return "weak";
+}
+
+function relationshipMeasurement(evidence, relationship = {}) {
+  const candidates = [
+    relationship,
+    ...toList(
+      evidence?.relationship_delta,
+      evidence?.relationshipDelta,
+      evidence?.metric_delta,
+      evidence?.metricDelta,
+      evidence?.relevant_metric_changes,
+      evidence?.relevantMetricChanges,
+    ),
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const baseline = Number(candidate.baseline_strength ?? candidate.baselineStrength ?? candidate.baseline_correlation ?? candidate.baselineCoupling);
+    const current = Number(candidate.current_strength ?? candidate.currentStrength ?? candidate.current_correlation ?? candidate.recent_correlation ?? candidate.currentCoupling);
+    const delta = Number(candidate.correlation_delta ?? candidate.correlationDelta ?? candidate.coupling_delta ?? candidate.couplingDelta);
+    if (Number.isFinite(baseline) || Number.isFinite(current) || Number.isFinite(delta)) {
+      return {
+        delta: Number.isFinite(delta) ? Math.abs(delta) : null,
+        baseline: Number.isFinite(baseline) ? baseline : null,
+        current: Number.isFinite(current) ? current : null,
+      };
+    }
+  }
+  return { delta: null, baseline: null, current: null };
+}
+
+function relationshipSentence(value, evidence, index = 0) {
+  const endpoints = relationshipEndpoints(value, index);
+  const pair = endpoints.length >= 2 ? `${lowerFirst(endpoints[0])} and ${lowerFirst(endpoints[1])}` : lowerFirst(endpoints[0]);
+  const raw = text(value);
+  const changeType = text(value?.change_type ?? value?.changeType)
+    .toLowerCase()
+    || (raw.match(/operating coupling\s+(missing|new|weakened|strengthened|inverted|disrupted|changed)/i)?.[1] ?? "changed").toLowerCase();
+  const measurement = relationshipMeasurement(evidence, value && typeof value === "object" ? value : {});
+  const baseline = strengthWord(value?.baseline_strength ?? value?.baselineStrength ?? value?.baseline_correlation ?? measurement.baseline);
+  const current = strengthWord(value?.current_strength ?? value?.currentStrength ?? value?.current_correlation ?? value?.recent_correlation ?? measurement.current);
+
+  if (["new", "strengthened"].includes(changeType)) return `A stronger relationship emerged between ${pair}.`;
+  const reversed = measurement.baseline !== null && measurement.current !== null
+    && Math.sign(measurement.baseline) !== 0 && Math.sign(measurement.current) !== 0
+    && Math.sign(measurement.baseline) !== Math.sign(measurement.current);
+  if (["inverted", "reversed"].includes(changeType) || reversed) return `The relationship between ${pair} reversed direction.`;
+  if (["missing", "weakened"].includes(changeType)) {
+    if (baseline && current && baseline !== current) return `The relationship between ${pair} weakened from ${baseline} to ${current}.`;
+    return `The relationship between ${pair} weakened from its learned baseline.`;
+  }
+  if (changeType === "disrupted") return `The relationship between ${pair} no longer follows its established operating pattern.`;
+  return `The relationship between ${pair} changed from its learned baseline.`;
+}
+
+function relationshipDetails(insight, evidence) {
+  const source = toList(insight?.contributingRelationships, insight?.contributing_relationships);
+  const relationships = source.length ? source : toList(insight?.affectedRelationships, insight?.affected_relationships);
+  return unique(relationships.map((relationship, index) => {
+    const endpoints = relationshipEndpoints(relationship, index);
+    return {
+      raw: relationship,
+      endpoints,
+      evidence: evidence[index],
+      sentence: relationshipSentence(relationship, evidence[index], index),
+    };
+  }), (item) => item.endpoints.map((endpoint) => endpoint.toLowerCase()).sort().join("|"));
+}
+
+function countWord(count) {
+  const words = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
+  return words[count] ?? String(count);
+}
+
+function isHydraulic(insight, metrics, relationships) {
+  const context = [
+    insight?.system,
+    insight?.summary,
+    ...metrics.map((item) => item.signal),
+    ...relationships.flatMap((item) => item.endpoints),
+  ].join(" ").toLowerCase();
+  return /pump|flow|pressure|hydraulic|valve|filter/.test(context);
+}
+
+function supportingEvidence(insight, evidence, relationships) {
+  const facts = unique(toList(
+    insight?.observedFacts,
+    insight?.observed,
+    insight?.observed_facts,
+    ...evidence.flatMap((item) => toList(item?.supporting_signals, item?.supportingSignals)),
+  ).map(cleanSentence));
+  const metrics = unique(facts.map(parseMetricObservation).filter(Boolean), (item) => item.signal.toLowerCase());
+  const used = new Set();
+  const bullets = [];
+  const power = metrics.find((item) => /pump power/.test(item.signal.toLowerCase()));
+  const flow = metrics.find((item) => /^flow$|\bflow\b/.test(item.signal.toLowerCase()));
+  if (power && flow) {
+    bullets.push(`${metricSentence(power)} while ${lowerFirst(metricSentence(flow))}.`);
+    used.add(power);
+    used.add(flow);
+  }
+  for (const metric of metrics) {
+    if (used.has(metric) || bullets.length >= 3) continue;
+    bullets.push(`${metricSentence(metric)}.`);
+  }
+
+  if (!bullets.length) {
+    const fallback = facts.filter((item) => !/relationship|operating coupling|observed during|started around|drift trajectory/i.test(item));
+    bullets.push(...fallback.slice(0, 3));
+  }
+
+  const changedCount = Number(insight?.changedRelationshipCount ?? insight?.changed_relationship_count) || relationships.length;
+  if (changedCount) {
+    const qualifier = isHydraulic(insight, metrics, relationships) ? " hydraulic" : "";
+    bullets.push(`${countWord(changedCount)} learned${qualifier} relationship${changedCount === 1 ? "" : "s"} weakened or changed.`);
+  }
+  return { bullets: unique(bullets).slice(0, 4), metrics };
+}
+
+function metricByName(metrics, pattern) {
+  return metrics.find((item) => pattern.test(item.signal.toLowerCase()));
+}
+
+function whatChangedSummary(insight, metrics, relationships) {
+  const power = metricByName(metrics, /pump power/);
+  const flow = metricByName(metrics, /\bflow\b/);
+  const pressure = metrics.find((item) => /pressure/.test(item.signal.toLowerCase()) && !/filter differential/.test(item.signal.toLowerCase()));
+  if (power?.direction === "decreased" && flow?.direction === "increased" && pressure?.direction === "decreased") {
+    return "The system produced more flow while recorded pump power and pressure decreased relative to the learned baseline.";
+  }
+  const supplied = cleanSentence(insight?.whatChanged ?? insight?.what_changed ?? insight?.whatHappened ?? insight?.rawSummary);
+  if (supplied && !/operating coupling|related relationships shifted|historical relationship between/i.test(supplied)) return supplied;
+  if (metrics.length >= 2) return `${metricSentence(metrics[0])} while ${lowerFirst(metricSentence(metrics[1]))} relative to the learned baseline.`;
+  if (relationships.length) return "The system response changed relative to its learned operating baseline.";
+  return cleanSentence(insight?.summary) || "Recorded behavior changed relative to the learned baseline.";
+}
+
+function whyItMattersSummary(insight, metrics, relationships) {
+  if (isHydraulic(insight, metrics, relationships)) {
+    const power = metricByName(metrics, /pump power/);
+    const flow = metricByName(metrics, /\bflow\b/);
+    const lowerPressure = metrics.some((item) => /pressure/.test(item.signal.toLowerCase()) && item.direction === "decreased");
+    if (power?.direction === "decreased" && flow?.direction === "increased" && lowerPressure) {
+      return "The hydraulic system is producing more flow with less recorded pump power and lower pressure readings than during the learned baseline. This may reflect a change in operating mode, valve position, instrumentation, or equipment configuration.";
+    }
+    return "The hydraulic response no longer matches its historical operating pattern. This may reflect an operating-mode change, valve-position change, instrumentation issue, or equipment configuration change.";
+  }
+  return cleanSentence(insight?.behaviorInterpretation ?? insight?.whyItMatters ?? insight?.whyThisMatters)
+    || "The response no longer matches its historical operating pattern. Confirm the operating context before treating the change as an equipment fault.";
+}
+
+function startHereCopy(insight, metrics, relationships) {
+  if (isHydraulic(insight, metrics, relationships)) {
+    return [
+      "Confirm whether pump operating mode, valve position, or sensor configuration changed near the beginning of the comparison window.",
+      "If no operating change occurred, compare pump power, flow, main pressure, and filter differential-pressure trends for sensor or equipment inconsistencies.",
+    ];
+  }
+  const supplied = cleanSentence(insight?.recommendedFirstAction ?? insight?.recommendedAction ?? insight?.operatorCheck);
+  return [supplied || "Confirm whether operating mode, setpoints, or instrumentation changed near the beginning of the comparison window."];
+}
+
+function limitationCopy(insight) {
+  const limitations = toList(insight?.limitations, insight?.qualityWarnings, insight?.quality_warnings).map(text).filter(Boolean);
+  const unmapped = toList(insight?.unmappedColumns, insight?.unmapped_columns).map(text).filter(Boolean);
+  if (unmapped.length || limitations.some((item) => /could not be mapped|unmapped|classif/i.test(item))) {
+    return "Some telemetry fields could not be classified, which limits how specifically Neraium can interpret the change.";
+  }
+  return limitations[0] ? cleanSentence(limitations[0]) : "";
 }
 
 function parseDate(value) {
@@ -59,281 +294,30 @@ function parseDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function formatDateTime(value) {
+function dateTimePart(value, facilityTimezone) {
   const date = parseDate(value);
   if (!date) return text(value);
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function formatDuration(startValue, endValue) {
-  const start = parseDate(startValue);
-  const end = parseDate(endValue);
-  if (!start || !end || end <= start) return "";
-  const hours = Math.round((end.getTime() - start.getTime()) / 3600000);
-  if (hours < 48) return `${hours} hours`;
-  const days = Math.round(hours / 24);
-  if (days < 60) return `${days} days`;
-  const months = Math.round(days / 30.44);
-  return `${months} months`;
-}
-
-function relationshipMeasurement(evidence) {
-  const candidates = toList(
-    evidence?.relationship_delta,
-    evidence?.relationshipDelta,
-    evidence?.metric_delta,
-    evidence?.metricDelta,
-    evidence?.relevant_metric_changes,
-    evidence?.relevantMetricChanges
-  );
-
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== "object") continue;
-    const baseline = Number(candidate.baseline_strength ?? candidate.baselineStrength ?? candidate.baseline_coupling ?? candidate.baselineCoupling);
-    const current = Number(candidate.current_strength ?? candidate.currentStrength ?? candidate.current_coupling ?? candidate.currentCoupling);
-    const delta = Number(candidate.correlation_delta ?? candidate.correlationDelta ?? candidate.coupling_delta ?? candidate.couplingDelta);
-    if (Number.isFinite(baseline) && Number.isFinite(current)) {
-      return {
-        delta: Number.isFinite(delta) ? Math.abs(delta) : null,
-        baseline,
-        current,
-      };
-    }
+  const options = { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+  if (facilityTimezone) options.timeZone = facilityTimezone;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", options).formatToParts(date);
+    const read = (type) => parts.find((part) => part.type === type)?.value ?? "";
+    return `${read("month")} ${read("day")} at ${read("hour")}:${read("minute")} ${read("dayPeriod")}`.trim();
+  } catch {
+    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
   }
-
-  const delta = Number(evidence?.relationship_delta?.correlation_delta ?? evidence?.relationshipDelta?.correlationDelta);
-  const metricItems = toList(evidence?.metric_delta, evidence?.relevant_metric_changes, evidence?.relevantMetricChanges);
-  const metricText = metricItems.map((item) => typeof item === "string" ? item : JSON.stringify(item)).join(" ");
-  const baselineMatch = metricText.match(/Baseline operating coupling:\s*(-?\d+(?:\.\d+)?)/i);
-  const currentMatch = metricText.match(/Current operating coupling:\s*(-?\d+(?:\.\d+)?)/i);
-  return {
-    delta: Number.isFinite(delta) ? Math.abs(delta) : null,
-    baseline: baselineMatch ? Number(baselineMatch[1]) : null,
-    current: currentMatch ? Number(currentMatch[1]) : null,
-  };
 }
 
-function signalName(value) {
-  return humanize(value).replace(/\bDp\b/g, "DP");
-}
-
-function relationshipLabels(insight) {
-  const explicit = toList(insight?.affectedRelationships).map(text).filter(Boolean);
-  if (explicit.length) return explicit;
-  return toList(insight?.contributingRelationships).map((relationship, itemIndex) => {
-    if (!relationship || typeof relationship !== "object") return text(relationship);
-    const columns = toList(
-      relationship.display_columns,
-      relationship.displayColumns,
-      relationship.columns,
-      relationship.source_columns,
-      relationship.sourceColumns
-    ).map(signalName).filter(Boolean);
-    if (columns.length >= 2) return `${columns[0]} \u2194 ${columns[1]}`;
-    return text(relationship) || "Supporting relationship " + (itemIndex + 1);
-  }).filter(Boolean);
-}
-
-function comparisonRanges(evidence) {
-  return evidence.flatMap((item) => toList(item?.source_time_ranges, item?.sourceTimeRanges))
-    .filter((range) => range && typeof range === "object");
-}
-
-function buildChangeContext(insight, evidence) {
-  const ranges = comparisonRanges(evidence);
-  const currentStarts = ranges.map((range) => range.current_start ?? range.currentStart).filter(Boolean);
-  const currentEnds = ranges.map((range) => range.current_end ?? range.currentEnd).filter(Boolean);
-  const baselineStarts = ranges.map((range) => range.baseline_start ?? range.baselineStart).filter(Boolean);
-  const baselineEnds = ranges.map((range) => range.baseline_end ?? range.baselineEnd).filter(Boolean);
-
-  const earliestCurrent = currentStarts
-    .map(parseDate)
-    .filter(Boolean)
-    .sort((a, b) => a - b)[0];
-  const latestCurrent = currentEnds
-    .map(parseDate)
-    .filter(Boolean)
-    .sort((a, b) => b - a)[0];
-  const earliestBaseline = baselineStarts
-    .map(parseDate)
-    .filter(Boolean)
-    .sort((a, b) => a - b)[0];
-  const latestBaseline = baselineEnds
-    .map(parseDate)
-    .filter(Boolean)
-    .sort((a, b) => b - a)[0];
-
-  const measurements = evidence.map(relationshipMeasurement);
-  const deltas = measurements.map((item) => item.delta).filter((value) => value !== null);
-  const largestDelta = deltas.length ? Math.max(...deltas) : null;
-  const changedCount = Number(insight?.changedRelationshipCount);
-
-  const rows = [];
-  if (earliestCurrent) rows.push(["Current comparison window began", formatDateTime(earliestCurrent)]);
-  if (latestCurrent) rows.push(["Observed through", formatDateTime(latestCurrent)]);
-  const currentDuration = formatDuration(earliestCurrent, latestCurrent);
-  if (currentDuration) rows.push(["Current comparison span", currentDuration]);
-  if (earliestBaseline && latestBaseline) rows.push(["Historical baseline period", `${formatDateTime(earliestBaseline)} to ${formatDateTime(latestBaseline)}`]);
-  if (Number.isFinite(changedCount) && changedCount > 0) rows.push(["Relationships changed together", String(changedCount)]);
-  if (largestDelta !== null) rows.push(["Largest relationship change magnitude", largestDelta.toFixed(2)]);
-  if (insight?.detectedAt) rows.push(["Insight generated", formatDateTime(insight.detectedAt)]);
-
-  return rows;
-}
-
-function buildOperationalMemory(insight) {
-  const priorOccurrences = Number(
-    insight?.priorOccurrenceCount ?? insight?.prior_occurrence_count ?? insight?.recurrenceCount ?? insight?.recurrence_count
-  );
-  const similarEvents = toList(
-    insight?.similarHistoricalEvents,
-    insight?.similar_historical_events,
-    insight?.priorMatches,
-    insight?.prior_matches
-  );
-  const rows = [];
-  if (Number.isFinite(priorOccurrences)) rows.push(["Prior matching occurrences", String(priorOccurrences)]);
-  return { rows, similarEvents };
-}
-
-function cleanOperationalImpact(value) {
-  return text(value)
-    .replace(/^Operational impact:\s*/i, "")
-    .replace(/^If this persists,\s*/i, "If nothing is done, ")
-    .replace(/\bequipment degradation\b/gi, "degraded operating performance")
-    .replace(/\brecent maintenance\b/gi, "recent operating changes")
-    .replace(/\bmaintenance\b/gi, "operating changes");
-}
-
-function splitOperationalImpacts(values) {
-  return unique(values.flatMap((value) => cleanOperationalImpact(value).split(/\n|;|\u2022/g))
-    .flatMap((value) => value.split(/(?<=\.)\s+(?=[A-Z])/g))
-    .map((item) => item.trim())
-    .filter(Boolean));
-}
-
-function defaultOperationalImpacts(causes, relationships) {
-  const causeText = causes.join(" ").toLowerCase();
-  const relationshipText = relationships.join(" ").toLowerCase();
-  if (/filter|dp|pressure|pump|flow|hydraulic/.test(`${causeText} ${relationshipText}`)) {
-    return [
-      "Operating behavior moved away from baseline",
-      "Efficiency or capacity may be degrading under comparable load",
-      "Downstream control assumptions may be less reliable",
-    ];
-  }
-  return [
-    "Continued movement away from baseline",
-    "Downstream assumptions may be less reliable",
-    "Higher likelihood of manual investigation on the next operating cycle",
-  ];
-}
-
-
-function insightSeverityLabel(insight) {
-  const severity = humanize(insight?.severity);
-  if (/critical/i.test(severity)) return "Critical";
-  if (/high|unstable/i.test(severity)) return "High";
-  if (/moderate|review|elevated/i.test(severity)) return "Moderate";
-  return severity || "Low";
-}
-
-function usefulDiagnosticEntries(evidence) {
-  const rows = [
-    ["Time window", text(evidence?.time_window ?? evidence?.timeWindow)],
-    ["Persistence / duration", text(evidence?.persistence_duration ?? evidence?.persistenceDuration)],
-    ["Calculated percent change", evidence?.calculated_percent_delta ?? evidence?.calculatedPercentDelta],
-    ["Signal identifiers", toList(evidence?.source_columns, evidence?.sourceColumns, evidence?.source_metrics, evidence?.sourceMetrics, evidence?.source_tags, evidence?.sourceTags)],
-    ["Internal metric names", toList(evidence?.metric_delta, evidence?.relevant_metric_changes, evidence?.relevantMetricChanges)],
-  ];
-
-  return rows.filter(([, value]) => {
-    if (Array.isArray(value)) return value.length > 0;
-    if (value && typeof value === "object") return Object.keys(value).length > 0;
-    const clean = text(value);
-    return clean && clean.toLowerCase() !== "not available";
-  });
-}
-
-function DiagnosticValue({ value }) {
-  if (Array.isArray(value)) {
-    return <ul className="operator-briefing-list operator-briefing-list--code">{value.map((item, index) => <li key={`${text(item)}-${index}`}><code>{typeof item === "object" ? JSON.stringify(item) : text(item)}</code></li>)}</ul>;
-  }
-  if (value && typeof value === "object") return <code>{JSON.stringify(value)}</code>;
-  return <>{text(value)}</>;
-}
-
-function BulletList({ items }) {
-  const visible = unique(items.map(text)).slice(0, 6);
-  if (!visible.length) return null;
-  return <ul className="operator-briefing-list">{visible.map((item) => <li key={item}>{item}</li>)}</ul>;
-}
-
-function CheckedList({ items }) {
-  const visible = unique(items.map(text)).slice(0, 6);
-  if (!visible.length) return null;
-  return <ul className="operator-briefing-list operator-briefing-list--checked">{visible.map((item) => <li key={item}>{item}</li>)}</ul>;
-}
-
-function ContextGrid({ rows }) {
-  if (!rows.length) return null;
-  return (
-    <dl className="operational-detail-grid">
-      {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-    </dl>
-  );
-}
-
-function waterItemText(value) {
-  if (!value || typeof value !== "object") return text(value);
-  return text(value.explanation ?? value.summary ?? value.name ?? value.check ?? value.condition ?? value.note) || JSON.stringify(value);
-}
-
-function graphTrustLabel(value) {
-  if (!value || typeof value !== "object") return humanize(value);
-  return humanize(value.tier ?? value.state ?? value.label);
-}
-
-function WaterIntelligencePanel({ insight }) {
-  const observed = toList(insight?.observedEvidence, insight?.observed_evidence).map(waterItemText).filter(Boolean);
-  const derived = toList(insight?.derivedMetrics, insight?.derived_metrics).map(waterItemText).filter(Boolean);
-  const explanations = toList(insight?.possibleExplanations, insight?.possible_explanations).map(waterItemText).filter(Boolean);
-  const confounders = toList(insight?.confoundingConditions, insight?.confounding_conditions).map(waterItemText).filter(Boolean);
-  const checks = toList(insight?.recommendedChecksStructured, insight?.recommended_checks).map(waterItemText).filter(Boolean);
-  const confidence = insight?.confidenceAndUncertainty ?? insight?.confidence_and_uncertainty;
-  const priorId = text(insight?.relationshipPriorId ?? insight?.relationship_prior_id);
-  const hasWaterFields = priorId || observed.length || derived.length || explanations.length || confounders.length || checks.length || confidence;
-  if (!hasWaterFields) return null;
-  const status = text(insight?.hypothesisStatus ?? insight?.status ?? insight?.hypothesis_state) || "observed";
-  const rows = [
-    priorId ? ["Prior", priorId] : null,
-    text(insight?.relationshipPriorVersion ?? insight?.relationship_prior_version) ? ["Prior version", text(insight?.relationshipPriorVersion ?? insight?.relationship_prior_version)] : null,
-    text(insight?.operatingMode ?? insight?.operating_mode) ? ["Operating mode", text(insight?.operatingMode ?? insight?.operating_mode)] : null,
-    graphTrustLabel(insight?.graphTrust ?? insight?.graph_trust) ? ["Graph trust", graphTrustLabel(insight?.graphTrust ?? insight?.graph_trust)] : null,
-    ["Hypothesis status", humanize(status)],
-    ["Operator confirmed", status === "operator_confirmed" ? "Yes" : "No"],
-  ].filter(Boolean);
-  return (
-    <section className="insight-summary-card" aria-labelledby="water-intelligence-title">
-      <span className="insight-summary-card__eyebrow">Water intelligence</span>
-      <h4 id="water-intelligence-title">Evidence and hypothesis status</h4>
-      <ContextGrid rows={rows} />
-      <div className="investigation-evidence-grid">
-        <section><span>Observed</span><BulletList items={observed} /></section>
-        <section><span>Derived</span><BulletList items={derived} /></section>
-        <section><span>Possible explanation</span><BulletList items={explanations} /></section>
-        <section><span>Recommended check</span><CheckedList items={checks} /></section>
-      </div>
-      {confounders.length ? <Disclosure title="Confounders"><BulletList items={confounders} /></Disclosure> : null}
-      {confidence?.explanation ? <p>{text(confidence.explanation)}</p> : null}
-    </section>
-  );
+function comparisonWindow(insight, evidence) {
+  const ranges = [
+    ...toList(insight?.sourceTimeRanges, insight?.source_time_ranges),
+    ...evidence.flatMap((item) => toList(item?.source_time_ranges, item?.sourceTimeRanges)),
+  ].filter((item) => item && typeof item === "object");
+  const starts = ranges.map((item) => item.current_start ?? item.currentStart ?? item.start).map(parseDate).filter(Boolean).sort((a, b) => a - b);
+  const ends = ranges.map((item) => item.current_end ?? item.currentEnd ?? item.end).map(parseDate).filter(Boolean).sort((a, b) => b - a);
+  if (!starts.length || !ends.length) return "";
+  const zone = text(insight?.facilityTimezone ?? insight?.facility_timezone);
+  return `${dateTimePart(starts[0], zone)} – ${dateTimePart(ends[0], zone)}`;
 }
 
 function Disclosure({ title, children, className = "", defaultOpen = false }) {
@@ -345,315 +329,103 @@ function Disclosure({ title, children, className = "", defaultOpen = false }) {
   );
 }
 
-function compactCheckTitle(action) {
-  return text(action)
-    .replace(/,?\s*operational changes,?\s*or\s*recent operating changes/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
+function DiagnosticValue({ value }) {
+  if (Array.isArray(value)) return <ul className="operator-briefing-list operator-briefing-list--code">{value.map((item, index) => <li key={`${text(item)}-${index}`}><code>{typeof item === "object" ? JSON.stringify(item) : text(item)}</code></li>)}</ul>;
+  if (value && typeof value === "object") return <code>{JSON.stringify(value)}</code>;
+  return <>{text(value)}</>;
 }
 
-function PriorityActions({ actions, signals = [], impacts = [], explain = false }) {
-  const reasons = [
-    "It checks the strongest relationship change first.",
-    "It tests whether the deviation matches current operating context.",
-    "It narrows equipment or instrumentation effects after the primary checks.",
-  ];
-  const expected = [
-    "Confirm the trend is present at the affected equipment.",
-    "Confirm or rule out a known operating condition.",
-    "Confirm whether the signal is operational or instrumentation-related.",
-  ];
-  return (
-    <ol className={explain ? "investigation-priorities investigation-priorities--explained" : "investigation-priorities"}>
-      {actions.slice(0, 3).map((action, index) => {
-        const title = compactCheckTitle(action);
-        return (
-          <li key={`${title}-${index}`} className="investigation-card">
-            {explain ? (
-              <details>
-                <summary>
-                  <span>Priority {index + 1}</span>
-                  <strong>{title}</strong>
-                  <small>{expected[index]}</small>
-                </summary>
-                <dl className="investigation-card__details">
-                  <div><dt>Why this check comes first</dt><dd>{reasons[index]}</dd></div>
-                  <div><dt>Expected confirmation</dt><dd>{expected[index]}</dd></div>
-                  <div><dt>Supporting signal</dt><dd>{signals[index] || signals[0] || "Changed relationship evidence"}</dd></div>
-                  <div><dt>Estimated impact</dt><dd>{impacts[index] || (index === 0 ? "High" : "Moderate")}</dd></div>
-                </dl>
-              </details>
-            ) : <strong>{title}</strong>}
-          </li>
-        );
-      })}
-    </ol>
-  );
+function usefulDiagnosticEntries(evidence) {
+  return [
+    ["Time window", evidence?.time_window ?? evidence?.timeWindow],
+    ["Persistence / duration", evidence?.persistence_duration ?? evidence?.persistenceDuration],
+    ["Calculated percent change", evidence?.calculated_percent_delta ?? evidence?.calculatedPercentDelta],
+    ["Signal identifiers", toList(evidence?.source_columns, evidence?.sourceColumns, evidence?.source_metrics, evidence?.sourceMetrics, evidence?.source_tags, evidence?.sourceTags)],
+    ["Internal metric names", toList(evidence?.metric_delta, evidence?.relevant_metric_changes, evidence?.relevantMetricChanges)],
+  ].filter(([, value]) => Array.isArray(value) ? value.length : Boolean(value && (typeof value !== "object" || Object.keys(value).length)));
 }
 
-function focusInvestigationSection(sectionId) {
-  const target = document.getElementById(sectionId);
-  if (!target) return;
-  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
-  target.focus({ preventScroll: true });
-}
-
-function InvestigationDecisionPath({ evidenceCount, relationshipCount }) {
-  const steps = [
-    ["1", "Understand the change", "Confirm subsystem, status, and first detected time.", "insight-situation"],
-    ["2", "Verify evidence", `${relationshipCount || "No"} changed relationship${relationshipCount === 1 ? "" : "s"}; ${evidenceCount || "no"} evidence record${evidenceCount === 1 ? "" : "s"}.`, "insight-evidence"],
-    ["3", "Run checks", "Start with the highest-impact operator check.", "recommended-investigation"],
-    ["4", "Close the loop", "Export or inspect raw metrics for escalation.", "relationship-explorer"],
-  ];
-  return (
-    <nav className="investigation-decision-path" aria-label="Investigation decision path">
-      {steps.map(([index, label, detail, target], stepIndex) => (
-        <details key={label} className={stepIndex === 0 ? "is-current" : ""} open={stepIndex === 0}>
-          <summary onClick={() => focusInvestigationSection(target)}>
-            <span>{index}</span>
-            <strong>{label}</strong>
-          </summary>
-          <p>{detail}</p>
-        </details>
-      ))}
-    </nav>
-  );
-}
-
-function OperatorActions({ insight, subsystem }) {
-  const exportReport = () => {
-    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), subsystem, insight }, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `neraium-investigation-${text(insight?.id) || "report"}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-  return <section className="operator-action-groups" aria-label="Operator actions">
-    <div className="operator-action-groups__primary">
-      <button type="button" className="command-button" onClick={() => focusInvestigationSection("recommended-investigation")}>Begin investigation</button>
-    </div>
-    <div className="operator-action-groups__secondary" role="group" aria-label="Secondary investigation actions">
-      <button type="button" onClick={() => focusInvestigationSection("insight-evidence")}>Inspect affected equipment</button>
-      <button type="button" onClick={() => focusInvestigationSection("fingerprint-comparison")}>Compare baseline</button>
-      <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>Related systems</button>
-    </div>
-    <div className="operator-action-groups__utility" role="group" aria-label="Utility actions">
-      <button type="button" onClick={exportReport}>Export report</button>
-      <button type="button" onClick={() => focusInvestigationSection("relationship-explorer")}>View technical evidence</button>
-    </div>
-  </section>;
+function WaterIntelligencePanel({ insight }) {
+  const observed = toList(insight?.observedEvidence, insight?.observed_evidence).map(text).filter(Boolean);
+  const derived = toList(insight?.derivedMetrics, insight?.derived_metrics).map((item) => text(item?.explanation ?? item?.name ?? item)).filter(Boolean);
+  const explanations = toList(insight?.possibleExplanations, insight?.possible_explanations).map((item) => text(item?.explanation ?? item)).filter(Boolean);
+  const checks = toList(insight?.recommendedChecksStructured, insight?.recommended_checks).map((item) => text(item?.check ?? item)).filter(Boolean);
+  const confidence = insight?.confidenceAndUncertainty ?? insight?.confidence_and_uncertainty;
+  if (!observed.length && !derived.length && !explanations.length && !checks.length && !confidence) return null;
+  return <section className="technical-evidence-section"><div className="technical-evidence-section__header"><span>Water intelligence</span></div>{observed.length ? <><h5>Observed</h5><ul>{observed.map((item) => <li key={item}>{item}</li>)}</ul></> : null}{derived.length ? <><h5>Derived</h5><ul>{derived.map((item) => <li key={item}>{item}</li>)}</ul></> : null}{explanations.length ? <><h5>Possible explanation</h5><ul>{explanations.map((item) => <li key={item}>{item}</li>)}</ul></> : null}{checks.length ? <><h5>Recommended check</h5><ul>{checks.map((item) => <li key={item}>{item}</li>)}</ul></> : null}{confidence?.explanation ? <p>{text(confidence.explanation)}</p> : null}</section>;
 }
 
 export default function OperatorInsightDetail({ insight, defaultOpen = false, inline = false, focusMode = false }) {
   const evidence = Array.isArray(insight?.evidence) ? insight.evidence : [];
-  const relationships = relationshipLabels(insight);
-  const observedFacts = unique(toList(insight?.observedFacts, insight?.observed, insight?.observed_facts).map(text));
-  const actions = unique(toList(
-    insight?.recommendedFirstAction, insight?.recommendedAction, insight?.recommended_action,
-    insight?.recommendedInvestigation, insight?.recommended_investigation, insight?.operatorCheck,
-    insight?.operator_check, insight?.recommendedActions, insight?.recommended_actions,
-    insight?.recommendedFirstChecks, insight?.recommended_first_checks, insight?.recommendedCheck,
-    insight?.recommended_check
-  ).flatMap((item) => text(item).split(/\n|;|\u2022/g)).map((item) => item.trim()));
-  const investigationActions = (actions.length ? actions : [
-    "Review the contributing signal trends for the selected operating window.",
-    "Compare recent control and valve changes with the start of the deviation.",
-    "Verify equipment performance and instrumentation health.",
-  ]).slice(0, 3);
-  const suppliedCauses = unique(toList(
-    insight?.likelyCauses, insight?.possibleOperationalCauses, insight?.possible_operational_causes,
-    insight?.contributingFactors, insight?.contributing_factors, insight?.likely_causes
-  ).map(text));
-  const causes = (suppliedCauses.length ? suppliedCauses : [
-    "Operating mode change", "Hydraulic restriction", "Equipment wear", "Valve configuration change", "Instrumentation issue",
-  ]).slice(0, 6);
-  const severity = insightSeverityLabel(insight);
-  const confidenceValue = confidenceLabel(insight) || confidencePercent(insight);
-  const subsystem = text(insight?.system || insight?.rawSystemName) || "Operational subsystem";
-  const measurements = evidence.map(relationshipMeasurement).filter((item) => item.delta !== null);
-  const largestDelta = measurements.length ? Math.max(...measurements.map((item) => item.delta)) : null;
-  const primaryRelationship = relationships[0];
-  const suppliedImpacts = splitOperationalImpacts(toList(
-    insight?.expectedOperationalImpact, insight?.expected_operational_impact,
-    insight?.possibleOperationalConsequence, insight?.possible_operational_consequence,
-    insight?.whyThisMatters, insight?.whyItMatters, insight?.possibleConsequence,
-    insight?.possible_consequence
-  ));
-  const expectedImpacts = (suppliedImpacts.length ? suppliedImpacts : defaultOperationalImpacts(causes, relationships)).slice(0, 4);
-  const historicalDetails = buildChangeContext(insight, evidence).filter(([label]) => !/Largest relationship change magnitude/.test(label));
-  const operationalMemory = buildOperationalMemory(insight);
-  const explicitSummary = text(insight?.behaviorInterpretation ?? insight?.whatChanged ?? insight?.what_changed ?? insight?.whatHappened ?? insight?.rawSummary ?? insight?.summary);
-  const behavioralSummary = explicitSummary || `The ${subsystem} subsystem moved off its operating baseline.`;
-  const operationalStatus = severity === "Critical" ? "Critical" : severity === "High" ? "Investigation Recommended" : severity === "Moderate" ? "Watch" : "Normal";
-  const relationshipModels = relationships.map((label, index) => ({ label, evidence: evidence[index], measurement: relationshipMeasurement(evidence[index]) }));
-  const supportingSignals = unique(evidence.flatMap((item) => toList(item?.supporting_signals, item?.supportingSignals, item?.source_columns, item?.sourceColumns)).map(signalName));
-  const relationshipCoverageNotes = relationshipModels.flatMap(({ label, measurement }) => {
-    if (measurement.baseline === null && measurement.current === null && measurement.delta === null) {
-      return [`${label}: no quantitative measurement was included in this result.`];
-    }
-    if (measurement.baseline !== null && measurement.current !== null && Math.sign(measurement.baseline) !== 0 && Math.sign(measurement.current) !== 0 && Math.sign(measurement.baseline) !== Math.sign(measurement.current)) {
-      return [`${label}: the relationship reversed direction.`];
-    }
-    return [];
-  });
-  const supportingObservations = unique([
-    ...observedFacts,
-    ...evidence.map((item) => text(item?.description ?? item?.summary)),
-  ]).filter((item) => {
-    const observation = item.toLowerCase();
-    const summary = behavioralSummary.toLowerCase();
-    return observation !== summary && !summary.includes(observation) && !observation.includes(summary);
-  }).slice(0, 4);
-  const advancedMetadata = [
-    insight?.id ? ["Insight identifier", text(insight.id)] : null,
-    insight?.metricName ? ["Signal identifier", text(insight.metricName)] : null,
-    Number.isFinite(Number(insight?.persistenceScore ?? insight?.persistence_score))
-      ? ["Persistence score", Number(insight.persistenceScore ?? insight.persistence_score).toFixed(2)]
-      : null,
-  ].filter(Boolean);
-  const historicalComparison = text(insight?.previousFingerprint)
-    || text(insight?.healthyBaseline)
-    || "Current operation is being compared with the baseline.";
-  const confidenceRaises = unique(toList(
-    insight?.confidenceIncreaseFactors,
-    insight?.confidence_increase_factors,
-    insight?.confidenceBreakdown,
-    insight?.confidence_breakdown,
-    insight?.confidenceRationale
-  ).map(text)).slice(0, 5);
-  const confidenceLowers = unique(toList(
-    insight?.confidenceDecreaseFactors,
-    insight?.confidence_decrease_factors,
-    "Missing or delayed telemetry",
-    "A short observation window",
-    "Evidence that the change matches a planned operating mode"
-  ).map(text)).slice(0, 4);
+  const relationships = relationshipDetails(insight, evidence);
+  const support = supportingEvidence(insight, evidence, relationships);
+  const summary = whatChangedSummary(insight, support.metrics, relationships);
+  const interpretation = whyItMattersSummary(insight, support.metrics, relationships);
+  const firstChecks = startHereCopy(insight, support.metrics, relationships);
+  const limitation = limitationCopy(insight);
+  const window = comparisonWindow(insight, evidence);
+  const subsystem = text(insight?.system || insight?.rawSystemName) || "Unassigned system";
+  const dataset = text(insight?.sourceName ?? insight?.source_name) || "Unassigned dataset";
+  const relationshipModels = relationships.map((item) => ({ label: item.endpoints.join(" and "), evidence: item.evidence, measurement: relationshipMeasurement(item.evidence, item.raw) }));
+  const scope = relationships.length || support.metrics.length ? "Narrowed" : "Broad";
+  const technicalLimitations = unique(toList(insight?.qualityWarnings, insight?.quality_warnings).map(text))
+    .filter((item) => !/could not be mapped|unmapped|classif/i.test(item));
+  const unmappedColumns = unique(toList(insight?.unmappedColumns, insight?.unmapped_columns).map(text));
 
   const body = (
-    <div className="insight-layered">
-      <section id="insight-situation" className="insight-situation-card" aria-labelledby="insight-situation-title" tabIndex={-1}>
-        <span className="insight-summary-card__eyebrow">What happened</span>
-        <div className="insight-situation-card__meta">
-          <span className={`insight-severity insight-severity--${severity.toLowerCase()}`}>{operationalStatus}</span>
-          <span>Affected subsystem: {subsystem}</span>
-          {confidenceValue ? <span>Finding confidence {confidenceValue}</span> : null}
-        </div>
-        <p id="insight-situation-title" className="insight-situation-card__summary">{behavioralSummary}</p>
+    <div className="insight-layered evidence-page">
+      {!focusMode ? <p className="evidence-page__status"><span>Change detected</span><span aria-hidden="true">·</span><span>{scope}</span></p> : null}
+
+      <section className="evidence-page__section evidence-page__where" aria-labelledby="finding-where-title">
+        <h4 id="finding-where-title">Where</h4>
+        <p>{dataset} <span aria-hidden="true">·</span> {subsystem}</p>
       </section>
 
-      <InvestigationDecisionPath evidenceCount={evidence.length} relationshipCount={relationships.length} />
-
-      <section id="insight-evidence" className="insight-summary-card insight-summary-card--evidence" aria-labelledby="key-evidence-title" tabIndex={-1}>
-        <span className="insight-summary-card__eyebrow">Why Neraium flagged this</span>
-        <h4 id="key-evidence-title">Key evidence</h4>
-        <div className="investigation-evidence-grid">
-          <section>
-            <span>Largest relationship change</span>
-            <strong>{largestDelta !== null ? largestDelta.toFixed(2) : "Not measured"}</strong>
-            {primaryRelationship ? <p>{primaryRelationship}</p> : null}
-          </section>
-          <section>
-            <span>Primary changed relationships</span>
-            <BulletList items={relationships.slice(0, 3)} />
-          </section>
-          <section>
-            <span>Supporting observation summary</span>
-            <p>{supportingObservations[0] || "Supporting observations are available in the full evidence view."}</p>
-          </section>
-          <section>
-            <span>Baseline comparison status</span>
-            <p>{historicalComparison}</p>
-          </section>
-        </div>
-        <Disclosure title="View full evidence" className="insight-disclosure--compact">
-          <div className="full-evidence-stack">
-            <section><span>Monitored signals</span><BulletList items={supportingSignals.length ? supportingSignals : relationships} /></section>
-            {supportingObservations.length ? <section><span>Supporting observations</span><BulletList items={supportingObservations} /></section> : null}
-            {relationshipCoverageNotes.length ? <section><span>Relationship notes</span><BulletList items={relationshipCoverageNotes} /></section> : null}
-          </div>
-        </Disclosure>
+      <section id="insight-situation" className="evidence-page__section" aria-labelledby="insight-situation-title" tabIndex={-1}>
+        <h4 id="insight-situation-title">What changed</h4>
+        <p>{summary}</p>
+        {window ? <p className="evidence-page__window">{window}</p> : null}
       </section>
 
-      <section id="recommended-investigation" className="insight-summary-card insight-summary-card--action" aria-labelledby="recommended-investigation-title" tabIndex={-1}>
-        <span className="insight-summary-card__eyebrow">What to check next</span>
-        <h4 id="recommended-investigation-title">Recommended checks</h4>
-        <PriorityActions actions={investigationActions} signals={supportingSignals} impacts={expectedImpacts} explain />
+      <section id="insight-evidence" className="evidence-page__section" aria-labelledby="key-evidence-title" tabIndex={-1}>
+        <h4 id="key-evidence-title">Supporting evidence</h4>
+        <ul className="operator-briefing-list evidence-page__evidence">{support.bullets.map((item) => <li key={item}>{item}</li>)}</ul>
       </section>
 
-      <WaterIntelligencePanel insight={insight} />
-
-      <OperatorActions insight={insight} subsystem={subsystem} />
-
-      <section className="insight-summary-card similar-investigations" aria-labelledby="similar-investigations-title">
-        <span className="insight-summary-card__eyebrow">Operational memory</span>
-        <h4 id="similar-investigations-title">Similar Verified Investigations</h4>
-        <p>No verified similar investigations are available yet.</p>
+      <section className="evidence-page__section" aria-labelledby="why-it-matters-title">
+        <h4 id="why-it-matters-title">Why it matters</h4>
+        <p>{interpretation}</p>
       </section>
 
-      <div className="insight-disclosure-stack" role="region" aria-label="Technical investigation detail">
-        <Disclosure title="Technical evidence">
-          <section id="fingerprint-comparison" className="technical-evidence-section fingerprint-comparison" tabIndex={-1}>
-            <div className="technical-evidence-section__header"><span>Baseline comparison</span><p>Only material differences are shown.</p></div>
-            <section><span>Current pattern</span><strong>{text(insight?.currentFingerprint) || "Current relationship strengths are in raw metrics."}</strong></section>
-            <section><span>Previous pattern</span><strong>{text(insight?.previousFingerprint) || "Behavior was closer to baseline."}</strong></section>
-            <section><span>Healthy baseline</span><strong>{text(insight?.healthyBaseline) || "Relationships remained inside range."}</strong></section>
-          </section>
-          <section id="relationship-explorer" className="technical-evidence-section" tabIndex={-1}>
-            <div className="technical-evidence-section__header"><span>Relationships and raw metrics</span><p>Inspect source strengths for affected relationships.</p></div>
-            <Suspense fallback={<p>Loading relationship explorer...</p>}><RelationshipExplorer relationships={relationshipModels} /></Suspense>
-          </section>
-          {historicalDetails.length || operationalMemory.rows.length || operationalMemory.similarEvents.length ? <section className="technical-evidence-section">
-            <div className="technical-evidence-section__header"><span>Historical details</span></div>
-            <ContextGrid rows={historicalDetails} />
-            {operationalMemory.rows.length ? <ContextGrid rows={operationalMemory.rows} /> : null}
-            <BulletList items={operationalMemory.similarEvents} />
-          </section> : null}
-        </Disclosure>
+      <section id="recommended-investigation" className="evidence-page__section evidence-page__start" aria-labelledby="recommended-investigation-title" tabIndex={-1}>
+        <h4 id="recommended-investigation-title">Start here</h4>
+        {firstChecks.map((item) => <p key={item}>{item}</p>)}
+      </section>
 
-        <Disclosure title="Advanced details">
-          <section className="technical-evidence-section">
-            <div className="technical-evidence-section__header"><span>Possible causes to rule out</span></div>
-            <BulletList items={causes} />
-          </section>
-          <div className="confidence-drivers">
-            <section><h5>Raises confidence</h5><CheckedList items={confidenceRaises} /></section>
-            <section><h5>Lowers confidence</h5><BulletList items={confidenceLowers} /></section>
-          </div>
-          {advancedMetadata.length ? <ContextGrid rows={advancedMetadata} /> : null}
-          {evidence.map((item, index) => {
-            const rows = usefulDiagnosticEntries(item);
-            return rows.length ? (
-              <div className="insight-evidence-item" key={item?.evidence_id ?? index}>
-                <dl className="operational-detail-grid operational-detail-grid--technical">
-                  {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd><DiagnosticValue value={value} /></dd></div>)}
-                </dl>
-              </div>
-            ) : null;
-          })}
-        </Disclosure>
+      {limitation ? <section className="evidence-page__section evidence-page__limitation" aria-labelledby="finding-limitation-title"><h4 id="finding-limitation-title">Limitation</h4><p>{limitation}</p></section> : null}
 
-        <Disclosure title="Raw analysis payload" className="insight-disclosure--raw">
-          <pre><code>{JSON.stringify(insight, null, 2)}</code></pre>
-        </Disclosure>
-      </div>
+      {relationships.length ? <Disclosure title="Open relationship evidence" className="evidence-page__relationship-disclosure">
+        <ul className="operator-briefing-list evidence-page__relationships">{relationships.map((item) => <li key={item.sentence}>{item.sentence}</li>)}</ul>
+        <section id="relationship-explorer" className="technical-evidence-section" tabIndex={-1}>
+          <div className="technical-evidence-section__header"><span>Relationship measurements</span><p>Source strengths and coefficients are shown here for technical review.</p></div>
+          <Suspense fallback={<p>Loading relationship evidence...</p>}><RelationshipExplorer relationships={relationshipModels} /></Suspense>
+        </section>
+      </Disclosure> : null}
+
+      <Disclosure title="Technical details" className="evidence-page__technical">
+        {window ? <dl className="operational-detail-grid"><div><dt>Comparison window</dt><dd>{window}</dd></div>{text(insight?.facilityTimezone ?? insight?.facility_timezone) ? <div><dt>Facility timezone</dt><dd>{text(insight?.facilityTimezone ?? insight?.facility_timezone)}</dd></div> : null}</dl> : null}
+        {unmappedColumns.length ? <section className="technical-evidence-section"><div className="technical-evidence-section__header"><span>Unmapped columns</span></div><ul className="operator-briefing-list operator-briefing-list--code">{unmappedColumns.map((item) => <li key={item}><code>{item}</code></li>)}</ul></section> : null}
+        {technicalLimitations.length ? <section className="technical-evidence-section"><div className="technical-evidence-section__header"><span>Data-quality warnings</span></div><ul className="operator-briefing-list">{technicalLimitations.map((item) => <li key={item}>{item}</li>)}</ul></section> : null}
+        {evidence.map((item, index) => {
+          const rows = usefulDiagnosticEntries(item);
+          return rows.length ? <div className="insight-evidence-item" key={item?.evidence_id ?? item?.id ?? index}><dl className="operational-detail-grid operational-detail-grid--technical">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd><DiagnosticValue value={value} /></dd></div>)}</dl></div> : null;
+        })}
+        <WaterIntelligencePanel insight={insight} />
+        <Disclosure title="Raw analysis payload" className="insight-disclosure--raw"><pre><code>{JSON.stringify(insight, null, 2)}</code></pre></Disclosure>
+      </Disclosure>
     </div>
   );
 
-  if (inline) {
-    return (
-      <div className={focusMode ? "insight-detail-card insight-detail-card--selected" : "insight-detail-card"} role="region" aria-label="Selected investigation detail">
-        {body}
-      </div>
-    );
-  }
-
-  return (
-    <details className="insight-detail-card" aria-label="Insight detail" open={defaultOpen}>
-      <summary>Insight detail</summary>
-      {body}
-    </details>
-  );
+  if (inline) return <div className={focusMode ? "insight-detail-card insight-detail-card--selected" : "insight-detail-card"} role="region" aria-label="Selected investigation detail">{body}</div>;
+  return <details className="insight-detail-card" aria-label="Insight detail" open={defaultOpen}><summary>Insight detail</summary>{body}</details>;
 }

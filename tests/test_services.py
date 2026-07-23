@@ -1,6 +1,10 @@
 import pytest
 
-from app.services.analysis_explanations import build_analysis_explanation
+from app.services.analysis_explanations import (
+    build_analysis_explanation,
+    metric_observed_fact,
+    relationship_strength_fact,
+)
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.csv_parser import parse_csv_content, preview_rows
 from app.services.cultivation_mapping import map_cultivation_columns
@@ -666,3 +670,34 @@ def test_analysis_explanation_builds_decision_outputs_from_upload_result() -> No
     assert explanation["recommendations"][0]["recommendation"]
     assert {"executive_summary", "systems", "relationships", "insights", "fingerprint", "evidence", "recommendations"}.issubset(explanation)
     assert "operating fingerprint is changing" in explanation["fingerprint"]["meaning"]
+
+
+def test_operator_evidence_uses_clean_direction_and_relationship_language() -> None:
+    assert metric_observed_fact(
+        {
+            "display_name": "Pump power",
+            "direction": "down",
+            "percent_change": -8.9,
+        }
+    ) == "Pump power decreased 8.9%."
+
+    assert relationship_strength_fact(
+        {
+            "display_columns": ["Pump power", "Filter dp"],
+            "change_type": "missing",
+            "baseline_strength": "strong",
+            "current_strength": "weak",
+        }
+    ) == (
+        "The relationship between Pump power and Filter differential pressure "
+        "weakened from strong to weak."
+    )
+
+    assert relationship_strength_fact(
+        {
+            "display_columns": ["Pump power", "Flow"],
+            "change_type": "new",
+            "baseline_strength": "weak",
+            "current_strength": "strong",
+        }
+    ) == "A stronger relationship emerged between Pump power and Flow."

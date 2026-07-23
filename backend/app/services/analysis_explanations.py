@@ -1261,17 +1261,34 @@ def relationship_source_time_ranges(item: dict[str, Any], fallback: list[dict[st
 def relationship_change_sentence(label: str, item: dict[str, Any]) -> str:
     change_type = first_text(item.get("change_type"), "changed").replace("_", " ")
     pair = relationship_pair_phrase(label)
-    if change_type == "missing":
-        return f"The historical relationship between {pair} no longer follows its established operating pattern."
-    if change_type == "weakened":
-        return f"The historical relationship between {pair} weakened substantially during the analysis window."
-    if change_type in {"disrupted", "inverted"}:
-        return f"The historical relationship between {pair} shifted from its established operating pattern."
-    if change_type == "new":
-        return f"A new operating relationship between {pair} emerged during the analysis window and should be checked against operating changes."
-    if change_type == "strengthened":
-        return f"{pair} became more tightly coupled than their historical operating pattern."
-    return f"The relationship between {pair} changed significantly from baseline operation."
+    baseline = relationship_strength_label(item.get("baseline_strength", item.get("baseline_correlation")))
+    current = relationship_strength_label(item.get("current_strength", item.get("recent_correlation")))
+    if change_type in {"missing", "weakened"}:
+        if baseline and current and baseline != current:
+            return f"The relationship between {pair} weakened from {baseline} to {current}."
+        return f"The relationship between {pair} weakened from its learned baseline."
+    if change_type == "inverted":
+        return f"The relationship between {pair} reversed direction."
+    if change_type == "disrupted":
+        return f"The relationship between {pair} no longer follows its established operating pattern."
+    if change_type in {"new", "strengthened"}:
+        return f"A stronger relationship emerged between {pair}."
+    return f"The relationship between {pair} changed from its learned baseline."
+
+
+def relationship_strength_label(value: Any) -> str:
+    clean = str(value or "").strip().lower()
+    if clean in {"strong", "moderate", "weak"}:
+        return clean
+    try:
+        magnitude = abs(float(value))
+    except (TypeError, ValueError):
+        return ""
+    if magnitude >= 0.65:
+        return "strong"
+    if magnitude >= 0.35:
+        return "moderate"
+    return "weak"
 
 
 def relationship_pair_phrase(label: str) -> str:
@@ -1910,15 +1927,7 @@ def metric_observed_fact(item: dict[str, Any]) -> str:
 
 def relationship_strength_fact(item: dict[str, Any]) -> str:
     label = " / ".join(relationship_display_columns(item)) or first_text(item.get("display_relationship"), item.get("relationship"), "Operating relationship")
-    baseline = first_text(item.get("baseline_strength"), item.get("baseline_correlation"), item.get("coupling_strength"))
-    current = first_text(item.get("current_strength"), item.get("recent_correlation"), item.get("strength"))
-    change_type = first_text(item.get("change_type"), "changed").replace("_", " ")
-    if baseline and current:
-        return f"{label} operating coupling {change_type} from {baseline} to {current}."
-    delta = first_text(item.get("correlation_delta"), item.get("change_percentage"))
-    if delta:
-        return f"{label} operating behavior changed; magnitude {delta}."
-    return f"{label} operating behavior changed from the learned fingerprint."
+    return relationship_change_sentence(label, item)
 
 
 def observed_window_fact(source_ranges: list[dict[str, Any]]) -> str:
@@ -1947,13 +1956,12 @@ def direction_word(direction: str) -> str:
 
 def format_signed_percent(value: Any) -> str:
     try:
-        number = float(value)
+        number = abs(float(value))
     except (TypeError, ValueError):
-        return f"by {value}%"
-    sign = "+" if number > 0 else ""
+        return f"by {str(value).lstrip('+-')}%"
     if number.is_integer():
-        return f"{sign}{int(number)}%"
-    return f"{sign}{number:.1f}%"
+        return f"{int(number)}%"
+    return f"{number:.1f}%"
 
 
 def relationship_why_this_matters(system: str, names: list[str]) -> list[str]:
@@ -2020,7 +2028,7 @@ def recommended_investigation_steps(system: str, names: list[str], label: str) -
 def relationship_behavior_interpretation(system: str, names: list[str], causes: list[str]) -> str:
     combined = " ".join([system, *[str(name or "") for name in names], *causes]).lower().replace("_", " ").replace("-", " ")
     if any(token in combined for token in ["pump", "flow", "pressure", "hydraulic", "filter"]):
-        return "The system is requiring different hydraulic behavior than its established fingerprint. This pattern is more consistent with increasing restriction or changed pump operating point than normal demand variation."
+        return "The hydraulic response no longer matches its historical operating pattern. This may reflect an operating-mode change, valve-position change, instrumentation issue, or equipment configuration change."
     if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "quality"]):
         return "Treatment response no longer matches the learned control fingerprint. This pattern is consistent with feed, sensor, or source-water changes that should be separated before changing controls."
     if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):
@@ -2138,20 +2146,33 @@ def relationship_has_cumulative_counter(item: dict[str, Any]) -> bool:
     return any(is_cumulative_counter_name(column) for column in relationship_columns(item))
 
 
+def operator_signal_label(value: Any) -> str:
+    label = first_text(value).replace("_", " ").replace("-", " ")
+    normalized = " ".join(label.split()).strip()
+    lower = normalized.lower()
+    if "filter" in lower and (" dp" in f" {lower}" or "differential pressure" in lower):
+        return "Filter differential pressure"
+    if "pump" in lower and "speed" in lower:
+        return "Pump speed"
+    if not normalized:
+        return "Signal"
+    return normalized[0].upper() + normalized[1:]
+
+
 def signal_label_from_item(item: dict[str, Any]) -> str:
-    return first_text(item.get("display_name"), item.get("normalized_name"), item.get("original_header"), item.get("column"), "Signal")
+    return operator_signal_label(first_text(item.get("display_name"), item.get("normalized_name"), item.get("original_header"), item.get("column"), "Signal"))
 
 
 def relationship_display_columns(item: dict[str, Any]) -> list[str]:
     display_columns = item.get("display_columns")
     if isinstance(display_columns, list):
-        values = dedupe([str(column) for column in display_columns if column])
+        values = dedupe([operator_signal_label(column) for column in display_columns if column])
         if values:
             return values
     metadata = item.get("source_column_metadata") if isinstance(item.get("source_column_metadata"), list) else []
-    values = [first_text(meta.get("display_name"), meta.get("normalized_name"), meta.get("original_header"), meta.get("source_column")) for meta in metadata if isinstance(meta, dict)]
+    values = [operator_signal_label(first_text(meta.get("display_name"), meta.get("normalized_name"), meta.get("original_header"), meta.get("source_column"))) for meta in metadata if isinstance(meta, dict)]
     values = dedupe([value for value in values if value])
-    return values or relationship_columns(item)
+    return values or [operator_signal_label(column) for column in relationship_columns(item)]
 
 
 GENERIC_SUBSYSTEM_NAME = "Observed subsystem behavior changed"
@@ -2269,6 +2290,14 @@ def contains_algorithmic_relationship_language(value: str) -> bool:
 
 def human_metric_label(column: str) -> str:
     text = str(column or "").lower()
+    if "filter" in text and ("dp" in text or "differential" in text):
+        return "Filter differential pressure"
+    if "pump" in text and "speed" in text:
+        return "Pump speed"
+    if "pump" in text and any(token in text for token in ["power", "kw"]):
+        return "Pump power"
+    if "main" in text and "pressure" in text:
+        return "Main pressure"
     if "condenser" in text and ("approach" in text or "temp" in text):
         return "Condenser approach temperature"
     if "compressor" in text and any(token in text for token in ["amp", "current"]):
@@ -2332,9 +2361,8 @@ def relationship_title(columns: list[str], item: dict[str, Any]) -> str:
 
 
 def relationship_observable_sentence(columns: list[str], item: dict[str, Any]) -> str:
-    title = relationship_title(columns, item).rstrip(".")
     label = " / ".join(relationship_display_columns(item) or columns) or str(item.get("display_relationship") or item.get("relationship") or "these signals")
-    return f"{title}; {relationship_change_sentence(label, item)}"
+    return relationship_change_sentence(label, item)
 
 
 def relationship_recommended_action(system: str) -> str:
@@ -2346,7 +2374,7 @@ def relationship_recommended_action(system: str) -> str:
 def relationship_operational_impact_sentence(system: str, names: list[str], causes: list[str]) -> str:
     combined = " ".join([system, *[str(name or "") for name in names], *causes]).lower().replace("_", " ").replace("-", " ")
     if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
-        return "Operational impact: This relationship change is consistent with conditions such as increasing hydraulic resistance, equipment degradation, operational changes, or recent maintenance. Investigation is recommended to determine the cause."
+        return "The hydraulic response no longer matches its historical operating pattern. This may reflect an operating-mode change, valve-position change, instrumentation issue, or equipment configuration change."
     if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality", "disinfection"]):
         return "Operational impact: This relationship change is consistent with conditions such as feed calibration drift, water quality variation, control loop changes, or recent maintenance. Investigation is recommended to determine the cause."
     if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):

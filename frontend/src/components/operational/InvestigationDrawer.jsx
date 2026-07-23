@@ -143,11 +143,12 @@ export default function InvestigationDrawer({
       >
         <header className="investigation-panel__header">
           <div className="investigation-panel__identity">
-            <span className="section-token">{isFullWorkspace ? "Full investigation workspace" : "Investigation"}</span>
+            <span className="section-token">{isFullWorkspace ? "Full evidence page" : "Evidence"}</span>
             <h2 id="investigation-panel-title">{visibleTitle}</h2>
-            <p id="investigation-panel-subsystem">
-              <span>Affected subsystem</span>
-              <strong>{visibleInsight?.system || "Unavailable"}</strong>
+            <p id="investigation-panel-subsystem" className="investigation-panel__finding-state">
+              <span>Change detected</span>
+              <span aria-hidden="true">·</span>
+              <strong>{(visibleInsight?.changedRelationshipCount || visibleInsight?.affectedRelationships?.length || visibleInsight?.observedFacts?.length) ? "Narrowed" : "Broad"}</strong>
             </p>
           </div>
           <div className="investigation-panel__actions">

@@ -1806,6 +1806,20 @@ function applyCumulativeRelationshipConfidenceCap(insight) {
 
 function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatus, lastAnalysis, analysisExplanation, systems = [], signals = [] }) {
   const explanatoryInsights = Array.isArray(analysisExplanation?.insights) ? analysisExplanation.insights : [];
+  const analysisQuality = analysisExplanation?.data_quality ?? result?.analysis_result?.data_quality ?? result?.data_quality ?? {};
+  const schemaMapping = analysisExplanation?.cultivation_mapping ?? result?.analysis_result?.cultivation_mapping ?? result?.cultivation_mapping ?? {};
+  const sharedFindingContext = {
+    sourceName: firstText(analysisExplanation?.source_file, result?.filename, result?.source_name) || "Unassigned dataset",
+    qualityWarnings: dedupeText(toList(analysisQuality?.warnings, schemaMapping?.warnings)),
+    unmappedColumns: dedupeText(toList(schemaMapping?.categories?.unknown)),
+    facilityTimezone: firstText(
+      analysisExplanation?.facility_timezone,
+      analysisExplanation?.site_timezone,
+      result?.facility_timezone,
+      result?.site_timezone,
+      result?.timezone,
+    ),
+  };
   if (explanatoryInsights.length > 0) {
     const insights = explanatoryInsights.map((item, index) => {
       const resolvedEvidence = resolveEvidenceRefs(item, analysisExplanation);
@@ -1813,6 +1827,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
       const contributingRelationships = Array.isArray(item.contributing_relationships) ? item.contributing_relationships : [];
       const affectedRelationships = relationshipContributionLabels(contributingRelationships);
       const insight = {
+        ...sharedFindingContext,
         id: normalizeInsightId(item, index),
         rawSystemName: firstText(item.system, toList(item.affected_systems)[0], primarySystem),
         status: normalizeInsightStatus(item.status ?? item.severity),
@@ -1889,6 +1904,7 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
       const supporting = formatEvidenceItems(toList(item.supportingEvidence, item.relationshipEvidence, result?.operator_report?.evidence_summary, result?.finding_evidence_chains));
       const evidence = supporting.length ? [{ supporting_signals: supporting }] : [];
       const insight = {
+        ...sharedFindingContext,
         id: normalizeInsightId(item, index),
         rawSystemName: firstText(item.label, item.affectedSubsystem, item.affected_system, primarySystem),
         status: normalizeInsightStatus(item.status ?? result?.operating_state),

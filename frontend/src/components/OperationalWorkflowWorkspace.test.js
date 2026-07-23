@@ -499,14 +499,11 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Close investigation drawer" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Expand investigation to full workspace" })).toBeTruthy();
-    expect(screen.getAllByText("Affected subsystem").length).toBeGreaterThan(0);
-    expect(screen.getByText("What happened")).toBeTruthy();
-    expect(screen.getByText("Key evidence")).toBeTruthy();
-    expect(screen.getAllByText(/degraded operating performance/).length).toBeGreaterThan(0);
-    expect(screen.getByText("Recommended checks")).toBeTruthy();
-    expect(screen.getByText("Advanced details")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Similar Verified Investigations" })).toBeTruthy();
-    expect(screen.getByText("No verified similar investigations are available yet.")).toBeTruthy();
+    expect(screen.getByText("What changed")).toBeTruthy();
+    expect(screen.getByText("Supporting evidence")).toBeTruthy();
+    expect(screen.getByText("Why it matters")).toBeTruthy();
+    expect(screen.getByText("Start here")).toBeTruthy();
+    expect(screen.getByText("Open relationship evidence")).toBeTruthy();
     expect(screen.queryByText("Confidence Breakdown")).toBeNull();
     expect(document.querySelector("[data-testid='operational-command-center']")).toBeTruthy();
     expect(document.querySelector(".page-container")?.getAttribute("aria-hidden")).toBe("true");
@@ -525,8 +522,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     expect(screen.getByRole("dialog", { name: "Pump relationships changed" })).toBeTruthy();
     expect(screen.getByLabelText("Selected investigation detail")).toBeTruthy();
-    expect(screen.getByText("What happened")).toBeTruthy();
-    expect(screen.getByText("Key evidence")).toBeTruthy();
+    expect(screen.getByText("What changed")).toBeTruthy();
+    expect(screen.getByText("Supporting evidence")).toBeTruthy();
     expect(document.querySelector("[data-testid='operational-command-center']")).toBeTruthy();
     expect(document.querySelector(".operational-nav button[aria-current='page']")?.textContent).toContain("Command Center");
   });
@@ -603,7 +600,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     clickNav("Engineering Findings");
     expect(screen.getAllByRole("heading", { name: "Engineering Findings" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("Key evidence")).toBeTruthy();
+    expect(screen.getByText("Supporting evidence")).toBeTruthy();
 
     clickNav("Behavior Baseline");
     expect(screen.getAllByRole("heading", { name: "Behavior Baseline" }).length).toBeGreaterThan(0);
@@ -627,15 +624,12 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     clickNav("Engineering Findings");
     expect(screen.getAllByText(/Pressure and Flow Behavior Changed/i).length).toBeGreaterThan(0);
-    expect(screen.getByText("What happened")).toBeTruthy();
-    expect(screen.getByText("Key evidence")).toBeTruthy();
-    expect(screen.getByText("Recommended checks")).toBeTruthy();
-    expect(screen.getByText("Technical evidence")).toBeTruthy();
-    expect(screen.getByText("Advanced details")).toBeTruthy();
-    expect(screen.getAllByText(/Confidence/).length).toBeGreaterThan(0);
+    expect(screen.getByText("What changed")).toBeTruthy();
+    expect(screen.getByText("Supporting evidence")).toBeTruthy();
+    expect(screen.getByText("Start here")).toBeTruthy();
+    expect(screen.getByText("Technical details")).toBeTruthy();
     expect(screen.queryByText("Investigation Timeline")).toBeNull();
-    expect(screen.getAllByText("pressure \u2194 flow").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Pressure and flow relationship weakened.").length).toBeGreaterThan(0);
+    expect(screen.getByText(/relationship between pressure and flow weakened from its learned baseline/i)).toBeTruthy();
     expect(screen.queryByText("[object Object]")).toBeNull();
     expect(screen.getByText(/1\.111111/)).toBeTruthy();
   });
@@ -648,41 +642,25 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     });
 
     clickNav("Engineering Findings");
-    expect(screen.getByText("What happened")).toBeTruthy();
-    expect(screen.getByText(/Affected subsystem:/)).toBeTruthy();
-    expect(screen.getByText("Key evidence")).toBeTruthy();
-    expect(screen.getByText("Largest relationship change")).toBeTruthy();
-    expect(screen.getByText("Recommended checks")).toBeTruthy();
-    expect(screen.getByText("Technical evidence")).toBeTruthy();
-    expect(screen.getByText("Advanced details")).toBeTruthy();
+    expect(screen.getByText("What changed")).toBeTruthy();
+    expect(screen.getByText("Supporting evidence")).toBeTruthy();
+    expect(screen.getByText("Start here")).toBeTruthy();
+    expect(screen.getByText("Technical details")).toBeTruthy();
     expect(screen.queryByText("Investigation Timeline")).toBeNull();
     expect(screen.queryByText("Prioritized Investigation Workflow")).toBeNull();
-    expect(screen.getByRole("button", { name: "Inspect affected equipment" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Compare baseline" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Related systems" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Export report" })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Ã|â|Â/);
   });
 
-  it("exports the selected investigation as a JSON download", () => {
-    const createObjectURL = vi.fn(() => "blob:investigation-report");
-    const revokeObjectURL = vi.fn();
-    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
-    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
-
+  it("keeps utility actions off the concise evidence surface", () => {
     renderWorkspace({
       effectiveLatestUploadResult: completeResult({ analysis_result: analysis() }),
       effectiveLatestUploadSnapshot: completeSnapshot(),
       currentSession: { hasReliableOperatorEvidence: true },
     });
     clickNav("Engineering Findings");
-    fireEvent.click(screen.getByRole("button", { name: "Export report" }));
 
-    expect(createObjectURL).toHaveBeenCalledTimes(1);
-    expect(anchorClick).toHaveBeenCalledTimes(1);
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:investigation-report");
-    anchorClick.mockRestore();
+    expect(screen.queryByRole("button", { name: "Export report" })).toBeNull();
+    expect(screen.getByText("Open relationship evidence")).toBeTruthy();
   });
 
   it("maps two changed relationships to two evidence lines", () => {
@@ -693,13 +671,12 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     });
 
     clickNav("Engineering Findings");
-    expect(screen.getAllByText("Pump Power \u2194 Filter DP").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Pump Power \u2194 Flow").length).toBeGreaterThan(0);
-    expect(screen.getByText("Largest relationship change")).toBeTruthy();
-    expect(screen.getAllByText("Largest relationship change")).toHaveLength(1);
+    expect(screen.getByText(/relationship between pump power and filter differential pressure changed from its learned baseline/i)).toBeTruthy();
+    expect(screen.getByText(/relationship between pump power and flow changed from its learned baseline/i)).toBeTruthy();
+    expect(screen.queryByText("Largest relationship change")).toBeNull();
   });
 
-  it("shows an explicit message when relationship evidence is missing", () => {
+  it("keeps a changed relationship readable when its coefficient is unavailable", () => {
     renderWorkspace({
       effectiveLatestUploadResult: completeResult({ analysis_result: analysis({ second: false }) }),
       effectiveLatestUploadSnapshot: completeSnapshot(),
@@ -707,7 +684,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     });
 
     clickNav("Engineering Findings");
-    expect(screen.getByText(/Pump Power \u2194 Flow: no quantitative measurement was included/)).toBeTruthy();
+    expect(screen.getByText(/relationship between pump power and flow changed from its learned baseline/i)).toBeTruthy();
+    expect(screen.queryByText(/no quantitative measurement was included/i)).toBeNull();
   });
 
   it("formats evidence to two decimals and explains weakening", () => {
@@ -719,9 +697,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
 
     clickNav("Engineering Findings");
     const text = screen.getByLabelText("Neraium platform workspace").textContent;
-    expect(text).toContain("0.84");
-    expect(screen.getByText("Technical evidence")).toBeTruthy();
-    expect(screen.getByText("Advanced details")).toBeTruthy();
+    expect(screen.queryByText("Largest relationship change")).toBeNull();
+    expect(screen.getByText("Technical details")).toBeTruthy();
     expect(text).toMatch(/0\.775497|0\.063807|0\.839304/);
   });
 
@@ -733,7 +710,7 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     });
 
     clickNav("Engineering Findings");
-    expect(screen.getByText(/Pump Power \u2194 Flow: the relationship reversed direction/)).toBeTruthy();
+    expect(screen.getByText(/relationship between pump power and flow reversed direction/i)).toBeTruthy();
   });
 
   it("keeps raw identifiers and JSON in Advanced instead of Command Center", () => {
