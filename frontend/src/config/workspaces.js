@@ -1,9 +1,9 @@
 export const WORKSPACES = [
   {
     id: "system-body",
-    label: "Portfolio",
-    eyebrow: "Engineering Triage",
-    description: "Sites, structural stability, evidence quality, and bounded operational findings.",
+    label: "Sites",
+    eyebrow: "Operational Status",
+    description: "Site status, active findings, locations, and supporting evidence.",
   },
   {
     id: "data-connections",

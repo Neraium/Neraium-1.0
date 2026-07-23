@@ -287,9 +287,9 @@ it("processing state uses the behavior baseline as the progress indicator", () =
   });
 
   expect(screen.getByText("Comparing relationships")).toBeTruthy();
-  expect(screen.getByText("Stage 3 of 4")).toBeTruthy();
+  expect(screen.getByText("Checking current behavior against the learned baseline.")).toBeTruthy();
   expect(screen.getByText("progress.csv")).toBeTruthy();
-  expect(screen.getByText("1.0 KB")).toBeTruthy();
+  expect(screen.queryByText("1.0 KB")).toBeNull();
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
   expect(screen.queryByText("65% complete")).toBeNull();
@@ -314,7 +314,8 @@ it("baseline renderer fallback keeps the active analysis job visible", () => {
     latestMessage: "Building behavior baseline...",
   });
 
-  expect(screen.getByText("Using an alternate processing path.")).toBeTruthy();
+  expect(screen.queryByText("Using an alternate processing path.")).toBeNull();
+  expect(screen.getByText("Checking current behavior against the learned baseline.")).toBeTruthy();
   expect(screen.getByText("fallback.csv")).toBeTruthy();
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
   const renderer = document.querySelector(".upload-fingerprint-build");
@@ -375,8 +376,9 @@ it("shows queued worker status as one visible processing line", () => {
     queuedWorkerDetail: "Preparing analysis resources",
   });
 
-  const statusLine = document.querySelector(".upload-processing-status");
-  expect(statusLine?.textContent).toBe("Preparing analysis resources");
+  expect(document.querySelector(".upload-processing-status")).toBeNull();
+  expect(screen.getByText("Validating dataset")).toBeTruthy();
+  expect(screen.queryByText("Preparing analysis resources")).toBeNull();
   expect(document.querySelector(".metadata-text")).toBeNull();
 });
 
@@ -423,27 +425,27 @@ it("complete state shows the behavior baseline completion moment", () => {
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getAllByRole("heading", { name: "Analysis Complete" })).toHaveLength(1);
-  expect(screen.getByText("Behavior baseline established and evidence saved.")).toBeTruthy();
+  expect(screen.getAllByRole("heading", { name: "Analysis complete" })).toHaveLength(1);
+  expect(screen.queryByText("Behavior baseline established and evidence saved.")).toBeNull();
   const labels = Array.from(document.querySelectorAll(".upload-result-summary__item dt")).map((node) => node.textContent);
-  expect(labels).toEqual(["Systems analyzed", "Insights generated", "Relationship change"]);
-  expect(screen.getByLabelText("complete.csv, 8.4 MB, Complete")).toBeTruthy();
+  expect(labels).toEqual(["Status", "Findings", "Evidence quality"]);
+  expect(screen.getByText("complete.csv")).toBeTruthy();
+  expect(screen.queryByText("8.4 MB")).toBeNull();
   const completedStages = document.querySelector(".upload-fingerprint-build__nodes").querySelectorAll("li.is-complete");
-  expect(completedStages).toHaveLength(4);
+  expect(completedStages).toHaveLength(5);
   expect(Array.from(completedStages).map((node) => node.getAttribute("aria-label"))).toEqual([
-    "Prepare: completed", "Baseline: completed", "Compare: completed", "Save: completed",
+    "Validate: completed", "Map: completed", "Baseline: completed", "Compare: completed", "Evidence: completed",
   ]);
-  expect(completedStages[3].classList.contains("is-final")).toBe(true);
-  const primary = screen.getByRole("button", { name: "Open Portfolio" });
+  expect(completedStages[4].classList.contains("is-final")).toBe(true);
+  const primary = screen.getByRole("button", { name: "View Results" });
   const secondary = screen.getByRole("button", { name: "Analyze Another Dataset" });
   expect(primary.classList.contains("upload-completion-actions__primary")).toBe(true);
   expect(secondary.classList.contains("upload-completion-actions__secondary")).toBe(true);
-  const details = screen.getByText("Analysis Details").closest("details");
-  expect(details.open).toBe(false);
+  expect(screen.queryByText("Analysis Details")).toBeNull();
 });
 
 
-it("completed upload screen count matches AnalysisResult systems length", () => {
+it("completed upload screen omits system metrics", () => {
   renderPanel({
     uploadState: "complete",
     selectedFiles: [selectedCsv("systems-count.csv")],
@@ -465,8 +467,8 @@ it("completed upload screen count matches AnalysisResult systems length", () => 
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  const item = Array.from(document.querySelectorAll(".upload-result-summary__item")).find((node) => node.textContent?.includes("Systems"));
-  expect(item.textContent).toContain("3");
+  expect(screen.queryByText("Systems analyzed")).toBeNull();
+  expect(screen.getByText("Normal")).toBeTruthy();
 });
 
 it("completed upload screen count matches AnalysisResult insights length", () => {
@@ -492,11 +494,11 @@ it("completed upload screen count matches AnalysisResult insights length", () =>
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  const item = screen.getByText("Insights generated").closest(".upload-result-summary__item");
+  const item = screen.getByText("Findings").closest(".upload-result-summary__item");
   expect(item.textContent).toContain("4");
 
-  const relationshipItem = screen.getByText("Relationship change").closest(".upload-result-summary__item");
-  expect(relationshipItem.textContent).toContain("Detected");
+  const statusItem = screen.getByText("Status").closest(".upload-result-summary__item");
+  expect(statusItem.textContent).toContain("Change detected");
 });
 
 it("uses the analysis result for not-detected relationship wording", () => {
@@ -517,8 +519,8 @@ it("uses the analysis result for not-detected relationship wording", () => {
     uploadJob: { job_id: "stable-job", status: "COMPLETE", result_available: true },
   });
 
-  const relationshipItem = screen.getByText("Relationship change").closest(".upload-result-summary__item");
-  expect(relationshipItem.textContent).toContain("Not detected");
+  const statusItem = screen.getByText("Status").closest(".upload-result-summary__item");
+  expect(statusItem.textContent).toContain("Normal");
 });
 
 it("keeps telemetry connector setup out of the dataset workflow", () => {
@@ -544,9 +546,9 @@ it("shows finalizing results instead of fake zero counts before AnalysisResult i
     uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
   });
 
-  expect(screen.getByLabelText("Analysis progress: Preparing Portfolio...")).toBeTruthy();
-  expect(screen.getByText("Saving evidence record")).toBeTruthy();
-  expect(screen.queryByRole("heading", { name: "Analysis Complete" })).toBeNull();
+  expect(screen.getByLabelText("Analysis progress: Preparing results")).toBeTruthy();
+  expect(screen.getByText("Preparing evidence")).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Analysis complete" })).toBeNull();
   expect(document.querySelector(".upload-result-summary")).toBeNull();
   expect(screen.getByLabelText("Analysis 99% complete")).toBeTruthy();
 });
@@ -650,8 +652,8 @@ it("treats the first complete payload with a saved result as terminal and auto-o
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: false });
   });
 
-  expect(await screen.findByRole("button", { name: "Open Portfolio" })).toBeTruthy();
-  expect(screen.getByText("Behavior baseline established and evidence saved.")).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "View Results" })).toBeTruthy();
+  expect(screen.queryByText("Behavior baseline established and evidence saved.")).toBeNull();
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: true });
@@ -743,7 +745,8 @@ it("renders intermediate processing progress without jumping to complete", () =>
   });
 
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
-  expect(screen.getByText("Comparing relationships")).toBeTruthy();
+  expect(screen.getByText("Building baseline")).toBeTruthy();
+  expect(screen.getByText("Learning the expected relationships in the baseline window.")).toBeTruthy();
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
   expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
 });
@@ -895,4 +898,32 @@ it("prevents duplicate upload and polling events from repeated process clicks", 
   });
   expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
   expect(apiFetch.mock.calls.filter(([path]) => String(path).includes("/api/data/upload-status/job-duplicate-click"))).toHaveLength(1);
+});
+
+
+it("uses the evidence-insufficient completion state when baseline gating fails", () => {
+  renderPanel({
+    uploadState: "complete",
+    selectedFiles: [selectedCsv("insufficient.csv")],
+    selectedFileSize: "2.1 MB",
+    latestUploadSnapshot: {
+      latest_result: {
+        analysis_result: {
+          systems: [{ name: "Cooling" }],
+          insights: [{ title: "Relationship change detected", confidence_tier: "Qualified" }],
+          baseline_sufficient: false,
+          fingerprint: { status: "Insufficient" },
+        },
+      },
+    },
+    uploadJob: { job_id: "insufficient-job", status: "COMPLETE", result_available: true },
+  });
+
+  const status = screen.getByText("Status").closest(".upload-result-summary__item");
+  expect(status.textContent).toContain("Evidence insufficient");
+  const quality = screen.getByText("Evidence quality").closest(".upload-result-summary__item");
+  expect(quality.textContent).toContain("Deferred");
+  expect(screen.getByRole("button", { name: "Review Data Requirements" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "View Results" })).toBeNull();
+  expect(screen.queryByText("Analysis Details")).toBeNull();
 });
