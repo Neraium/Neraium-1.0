@@ -24,14 +24,21 @@ const unique = (items) => [...new Set(compact(items).map((item) => String(item).
 const humanize = (value) => String(value ?? "").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const stripPeriod = (value) => String(value ?? "").trim().replace(/[.。]+$/, "");
 
-const UNSUPPORTED_LOCATION = /^(current site|uploaded telemetry|not established|mapped infrastructure|mapped system|unknown|n\/?a)$/i;
+const UNSUPPORTED_LOCATION = /^(current site|uploaded telemetry|not established|mapped infrastructure|mapped system|unknown|n\/?a|observed subsystem behavior (?:changed|shifted))$/i;
+const LOCATION_AS_FINDING = /\b(?:behavior|relationship|performance)\b.*\b(?:changed|shifted|degrading|degraded|detected)\b/i;
 const GENERIC_FINDING_TITLE = /^(observed subsystem behavior (?:changed|shifted)|investigation recommended|relationship change detected|structural instability|highest-priority operational finding|operational finding|mapped change|change detected)$/i;
+const MALFORMED_FINDING_TITLE = /[;]|\b(?:new operating relationship|operating coupling|correlation|relationship strength)\b|^-?0?\.\d+/i;
+const OVERSTATED_FINDING_TITLE = /\b(?:degrading|degraded|deteriorating|underperforming|failure|failing)\b/i;
 const DATA_CLEANING_DETAIL = /(dropped rows?|unmapped columns?|constant sensors?|completeness floors?|parsing warnings?|coercion|duplicate rows?)/i;
 const MATERIAL_LIMITATION = /(missing|gap|unavailable|incomplete|insufficient|baseline|unreliable|contradict|efficiency|coverage|prevents?|limits?|cannot|could not)/i;
+const TIER_RANK = { Withheld: 0, Deferred: 1, Narrowed: 2, Qualified: 3, Confirmed: 4 };
 
 function supportedLocationText(...values) {
-  const text = firstText(...values);
-  return text && !UNSUPPORTED_LOCATION.test(text) ? text : "";
+  for (const value of values.flat()) {
+    const text = sanitizeOperatorText(value);
+    if (text && !UNSUPPORTED_LOCATION.test(text) && !LOCATION_AS_FINDING.test(text)) return text;
+  }
+  return "";
 }
 
 function sentence(value, maxLength = 180) {
@@ -51,14 +58,58 @@ function strengthLabel(value) {
   return "strong";
 }
 
-export function formatPrimaryEvidence(value) {
+function contextText(values) {
+  return values.flat(Infinity).map((value) => sanitizeOperatorText(value)).filter(Boolean).join(" ").toLowerCase().replace(/[_-]+/g, " ");
+}
+
+function inferredOperationalArea(values) {
+  const combined = contextText(values);
+  if (/condenser|approach temperature|chiller|compressor|cooling/.test(combined)) return "Cooling system";
+  if (/pump|flow|pressure|valve|hydraulic/.test(combined)) return "Flow and pressure";
+  if (/chlor|turbidity|conductivity|water quality|orp|chemical|ph\b/.test(combined)) return "Water quality";
+  if (/tower|heat rejection|thermal/.test(combined)) return "Heat rejection";
+  return "";
+}
+
+function sentenceCaseArea(value) {
+  const normalized = String(value || "").replace(/\s*&\s*/g, " and ").replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  const words = normalized.split(" ");
+  return words.map((word, index) => index === 0 || /^[A-Z]{2,}$/.test(word) ? word : word.toLowerCase()).join(" ");
+}
+
+function operationalTitleFromContext(values, system = "") {
+  const combined = contextText([values, system]);
+  if (/condenser|approach temperature/.test(combined) || (/temperature/.test(combined) && /compressor|chiller/.test(combined))) return "Condenser-side behavior changed";
+  if (/pump/.test(combined) && /flow/.test(combined) && /demand|power|current|amp/.test(combined)) return "Pump demand no longer matches flow";
+  if (/chlor|turbidity|conductivity|water quality|orp|chemical|ph\b/.test(combined)) return "Water-quality relationships shifted";
+  if (/flow|pressure|hydraulic|pump|valve/.test(combined)) return (sentenceCaseArea(system || "Flow and pressure") || "Flow and pressure") + " behavior changed";
+  if (/cooling|chiller|compressor|thermal/.test(combined)) return (sentenceCaseArea(system || "Cooling system") || "Cooling system") + " behavior changed";
+  if (system) return sentenceCaseArea(system) + " behavior changed";
+  return "Measured behavior changed";
+}
+
+function mappedEvidenceSignal(text, contextSignals) {
+  if (!/^chiller\s+(?:increased|decreased|changed)\b/i.test(text)) return text;
+  const context = contextText(contextSignals);
+  let replacement = "Chiller signal";
+  if (/compressor/.test(context) && /amp|current/.test(context)) replacement = "Compressor current";
+  else if (/chiller/.test(context) && /power|kw/.test(context)) replacement = "Chiller power";
+  else if (/chiller|cooling/.test(context) && /load/.test(context)) replacement = "Cooling load";
+  return text.replace(/^chiller\b/i, replacement);
+}
+
+export function formatPrimaryEvidence(value, contextSignals = []) {
   let text = typeof value === "object" && value !== null
     ? firstText(value?.description, value?.summary, value?.observation, value?.signal, value?.relationship, value?.label, value?.value)
     : firstText(value);
   if (!text) return "";
   const coefficientRange = /(-?0?\.\d{3,})\s*(?:to|→|->)\s*(-?0?\.\d{3,})/gi;
-  text = text.replace(coefficientRange, (_, from, to) => `${strengthLabel(from)} to ${strengthLabel(to)}`);
+  text = text.replace(coefficientRange, (_, from, to) => strengthLabel(from) + " to " + strengthLabel(to));
   text = text.replace(/\b-?0\.\d{4,}\b/g, (raw) => strengthLabel(raw));
+  text = mappedEvidenceSignal(text, contextSignals);
+  text = text.replace(/^.*?operating coupling\s+(?:changed|shifted|strengthened|weakened)?\s*from\s+(weak|moderate|strong)\s+to\s+(weak|moderate|strong)\.?$/i, "Their learned relationship changed from $1 to $2.");
+  text = text.replace(/^the relationship moved outside its learned range\.?$/i, "Their learned relationship changed.");
   return sentence(text);
 }
 
@@ -73,8 +124,9 @@ export function deriveConfidenceTier({ explicit, coverage, evidenceCount, limita
   if (explicitTier === "Withheld") return "Withheld";
   if (explicitTier === "Deferred" || /defer|pending|delay|incomplete/.test(normalized)) return "Deferred";
   if (completeness !== null && completeness < 0.75) return "Narrowed";
+  if (limitations.length || contradictions.length) return "Narrowed";
   if (explicitTier === "Narrowed" || /low|weak|developing|narrow/.test(normalized)) return "Narrowed";
-  if (explicitTier === "Confirmed") return ((completeness !== null && completeness < 0.95) || limitations.length || contradictions.length) ? "Qualified" : "Confirmed";
+  if (explicitTier === "Confirmed") return completeness !== null && completeness < 0.95 ? "Qualified" : "Confirmed";
   return "Qualified";
 }
 
@@ -126,7 +178,7 @@ function normalizeRelationship(row, index, evidenceIndex = {}) {
   const target = columns[1] || "";
   const evidenceRefs = unique(asArray(row?.evidence_refs ?? row?.evidenceRefs));
   const evidence = compact([row?.evidence, ...evidenceRefs.map((ref) => evidenceIndex?.[ref])]).filter((item) => typeof item === "object");
-  return { id: String(row?.id ?? row?.relationship_id ?? `relationship-${index}`), label: relationshipLabel(row, index), source, target, state: edgeState(row), baseline: firstNumber(row?.baseline_strength, row?.baseline, row?.statistics?.baseline_strength), current: firstNumber(row?.current_strength, row?.current, row?.statistics?.current_strength), delta: firstNumber(row?.calculated_delta, row?.correlation_delta, row?.delta, row?.statistics?.correlation_delta), evidence, confidence: firstText(row?.confidence, evidence[0]?.confidence), windows: asArray(row?.source_time_ranges ?? evidence[0]?.source_time_ranges) };
+  return { id: String(row?.id ?? row?.relationship_id ?? `relationship-${index}`), label: relationshipLabel(row, index), source, target, state: edgeState(row), changeType: firstText(row?.change_type, row?.state, row?.status, row?.relationship_state).toLowerCase(), baseline: firstNumber(row?.baseline_strength, row?.baseline, row?.statistics?.baseline_strength), current: firstNumber(row?.current_strength, row?.current, row?.statistics?.current_strength), delta: firstNumber(row?.calculated_delta, row?.correlation_delta, row?.delta, row?.statistics?.correlation_delta), evidence, confidence: firstText(row?.confidence, evidence[0]?.confidence), windows: asArray(row?.source_time_ranges ?? evidence[0]?.source_time_ranges) };
 }
 
 function collectRelationships(result, analysis) {
@@ -152,11 +204,20 @@ function collectTechnicalLimitations(raw, result, gaps) {
   return unique([...asArray(raw?.limitations), ...asArray(raw?.confidence_decrease_factors), ...asArray(result?.data_quality?.warnings), ...asArray(result?.warnings), ...asArray(result?.data_conditions), ...gaps.map((gap) => `Evidence gap in ${gap.signals.join(", ") || gap.source}${gap.duration ? ` (${gap.duration})` : ""}.`)].map(evidenceText));
 }
 function collectContradictions(raw) { return unique([...asArray(raw?.contradicting_evidence), ...asArray(raw?.contradictions), ...asArray(raw?.counter_evidence), ...asArray(raw?.confounders)].map(evidenceText)); }
+function plainLimitation(value) {
+  const text = sentence(value, 120);
+  const lower = text.toLowerCase();
+  if (/efficiency/.test(lower) && /missing|gap|unavailable/.test(lower)) return "Missing efficiency telemetry limits the conclusion.";
+  if (/missing numeric|missing values?|rows? contain missing|gap|unavailable|historian/.test(lower)) return "Missing telemetry limits the conclusion.";
+  if (/baseline/.test(lower) && /insufficient|incomplete|missing|unavailable/.test(lower)) return "The baseline is insufficient for a reliable conclusion.";
+  if (/coverage|completeness/.test(lower)) return "Limited telemetry coverage narrows the conclusion.";
+  return text;
+}
 function materialLimitations(raw, technicalLimitations, gaps) {
   const explicit = unique([...asArray(raw?.limitations), ...asArray(raw?.confidence_decrease_factors)].map(evidenceText));
   const relevantTechnical = technicalLimitations.filter((item) => !DATA_CLEANING_DETAIL.test(item) && MATERIAL_LIMITATION.test(item));
-  const gapSentences = gaps.map((gap) => `Evidence is limited by gaps in ${gap.signals.length ? gap.signals.join(", ") : gap.source}.`);
-  return unique([...explicit, ...relevantTechnical, ...gapSentences].map((item) => sentence(item)));
+  const gapSentences = gaps.map((gap) => gap.signals.length ? "Missing " + gap.signals.join(", ") + " telemetry limits the conclusion." : "Missing telemetry limits the conclusion.");
+  return unique([...explicit, ...relevantTechnical, ...gapSentences].map(plainLimitation).filter(Boolean));
 }
 function deriveBaselineSufficiency(result, analysis, relationships) {
   const explicit = result?.baseline_sufficient ?? result?.baseline_established ?? analysis?.baseline_sufficient ?? analysis?.fingerprint?.baseline_sufficient;
@@ -181,23 +242,38 @@ function isActiveRawFinding(raw) {
   if (/^(no (?:material )?change|normal operation|relationships? (?:remain )?(?:normal|stable))/.test(title)) return false;
   return true;
 }
-function specificFindingTitle(raw, observedChange, relationship, tier, system, subsystem) {
-  const supplied = stripPeriod(firstText(raw?.title, raw?.finding_title));
-  if (supplied && !GENERIC_FINDING_TITLE.test(supplied)) return supplied;
-  const observed = stripPeriod(sentence(observedChange, 110));
-  if (observed && !GENERIC_FINDING_TITLE.test(observed)) return observed;
+function specificFindingTitle(raw, observedChange, relationship, tier, system, contextValues = []) {
   if (["Deferred", "Withheld"].includes(tier)) return "Evidence insufficient to isolate cause";
-  if (relationship?.source && relationship?.target) return `${relationship.source} and ${relationship.target} no longer behave as expected`;
-  const supportedArea = subsystem || system;
-  return supportedArea ? `${supportedArea} behavior changed` : "Measured behavior changed";
+  const supplied = stripPeriod(firstText(raw?.title, raw?.finding_title));
+  const observed = stripPeriod(sentence(observedChange, 90));
+  const fullContext = [contextValues, supplied, observed, relationship?.source, relationship?.target];
+  const inferred = operationalTitleFromContext(fullContext, system);
+  const directionalSupport = /weakened|decreased|fell|reduced|no longer matches/.test(contextText(contextValues));
+  const suppliedIsUsable = supplied && supplied.length <= 72 && !GENERIC_FINDING_TITLE.test(supplied) && !MALFORMED_FINDING_TITLE.test(supplied) && !OVERSTATED_FINDING_TITLE.test(supplied);
+  if (inferred === "Condenser-side behavior changed" || inferred === "Pump demand no longer matches flow") return inferred;
+  if (suppliedIsUsable) {
+    if (/\bweakened\b/i.test(supplied) && !directionalSupport) return inferred;
+    if (/\bperformance changed\b/i.test(supplied) && inferred !== "Measured behavior changed") return inferred;
+    return supplied.replace(/\s*&\s*/g, " and ");
+  }
+  const observedIsUsable = observed && observed.length <= 72 && !GENERIC_FINDING_TITLE.test(observed) && !MALFORMED_FINDING_TITLE.test(observed) && !OVERSTATED_FINDING_TITLE.test(observed);
+  return observedIsUsable && inferred === "Measured behavior changed" ? observed : inferred;
 }
 function deriveLocation(raw, context) {
-  const system = supportedLocationText(raw?.system, raw?.system_name, raw?.location?.system, context.primarySystem);
+  const rawRelationships = asArray(raw?.contributing_relationships ?? raw?.relationships);
+  const signalContext = [
+    ...asArray(raw?.variables), ...asArray(raw?.affected_variables), ...asArray(raw?.supporting_signals),
+    raw?.title, raw?.what_changed, raw?.observed_change,
+    ...rawRelationships.flatMap((item) => [...asArray(item?.columns), ...asArray(item?.display_columns), item?.source, item?.target]),
+  ];
+  const inferredSystem = inferredOperationalArea(signalContext);
+  const system = supportedLocationText(raw?.system, raw?.system_name, raw?.location?.system, context.primarySystem) || inferredSystem;
   const subsystem = supportedLocationText(raw?.subsystem, raw?.subsystem_name, raw?.location?.subsystem);
   const asset = supportedLocationText(raw?.asset, raw?.asset_name, raw?.equipment, raw?.equipment_name, raw?.mapped_asset, raw?.location?.asset);
   const normalizedSubsystem = subsystem && subsystem !== system ? subsystem : "";
   const normalizedAsset = asset && asset !== normalizedSubsystem && asset !== system ? asset : "";
-  const hierarchy = unique([context.siteLocation, system, normalizedSubsystem, normalizedAsset]);
+  const supportedHierarchy = unique([context.siteLocation, system, normalizedSubsystem, normalizedAsset]);
+  const hierarchy = supportedHierarchy.length > 1 ? supportedHierarchy : [...supportedHierarchy, "Asset not identified"];
   return { site: context.siteLocation, system, subsystem: normalizedSubsystem, asset: normalizedAsset, hierarchy, label: hierarchy.join(" · ") };
 }
 function comparisonSummary(relationship) {
@@ -222,25 +298,111 @@ function buildFinding(raw, index, context) {
   const evidenceRefs = unique(asArray(raw?.evidence_refs ?? raw?.evidenceRefs));
   const evidenceObjects = compact([...asArray(raw?.evidence ?? raw?.evidence_items), ...evidenceRefs.map((ref) => context.evidenceIndex?.[ref]), ...relatedRows.flatMap((row) => row.evidence)]);
   const rawSupporting = unique([...asArray(raw?.supporting_evidence), ...asArray(raw?.observed_facts), ...evidenceObjects.map(evidenceText)].map(evidenceText));
-  if (!rawSupporting.length && relationship && ["changed", "emerging"].includes(relationship.state)) rawSupporting.push(`${relationship.label} moved outside its learned range.`);
+  if (!rawSupporting.length && relationship && ["changed", "emerging"].includes(relationship.state)) rawSupporting.push(relationship.label + " moved outside its learned range.");
   const technicalLimitations = collectTechnicalLimitations(raw, context.result, context.gaps);
   const limitations = materialLimitations(raw, technicalLimitations, context.gaps);
   const contradictions = collectContradictions(raw);
-  const tier = deriveConfidenceTier({ explicit: raw?.confidence_tier ?? raw?.confidence ?? raw?.confidence_state, coverage: context.coverage, evidenceCount: rawSupporting.length + evidenceObjects.length, limitations, contradictions, processing: context.processing, baselineSufficient: raw?.baseline_sufficient === false ? false : context.baselineSufficient, reliable: isReliable(raw, context.result) });
-  const observedChange = firstText(raw?.what_changed, raw?.observed_change, raw?.whatHappened, raw?.summary, raw?.title) || (relationship ? `${relationship.label} moved outside its learned behavior.` : "The available comparison indicates a change in measured behavior.");
-  const location = deriveLocation(raw, context);
-  const title = specificFindingTitle(raw, observedChange, relationship, tier, location.system, location.subsystem);
-  const supporting = unique(rawSupporting.map(formatPrimaryEvidence).filter(Boolean));
   const variables = unique([...asArray(raw?.variables), ...asArray(raw?.affected_variables), ...asArray(raw?.supporting_signals), relationship?.source, relationship?.target]);
+  const tier = deriveConfidenceTier({ explicit: raw?.confidence_tier ?? raw?.confidence ?? raw?.confidence_state, coverage: context.coverage, evidenceCount: rawSupporting.length + evidenceObjects.length, limitations, contradictions, processing: context.processing, baselineSufficient: raw?.baseline_sufficient === false ? false : context.baselineSufficient, reliable: isReliable(raw, context.result) });
+  const observedChange = firstText(raw?.what_changed, raw?.observed_change, raw?.whatHappened, raw?.summary, raw?.title) || (relationship ? relationship.label + " moved outside its learned behavior." : "The available comparison indicates a change in measured behavior.");
+  const location = deriveLocation(raw, context);
+  const titleContext = [variables, rawSupporting, relatedRows.map((item) => [item.label, item.source, item.target])];
+  const title = specificFindingTitle(raw, observedChange, relationship, tier, location.subsystem || location.system, titleContext);
+  const supporting = unique(rawSupporting.map((item) => formatPrimaryEvidence(item, titleContext)).filter(Boolean));
   const specificRecommendation = firstText(raw?.first_place_to_look, raw?.recommended_first_action, raw?.recommended_check, raw?.operator_check, raw?.recommended_action);
   const hasMappedContext = Boolean(location.system || location.subsystem || location.asset) && variables.length > 0;
   const prior = raw?.engineering_prior ?? raw?.relationship_prior ?? raw?.prior_contribution ?? null;
   const interpretationLevel = prior && hasMappedContext ? 1 : specificRecommendation && hasMappedContext ? 2 : relationship ? 3 : 4;
   const recommendationAllowed = !["Deferred", "Withheld"].includes(tier) && interpretationLevel <= 2;
   const whyItMatters = sentence(firstText(raw?.why_it_matters, raw?.potential_impact, raw?.behavior_interpretation, raw?.interpretation)) || "Neraium flagged a repeatable difference between the learned baseline and the current comparison.";
-  const primaryLimitation = limitations[0] || contradictions[0] || "";
+  const primaryLimitation = limitations[0] || plainLimitation(contradictions[0]) || "";
   const status = ["Deferred", "Withheld"].includes(tier) ? "Evidence insufficient" : "Change detected";
-  return { id: String(raw?.id ?? raw?.finding_id ?? `finding-${index}`), title, status, system: location.subsystem || location.system || context.siteLocation, location, observedChange: sentence(observedChange), whyItMatters, tier, confidenceReason: confidenceReason(tier, primaryLimitation), supporting, visibleSupporting: supporting.slice(0, 3), rawSupporting, contradictions, limitations, primaryLimitation, technicalLimitations, firstPlaceToLook: recommendationAllowed ? specificRecommendation : "", confirmationCriteria: firstText(raw?.confirmation_criteria, raw?.confirm_or_rule_out, raw?.expected_confirmation), comparison: deriveComparison(raw, relationship, context.result), comparisonSummary: comparisonSummary(relationship), relationships: relatedRows.length ? relatedRows : (relationship ? [relationship] : []), variables, engineeringPrior: prior, interpretationLevel, recommendationAllowed, evidenceObjects, outcome: asArray(raw?.operator_feedback_history)[0] ?? null };
+  return { id: String(raw?.id ?? raw?.finding_id ?? "finding-" + index), title, status, system: location.subsystem || location.system || context.siteLocation, location, relatedAreas: [], observedChange: sentence(observedChange), whyItMatters, tier, confidenceReason: confidenceReason(tier, primaryLimitation), supporting, visibleSupporting: supporting.slice(0, 3), rawSupporting, contradictions, limitations, primaryLimitation, technicalLimitations, firstPlaceToLook: recommendationAllowed ? specificRecommendation : "", confirmationCriteria: firstText(raw?.confirmation_criteria, raw?.confirm_or_rule_out, raw?.expected_confirmation), comparison: deriveComparison(raw, relationship, context.result), comparisonSummary: comparisonSummary(relationship), relationships: relatedRows.length ? relatedRows : (relationship ? [relationship] : []), variables, engineeringPrior: prior, interpretationLevel, recommendationAllowed, evidenceObjects, outcome: asArray(raw?.operator_feedback_history)[0] ?? null };
+}
+
+function evidenceKey(value) {
+  const text = String(value || "").toLowerCase().replace(/[^a-z0-9.%]+/g, " ").trim();
+  if (/relationship|coupling|learned range|learned behavior/.test(text)) return "relationship-change";
+  return text;
+}
+function findingsOverlap(left, right) {
+  const leftKeys = new Set(left.supporting.map(evidenceKey));
+  const rightKeys = new Set(right.supporting.map(evidenceKey));
+  if (Math.min(leftKeys.size, rightKeys.size) < 2) return false;
+  let shared = 0;
+  for (const key of leftKeys) if (rightKeys.has(key)) shared += 1;
+  return shared >= 2;
+}
+function uniqueObjects(items, identity) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = identity(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function prioritizeEvidence(items) {
+  const all = unique(items);
+  const relationship = all.filter((item) => /relationship|coupling|learned range|learned behavior/i.test(item));
+  const metrics = all.filter((item) => !relationship.includes(item) && /%|increased|decreased|rose|fell/i.test(item));
+  const other = all.filter((item) => !relationship.includes(item) && !metrics.includes(item));
+  const visible = unique([...metrics.slice(0, 2), ...relationship.slice(0, 1), ...other]).slice(0, 3);
+  return { all: unique([...visible, ...all]), visible };
+}
+function mergeFindingGroup(group) {
+  if (group.length === 1) return group[0];
+  const primary = group[0];
+  const variables = unique(group.flatMap((finding) => finding.variables));
+  const allSupporting = group.flatMap((finding) => finding.supporting);
+  const areas = unique(group.flatMap((finding) => [finding.location.system, finding.location.subsystem])).filter(Boolean);
+  const inferredSystem = inferredOperationalArea([variables, allSupporting, areas]) || primary.location.system;
+  const assets = unique(group.map((finding) => finding.location.asset).filter(Boolean));
+  const site = primary.location.site;
+  const hierarchyBase = unique([site, inferredSystem, assets.length === 1 ? assets[0] : ""]);
+  const hierarchy = hierarchyBase.length > 1 ? hierarchyBase : [...hierarchyBase, "Asset not identified"];
+  const location = { site, system: inferredSystem, subsystem: "", asset: assets.length === 1 ? assets[0] : "", hierarchy, label: hierarchy.join(" · ") };
+  const tier = group.reduce((lowest, finding) => TIER_RANK[finding.tier] < TIER_RANK[lowest] ? finding.tier : lowest, primary.tier);
+  const limitations = unique(group.flatMap((finding) => finding.limitations));
+  const contradictions = unique(group.flatMap((finding) => finding.contradictions));
+  const primaryLimitation = limitations[0] || plainLimitation(contradictions[0]) || "";
+  const evidence = prioritizeEvidence(allSupporting);
+  const title = operationalTitleFromContext([variables, evidence.all, areas], inferredSystem);
+  const relationships = uniqueObjects(group.flatMap((finding) => finding.relationships), (item) => item.id + "|" + item.label);
+  const evidenceObjects = uniqueObjects(group.flatMap((finding) => finding.evidenceObjects), (item) => String(item?.id ?? item?.evidence_id ?? evidenceText(item)));
+  const status = ["Deferred", "Withheld"].includes(tier) ? "Evidence insufficient" : "Change detected";
+  return {
+    ...primary,
+    title: title === "Measured behavior changed" ? primary.title : title,
+    status,
+    location,
+    system: inferredSystem || primary.system,
+    relatedAreas: areas.length > 1 ? areas : [],
+    observedChange: (title === "Measured behavior changed" ? primary.title : title) + ".",
+    tier,
+    confidenceReason: confidenceReason(tier, primaryLimitation),
+    supporting: evidence.all,
+    visibleSupporting: evidence.visible,
+    rawSupporting: unique(group.flatMap((finding) => finding.rawSupporting)),
+    contradictions,
+    limitations,
+    primaryLimitation,
+    technicalLimitations: unique(group.flatMap((finding) => finding.technicalLimitations)),
+    relationships,
+    variables,
+    evidenceObjects,
+    recommendationAllowed: !["Deferred", "Withheld"].includes(tier) && group.some((finding) => finding.recommendationAllowed),
+    mergedFindingIds: group.map((finding) => finding.id),
+  };
+}
+function consolidateFindings(findings) {
+  const groups = [];
+  for (const finding of findings) {
+    const match = groups.find((group) => group.some((candidate) => findingsOverlap(candidate, finding)));
+    if (match) match.push(finding);
+    else groups.push([finding]);
+  }
+  return groups.map(mergeFindingGroup);
 }
 
 function deriveComparison(raw, relationship, result) {
@@ -253,9 +415,9 @@ function canonicalAsRaw(canonicalFinding) {
   return { id: canonicalFinding.id, title: canonicalFinding.summary, summary: canonicalFinding.summary, why_it_matters: canonicalFinding.whyItMatters, confidence: canonicalFinding.confidence, recommended_check: canonicalFinding.reviewNext, supporting_evidence: canonicalFinding.supportingEvidence, variables: canonicalFinding.affectedVariables };
 }
 function deriveSubsystems(systems, findings, relationships, siteLocation) {
-  const names = unique([...asArray(systems).map((item) => firstText(item?.name, item?.label)), ...findings.flatMap((finding) => [finding.location.system, finding.location.subsystem])]);
+  const names = unique([...asArray(systems).map((item) => supportedLocationText(item?.name, item?.label)), ...findings.flatMap((finding) => [finding.location.system, finding.location.subsystem, ...finding.relatedAreas])]);
   return names.map((name, index) => {
-    const owned = findings.filter((finding) => finding.location.system === name || finding.location.subsystem === name);
+    const owned = findings.filter((finding) => finding.location.system === name || finding.location.subsystem === name || finding.relatedAreas.includes(name));
     const status = owned.some((finding) => finding.status === "Change detected") ? "Change detected" : owned.length ? "Evidence insufficient" : relationships.length ? "Normal" : "Evidence insufficient";
     return { id: `system-${index}`, name, status, findingCount: owned.length, findings: owned, location: unique([siteLocation, name]), evidenceTier: owned[0]?.tier ?? (relationships.length ? "Qualified" : "Deferred") };
   });
@@ -297,9 +459,9 @@ export function buildEngineeringReasoningModel({ liveOps = {}, canonicalFinding 
   const canonicalRaw = canonicalAsRaw(canonicalFinding);
   const findingsSource = rawFindings.length ? rawFindings : (canonicalRaw ? [canonicalRaw] : []);
   const processing = /process|pending|queue|analyz/.test(firstText(resolvedSnapshot?.status, currentSession?.status).toLowerCase());
-  const primarySystem = supportedLocationText(result?.system_name, liveOps?.primaryWindow?.label, analysis?.systems?.[0]?.name);
+  const primarySystem = supportedLocationText(result?.system_name, analysis?.systems?.[0]?.name, liveOps?.primaryWindow?.label);
   const context = { result, evidenceIndex: analysis?.evidence_index ?? {}, relationships, coverage, gaps, processing, primarySystem, baselineSufficient, siteLocation: siteIdentity.location };
-  const findings = findingsSource.map((raw, index) => buildFinding(raw, index, context));
+  const findings = consolidateFindings(findingsSource.map((raw, index) => buildFinding(raw, index, context)));
   const systems = asArray(analysis?.systems).length ? analysis.systems : asArray(liveOps?.systems);
   const subsystems = deriveSubsystems(systems, findings, relationships, siteIdentity.location);
   const hasAnalysis = Boolean(result && Object.keys(result).length);

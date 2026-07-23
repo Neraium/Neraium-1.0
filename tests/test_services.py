@@ -655,7 +655,7 @@ def test_analysis_explanation_builds_decision_outputs_from_upload_result() -> No
     explanation = build_analysis_explanation(result)
 
     assert explanation["executive_summary"]["overall_operational_status"] == "Structural drift observed"
-    assert explanation["executive_summary"]["highest_priority_finding"] == "Flow & Pressure Degrading"
+    assert explanation["executive_summary"]["highest_priority_finding"] == "Flow and pressure behavior changed"
     assert explanation["insights"][0]["evidence"][0]["confidence"] == "high"
     assert "Operating pattern change: 1.11" in explanation["insights"][0]["evidence"][0]["relevant_metric_changes"]
     assert explanation["systems"][0]["health_status"] == "Structural drift observed"

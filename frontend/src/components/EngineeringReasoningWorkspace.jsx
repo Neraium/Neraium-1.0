@@ -71,7 +71,14 @@ function TechnicalSummary({ model }) {
   );
 }
 
-function OverviewHeader({ eyebrow, name, status, confidence, location }) {
+function findingCountSummary(findings, status) {
+  const changed = findings.filter((finding) => finding.status === "Change detected").length;
+  if (changed) return String(changed) + " behavioral " + (changed === 1 ? "change" : "changes") + " detected";
+  if (findings.length) return String(findings.length) + " " + (findings.length === 1 ? "finding needs" : "findings need") + " more evidence";
+  return status === "Normal" ? "No changes detected" : "Evidence requirements not met";
+}
+
+function OverviewHeader({ eyebrow, name, status, confidence, location, summary = status }) {
   return (
     <header className="operational-overview-header">
       <div>
@@ -81,7 +88,7 @@ function OverviewHeader({ eyebrow, name, status, confidence, location }) {
       </div>
       <div className={`operational-overview-status operational-overview-status--${statusClass(status)}`}>
         <span>Status</span>
-        <strong>{status}</strong>
+        <strong>{summary}</strong>
         <ConfidenceTierChip tier={confidence} />
       </div>
     </header>
@@ -91,10 +98,9 @@ function OverviewHeader({ eyebrow, name, status, confidence, location }) {
 function SiteOverview({ model, onEvidence }) {
   return (
     <div className="site-overview operational-overview">
-      <OverviewHeader eyebrow={model.site.assigned ? "Site overview" : "Analysis overview"} name={model.site.name} status={model.status} confidence={model.evidenceQuality} />
+      <OverviewHeader eyebrow={model.site.assigned ? "Site overview" : "Analysis overview"} name={model.site.name} status={model.status} confidence={model.evidenceQuality} summary={findingCountSummary(model.findings, model.status)} />
       {model.findings.length ? (
-        <section className="active-findings" aria-labelledby="active-findings-title">
-          <h2 id="active-findings-title">Active findings</h2>
+        <section className="active-findings" aria-label="Active findings">
           <div>{model.findings.map((finding) => <FindingSummary key={finding.id} finding={finding} onEvidence={onEvidence} />)}</div>
         </section>
       ) : (
@@ -114,10 +120,9 @@ function SystemOverview({ model, system, onEvidence }) {
   if (!system) return <SiteOverview model={model} onEvidence={onEvidence} />;
   return (
     <div className="system-overview operational-overview">
-      <OverviewHeader eyebrow="System overview" name={system.name} status={system.status} confidence={system.evidenceTier} location={system.location.join(" / ")} />
+      <OverviewHeader eyebrow="System overview" name={system.name} status={system.status} confidence={system.evidenceTier} location={system.location.join(" / ")} summary={findingCountSummary(system.findings, system.status)} />
       {system.findings.length ? (
-        <section className="active-findings" aria-labelledby="system-findings-title">
-          <h2 id="system-findings-title">Active findings</h2>
+        <section className="active-findings" aria-label="Active findings">
           <div>{system.findings.map((finding) => <FindingSummary key={finding.id} finding={finding} onEvidence={onEvidence} />)}</div>
         </section>
       ) : (

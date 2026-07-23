@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from app.services.analysis_explanations import build_analysis_explanation, relationship_subsystem_name
+from app.services.analysis_explanations import build_analysis_explanation, human_metric_label, relationship_subsystem_name
 from app.services.analysis_result_contract import build_analysis_result
 from app.services.relationship_baselines import score_relationship_importance
 from app.services.upload_jobs import process_csv_content
@@ -135,8 +135,8 @@ def test_duplicate_relationship_insights_are_merged_and_preserve_relationships()
 
     titles = [insight["title"] for insight in explanation["insights"]]
     assert titles.count("Thermal relationship changed") == 0
-    assert "Heat Rejection Performance Degrading" in titles
-    assert "Thermal Performance Degrading" in titles
+    assert "Condenser-side behavior changed" in titles
+    assert "Thermal performance behavior changed" in titles
     contributing_relationships = [
         relationship
         for insight in explanation["insights"]
@@ -202,8 +202,8 @@ def test_low_confidence_or_ambiguous_subsystem_naming_falls_back_to_observed_beh
         }
     )
 
-    assert explanation["insights"][0]["title"] == "Observed subsystem behavior changed"
-    assert explanation["insights"][0]["affected_systems"] == ["Observed subsystem behavior changed"]
+    assert explanation["insights"][0]["title"] == "Flow and pressure behavior changed"
+    assert explanation["insights"][0]["affected_systems"] == ["Flow & Pressure"]
 
 
 def test_relationship_clusters_use_dominant_group_and_merge_related_findings() -> None:
@@ -221,7 +221,7 @@ def test_relationship_clusters_use_dominant_group_and_merge_related_findings() -
         }
     )
 
-    assert explanation["insights"][0]["title"] == "Flow & Pressure Degrading"
+    assert explanation["insights"][0]["title"] == "Pump demand no longer matches flow"
     assert explanation["insights"][0]["affected_systems"] == ["Flow & Pressure"]
     assert len(explanation["insights"][0]["contributing_relationships"]) == 3
 
@@ -244,8 +244,15 @@ def test_individual_variable_changes_are_down_ranked_when_relationship_changes_e
         }
     )
 
-    assert explanation["insights"][0]["title"] == "Chemical Feed Control Drift"
+    assert explanation["insights"][0]["title"] == "Water-quality relationships shifted"
     assert not any(insight["title"].lower().startswith("turbidity") for insight in explanation["insights"])
+
+
+def test_signal_labels_name_the_measured_quantity() -> None:
+    assert human_metric_label("compressor_amps") == "Compressor current"
+    assert human_metric_label("chiller_power_kw") == "Chiller power"
+    assert human_metric_label("chiller") == "Chiller signal"
+    assert human_metric_label("condenser_approach_temp_f") == "Condenser approach temperature"
 
 
 def test_raw_csv_tags_remain_available_in_evidence() -> None:

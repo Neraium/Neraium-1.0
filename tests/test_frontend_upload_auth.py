@@ -117,9 +117,12 @@ def test_frontend_upload_progress_uses_propagation_fields_with_fallback() -> Non
     assert "[uploadTransferPercent, backendPercent, statusFallbackPercent]" in source
     assert "[propagationPercent, backendPercent, statusFallbackPercent]" in source
     assert "propagationLabel" in source
-    assert "Importing Dataset..." in panel
-    assert "Learning Operational Relationships" in panel
-    assert "Preparing Insights and Evidence..." in panel
+    assert "Validating dataset" in panel
+    assert "Mapping signals" in panel
+    assert "Building baseline" in panel
+    assert "Comparing relationships" in panel
+    assert "Preparing evidence" in panel
+    assert "Importing Dataset..." not in panel
 
 
 def test_mobile_upload_limit_and_guidance_are_operational_grade() -> None:
@@ -207,7 +210,7 @@ def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
     source = read_upload_surface()
     workspaces_source = read_frontend(WORKSPACES_CONFIG)
 
-    assert 'label: "Datasets & Connectors"' in workspaces_source
+    assert 'label: "Data Connections"' in workspaces_source
     assert 'id: "data-connections"' in workspaces_source
     assert "DataConnectionsWorkspace" in source
     assert "HistorianSetupWorkspace" not in source
@@ -249,13 +252,15 @@ def test_frontend_displays_queued_worker_visibility_messages() -> None:
     assert "queuedWorkerDetail" in panel
 
 
-def test_queued_worker_status_is_folded_into_single_upload_line() -> None:
+def test_queued_worker_status_stays_out_of_compact_primary_progress() -> None:
     source = read_frontend(ROOT / "frontend" / "src" / "components" / "DataConnectionsWorkspace.jsx")
     panel = read_frontend(ROOT / "frontend" / "src" / "components" / "setup" / "IntakeFlowPanel.jsx")
 
     assert "workerState === \"starting\"" in source
     assert "Preparing analysis resources..." in source
-    assert "upload-processing-status" in panel
+    assert "upload-processing-status" not in panel
+    assert "upload-analysis-card--compact" in panel
+    assert '["failed", "completion_error"].includes(viewState)' in panel
     assert "queuedWorkerDetail ? <span className=\"metadata-text\">{queuedWorkerDetail}</span> : null" not in panel
     assert "statusText" in panel
     assert "uploadTransfer?.label" in panel

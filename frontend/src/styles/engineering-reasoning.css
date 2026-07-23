@@ -444,38 +444,37 @@
 
 
 /* Direct operational answer surfaces */
-.operational-overview { max-width: 1180px; margin: 0 auto; }
+.operational-overview { max-width: 980px; margin: 0 auto; }
 .operational-overview-header { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 4px 0 24px; border-bottom: 1px solid var(--fr-line); }
 .operational-overview-header h1 { margin: 6px 0 0; font-size: clamp(28px, 4vw, 44px); line-height: 1.08; font-weight: 520; letter-spacing: -.025em; }
 .operational-overview-header p { margin: 8px 0 0; color: var(--fr-muted); font-size: 12px; }
-.operational-overview-status { min-width: 220px; display: grid; gap: 7px; padding: 15px 18px; border-left: 3px solid var(--fr-blue); background: rgba(77,163,255,.055); }
+.operational-overview-status { min-width: 230px; display: grid; gap: 6px; padding: 3px 0 3px 18px; border-left: 2px solid var(--fr-blue); }
 .operational-overview-status > span, .operational-field > span, .evidence-section > span, .normal-summary > span, .portfolio-site-card > div > span, .operational-label { color: #8297ad; font-size: 9px; font-weight: 680; letter-spacing: .13em; text-transform: uppercase; }
-.operational-overview-status > strong { font-size: 18px; font-weight: 560; }
-.operational-overview-status--change-detected { border-color: var(--fr-amber); background: rgba(217,161,77,.055); }
-.operational-overview-status--evidence-insufficient { border-color: var(--fr-gray); background: rgba(135,144,156,.05); }
-.active-findings { margin-top: 24px; }
-.active-findings > h2 { margin: 0 0 12px; color: #9eafc0; font-size: 13px; font-weight: 560; }
-.active-findings > div { display: grid; gap: 14px; }
+.operational-overview-status > strong { font-size: 15px; font-weight: 560; }
+.operational-overview-status--change-detected { border-color: var(--fr-amber); }
+.operational-overview-status--evidence-insufficient { border-color: var(--fr-gray); }
+.active-findings { margin-top: 18px; }
+.active-findings > div { display: grid; max-width: 820px; gap: 12px; }
 
 .operational-finding { overflow: hidden; border: 1px solid var(--fr-line-strong); background: #0b121b; }
 .operational-finding--change-detected { box-shadow: inset 3px 0 var(--fr-amber); }
 .operational-finding--evidence-insufficient { border-style: dashed; box-shadow: inset 3px 0 var(--fr-gray); }
-.operational-finding__answer { display: grid; grid-template-columns: 150px minmax(240px, 1.35fr) minmax(220px, 1fr) 220px auto; align-items: start; gap: 0; }
-.operational-field { min-width: 0; min-height: 108px; padding: 17px 18px; border-right: 1px solid var(--fr-line); }
-.operational-field > strong { display: block; margin-top: 9px; font-size: 14px; font-weight: 580; }
-.operational-field h2 { margin: 8px 0 0; font-size: 19px; line-height: 1.28; font-weight: 560; }
-.operational-field p { margin: 8px 0 0; color: #c3cfdb; font-size: 12px; line-height: 1.45; }
-.operational-field .confidence-tier { margin-top: 10px; }
-.operational-field small { display: block; margin-top: 9px; color: var(--fr-muted); font-size: 10px; line-height: 1.4; }
-.operational-finding__action { align-self: stretch; display: grid; align-items: center; padding: 17px; }
-.operational-finding__action .forensic-button { white-space: nowrap; }
-.operational-finding__evidence { padding: 15px 18px 16px; border-top: 1px solid var(--fr-line); }
-.operational-finding__evidence h3 { margin: 0 0 9px; color: #8297ad; font-size: 9px; font-weight: 680; letter-spacing: .13em; text-transform: uppercase; }
+.operational-finding__meta { display: flex; align-items: center; gap: 12px; padding: 15px 18px 0; }
+.operational-status-chip { width: fit-content; display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid var(--fr-line-strong); border-radius: 999px; color: #b9c7d5; font-size: 8px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.operational-status-chip--change-detected { border-color: rgba(217,161,77,.48); background: rgba(217,161,77,.09); color: #e4b76f; }
+.operational-status-chip--evidence-insufficient { border-color: rgba(135,144,156,.42); color: #a5adb8; }
+.operational-finding__what { padding: 9px 18px 0; }
+.operational-finding__what h2 { margin: 0; max-width: 680px; font-size: 20px; line-height: 1.25; font-weight: 560; letter-spacing: -.012em; }
+.operational-finding__where, .operational-finding__areas, .operational-finding__evidence { padding: 13px 18px 0; }
+.operational-finding__where h3, .operational-finding__areas h3, .operational-finding__evidence h3 { margin: 0 0 6px; color: #8297ad; font-size: 8px; font-weight: 680; letter-spacing: .13em; text-transform: uppercase; }
+.operational-finding__where p, .operational-finding__areas p { margin: 0; color: #c3cfdb; font-size: 11px; line-height: 1.45; }
+.operational-finding__areas p { color: var(--fr-muted); }
 .operational-finding__evidence ul, .evidence-section ul { margin: 0; padding-left: 18px; }
-.operational-finding__evidence li, .evidence-section li { color: #c5d0dc; font-size: 12px; line-height: 1.55; }
-.operational-finding__evidence li + li, .evidence-section li + li { margin-top: 5px; }
-.operational-finding__limitation { margin: 0; padding: 11px 18px; border-top: 1px solid var(--fr-line); color: var(--fr-muted); font-size: 10px; line-height: 1.5; }
-.operational-finding__limitation strong { color: #b8a273; }
+.operational-finding__evidence li, .evidence-section li { color: #c5d0dc; font-size: 12px; line-height: 1.5; }
+.operational-finding__evidence li + li, .evidence-section li + li { margin-top: 4px; }
+.operational-finding__limitation { margin: 0; padding: 12px 18px 0; color: #aeb7c1; font-size: 10px; line-height: 1.45; }
+.operational-finding__action { display: flex; padding: 14px 18px 17px; }
+.operational-finding__action .forensic-button { min-height: 36px; white-space: nowrap; }
 
 .normal-summary { margin-top: 24px; padding: 22px; border: 1px solid var(--fr-line); background: var(--fr-surface); }
 .normal-summary h2 { margin: 7px 0; font-size: 19px; font-weight: 540; }
@@ -519,8 +518,6 @@
 .operational-empty p { margin: 0 0 18px; color: var(--fr-muted); font-size: 12px; }
 
 @media (max-width: 1180px) {
-  .operational-finding__answer { grid-template-columns: 135px minmax(240px, 1.4fr) minmax(210px, 1fr) 200px; }
-  .operational-finding__action { grid-column: 1 / -1; border-top: 1px solid var(--fr-line); justify-items: start; }
   .portfolio-site-card { grid-template-columns: 150px minmax(220px, 1fr) 120px 170px; }
   .portfolio-site-card > button { margin: 14px 16px; }
 }
@@ -528,25 +525,17 @@
 @media (max-width: 720px) {
   .operational-overview-header { align-items: stretch; flex-direction: column; gap: 12px; padding-bottom: 14px; }
   .operational-overview-header h1 { font-size: 25px; }
-  .operational-overview-status { min-width: 0; grid-template-columns: 1fr auto; align-items: center; gap: 5px 10px; padding: 10px 12px; }
-  .operational-overview-status > span { grid-column: 1 / -1; }
-  .operational-overview-status > strong { font-size: 15px; }
-  .active-findings { margin-top: 15px; }
-  .active-findings > h2 { margin-bottom: 8px; }
-  .operational-finding__answer { display: grid; grid-template-columns: 105px minmax(0, 1fr); }
-  .operational-field { min-height: 0; padding: 11px 12px; border-right: 0; border-bottom: 1px solid var(--fr-line); }
-  .operational-field--status { border-right: 1px solid var(--fr-line); }
-  .operational-field--what { min-height: 86px; }
-  .operational-field--where { grid-column: 1 / -1; padding-top: 9px; padding-bottom: 9px; }
-  .operational-field--confidence { grid-column: 1 / -1; display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 2px 8px; padding-top: 8px; padding-bottom: 8px; }
-  .operational-field--confidence > span { grid-row: 1 / span 2; }
-  .operational-field--confidence .confidence-tier, .operational-field--confidence small { margin-top: 0; }
-  .operational-field > strong { margin-top: 7px; font-size: 12px; }
-  .operational-field h2 { margin-top: 6px; font-size: 16px; line-height: 1.2; }
-  .operational-field p { margin-top: 5px; font-size: 11px; }
-  .operational-finding__action { grid-column: 1 / -1; padding: 9px 12px; border-top: 0; }
-  .operational-finding__action .forensic-button { width: 100%; }
-  .operational-finding__evidence { padding: 13px 14px; }
+  .operational-overview-status { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 0; border-left: 0; }
+  .operational-overview-status > span { display: none; }
+  .operational-overview-status > strong { font-size: 14px; }
+  .active-findings { margin-top: 14px; }
+  .operational-finding__meta { padding: 13px 14px 0; }
+  .operational-finding__what { padding: 8px 14px 0; }
+  .operational-finding__what h2 { font-size: 17px; line-height: 1.22; }
+  .operational-finding__where, .operational-finding__areas, .operational-finding__evidence { padding: 11px 14px 0; }
+  .operational-finding__evidence li { font-size: 11px; line-height: 1.45; }
+  .operational-finding__limitation { padding: 11px 14px 0; }
+  .operational-finding__action { padding: 12px 14px 14px; }
   .operational-evidence__sections { grid-template-columns: 1fr; margin-top: 16px; }
   .evidence-section { min-height: 0; border-right: 0; padding: 15px; }
   .operational-technical__content > dl { grid-template-columns: 1fr; }

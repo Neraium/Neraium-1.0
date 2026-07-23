@@ -187,6 +187,10 @@ def build_insights(
         confidence_score = max(confidence_scores) if confidence_scores else 0.5
         confidence = confidence_label_from_score(confidence_score)
         system = relationship_subsystem_name(all_signal_names or all_columns or primary_columns, confidence_score=confidence_score)
+        if system == GENERIC_SUBSYSTEM_NAME:
+            system = relationship_subsystem_name(all_signal_names or all_columns or primary_columns, allow_generic=False)
+        if system == "Uploaded telemetry":
+            system = ""
         evidence_items: list[dict[str, Any]] = []
         contributions: list[dict[str, Any]] = []
         group_source_ranges = []
@@ -1827,24 +1831,29 @@ def operational_diagnosis_title(
     group: list[dict[str, Any]],
     confidence_score: float,
 ) -> str:
-    if system == GENERIC_SUBSYSTEM_NAME or confidence_label_from_score(confidence_score) == "limited":
-        return GENERIC_SUBSYSTEM_NAME
     combined = relationship_context_text(system, names, group)
-    evidence_context = relationship_context_text("", names, group)
-    if all(token in evidence_context for token in ["pump", "power"]) and any(token in evidence_context for token in ["filter", "dp", "differential pressure", "flow", "hydraulic resistance"]):
-        return "Pump Efficiency Degrading"
-    if system == "Pumping System" and "pump" in combined and any(token in combined for token in ["vibration", "bearing", "current", "amp"]):
-        return "Pump Mechanical Behavior Degrading"
-    if any(token in combined for token in ["flow", "pressure", "hydraulic", "filter", "valve", "suction", "discharge"]):
-        return f"{system} Degrading" if system not in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"} else "Hydraulic Resistance Increasing"
+    if "condenser" in combined or ("temperature" in combined and any(token in combined for token in ["compressor", "chiller"])):
+        return "Condenser-side behavior changed"
+    if "pump" in combined and "flow" in combined and any(token in combined for token in ["demand", "power", "current", "amp"]):
+        return "Pump demand no longer matches flow"
     if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality", "conductivity"]):
-        return f"{system} Control Drift" if system not in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"} else "Water Quality Control Drift"
-    if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower", "temperature"]):
-        if system in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"}:
-            return "Heat Transfer Performance Degrading"
-        return f"{system} Degrading" if "performance" in system.lower() else f"{system} Performance Degrading"
-    return f"{system} Behavior Degrading"
-
+        return "Water-quality relationships shifted"
+    area_labels = {
+        "Flow & Pressure": "Flow and pressure",
+        "Cooling Distribution": "Cooling distribution",
+        "Pumping System": "Pumping system",
+        "Thermal Performance": "Thermal performance",
+        "Heat Rejection": "Heat rejection",
+    }
+    area = area_labels.get(system, system)
+    if system in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"} or confidence_label_from_score(confidence_score) == "limited":
+        if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve"]):
+            area = "Flow and pressure"
+        elif any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "compressor", "tower"]):
+            area = "Cooling system"
+        else:
+            return "Measured behavior changed"
+    return f"{area} behavior changed"
 
 def relationship_context_text(system: str, names: list[str], group: list[dict[str, Any]]) -> str:
     values: list[str] = [system, *[str(name or "") for name in names]]
@@ -2260,6 +2269,18 @@ def contains_algorithmic_relationship_language(value: str) -> bool:
 
 def human_metric_label(column: str) -> str:
     text = str(column or "").lower()
+    if "condenser" in text and ("approach" in text or "temp" in text):
+        return "Condenser approach temperature"
+    if "compressor" in text and any(token in text for token in ["amp", "current"]):
+        return "Compressor current"
+    if "chiller" in text and any(token in text for token in ["power", "kw"]):
+        return "Chiller power"
+    if "chiller" in text and any(token in text for token in ["amp", "current"]):
+        return "Chiller current"
+    if "chiller" in text and "load" in text:
+        return "Cooling load"
+    if text.strip() in {"chiller", "chiller signal"}:
+        return "Chiller signal"
     if "pump" in text and "vibration" in text:
         return "Pump vibration"
     if "fouling" in text:

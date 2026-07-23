@@ -9,7 +9,7 @@ import {
 describe("engineering reasoning model", () => {
   it.each([
     [{ explicit: "Confirmed", coverage: 1, evidenceCount: 3 }, "Confirmed"],
-    [{ explicit: "Confirmed", coverage: 0.8, evidenceCount: 3, limitations: ["gap"] }, "Qualified"],
+    [{ explicit: "Confirmed", coverage: 0.8, evidenceCount: 3, limitations: ["gap"] }, "Narrowed"],
     [{ explicit: "high", coverage: 1, evidenceCount: 3 }, "Qualified"],
     [{ explicit: "Qualified", coverage: 0.7, evidenceCount: 2 }, "Narrowed"],
     [{ explicit: "pending", coverage: 0.8, evidenceCount: 1, processing: true }, "Deferred"],
@@ -48,7 +48,7 @@ describe("engineering reasoning model", () => {
     expect(finding.tier).toBe("Withheld");
     expect(finding.recommendationAllowed).toBe(false);
     expect(finding.firstPlaceToLook).toBe("");
-    expect(finding.primaryLimitation).toMatch(/Historian X/);
+    expect(finding.primaryLimitation).toBe("Missing telemetry limits the conclusion.");
   });
 
   it("uses specific wording, the deepest supported location, and at most three default evidence points", () => {
@@ -83,7 +83,7 @@ describe("engineering reasoning model", () => {
     } });
 
     const finding = model.selectedFinding;
-    expect(finding.title).toBe("Condenser performance changed");
+    expect(finding.title).toBe("Condenser-side behavior changed");
     expect(finding.location.hierarchy).toEqual(["Golden Nugget", "Cooling Plant", "Condenser Water", "Chiller 03"]);
     expect(finding.visibleSupporting).toHaveLength(3);
     expect(finding.supporting.join(" ")).not.toMatch(/0\.094013|0\.833811/);
@@ -148,6 +148,33 @@ describe("engineering reasoning model", () => {
     expect(models).toHaveLength(2);
     expect(models.find((model) => model.site.id === "site-a").site.lastMeaningfulChange).toBe("Latest observation");
     expect(models.find((model) => model.site.id === "site-b").site.activeInvestigations).toBe(0);
+  });
+
+  it("keeps generic finding language out of location and confidence fields", () => {
+    const model = buildEngineeringReasoningModel({ result: {
+      data_quality: { coverage_percent: 100, warnings: ["811 rows contain missing numeric values."] },
+      analysis_explanation: {
+        fingerprint: { status: "Established" },
+        systems: [{ name: "Observed subsystem behavior changed" }],
+        insights: [{
+          id: "finding-1",
+          title: "Cooling Distribution Performance Degrading",
+          system: "Observed subsystem behavior changed",
+          variables: ["Condenser approach temperature", "Compressor amps"],
+          confidence: "high",
+          supporting_evidence: ["Chiller increased 5.5%.", "The relationship moved outside its learned range."],
+        }],
+      },
+    } });
+
+    const finding = model.selectedFinding;
+    expect(finding.title).toBe("Condenser-side behavior changed");
+    expect(finding.location.label).toBe("Unassigned dataset · Cooling system");
+    expect(finding.location.label).not.toContain("Observed subsystem behavior changed");
+    expect(finding.tier).toBe("Narrowed");
+    expect(finding.confidenceReason).toBe("Missing telemetry limits the conclusion.");
+    expect(finding.technicalLimitations).toContain("811 rows contain missing numeric values.");
+    expect(finding.supporting).toContain("Compressor current increased 5.5%.");
   });
 
   it("translates raw relationship coefficients into readable primary evidence", () => {

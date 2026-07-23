@@ -88,17 +88,18 @@ describe("EngineeringReasoningWorkspace", () => {
 
     const card = document.querySelector('[data-finding-id="finding-1"]');
     expect(card).toBeTruthy();
-    const answer = within(card.querySelector(".operational-finding__answer"));
-    expect(answer.getByText("Change detected")).toBeTruthy();
-    expect(answer.getByRole("heading", { name: "Condenser performance changed" })).toBeTruthy();
-    expect(answer.getByText((text) => text.includes("North Plant") && text.includes("Chiller 03"))).toBeTruthy();
-    expect(answer.getByText("Qualified")).toBeTruthy();
-    expect(answer.getByRole("button", { name: "Open Evidence" })).toBeTruthy();
+    const decision = within(card);
+    expect(decision.getByText("Change detected")).toBeTruthy();
+    expect(decision.getByRole("heading", { name: "Condenser-side behavior changed" })).toBeTruthy();
+    expect(decision.getByText((text) => text.includes("North Plant") && text.includes("Chiller 03"))).toBeTruthy();
+    expect(decision.getByText("Narrowed")).toBeTruthy();
+    expect(decision.getByRole("button", { name: "Open Evidence" })).toBeTruthy();
+    expect(screen.getByText("1 behavioral change detected")).toBeTruthy();
 
     const evidenceItems = card.querySelectorAll(".operational-finding__evidence li");
     expect(evidenceItems).toHaveLength(3);
     expect(card.textContent).not.toContain("0.094013");
-    expect(screen.getAllByText("Condenser performance changed")).toHaveLength(1);
+    expect(screen.getAllByText("Condenser-side behavior changed")).toHaveLength(1);
   });
 
   it("opens evidence directly and keeps exact calculations and trace controls in Technical Details", () => {
@@ -186,6 +187,80 @@ describe("EngineeringReasoningWorkspace", () => {
     expect(screen.getByRole("heading", { name: "South Plant" })).toBeTruthy();
     expect(window.location.pathname).toBe("/sites/site-b");
     expect(screen.queryByText(/evidence distribution|structural field|governance boundary/i)).toBeNull();
+  });
+
+  it("consolidates overlapping evidence into one compact, safely worded decision card", () => {
+    const sharedRelationship = {
+      id: "shared-rel",
+      columns: ["Condenser approach temperature", "Compressor amps"],
+      change_type: "changed",
+      baseline_strength: 0.12,
+      current_strength: 0.81,
+    };
+    const sharedEvidence = [
+      "Condenser approach temperature increased 15.3%.",
+      "The relationship moved outside its learned range.",
+    ];
+    renderWorkspace("/portfolio", {
+      effectiveLatestUploadResult: {
+        ...result,
+        facility_name: undefined,
+        data_quality: { coverage_percent: 100, warnings: ["811 rows contain missing numeric values."] },
+        data_gaps: [],
+        analysis_explanation: {
+          fingerprint: { status: "Established" },
+          systems: [{ name: "Observed subsystem behavior changed" }],
+          relationships: [sharedRelationship],
+          insights: [
+            {
+              id: "thermal",
+              title: "Temperature and Compressor amps relationship changed; A new operating relationship between Cond approach temp and compressor amps emerged",
+              system: "Observed subsystem behavior changed",
+              variables: ["Condenser approach temperature", "Compressor amps"],
+              confidence: "high",
+              supporting_evidence: [sharedEvidence[0], "Chiller increased 5.5%.", sharedEvidence[1]],
+              contributing_relationships: [sharedRelationship],
+            },
+            {
+              id: "distribution",
+              title: "Cooling Distribution Performance Degrading",
+              system: "Cooling Distribution",
+              variables: ["Cooling flow"],
+              confidence: "high",
+              supporting_evidence: [sharedEvidence[0], "Cooling flow increased 4.2%.", sharedEvidence[1]],
+            },
+            {
+              id: "hydraulic",
+              title: "Flow & Pressure Degrading",
+              system: "Flow & Pressure",
+              variables: ["Discharge pressure"],
+              confidence: "high",
+              supporting_evidence: [sharedEvidence[0], "Discharge pressure increased 3.1%.", sharedEvidence[1]],
+            },
+          ],
+        },
+      },
+    });
+
+    const cards = document.querySelectorAll(".operational-finding");
+    expect(cards).toHaveLength(1);
+    const card = cards[0];
+    expect(within(card).getByRole("heading", { name: "Condenser-side behavior changed" })).toBeTruthy();
+    expect(within(card).getByText("Narrowed")).toBeTruthy();
+    expect(within(card).getByText("Unassigned dataset · Cooling system")).toBeTruthy();
+    expect(within(card).getByText(/Cooling Distribution.*Flow & Pressure/)).toBeTruthy();
+    expect(within(card).getByText("Compressor current increased 5.5%.")).toBeTruthy();
+    expect(within(card).getByText("Their learned relationship changed.")).toBeTruthy();
+    expect(within(card).getByText("Missing telemetry limits the conclusion.")).toBeTruthy();
+    expect(card.textContent).not.toMatch(/811 rows|Degrading|new operating relationship/i);
+    expect(screen.getByText("1 behavioral change detected")).toBeTruthy();
+    expect(card.querySelectorAll(".operational-finding__evidence li")).toHaveLength(3);
+    const evidence = card.querySelector(".operational-finding__evidence");
+    const action = card.querySelector(".operational-finding__action");
+    expect(evidence.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const details = screen.getByText("Technical Details").closest("details");
+    expect(within(details).getByText("811 rows contain missing numeric values.")).toBeTruthy();
   });
 
   it("does not expose control actions or duplicate the finding workflow", () => {
