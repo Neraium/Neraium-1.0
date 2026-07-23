@@ -333,7 +333,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
       </aside>
       <div className="forensic-app">
         <header className="forensic-topbar">
-          <button type="button" className="forensic-mobile-menu" aria-expanded={mobileNavOpen} aria-label="Toggle navigation" onClick={() => setMobileNavOpen((value) => !value)}>Menu</button>
+          <button type="button" className="forensic-mobile-menu" aria-expanded={mobileNavOpen} aria-label={mobileNavOpen ? "Close menu" : "Open menu"} onClick={() => setMobileNavOpen((value) => !value)}><span className="forensic-mobile-menu__label">Menu</span><svg className="forensic-mobile-menu__icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
           <GlobalAssetSearch items={model.searchItems} onSelect={handleSearch} />
           <div className="forensic-topbar__site"><span>{model.site.name}</span><ConfidenceTierChip tier={model.evidenceQuality} /></div>
         </header>
