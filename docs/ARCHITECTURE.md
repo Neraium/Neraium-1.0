@@ -26,6 +26,19 @@ Major API workflows include authentication and session management, system discov
 
 CSV imports are validated and processed through a bounded analysis workflow. Source files are deleted after processing; analysis metadata, results, evidence, and the latest SII state are retained in the configured runtime directory. SII compares behavior windows and system relationships. It does not claim root cause, predict failure, or control equipment.
 
+### Engineering finding certainty
+
+The SII engine remains unchanged and supplies relationship, persistence, and corroboration evidence. The upload and explanation services add four inspectable certainty layers:
+
+1. `operating_modes.py` compares the relationship engine's baseline and recent periods using explicit state, staging, load, schedule, environmental, setpoint, and event telemetry. Numeric context bands are learned from the uploaded dataset; they are not universal engineering thresholds.
+2. `sensor_health.py` extends existing profiles, normalization integrity, ingestion counts, timestamp checks, and confidence caps into qualitative per-signal health and `high`, `limited`, or `low` data confidence.
+3. `finding_classification.py` deterministically assigns `known_operational_change`, `possible_instrumentation_issue`, `unexplained_systemic_change`, or `insufficient_evidence`.
+4. `analysis_explanations.py` applies classification-specific language and preserves the supporting mode, quality, persistence, relationship, timeline, and uncertainty evidence in the canonical analysis contract.
+
+Low data confidence or insufficient relationship support prevents stronger claims. Weak or unavailable mode matching prevents an unexplained systemic classification. An unexplained systemic change means only that a persistent relationship changed under comparable recorded conditions; it is not a root-cause diagnosis, failure prediction, or emergency state.
+
+Older saved analyses remain readable. Missing certainty fields are normalized to explicit unavailable/low evidence context while legacy display fields remain intact.
+
 ## Frontend
 
 The frontend lives in `frontend`. The operator workspace is organized around distinct product objects:

@@ -24,8 +24,11 @@ Current capabilities include:
 - Telemetry upload and validation
 - CSV, TXT, and JSON ingestion paths
 - Data quality checks
+- Qualitative signal-health and data-confidence evidence
 - Timestamp and signal profiling
 - Baseline versus recent comparison
+- Deterministic operating-mode comparability
+- Four-way engineering finding classification
 - Systemic Infrastructure Intelligence results
 - Evidence summaries
 - Operator-facing reports
@@ -85,10 +88,12 @@ A typical workflow looks like this:
 1. Upload telemetry from a system, facility, asset, controller, or exported dataset.
 2. Neraium validates the file and checks basic data quality.
 3. The platform profiles timestamps, numeric signals, and available system fields.
-4. Baseline behavior is compared against recent behavior.
-5. The SII engine produces a deterministic system intelligence result.
-6. Neraium generates evidence, warnings, readiness indicators, replay artifacts, and an operator report.
-7. Operators review what changed, what evidence supports it, and what should be checked next.
+4. Baseline behavior is compared against recent behavior, with operating context checked for comparability.
+5. Existing data-quality evidence is extended into qualitative signal health and a finding certainty ceiling.
+6. The SII engine produces a deterministic system intelligence result.
+7. Explanation policy classifies supported findings as a known operational change, possible instrumentation issue, unexplained systemic change, or insufficient evidence.
+8. Neraium generates evidence, warnings, readiness indicators, replay artifacts, and an operator report.
+9. Operators review what changed, what evidence supports it, what uncertainty remains, and what should be checked next.
 
 ---
 

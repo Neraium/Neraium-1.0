@@ -10,8 +10,14 @@ from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import build_data_quality, profile_timestamps
 from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
+from app.services.operating_modes import apply_operating_mode_context, assess_operating_modes
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE, run_sii_runner
+from app.services.sensor_health import (
+    apply_sensor_health_context,
+    assess_sensor_health,
+    build_data_confidence,
+)
 from app.services.telemetry_confidence import apply_telemetry_confidence_adjustment
 from app.services.telemetry_classification import build_telemetry_signal_catalog, update_catalog_from_baseline
 
@@ -94,6 +100,12 @@ def run_structural_analysis_pipeline(
         baseline_analysis=baseline_analysis,
         telemetry_signal_catalog=telemetry_signal_catalog,
     )
+    operating_mode = assess_operating_modes(
+        rows,
+        timestamp_column=timestamp_column,
+        telemetry_signal_catalog=telemetry_signal_catalog,
+    )
+    relationship_model = apply_operating_mode_context(relationship_model, operating_mode)
     replay = _empty_optional_replay(job_id, "inline_replay_disabled")
     if _inline_replay_generation_enabled():
         try:
@@ -167,6 +179,40 @@ def run_structural_analysis_pipeline(
             "imputation_report": ingestion_report.get("imputation_report", {}),
             "normalization_report": normalization_report,
         },
+    )
+    data_quality["operating_mode"] = operating_mode
+    sensor_health = assess_sensor_health(
+        rows,
+        numeric_columns,
+        timestamp_column=timestamp_column,
+        numeric_profiles=numeric_profiles,
+        normalization_report=normalization_report,
+        ingestion_report=ingestion_report,
+        timestamp_profile=timestamp_profile,
+        relationship_model=relationship_model,
+        telemetry_signal_catalog=telemetry_signal_catalog,
+    )
+    data_quality["sensor_health"] = sensor_health["signals"]
+    data_quality["sensor_health_summary"] = {
+        "source_conditions": sensor_health["source_conditions"],
+        "population_rows": sensor_health["population_rows"],
+        "assessed_rows": sensor_health["assessed_rows"],
+        "sampled_for_signal_health": sensor_health["sampled_for_signal_health"],
+        "assessment_method": sensor_health["assessment_method"],
+    }
+    data_quality["data_confidence"] = build_data_confidence(data_quality, sensor_health)
+    relationship_model = apply_sensor_health_context(
+        relationship_model,
+        sensor_health=sensor_health,
+        data_quality=data_quality,
+    )
+    relationship_baseline = relationship_model
+    baseline_analysis.update(
+        {
+            "top_relationship_changes": relationship_baseline.get("top_relationship_changes", []),
+            "baseline_relationships": relationship_baseline.get("baseline_relationships", []),
+            "relationship_graph": relationship_baseline.get("relationship_graph", {}),
+        }
     )
     reliability_warning = None
     if not baseline_reliable:

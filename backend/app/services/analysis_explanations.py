@@ -3,6 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.cumulative_counters import is_cumulative_counter_name
+from app.services.finding_classification import (
+    INSUFFICIENT_EVIDENCE,
+    KNOWN_OPERATIONAL_CHANGE,
+    POSSIBLE_INSTRUMENTATION_ISSUE,
+    UNEXPLAINED_SYSTEMIC_CHANGE,
+    classify_finding,
+)
 from app.services.telemetry_classification import is_context_or_supporting_column
 
 
@@ -29,6 +36,7 @@ def build_analysis_explanation(result: dict[str, Any]) -> dict[str, Any]:
     water_insights = water_interpreted_insights(result.get("water_intelligence"))
     if water_insights:
         insights = [*water_insights, *insights]
+    insights = ensure_finding_context(insights, result)
     systems = build_systems(
         baseline=baseline,
         relationship_model=relationship_model,
@@ -151,6 +159,15 @@ def build_insights(
     insights: list[dict[str, Any]] = []
     persistence = result.get("engine_result", {}).get("persistence_assessment") if isinstance(result.get("engine_result"), dict) else {}
     persistent_columns = set(persistence.get("persistent_columns") or []) if isinstance(persistence, dict) else set()
+    data_quality = result.get("data_quality") if isinstance(result.get("data_quality"), dict) else {}
+    default_operating_mode = finding_operating_mode(
+        relationship_model.get("operating_mode"),
+        data_quality.get("operating_mode"),
+    )
+    default_data_confidence = finding_data_confidence(data_quality.get("data_confidence"), data_quality)
+    all_sensor_health = [
+        item for item in data_quality.get("sensor_health", []) if isinstance(item, dict)
+    ]
     time_window = build_time_window(result)
     source_ranges = source_time_ranges(result, time_window)
     upload_id = first_text(result.get("upload_id"), result.get("job_id"), result.get("run_id"))
@@ -238,11 +255,47 @@ def build_insights(
         investigation_steps = recommended_investigation_steps(system, signal_context, label)
         first_check = first_item(investigation_steps)
         behavior_interpretation = relationship_behavior_interpretation(system, signal_context, possible_causes)
+        operating_mode = finding_operating_mode(primary.get("operating_mode"), default_operating_mode)
+        sensor_health = finding_sensor_health(group, all_sensor_health, all_columns)
+        data_confidence = finding_data_confidence(primary.get("data_confidence"), data_quality)
+        persistence_info = relationship_persistence_info(
+            all_columns,
+            persistence if isinstance(persistence, dict) else {},
+            primary,
+        )
+        relationship_evidence = relationship_evidence_context(primary)
+        classification = classify_finding(
+            data_confidence=data_confidence,
+            sensor_health=sensor_health,
+            operating_mode=operating_mode,
+            persistence=persistence_info,
+            relationship_evidence=relationship_evidence,
+        )
+        has_certainty_context = finding_has_certainty_context(primary, data_quality)
+        classification_narrative = relationship_classification_narrative(
+            classification=classification,
+            label=label,
+            operating_mode=operating_mode,
+            data_confidence=data_confidence,
+        )
+        if has_certainty_context:
+            title = classification_title(system, classification)
+            what_changed = classification_narrative["what_changed"]
+            why = classification_narrative["why_classified"]
+            behavior_interpretation = classification_narrative["interpretation"]
+            operational_impact = classification_narrative["why_it_matters"]
+        explanation_options = (
+            classification.get("alternative_explanations", [])
+            if has_certainty_context
+            else possible_causes
+        )
+        impact_options = [operational_impact] if has_certainty_context else likely_impacts
         activity_timeline = relationship_activity_timeline(
             system=system,
             facts=observed_facts,
             first_check=first_check,
             source_ranges=deduped_source_ranges,
+            classification=classification,
         )
         insight = compact_dict(
             {
@@ -250,9 +303,22 @@ def build_insights(
                 "title": title,
                 "primary_finding": title,
                 "severity": severity_from_number(primary.get("correlation_delta")),
-                "confidence": confidence,
+                "confidence": classification.get("confidence") if has_certainty_context else confidence,
                 "confidence_score": confidence_score,
-                "confidence_rationale": confidence_rationale_for_relationship(primary, confidence_score),
+                "confidence_rationale": (
+                    classification_confidence_rationale(classification, data_confidence, operating_mode)
+                    if has_certainty_context
+                    else confidence_rationale_for_relationship(primary, confidence_score)
+                ),
+                "classification": classification,
+                "operating_mode": operating_mode,
+                "data_confidence": data_confidence,
+                "sensor_health": sensor_health,
+                "certainty_limit": classification.get("certainty_limit"),
+                "alternative_explanations": classification.get("alternative_explanations"),
+                "data_limitations": data_confidence.get("reasons"),
+                "persistence": persistence_info,
+                "relationship_evidence": relationship_evidence,
                 "relationship_importance_score": primary.get("relationship_importance_score"),
                 "relationship_importance_rationale": primary.get("relationship_importance_rationale"),
                 "ranking_factors": primary.get("ranking_factors"),
@@ -266,15 +332,15 @@ def build_insights(
                 "why_neraium_thinks": why,
                 "behavior_interpretation": behavior_interpretation,
                 "why_it_matters": operational_impact,
-                "why_this_matters": likely_impacts,
-                "if_ignored": likely_impacts,
+                "why_this_matters": impact_options,
+                "if_ignored": impact_options,
                 "likely_cause": why,
                 "contributing_factors": [relationship_label(entry) for entry in group],
                 "possible_operational_consequence": operational_impact,
                 "possible_consequence": operational_impact,
-                "possible_operational_causes": possible_causes,
-                "likely_causes": possible_causes,
-                "possible_operational_causes_summary": "; ".join(possible_causes),
+                "possible_operational_causes": explanation_options,
+                "likely_causes": explanation_options,
+                "possible_operational_causes_summary": "; ".join(explanation_options),
                 "recommended_operator_check": operational_cause_check(label, possible_causes),
                 "recommended_action": relationship_recommended_action(system),
                 "recommended_investigation": investigation_steps,
@@ -346,15 +412,65 @@ def build_insights(
             matching_operator_check(operator_report, column),
             f"Review {column_label} readings against facility logs for the uploaded period.",
         )
+        operating_mode = default_operating_mode
+        sensor_health = [
+            item for item in all_sensor_health if str(item.get("signal") or "") == column
+        ]
+        data_confidence = default_data_confidence
+        persistence_info = {
+            "status": "persistent" if persistent else "limited",
+            "persistent": persistent,
+            "supporting_signals": [column] if persistent else [],
+            "summary": persistence_phrase(persistence_detail) or (
+                "The existing persistence assessment did not confirm this signal."
+            ),
+        }
+        metric_evidence = {
+            "evidence_type": "metric_deviation",
+            "baseline_sample_size": baseline.get("baseline_window_rows"),
+            "recent_sample_size": baseline.get("recent_window_rows"),
+            "confidence_score": confidence_score,
+            "correlation_delta": abs(float(item.get("standardized_change") or item.get("percent_change") or 0)),
+            "source_signals": [column],
+        }
+        classification = classify_finding(
+            data_confidence=data_confidence,
+            sensor_health=sensor_health,
+            operating_mode=operating_mode,
+            persistence=persistence_info,
+            relationship_evidence=metric_evidence,
+        )
+        has_certainty_context = bool(data_quality.get("data_confidence"))
+        metric_narrative = metric_classification_narrative(
+            classification=classification,
+            observed_change=what_changed,
+            signal_label=column_label,
+        )
+        if has_certainty_context:
+            what_changed = metric_narrative["what_changed"]
+            why = metric_narrative["why_classified"]
         insights.append(
             compact_dict(
                 {
                     "id": f"metric-{index}",
                     "title": metric_title(item),
                     "severity": "high" if item.get("drift_flag") == "review" else "moderate",
-                    "confidence": confidence,
+                    "confidence": classification.get("confidence") if has_certainty_context else confidence,
                     "confidence_score": confidence_score,
-                    "confidence_rationale": confidence_rationale_for_metric(item, persistence_detail, confidence_score),
+                    "confidence_rationale": (
+                        classification_confidence_rationale(classification, data_confidence, operating_mode)
+                        if has_certainty_context
+                        else confidence_rationale_for_metric(item, persistence_detail, confidence_score)
+                    ),
+                    "classification": classification,
+                    "operating_mode": operating_mode,
+                    "data_confidence": data_confidence,
+                    "sensor_health": sensor_health,
+                    "certainty_limit": classification.get("certainty_limit"),
+                    "alternative_explanations": classification.get("alternative_explanations"),
+                    "data_limitations": data_confidence.get("reasons"),
+                    "persistence": persistence_info,
+                    "relationship_evidence": metric_evidence,
                     "affected_systems": [system],
                     "system": system,
                     "what_changed": what_changed,
@@ -366,8 +482,16 @@ def build_insights(
                     "persistence_score": item.get("persistence_score"),
                     "standardized_change": item.get("standardized_change"),
                     "contributing_factors": [column],
-                    "possible_operational_consequence": "If this persists, the related process may continue moving away from its operating fingerprint.",
-                    "possible_consequence": "If this persists, the related process may continue moving away from its operating fingerprint.",
+                    "possible_operational_consequence": (
+                        metric_narrative["why_it_matters"]
+                        if has_certainty_context
+                        else "If this persists, the related process may continue moving away from its operating fingerprint."
+                    ),
+                    "possible_consequence": (
+                        metric_narrative["why_it_matters"]
+                        if has_certainty_context
+                        else "If this persists, the related process may continue moving away from its operating fingerprint."
+                    ),
                     "recommended_operator_check": operator_check,
                     "recommended_action": metric_recommended_action(column, item),
                     "operator_check": f"Check source readings, control changes, and maintenance activity involving {column_label}.",
@@ -380,6 +504,11 @@ def build_insights(
                     "source_time_ranges": source_ranges,
                     "time_window": time_window,
                     "persistence_duration": persistence_phrase(persistence_detail),
+                    "activity_timeline": finding_activity_timeline(
+                        classification,
+                        source_ranges,
+                        what_changed,
+                    ),
                     "upload_id": upload_id,
                     "analysis_id": analysis_id,
                     "persistent": persistent,
@@ -445,6 +574,358 @@ def build_insights(
         )
 
     return insights
+
+
+def ensure_finding_context(
+    insights: list[dict[str, Any]],
+    result: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Normalize legacy/domain insights into the additive certainty contract."""
+
+    data_quality = result.get("data_quality") if isinstance(result.get("data_quality"), dict) else {}
+    relationship_model = result.get("relationship_model") if isinstance(result.get("relationship_model"), dict) else {}
+    baseline = result.get("baseline_analysis") if isinstance(result.get("baseline_analysis"), dict) else {}
+    default_mode = finding_operating_mode(
+        relationship_model.get("operating_mode"),
+        data_quality.get("operating_mode"),
+    )
+    all_health = [item for item in data_quality.get("sensor_health", []) if isinstance(item, dict)]
+    normalized = []
+    for item in insights:
+        if not isinstance(item, dict):
+            continue
+        updated = dict(item)
+        source_signals = dedupe(
+            [
+                *[str(value) for value in item.get("source_tags", []) if value],
+                *[str(value) for value in item.get("source_metrics", []) if value],
+            ]
+        )
+        operating_mode = finding_operating_mode(item.get("operating_mode"), default_mode)
+        data_confidence = finding_data_confidence(item.get("data_confidence"), data_quality)
+        sensor_health = (
+            item.get("sensor_health")
+            if isinstance(item.get("sensor_health"), list)
+            else [
+                profile
+                for profile in all_health
+                if not source_signals or str(profile.get("signal") or "") in set(source_signals)
+            ]
+        )
+        persistence = (
+            item.get("persistence")
+            if isinstance(item.get("persistence"), dict)
+            else {
+                "status": "persistent" if item.get("persistent") is True else "unavailable",
+                "persistent": item.get("persistent") is True,
+                "summary": first_text(
+                    item.get("persistence_duration"),
+                    "Persistence evidence was unavailable for this historical finding.",
+                ),
+            }
+        )
+        relationship_evidence = (
+            item.get("relationship_evidence")
+            if isinstance(item.get("relationship_evidence"), dict)
+            else {
+                "evidence_type": "legacy_finding",
+                "baseline_sample_size": baseline.get("baseline_window_rows"),
+                "recent_sample_size": baseline.get("recent_window_rows"),
+                "confidence_score": item.get("confidence_score"),
+                "correlation_delta": item.get("correlation_delta"),
+                "source_signals": source_signals,
+            }
+        )
+        classification = (
+            item.get("classification")
+            if isinstance(item.get("classification"), dict)
+            else classify_finding(
+                data_confidence=data_confidence,
+                sensor_health=sensor_health,
+                operating_mode=operating_mode,
+                persistence=persistence,
+                relationship_evidence=relationship_evidence,
+            )
+        )
+        updated.setdefault("classification", classification)
+        updated.setdefault("operating_mode", operating_mode)
+        updated.setdefault("data_confidence", data_confidence)
+        updated.setdefault("sensor_health", sensor_health)
+        updated.setdefault("certainty_limit", classification.get("certainty_limit"))
+        updated.setdefault("alternative_explanations", classification.get("alternative_explanations", []))
+        updated.setdefault("data_limitations", data_confidence.get("reasons", []))
+        updated.setdefault("persistence", persistence)
+        updated.setdefault("relationship_evidence", relationship_evidence)
+        updated.setdefault(
+            "activity_timeline",
+            finding_activity_timeline(
+                classification,
+                item.get("source_time_ranges") if isinstance(item.get("source_time_ranges"), list) else [],
+                first_text(item.get("what_changed"), item.get("explanation"), item.get("title")),
+            ),
+        )
+        normalized.append(compact_dict(updated))
+    return normalized
+
+
+def finding_operating_mode(*values: Any) -> dict[str, Any]:
+    for value in values:
+        if isinstance(value, dict) and value.get("match"):
+            return value
+    return {
+        "baseline_mode": "unavailable",
+        "baseline_mode_label": "Operating context unavailable",
+        "recent_mode": "unavailable",
+        "recent_mode_label": "Operating context unavailable",
+        "match": "unavailable",
+        "confidence": "low",
+        "differences": [],
+        "reasons": ["Operating-mode evidence was not recorded for this analysis."],
+        "known_operational_change": False,
+    }
+
+
+def finding_data_confidence(value: Any, data_quality: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(value, dict) and value.get("rating"):
+        return value
+    reliability = str(data_quality.get("reliability_rating") or "").lower()
+    normalization = data_quality.get("normalization_report") if isinstance(data_quality.get("normalization_report"), dict) else {}
+    if data_quality.get("readiness") == "not_ready" or reliability == "not_reliable" or normalization.get("window_suppressed"):
+        rating = "low"
+    elif reliability in {"strong", "high"}:
+        rating = "high"
+    else:
+        rating = "limited" if reliability else "low"
+    reasons = list(data_quality.get("warnings") or [])
+    if not reliability:
+        reasons.append("Qualitative data-confidence evidence was not recorded for this analysis.")
+    summary = {
+        "high": "Available telemetry passed the recorded data-quality checks.",
+        "limited": "Recorded data-quality conditions limit finding certainty.",
+        "low": "Recorded data quality does not support a reliable interpretation.",
+    }[rating]
+    return {
+        "rating": rating,
+        "summary": summary,
+        "reasons": dedupe([str(item) for item in reasons if item]),
+        "affected_signals": [],
+    }
+
+
+def finding_sensor_health(
+    group: list[dict[str, Any]],
+    fallback: list[dict[str, Any]],
+    columns: list[str],
+) -> list[dict[str, Any]]:
+    profiles = []
+    for entry in group:
+        if isinstance(entry.get("sensor_health"), list):
+            profiles.extend(item for item in entry["sensor_health"] if isinstance(item, dict))
+    if not profiles:
+        profiles = [
+            item for item in fallback if str(item.get("signal") or "") in set(columns)
+        ]
+    by_signal: dict[str, dict[str, Any]] = {}
+    for profile in profiles:
+        signal = str(profile.get("signal") or "")
+        if signal:
+            by_signal[signal] = profile
+    return [by_signal[key] for key in sorted(by_signal)]
+
+
+def relationship_persistence_info(
+    columns: list[str],
+    persistence: dict[str, Any],
+    relationship: dict[str, Any],
+) -> dict[str, Any]:
+    persistent_columns = set(str(item) for item in persistence.get("persistent_columns", []) if item)
+    supported = [column for column in columns if column in persistent_columns]
+    persistent = bool(columns) and len(supported) == len(set(columns))
+    baseline_samples = relationship.get("baseline_sample_size")
+    recent_samples = relationship.get("recent_sample_size")
+    if persistent:
+        summary = (
+            f"The existing persistence assessment includes all {len(set(columns))} relationship signal(s); "
+            f"{sample_window_phrase(baseline_samples, recent_samples).lower()}"
+        ).strip()
+    else:
+        summary = "The existing persistence assessment did not confirm every signal in this relationship."
+    return {
+        "status": "persistent" if persistent else "limited",
+        "persistent": persistent,
+        "supporting_signals": supported,
+        "summary": summary,
+        "reasons": [summary],
+    }
+
+
+def relationship_evidence_context(item: dict[str, Any]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "evidence_type": first_text(item.get("relationship_type"), "linear_correlation"),
+            "change_type": item.get("change_type"),
+            "baseline_correlation": item.get("baseline_correlation"),
+            "recent_correlation": item.get("recent_correlation"),
+            "correlation_delta": item.get("correlation_delta"),
+            "baseline_sample_size": item.get("baseline_sample_size"),
+            "recent_sample_size": item.get("recent_sample_size"),
+            "confidence_score": item.get("confidence_score"),
+            "supporting_metric_pairs": item.get("supporting_metric_pairs"),
+            "time_window": item.get("time_window"),
+        }
+    )
+
+
+def finding_has_certainty_context(
+    relationship: dict[str, Any],
+    data_quality: dict[str, Any],
+) -> bool:
+    return bool(
+        relationship.get("operating_mode")
+        or relationship.get("data_confidence")
+        or data_quality.get("data_confidence")
+    )
+
+
+def classification_title(system: str, classification: dict[str, Any]) -> str:
+    subject = system if system not in {GENERIC_SUBSYSTEM_NAME, "Uploaded telemetry"} else "System"
+    classification_type = classification.get("type")
+    if classification_type == KNOWN_OPERATIONAL_CHANGE:
+        return f"{subject} operating-context change"
+    if classification_type == POSSIBLE_INSTRUMENTATION_ISSUE:
+        return f"{subject} instrumentation review"
+    if classification_type == UNEXPLAINED_SYSTEMIC_CHANGE:
+        return f"{subject} relationship change"
+    return f"{subject} evidence review"
+
+
+def relationship_classification_narrative(
+    *,
+    classification: dict[str, Any],
+    label: str,
+    operating_mode: dict[str, Any],
+    data_confidence: dict[str, Any],
+) -> dict[str, str]:
+    pair = relationship_pair_phrase(label)
+    classification_type = classification.get("type")
+    reasons = "; ".join(classification.get("reasons", [])[:3])
+    if classification_type == KNOWN_OPERATIONAL_CHANGE:
+        baseline_label = first_text(operating_mode.get("baseline_mode_label"), operating_mode.get("baseline_mode"), "baseline operation")
+        recent_label = first_text(operating_mode.get("recent_mode_label"), operating_mode.get("recent_mode"), "recent operation")
+        return {
+            "what_changed": (
+                f"The relationship between {pair} shifted during a transition from {baseline_label} "
+                f"to {recent_label}. The observed change is consistent with the available operating context."
+            ),
+            "why_classified": reasons or "Recorded operating context changed with the relationship.",
+            "interpretation": (
+                "The evidence supports an operating-context explanation. It does not establish a root cause "
+                "or show that the physical system degraded."
+            ),
+            "why_it_matters": "Confirm the recorded staging, schedule, setpoint, or event context before escalating the relationship shift.",
+        }
+    if classification_type == POSSIBLE_INSTRUMENTATION_ISSUE:
+        return {
+            "what_changed": (
+                f"The relationship between {pair} changed, but the evidence is more consistent with a possible "
+                "instrumentation issue than a confirmed physical-system change."
+            ),
+            "why_classified": reasons or "Relevant signal-health evidence limits a physical-system interpretation.",
+            "interpretation": "A possible instrumentation issue should be ruled out first; the available data does not confirm a faulty device.",
+            "why_it_matters": "Validate the affected readings before using this relationship shift to guide a physical-system investigation.",
+        }
+    if classification_type == UNEXPLAINED_SYSTEMIC_CHANGE:
+        recent_label = first_text(operating_mode.get("recent_mode_label"), "comparable operation")
+        return {
+            "what_changed": (
+                f"The relationship between {pair} no longer follows its established pattern during comparable "
+                f"{recent_label.lower()}. Available signal-health checks passed, and no recorded operating change explains the shift."
+            ),
+            "why_classified": reasons or "The persistent relationship shift occurred under comparable operating conditions.",
+            "interpretation": (
+                "The evidence supports an unexplained systemic relationship change. It does not identify a cause "
+                "or predict an exact failure."
+            ),
+            "why_it_matters": "Engineering review can determine whether the persistent relationship shift warrants further investigation.",
+        }
+    limitations = "; ".join(data_confidence.get("reasons", [])[:2])
+    return {
+        "what_changed": (
+            f"A possible change in the relationship between {pair} was observed, but "
+            f"{limitations or 'available comparability, quality, or persistence evidence'} prevents a reliable interpretation."
+        ),
+        "why_classified": reasons or "The finding did not clear all certainty gates.",
+        "interpretation": "The evidence is insufficient to distinguish an operating, instrumentation, or physical-system explanation.",
+        "why_it_matters": "Additional like-for-like telemetry or source validation is needed before this observation should guide engineering action.",
+    }
+
+
+def metric_classification_narrative(
+    *,
+    classification: dict[str, Any],
+    observed_change: str,
+    signal_label: str,
+) -> dict[str, str]:
+    classification_type = classification.get("type")
+    reasons = "; ".join(classification.get("reasons", [])[:3])
+    if classification_type == KNOWN_OPERATIONAL_CHANGE:
+        return {
+            "what_changed": f"{observed_change} The movement aligns with an available operating-context change.",
+            "why_classified": reasons,
+            "why_it_matters": "Confirm the recorded operating change before treating this signal movement as an unexplained condition.",
+        }
+    if classification_type == POSSIBLE_INSTRUMENTATION_ISSUE:
+        return {
+            "what_changed": f"{observed_change} Signal-health evidence makes an instrumentation issue a plausible explanation.",
+            "why_classified": reasons,
+            "why_it_matters": f"Validate {signal_label} independently before interpreting the movement as a physical-system change.",
+        }
+    if classification_type == UNEXPLAINED_SYSTEMIC_CHANGE:
+        return {
+            "what_changed": f"{observed_change} The movement persisted during comparable operating conditions.",
+            "why_classified": reasons,
+            "why_it_matters": "The persistent change warrants engineering review, without implying a diagnosed cause or exact failure.",
+        }
+    return {
+        "what_changed": f"{observed_change} Available evidence is insufficient for a reliable interpretation.",
+        "why_classified": reasons or "The signal movement did not clear all certainty gates.",
+        "why_it_matters": "Additional comparable telemetry or signal validation is needed before this movement should guide engineering action.",
+    }
+
+
+def classification_confidence_rationale(
+    classification: dict[str, Any],
+    data_confidence: dict[str, Any],
+    operating_mode: dict[str, Any],
+) -> str:
+    return (
+        f"Finding confidence is {classification.get('confidence', 'low')} because data confidence is "
+        f"{data_confidence.get('rating', 'low')} and operating-mode match is "
+        f"{operating_mode.get('match', 'unavailable')}. {classification.get('certainty_limit', '')}"
+    ).strip()
+
+
+def finding_activity_timeline(
+    classification: dict[str, Any],
+    source_ranges: list[dict[str, Any]],
+    observation: str,
+) -> list[dict[str, str]]:
+    bounds = source_ranges[0] if source_ranges and isinstance(source_ranges[0], dict) else {}
+    baseline_time = first_text(bounds.get("baseline_start"), bounds.get("start"), "Baseline window")
+    recent_time = first_text(bounds.get("current_start"), bounds.get("end"), "Recent window")
+    return [
+        {
+            "time": baseline_time,
+            "title": "Reference evidence",
+            "detail": "The baseline period supplied the reference behavior for this comparison.",
+        },
+        {
+            "time": recent_time,
+            "title": first_text(classification.get("label"), "Finding evidence reviewed"),
+            "detail": observation,
+        },
+    ]
+
 
 def build_systems(
     *,
@@ -559,6 +1040,9 @@ def build_relationships(
                     "ranking_factors": item.get("ranking_factors"),
                     "column_classifications": item.get("column_classifications"),
                     "relationship_context": item.get("relationship_context"),
+                    "operating_mode": item.get("operating_mode"),
+                    "data_confidence": item.get("data_confidence"),
+                    "sensor_health": item.get("sensor_health"),
                     "what_changed": first_text(
                         relationship_operator_summary(item, label),
                         relationship_change_sentence(label, item),
@@ -2042,6 +2526,7 @@ def relationship_activity_timeline(
     facts: list[str],
     first_check: str,
     source_ranges: list[dict[str, Any]],
+    classification: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
     base_time = timeline_base_time(source_ranges)
     entries = []
@@ -2059,7 +2544,10 @@ def relationship_activity_timeline(
         compact_dict(
             {
                 "time": timeline_time_label(base_time, len(entries)),
-                "title": f"Behavior classified as {system} degradation.",
+                "title": first_text(
+                    (classification or {}).get("label"),
+                    f"{system} relationship evidence reviewed.",
+                ),
                 "detail": first_check or "Investigation recommended.",
             }
         )
@@ -2079,8 +2567,8 @@ def timeline_base_time(source_ranges: list[dict[str, Any]]) -> str:
 
 def timeline_time_label(base_time: str, index: int) -> str:
     if not base_time or base_time == "Current window":
-        return "Current window" if index == 0 else f"+{index * 3} min"
-    return base_time if index == 0 else f"+{index * 3} min"
+        return "Current window"
+    return base_time if index == 0 else "Within the analyzed window"
 
 
 def timeline_title_from_fact(fact: str) -> str:
