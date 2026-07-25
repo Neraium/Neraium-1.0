@@ -51,14 +51,16 @@ test.describe("Engineering reasoning decision cards", () => {
     const card = page.locator(".operational-finding");
     await expect(card).toHaveCount(1);
     await expect(card.getByRole("heading", { name: "Pump demand no longer matches flow" })).toBeVisible();
-    await expect(card.getByText("North Plant · Flow & Pressure")).toBeVisible();
-    await expect(card.getByText("Narrowed")).toBeVisible();
-    await expect(card.locator(".operational-finding__evidence li")).toHaveCount(3);
-    await expect(card.getByText("Missing telemetry limits the conclusion.")).toBeVisible();
+    await expect(card.locator(".finding-classification__chip")).toHaveCount(3);
+    await expect(card.locator(".operational-finding__evidence-line")).toHaveCount(1);
+    await expect(card.locator(".operational-finding__next p")).toHaveCount(1);
+    await expect(card.getByText("Missing telemetry limits the conclusion.")).toHaveCount(0);
     await expect(card.getByLabel(/Classification: Unexplained systemic change/i)).toBeVisible();
     await expect(card.locator(".finding-classification--systemic")).toBeVisible();
+    await expect(card.getByRole("button", { name: "Review" })).toBeVisible();
+    await expect(card.getByRole("button", { name: "Acknowledge" })).toBeVisible();
 
-    await card.getByRole("button", { name: "Open Evidence" }).click();
+    await card.getByRole("button", { name: "View evidence" }).click();
     await expect(page).toHaveURL(/\/evidence\/flow-response$/);
     await expect(page.getByText("What changed")).toBeVisible();
     await expect(page.getByText("Supporting evidence")).toBeVisible();
@@ -68,30 +70,31 @@ test.describe("Engineering reasoning decision cards", () => {
     await expect(details).not.toHaveAttribute("open", "");
     await details.locator(":scope > summary").click();
     await expect(details.getByText("Historian X was unavailable during the comparison window.")).toBeVisible();
-    await details.getByRole("button", { name: "Open Trace Mode" }).click();
-    await expect(page.getByRole("heading", { name: "Trace Mode" })).toBeVisible();
+    await details.getByRole("button", { name: "Open trace mode" }).click();
+    await expect(page.getByRole("heading", { name: "Trace mode" })).toBeVisible();
   });
 
   test("mobile uses a vertical answer and keeps evidence before the action", async ({ page }) => {
     await openSite(page, { width: 390, height: 844 });
     const card = page.locator(".operational-finding");
     const metrics = await card.evaluate((node) => {
-      const evidence = node.querySelector(".operational-finding__evidence")?.getBoundingClientRect();
+      const evidence = node.querySelector(".operational-finding__evidence-line")?.getBoundingClientRect();
+      const next = node.querySelector(".operational-finding__next")?.getBoundingClientRect();
       const action = node.querySelector(".operational-finding__action")?.getBoundingClientRect();
-      const title = node.querySelector(".operational-finding__what")?.getBoundingClientRect();
+      const title = node.querySelector(".operational-finding__identity")?.getBoundingClientRect();
       const cardBox = node.getBoundingClientRect();
       return {
         overflow: document.documentElement.scrollWidth - window.innerWidth,
-        evidenceBeforeAction: Boolean(evidence && action && evidence.bottom <= action.top + 1),
+        summaryOrder: Boolean(evidence && next && action && evidence.bottom <= next.top + 1 && next.bottom <= action.top + 1),
         titleUsesCardWidth: Boolean(title && title.width >= cardBox.width - 32),
-        actionVisible: Boolean(action && action.bottom <= window.innerHeight),
+        actionsFitCard: Boolean(action && action.right <= cardBox.right + 1),
         classificationFits: Boolean(node.querySelector(".finding-classification")?.getBoundingClientRect().right <= window.innerWidth + 1),
       };
     });
     expect(metrics.overflow).toBeLessThanOrEqual(1);
-    expect(metrics.evidenceBeforeAction).toBe(true);
+    expect(metrics.summaryOrder).toBe(true);
     expect(metrics.titleUsesCardWidth).toBe(true);
-    expect(metrics.actionVisible).toBe(true);
+    expect(metrics.actionsFitCard).toBe(true);
     expect(metrics.classificationFits).toBe(true);
   });
 
@@ -100,9 +103,9 @@ test.describe("Engineering reasoning decision cards", () => {
     await page.getByRole("combobox", { name: /Search sites/ }).fill("Chiller-03");
     await page.getByRole("button", { name: "Asset / signal: Chiller-03" }).click();
     await expect(page).toHaveURL(/\/evidence\/flow-response$/);
-    await expect(page.getByRole("button", { name: "Open Trace Mode" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Open trace mode" })).toHaveCount(0);
     await page.locator("details.evidence-technical > summary").click();
-    await expect(page.getByRole("button", { name: "Open Trace Mode" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open trace mode" })).toBeVisible();
   });
 
   test("desktop and mobile decision surfaces have no serious accessibility violations", async ({ page }) => {

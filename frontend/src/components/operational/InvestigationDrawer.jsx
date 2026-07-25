@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 
-import { normalizeFindingPresentation } from "../../viewModels/operatorFinding";
 import OperatorInsightDetail from "./OperatorInsightDetail";
 
 const FOCUSABLE_SELECTOR = [
@@ -122,7 +121,6 @@ export default function InvestigationDrawer({
   const visibleTitle = title ?? presented.title ?? "Investigation";
   const isFullWorkspace = visibleRoute.mode === "full";
   const isInteractive = Boolean(route) && phase !== "closing";
-  const classification = normalizeFindingPresentation(visibleInsight ?? {});
 
   return (
     <div
@@ -145,13 +143,9 @@ export default function InvestigationDrawer({
       >
         <header className="investigation-panel__header">
           <div className="investigation-panel__identity">
-            <span className="section-token">{isFullWorkspace ? "Full evidence page" : "Evidence"}</span>
+            <span className="section-token">{isFullWorkspace ? "Full investigation" : "Finding detail"}</span>
             <h2 id="investigation-panel-title">{visibleTitle}</h2>
-            <p id="investigation-panel-subsystem" className={`investigation-panel__finding-state investigation-panel__finding-state--${classification.tone}`}>
-              <span>{classification.label}</span>
-              <span aria-hidden="true">·</span>
-              <strong>{classification.reviewPriority}</strong>
-            </p>
+            <p id="investigation-panel-subsystem" className="investigation-panel__finding-context">{visibleInsight?.system || "Unassigned system"}</p>
           </div>
           <div className="investigation-panel__actions">
             {!isFullWorkspace ? (
@@ -161,7 +155,7 @@ export default function InvestigationDrawer({
                 onClick={onExpand}
                 aria-label="Expand investigation to full workspace"
               >
-                Expand to Full Workspace
+                Open full investigation
               </button>
             ) : null}
             <button

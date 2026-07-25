@@ -331,11 +331,15 @@ function DiagnosticValue({ value }) {
 
 function usefulDiagnosticEntries(evidence) {
   return [
+    ["Evidence reference", evidence?.evidence_id ?? evidence?.id],
     ["Time window", evidence?.time_window ?? evidence?.timeWindow],
+    ["Source ranges", evidence?.source_time_ranges ?? evidence?.sourceTimeRanges],
+    ["Source row anchors", evidence?.source_row_anchors ?? evidence?.sourceRowAnchors ?? evidence?.row_anchors ?? evidence?.rowAnchors ?? evidence?.source_rows],
     ["Persistence / duration", evidence?.persistence_duration ?? evidence?.persistenceDuration],
     ["Calculated percent change", evidence?.calculated_percent_delta ?? evidence?.calculatedPercentDelta],
     ["Signal identifiers", toList(evidence?.source_columns, evidence?.sourceColumns, evidence?.source_metrics, evidence?.sourceMetrics, evidence?.source_tags, evidence?.sourceTags)],
     ["Internal metric names", toList(evidence?.metric_delta, evidence?.relevant_metric_changes, evidence?.relevantMetricChanges)],
+    ["Analysis reference", evidence?.source_upload_id ?? evidence?.upload_id ?? evidence?.analysis_id],
   ].filter(([, value]) => Array.isArray(value) ? value.length : Boolean(value && (typeof value !== "object" || Object.keys(value).length)));
 }
 
@@ -366,6 +370,29 @@ function sensorConditionLabel(value) {
   return sentenceCase(value || "Signal-health condition");
 }
 
+function shortSentence(value) {
+  const clean = cleanSentence(value);
+  return clean.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() ?? clean;
+}
+
+function GuidanceList({ items, start = 1 }) {
+  return (
+    <ol className="investigation-guidance-list" start={start}>
+      {items.map((item, index) => (
+        <li key={`${item.rank}-${item.check}`}>
+          <span className="investigation-guidance-list__rank" aria-hidden="true">{item.rank || start + index}</span>
+          <div><strong>{item.check}</strong><p>{shortSentence(item.reason)}</p><span className="investigation-guidance-list__category">{guidanceCategory(item.category)}</span></div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function AuditHistory({ entries }) {
+  if (!entries.length) return <p className="evidence-page__unavailable">No audit or replay events were recorded on this finding.</p>;
+  return <ul className="operator-briefing-list operator-briefing-list--code">{entries.map((entry, index) => <li key={`${text(entry)}-${index}`}><DiagnosticValue value={entry} /></li>)}</ul>;
+}
+
 export default function OperatorInsightDetail({ insight, defaultOpen = false, inline = false, focusMode = false }) {
   const evidence = Array.isArray(insight?.evidence) ? insight.evidence : [];
   const relationships = relationshipDetails(insight, evidence);
@@ -388,51 +415,42 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
     presentation.certaintyLimit,
   ].map(cleanSentence).filter(Boolean));
   const facilityTimezone = text(insight?.facilityTimezone ?? insight?.facility_timezone);
+  const visibleGuidance = presentation.investigationGuidance.slice(0, 3);
+  const additionalGuidance = presentation.investigationGuidance.slice(3);
+  const visibleEvidence = support.bullets.slice(0, 3);
+  const additionalEvidence = support.bullets.slice(3);
+  const auditEntries = toList(
+    insight?.auditHistory,
+    insight?.audit_history,
+    insight?.reviewHistory,
+    insight?.review_history,
+    insight?.replayReferences,
+    insight?.replay_references,
+  );
+  const whyBullets = unique([
+    shortSentence(interpretation),
+    presentation.persistence.persistent ? `The change persisted.` : "",
+    presentation.operatingMode.match !== "Unavailable" ? `Operating-mode match is ${presentation.operatingMode.match.toLowerCase()}.` : "",
+  ].filter(Boolean)).slice(0, 3);
 
   const body = (
     <div className="insight-layered evidence-page">
-      <FindingClassificationSummary finding={insight} />
-      <p className="evidence-page__context">{dataset} <span aria-hidden="true">·</span> {subsystem} <span aria-hidden="true">·</span> {scope} evidence scope</p>
+      <FindingClassificationSummary finding={insight} showDefinition={false} />
 
       <section id="insight-situation" className="evidence-page__section" aria-labelledby="insight-situation-title" tabIndex={-1}>
         <h4 id="insight-situation-title">What changed</h4>
         <p>{summary}</p>
-        <p className="evidence-page__secondary"><strong>Engineering relevance:</strong> {interpretation}</p>
-        {window ? <p className="evidence-page__window">Comparison window: {window}</p> : null}
       </section>
 
-      <section className="evidence-page__section" aria-labelledby="classification-reasons-title">
-        <h4 id="classification-reasons-title">Why Neraium classified it this way</h4>
-        <p>{presentation.meaning}</p>
-        <ul className="operator-briefing-list">{presentation.reasons.map((item) => <li key={item}>{cleanSentence(item)}</li>)}</ul>
+      <section className="evidence-page__section" aria-labelledby="why-it-matters-title">
+        <h4 id="why-it-matters-title">Why it matters</h4>
+        <ul className="operator-briefing-list">{whyBullets.map((item) => <li key={item}>{item}</li>)}</ul>
       </section>
 
-      <section className="evidence-page__section" aria-labelledby="data-health-title">
-        <h4 id="data-health-title">Data confidence and sensor-health context</h4>
-        <dl className="evidence-context-grid">
-          <div><dt>Data confidence</dt><dd>{presentation.dataConfidence.rating}</dd></div>
-          <div><dt>Summary</dt><dd>{presentation.dataConfidence.summary}</dd></div>
-        </dl>
-        {presentation.sensorHealth.length ? (
-          <ul className="sensor-health-list">{presentation.sensorHealth.map((sensor) => (
-            <li key={sensor.signal} className={`sensor-health-list__item sensor-health-list__item--${sensor.health.toLowerCase()}`}>
-              <div><strong>{sentenceCase(sensor.signal)}</strong><span>{sentenceCase(sensor.health)}</span></div>
-              {sensor.conditions.length ? <ul>{sensor.conditions.map((condition, index) => <li key={`${condition.type}-${index}`}><strong>{sensorConditionLabel(condition.type)}:</strong> {condition.evidence || "No supporting condition detail was recorded."}</li>)}</ul> : <p>No signal-health warning was recorded.</p>}
-            </li>
-          ))}</ul>
-        ) : <p className="evidence-page__unavailable">Sensor-health conditions were not recorded for this finding.</p>}
-      </section>
-
-      <section className="evidence-page__section" aria-labelledby="operating-mode-title">
-        <h4 id="operating-mode-title">Operating-mode comparison</h4>
-        <dl className="evidence-context-grid evidence-context-grid--mode">
-          <div><dt>Baseline mode</dt><dd>{presentation.operatingMode.baseline}</dd></div>
-          <div><dt>Recent mode</dt><dd>{presentation.operatingMode.recent}</dd></div>
-          <div><dt>Mode match</dt><dd>{presentation.operatingMode.match}</dd></div>
-          <div><dt>Comparison confidence</dt><dd>{presentation.operatingMode.confidence}</dd></div>
-        </dl>
-        {presentation.operatingMode.differences.length ? <ul className="operator-briefing-list">{presentation.operatingMode.differences.map((item, index) => <li key={`${item.feature}-${index}`}><strong>{sentenceCase(item.feature)}:</strong> {item.reason || "A recorded operating-mode difference was present."}</li>)}</ul> : null}
-        {presentation.operatingMode.reasons.length ? <ul className="operator-briefing-list">{presentation.operatingMode.reasons.map((item) => <li key={item}>{cleanSentence(item)}</li>)}</ul> : null}
+      <section id="recommended-investigation" className="evidence-page__section evidence-page__start" aria-labelledby="recommended-investigation-title" tabIndex={-1}>
+        <h4 id="recommended-investigation-title">Highest-value next checks</h4>
+        {visibleGuidance.length ? <GuidanceList items={visibleGuidance} /> : <p>No evidence-linked next check was recorded for this finding.</p>}
+        {additionalGuidance.length ? <Disclosure title="Show all checks" className="evidence-page__all-checks"><GuidanceList items={additionalGuidance} start={4} /></Disclosure> : null}
       </section>
 
       <section className="evidence-page__section" aria-labelledby="relationship-timeline-title">
@@ -448,47 +466,75 @@ export default function OperatorInsightDetail({ insight, defaultOpen = false, in
 
       <section id="insight-evidence" className="evidence-page__section" aria-labelledby="key-evidence-title" tabIndex={-1}>
         <h4 id="key-evidence-title">Supporting evidence</h4>
-        {support.bullets.length ? <ul className="operator-briefing-list evidence-page__evidence">{support.bullets.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="evidence-page__unavailable">No additional supporting observations were recorded.</p>}
+        {visibleEvidence.length ? <ul className="operator-briefing-list evidence-page__evidence">{visibleEvidence.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="evidence-page__unavailable">No additional supporting observations were recorded.</p>}
+        {additionalEvidence.length ? <Disclosure title="Show all supporting evidence"><ul className="operator-briefing-list">{additionalEvidence.map((item) => <li key={item}>{item}</li>)}</ul></Disclosure> : null}
         {relationships.length ? <Disclosure title="Open relationship evidence" className="evidence-page__relationship-disclosure">
           <ul className="operator-briefing-list evidence-page__relationships">{relationships.map((item) => <li key={item.sentence}>{item.sentence}</li>)}</ul>
           <section id="relationship-explorer" className="technical-evidence-section" tabIndex={-1}>
-            <div className="technical-evidence-section__header"><span>Relationship measurements</span><p>Source strengths and coefficients are shown here for technical review.</p></div>
+            <div className="technical-evidence-section__header"><span>Relationship measurements</span></div>
             <Suspense fallback={<p>Loading relationship evidence...</p>}><RelationshipExplorer relationships={relationshipModels} /></Suspense>
           </section>
         </Disclosure> : null}
       </section>
 
-      <section id="recommended-investigation" className="evidence-page__section evidence-page__start" aria-labelledby="recommended-investigation-title" tabIndex={-1}>
-        <h4 id="recommended-investigation-title">Highest-value next checks</h4>
-        {presentation.investigationGuidance.length ? <ol className="investigation-guidance-list">{presentation.investigationGuidance.map((item) => (
-          <li key={`${item.rank}-${item.check}`}>
-            <span className="investigation-guidance-list__rank" aria-hidden="true">{item.rank}</span>
-            <div><span className="investigation-guidance-list__category">{guidanceCategory(item.category)}</span><strong>{item.check}</strong><p>{item.reason}</p></div>
-          </li>
-        ))}</ol> : <p>No evidence-linked next check was recorded for this finding.</p>}
-      </section>
+      <div className="evidence-page__disclosures" aria-label="Additional investigation detail">
+        <Disclosure title="Why Neraium classified it this way">
+          <p>{presentation.meaning}</p>
+          <ul className="operator-briefing-list">{presentation.reasons.map((item) => <li key={item}>{cleanSentence(item)}</li>)}</ul>
+        </Disclosure>
 
-      <section className="evidence-page__section" aria-labelledby="alternative-explanations-title">
-        <h4 id="alternative-explanations-title">Alternative explanations</h4>
-        {presentation.alternativeExplanations.length ? <ul className="operator-briefing-list">{presentation.alternativeExplanations.map((item) => <li key={item}>{cleanSentence(item)}</li>)}</ul> : <p className="evidence-page__unavailable">No alternative-explanation list was recorded for this finding.</p>}
-      </section>
+        <Disclosure title="Operating-mode comparison details">
+          <dl className="evidence-context-grid evidence-context-grid--mode">
+            <div><dt>Baseline mode</dt><dd>{presentation.operatingMode.baseline}</dd></div>
+            <div><dt>Recent mode</dt><dd>{presentation.operatingMode.recent}</dd></div>
+            <div><dt>Mode match</dt><dd>{presentation.operatingMode.match}</dd></div>
+            <div><dt>Comparison confidence</dt><dd>{presentation.operatingMode.confidence}</dd></div>
+          </dl>
+          {presentation.operatingMode.differences.length ? <ul className="operator-briefing-list">{presentation.operatingMode.differences.map((item, index) => <li key={`${item.feature}-${index}`}><strong>{sentenceCase(item.feature)}:</strong> {item.reason || "A recorded operating-mode difference was present."}</li>)}</ul> : null}
+          {presentation.operatingMode.reasons.length ? <ul className="operator-briefing-list">{presentation.operatingMode.reasons.map((item) => <li key={item}>{cleanSentence(item)}</li>)}</ul> : null}
+        </Disclosure>
 
-      <section className="evidence-page__section evidence-page__limitation" aria-labelledby="finding-limitation-title">
-        <h4 id="finding-limitation-title">Data limitations</h4>
-        <ul className="operator-briefing-list">{limitations.map((item) => <li key={item}>{item}</li>)}</ul>
-      </section>
+        <Disclosure title="Sensor-health details">
+          <dl className="evidence-context-grid"><div><dt>Data confidence</dt><dd>{presentation.dataConfidence.rating}</dd></div><div><dt>Summary</dt><dd>{presentation.dataConfidence.summary}</dd></div></dl>
+          {presentation.sensorHealth.length ? <ul className="sensor-health-list">{presentation.sensorHealth.map((sensor) => (
+            <li key={sensor.signal} className={`sensor-health-list__item sensor-health-list__item--${sensor.health.toLowerCase()}`}>
+              <div><strong>{sentenceCase(sensor.signal)}</strong><span>{sentenceCase(sensor.health)}</span></div>
+              {sensor.conditions.length ? <ul>{sensor.conditions.map((condition, index) => <li key={`${condition.type}-${index}`}><strong>{sensorConditionLabel(condition.type)}:</strong> {condition.evidence || "No supporting condition detail was recorded."}</li>)}</ul> : <p>No signal-health warning was recorded.</p>}
+            </li>
+          ))}</ul> : <p className="evidence-page__unavailable">Sensor-health conditions were not recorded for this finding.</p>}
+        </Disclosure>
 
-      <Disclosure title="Technical details" className="evidence-page__technical">
-        {window ? <dl className="operational-detail-grid"><div><dt>Comparison window</dt><dd>{window}</dd></div>{facilityTimezone ? <div><dt>Facility timezone</dt><dd>{facilityTimezone}</dd></div> : null}</dl> : null}
-        {unmappedColumns.length ? <section className="technical-evidence-section"><div className="technical-evidence-section__header"><span>Unmapped columns</span></div><ul className="operator-briefing-list operator-briefing-list--code">{unmappedColumns.map((item) => <li key={item}><code>{item}</code></li>)}</ul></section> : null}
-        {technicalLimitations.length ? <section className="technical-evidence-section"><div className="technical-evidence-section__header"><span>Data-quality warnings</span></div><ul className="operator-briefing-list">{technicalLimitations.map((item) => <li key={item}>{item}</li>)}</ul></section> : null}
-        {evidence.map((item, index) => {
-          const rows = usefulDiagnosticEntries(item);
-          return rows.length ? <div className="insight-evidence-item" key={item?.evidence_id ?? item?.id ?? index}><dl className="operational-detail-grid operational-detail-grid--technical">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd><DiagnosticValue value={value} /></dd></div>)}</dl></div> : null;
-        })}
-        <WaterIntelligencePanel insight={insight} />
-        <Disclosure title="Raw analysis payload" className="insight-disclosure--raw"><pre><code>{JSON.stringify(insight, null, 2)}</code></pre></Disclosure>
-      </Disclosure>
+        <Disclosure title="Alternative explanations">
+          {presentation.alternativeExplanations.length ? <ul className="operator-briefing-list">{presentation.alternativeExplanations.map((item) => <li key={item}>{cleanSentence(item)}</li>)}</ul> : <p className="evidence-page__unavailable">No alternative explanations were recorded.</p>}
+        </Disclosure>
+
+        <Disclosure title="Data limitations">
+          {limitations.length ? <ul className="operator-briefing-list">{limitations.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="evidence-page__unavailable">No additional limitations were recorded.</p>}
+        </Disclosure>
+
+        <Disclosure title="Source metadata">
+          <dl className="operational-detail-grid">
+            <div><dt>Dataset</dt><dd>{dataset}</dd></div>
+            <div><dt>System</dt><dd>{subsystem}</dd></div>
+            <div><dt>Evidence scope</dt><dd>{scope}</dd></div>
+            {window ? <div><dt>Comparison window</dt><dd>{window}</dd></div> : null}
+            {facilityTimezone ? <div><dt>Facility timezone</dt><dd>{facilityTimezone}</dd></div> : null}
+          </dl>
+        </Disclosure>
+
+        <Disclosure title="Technical analysis details" className="evidence-page__technical">
+          {unmappedColumns.length ? <section className="technical-evidence-section"><div className="technical-evidence-section__header"><span>Unmapped columns</span></div><ul className="operator-briefing-list operator-briefing-list--code">{unmappedColumns.map((item) => <li key={item}><code>{item}</code></li>)}</ul></section> : null}
+          {technicalLimitations.length ? <section className="technical-evidence-section"><div className="technical-evidence-section__header"><span>Data-quality warnings</span></div><ul className="operator-briefing-list">{technicalLimitations.map((item) => <li key={item}>{item}</li>)}</ul></section> : null}
+          {evidence.map((item, index) => {
+            const rows = usefulDiagnosticEntries(item);
+            return rows.length ? <div className="insight-evidence-item" key={item?.evidence_id ?? item?.id ?? index}><dl className="operational-detail-grid operational-detail-grid--technical">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd><DiagnosticValue value={value} /></dd></div>)}</dl></div> : null;
+          })}
+          <WaterIntelligencePanel insight={insight} />
+          <Disclosure title="Raw analysis payload" className="insight-disclosure--raw"><pre><code>{JSON.stringify(insight, null, 2)}</code></pre></Disclosure>
+        </Disclosure>
+
+        <Disclosure title="Audit history"><AuditHistory entries={auditEntries} /></Disclosure>
+      </div>
     </div>
   );
 

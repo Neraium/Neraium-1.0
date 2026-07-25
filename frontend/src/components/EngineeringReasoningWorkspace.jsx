@@ -58,7 +58,7 @@ function TechnicalSummary({ model }) {
   const warnings = model.selectedFinding?.technicalLimitations ?? [];
   return (
     <details className="operational-technical">
-      <summary>Technical Details</summary>
+      <summary>Technical details</summary>
       <div className="operational-technical__content">
         <dl>
           <div><dt>Dataset assignment</dt><dd>{model.site.locationLabel}</dd></div>
@@ -108,8 +108,8 @@ function SiteOverview({ model, onEvidence }) {
       ) : (
         <section className="normal-summary">
           <span>What</span>
-          <h2>{model.status === "Normal" ? "No active findings" : "No reliable finding can be shown"}</h2>
-          <p>{model.status === "Normal" ? "Measured relationships remain within the learned baseline." : "The available evidence does not support a reliable comparison."}</p>
+          <h2>{model.status === "Normal" ? "No new unexplained system changes." : "No reliable finding can be shown"}</h2>
+          <p>{model.status === "Normal" ? "All monitored systems are quiet." : "The available evidence does not support a reliable comparison."}</p>
           <button type="button" className="forensic-button" onClick={() => onEvidence(null)}>Open Evidence</button>
         </section>
       )}
@@ -130,8 +130,8 @@ function SystemOverview({ model, system, onEvidence }) {
       ) : (
         <section className="normal-summary">
           <span>What</span>
-          <h2>{system.status === "Normal" ? "No active findings" : "Evidence is insufficient for this system"}</h2>
-          <p>{system.status === "Normal" ? "Mapped relationships remain within the learned baseline." : "A reliable system comparison is not available."}</p>
+          <h2>{system.status === "Normal" ? "No new unexplained system changes." : "Evidence is insufficient for this system"}</h2>
+          <p>{system.status === "Normal" ? "This system is quiet." : "A reliable system comparison is not available."}</p>
           <button type="button" className="forensic-button" onClick={() => onEvidence(null)}>Open Evidence</button>
         </section>
       )}
@@ -161,6 +161,17 @@ function uniqueText(values) {
   return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
 }
 
+function briefSentence(value) {
+  const clean = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+  const first = clean.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() ?? clean;
+  return /[.!?]$/.test(first) ? first : `${first}.`;
+}
+
+function EngineeringGuidance({ items, start = 1 }) {
+  return <ol className="classification-guidance" start={start}>{items.map((item, index) => <li key={`${item.rank}-${item.check}`}><span>{item.rank || start + index}</span><div><strong>{item.check}</strong><p>{briefSentence(item.reason)}</p><small>{displayLabel(item.category)}</small></div></li>)}</ol>;
+}
+
 function EvidenceWorkspace({ model, finding, apiFetch, onTrace, onBack }) {
   const runId = runIdentity(model, finding);
   if (!finding) {
@@ -168,8 +179,7 @@ function EvidenceWorkspace({ model, finding, apiFetch, onTrace, onBack }) {
       <div className="evidence-workspace operational-evidence">
         <button type="button" className="evidence-back" onClick={onBack}>Back to overview</button>
         <OverviewHeader eyebrow="Evidence" name={model.status === "Normal" ? "No active findings" : "Evidence requirements not met"} status={model.status} confidence={model.evidenceQuality} />
-        <section className="evidence-section"><span>Where</span><LocationHierarchy items={[model.site.locationLabel]} /></section>
-        <section className="evidence-section"><span>Baseline vs current</span><p>{model.status === "Normal" ? "Mapped relationships remain within their learned behavior." : "A reliable baseline comparison is not available."}</p></section>
+        <section className="evidence-section"><h2>What changed</h2><p>{model.status === "Normal" ? "Mapped relationships remain within their learned behavior." : "A reliable baseline comparison is not available."}</p></section>
         <TechnicalSummary model={model} />
       </div>
     );
@@ -177,44 +187,34 @@ function EvidenceWorkspace({ model, finding, apiFetch, onTrace, onBack }) {
   const limiting = [...finding.contradictions, ...finding.limitations];
   const relationship = finding.relationships[0] ?? model.relationships[0] ?? null;
   const presentation = finding.classificationPresentation ?? normalizeFindingPresentation(finding);
-  const dataLimitations = uniqueText([...presentation.dataLimitations, ...limiting, presentation.certaintyLimit]);
+  const dataLimitations = uniqueText([...presentation.dataLimitations, ...limiting, finding.confidenceReason, presentation.certaintyLimit]);
+  const visibleGuidance = presentation.investigationGuidance.slice(0, 3);
+  const additionalGuidance = presentation.investigationGuidance.slice(3);
+  const visibleEvidence = finding.supporting.slice(0, 3);
+  const additionalEvidence = finding.supporting.slice(3);
+  const whyBullets = uniqueText([
+    briefSentence(finding.whyItMatters),
+    presentation.persistence.persistent ? `The change persisted.` : "",
+    presentation.operatingMode.match !== "Unavailable" ? `Operating-mode match is ${presentation.operatingMode.match.toLowerCase()}.` : "",
+  ]);
   return (
     <div className="evidence-workspace operational-evidence">
       <button type="button" className="evidence-back" onClick={onBack}>Back to overview</button>
       <OverviewHeader eyebrow="Evidence" name={finding.title} status={finding.status} confidence={finding.tier} />
-      <FindingClassificationSummary finding={finding} />
-      {finding.confidenceReason ? <p className="evidence-confidence-reason">{finding.confidenceReason}</p> : null}
+      <FindingClassificationSummary finding={finding} showDefinition={false} />
       <div className="operational-evidence__sections operational-evidence__sections--classification">
         <section className="evidence-section evidence-section--what">
           <h2>What changed</h2>
           <p>{finding.observedChange}</p>
-          <p><strong>Engineering relevance:</strong> {finding.whyItMatters}</p>
-          <h3>Where</h3>
-          <LocationHierarchy items={finding.location.hierarchy} />
         </section>
         <section className="evidence-section">
-          <h2>Why Neraium classified it this way</h2>
-          <p>{presentation.meaning}</p>
-          <ul>{presentation.reasons.map((item) => <li key={item}>{item}</li>)}</ul>
+          <h2>Why it matters</h2>
+          <ul>{whyBullets.map((item) => <li key={item}>{item}</li>)}</ul>
         </section>
         <section className="evidence-section">
-          <h2>Data confidence and sensor-health context</h2>
-          <dl className="classification-detail-grid">
-            <div><dt>Data confidence</dt><dd>{presentation.dataConfidence.rating}</dd></div>
-            <div><dt>Summary</dt><dd>{presentation.dataConfidence.summary}</dd></div>
-          </dl>
-          {presentation.sensorHealth.length ? <ul className="classification-sensor-list">{presentation.sensorHealth.map((sensor) => <li key={sensor.signal}><strong>{displayLabel(sensor.signal)} · {displayLabel(sensor.health)}</strong>{sensor.conditions.length ? <ul>{sensor.conditions.map((condition, index) => <li key={`${condition.type}-${index}`}>{displayLabel(condition.type)}: {condition.evidence || "No supporting condition detail was recorded."}</li>)}</ul> : null}</li>)}</ul> : <p>Sensor-health conditions were not recorded for this finding.</p>}
-        </section>
-        <section className="evidence-section">
-          <h2>Operating-mode comparison</h2>
-          <dl className="classification-detail-grid classification-detail-grid--mode">
-            <div><dt>Baseline mode</dt><dd>{presentation.operatingMode.baseline}</dd></div>
-            <div><dt>Recent mode</dt><dd>{presentation.operatingMode.recent}</dd></div>
-            <div><dt>Mode match</dt><dd>{presentation.operatingMode.match}</dd></div>
-            <div><dt>Comparison confidence</dt><dd>{presentation.operatingMode.confidence}</dd></div>
-          </dl>
-          {presentation.operatingMode.differences.length ? <ul>{presentation.operatingMode.differences.map((item, index) => <li key={`${item.feature}-${index}`}><strong>{displayLabel(item.feature)}:</strong> {item.reason || "A recorded operating-mode difference was present."}</li>)}</ul> : null}
-          {presentation.operatingMode.reasons.length ? <ul>{presentation.operatingMode.reasons.map((item) => <li key={item}>{item}</li>)}</ul> : null}
+          <h2>Highest-value next checks</h2>
+          {visibleGuidance.length ? <EngineeringGuidance items={visibleGuidance} /> : <p>No evidence-linked next check was recorded for this finding.</p>}
+          {additionalGuidance.length ? <details className="evidence-section__more"><summary>Show all checks</summary><EngineeringGuidance items={additionalGuidance} start={4} /></details> : null}
         </section>
         <section className="evidence-section">
           <h2>Relationship timeline</h2>
@@ -223,40 +223,73 @@ function EvidenceWorkspace({ model, finding, apiFetch, onTrace, onBack }) {
         <section className="evidence-section">
           <h2>Supporting evidence</h2>
           <p>{finding.comparisonSummary}</p>
-          {finding.supporting.length ? <ul>{finding.supporting.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No supporting observation was supplied.</p>}
-        </section>
-        <section className="evidence-section">
-          <h2>Highest-value next checks</h2>
-          {presentation.investigationGuidance.length ? <ol className="classification-guidance">{presentation.investigationGuidance.map((item) => <li key={`${item.rank}-${item.check}`}><span>{item.rank}</span><div><small>{displayLabel(item.category)}</small><strong>{item.check}</strong><p>{item.reason}</p></div></li>)}</ol> : <p>No evidence-linked next check was recorded for this finding.</p>}
-        </section>
-        <section className="evidence-section">
-          <h2>Alternative explanations</h2>
-          {presentation.alternativeExplanations.length ? <ul>{presentation.alternativeExplanations.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No alternative-explanation list was recorded for this finding.</p>}
-        </section>
-        <section className="evidence-section">
-          <h2>Data limitations</h2>
-          {dataLimitations.length ? <ul>{dataLimitations.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No additional data limitations were recorded.</p>}
+          {visibleEvidence.length ? <ul>{visibleEvidence.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No supporting observation was supplied.</p>}
+          {additionalEvidence.length ? <details className="evidence-section__more"><summary>Show all supporting evidence</summary><ul>{additionalEvidence.map((item) => <li key={item}>{item}</li>)}</ul></details> : null}
         </section>
       </div>
-      <details className="operational-technical evidence-technical">
-        <summary>Technical Details</summary>
-        <div className="operational-technical__content">
-          <dl>
+
+      <div className="engineering-investigation-disclosures" aria-label="Additional investigation detail">
+        <details>
+          <summary>Why Neraium classified it this way</summary>
+          <p>{presentation.meaning}</p>
+          <ul>{presentation.reasons.map((item) => <li key={item}>{item}</li>)}</ul>
+        </details>
+        <details>
+          <summary>Operating-mode comparison details</summary>
+          <dl className="classification-detail-grid classification-detail-grid--mode">
+            <div><dt>Baseline mode</dt><dd>{presentation.operatingMode.baseline}</dd></div>
+            <div><dt>Recent mode</dt><dd>{presentation.operatingMode.recent}</dd></div>
+            <div><dt>Mode match</dt><dd>{presentation.operatingMode.match}</dd></div>
+            <div><dt>Comparison confidence</dt><dd>{presentation.operatingMode.confidence}</dd></div>
+          </dl>
+          {presentation.operatingMode.differences.length ? <ul>{presentation.operatingMode.differences.map((item, index) => <li key={`${item.feature}-${index}`}><strong>{displayLabel(item.feature)}:</strong> {item.reason || "A recorded operating-mode difference was present."}</li>)}</ul> : null}
+          {presentation.operatingMode.reasons.length ? <ul>{presentation.operatingMode.reasons.map((item) => <li key={item}>{item}</li>)}</ul> : null}
+        </details>
+        <details>
+          <summary>Sensor-health details</summary>
+          <dl className="classification-detail-grid"><div><dt>Data confidence</dt><dd>{presentation.dataConfidence.rating}</dd></div><div><dt>Summary</dt><dd>{presentation.dataConfidence.summary}</dd></div></dl>
+          {presentation.sensorHealth.length ? <ul className="classification-sensor-list">{presentation.sensorHealth.map((sensor) => <li key={sensor.signal}><strong>{displayLabel(sensor.signal)} · {displayLabel(sensor.health)}</strong>{sensor.conditions.length ? <ul>{sensor.conditions.map((condition, index) => <li key={`${condition.type}-${index}`}>{displayLabel(condition.type)}: {condition.evidence || "No supporting condition detail was recorded."}</li>)}</ul> : null}</li>)}</ul> : <p>Sensor-health conditions were not recorded for this finding.</p>}
+        </details>
+        <details>
+          <summary>Alternative explanations</summary>
+          {presentation.alternativeExplanations.length ? <ul>{presentation.alternativeExplanations.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No alternative explanations were recorded.</p>}
+        </details>
+        <details>
+          <summary>Data limitations</summary>
+          {dataLimitations.length ? <ul>{dataLimitations.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No additional data limitations were recorded.</p>}
+        </details>
+        <details>
+          <summary>Source metadata</summary>
+          <LocationHierarchy items={finding.location.hierarchy} />
+          <dl className="classification-detail-grid classification-detail-grid--mode">
             <div><dt>Baseline window</dt><dd>{finding.comparison.baseline}</dd></div>
             <div><dt>Current window</dt><dd>{finding.comparison.current}</dd></div>
-            <div><dt>Baseline relationship value</dt><dd>{finding.comparison.baselineValue ?? "Not supplied"}</dd></div>
-            <div><dt>Current relationship value</dt><dd>{finding.comparison.currentValue ?? "Not supplied"}</dd></div>
-            <div><dt>Relationship delta</dt><dd>{finding.comparison.delta ?? "Not supplied"}</dd></div>
             <div><dt>Evidence run</dt><dd>{runId ?? "Not persisted"}</dd></div>
+            <div><dt>Generated</dt><dd>{finding.generatedAt || "Not supplied"}</dd></div>
           </dl>
-          {finding.technicalLimitations.length ? <section><h3>All processing notes</h3><ul>{finding.technicalLimitations.map((item) => <li key={item}>{item}</li>)}</ul></section> : null}
-          <EvidenceLineage finding={finding} relationship={relationship} result={model.result} />
-          <div className="technical-actions">
-            <EvidencePackageExport runId={runId} apiFetch={apiFetch} />
-            <button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open Trace Mode</button>
+        </details>
+        <details className="operational-technical evidence-technical">
+          <summary>Technical analysis details</summary>
+          <div className="operational-technical__content">
+            <dl>
+              <div><dt>Baseline relationship value</dt><dd>{finding.comparison.baselineValue ?? "Not supplied"}</dd></div>
+              <div><dt>Current relationship value</dt><dd>{finding.comparison.currentValue ?? "Not supplied"}</dd></div>
+              <div><dt>Relationship delta</dt><dd>{finding.comparison.delta ?? "Not supplied"}</dd></div>
+              <div><dt>Evidence records</dt><dd>{finding.evidenceObjects.length}</dd></div>
+            </dl>
+            {finding.technicalLimitations.length ? <section><h3>All processing notes</h3><ul>{finding.technicalLimitations.map((item) => <li key={item}>{item}</li>)}</ul></section> : null}
+            <EvidenceLineage finding={finding} relationship={relationship} result={model.result} />
+            <div className="technical-actions">
+              <EvidencePackageExport runId={runId} apiFetch={apiFetch} />
+              <button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open trace mode</button>
+            </div>
           </div>
-        </div>
-      </details>
+        </details>
+        <details>
+          <summary>Audit history</summary>
+          <dl className="classification-detail-grid"><div><dt>Evidence run</dt><dd>{runId ?? "Not persisted"}</dd></div><div><dt>Review outcome</dt><dd>{finding.outcome ? JSON.stringify(finding.outcome) : "No review outcome recorded"}</dd></div></dl>
+        </details>
+      </div>
     </div>
   );
 }
@@ -267,7 +300,7 @@ function TraceWorkspace({ model, finding, apiFetch, onBack }) {
   return (
     <div className="trace-workspace">
       <button type="button" className="evidence-back" onClick={onBack}>Back to evidence</button>
-      <header className="forensic-page-header"><div><span className="forensic-kicker">Technical Details</span><h1>Trace Mode</h1><p>Computational lineage for the selected evidence record.</p></div></header>
+      <header className="forensic-page-header"><div><span className="forensic-kicker">Technical details</span><h1>Trace mode</h1></div></header>
       <div className="trace-actions"><EvidencePackageExport runId={runId} apiFetch={apiFetch} /></div>
       <TraceTimeline steps={model.trace} selectedId={selectedId} onSelect={(step) => setSelectedId(step.id)} />
     </div>

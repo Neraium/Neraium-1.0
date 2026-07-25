@@ -3,52 +3,44 @@ export default function SystemsView({ model, helpers, onOpenInsight }) {
   return (
     <div className="operational-grid operational-grid--command-center">
       <section className="operational-panel operational-panel--wide" aria-label={model.systemsSectionTitle}>
-        <PanelHeader eyebrow="Systems" title={model.systemsSectionTitle} subtitle={model.systemsSectionSubtitle} />
+        <PanelHeader title={model.systemsSectionTitle} />
         {model.systemCards.length ? (
           <div className="systems-list systems-list--systems-view">
             {model.systemCards.map((system) => (
               <article className="system-summary-row system-summary-row--systems-view" key={system.id}>
-                <div>
+                <div className="system-summary-row__main">
                   <div className="system-summary-row__heading">
                     <strong>{system.name}</strong>
+                    <span>{system.status}</span>
                   </div>
-                  {system.placeholder ? <small>Expected resort domain example, not a detected system</small> : null}
-                  <p>{system.scope}</p>
+                  {system.placeholder ? <small>Expected example, not detected</small> : null}
                   <DetailGrid rows={[
-                    ["Status", system.status],
-                    ["Active Insights", system.activeInsights],
-                    ["Primary Insight", system.primaryFinding],
-                    ["Recommended First Action", system.recommendedFirstAction],
-                    ["Key Changed Relationship", system.keyChangedRelationship],
+                    ["Active findings", system.activeInsights],
+                    ["Next check", system.recommendedFirstAction],
                   ]} />
-                  {Array.isArray(system.potentialCauses) && system.potentialCauses.length ? (
-                    <div className="system-summary-row__briefing">
-                      <span>Potential causes</span>
-                      <ul className="operator-briefing-list">
-                        {system.potentialCauses.map((cause) => <li key={cause}>{cause}</li>)}
-                      </ul>
-                    </div>
-                  ) : null}
-                  {Array.isArray(system.observedFacts) && system.observedFacts.length ? (
-                    <div className="system-summary-row__briefing">
-                      <span>Observed</span>
-                      <ul className="operator-briefing-list">
-                        {system.observedFacts.map((fact) => <li key={fact}>{fact}</li>)}
-                      </ul>
-                    </div>
-                  ) : null}
+                  <details className="system-summary-row__details">
+                    <summary>System evidence</summary>
+                    <DetailGrid rows={[
+                      ["Scope", system.scope],
+                      ["Primary finding", system.primaryFinding],
+                      ["Changed relationship", system.keyChangedRelationship],
+                    ]} />
+                    {Array.isArray(system.potentialCauses) && system.potentialCauses.length ? (
+                      <div className="system-summary-row__briefing"><span>Alternative explanations</span><ul className="operator-briefing-list">{system.potentialCauses.map((cause) => <li key={cause}>{cause}</li>)}</ul></div>
+                    ) : null}
+                    {Array.isArray(system.observedFacts) && system.observedFacts.length ? (
+                      <div className="system-summary-row__briefing"><span>Supporting evidence</span><ul className="operator-briefing-list">{system.observedFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul></div>
+                    ) : null}
+                  </details>
                 </div>
-                <div className="system-summary-row__meta">
-                  <span>{system.placeholder ? "Example, not detected" : system.severity}</span>
-                  {system.primaryInsightId && typeof onOpenInsight === "function" ? (
-                    <button type="button" className="system-summary-row__action" onClick={() => onOpenInsight(system.primaryInsightId)}>Open Insight</button>
-                  ) : null}
-                </div>
+                {system.primaryInsightId && typeof onOpenInsight === "function" ? (
+                  <button type="button" className="system-summary-row__action" onClick={() => onOpenInsight(system.primaryInsightId)}>Review finding</button>
+                ) : null}
               </article>
             ))}
           </div>
         ) : (
-          <EmptyOperationalState title={model.systemsSectionTitle} body={`${model.systemsSectionSubtitle} Import telemetry or reopen a completed analysis to populate system ownership.`} />
+          <EmptyOperationalState title="No systems detected" body="Import telemetry to establish system ownership." />
         )}
       </section>
     </div>

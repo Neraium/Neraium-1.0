@@ -9,12 +9,7 @@ const result = {
   job_id: "run-42",
   data_quality: {
     coverage_percent: 82,
-    warnings: [
-      "Historian X was unavailable during the comparison window.",
-      "3 dropped rows.",
-      "One unmapped column.",
-      "A constant sensor was excluded.",
-    ],
+    warnings: ["Historian X was unavailable during the comparison window.", "3 dropped rows.", "One unmapped column."],
   },
   data_gaps: [{ id: "gap-1", source: "Historian X", signals: ["Efficiency"], overlaps_change_window: true }],
   analysis_explanation: {
@@ -58,7 +53,7 @@ const result = {
 
 function renderWorkspace(path = "/portfolio", overrides = {}) {
   window.history.replaceState({}, "", path);
-  const props = {
+  return render(React.createElement(EngineeringReasoningWorkspace, {
     liveOps: {},
     canonicalFinding: { exists: false },
     currentSession: {},
@@ -68,8 +63,7 @@ function renderWorkspace(path = "/portfolio", overrides = {}) {
     onWorkspaceNavigate: vi.fn(),
     currentUser: { name: "Engineer One", role: "operator" },
     ...overrides,
-  };
-  return render(React.createElement(EngineeringReasoningWorkspace, props));
+  }));
 }
 
 afterEach(() => {
@@ -77,267 +71,130 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-describe("EngineeringReasoningWorkspace", () => {
-  it("opens a one-site result directly with the operational answer in one card", () => {
+describe("EngineeringReasoningWorkspace progressive disclosure", () => {
+  it("shows one compact finding card with no report prose", () => {
     renderWorkspace();
-
-    expect(screen.getByTestId("engineering-reasoning-platform")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "North Plant" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Sites" })).toBeNull();
-    expect(screen.queryByText(/structural stability/i)).toBeNull();
 
     const card = document.querySelector('[data-finding-id="finding-1"]');
     expect(card).toBeTruthy();
-    const decision = within(card);
-    expect(decision.getByText("Change detected")).toBeTruthy();
-    expect(decision.getByRole("heading", { name: "Condenser-side behavior changed" })).toBeTruthy();
-    expect(decision.getByText((text) => text.includes("North Plant") && text.includes("Chiller 03"))).toBeTruthy();
-    expect(decision.getByText("Narrowed")).toBeTruthy();
-    expect(decision.getByRole("button", { name: "Open Evidence" })).toBeTruthy();
-    expect(screen.getByText("1 behavioral change detected")).toBeTruthy();
-
-    const evidenceItems = card.querySelectorAll(".operational-finding__evidence li");
-    expect(evidenceItems).toHaveLength(3);
+    expect(within(card).getByRole("heading", { name: "Condenser-side behavior changed" })).toBeTruthy();
+    expect(within(card).getByText("Chiller 03")).toBeTruthy();
+    expect(card.querySelectorAll(".operational-finding__evidence-line")).toHaveLength(1);
+    expect(card.querySelectorAll(".operational-finding__next p")).toHaveLength(1);
+    expect(within(card).getByRole("button", { name: "Review" })).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "Acknowledge" })).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "View evidence" })).toBeTruthy();
     expect(card.textContent).not.toContain("0.094013");
-    expect(screen.getAllByText("Condenser-side behavior changed")).toHaveLength(1);
+    expect(card.textContent).not.toContain("Historian X");
   });
 
-  it("opens evidence directly and keeps exact calculations and trace controls in Technical Details", () => {
+  it("opens evidence in the five-part investigation order", () => {
     renderWorkspace();
-    fireEvent.click(screen.getByRole("button", { name: "Open Evidence" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
 
-    expect(screen.getByText("What changed")).toBeTruthy();
-    expect(screen.getByText("Supporting evidence")).toBeTruthy();
-    expect(screen.getByText("Operating-mode comparison")).toBeTruthy();
-    expect(screen.getByText("Why Neraium classified it this way")).toBeTruthy();
-    expect(screen.getAllByText("North Plant").length).toBeGreaterThan(0);
-    expect(screen.getByText("Cooling system")).toBeTruthy();
-    expect(screen.getByText("Condenser Water")).toBeTruthy();
-    expect(screen.getByText("Chiller 03")).toBeTruthy();
-
-    const primary = document.querySelector(".operational-evidence__sections");
-    expect(primary.textContent).not.toContain("0.094013");
-    expect(primary.textContent).not.toContain("0.833811");
-    expect(primary.textContent).toContain("weak at baseline");
-    expect(primary.textContent).toContain("strong now");
-
-    const details = screen.getByText("Technical Details").closest("details");
-    expect(details.open).toBe(false);
-    fireEvent.click(screen.getByText("Technical Details"));
-    expect(details.open).toBe(true);
-    expect(within(details).getByText("0.094013")).toBeTruthy();
-    expect(within(details).getByText("0.833811")).toBeTruthy();
-    expect(within(details).getByRole("button", { name: "Open Trace Mode" })).toBeTruthy();
-    expect(within(details).getByText("3 dropped rows.")).toBeTruthy();
+    const headings = [...document.querySelectorAll(".operational-evidence__sections--classification .evidence-section > h2")].map((node) => node.textContent);
+    expect(headings).toEqual([
+      "What changed",
+      "Why it matters",
+      "Highest-value next checks",
+      "Relationship timeline",
+      "Supporting evidence",
+    ]);
+    expect(screen.getByText("Why Neraium classified it this way").closest("details").open).toBe(false);
+    expect(screen.getByText("Operating-mode comparison details").closest("details").open).toBe(false);
+    expect(screen.getByText("Sensor-health details").closest("details").open).toBe(false);
   });
 
-  it("shows only one short material limitation outside Technical Details", () => {
+  it("keeps exact calculations, limitations, lineage, and trace controls in deep detail", () => {
+    renderWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "View evidence" }));
+
+    const limitations = screen.getByText("Data limitations").closest("details");
+    expect(limitations.open).toBe(false);
+    expect(limitations.textContent).toContain("Missing telemetry limits the conclusion.");
+
+    const technical = screen.getByText("Technical analysis details").closest("details");
+    expect(technical.open).toBe(false);
+    fireEvent.click(technical.querySelector("summary"));
+    expect(technical.open).toBe(true);
+    expect(within(technical).getByText("0.094013")).toBeTruthy();
+    expect(within(technical).getByText("0.833811")).toBeTruthy();
+    expect(within(technical).getByText("3 dropped rows.")).toBeTruthy();
+    expect(within(technical).getByRole("button", { name: "Open trace mode" })).toBeTruthy();
+    expect(technical.textContent).toMatch(/lineage|source/i);
+  });
+
+  it("acknowledges a finding without removing its evidence action", () => {
+    renderWorkspace();
+    const acknowledge = screen.getByRole("button", { name: "Acknowledge" });
+    acknowledge.focus();
+    expect(document.activeElement).toBe(acknowledge);
+    fireEvent.click(acknowledge);
+    expect(screen.getByRole("button", { name: "Acknowledged" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "View evidence" })).toBeTruthy();
+  });
+
+  it("uses conservative legacy classification and keeps the definition in detail", () => {
     renderWorkspace();
     const card = document.querySelector('[data-finding-id="finding-1"]');
-    expect(card.querySelectorAll(".operational-finding__limitation")).toHaveLength(1);
-    expect(card.textContent).not.toContain("3 dropped rows.");
-    expect(card.textContent).not.toContain("One unmapped column.");
-    expect(card.textContent).not.toContain("A constant sensor was excluded.");
+    expect(card.querySelector('[data-classification="insufficient_evidence"]')).toBeTruthy();
+    expect(within(card).getByText("Insufficient evidence")).toBeTruthy();
+    fireEvent.click(within(card).getByRole("button", { name: "Review" }));
+    expect(screen.getAllByText("This historical finding was generated before contextual classification was available.").length).toBeGreaterThan(0);
   });
 
-  it("uses Unassigned Analysis and Unassigned dataset when no site is mapped", () => {
-    renderWorkspace("/portfolio", {
-      effectiveLatestUploadResult: { ...result, facility_name: undefined, site_name: undefined },
-    });
-
-    expect(screen.getByRole("heading", { name: "Unassigned Analysis" })).toBeTruthy();
-    expect(screen.getByText((text) => text.includes("Unassigned dataset") && text.includes("Chiller 03"))).toBeTruthy();
-    expect(screen.queryByText("Current site")).toBeNull();
-  });
-
-  it("gives a system screen the same direct status, finding, location, and evidence action", () => {
-    renderWorkspace();
-    const search = screen.getByRole("combobox", { name: /Search sites/i });
-    fireEvent.change(search, { target: { value: "Cooling system" } });
-    fireEvent.click(screen.getByRole("button", { name: "System: Cooling system" }));
-
-    expect(screen.getByRole("heading", { name: "Cooling system" })).toBeTruthy();
-    expect(screen.getAllByText("Change detected").length).toBeGreaterThan(0);
-    expect(screen.getByText("North Plant / Cooling system")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open Evidence" })).toBeTruthy();
-  });
-
-  it("shows a portfolio list only after more than one site is available", async () => {
-    const apiFetch = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        runs: [{
-          run_id: "site-b-run",
-          adaptive_site_key: "site-b",
-          site_name: "South Plant",
-          system_name: "Pumping",
-          rows_received: 10,
-          rows_accepted: 10,
-          evidence_summary: [],
-          observation_status: "normal",
-          baseline_status: "Established",
-        }],
-      }),
+  it("renders classified metadata, top-three guidance, and Show all checks", () => {
+    const guidance = Array.from({ length: 5 }, (_, index) => ({
+      rank: index + 1,
+      check: `Check ${index + 1}.`,
+      reason: `Reason ${index + 1}.`,
+      category: "data_quality",
+      editable: true,
     }));
-    renderWorkspace("/portfolio", { apiFetch });
-
-    expect(await screen.findByRole("heading", { name: "Sites" })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Open Site" })).toHaveLength(2);
-    fireEvent.click(screen.getAllByRole("button", { name: "Open Site" })[1]);
-    expect(screen.getByRole("heading", { name: "South Plant" })).toBeTruthy();
-    expect(window.location.pathname).toBe("/sites/site-b");
-    expect(screen.queryByText(/evidence distribution|structural field|governance boundary/i)).toBeNull();
-  });
-
-  it("consolidates overlapping evidence into one compact, safely worded decision card", () => {
-    const sharedRelationship = {
-      id: "shared-rel",
-      columns: ["Condenser approach temperature", "Compressor amps"],
-      change_type: "changed",
-      baseline_strength: 0.12,
-      current_strength: 0.81,
-    };
-    const sharedEvidence = [
-      "Condenser approach temperature increased 15.3%.",
-      "The relationship moved outside its learned range.",
-    ];
-    renderWorkspace("/portfolio", {
-      effectiveLatestUploadResult: {
-        ...result,
-        facility_name: undefined,
-        data_quality: { coverage_percent: 100, warnings: ["811 rows contain missing numeric values."] },
-        data_gaps: [],
-        analysis_explanation: {
-          fingerprint: { status: "Established" },
-          systems: [{ name: "Observed subsystem behavior changed" }],
-          relationships: [sharedRelationship],
-          insights: [
-            {
-              id: "thermal",
-              title: "Temperature and Compressor amps relationship changed; A new operating relationship between Cond approach temp and compressor amps emerged",
-              system: "Observed subsystem behavior changed",
-              variables: ["Condenser approach temperature", "Compressor amps"],
-              confidence: "high",
-              supporting_evidence: [sharedEvidence[0], "Chiller increased 5.5%.", sharedEvidence[1]],
-              contributing_relationships: [sharedRelationship],
-            },
-            {
-              id: "distribution",
-              title: "Cooling Distribution Performance Degrading",
-              system: "Cooling Distribution",
-              variables: ["Cooling flow"],
-              confidence: "high",
-              supporting_evidence: [sharedEvidence[0], "Cooling flow increased 4.2%.", sharedEvidence[1]],
-            },
-            {
-              id: "hydraulic",
-              title: "Flow & Pressure Degrading",
-              system: "Flow & Pressure",
-              variables: ["Discharge pressure"],
-              confidence: "high",
-              supporting_evidence: [sharedEvidence[0], "Discharge pressure increased 3.1%.", sharedEvidence[1]],
-            },
-          ],
-        },
-      },
-    });
-
-    const cards = document.querySelectorAll(".operational-finding");
-    expect(cards).toHaveLength(1);
-    const card = cards[0];
-    expect(within(card).getByRole("heading", { name: "Condenser-side behavior changed" })).toBeTruthy();
-    expect(within(card).getByText("Narrowed")).toBeTruthy();
-    expect(within(card).getByText("Unassigned dataset · Cooling system")).toBeTruthy();
-    expect(within(card).getByText(/Cooling Distribution.*Flow & Pressure/)).toBeTruthy();
-    expect(within(card).getByText("Compressor current increased 5.5%.")).toBeTruthy();
-    expect(within(card).getByText("Their learned relationship changed.")).toBeTruthy();
-    expect(within(card).getByText("Missing telemetry limits the conclusion.")).toBeTruthy();
-    expect(card.textContent).not.toMatch(/811 rows|Degrading|new operating relationship/i);
-    expect(screen.getByText("1 behavioral change detected")).toBeTruthy();
-    expect(card.querySelectorAll(".operational-finding__evidence li")).toHaveLength(3);
-    const evidence = card.querySelector(".operational-finding__evidence");
-    const action = card.querySelector(".operational-finding__action");
-    expect(evidence.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
-    const details = screen.getByText("Technical Details").closest("details");
-    expect(within(details).getByText("811 rows contain missing numeric values.")).toBeTruthy();
-  });
-
-  it("renders classification-aware detail in evidence order with structured guidance", () => {
-    const classifiedInsight = {
+    const classified = {
       ...result.analysis_explanation.insights[0],
-      classification: {
-        type: "unexplained_systemic_change",
-        label: "Unexplained systemic change",
-        confidence: "high",
-        reasons: ["Operating context matched strongly.", "The relationship shift remained persistent."],
-        alternative_explanations: ["An undocumented control-state change may still explain the shift."],
-        certainty_limit: "This describes a relationship change and does not establish a cause.",
-      },
-      data_confidence: { rating: "high", summary: "Telemetry passed recorded quality checks.", reasons: [] },
-      operating_mode: {
-        match: "strong",
-        confidence: "high",
-        baseline_mode_label: "Lead-pump mid-load operation",
-        recent_mode_label: "Lead-pump mid-load operation",
-        differences: [],
-      },
-      sensor_health: [{ signal: "discharge_pressure", health: "healthy", conditions: [] }],
-      persistence: { persistent: true, duration: "18 days", summary: "The shift remained present in comparable windows." },
-      investigation_guidance: [{ rank: 1, check: "Verify source data and control-state context.", reason: "Source validation bounds the physical-system interpretation.", category: "data_quality", editable: true }],
-      activity_timeline: [
-        { event_type: "baseline_reference", title: "Baseline reference period", start: "2026-06-01T00:00:00Z", end: "2026-06-30T23:59:00Z", precision: "range" },
-        { event_type: "persistence_supported", title: "Persistence supported", period_label: "Recent comparison window", precision: "period" },
-      ],
-      data_limitations: ["No independent control log was supplied."],
+      classification: { type: "unexplained_systemic_change", confidence: "high", reasons: ["Comparable modes matched."] },
+      data_confidence: { rating: "high", summary: "Quality checks passed." },
+      operating_mode: { match: "strong", confidence: "high" },
+      persistence: { persistent: true, duration: "18 days" },
+      investigation_guidance: guidance,
+      activity_timeline: [{ event_type: "analysis_window", title: "Recent comparison", period_label: "18 days", precision: "period" }],
     };
     renderWorkspace("/portfolio", {
-      effectiveLatestUploadResult: {
-        ...result,
-        data_quality: { coverage_percent: 100 },
-        analysis_explanation: { ...result.analysis_explanation, insights: [classifiedInsight] },
-      },
+      effectiveLatestUploadResult: { ...result, data_quality: { coverage_percent: 100 }, analysis_explanation: { ...result.analysis_explanation, insights: [classified] } },
     });
 
     const card = document.querySelector('[data-finding-id="finding-1"]');
     expect(card.querySelector('[data-classification="unexplained_systemic_change"]')).toBeTruthy();
-    expect(card.className).toContain("operational-finding--classification-systemic");
-    expect(within(card).getByLabelText(/Classification: Unexplained systemic change/i)).toBeTruthy();
-
-    fireEvent.click(within(card).getByRole("button", { name: "Open Evidence" }));
-    const headings = [...document.querySelectorAll(".operational-evidence__sections--classification .evidence-section > h2")].map((node) => node.textContent);
-    expect(headings).toEqual([
-      "What changed",
-      "Why Neraium classified it this way",
-      "Data confidence and sensor-health context",
-      "Operating-mode comparison",
-      "Relationship timeline",
-      "Supporting evidence",
-      "Highest-value next checks",
-      "Alternative explanations",
-      "Data limitations",
-    ]);
-    expect(screen.getByText("Verify source data and control-state context.")).toBeTruthy();
-    expect(screen.getByText("Source validation bounds the physical-system interpretation.")).toBeTruthy();
-    expect(screen.getByText("Recent comparison window")).toBeTruthy();
-    expect(document.body.textContent).not.toContain("18 days ago");
+    fireEvent.click(within(card).getByRole("button", { name: "Review" }));
+    expect(document.querySelectorAll(".evidence-section .classification-guidance > li")).toHaveLength(5);
+    const showAll = screen.getByText("Show all checks").closest("details");
+    expect(showAll.open).toBe(false);
+    expect(showAll.textContent).toContain("Check 4.");
+    expect(screen.getByText("Recent comparison")).toBeTruthy();
   });
 
-  it("shows a conservative historical fallback for findings without classification fields", () => {
+  it("keeps system navigation and unassigned-site compatibility", () => {
+    renderWorkspace("/portfolio", { effectiveLatestUploadResult: { ...result, facility_name: undefined, site_name: undefined } });
+    expect(screen.getByRole("heading", { name: "Unassigned Analysis" })).toBeTruthy();
+
+    cleanup();
     renderWorkspace();
-    const card = document.querySelector('[data-finding-id="finding-1"]');
-    expect(card.querySelector('[data-classification="insufficient_evidence"]')).toBeTruthy();
-    expect(within(card).getByText("Historical evidence review")).toBeTruthy();
-    fireEvent.click(within(card).getByRole("button", { name: "Open Evidence" }));
-    expect(screen.getAllByText("This historical finding was generated before contextual classification was available.").length).toBeGreaterThan(0);
+    const search = screen.getByRole("combobox", { name: /Search sites/i });
+    fireEvent.change(search, { target: { value: "Cooling system" } });
+    fireEvent.click(screen.getByRole("button", { name: "System: Cooling system" }));
+    expect(screen.getByRole("heading", { name: "Cooling system" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Review" })).toBeTruthy();
   });
 
-  it("does not expose control actions or duplicate the finding workflow", () => {
-    renderWorkspace();
-    const text = document.body.textContent;
-    for (const forbidden of ["Acknowledge", "Snooze", "Silence", "Reset", "Open investigation", "Highest-priority evidence"]) {
-      expect(text).not.toContain(forbidden);
-    }
-    expect(screen.getAllByRole("button", { name: "Open Evidence" })).toHaveLength(1);
+  it("shows a portfolio list only after more than one site is available", async () => {
+    const apiFetch = vi.fn(async () => ({ ok: true, json: async () => ({ runs: [{
+      run_id: "site-b-run", adaptive_site_key: "site-b", site_name: "South Plant", system_name: "Pumping",
+      rows_received: 10, rows_accepted: 10, evidence_summary: [], observation_status: "normal", baseline_status: "Established",
+    }] }) }));
+    renderWorkspace("/portfolio", { apiFetch });
+
+    expect(await screen.findByRole("heading", { name: "Sites" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Open Site" })).toHaveLength(2);
   });
 });

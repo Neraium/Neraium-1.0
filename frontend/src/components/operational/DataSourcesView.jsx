@@ -47,7 +47,7 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
         >
           <div className="data-source-import-card__copy">
             <h2 id="import-dataset-heading">Import a dataset</h2>
-            <p>Upload timestamped CSV telemetry to establish a baseline and run the first analysis.</p>
+            <p>Upload timestamped CSV telemetry.</p>
           </div>
           <button
             type="button"
@@ -61,7 +61,7 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
         </section>
 
         <section className="operational-panel operational-panel--wide data-source-status-panel" aria-label="Data Source Status">
-          <PanelHeader title="Data Source Status" />
+          <PanelHeader title="Data source status" />
           {sourceHealth ? <StatusBadge label={sourceHealth.label} tone={sourceHealth.tone} statusKey={sourceHealth.statusKey} /> : null}
           <DetailGrid rows={model.dataSourceRows} />
         </section>
@@ -77,7 +77,7 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
           ) : (
             <div className="connector-empty-row connector-empty-row--stacked" role="status">
               <strong>No configured connectors</strong>
-              <span>Connectors can be added when continuous read-only telemetry is needed.</span>
+              <span>Read-only connectors are not configured.</span>
             </div>
           )}
         </section>
@@ -97,26 +97,23 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
   return (
     <div className="operational-grid operational-grid--data-sources">
       <section className="operational-panel operational-panel--wide data-source-status-panel" aria-label="Data Source Status">
-        <PanelHeader
-          eyebrow="Status"
-          title="Data Source Status"
-        />
+        <PanelHeader title="Data source status" />
         <StatusBadge label={sourceHealth.label} tone={sourceHealth.tone} statusKey={sourceHealth.statusKey} />
         <DetailGrid rows={model.dataSourceRows} />
       </section>
 
       <section className="operational-panel operational-panel--wide data-source-actions-panel" aria-label="Dataset Analysis">
-        <PanelHeader eyebrow="Primary Action" title="Import and Analyze a Dataset" />
+        <PanelHeader title="Import and analyze a dataset" />
         <div className="data-source-action-grid data-source-action-grid--single">
           <button type="button" className="command-button data-source-action data-source-action--primary" onClick={onAnalyzeHistoricalData} disabled={model.analyzeDisabled} title={model.analyzeDisabled ? "Analysis is already in progress. Wait for it to finish before starting another." : "Choose a telemetry CSV to analyze."}>
-            <strong>Choose Dataset</strong>
+            <strong>Choose dataset</strong>
             <span>Import CSV telemetry and run analysis.</span>
           </button>
         </div>
       </section>
 
       <section className="operational-panel" aria-label="Available Imports">
-        <PanelHeader eyebrow="Imports" title="Available Imports" />
+        <PanelHeader title="Available imports" />
         <div className="telemetry-source-grid telemetry-source-grid--compact">
           {AVAILABLE_IMPORTS.map((source) => (
             <ConnectorCard key={source.label} {...source} available />
@@ -125,7 +122,7 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
       </section>
 
       <section className="operational-panel" aria-label="Configured Connectors">
-        <PanelHeader eyebrow="Connectors" title="Configured Connectors" />
+        <PanelHeader title="Configured connectors" />
         {configuredConnectors.length ? (
           <div className="telemetry-source-grid telemetry-source-grid--compact">
             {configuredConnectors.map((connector) => (
@@ -141,7 +138,7 @@ export default function DataSourcesView({ model, helpers, onAnalyzeHistoricalDat
       </section>
 
       <section className="operational-panel" aria-label="Planned Connectors">
-        <PanelHeader eyebrow="Connectors" title="Planned Connectors" />
+        <PanelHeader title="Planned connectors" />
         <div className="telemetry-source-grid telemetry-source-grid--compact">
           {PLANNED_CONNECTORS.map((source) => (
             <ConnectorCard key={source.label} {...source} status="Planned" />

@@ -6,24 +6,24 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
   return (
     <div className="operational-grid operational-grid--overview">
       <section className="operational-panel operational-panel--wide" aria-label="Analysis Details">
-        <PanelHeader eyebrow="Analysis Details" title="Analysis Details" subtitle="Use this view when a finding needs diagnostics, evidence metadata, or raw result verification." />
+        <PanelHeader title="Analysis Details" />
         <details className="advanced-details-panel">
-          <summary>Analysis Metadata</summary>
+          <summary>Analysis metadata</summary>
           <DetailGrid rows={model.analysisMetadataRows} technical />
         </details>
         <details className="advanced-details-panel">
-          <summary>Behavior Windows</summary>
+          <summary>Behavior windows</summary>
           <DetailGrid rows={model.behaviorWindowRows} technical />
         </details>
         <details className="advanced-details-panel">
-          <summary>Service Diagnostics</summary>
+          <summary>Service diagnostics</summary>
           <QualityList title="Warnings" items={model.qualityWarnings} empty={model.analysisComplete ? "No data quality warnings reported." : model.uiState.status.detail} />
           <QualityList title="Missing values" items={model.missingValues} empty={model.analysisComplete ? "No missing value summary reported." : model.uiState.status.detail} />
           <QualityList title="Timestamp quality" items={model.timestampNotes} empty={model.analysisComplete ? "Timestamp quality is acceptable or not yet reported." : model.uiState.status.detail} />
         </details>
         {model.advancedRelationshipDetails.length ? (
           <details className="advanced-details-panel">
-            <summary>Relationship Identifiers</summary>
+            <summary>Relationship identifiers</summary>
             <QualityList title="Identifiers" items={model.advancedRelationshipDetails} empty="" codeItems />
           </details>
         ) : null}
@@ -51,11 +51,11 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
             </div>
           </details>
         ) : null}
-        <AnalysisRecordDetails className="advanced-details-panel" summary="Analysis Result JSON" payload={model.rawAnalysisPayload} fileName={model.rawAnalysisFilename} />
+        <AnalysisRecordDetails className="advanced-details-panel" summary="Analysis result JSON" payload={model.rawAnalysisPayload} fileName={model.rawAnalysisFilename} />
       </section>
 
       <section className="operational-panel" aria-label="Telemetry source details">
-        <PanelHeader eyebrow="Telemetry" title="Telemetry Source" subtitle="" />
+        <PanelHeader title="Telemetry source" />
         <StatusBadge label={model.telemetryStatus.label} tone={model.telemetryStatus.tone} />
         <DetailGrid rows={[
           ["Source", model.sourceLabel],
@@ -68,7 +68,7 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
       </section>
 
       <section className="operational-panel" aria-label="Analysis history">
-        <PanelHeader eyebrow="History" title="Analysis History" subtitle="Reopen completed analyses." />
+        <PanelHeader title="Analysis history" />
         <AnalysisHistoryList
           history={model.analysisHistory}
           onReopen={onReopenHistoricalAnalysis}
@@ -77,13 +77,13 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
       </section>
 
       <section className="operational-panel" aria-label="Recent activity">
-        <PanelHeader eyebrow="Activity" title="Recent Activity" subtitle="" />
+        <PanelHeader title="Recent activity" />
         <Timeline items={model.historyItems} state={model.orb} status={model.orb.status} />
       </section>
 
       {model.canResumePrevious && typeof onResumePreviousSession === "function" ? (
         <section className="operational-panel" aria-label="Previous analysis">
-          <PanelHeader eyebrow="Previous" title="Previous Analysis" subtitle="" />
+          <PanelHeader title="Previous analysis" />
           <button type="button" className="secondary-command-button" onClick={onResumePreviousSession}>Resume Previous Analysis</button>
         </section>
       ) : null}
@@ -94,7 +94,7 @@ export default function AdvancedDetailsView({ model, helpers, selectedInsightId,
 
 function AnalysisHistoryList({ history = [], onReopen, onDelete }) {
   if (!history.length) {
-    return <div className="operational-empty"><strong>No saved analyses</strong><p>No completed analysis has been saved in this browser session. Import telemetry or reopen a persisted session to build history.</p></div>;
+    return <div className="operational-empty"><strong>No saved analyses</strong><p>Completed analyses will appear here.</p></div>;
   }
   return (
     <div className="analysis-history-list">

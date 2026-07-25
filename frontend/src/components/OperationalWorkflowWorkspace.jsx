@@ -28,11 +28,11 @@ const NAV_ITEMS = [
 ];
 
 const SECTION_HEADERS = {
-  systems: { eyebrow: "Systems", title: "Discovered Systems", subtitle: "Systems identified from analyzed telemetry and their active insights." },
-  insights: { eyebrow: "Engineering review", title: "Engineering Findings", subtitle: "Prioritized behavioral changes with evidence for engineer review." },
-  fingerprint: { eyebrow: "Reference", title: "Behavior Baseline", subtitle: "The learned reference for how system relationships normally move together." },
-  "data-sources": { eyebrow: "Telemetry", title: "Datasets & Connectors", subtitle: "Import historical telemetry to establish a baseline, or manage a read-only connector." },
-  advanced: { eyebrow: "Analysis", title: "Analysis Details", subtitle: "Review analysis history, source information, evidence metadata, and support diagnostics." },
+  systems: { eyebrow: "Systems", title: "Discovered Systems", subtitle: "" },
+  insights: { eyebrow: "Findings", title: "Engineering Findings", subtitle: "" },
+  fingerprint: { eyebrow: "Reference", title: "Behavior Baseline", subtitle: "Learned normal relationships." },
+  "data-sources": { eyebrow: "Telemetry", title: "Datasets & Connectors", subtitle: "" },
+  advanced: { eyebrow: "Analysis", title: "Analysis Details", subtitle: "" },
 };
 
 const ACTIVE_SECTION_STORAGE_KEY = "neraium.operational.active_section";
@@ -660,7 +660,7 @@ export default function OperationalWorkflowWorkspace({
           <div>
             <p className="section-token">{sectionHeader?.eyebrow}</p>
             <h1>{sectionHeader?.title}</h1>
-            <p className="operational-topbar__context">{sectionHeader?.subtitle}</p>
+            {sectionHeader?.subtitle ? <p className="operational-topbar__context">{sectionHeader.subtitle}</p> : null}
           </div>
         </header> : null}
 
@@ -757,7 +757,7 @@ export default function OperationalWorkflowWorkspace({
 
         {visibleSection === "insights" ? (
           <WorkspaceSectionBoundary name="InsightsView" resetKey={sectionBoundaryResetKey} errorContext={telemetryBoundaryMeta} onRetry={retryLatestTelemetry}>
-            <InsightsView model={model} helpers={viewHelpers} selectedInsight={selectedInsight} onSelectInsight={setSelectedInsightId} />
+            <InsightsView model={model} helpers={viewHelpers} selectedInsight={selectedInsight} onSelectInsight={openInvestigation} />
           </WorkspaceSectionBoundary>
         ) : null}
 
@@ -2221,53 +2221,46 @@ function buildHistoryItems({ liveOps, snapshot, result, insights, analysisComple
 }
 
 
-function insightDomId(value, index) {
-  const source = String(value ?? index + 1).replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
-  return "insight-detail-" + (source || index + 1);
-}
 
-function InsightList({ insights, empty, emptyTitle = "No active insights", onOpenInsight, selectedId, renderInsightDetail }) {
+function InsightList({ insights, empty, emptyTitle = "No active findings", onOpenInsight, selectedId }) {
+  const [acknowledgedIds, setAcknowledgedIds] = useState(() => new Set());
   if (!insights.length) return <EmptyOperationalState title={emptyTitle} body={empty} />;
+
+  function acknowledge(insightId) {
+    setAcknowledgedIds((current) => {
+      const next = new Set(current);
+      next.add(insightId);
+      return next;
+    });
+  }
+
   return (
     <div className="insight-feed insight-feed--cards">
       {insights.map((insight, index) => {
         const selected = selectedId != null && selectedId === insight.id;
-        const detailId = insightDomId(insight.id, index);
-        const title = formatInsightTitle(insight);
         const relationships = insightRelationshipLabels(insight).slice(0, 8);
-        const summary = operatorSummaryBriefing(insight, relationships)[0] || title;
-        const rows = insightCardRows(insight, relationships);
+        const summary = operatorSummaryBriefing(insight, relationships)[0] || formatInsightTitle(insight);
+        const presentation = normalizeFindingPresentation(insight);
+        const nextCheck = presentation.investigationGuidance[0]?.check || recommendedReviewItems(insight, relationships)[0] || "Review source data and relationship evidence.";
+        const acknowledged = acknowledgedIds.has(insight.id);
+        const visibleInsight = acknowledged ? { ...insight, status: "Acknowledged" } : insight;
         return (
           <article
             key={insight.id || index}
             className={selected ? "insight-card insight-card--compact is-selected" : "insight-card insight-card--compact"}
             aria-current={selected ? "true" : undefined}
+            data-testid="compact-finding-card"
           >
-            <FindingClassificationSummary finding={insight} compact />
-            <div className="insight-card__header">
-              <span className="section-token">{formatSubsystemName(insight.system)}</span>
-              <div className="insight-card__badges">
-                <LabeledStatusChip label="Severity" value={insight.severity} tone={findingClassificationTone(insight)} />
-                <LabeledStatusChip label="Confidence" value={formatConfidenceLevel(insight.confidence, insight.confidenceScore)} tone="unknown" />
-              </div>
+            <div className="insight-card__header"><span className="section-token">{formatSubsystemName(insight.system)}</span></div>
+            <h3>{formatInsightTitle(insight)}</h3>
+            <FindingClassificationSummary finding={visibleInsight} compact />
+            <p className="insight-card__summary">{briefingSentences(summary, 1)[0] || ensureSentence(summary)}</p>
+            <div className="insight-card__next"><span>Next check</span><p>{briefingSentences(nextCheck, 1)[0] || ensureSentence(nextCheck)}</p></div>
+            <div className="insight-card__actions" aria-label={`Actions for ${formatInsightTitle(insight)}`}>
+              <button type="button" className="command-button" onClick={() => onOpenInsight?.(insight.id)}>Review</button>
+              <button type="button" className="secondary-command-button" aria-pressed={acknowledged} onClick={() => acknowledge(insight.id)}>{acknowledged ? "Acknowledged" : "Acknowledge"}</button>
+              <button type="button" className="operational-link-button" onClick={() => onOpenInsight?.(insight.id, { focusTarget: "insight-evidence" })}>View evidence</button>
             </div>
-            <h3>{title}</h3>
-            <DetailGrid rows={rows} />
-            <p className="insight-card__summary">{summary}</p>
-            <button
-              type="button"
-              className="secondary-command-button insight-card__open"
-              aria-expanded={selected}
-              aria-controls={selected ? detailId : undefined}
-              onClick={() => onOpenInsight?.(selected ? null : insight.id)}
-            >
-              {selected ? "Hide Insight" : "Open Insight"}
-            </button>
-            {selected && typeof renderInsightDetail === "function" ? (
-              <div id={detailId} className="insight-card__inline-detail">
-                {renderInsightDetail(insight)}
-              </div>
-            ) : null}
           </article>
         );
       })}
@@ -2396,25 +2389,6 @@ function whyNeraiumBelievesInsight(insight, relationships, evidenceLines) {
     return `Neraium generated this insight because the supporting evidence moved away from the learned behavior baseline: ${evidenceLines[0]}`;
   }
   return "";
-}
-
-function insightCardRows(insight, relationships) {
-  const type = getInsightType(insight);
-  if (type === "relationship_shift") {
-    return [
-      ["Key relationship", relationships[0]],
-      shouldShowRelationshipCount(insight) ? ["Changed relationships", String(insight.changedRelationshipCount ?? relationships.length)] : null,
-    ];
-  }
-  if (type === "metric_deviation") {
-    return [
-      ["Metric", normalizeSignalName(insight.metricName)],
-      ["Baseline value/range", insight.baselineValue],
-      ["Current value", insight.currentValue],
-      ["Deviation direction", insight.deviationDirection],
-    ];
-  }
-  return relationships.length ? [["Key relationship", relationships[0]]] : [];
 }
 
 function evidenceBriefing(insight, relationships = []) {
@@ -3259,15 +3233,6 @@ function StatusBadge({ label, tone, statusKey }) {
   return <span className={classes}><span className="operational-status__icon" aria-hidden="true" />{label}</span>;
 }
 
-function LabeledStatusChip({ label, value, tone, statusKey }) {
-  return (
-    <span className="labeled-status-chip">
-      <span className="labeled-status-chip__label">{label}</span>
-      <StatusBadge label={value} tone={tone} statusKey={statusKey} />
-    </span>
-  );
-}
-
 function EmptyOperationalState({ title, body }) {
   return <div className="operational-empty"><strong>{title}</strong><p>{body}</p></div>;
 }
@@ -3294,10 +3259,6 @@ function severityToTone(severity) {
   if (text.includes("high") || text.includes("significant") || text.includes("critical")) return "investigate";
   if (text.includes("moderate") || text.includes("changed") || text.includes("review") || text.includes("drift")) return "changed";
   return "normal";
-}
-
-function findingClassificationTone(insight) {
-  return normalizeFindingPresentation(insight).tone;
 }
 
 function prioritizeEvidenceGroups(groups, selectedInsightId) {
@@ -3505,10 +3466,6 @@ function getInsightType(insight) {
   if (/relationship|correlation|coupling|interaction|pair/.test(text) || relationships.length > 0 || (changedRelationshipCount ?? 0) > 0) return "relationship_shift";
   if (/metric|signal|deviation|deviat|anomaly|threshold|baseline|current value/.test(text) || toList(insight?.contributing_metrics, insight?.contributingMetrics, insight?.metric, insight?.metric_name).length > 0) return "metric_deviation";
   return "behavior_change";
-}
-
-function shouldShowRelationshipCount(insight) {
-  return getInsightType(insight) === "relationship_shift" && Number(insight?.changedRelationshipCount ?? insightRelationshipLabels(insight).length) > 0;
 }
 
 // Hardened fallback-label detector.
@@ -3942,21 +3899,6 @@ function ensureSentence(value) {
   const text = String(value ?? "").trim();
   if (!text) return "";
   return /[.!?]$/.test(text) ? text : `${text}.`;
-}
-
-function formatConfidenceLevel(label, score) {
-  const cleanLabel = firstText(label)
-    .split("_")
-    .join(" ")
-    .toLowerCase();
-  if (cleanLabel.includes("high") || cleanLabel.includes("confirmed") || cleanLabel.includes("strong")) return "High";
-  if (cleanLabel.includes("moderate") || cleanLabel.includes("medium") || cleanLabel.includes("likely") || cleanLabel.includes("present")) return "Moderate";
-  if (cleanLabel.includes("low") || cleanLabel.includes("weak") || cleanLabel.includes("developing") || cleanLabel.includes("pending")) return "Low";
-  const percent = confidencePercent(score);
-  if (percent === null) return cleanLabel ? cleanLabel.replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Low";
-  if (percent >= 82) return "High";
-  if (percent >= 62) return "Moderate";
-  return "Low";
 }
 
 function operatorEvidenceSummary(...values) {

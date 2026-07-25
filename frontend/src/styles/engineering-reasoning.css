@@ -760,3 +760,136 @@
   .classification-timeline li { grid-template-columns: minmax(0, 1fr); }
   .classification-timeline time { grid-row: auto; }
 }
+
+/* Sparse finding summaries and progressive investigation detail. */
+.operational-finding__identity,
+.finding-summary > .operational-finding__identity {
+  min-height: 0;
+  display: grid;
+  justify-content: stretch;
+  gap: 6px;
+  padding: 17px 18px 0;
+  border-bottom: 0;
+}
+
+.operational-finding__identity h2 {
+  max-width: 36ch;
+  margin: 0;
+  font-size: 19px;
+  font-weight: 560;
+  line-height: 1.26;
+}
+
+.operational-finding__evidence-line {
+  max-width: 72ch;
+  margin: 14px 18px 0;
+  color: #c5d0dc;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.operational-finding__next {
+  display: grid;
+  gap: 4px;
+  margin: 13px 18px 0;
+  padding: 10px 12px;
+  border-left: 2px solid var(--fr-blue);
+  background: rgba(77, 163, 255, 0.045);
+}
+
+.operational-finding__next > span {
+  color: var(--fr-faint);
+  font-size: 8px;
+  font-weight: 680;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.operational-finding__next p {
+  margin: 0;
+  color: #d3dde7;
+  font-size: 12px;
+  font-weight: 560;
+  line-height: 1.45;
+}
+
+.operational-finding__action {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.forensic-link-button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--fr-blue);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.forensic-link-button:hover,
+.forensic-link-button:focus-visible {
+  color: #8dc8ff;
+  text-decoration: underline;
+}
+
+.engineering-investigation-disclosures {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.engineering-investigation-disclosures > details,
+.evidence-section__more {
+  border: 1px solid var(--fr-line);
+  background: rgba(10, 17, 26, 0.54);
+}
+
+.engineering-investigation-disclosures > details > summary,
+.evidence-section__more > summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  color: #aab9c8;
+  font-size: 11px;
+  font-weight: 560;
+  cursor: pointer;
+}
+
+.engineering-investigation-disclosures > details > :not(summary) {
+  margin-left: 15px;
+  margin-right: 15px;
+}
+
+.engineering-investigation-disclosures > details > :last-child {
+  margin-bottom: 15px;
+}
+
+.engineering-investigation-disclosures > .operational-technical {
+  margin-top: 0;
+}
+
+.evidence-section__more {
+  margin-top: 12px;
+}
+
+.evidence-section__more > summary {
+  min-height: 42px;
+  color: var(--fr-blue);
+}
+
+.evidence-section__more > :not(summary) {
+  margin: 0 12px 12px;
+}
+
+@media (max-width: 720px) {
+  .operational-finding__identity,
+  .finding-summary > .operational-finding__identity { padding: 14px 14px 0; }
+  .operational-finding__evidence-line { margin-inline: 14px; }
+  .operational-finding__next { margin-inline: 14px; }
+  .operational-finding__action > button { flex: 1 1 calc(50% - 8px); min-height: 44px; }
+  .operational-finding__action .forensic-link-button { flex-basis: 100%; }
+}

@@ -1,7 +1,68 @@
 import "../../styles/finding-classification.css";
 import { normalizeFindingPresentation } from "../../viewModels/operatorFinding";
 
-export default function FindingClassificationSummary({ finding, compact = false }) {
+function displayLabel(value, fallback = "Unavailable") {
+  const clean = String(value ?? "").trim();
+  if (!clean) return fallback;
+  return clean.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function confidenceLabel(finding, presentation) {
+  const explicit = String(finding?.confidence ?? "").trim();
+  if (explicit) {
+    const numeric = Number(explicit);
+    if (Number.isFinite(numeric)) {
+      const normalized = numeric > 1 ? numeric / 100 : numeric;
+      return normalized >= 0.85 ? "High" : normalized >= 0.6 ? "Moderate" : "Low";
+    }
+    return displayLabel(explicit);
+  }
+  if (presentation.classificationConfidence !== "Unavailable") return presentation.classificationConfidence;
+  return presentation.dataConfidence.rating;
+}
+
+function detailedConfidenceLabel(finding, presentation) {
+  const label = confidenceLabel(finding, presentation);
+  const rawScore = finding?.confidenceScore ?? finding?.confidence_score;
+  const score = Number(rawScore);
+  if (!Number.isFinite(score)) return label;
+  const percent = Math.round(Math.max(0, Math.min(1, score > 1 ? score / 100 : score)) * 100);
+  return `${label} · ${percent}%`;
+}
+
+function statusLabel(finding, presentation) {
+  const explicit = finding?.reviewStatus ?? finding?.review_status ?? finding?.hypothesisStatus ?? finding?.status;
+  if (explicit) return displayLabel(explicit);
+  if (presentation.persistence.persistent) return presentation.persistence.label;
+  return "Open";
+}
+
+function CompactSummary({ finding, presentation, ariaLabel }) {
+  const confidence = confidenceLabel(finding, presentation);
+  const status = statusLabel(finding, presentation);
+  return (
+    <section
+      className={`finding-classification finding-classification--${presentation.tone} finding-classification--compact`}
+      aria-label={ariaLabel}
+      data-classification={presentation.type}
+      data-testid="finding-classification-summary"
+    >
+      <ul className="finding-classification__chips">
+        <li className="finding-classification__chip finding-classification__chip--classification">
+          <span className="sr-only">Classification: </span>{presentation.label}
+        </li>
+        <li className="finding-classification__chip">
+          <span className="sr-only">Confidence: </span>{confidence} confidence
+        </li>
+        <li className="finding-classification__chip">
+          <span className="sr-only">Status: </span>{status}
+        </li>
+      </ul>
+    </section>
+  );
+}
+
+export default function FindingClassificationSummary({ finding, compact = false, showDefinition = true }) {
   const presentation = normalizeFindingPresentation(finding);
   const ariaLabel = [
     `Classification: ${presentation.label}`,
@@ -12,9 +73,11 @@ export default function FindingClassificationSummary({ finding, compact = false 
     `Review priority: ${presentation.reviewPriority}`,
   ].join(". ");
 
+  if (compact) return <CompactSummary finding={finding} presentation={presentation} ariaLabel={ariaLabel} />;
+
   return (
     <section
-      className={`finding-classification finding-classification--${presentation.tone}${compact ? " finding-classification--compact" : ""}`}
+      className={`finding-classification finding-classification--${presentation.tone}`}
       aria-label={ariaLabel}
       data-classification={presentation.type}
       data-testid="finding-classification-summary"
@@ -22,14 +85,20 @@ export default function FindingClassificationSummary({ finding, compact = false 
       <div className="finding-classification__identity">
         <span>Classification</span>
         <strong>{presentation.label}</strong>
-        <small aria-label={`Classification confidence: ${presentation.classificationConfidence}`}>Classification confidence: {presentation.classificationConfidence}</small>
       </div>
       <dl className="finding-classification__facts">
-        <div aria-label={`Data confidence: ${presentation.dataConfidence.rating}`}><dt>Data confidence</dt><dd>{presentation.dataConfidence.rating}</dd></div>
-        <div><dt>Operating-mode match</dt><dd>{presentation.operatingMode.match}</dd></div>
+        <div><dt>Confidence</dt><dd>{detailedConfidenceLabel(finding, presentation)}</dd></div>
+        <div><dt>Data confidence</dt><dd>{presentation.dataConfidence.rating}</dd></div>
+        <div><dt>Mode match</dt><dd>{presentation.operatingMode.match}</dd></div>
         <div><dt>Persistence</dt><dd>{presentation.persistence.label}</dd></div>
-        <div><dt>Review priority</dt><dd>{presentation.reviewPriority}</dd></div>
+        <div><dt>Priority</dt><dd>{presentation.reviewPriority}</dd></div>
       </dl>
+      {showDefinition ? (
+        <details className="finding-classification__meaning">
+          <summary>What this means</summary>
+          <p>{presentation.meaning}</p>
+        </details>
+      ) : null}
     </section>
   );
 }
