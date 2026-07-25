@@ -867,3 +867,101 @@ summary:focus-visible,
   fill: var(--graph-node-core);
   filter: drop-shadow(0 0 10px var(--graph-node-halo));
 }
+
+/* Production self-monitoring stays visually quiet until persistence thresholds open an incident. */
+.infrastructure-health-dashboard {
+  display: grid;
+  gap: var(--space-5, 1.25rem);
+  margin-block: var(--space-5, 1.25rem);
+}
+
+.infra-overall-row,
+.infra-subsystem-card > div,
+.infra-incident-list article > div {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.infra-overall-row h2 {
+  margin: 0.25rem 0 0;
+}
+
+.infra-status-badge {
+  border: 1px solid color-mix(in srgb, var(--border-color, #617083) 55%, transparent);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.25rem 0.55rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.infra-status-badge--healthy { color: var(--success-color, #3dcf91); }
+.infra-status-badge--degraded { color: var(--warning-color, #f0bd62); }
+.infra-status-badge--critical { color: var(--danger-color, #ff7b83); }
+
+.infra-quiet-state,
+.infra-validation-note {
+  color: var(--text-muted, #9ba7b5);
+  margin-block: 0.9rem 0;
+}
+
+.infra-validation-note {
+  border-left: 2px solid var(--warning-color, #f0bd62);
+  padding-left: 0.75rem;
+}
+
+.infra-subsystem-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+
+.infra-subsystem-card,
+.infra-incident-list article {
+  background: color-mix(in srgb, var(--surface-color, #111923) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color, #617083) 32%, transparent);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+}
+
+.infra-subsystem-card p,
+.infra-incident-list p {
+  color: var(--text-muted, #9ba7b5);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  margin: 0.65rem 0 0;
+}
+
+.infra-definition-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.infra-definition-list > div {
+  align-items: baseline;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color, #617083) 24%, transparent);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.55rem;
+}
+
+.infra-definition-list dt { color: var(--text-muted, #9ba7b5); }
+.infra-definition-list dd { font-weight: 650; margin: 0; text-align: right; }
+.infra-incident-list { display: grid; gap: 0.75rem; }
+.infra-incident-list small { color: var(--text-muted, #9ba7b5); }
+
+@media (max-width: 900px) {
+  .infra-subsystem-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .infra-subsystem-grid { grid-template-columns: 1fr; }
+  .infra-overall-row { align-items: flex-start; }
+}

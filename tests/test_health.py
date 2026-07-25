@@ -547,3 +547,28 @@ def test_wrong_bearer_code_is_rejected_without_logging_secrets(tmp_path, caplog)
     log_text = caplog.text
     assert "wrong-secret" not in log_text
     assert "expected-secret" not in log_text
+
+
+def test_runner_status_uses_shared_worker_completion_in_split_role(monkeypatch) -> None:
+    from app.services import sii_runner, upload_state_repository
+
+    completed_at = datetime.now(UTC).isoformat()
+    monkeypatch.setattr(sii_runner, "read_latest_sii_state", lambda: None)
+    monkeypatch.setattr(
+        upload_state_repository,
+        "read_latest_upload_summary",
+        lambda: {
+            "sii_completed": True,
+            "runner_used": True,
+            "last_processed_at": completed_at,
+        },
+    )
+
+    client = TestClient(create_app())
+    payload = client.get("/api/intelligence/runner-status").json()
+
+    assert payload["state_available"] is True
+    assert payload["detailed_state_available"] is False
+    assert payload["state_source"] == "shared_upload_summary"
+    assert payload["last_processed_at"] == completed_at
+    assert payload["state_timestamp_valid"] is True

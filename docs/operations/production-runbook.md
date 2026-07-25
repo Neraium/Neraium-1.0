@@ -593,3 +593,9 @@ For each production deployment, preserve:
 - Smoke-test output.
 - Any rollback or remediation commands.
 - Screenshots for operator-visible changes.
+
+## Production Self-Monitoring
+
+Production infrastructure health, persistence thresholds, notification adapters, alarm architecture, dashboard behavior, and validation commands are documented in [`docs/production-self-monitoring.md`](../production-self-monitoring.md).
+
+The external CloudWatch/SNS plane is authoritative when the API process is unavailable. The protected `/api/infrastructure/health` endpoint and Administration dashboard provide dependency evidence, current incidents, recovery history, worker heartbeat, secret age, and credential refresh state when the API is reachable.

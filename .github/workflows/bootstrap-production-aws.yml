@@ -18,6 +18,11 @@ env:
   NERAIUM_BOOTSTRAP_ADMIN_EMAIL: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_EMAIL }}
   NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN }}
   TASK_EXECUTION_ROLE_NAME: neraium-prod-ecs-task-execution-role
+  ECS_CLUSTER: neraium-prod-cluster
+  ECS_API_SERVICE: neraium-prod-api-service
+  ECS_WORKER_SERVICE: neraium-prod-worker-service
+  INFRA_ALERT_TOPIC_NAME: neraium-prod-infrastructure-alerts
+  NERAIUM_INFRA_ALERT_EMAILS: ${{ vars.NERAIUM_INFRA_ALERT_EMAILS || vars.NERAIUM_BOOTSTRAP_ADMIN_EMAIL }}
 
 jobs:
   bootstrap-production-aws:

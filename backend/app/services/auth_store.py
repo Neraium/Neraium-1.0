@@ -33,7 +33,80 @@ _VALID_ROLES = {"viewer", "operator", "admin"}
 _AUTH_BACKEND_KEY: tuple[str, ...] | None = None
 _AUTH_BACKEND: "_BaseAuthBackend" | None = None
 _AUTH_SECRETS_CLIENT: Any | None = None
+_AUTH_DEPENDENCY_LOCK = threading.RLock()
+_AUTH_DEPENDENCY_TELEMETRY: dict[str, Any] = {
+    "last_secret_access_success_at": None,
+    "last_secret_access_failure_at": None,
+    "last_refresh_success_at": None,
+    "last_refresh_failure_at": None,
+    "last_database_success_at": None,
+    "last_database_failure_at": None,
+    "consecutive_refresh_failures": 0,
+    "consecutive_database_failures": 0,
+}
 logger = logging.getLogger(__name__)
+
+
+def _dependency_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _record_auth_dependency_event(event: str) -> None:
+    timestamp = _dependency_timestamp()
+    with _AUTH_DEPENDENCY_LOCK:
+        if event == "secret_success":
+            _AUTH_DEPENDENCY_TELEMETRY["last_secret_access_success_at"] = timestamp
+        elif event == "secret_failure":
+            _AUTH_DEPENDENCY_TELEMETRY["last_secret_access_failure_at"] = timestamp
+        elif event == "refresh_success":
+            _AUTH_DEPENDENCY_TELEMETRY["last_refresh_success_at"] = timestamp
+            _AUTH_DEPENDENCY_TELEMETRY["consecutive_refresh_failures"] = 0
+        elif event == "refresh_failure":
+            _AUTH_DEPENDENCY_TELEMETRY["last_refresh_failure_at"] = timestamp
+            _AUTH_DEPENDENCY_TELEMETRY["consecutive_refresh_failures"] = int(
+                _AUTH_DEPENDENCY_TELEMETRY.get("consecutive_refresh_failures") or 0
+            ) + 1
+        elif event == "database_success":
+            _AUTH_DEPENDENCY_TELEMETRY["last_database_success_at"] = timestamp
+            _AUTH_DEPENDENCY_TELEMETRY["consecutive_database_failures"] = 0
+        elif event == "database_failure":
+            _AUTH_DEPENDENCY_TELEMETRY["last_database_failure_at"] = timestamp
+            _AUTH_DEPENDENCY_TELEMETRY["consecutive_database_failures"] = int(
+                _AUTH_DEPENDENCY_TELEMETRY.get("consecutive_database_failures") or 0
+            ) + 1
+
+
+def auth_dependency_telemetry() -> dict[str, Any]:
+    with _AUTH_DEPENDENCY_LOCK:
+        return dict(_AUTH_DEPENDENCY_TELEMETRY)
+
+
+def probe_auth_secret_metadata() -> dict[str, Any]:
+    """Validate managed-secret access and return sanitized rotation metadata."""
+    managed = _managed_auth_database_config()
+    if managed is None:
+        return {"configured": False, "rotation_enabled": None, "age_seconds": None}
+    try:
+        response = _auth_secrets_client().describe_secret(SecretId=managed["secret_arn"])
+    except Exception:
+        _record_auth_dependency_event("secret_failure")
+        logger.warning(
+            "auth_database_secret_probe_failed",
+            extra={"event": "auth_database_secret_probe_failed", "auth_store_backend": "postgresql_secrets_manager"},
+        )
+        raise
+    _record_auth_dependency_event("secret_success")
+    changed_at = response.get("LastChangedDate") or response.get("LastRotatedDate")
+    age_seconds = None
+    if isinstance(changed_at, datetime):
+        normalized = changed_at if changed_at.tzinfo else changed_at.replace(tzinfo=timezone.utc)
+        age_seconds = max(0.0, (datetime.now(timezone.utc) - normalized.astimezone(timezone.utc)).total_seconds())
+    return {
+        "configured": True,
+        "rotation_enabled": response.get("RotationEnabled"),
+        "last_changed_at": changed_at.isoformat() if isinstance(changed_at, datetime) else None,
+        "age_seconds": round(age_seconds, 2) if age_seconds is not None else None,
+    }
 
 
 AUTH_SCHEMA_STATEMENTS = (
@@ -549,31 +622,49 @@ class _SecretsManagerPostgresAuthBackend(_BaseAuthBackend):
         with self._credential_lock:
             if self._cached_dsn is not None and not force_refresh:
                 return self._cached_dsn
-            response = _auth_secrets_client().get_secret_value(SecretId=self.secret_arn)
-            raw_payload = response.get("SecretString")
-            if not isinstance(raw_payload, str) or not raw_payload.strip():
-                raise RuntimeError("Managed auth database secret has no SecretString payload.")
             try:
-                payload = json.loads(raw_payload)
-            except (TypeError, ValueError) as error:
-                raise RuntimeError("Managed auth database secret is not valid JSON.") from error
-            username = str(payload.get("username") or "").strip()
-            password = str(payload.get("password") or "")
-            if not username or not password:
-                raise RuntimeError("Managed auth database secret must contain username and password.")
-            self._cached_dsn = (
-                f"postgresql://{quote(username, safe='')}:{quote(password, safe='')}@"
-                f"{self.host}:{self.port}/{quote(self.database, safe='')}"
-                f"?sslmode={quote(self.sslmode, safe='')}"
-            )
+                response = _auth_secrets_client().get_secret_value(SecretId=self.secret_arn)
+                raw_payload = response.get("SecretString")
+                if not isinstance(raw_payload, str) or not raw_payload.strip():
+                    raise RuntimeError("Managed auth database secret has no SecretString payload.")
+                try:
+                    payload = json.loads(raw_payload)
+                except (TypeError, ValueError) as error:
+                    raise RuntimeError("Managed auth database secret is not valid JSON.") from error
+                username = str(payload.get("username") or "").strip()
+                password = str(payload.get("password") or "")
+                if not username or not password:
+                    raise RuntimeError("Managed auth database secret must contain username and password.")
+                self._cached_dsn = (
+                    f"postgresql://{quote(username, safe='')}:{quote(password, safe='')}@"
+                    f"{self.host}:{self.port}/{quote(self.database, safe='')}"
+                    f"?sslmode={quote(self.sslmode, safe='')}"
+                )
+            except Exception:
+                _record_auth_dependency_event("secret_failure")
+                _record_auth_dependency_event("refresh_failure")
+                logger.warning(
+                    "auth_database_credentials_refresh_failed",
+                    extra={
+                        "event": "auth_database_credentials_refresh_failed",
+                        "auth_store_backend": "postgresql_secrets_manager",
+                        "reason": "secret_read_or_validation_failed",
+                    },
+                )
+                raise
+            _record_auth_dependency_event("secret_success")
+            _record_auth_dependency_event("refresh_success")
             return self._cached_dsn
 
     def _connect(self):
         if psycopg is None:
             raise RuntimeError("psycopg is required when a PostgreSQL auth database is configured.")
         try:
-            return psycopg.connect(self._load_dsn())
+            connection = psycopg.connect(self._load_dsn())
+            _record_auth_dependency_event("database_success")
+            return connection
         except Exception as error:
+            _record_auth_dependency_event("database_failure")
             if not _password_authentication_failed(error):
                 raise
             logger.warning(
@@ -584,7 +675,30 @@ class _SecretsManagerPostgresAuthBackend(_BaseAuthBackend):
                     "reason": "database_authentication_rejected",
                 },
             )
-            return psycopg.connect(self._load_dsn(force_refresh=True))
+            try:
+                connection = psycopg.connect(self._load_dsn(force_refresh=True))
+            except Exception:
+                _record_auth_dependency_event("refresh_failure")
+                _record_auth_dependency_event("database_failure")
+                logger.warning(
+                    "auth_database_credentials_refresh_failed",
+                    extra={
+                        "event": "auth_database_credentials_refresh_failed",
+                        "auth_store_backend": "postgresql_secrets_manager",
+                        "reason": "refreshed_credentials_rejected",
+                    },
+                )
+                raise
+            _record_auth_dependency_event("refresh_success")
+            _record_auth_dependency_event("database_success")
+            logger.info(
+                "auth_database_credentials_refresh_succeeded",
+                extra={
+                    "event": "auth_database_credentials_refresh_succeeded",
+                    "auth_store_backend": "postgresql_secrets_manager",
+                },
+            )
+            return connection
 
 
 def session_cookie_name() -> str:

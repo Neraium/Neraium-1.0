@@ -63,6 +63,9 @@ class Settings:
     log_level: str = DEFAULT_LOG_LEVEL
     log_format: str = DEFAULT_LOG_FORMAT
     shutdown_timeout_seconds: float = DEFAULT_SHUTDOWN_TIMEOUT_SECONDS
+    infrastructure_monitor_enabled: bool = False
+    infrastructure_monitor_interval_seconds: float = 60.0
+    worker_heartbeat_timeout_seconds: float = 180.0
 
 
 def get_settings() -> Settings:
@@ -117,6 +120,21 @@ def get_settings() -> Settings:
             os.getenv("NERAIUM_SHUTDOWN_TIMEOUT_SECONDS"),
             DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
             name="NERAIUM_SHUTDOWN_TIMEOUT_SECONDS",
+        ),
+        infrastructure_monitor_enabled=parse_bool(
+            os.getenv("NERAIUM_INFRA_MONITOR_ENABLED"),
+            app_env in {"prod", "production"} and process_role in {"api", "all", "monolith"},
+            name="NERAIUM_INFRA_MONITOR_ENABLED",
+        ),
+        infrastructure_monitor_interval_seconds=parse_positive_float(
+            os.getenv("NERAIUM_INFRA_MONITOR_INTERVAL_SECONDS"),
+            60.0,
+            name="NERAIUM_INFRA_MONITOR_INTERVAL_SECONDS",
+        ),
+        worker_heartbeat_timeout_seconds=parse_positive_float(
+            os.getenv("NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS"),
+            180.0,
+            name="NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS",
         ),
     )
     validate_settings(settings)

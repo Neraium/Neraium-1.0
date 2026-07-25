@@ -8,6 +8,7 @@ on:
       - "backend/**"
       - ".github/workflows/deploy-backend.yml"
       - "scripts/bootstrap-production-aws.sh"
+      - "scripts/configure-production-monitoring.sh"
   workflow_dispatch:
 
 permissions:
@@ -41,6 +42,8 @@ env:
   NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN }}
   NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD || 'false' }}
   TASK_EXECUTION_ROLE_NAME: neraium-prod-ecs-task-execution-role
+  INFRA_ALERT_TOPIC_NAME: neraium-prod-infrastructure-alerts
+  NERAIUM_INFRA_ALERT_EMAILS: ${{ vars.NERAIUM_INFRA_ALERT_EMAILS || vars.NERAIUM_BOOTSTRAP_ADMIN_EMAIL }}
 
 jobs:
   deploy-backend:
@@ -79,6 +82,11 @@ jobs:
             *) echo "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD must be true or false" >&2; exit 1 ;;
           esac
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          INFRA_ALERT_TOPIC_ARN=$(aws sns create-topic \
+            --name "$INFRA_ALERT_TOPIC_NAME" \
+            --region "$AWS_REGION" \
+            --query TopicArn \
+            --output text)
           RDS_AUTH_CONFIG=$(aws rds describe-db-instances \
             --db-instance-identifier "$RDS_AUTH_INSTANCE_ID" \
             --region "$AWS_REGION" \
@@ -100,11 +108,32 @@ jobs:
           echo "AUTH_DATABASE_KMS_KEY_ARN=$AUTH_DATABASE_KMS_KEY_ARN" >> "$GITHUB_ENV"
           echo "APP_TASK_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${APP_TASK_ROLE_NAME}" >> "$GITHUB_ENV"
           echo "TASK_EXECUTION_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${TASK_EXECUTION_ROLE_NAME}" >> "$GITHUB_ENV"
+          echo "INFRA_ALERT_TOPIC_ARN=$INFRA_ALERT_TOPIC_ARN" >> "$GITHUB_ENV"
 
       - name: Bootstrap shared AWS deployment resources
         run: |
           set -euo pipefail
           ./scripts/bootstrap-production-aws.sh
+
+      - name: Validate production monitoring resources
+        run: |
+          set -euo pipefail
+          aws cloudwatch describe-alarms \
+            --alarm-name-prefix neraium-prod- \
+            --region "$AWS_REGION" > production-alarms.json
+          jq -e --arg topic "$INFRA_ALERT_TOPIC_ARN" '
+            [.MetricAlarms[] | select(.ActionsEnabled == true and (.AlarmActions | index($topic)) != null and (.OKActions | index($topic)) != null)]
+            | length >= 9
+          ' production-alarms.json >/dev/null
+          test "$(aws ecs describe-clusters \
+            --clusters "$ECS_CLUSTER" \
+            --include SETTINGS \
+            --region "$AWS_REGION" \
+            --query 'clusters[0].settings[?name==`containerInsights`].value | [0]' \
+            --output text)" = "enabled"
+          test "$(aws logs describe-metric-filters --log-group-name "$API_LOG_GROUP" --region "$AWS_REGION" --query 'length(metricFilters)' --output text)" -ge 3
+          test "$(aws logs describe-metric-filters --log-group-name "$WORKER_LOG_GROUP" --region "$AWS_REGION" --query 'length(metricFilters)' --output text)" -ge 1
+          jq -r '.MetricAlarms[] | "  - \(.AlarmName): \(.StateValue)"' production-alarms.json
 
       - name: Validate ECS deployment baseline
         run: |
@@ -256,7 +285,7 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
           echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_SECRET_ARN "$AUTH_DATABASE_SECRET_ARN" --arg AUTH_DATABASE_HOST "$AUTH_DATABASE_HOST" --arg AUTH_DATABASE_PORT "$AUTH_DATABASE_PORT" --arg AUTH_DATABASE_NAME "$AUTH_DATABASE_NAME" --arg AUTH_DATABASE_SSLMODE "$AUTH_DATABASE_SSLMODE" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg BACKEND_PORT "$API_CONTAINER_PORT" --argjson CONTAINER_PORT "$API_CONTAINER_PORT" --arg HEALTHCHECK_COMMAND "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${API_CONTAINER_PORT}/api/health', timeout=5).read()\" || exit 1" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_SECRET_ARN "$AUTH_DATABASE_SECRET_ARN" --arg AUTH_DATABASE_HOST "$AUTH_DATABASE_HOST" --arg AUTH_DATABASE_PORT "$AUTH_DATABASE_PORT" --arg AUTH_DATABASE_NAME "$AUTH_DATABASE_NAME" --arg AUTH_DATABASE_SSLMODE "$AUTH_DATABASE_SSLMODE" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg BACKEND_PORT "$API_CONTAINER_PORT" --argjson CONTAINER_PORT "$API_CONTAINER_PORT" --arg HEALTHCHECK_COMMAND "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${API_CONTAINER_PORT}/api/health', timeout=5).read()\" || exit 1" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" --arg ECS_CLUSTER "$ECS_CLUSTER" --arg ECS_API_SERVICE "$ECS_API_SERVICE" --arg ECS_WORKER_SERVICE "$ECS_WORKER_SERVICE" --arg TARGET_GROUP_ARN "$API_TARGET_GROUP_ARN" --arg INFRA_ALERT_TOPIC_ARN "$INFRA_ALERT_TOPIC_ARN" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
             | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .containerDefinitions = (.containerDefinitions | map(
@@ -264,7 +293,7 @@ jobs:
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "BACKEND_HOST" and .name != "BACKEND_PORT" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" and .name != "NERAIUM_AUTH_DATABASE_SECRET_ARN" and .name != "NERAIUM_AUTH_DATABASE_HOST" and .name != "NERAIUM_AUTH_DATABASE_PORT" and .name != "NERAIUM_AUTH_DATABASE_NAME" and .name != "NERAIUM_AUTH_DATABASE_SSLMODE"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "BACKEND_HOST" and .name != "BACKEND_PORT" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" and .name != "NERAIUM_AUTH_DATABASE_SECRET_ARN" and .name != "NERAIUM_AUTH_DATABASE_HOST" and .name != "NERAIUM_AUTH_DATABASE_PORT" and .name != "NERAIUM_AUTH_DATABASE_NAME" and .name != "NERAIUM_AUTH_DATABASE_SSLMODE" and .name != "NERAIUM_INFRA_MONITOR_ENABLED" and .name != "NERAIUM_INFRA_MONITOR_INTERVAL_SECONDS" and .name != "NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS" and .name != "NERAIUM_ECS_CLUSTER" and .name != "NERAIUM_ECS_API_SERVICE" and .name != "NERAIUM_ECS_WORKER_SERVICE" and .name != "NERAIUM_ALB_TARGET_GROUP_ARN" and .name != "NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN"))
                     + [
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "api"},
                       {"name": "APP_ENV", "value": "prod"},
@@ -278,6 +307,14 @@ jobs:
                       {"name": "LOG_LEVEL", "value": $LOG_LEVEL},
                       {"name": "LOG_FORMAT", "value": $LOG_FORMAT},
                       {"name": "NERAIUM_BUILD_SHA", "value": $BUILD_SHA},
+                      {"name": "NERAIUM_INFRA_MONITOR_ENABLED", "value": "true"},
+                      {"name": "NERAIUM_INFRA_MONITOR_INTERVAL_SECONDS", "value": "60"},
+                      {"name": "NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS", "value": "180"},
+                      {"name": "NERAIUM_ECS_CLUSTER", "value": $ECS_CLUSTER},
+                      {"name": "NERAIUM_ECS_API_SERVICE", "value": $ECS_API_SERVICE},
+                      {"name": "NERAIUM_ECS_WORKER_SERVICE", "value": $ECS_WORKER_SERVICE},
+                      {"name": "NERAIUM_ALB_TARGET_GROUP_ARN", "value": $TARGET_GROUP_ARN},
+                      {"name": "NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN", "value": $INFRA_ALERT_TOPIC_ARN},
                       {"name": "NERAIUM_AUTH_DATABASE_SECRET_ARN", "value": $AUTH_DATABASE_SECRET_ARN},
                       {"name": "NERAIUM_AUTH_DATABASE_HOST", "value": $AUTH_DATABASE_HOST},
                       {"name": "NERAIUM_AUTH_DATABASE_PORT", "value": $AUTH_DATABASE_PORT},
@@ -547,6 +584,24 @@ jobs:
             --query 'taskDefinition.containerDefinitions[0].environment[?name==`NERAIUM_AUTH_DATABASE_PORT`].value | [0]' \
             --output text)
 
+          API_INFRA_MONITOR_ENABLED=$(aws ecs describe-task-definition \
+            --task-definition "$API_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].environment[?name==`NERAIUM_INFRA_MONITOR_ENABLED`].value | [0]' \
+            --output text)
+
+          API_INFRA_ALERT_TOPIC_VALUE=$(aws ecs describe-task-definition \
+            --task-definition "$API_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].environment[?name==`NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN`].value | [0]' \
+            --output text)
+
+          API_ALB_TARGET_GROUP_VALUE=$(aws ecs describe-task-definition \
+            --task-definition "$API_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].environment[?name==`NERAIUM_ALB_TARGET_GROUP_ARN`].value | [0]' \
+            --output text)
+
           AUTH_DATABASE_URL_SECRET_COUNT=$(aws ecs describe-task-definition \
             --task-definition "$API_TASK_DEF_ARN" \
             --region "$AWS_REGION" \
@@ -558,6 +613,9 @@ jobs:
           test "$AUTH_DATABASE_HOST_VALUE" = "$AUTH_DATABASE_HOST"
           test "$AUTH_DATABASE_PORT_VALUE" = "$AUTH_DATABASE_PORT"
           test "$AUTH_DATABASE_URL_SECRET_COUNT" = "0"
+          test "$API_INFRA_MONITOR_ENABLED" = "true"
+          test "$API_INFRA_ALERT_TOPIC_VALUE" = "$INFRA_ALERT_TOPIC_ARN"
+          test "$API_ALB_TARGET_GROUP_VALUE" = "$API_TARGET_GROUP_ARN"
 
           API_BOOTSTRAP_ADMIN_EMAIL_VALUE=$(aws ecs describe-task-definition \
             --task-definition "$API_TASK_DEF_ARN" \

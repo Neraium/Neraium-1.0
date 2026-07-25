@@ -339,7 +339,27 @@ def runner_import_error() -> str | None:
 def build_runner_status() -> dict[str, Any]:
     state = read_latest_sii_state()
     identity = runner_identity()
-    last_processed_at = state.get("last_processed_at") if state else None
+    shared_summary: dict[str, Any] | None = None
+    if state is None:
+        try:
+            # Split-role production writes completion evidence to shared upload
+            # state, while the detailed runner file remains worker-local.
+            from app.services.upload_state_repository import read_latest_upload_summary
+
+            candidate = read_latest_upload_summary()
+            if isinstance(candidate, dict):
+                shared_summary = candidate
+        except Exception:
+            logger.exception("runner_shared_status_read_failed")
+    shared_runner_complete = bool(
+        shared_summary
+        and shared_summary.get("sii_completed") is True
+        and shared_summary.get("runner_used") is True
+    )
+    last_processed_at = (
+        state.get("last_processed_at") if state else
+        (shared_summary or {}).get("last_processed_at") or (shared_summary or {}).get("completed_at")
+    )
     parsed_last_processed_at = parse_state_timestamp(last_processed_at)
     state_age_seconds = None
     if parsed_last_processed_at is not None:
@@ -352,11 +372,13 @@ def build_runner_status() -> dict[str, Any]:
         "core_engine_file": identity["core_engine_file"],
         "validation_runner": identity["validation_runner"],
         "validation_runner_file": identity["validation_runner_file"],
-        "state_available": state is not None,
+        "state_available": state is not None or shared_runner_complete,
+        "detailed_state_available": state is not None,
+        "state_source": "runner_local" if state is not None else ("shared_upload_summary" if shared_runner_complete else "none"),
         "last_processed_at": last_processed_at,
         "state_timestamp_valid": last_processed_at is None or parsed_last_processed_at is not None,
         "state_age_seconds": state_age_seconds,
-        "source": state.get("source") if state else "none",
+        "source": state.get("source") if state else ("shared_upload" if shared_runner_complete else "none"),
         "same_engine_family_as_validation": False,
         "same_exact_fd004_validation_runner": False,
         "note": (
