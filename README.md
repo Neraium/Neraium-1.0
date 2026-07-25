@@ -1,112 +1,334 @@
 # Neraium
 
-**See system drift before it becomes operational failure.**
+**Systemic Infrastructure Intelligence for engineering teams.**
 
-Neraium is the platform for Systemic Infrastructure Intelligence (SII). It analyzes multivariable telemetry to identify behavior changes, instability, weak signals, and operational risk before conventional threshold alarms or visible symptoms reveal a problem.
+Neraium is a read-only intelligence layer that learns how operational systems behave over time and recognizes when that behavior fundamentally changes.
 
-The platform is designed first for commercial water systems where pumps, tanks, filtration, treatment, pressure, temperature, flow, chemistry, and equipment signals interact continuously. The same SII intelligence can extend to other telemetry-heavy infrastructure, but commercial water operations are the primary use case.
+Rather than monitoring isolated signals against fixed thresholds, Neraium evaluates relationships among signals, establishes a behavioral baseline, and surfaces persistent changes that appear meaningful enough for engineering review.
+
+The platform is designed to give engineers an extra set of eyes across complex operational data without taking control away from them.
+
+> **Neraium provides visibility. The human provides judgment.**
 
 ---
 
-## What Neraium Does
+## What Neraium Is
 
-Neraium helps operators answer four practical questions:
+Neraium is a platform for **Systemic Infrastructure Intelligence (SII)**.
 
-1. **What state is the system in?**
-2. **What is drifting or behaving abnormally?**
-3. **What evidence supports the finding?**
-4. **What should the operator check next?**
+It works with operational data already collected through sources such as:
 
-Instead of treating each sensor as an isolated alarm, Neraium evaluates relationships across signals and looks for structural changes in system behavior.
+- Historians
+- Building automation systems
+- SCADA systems
+- Approved databases
+- Exported CSV, TXT, or JSON telemetry
+- Read-only data connectors
 
-Current capabilities include:
+Neraium is currently focused on telemetry-heavy infrastructure, with commercial water systems, central plants, resorts, aquatic facilities, filtration systems, pump networks, and mechanical infrastructure as primary use cases.
 
-- Telemetry upload and validation
-- CSV, TXT, and JSON ingestion paths
-- Data quality checks
-- Timestamp and signal profiling
-- Baseline versus recent comparison
-- Systemic Infrastructure Intelligence results
-- Evidence summaries
-- Operator-facing reports
-- Replay-ready upload artifacts
+The same relationship-based intelligence can extend to other operational environments where many signals interact continuously.
+
+---
+
+## Core Product Principles
+
+### Read-only by design
+
+Neraium does not control equipment, change setpoints, or write commands back to operational systems.
+
+### Human in the loop
+
+Neraium identifies and explains meaningful changes. Engineers determine what those changes mean and what action, if any, should be taken.
+
+### Relationship-based intelligence
+
+Traditional alarms typically evaluate individual readings against fixed limits. Neraium evaluates how signals behave together.
+
+Examples include:
+
+- Pump power relative to flow
+- Pressure relative to filter differential pressure
+- Valve position relative to system response
+- Chiller power relative to cooling demand
+- Cooling-tower performance relative to ambient conditions
+- Makeup-water demand relative to occupancy or load
+
+These relationships can shift even when individual readings remain within normal alarm limits.
+
+### Persistence over noise
+
+Neraium is not intended to flag every fluctuation. It prioritizes changes that persist and appear meaningful enough for engineering review.
+
+### Explainable findings
+
+Every finding should show what changed, where it changed, which signals were involved, what evidence supports it, and where investigation should begin.
+
+### Evidence-bounded certainty
+
+Neraium should never present a finding with more certainty than the combined strength of the data quality, operating-context match, persistence, and relationship evidence supports.
+
+---
+
+## How Neraium Works
+
+A typical analysis workflow is:
+
+1. Import or connect approved operational telemetry.
+2. Validate timestamps, numeric signals, completeness, and data quality.
+3. Establish a baseline for how signals normally behave together.
+4. Compare a later period or live data against that learned behavior.
+5. Identify persistent changes in relationships among signals.
+6. Rank the most meaningful findings for engineering review.
+7. Present supporting evidence, time windows, contributing signals, and investigation guidance.
+8. Preserve evidence and replay artifacts for later review.
+
+The platform is built around a simple principle:
+
+> **Know the operating context, verify the data, detect persistent relationship change, explain the evidence, then suggest where to investigate.**
+
+---
+
+## Historical Proof of Value
+
+Before live deployment, Neraium can establish a baseline from an earlier historical period and analyze a later historical period against it.
+
+This allows an engineering team to evaluate the platform using its own operational data before approving a live connection.
+
+A historical proof-of-value analysis can help determine:
+
+- Whether the findings are meaningful
+- Whether the evidence makes operational sense
+- Whether relationship changes were visible before an incident or operational problem became obvious
+- Whether existing alarms or individual trend reviews missed useful context
+- Whether a live deployment would provide practical value
+
+This workflow is read-only and does not require Neraium to control or modify the customer system.
+
+---
+
+## What a Finding Shows
+
+A Neraium finding can include:
+
+- What changed
+- Where it changed
+- Which signals were involved
+- The baseline and recent behavior
+- Persistence duration
+- Confidence and confidence rationale
+- Data-quality conditions
+- Supporting evidence
+- Contributing relationships
+- Possible operational explanations
+- Why the change may matter
+- A timeline of the change
+- Recommended first checks
+- Source time ranges and evidence references
+
+The current explanation layer already supports relationship grouping, confidence labeling, evidence summaries, possible operational causes, activity timelines, and recommended investigation steps.
+
+---
+
+## Current Platform Capabilities
+
+### Telemetry ingestion and validation
+
+- CSV, TXT, and JSON upload paths
+- Timestamp profiling
+- Numeric-signal profiling
+- Missing and invalid value handling
+- Row acceptance and drop reporting
+- Irregular-sampling detection
+- Stuck or constant sensor identification
+- Baseline reliability checks
+
+### Behavioral analysis
+
+- Historical baseline creation
+- Baseline-versus-recent comparison
+- Multivariable relationship analysis
+- Persistent change detection
+- Relationship grouping
+- Drift and instability assessment
+- Evidence-backed confidence handling
+
+### Engineering findings
+
+- Prioritized findings
+- What-changed summaries
+- Affected systems and signals
+- Possible operational causes
+- Operational-impact explanations
+- Recommended investigation steps
+- First-check guidance
+- Relationship activity timelines
+- Evidence summaries and source ranges
+
+### Investigation and evidence
+
+- Engineering Findings view
+- Investigation drawer and workspace
+- Systems view
+- Behavior Baseline view
+- Evidence replay support
+- Persisted evidence records
 - Audit events
-- Runtime observability
-- Read-only connector setup, testing, health, and ingestion
+- Analysis history
+
+### Data access and operations
+
+- Read-only connector setup
+- Connector testing and health visibility
 - Backend worker processing
-- AWS ECS deployment preparation
+- Runtime observability
+- Authentication and role boundaries
+- Production-oriented AWS ECS/Fargate preparation
 - Continuous backend and frontend validation through GitHub Actions
 
 ---
 
-## Primary CSV Upload Workflow
+## Current Product Surfaces
 
-The core product workflow imports a telemetry dataset from a commercial water system and turns it into evidence-backed SII insights.
+The operator workspace includes:
 
-Recommended operator flow:
+- **Command Center**
+- **Systems**
+- **Engineering Findings**
+- **Behavior Baseline**
+- **Datasets & Connectors**
+- **Analysis Details**
 
-1. Open the system status view.
-2. Upload a commercial water-system CSV telemetry export.
-3. Show validation, queued worker visibility, and processing progress.
-4. Review the resulting insights and evidence.
-5. Explain what changed, why it matters, and what the operator should inspect next.
-6. Open Evidence Replay to show the behavior change over time.
-7. Close by explaining that the same intelligence layer applies across telemetry-heavy operational environments.
-
-Workflow and screenshot planning docs:
-
-- `docs/SCREENSHOT_CHECKLIST.md`
+The product is structured to help an engineer move from system status, to a prioritized finding, to supporting evidence, to a focused investigation path.
 
 ---
 
-## Core Use Cases
+## Finding Classification Direction
 
-Neraium is built for operational environments where drift matters before failure becomes obvious.
+Neraium is being strengthened so findings can distinguish among different classes of change rather than presenting every result as a generic anomaly.
 
-Primary commercial water-system contexts include:
+The target first-class classifications are:
 
-- Aquatic facilities and hospitality water systems
-- Pools, spas, and therapy-water operations
-- Filtration and pump networks
-- Tanks, reservoirs, and recirculation loops
-- Flow, pressure, temperature, and chemistry monitoring
-- Maintenance-heavy mechanical water infrastructure
-- Multi-site facility water operations
-- Sensor-heavy operational networks
+### Known operational change
 
-The current workflows emphasize uploaded telemetry and read-only intelligence. Neraium does not control equipment at this stage. It analyzes data, produces evidence, and gives operators clearer direction on what to inspect.
+The shift aligns with a documented schedule change, equipment staging change, maintenance event, setpoint change, special event, or other known operating condition.
+
+### Possible instrumentation issue
+
+The evidence is more consistent with sensor drift, flatlining, timing misalignment, recalibration, missing data, or disagreement between related measurements.
+
+### Unexplained systemic change
+
+The relationship changed persistently, the data appears trustworthy, comparable operating conditions were evaluated, and no known operational change explains the shift.
+
+### Insufficient evidence
+
+A possible change was observed, but the available data or operating context is not strong enough to support a reliable interpretation.
+
+These classifications are intended to make findings more useful and more honest, not to claim root cause.
 
 ---
 
-## Workflow
+## Near-Term Product Priorities
 
-A typical workflow looks like this:
+The next major product work is focused on strengthening the foundation before adding more advanced recommendations.
 
-1. Upload telemetry from a system, facility, asset, controller, or exported dataset.
-2. Neraium validates the file and checks basic data quality.
-3. The platform profiles timestamps, numeric signals, and available system fields.
-4. Baseline behavior is compared against recent behavior.
-5. The SII engine produces a deterministic system intelligence result.
-6. Neraium generates evidence, warnings, readiness indicators, replay artifacts, and an operator report.
-7. Operators review what changed, what evidence supports it, and what should be checked next.
+### 1. Operating-mode awareness
+
+Compare recent behavior against historically comparable conditions such as:
+
+- Day versus night
+- Weekday versus weekend
+- Summer versus winter
+- High load versus low load
+- One-pump versus two-pump operation
+- Normal operation versus backwash or maintenance
+- Different equipment staging configurations
+- Known schedule and setpoint states
+
+### 2. Signal-level sensor health
+
+Extend current data-quality checks into clearer per-signal assessments for:
+
+- Flatlining
+- Dropout
+- Missingness
+- Timing misalignment
+- Possible recalibration
+- Gradual divergence from related signals
+- Irregular sampling
+- Frozen or duplicated readings
+
+### 3. Transparent finding classification
+
+Make operating-context match, data confidence, sensor health, persistence, and relationship evidence first-class fields in every finding.
+
+### 4. Relationship timelines
+
+Show how a relationship moved from baseline-aligned behavior to persistent change over time.
+
+### 5. Evidence-linked investigation guidance
+
+Provide short, editable, probabilistic next checks tied directly to the available evidence without diagnosing root cause.
+
+### 6. Engineer feedback
+
+Capture outcomes such as confirmed issue, known operational change, instrumentation issue, useful monitoring, not useful, or investigation pending.
+
+Feedback should improve ranking, presentation, suppression of known conditions, and investigation guidance without silently rewriting the core relationship model.
+
+### 7. Domain starter packs and portfolio intelligence
+
+Provide conditional relationship templates for common resort, water-system, and central-plant use cases, followed later by multi-system and multi-facility comparison views.
+
+---
+
+## What Neraium Does Not Do
+
+Neraium does not:
+
+- Control equipment
+- Change setpoints
+- Replace alarms
+- Replace engineering judgment
+- Predict exact failures
+- Confirm root cause on its own
+- Guarantee that every developing problem will be detected
+- Treat engineering heuristics as universal physical laws
+
+Neraium provides evidence and direction for review. The engineer remains responsible for interpretation, inspection, and action.
 
 ---
 
 ## Repository Structure
 
 ```text
-backend/    FastAPI application, runtime services, upload processing, workers, and backend documentation
-frontend/   Vite React customer-facing app shell and operator interface
-docs/       Architecture, deployment, pilot, and implementation notes
-scripts/    Local development and validation helper scripts
-tests/      Backend tests
+backend/    FastAPI application, telemetry processing, analysis services, evidence, connectors, workers, and runtime operations
+frontend/   Vite React operator workspace and investigation interface
+docs/       Architecture, deployment, pilot, validation, and implementation notes
+scripts/    Local development, build, and validation helpers
+tests/      Backend regression, reliability, upload, and analysis coverage
 ```
 
 ---
 
-## Backend
+## Technical Architecture
 
-The backend is a FastAPI application with runtime services for uploads, evidence, audit events, observability, data connections, replay, and worker processing.
+### Backend
+
+The backend is a FastAPI application with services for:
+
+- Upload ingestion and validation
+- Behavioral baseline creation
+- Relationship analysis
+- SII processing
+- Evidence persistence
+- Replay artifacts
+- Audit events
+- Read-only data connections
+- Authentication and authorization
+- Worker processing
+- Runtime observability
 
 Important API areas include:
 
@@ -118,27 +340,38 @@ Important API areas include:
 - `POST /api/data/upload`
 - Upload status and replay endpoints
 - Evidence and audit endpoints
-- Observability and readiness endpoints
+- Connector and readiness endpoints
 
-Backend runtime state is written under `NERAIUM_RUNTIME_DIR`. Runtime storage includes upload jobs, upload queue records, evidence runs, audit events, latest payloads, and data connection records.
+Runtime state is written under `NERAIUM_RUNTIME_DIR`.
 
----
+### Frontend
 
-## Frontend
+The frontend is a Vite React application for engineering and operator workflows.
 
-The frontend is a Vite React application for customer and operator workflows.
+It supports:
 
-Current sections include:
+- Telemetry import
+- Processing visibility
+- Command-center status
+- System discovery
+- Engineering findings
+- Investigation workflows
+- Behavior baseline review
+- Evidence and analysis details
+- Historical analysis reopening
+- Connector configuration
 
-- Overview
-- Facility and system views
-- Data upload
-- Upload status and result review
-- Operator reports
-- Replay-oriented views
-- Evidence and observability surfaces
+The frontend runs locally at:
 
-The frontend runs locally at `http://127.0.0.1:3010` and calls the backend configured by `VITE_API_BASE_URL`.
+```text
+http://127.0.0.1:3010
+```
+
+The backend runs locally at:
+
+```text
+http://127.0.0.1:8010
+```
 
 ---
 
@@ -161,12 +394,6 @@ python -m pip install -r requirements-dev.txt
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 ```
 
-The backend runs locally at:
-
-```text
-http://127.0.0.1:8010
-```
-
 ---
 
 ## Frontend Setup
@@ -177,17 +404,11 @@ npm install
 npm run dev
 ```
 
-The frontend runs locally at:
-
-```text
-http://127.0.0.1:3010
-```
-
 ---
 
 ## Common Environment Variables
 
-Backend defaults are provided for local development. Production should explicitly configure runtime storage, CORS, workers, and deployment settings.
+Production should explicitly configure runtime storage, authentication, CORS, workers, and deployment settings.
 
 Common variables include:
 
@@ -203,6 +424,7 @@ Common variables include:
 - `NERAIUM_MAX_UPLOAD_SIZE_BYTES`
 - `NERAIUM_MAX_PENDING_UPLOAD_JOBS`
 - `NERAIUM_UPLOAD_STATE_BUCKET`
+- `NERAIUM_AUTH_DATABASE_URL`
 - `VITE_API_BASE_URL`
 
 ---
@@ -225,8 +447,6 @@ npm run build
 npm run test
 ```
 
-GitHub Actions CI now validates the backend and frontend on push to `main` and on pull requests. The CI workflow runs backend tests, frontend linting, frontend build, and frontend unit tests.
-
 Helper scripts are available from the repository root:
 
 ```powershell
@@ -236,74 +456,65 @@ Helper scripts are available from the repository root:
 .\scripts\build-frontend.ps1
 ```
 
+GitHub Actions validates backend tests, frontend linting, frontend builds, frontend tests, and security-related checks on pushes and pull requests.
+
+---
+
+## Reliability and Evidence Guardrails
+
+The current platform includes reliability hardening for messy operational telemetry.
+
+Implemented guardrails include:
+
+- Structured reliability ratings
+- Rows received, used, and dropped
+- Missing and invalid numeric conditions
+- Stuck-sensor detection
+- Irregular-sampling detection
+- Baseline reliability checks
+- Confidence caps when data quality is weak
+- Evidence records with variables, timestamps, source rows, and baseline/recent metrics
+- Frontend suppression of unsupported SII claims when evidence or reliability requirements are not met
+
+Relevant documentation includes:
+
+- `docs/sii_robustness_assessment.md`
+- `docs/sii_math_audit.md`
+- `docs/platform_strengthening_plan.md`
+- `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md`
+- `docs/PRODUCTION_OPERATOR_FLOW_CHECKLIST.md`
+
 ---
 
 ## Deployment
 
-Neraium includes AWS deployment preparation for a backend API service and worker service using ECS/Fargate and ECR.
+Neraium includes AWS deployment preparation for API and worker services using ECS/Fargate and ECR.
 
-Deployment notes and runbooks are available in:
+Deployment and operational notes are available in:
 
 - `docs/AWS_DEPLOYMENT.md`
 - `docs/DEPLOYMENT_RUNBOOK.md`
 - `docs/OPERATIONS.md`
 - `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md`
-- `docs/PRODUCTION_OPERATOR_FLOW_CHECKLIST.md`
 
-Local backend development runs on port `8010`. Local frontend development runs on port `3010`. The backend container is prepared for cloud deployment on internal container port `8080`.
-
----
-
-## Production Hardening
-
-Before broader production use, review `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md` for authentication, authorization, runtime storage, CI, screenshot/workflow assets, observability, deployment, and operator-flow acceptance checks.
-
-Current hardening focus areas include:
-
-- Confirming runtime database persistence across API and worker restarts
-- Confirming auth/session persistence through the dedicated auth database
-- Verifying multi-task or multi-worker deployment behavior
-- Requiring Postgres for production API auth/session state while keeping SQLite fallback for tests and local development
-- Keeping README/workflow screenshots current with the deployed UI
-- Keeping browser clients free of build-time shared API secrets
-- Expanding dependency security policy from critical CVE blocking to broader release governance
+Production deployments should use durable shared storage, explicit authentication configuration, appropriate role boundaries, and verified multi-instance behavior.
 
 ---
 
 ## Current Status
 
-Neraium 1.0 is the active production-oriented foundation for system intelligence workflows.
+Neraium 1.0 is the active production-oriented foundation for read-only Systemic Infrastructure Intelligence workflows.
 
-The current platform supports read-only telemetry analysis, upload-based workflows, deterministic SII engine results, evidence generation, replay artifacts, audit logging, runtime observability, authentication, CI validation, and cloud deployment preparation.
+The platform currently supports telemetry ingestion, validation, historical baseline creation, relationship-based behavioral analysis, evidence-backed findings, confidence handling, investigation guidance, replay artifacts, audit logging, read-only connectors, authentication, runtime observability, CI validation, and cloud deployment preparation.
 
-The next major focus areas are broader data connectors, multi-instance shared runtime storage, expanded test coverage, improved replay workflows, and operator reporting.
-
-Current Phase 3 hardening status:
-
-- Auth users and sessions persist in a dedicated auth database instead of `auth_store.json`
-- The auth store uses local SQLite by default and Postgres when `NERAIUM_AUTH_DATABASE_URL` is configured
-- Legacy JSON auth state is migrated forward on first boot into the auth database
-- Admin APIs can list users/sessions, activate or deactivate users, and revoke sessions
-- Observability now includes auth user/session counts and CI includes dependency security scanning
-
-Current Phase 2 hardening status:
-
-- Protected write routes require an authenticated session or configured service token in production
-- Role boundaries are enforced in production for operator and admin surfaces
-- Bootstrap pilot accounts can be provisioned through environment variables
-- Login attempts are rate-limited in production and auth session events are audited
-
-Current Phase 1 hardening status:
-
-- Frontend requests no longer source a shared API token from `VITE_` build-time environment
-- Production startup now requires an explicit `NERAIUM_RUNTIME_DIR`
-- Shared upload-state persistence failures are logged instead of silently swallowed
-- Security documentation has been reduced to match the controls currently implemented
+The immediate product direction is to strengthen operating-mode awareness, signal-level sensor health, finding classification, relationship timelines, evidence-linked investigation guidance, and engineer feedback.
 
 ---
 
 ## Vision
 
-Neraium is building a general-purpose system intelligence layer for operational environments.
+Neraium is building a general-purpose intelligence layer for complex operational systems.
 
-The long-term goal is to help teams understand complex systems earlier, act before failure becomes visible, and reduce downtime, waste, equipment failure, and operational uncertainty across multiple industries.
+The goal is not to replace engineers or automate judgment. The goal is to help engineering teams see persistent changes earlier, understand the evidence faster, and know where to begin investigating before a developing problem becomes an obvious operational failure.
+
+> **An extra set of eyes for engineers.**
