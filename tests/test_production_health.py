@@ -10,6 +10,7 @@ from app.services.production_health import (
     HealthObservation,
     PersistencePolicy,
     ProductionHealthEvaluator,
+    _classify_alb_target_states,
 )
 
 UTC = timezone.utc
@@ -169,6 +170,13 @@ def test_infrastructure_health_endpoint_is_structured(client: TestClient):
     }
     assert isinstance(payload["incidents"], list)
     assert isinstance(payload["current_alerts"], list)
+
+
+def test_alb_rollout_targets_do_not_create_false_degradation():
+    assert _classify_alb_target_states(["healthy", "draining"]) == ("healthy", 1, [])
+    assert _classify_alb_target_states(["healthy", "unused"]) == ("healthy", 1, [])
+    assert _classify_alb_target_states(["healthy", "unhealthy"]) == ("degraded", 1, ["unhealthy"])
+    assert _classify_alb_target_states(["draining"]) == ("critical", 0, [])
 
 
 def test_worker_heartbeat_is_sanitized_and_readable(monkeypatch, tmp_path):

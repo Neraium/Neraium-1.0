@@ -126,6 +126,17 @@ def api_request_metrics_snapshot(window_seconds: float = 300.0) -> dict[str, Any
     }
 
 
+def _classify_alb_target_states(states: list[str]) -> tuple[str, int, list[str]]:
+    """Treat rollout draining/unused targets as neutral while a healthy target is serving."""
+    healthy = states.count("healthy")
+    active_failures = [state for state in states if state not in {"healthy", "draining", "unused"}]
+    if healthy == 0:
+        return "critical", healthy, active_failures
+    if active_failures:
+        return "degraded", healthy, active_failures
+    return "healthy", healthy, active_failures
+
+
 class ProductionHealthProbe:
     """Collect sanitized production dependency observations without exposing credentials."""
 
@@ -526,8 +537,7 @@ class ProductionHealthProbe:
                 response = self._client("elbv2").describe_target_health(TargetGroupArn=target_group_arn)
                 descriptions = response.get("TargetHealthDescriptions") or []
                 states = [str(item.get("TargetHealth", {}).get("State") or "unknown") for item in descriptions]
-                healthy = states.count("healthy")
-                status = "healthy" if healthy >= 1 and healthy == len(states) else ("critical" if healthy == 0 else "degraded")
+                status, healthy, active_failures = _classify_alb_target_states(states)
                 observations.append(HealthObservation(
                     key="alb_targets",
                     subsystem="api",
@@ -535,7 +545,7 @@ class ProductionHealthProbe:
                     evidence=[f"ALB reports {healthy}/{len(states)} healthy API target(s).", f"Target states: {', '.join(states) or 'none'}."],
                     recommended_first_check="Inspect target health reasons, API /api/health responses, and ECS task networking.",
                     impact="The load balancer cannot route API traffic." if status == "critical" else ("API capacity is reduced." if status == "degraded" else "ALB targets are healthy."),
-                    metadata={"healthy": healthy, "total": len(states), "states": states},
+                    metadata={"healthy": healthy, "total": len(states), "states": states, "active_failures": active_failures},
                 ))
             except Exception as error:
                 observations.append(HealthObservation(
