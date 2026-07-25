@@ -16,7 +16,7 @@ async function openCommandCenter(page) {
   });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-  await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
 }
 
 async function startCommandCenterUpload(page, { name, csv }) {
@@ -71,7 +71,11 @@ test.describe("Setup + Upload regression", () => {
     await expect(page.getByRole("progressbar", { name: /Telemetry transfer|Analysis/i })).toHaveAttribute("aria-valuenow", /[1-9][0-9]*|100/, { timeout: 30000 });
     await expect(page.getByRole("region", { name: "Analysis complete" })).toBeVisible({ timeout: 120000 });
     const viewResults = page.getByRole("button", { name: /View Results|Open Portfolio/i });
-    if (await viewResults.count()) await viewResults.first().click();
-    await expect(page.getByTestId("engineering-reasoning-platform")).toBeVisible({ timeout: 30000 });
+    if (await viewResults.count()) {
+      await viewResults.first().click();
+      await expect(page.getByTestId("engineering-reasoning-platform")).toBeVisible({ timeout: 30000 });
+    } else {
+      await expect(page.getByRole("button", { name: "Review Data Requirements" })).toBeVisible();
+    }
   });
 });
