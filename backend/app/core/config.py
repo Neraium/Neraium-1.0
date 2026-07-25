@@ -326,6 +326,14 @@ def validate_environment_completeness(settings: Settings) -> None:
     app_env = str(getattr(settings, "app_env", DEFAULT_APP_ENV) or "").strip().lower()
     process_role = str(getattr(settings, "process_role", DEFAULT_PROCESS_ROLE) or "").strip().lower()
     auth_database_url = str(os.getenv("NERAIUM_AUTH_DATABASE_URL", "")).strip()
+    auth_database_secret_arn = str(os.getenv("NERAIUM_AUTH_DATABASE_SECRET_ARN", "")).strip()
+    auth_database_host = str(os.getenv("NERAIUM_AUTH_DATABASE_HOST", "")).strip()
+    auth_database_name = str(os.getenv("NERAIUM_AUTH_DATABASE_NAME", "postgres")).strip()
+    auth_database_sslmode = str(os.getenv("NERAIUM_AUTH_DATABASE_SSLMODE", "require")).strip().lower()
+    if auth_database_url and auth_database_secret_arn:
+        raise ValueError(
+            "Configure exactly one of NERAIUM_AUTH_DATABASE_URL or NERAIUM_AUTH_DATABASE_SECRET_ARN."
+        )
     if auth_database_url:
         parsed_auth_database = urlsplit(auth_database_url)
         try:
@@ -342,6 +350,25 @@ def validate_environment_completeness(settings: Settings) -> None:
             raise ValueError(
                 "NERAIUM_AUTH_DATABASE_URL must be an absolute PostgreSQL URL with a host and database name."
             )
+    if auth_database_secret_arn:
+        if not re.fullmatch(
+            r"arn:(?:aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+",
+            auth_database_secret_arn,
+        ):
+            raise ValueError("NERAIUM_AUTH_DATABASE_SECRET_ARN must be a Secrets Manager ARN.")
+        if (
+            not auth_database_host
+            or any(character.isspace() for character in auth_database_host)
+            or any(character in auth_database_host for character in "/@?")
+        ):
+            raise ValueError("NERAIUM_AUTH_DATABASE_HOST must be a database hostname.")
+        parse_port(os.getenv("NERAIUM_AUTH_DATABASE_PORT"), 5432, name="NERAIUM_AUTH_DATABASE_PORT")
+        if not auth_database_name or any(character.isspace() for character in auth_database_name):
+            raise ValueError("NERAIUM_AUTH_DATABASE_NAME must be a database name without whitespace.")
+        if auth_database_sslmode not in {"require", "verify-ca", "verify-full"}:
+            raise ValueError(
+                "NERAIUM_AUTH_DATABASE_SSLMODE must be require, verify-ca, or verify-full."
+            )
     if app_env in {"prod", "production"}:
         if not str(os.getenv("CORS_ORIGINS", "")).strip():
             raise ValueError("CORS_ORIGINS must be set explicitly in production.")
@@ -352,9 +379,14 @@ def validate_environment_completeness(settings: Settings) -> None:
             raise ValueError(
                 "NERAIUM_UPLOAD_STATE_BUCKET is required for split-role production."
             )
-        if process_role in {"api", "all", "monolith"} and not auth_database_url:
+        if (
+            process_role in {"api", "all", "monolith"}
+            and not auth_database_url
+            and not auth_database_secret_arn
+        ):
             raise ValueError(
-                "NERAIUM_AUTH_DATABASE_URL is required for production API processes."
+                "NERAIUM_AUTH_DATABASE_URL or NERAIUM_AUTH_DATABASE_SECRET_ARN is required "
+                "for production API processes."
             )
 
     for label, email_name, password_name in (

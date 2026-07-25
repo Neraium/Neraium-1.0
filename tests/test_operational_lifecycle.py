@@ -162,6 +162,15 @@ def test_runtime_dependency_failure_marks_readiness_not_ready(monkeypatch, tmp_p
     assert response.json()["checks"]["runtime_db"] == "error"
 
 
+def test_auth_dependency_failure_marks_readiness_not_ready(monkeypatch, tmp_path) -> None:
+    with TestClient(create_app(_settings(tmp_path))) as client:
+        monkeypatch.setattr("app.routers.health._auth_store_available", lambda: False)
+        response = client.get("/api/ready")
+
+    assert response.status_code == 503
+    assert response.json()["checks"]["auth_store"] == "error"
+
+
 def test_lifespan_stops_every_started_background_service(monkeypatch, tmp_path) -> None:
     calls: list[str] = []
     monkeypatch.setattr("app.main.start_upload_worker", lambda: calls.append("worker_started"))

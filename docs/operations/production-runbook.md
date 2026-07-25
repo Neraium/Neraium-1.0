@@ -52,7 +52,7 @@ The preferred production posture is same-origin routing when CloudFront is confi
   - `api`: handles HTTP requests and queues accepted uploads.
   - `worker`: claims queued uploads and performs analysis.
 - The API and worker tasks must share the same `NERAIUM_UPLOAD_STATE_BUCKET`.
-- The API task uses PostgreSQL from `NERAIUM_AUTH_DATABASE_URL` for production auth/session persistence.
+- The API task uses PostgreSQL through the rotating RDS secret referenced by `NERAIUM_AUTH_DATABASE_SECRET_ARN`; the backend refreshes credentials after managed rotation.
 - Runtime files live under `NERAIUM_RUNTIME_DIR=/mnt/neraium-runtime`.
 - Health and readiness are separate:
   - `/api/health` is lightweight liveness.
@@ -229,7 +229,11 @@ APP_ENV=prod
 NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_RUNTIME_DIR=/mnt/neraium-runtime
 CORS_ORIGINS=https://app.neraium.com
-NERAIUM_AUTH_DATABASE_URL=<secret-injected-postgres-dsn>
+NERAIUM_AUTH_DATABASE_SECRET_ARN=<rds-managed-json-secret-arn>
+NERAIUM_AUTH_DATABASE_HOST=<rds-endpoint>
+NERAIUM_AUTH_DATABASE_PORT=5432
+NERAIUM_AUTH_DATABASE_NAME=postgres
+NERAIUM_AUTH_DATABASE_SSLMODE=require
 NERAIUM_API_TOKEN=<secret-injected-service-token>
 ```
 

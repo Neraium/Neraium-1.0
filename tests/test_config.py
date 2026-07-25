@@ -208,8 +208,39 @@ def test_production_api_requires_postgres_auth_database(monkeypatch, tmp_path) -
     monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
     monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-state")
     monkeypatch.delenv("NERAIUM_AUTH_DATABASE_URL", raising=False)
+    monkeypatch.delenv("NERAIUM_AUTH_DATABASE_SECRET_ARN", raising=False)
 
-    with pytest.raises(ValueError, match="NERAIUM_AUTH_DATABASE_URL"):
+    with pytest.raises(ValueError, match="NERAIUM_AUTH_DATABASE_URL.*NERAIUM_AUTH_DATABASE_SECRET_ARN"):
+        validate_environment_completeness(get_settings())
+
+
+def test_production_api_accepts_managed_auth_database_secret(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-state")
+    monkeypatch.delenv("NERAIUM_AUTH_DATABASE_URL", raising=False)
+    monkeypatch.setenv(
+        "NERAIUM_AUTH_DATABASE_SECRET_ARN",
+        "arn:aws:secretsmanager:us-east-2:123456789012:secret:rds-managed",
+    )
+    monkeypatch.setenv("NERAIUM_AUTH_DATABASE_HOST", "database.example.test")
+    monkeypatch.setenv("NERAIUM_AUTH_DATABASE_NAME", "postgres")
+    monkeypatch.setenv("NERAIUM_AUTH_DATABASE_SSLMODE", "require")
+
+    validate_environment_completeness(get_settings())
+
+
+def test_managed_auth_database_secret_requires_host(monkeypatch) -> None:
+    monkeypatch.delenv("NERAIUM_AUTH_DATABASE_URL", raising=False)
+    monkeypatch.setenv(
+        "NERAIUM_AUTH_DATABASE_SECRET_ARN",
+        "arn:aws:secretsmanager:us-east-2:123456789012:secret:rds-managed",
+    )
+    monkeypatch.delenv("NERAIUM_AUTH_DATABASE_HOST", raising=False)
+
+    with pytest.raises(ValueError, match="NERAIUM_AUTH_DATABASE_HOST"):
         validate_environment_completeness(get_settings())
 
 

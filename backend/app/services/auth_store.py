@@ -12,8 +12,14 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from app.core.config import get_settings
+
+try:
+    import boto3  # type: ignore
+except Exception:  # pragma: no cover - boto3 is optional in isolated local/test envs
+    boto3 = None
 
 try:
     import psycopg  # type: ignore
@@ -24,8 +30,9 @@ _STORE_LOCK = threading.RLock()
 _SESSION_COOKIE_NAME = "neraium_session"
 _SESSION_TTL_DAYS = 14
 _VALID_ROLES = {"viewer", "operator", "admin"}
-_AUTH_BACKEND_KEY: tuple[str, str] | None = None
+_AUTH_BACKEND_KEY: tuple[str, ...] | None = None
 _AUTH_BACKEND: "_BaseAuthBackend" | None = None
+_AUTH_SECRETS_CLIENT: Any | None = None
 logger = logging.getLogger(__name__)
 
 
@@ -491,8 +498,93 @@ class _PostgresAuthBackend(_BaseAuthBackend):
 
     def _connect(self):
         if psycopg is None:
-            raise RuntimeError("psycopg is required when NERAIUM_AUTH_DATABASE_URL is configured.")
+            raise RuntimeError("psycopg is required when a PostgreSQL auth database is configured.")
         return psycopg.connect(self.dsn)
+
+
+def _auth_secrets_client():
+    global _AUTH_SECRETS_CLIENT
+    if _AUTH_SECRETS_CLIENT is None:
+        if boto3 is None:
+            raise RuntimeError("boto3 is required when NERAIUM_AUTH_DATABASE_SECRET_ARN is configured.")
+        _AUTH_SECRETS_CLIENT = boto3.client("secretsmanager")
+    return _AUTH_SECRETS_CLIENT
+
+
+def _password_authentication_failed(error: Exception) -> bool:
+    sqlstate = str(getattr(error, "sqlstate", "") or "").strip()
+    if sqlstate == "28P01":
+        return True
+    return "password authentication failed" in str(error).lower()
+
+
+class _SecretsManagerPostgresAuthBackend(_BaseAuthBackend):
+    """PostgreSQL backend backed directly by the rotating RDS credential secret."""
+
+    placeholder = "%s"
+    dialect = "postgresql"
+
+    def __init__(
+        self,
+        *,
+        secret_arn: str,
+        host: str,
+        port: int,
+        database: str,
+        sslmode: str,
+    ):
+        self.secret_arn = str(secret_arn or "").strip()
+        self.host = str(host or "").strip()
+        self.port = int(port)
+        self.database = str(database or "").strip()
+        self.sslmode = str(sslmode or "require").strip().lower()
+        self._credential_lock = threading.RLock()
+        self._cached_dsn: str | None = None
+        if not self.secret_arn or not self.host or not self.database:
+            raise ValueError("Managed auth database configuration is incomplete.")
+        if not 1 <= self.port <= 65535:
+            raise ValueError("NERAIUM_AUTH_DATABASE_PORT must be between 1 and 65535.")
+
+    def _load_dsn(self, *, force_refresh: bool = False) -> str:
+        with self._credential_lock:
+            if self._cached_dsn is not None and not force_refresh:
+                return self._cached_dsn
+            response = _auth_secrets_client().get_secret_value(SecretId=self.secret_arn)
+            raw_payload = response.get("SecretString")
+            if not isinstance(raw_payload, str) or not raw_payload.strip():
+                raise RuntimeError("Managed auth database secret has no SecretString payload.")
+            try:
+                payload = json.loads(raw_payload)
+            except (TypeError, ValueError) as error:
+                raise RuntimeError("Managed auth database secret is not valid JSON.") from error
+            username = str(payload.get("username") or "").strip()
+            password = str(payload.get("password") or "")
+            if not username or not password:
+                raise RuntimeError("Managed auth database secret must contain username and password.")
+            self._cached_dsn = (
+                f"postgresql://{quote(username, safe='')}:{quote(password, safe='')}@"
+                f"{self.host}:{self.port}/{quote(self.database, safe='')}"
+                f"?sslmode={quote(self.sslmode, safe='')}"
+            )
+            return self._cached_dsn
+
+    def _connect(self):
+        if psycopg is None:
+            raise RuntimeError("psycopg is required when a PostgreSQL auth database is configured.")
+        try:
+            return psycopg.connect(self._load_dsn())
+        except Exception as error:
+            if not _password_authentication_failed(error):
+                raise
+            logger.warning(
+                "auth_database_credentials_refreshing",
+                extra={
+                    "event": "auth_database_credentials_refreshing",
+                    "auth_store_backend": "postgresql_secrets_manager",
+                    "reason": "database_authentication_rejected",
+                },
+            )
+            return psycopg.connect(self._load_dsn(force_refresh=True))
 
 
 def session_cookie_name() -> str:
@@ -516,7 +608,35 @@ def _auth_database_url() -> str:
     return str(os.getenv("NERAIUM_AUTH_DATABASE_URL", "")).strip()
 
 
-def _backend_key() -> tuple[str, str]:
+def _managed_auth_database_config() -> dict[str, Any] | None:
+    secret_arn = str(os.getenv("NERAIUM_AUTH_DATABASE_SECRET_ARN", "")).strip()
+    if not secret_arn:
+        return None
+    raw_port = str(os.getenv("NERAIUM_AUTH_DATABASE_PORT", "5432")).strip()
+    try:
+        port = int(raw_port)
+    except ValueError as error:
+        raise ValueError("NERAIUM_AUTH_DATABASE_PORT must be an integer.") from error
+    return {
+        "secret_arn": secret_arn,
+        "host": str(os.getenv("NERAIUM_AUTH_DATABASE_HOST", "")).strip(),
+        "port": port,
+        "database": str(os.getenv("NERAIUM_AUTH_DATABASE_NAME", "postgres")).strip(),
+        "sslmode": str(os.getenv("NERAIUM_AUTH_DATABASE_SSLMODE", "require")).strip().lower(),
+    }
+
+
+def _backend_key() -> tuple[str, ...]:
+    managed = _managed_auth_database_config()
+    if managed:
+        return (
+            "postgres_secrets_manager",
+            managed["secret_arn"],
+            managed["host"],
+            str(managed["port"]),
+            managed["database"],
+            managed["sslmode"],
+        )
     dsn = _auth_database_url()
     if dsn:
         return ("postgres", dsn)
@@ -528,7 +648,12 @@ def _get_backend() -> _BaseAuthBackend:
     key = _backend_key()
     with _STORE_LOCK:
         if _AUTH_BACKEND is None or _AUTH_BACKEND_KEY != key:
-            if key[0] == "postgres":
+            if key[0] == "postgres_secrets_manager":
+                managed = _managed_auth_database_config()
+                if managed is None:  # pragma: no cover - key/config are computed together
+                    raise RuntimeError("Managed auth database configuration disappeared.")
+                _AUTH_BACKEND = _SecretsManagerPostgresAuthBackend(**managed)
+            elif key[0] == "postgres":
                 _AUTH_BACKEND = _PostgresAuthBackend(key[1])
             else:
                 _AUTH_BACKEND = _SQLiteAuthBackend(Path(key[1]))
@@ -543,6 +668,12 @@ def _get_backend() -> _BaseAuthBackend:
 def initialize_auth_store() -> str:
     """Connect, migrate, and validate the configured authentication store."""
     return _get_backend().dialect
+
+
+def auth_store_available() -> bool:
+    """Check the live auth dependency without exposing database details."""
+    backend = _get_backend()
+    return backend._fetch_one("SELECT 1 AS ready") is not None
 
 
 def _now_iso() -> str:

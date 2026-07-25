@@ -23,7 +23,7 @@ Response time: 48 hours
 - Login/session storage persists in a dedicated auth database, with local SQLite for tests/dev and Postgres in production
 - Admin controls can create users, activate or deactivate accounts, and revoke sessions
 - Production login attempts are rate-limited in application code
-- Set `NERAIUM_AUTH_DATABASE_URL` to a shared Postgres database before multi-instance rollout
+- Production ECS reads the shared Postgres credential from the rotating RDS secret referenced by `NERAIUM_AUTH_DATABASE_SECRET_ARN`; local deployments may use `NERAIUM_AUTH_DATABASE_URL` instead
 
 ### Data Protection
 - HTTPS is enforced in production through HSTS headers

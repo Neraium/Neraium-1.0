@@ -286,7 +286,7 @@ The next major focus areas are broader data connectors, multi-instance shared ru
 Current Phase 3 hardening status:
 
 - Auth users and sessions persist in a dedicated auth database instead of `auth_store.json`
-- The auth store uses local SQLite by default and Postgres when `NERAIUM_AUTH_DATABASE_URL` is configured
+- The auth store uses local SQLite by default and Postgres through either a local DSN or the rotating RDS secret configured by `NERAIUM_AUTH_DATABASE_SECRET_ARN`
 - Legacy JSON auth state is migrated forward on first boot into the auth database
 - Admin APIs can list users/sessions, activate or deactivate users, and revoke sessions
 - Observability now includes auth user/session counts and CI includes dependency security scanning

@@ -65,13 +65,13 @@ Required repository variables before running either workflow (the bootstrap pass
 secret: NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
 NERAIUM_API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name>
-NERAIUM_AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<postgres-dsn-secret>
+NERAIUM_AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<legacy-postgres-dsn-secret>  # rollback compatibility; active tasks use the discovered RDS managed secret
 NERAIUM_BOOTSTRAP_ADMIN_EMAIL=<pilot-admin-email>
 NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<bootstrap-admin-password-secret>
 NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD=false  # set true only for an intentional password reset
 ```
 
-The active production path is GitHub Actions plus AWS CLI. Terraform is deprecated and should not be used to register or update ECS task definitions. The backend deploy workflow expects the ECS cluster, API service, worker service, and both task-definition families to already exist, and now fails early if they do not.
+The workflows discover the production RDS endpoint, rotating master secret ARN, and KMS key directly from `neraium-prod-postgres`; do not copy the rotating password into a separate DSN secret. The active production path is GitHub Actions plus AWS CLI. Terraform is deprecated and should not be used to register or update ECS task definitions. The backend deploy workflow expects the ECS cluster, API service, worker service, and both task-definition families to already exist, and now fails early if they do not.
 
 ## Recommended Deployment Order
 

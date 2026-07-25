@@ -34,6 +34,9 @@ env:
   APP_TASK_ROLE_NAME: neraium-prod-task-app-role
   API_TOKEN_SECRET_ARN: ${{ vars.NERAIUM_API_TOKEN_SECRET_ARN }}
   AUTH_DATABASE_URL_SECRET_ARN: ${{ vars.NERAIUM_AUTH_DATABASE_URL_SECRET_ARN }}
+  RDS_AUTH_INSTANCE_ID: neraium-prod-postgres
+  AUTH_DATABASE_NAME: postgres
+  AUTH_DATABASE_SSLMODE: require
   NERAIUM_BOOTSTRAP_ADMIN_EMAIL: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_EMAIL }}
   NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN }}
   NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD || 'false' }}
@@ -66,6 +69,9 @@ jobs:
           test -n "$TASK_EXECUTION_ROLE_NAME"
           test -n "$API_TOKEN_SECRET_ARN"
           test -n "$AUTH_DATABASE_URL_SECRET_ARN"
+          test -n "$RDS_AUTH_INSTANCE_ID"
+          test -n "$AUTH_DATABASE_NAME"
+          test -n "$AUTH_DATABASE_SSLMODE"
           test -n "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL"
           test -n "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN"
           case "${NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD,,}" in
@@ -73,8 +79,25 @@ jobs:
             *) echo "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD must be true or false" >&2; exit 1 ;;
           esac
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          RDS_AUTH_CONFIG=$(aws rds describe-db-instances \
+            --db-instance-identifier "$RDS_AUTH_INSTANCE_ID" \
+            --region "$AWS_REGION" \
+            --query 'DBInstances[0].{host:Endpoint.Address,port:Endpoint.Port,secretArn:MasterUserSecret.SecretArn,kmsKeyArn:MasterUserSecret.KmsKeyId}' \
+            --output json)
+          AUTH_DATABASE_HOST=$(jq -r '.host' <<<"$RDS_AUTH_CONFIG")
+          AUTH_DATABASE_PORT=$(jq -r '.port' <<<"$RDS_AUTH_CONFIG")
+          AUTH_DATABASE_SECRET_ARN=$(jq -r '.secretArn' <<<"$RDS_AUTH_CONFIG")
+          AUTH_DATABASE_KMS_KEY_ARN=$(jq -r '.kmsKeyArn' <<<"$RDS_AUTH_CONFIG")
+          for value in "$AUTH_DATABASE_HOST" "$AUTH_DATABASE_PORT" "$AUTH_DATABASE_SECRET_ARN" "$AUTH_DATABASE_KMS_KEY_ARN"; do
+            test -n "$value"
+            test "$value" != "null"
+          done
           echo "API_TOKEN_SECRET_ARN=$API_TOKEN_SECRET_ARN" >> "$GITHUB_ENV"
           echo "AUTH_DATABASE_URL_SECRET_ARN=$AUTH_DATABASE_URL_SECRET_ARN" >> "$GITHUB_ENV"
+          echo "AUTH_DATABASE_HOST=$AUTH_DATABASE_HOST" >> "$GITHUB_ENV"
+          echo "AUTH_DATABASE_PORT=$AUTH_DATABASE_PORT" >> "$GITHUB_ENV"
+          echo "AUTH_DATABASE_SECRET_ARN=$AUTH_DATABASE_SECRET_ARN" >> "$GITHUB_ENV"
+          echo "AUTH_DATABASE_KMS_KEY_ARN=$AUTH_DATABASE_KMS_KEY_ARN" >> "$GITHUB_ENV"
           echo "APP_TASK_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${APP_TASK_ROLE_NAME}" >> "$GITHUB_ENV"
           echo "TASK_EXECUTION_ROLE_ARN=arn:aws:iam::${ACCOUNT_ID}:role/${TASK_EXECUTION_ROLE_NAME}" >> "$GITHUB_ENV"
 
@@ -233,7 +256,7 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
           echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_URL_SECRET_ARN "$AUTH_DATABASE_URL_SECRET_ARN" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg BACKEND_PORT "$API_CONTAINER_PORT" --argjson CONTAINER_PORT "$API_CONTAINER_PORT" --arg HEALTHCHECK_COMMAND "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${API_CONTAINER_PORT}/api/health', timeout=5).read()\" || exit 1" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_SECRET_ARN "$AUTH_DATABASE_SECRET_ARN" --arg AUTH_DATABASE_HOST "$AUTH_DATABASE_HOST" --arg AUTH_DATABASE_PORT "$AUTH_DATABASE_PORT" --arg AUTH_DATABASE_NAME "$AUTH_DATABASE_NAME" --arg AUTH_DATABASE_SSLMODE "$AUTH_DATABASE_SSLMODE" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg BACKEND_PORT "$API_CONTAINER_PORT" --argjson CONTAINER_PORT "$API_CONTAINER_PORT" --arg HEALTHCHECK_COMMAND "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${API_CONTAINER_PORT}/api/health', timeout=5).read()\" || exit 1" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
             | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .containerDefinitions = (.containerDefinitions | map(
@@ -241,7 +264,7 @@ jobs:
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "BACKEND_HOST" and .name != "BACKEND_PORT" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "BACKEND_HOST" and .name != "BACKEND_PORT" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" and .name != "NERAIUM_AUTH_DATABASE_SECRET_ARN" and .name != "NERAIUM_AUTH_DATABASE_HOST" and .name != "NERAIUM_AUTH_DATABASE_PORT" and .name != "NERAIUM_AUTH_DATABASE_NAME" and .name != "NERAIUM_AUTH_DATABASE_SSLMODE"))
                     + [
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "api"},
                       {"name": "APP_ENV", "value": "prod"},
@@ -255,6 +278,11 @@ jobs:
                       {"name": "LOG_LEVEL", "value": $LOG_LEVEL},
                       {"name": "LOG_FORMAT", "value": $LOG_FORMAT},
                       {"name": "NERAIUM_BUILD_SHA", "value": $BUILD_SHA},
+                      {"name": "NERAIUM_AUTH_DATABASE_SECRET_ARN", "value": $AUTH_DATABASE_SECRET_ARN},
+                      {"name": "NERAIUM_AUTH_DATABASE_HOST", "value": $AUTH_DATABASE_HOST},
+                      {"name": "NERAIUM_AUTH_DATABASE_PORT", "value": $AUTH_DATABASE_PORT},
+                      {"name": "NERAIUM_AUTH_DATABASE_NAME", "value": $AUTH_DATABASE_NAME},
+                      {"name": "NERAIUM_AUTH_DATABASE_SSLMODE", "value": $AUTH_DATABASE_SSLMODE},
                       {"name": "NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "value": $BOOTSTRAP_ADMIN_EMAIL},
                       {"name": "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD", "value": $BOOTSTRAP_ADMIN_RESET_PASSWORD}
                     ])
@@ -270,7 +298,6 @@ jobs:
                     | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD"))
                     + [
                       {"name": "NERAIUM_API_TOKEN", "valueFrom": $API_TOKEN_SECRET_ARN},
-                      {"name": "NERAIUM_AUTH_DATABASE_URL", "valueFrom": $AUTH_DATABASE_URL_SECRET_ARN},
                       {"name": "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "valueFrom": $BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN}
                     ])
                 | .logConfiguration = {
@@ -502,14 +529,35 @@ jobs:
             --query 'taskDefinition.containerDefinitions[0].secrets[?name==`NERAIUM_API_TOKEN`].valueFrom | [0]' \
             --output text)
 
-          AUTH_DATABASE_VALUE_FROM=$(aws ecs describe-task-definition \
+          AUTH_DATABASE_SECRET_ARN_VALUE=$(aws ecs describe-task-definition \
             --task-definition "$API_TASK_DEF_ARN" \
             --region "$AWS_REGION" \
-            --query 'taskDefinition.containerDefinitions[0].secrets[?name==`NERAIUM_AUTH_DATABASE_URL`].valueFrom | [0]' \
+            --query 'taskDefinition.containerDefinitions[0].environment[?name==`NERAIUM_AUTH_DATABASE_SECRET_ARN`].value | [0]' \
+            --output text)
+
+          AUTH_DATABASE_HOST_VALUE=$(aws ecs describe-task-definition \
+            --task-definition "$API_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].environment[?name==`NERAIUM_AUTH_DATABASE_HOST`].value | [0]' \
+            --output text)
+
+          AUTH_DATABASE_PORT_VALUE=$(aws ecs describe-task-definition \
+            --task-definition "$API_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition.containerDefinitions[0].environment[?name==`NERAIUM_AUTH_DATABASE_PORT`].value | [0]' \
+            --output text)
+
+          AUTH_DATABASE_URL_SECRET_COUNT=$(aws ecs describe-task-definition \
+            --task-definition "$API_TASK_DEF_ARN" \
+            --region "$AWS_REGION" \
+            --query 'length(taskDefinition.containerDefinitions[0].secrets[?name==`NERAIUM_AUTH_DATABASE_URL`])' \
             --output text)
 
           test "$API_TOKEN_VALUE_FROM" = "$API_TOKEN_SECRET_ARN"
-          test "$AUTH_DATABASE_VALUE_FROM" = "$AUTH_DATABASE_URL_SECRET_ARN"
+          test "$AUTH_DATABASE_SECRET_ARN_VALUE" = "$AUTH_DATABASE_SECRET_ARN"
+          test "$AUTH_DATABASE_HOST_VALUE" = "$AUTH_DATABASE_HOST"
+          test "$AUTH_DATABASE_PORT_VALUE" = "$AUTH_DATABASE_PORT"
+          test "$AUTH_DATABASE_URL_SECRET_COUNT" = "0"
 
           API_BOOTSTRAP_ADMIN_EMAIL_VALUE=$(aws ecs describe-task-definition \
             --task-definition "$API_TASK_DEF_ARN" \
