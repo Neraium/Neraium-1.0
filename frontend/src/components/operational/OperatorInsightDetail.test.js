@@ -43,8 +43,8 @@ describe("OperatorInsightDetail evidence synthesis", () => {
       },
     }));
 
-    expect(screen.getByText("Change detected")).toBeTruthy();
-    expect(screen.getByText("Narrowed")).toBeTruthy();
+    expect(screen.getByText("Insufficient evidence")).toBeTruthy();
+    expect(screen.getByText(/Narrowed evidence scope/)).toBeTruthy();
     expect(screen.getByText(/Unassigned dataset/).textContent).toContain("Flow and pressure");
     expect(screen.getByText("The system produced more flow while recorded pump power and pressure decreased relative to the learned baseline.")).toBeTruthy();
     expect(screen.getByText("Pump power decreased 8.9% while flow increased 6.3%.")).toBeTruthy();
@@ -52,8 +52,8 @@ describe("OperatorInsightDetail evidence synthesis", () => {
     expect(screen.getByText("Filter differential pressure decreased 32%.")).toBeTruthy();
     expect(screen.getByText("Four learned hydraulic relationships weakened or changed.")).toBeTruthy();
     expect(screen.getByText(/producing more flow with less recorded pump power and lower pressure readings/i)).toBeTruthy();
-    expect(screen.getByText(/Confirm whether pump operating mode, valve position, or sensor configuration changed/i)).toBeTruthy();
-    expect(screen.getByText(/If no operating change occurred, compare pump power, flow, main pressure/i)).toBeTruthy();
+    expect(screen.getAllByText(/historical finding was generated before contextual classification was available/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/No evidence-linked next check was recorded/i)).toBeTruthy();
     expect(screen.getByText("Some telemetry fields could not be classified, which limits how specifically Neraium can interpret the change.")).toBeTruthy();
     expect(screen.getAllByText("Feb 11 at 11:00 PM – Mar 1 at 11:00 PM").length).toBeGreaterThan(0);
     expect(screen.getByText("Open relationship evidence")).toBeTruthy();
@@ -94,4 +94,70 @@ describe("OperatorInsightDetail evidence synthesis", () => {
     expect(screen.getAllByText(/Check valve position and bypass status/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Water interpretation confidence is Medium/i).length).toBeGreaterThan(0);
   });
+
+  it("renders classification context, structured guidance, and detail sections in evidence order", () => {
+    const { container } = render(h(OperatorInsightDetail, {
+      defaultOpen: true,
+      insight: {
+        id: "systemic-pump-change",
+        summary: "Pump relationship changed",
+        system: "Pumping",
+        sourceName: "pump-history.csv",
+        classification: {
+          type: "unexplained_systemic_change",
+          confidence: "high",
+          reasons: ["The relationship shift persisted under comparable conditions."],
+          alternative_explanations: ["An undocumented control-state change."],
+          certainty_limit: "This finding does not identify a cause or predict an exact failure.",
+        },
+        dataConfidence: { rating: "high", summary: "Quality checks passed.", reasons: [] },
+        sensorHealth: [{ signal: "discharge_pressure", health: "healthy", conditions: [] }],
+        operatingMode: {
+          baseline_mode_label: "Lead-pump mid-load operation",
+          recent_mode_label: "Lead-pump mid-load operation",
+          match: "strong",
+          confidence: "high",
+          reasons: ["Pump state and load context matched."],
+        },
+        persistence: { persistent: true, duration: "18 days", summary: "The change remained present for 18 days." },
+        activityTimeline: [{
+          event_type: "analysis_window",
+          title: "Relationship comparison period",
+          detail: "The relationship was evaluated in the recorded recent window.",
+          start: "2026-07-01T00:00:00Z",
+          end: "2026-07-18T23:59:00Z",
+          precision: "range",
+        }],
+        investigationGuidance: [
+          { rank: 1, check: "Verify source data and control-state context.", reason: "Source context should be confirmed before physical review.", category: "data_quality", editable: true },
+          { rank: 2, check: "Review the affected relationship timeline.", reason: "The change persisted under comparable modes.", category: "operating_context", editable: true },
+        ],
+        alternativeExplanations: ["An undocumented control-state change."],
+        dataLimitations: ["Only uploaded telemetry and recorded context were evaluated."],
+        contributingRelationships: [{ display_columns: ["Pump speed", "Discharge pressure"], change_type: "weakened" }],
+        evidence: [{ supporting_signals: ["Pump speed and discharge pressure changed together."] }],
+      },
+    }));
+
+    expect(screen.getByText("Unexplained systemic change")).toBeTruthy();
+    expect(screen.getByText("Persistent for 18 days")).toBeTruthy();
+    expect(screen.getByText("Verify source data and control-state context.")).toBeTruthy();
+    expect(screen.getByText("Source context should be confirmed before physical review.")).toBeTruthy();
+    expect(screen.getByText("Relationship comparison period")).toBeTruthy();
+    expect(screen.queryByText("Persistence threshold reached")).toBeNull();
+
+    const headings = Array.from(container.querySelectorAll(".evidence-page__section > h4")).map((node) => node.textContent);
+    expect(headings).toEqual([
+      "What changed",
+      "Why Neraium classified it this way",
+      "Data confidence and sensor-health context",
+      "Operating-mode comparison",
+      "Relationship timeline",
+      "Supporting evidence",
+      "Highest-value next checks",
+      "Alternative explanations",
+      "Data limitations",
+    ]);
+  });
+
 });

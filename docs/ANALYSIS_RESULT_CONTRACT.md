@@ -90,6 +90,26 @@ Relationship strength is currently based on baseline/current correlation deltas 
 
 Fingerprint evidence must include at least the baseline/current window context and any metric or relationship deviations used in the explanation.
 
+## Engineering Finding Context
+
+Finding fields are additive. Current `insights[]` may include:
+
+- `classification`: deterministic `type`, display `label`, classification `confidence`, evidence-linked `reasons`, `alternative_explanations`, `certainty_limit`, and `rule_version`.
+- `data_confidence`: qualitative rating, summary, limitations, and affected signals.
+- `sensor_health[]`: per-signal health plus evidence-backed conditions.
+- `operating_mode`: baseline/recent labels, match strength, confidence, recorded differences, and reasons.
+- `persistence`: status, support flag, supporting signals, and summary.
+- `relationship_evidence`: paired sample support and relationship-change measurements.
+- `investigation_guidance[]`: ordered, frontend-safe checks with `rank`, `check`, evidence-linked `reason`, `category`, and `editable`.
+- `activity_timeline[]`: source-bounded evidence events. Events use source `time`, `start`/`end`, or an explicit `period_label`; consumers must not infer missing dates.
+- `certainty_limit`, `alternative_explanations`, and `data_limitations`.
+
+Canonical classification types are `known_operational_change`, `possible_instrumentation_issue`, `unexplained_systemic_change`, and `insufficient_evidence`. Supported guidance categories are `instrumentation`, `controls`, `operating_context`, `physical_system`, `data_quality`, and `documentation`.
+
+`recommended_investigation[]` and `recommended_first_action` remain populated as text compatibility views of `investigation_guidance`. Clients should prefer `investigation_guidance` when present.
+
+Historical canonical payloads may not contain these fields. Frontends must use `insufficient_evidence` presentation or an explicitly unclassified legacy state, show unavailable context, and explain that contextual classification was not recorded. They must never infer `unexplained_systemic_change` from legacy severity or confidence.
+
 ## Frontend Usage Rules
 
 - Overview renders `executive_summary` only for completed analysis.

@@ -1,0 +1,201 @@
+[
+  {
+    "id": "known_pump_staging_change",
+    "description": "Pump staging changed from one active pump to two during the recent comparison window.",
+    "expected_classification": "known_operational_change",
+    "data_confidence": {
+      "rating": "high",
+      "summary": "Telemetry passed recorded quality checks.",
+      "reasons": [],
+      "affected_signals": []
+    },
+    "sensor_health": [
+      {
+        "signal": "pump_speed",
+        "health": "healthy",
+        "conditions": []
+      },
+      {
+        "signal": "discharge_pressure",
+        "health": "healthy",
+        "conditions": []
+      }
+    ],
+    "operating_mode": {
+      "baseline_mode": "one_pump",
+      "baseline_mode_label": "One-pump operation",
+      "recent_mode": "two_pumps",
+      "recent_mode_label": "Two-pump operation",
+      "match": "weak",
+      "confidence": "high",
+      "known_operational_change": true,
+      "differences": [
+        {
+          "feature": "active_unit_count",
+          "reason": "Active pump count changed from 1 to 2 during the recent window."
+        }
+      ],
+      "reasons": [
+        "Equipment staging differs between the baseline and recent windows."
+      ]
+    },
+    "persistence": {
+      "status": "persistent",
+      "persistent": true,
+      "summary": "The relationship shift remained present across the 12-sample recent window."
+    },
+    "relationship_evidence": {
+      "baseline_sample_size": 24,
+      "recent_sample_size": 12,
+      "confidence_score": 0.9,
+      "correlation_delta": 0.72
+    }
+  },
+  {
+    "id": "possible_pressure_instrumentation_issue",
+    "description": "Discharge pressure gradually diverged from its peer while pump operating context remained comparable.",
+    "expected_classification": "possible_instrumentation_issue",
+    "data_confidence": {
+      "rating": "limited",
+      "summary": "One affected signal requires validation.",
+      "reasons": [
+        "Pressure is the only affected signal with peer divergence."
+      ],
+      "affected_signals": [
+        "discharge_pressure"
+      ]
+    },
+    "sensor_health": [
+      {
+        "signal": "pump_speed",
+        "health": "healthy",
+        "conditions": []
+      },
+      {
+        "signal": "discharge_pressure",
+        "health": "suspect",
+        "conditions": [
+          {
+            "type": "possible_drift",
+            "severity": "review",
+            "evidence": "Discharge pressure gradually diverged from a redundant pressure measurement."
+          }
+        ]
+      }
+    ],
+    "operating_mode": {
+      "baseline_mode": "lead_pump",
+      "baseline_mode_label": "Lead-pump operation",
+      "recent_mode": "lead_pump",
+      "recent_mode_label": "Lead-pump operation",
+      "match": "strong",
+      "confidence": "high",
+      "known_operational_change": false,
+      "differences": [],
+      "reasons": [
+        "Available pump-state and load context matched."
+      ]
+    },
+    "persistence": {
+      "status": "persistent",
+      "persistent": true,
+      "summary": "Peer divergence remained present across the recent window."
+    },
+    "relationship_evidence": {
+      "baseline_sample_size": 48,
+      "recent_sample_size": 18,
+      "confidence_score": 0.82,
+      "correlation_delta": 0.61
+    }
+  },
+  {
+    "id": "unexplained_persistent_systemic_change",
+    "description": "A persistent pump-speed and discharge-pressure relationship shift remains after like-for-like mode comparison.",
+    "expected_classification": "unexplained_systemic_change",
+    "data_confidence": {
+      "rating": "high",
+      "summary": "Telemetry passed recorded quality checks.",
+      "reasons": [],
+      "affected_signals": []
+    },
+    "sensor_health": [
+      {
+        "signal": "pump_speed",
+        "health": "healthy",
+        "conditions": []
+      },
+      {
+        "signal": "discharge_pressure",
+        "health": "healthy",
+        "conditions": []
+      }
+    ],
+    "operating_mode": {
+      "baseline_mode": "lead_pump_mid_load",
+      "baseline_mode_label": "Lead-pump mid-load operation",
+      "recent_mode": "lead_pump_mid_load",
+      "recent_mode_label": "Lead-pump mid-load operation",
+      "match": "strong",
+      "confidence": "high",
+      "known_operational_change": false,
+      "differences": [],
+      "reasons": [
+        "Pump state, load band, schedule, and setpoint context matched."
+      ]
+    },
+    "persistence": {
+      "status": "persistent",
+      "persistent": true,
+      "duration": "18 days",
+      "summary": "The relationship change remained present across 18 days of comparable operation."
+    },
+    "relationship_evidence": {
+      "baseline_sample_size": 240,
+      "recent_sample_size": 96,
+      "confidence_score": 0.91,
+      "correlation_delta": 0.68
+    }
+  },
+  {
+    "id": "insufficient_irregular_sparse_evidence",
+    "description": "Sparse baseline coverage and irregular sampling prevent a reliable like-for-like interpretation.",
+    "expected_classification": "insufficient_evidence",
+    "data_confidence": {
+      "rating": "low",
+      "summary": "Recorded data quality does not support reliable interpretation.",
+      "reasons": [
+        "Sampling was irregular.",
+        "The baseline contains only two paired samples."
+      ],
+      "affected_signals": [
+        "pump_speed",
+        "discharge_pressure"
+      ]
+    },
+    "sensor_health": [],
+    "operating_mode": {
+      "baseline_mode": "unavailable",
+      "baseline_mode_label": "Operating context unavailable",
+      "recent_mode": "unavailable",
+      "recent_mode_label": "Operating context unavailable",
+      "match": "weak",
+      "confidence": "limited",
+      "known_operational_change": false,
+      "differences": [],
+      "reasons": [
+        "Operating-state coverage was too sparse for a strong mode match."
+      ]
+    },
+    "persistence": {
+      "status": "limited",
+      "persistent": false,
+      "summary": "Persistence could not be established from the irregular recent samples."
+    },
+    "relationship_evidence": {
+      "baseline_sample_size": 2,
+      "recent_sample_size": 2,
+      "confidence_score": 0.31,
+      "correlation_delta": 0.52
+    }
+  }
+]

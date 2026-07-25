@@ -454,3 +454,345 @@ function formatBehaviorDuration(value) {
   if (hours < 24) return `${hours} hours`;
   return `${Math.round(hours / 24)} days`;
 }
+
+
+export const FINDING_CLASSIFICATIONS = Object.freeze({
+  known_operational_change: {
+    label: "Known operational change",
+    tone: "known",
+    priority: "Informational review",
+    meaning: "The observed shift is explained by available operational context.",
+  },
+  possible_instrumentation_issue: {
+    label: "Possible instrumentation issue",
+    tone: "instrumentation",
+    priority: "Verify instrumentation",
+    meaning: "Verify sensor or telemetry quality before treating the finding as a physical-system change.",
+  },
+  unexplained_systemic_change: {
+    label: "Unexplained systemic change",
+    tone: "systemic",
+    priority: "Engineering review",
+    meaning: "A persistent relationship change remains during comparable operating conditions and is not explained by available context.",
+  },
+  insufficient_evidence: {
+    label: "Insufficient evidence",
+    tone: "insufficient",
+    priority: "Evidence review",
+    meaning: "The evidence is not strong enough for a reliable interpretation.",
+  },
+});
+
+const GUIDANCE_CATEGORIES = new Set([
+  "instrumentation",
+  "controls",
+  "operating_context",
+  "physical_system",
+  "data_quality",
+  "documentation",
+]);
+
+const TIMELINE_EVENT_TYPES = new Set([
+  "baseline_reference",
+  "first_detectable_deviation",
+  "persistence_supported",
+  "persistence_threshold",
+  "operating_mode_event",
+  "sensor_health_warning",
+  "analysis_window",
+  "finding_generated",
+]);
+
+const LEGACY_CLASSIFICATION_EXPLANATION = "This historical finding was generated before contextual classification was available.";
+
+export function normalizeFindingPresentation(finding = {}) {
+  const rawClassification = objectValue(finding.classification);
+  const type = Object.hasOwn(FINDING_CLASSIFICATIONS, rawClassification.type)
+    ? rawClassification.type
+    : "insufficient_evidence";
+  const meta = FINDING_CLASSIFICATIONS[type];
+  const legacy = !rawClassification.type || !Object.hasOwn(FINDING_CLASSIFICATIONS, rawClassification.type);
+  const rawDataConfidence = objectValue(finding.dataConfidence ?? finding.data_confidence);
+  const rawOperatingMode = objectValue(finding.operatingMode ?? finding.operating_mode);
+  const rawPersistence = objectValue(finding.persistence);
+  const sensorHealth = listValue(finding.sensorHealth ?? finding.sensor_health)
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      signal: presentationText(item.signal) || "Unidentified signal",
+      health: presentationText(item.health) || "unavailable",
+      conditions: listValue(item.conditions).filter((condition) => condition && typeof condition === "object").map((condition) => ({
+        type: presentationText(condition.type) || "unavailable",
+        severity: presentationText(condition.severity) || "unavailable",
+        evidence: presentationText(condition.evidence),
+      })),
+    }));
+  const reasons = uniquePresentationText(rawClassification.reasons);
+  const alternatives = uniquePresentationText(
+    finding.alternativeExplanations
+      ?? finding.alternative_explanations
+      ?? rawClassification.alternative_explanations,
+  );
+  const certaintyLimit = presentationText(
+    finding.certaintyLimit
+      ?? finding.certainty_limit
+      ?? rawClassification.certainty_limit,
+  ) || (legacy
+    ? LEGACY_CLASSIFICATION_EXPLANATION
+    : "This classification is bounded by the evidence recorded in the current analysis.");
+  const dataRating = normalizeEvidenceLabel(rawDataConfidence.rating, "Unavailable");
+  const modeMatch = normalizeModeMatch(rawOperatingMode.match);
+  const persistence = normalizePersistence(rawPersistence, finding.persistenceDuration ?? finding.persistence_duration);
+  const classificationConfidence = legacy
+    ? "Unavailable"
+    : normalizeEvidenceLabel(rawClassification.confidence, "Unavailable");
+  const dataLimitations = uniquePresentationText([
+    ...listValue(finding.dataLimitations ?? finding.data_limitations),
+    ...listValue(rawDataConfidence.reasons),
+    ...listValue(finding.qualityWarnings ?? finding.quality_warnings),
+  ]);
+
+  return {
+    type,
+    label: meta.label,
+    tone: meta.tone,
+    meaning: legacy ? LEGACY_CLASSIFICATION_EXPLANATION : meta.meaning,
+    reviewPriority: legacy ? "Historical evidence review" : meta.priority,
+    classificationConfidence,
+    reasons: reasons.length ? reasons : [legacy ? LEGACY_CLASSIFICATION_EXPLANATION : "No classification rationale was recorded."],
+    alternativeExplanations: alternatives,
+    certaintyLimit,
+    legacy,
+    dataConfidence: {
+      rating: dataRating,
+      summary: presentationText(rawDataConfidence.summary) || (legacy ? "Unavailable for this historical finding." : "No data-confidence summary was recorded."),
+      reasons: uniquePresentationText(rawDataConfidence.reasons),
+      affectedSignals: uniquePresentationText(rawDataConfidence.affected_signals ?? rawDataConfidence.affectedSignals),
+    },
+    operatingMode: {
+      match: modeMatch,
+      confidence: normalizeEvidenceLabel(rawOperatingMode.confidence, "Unavailable"),
+      baseline: presentationText(rawOperatingMode.baseline_mode_label ?? rawOperatingMode.baselineModeLabel ?? rawOperatingMode.baseline_mode ?? rawOperatingMode.baselineMode) || "Unavailable",
+      recent: presentationText(rawOperatingMode.recent_mode_label ?? rawOperatingMode.recentModeLabel ?? rawOperatingMode.recent_mode ?? rawOperatingMode.recentMode) || "Unavailable",
+      differences: listValue(rawOperatingMode.differences).filter((item) => item && typeof item === "object").map((item) => ({
+        feature: presentationText(item.feature) || "Operating context",
+        reason: presentationText(item.reason),
+      })),
+      reasons: uniquePresentationText(rawOperatingMode.reasons),
+    },
+    persistence,
+    sensorHealth,
+    relationshipEvidence: objectValue(finding.relationshipEvidence ?? finding.relationship_evidence),
+    investigationGuidance: normalizeInvestigationGuidance(finding, reasons, legacy),
+    timeline: normalizeFindingTimeline(finding),
+    dataLimitations,
+  };
+}
+
+export function normalizeInvestigationGuidance(finding = {}, classificationReasons = [], legacy = false) {
+  let raw = listValue(finding.investigationGuidance ?? finding.investigation_guidance);
+  if (!raw.length) {
+    raw = listValue(
+      finding.recommendedInvestigation
+        ?? finding.recommended_investigation
+        ?? finding.recommendedChecksStructured
+        ?? finding.recommended_checks,
+    );
+  }
+  if (!raw.length) {
+    raw = listValue(
+      finding.recommendedFirstAction
+        ?? finding.recommended_first_action
+        ?? finding.recommendedAction
+        ?? finding.recommended_action
+        ?? finding.operatorCheck
+        ?? finding.operator_check,
+    );
+  }
+  const fallbackReason = presentationText(classificationReasons[0])
+    || (legacy
+      ? "This check was retained from the historical finding; supporting rationale was not recorded."
+      : "This check is tied to the evidence available for the current finding.");
+  const normalized = raw.map((item, index) => {
+    const source = item && typeof item === "object" ? item : { check: item };
+    const check = presentationText(source.check ?? source.recommendation ?? source.recommended_check);
+    const category = GUIDANCE_CATEGORIES.has(source.category) ? source.category : "documentation";
+    const rank = Number(source.rank);
+    return {
+      rank: Number.isFinite(rank) && rank > 0 ? rank : index + 1,
+      check,
+      reason: presentationText(source.reason) || fallbackReason,
+      category,
+      editable: source.editable !== false,
+    };
+  }).filter((item) => item.check);
+
+  return normalized
+    .sort((left, right) => left.rank - right.rank)
+    .map((item, index) => ({ ...item, rank: index + 1 }));
+}
+
+export function normalizeFindingTimeline(finding = {}) {
+  const sourceRanges = [
+    ...listValue(finding.sourceTimeRanges ?? finding.source_time_ranges),
+    ...listValue(finding.evidence).flatMap((item) => listValue(item?.source_time_ranges ?? item?.sourceTimeRanges)),
+  ].filter((item) => item && typeof item === "object");
+  const rawEvents = listValue(finding.activityTimeline ?? finding.activity_timeline)
+    .filter((item) => item && typeof item === "object")
+    .map(normalizeTimelineEvent)
+    .filter(Boolean);
+  const events = [...rawEvents];
+  const bounds = sourceRanges[0] ?? {};
+
+  if (!events.some((item) => item.eventType === "baseline_reference")) {
+    const baseline = timelineRangeEvent({
+      eventType: "baseline_reference",
+      title: "Baseline reference period",
+      detail: "This recorded period supplied the learned relationship reference.",
+      start: bounds.baseline_start ?? bounds.baselineStart,
+      end: bounds.baseline_end ?? bounds.baselineEnd,
+    });
+    if (baseline) events.unshift(baseline);
+  }
+  if (!events.some((item) => ["analysis_window", "first_detectable_deviation"].includes(item.eventType))) {
+    const current = timelineRangeEvent({
+      eventType: "analysis_window",
+      title: "Relationship comparison period",
+      detail: "This is the recorded period evaluated against the learned reference.",
+      start: bounds.current_start ?? bounds.currentStart ?? bounds.start,
+      end: bounds.current_end ?? bounds.currentEnd ?? bounds.end,
+    });
+    if (current) events.push(current);
+  }
+
+  const firstDetectedAt = presentationText(finding.firstDetectedAt ?? finding.first_detected_at);
+  if (firstDetectedAt && !events.some((item) => item.eventType === "first_detectable_deviation")) {
+    events.push({
+      eventType: "first_detectable_deviation",
+      title: "First detectable deviation",
+      detail: "The source finding records this as the first detectable change.",
+      time: firstDetectedAt,
+      start: "",
+      end: "",
+      periodLabel: "",
+      precision: "source_timestamp",
+    });
+  }
+
+  const generatedAt = presentationText(finding.generatedAt ?? finding.generated_at);
+  if (generatedAt && !events.some((item) => item.eventType === "finding_generated")) {
+    events.push({
+      eventType: "finding_generated",
+      title: "Finding generated",
+      detail: "Neraium generated this evidence-bounded finding for human review.",
+      time: generatedAt,
+      start: "",
+      end: "",
+      periodLabel: "",
+      precision: "source_timestamp",
+    });
+  }
+
+  const seen = new Set();
+  return events.filter((event) => {
+    const key = [event.eventType, event.time, event.start, event.end, event.periodLabel, event.title].join("|").toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return Boolean(event.time || event.start || event.end || event.periodLabel);
+  });
+}
+
+function normalizeTimelineEvent(item) {
+  const eventType = presentationText(item.event_type ?? item.eventType);
+  const time = presentationText(item.time);
+  const start = presentationText(item.start);
+  const end = presentationText(item.end);
+  const periodLabel = presentationText(item.period_label ?? item.periodLabel)
+    || (!parseableDate(time) ? time : "");
+  const exactTime = parseableDate(time) ? time : "";
+  if (!eventType && !time && !start && !end && !periodLabel) return null;
+  const normalizedType = TIMELINE_EVENT_TYPES.has(eventType) ? eventType : "analysis_window";
+  return {
+    eventType: normalizedType,
+    title: presentationText(item.title) || "Recorded evidence event",
+    detail: presentationText(item.detail),
+    time: exactTime,
+    start,
+    end,
+    periodLabel,
+    precision: presentationText(item.precision) || (start && end ? "range" : exactTime ? "source_timestamp" : "period"),
+  };
+}
+
+function timelineRangeEvent({ eventType, title, detail, start, end }) {
+  const normalizedStart = presentationText(start);
+  const normalizedEnd = presentationText(end);
+  if (!normalizedStart && !normalizedEnd) return null;
+  return {
+    eventType,
+    title,
+    detail,
+    time: "",
+    start: normalizedStart,
+    end: normalizedEnd,
+    periodLabel: "",
+    precision: normalizedStart && normalizedEnd ? "range" : "boundary",
+  };
+}
+
+function normalizePersistence(value, durationValue) {
+  const duration = presentationText(value.duration ?? value.persistence_duration ?? value.persistenceDuration ?? durationValue);
+  const status = presentationText(value.status).toLowerCase();
+  const persistent = value.persistent === true || ["persistent", "confirmed", "sustained"].includes(status);
+  let label = "Unavailable";
+  if (duration) label = persistent ? `Persistent for ${duration}` : duration;
+  else if (persistent) label = "Persistent";
+  else if (["limited", "unconfirmed"].includes(status) || value.persistent === false) label = "Not established";
+  return {
+    status: status || "unavailable",
+    persistent,
+    duration,
+    label,
+    summary: presentationText(value.summary) || (persistent ? "Persistence is supported by the current evidence." : "Persistence evidence is unavailable or not established."),
+    reasons: uniquePresentationText(value.reasons),
+  };
+}
+
+function normalizeModeMatch(value) {
+  const normalized = presentationText(value).toLowerCase();
+  if (normalized === "strong") return "Strong";
+  if (normalized === "partial") return "Partial";
+  if (normalized === "weak") return "Weak";
+  return "Unavailable";
+}
+
+function normalizeEvidenceLabel(value, fallback) {
+  const normalized = presentationText(value).replace(/_/g, " ").toLowerCase();
+  if (!normalized) return fallback;
+  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function uniquePresentationText(values) {
+  return [...new Set(listValue(values).map(presentationText).filter(Boolean))];
+}
+
+function presentationText(value) {
+  if (value === null || value === undefined) return "";
+  if (["string", "number", "boolean"].includes(typeof value)) return String(value).trim();
+  if (typeof value === "object") return presentationText(value.summary ?? value.description ?? value.reason ?? value.label);
+  return "";
+}
+
+function listValue(value) {
+  if (Array.isArray(value)) return value;
+  if (value === null || value === undefined || value === "") return [];
+  return [value];
+}
+
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function parseableDate(value) {
+  if (!value) return false;
+  return !Number.isNaN(new Date(value).getTime());
+}

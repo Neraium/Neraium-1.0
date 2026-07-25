@@ -501,8 +501,8 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getByRole("button", { name: "Expand investigation to full workspace" })).toBeTruthy();
     expect(screen.getByText("What changed")).toBeTruthy();
     expect(screen.getByText("Supporting evidence")).toBeTruthy();
-    expect(screen.getByText("Why it matters")).toBeTruthy();
-    expect(screen.getByText("Start here")).toBeTruthy();
+    expect(screen.getByText("Why Neraium classified it this way")).toBeTruthy();
+    expect(screen.getByText("Highest-value next checks")).toBeTruthy();
     expect(screen.getByText("Open relationship evidence")).toBeTruthy();
     expect(screen.queryByText("Confidence Breakdown")).toBeNull();
     expect(document.querySelector("[data-testid='operational-command-center']")).toBeTruthy();
@@ -626,9 +626,9 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     expect(screen.getAllByText(/Pressure and Flow Behavior Changed/i).length).toBeGreaterThan(0);
     expect(screen.getByText("What changed")).toBeTruthy();
     expect(screen.getByText("Supporting evidence")).toBeTruthy();
-    expect(screen.getByText("Start here")).toBeTruthy();
+    expect(screen.getByText("Highest-value next checks")).toBeTruthy();
+    expect(screen.getByText("Relationship timeline")).toBeTruthy();
     expect(screen.getByText("Technical details")).toBeTruthy();
-    expect(screen.queryByText("Investigation Timeline")).toBeNull();
     expect(screen.getByText(/relationship between pressure and flow weakened from its learned baseline/i)).toBeTruthy();
     expect(screen.queryByText("[object Object]")).toBeNull();
     expect(screen.getByText(/1\.111111/)).toBeTruthy();
@@ -644,9 +644,9 @@ describe("OperationalWorkflowWorkspace system-first architecture", () => {
     clickNav("Engineering Findings");
     expect(screen.getByText("What changed")).toBeTruthy();
     expect(screen.getByText("Supporting evidence")).toBeTruthy();
-    expect(screen.getByText("Start here")).toBeTruthy();
+    expect(screen.getByText("Highest-value next checks")).toBeTruthy();
+    expect(screen.getByText("Relationship timeline")).toBeTruthy();
     expect(screen.getByText("Technical details")).toBeTruthy();
-    expect(screen.queryByText("Investigation Timeline")).toBeNull();
     expect(screen.queryByText("Prioritized Investigation Workflow")).toBeNull();
     expect(document.body.textContent).not.toMatch(/Ã|â|Â/);
   });

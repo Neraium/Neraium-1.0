@@ -10,6 +10,7 @@ from app.services.finding_classification import (
     UNEXPLAINED_SYSTEMIC_CHANGE,
     classify_finding,
 )
+from app.services.investigation_guidance import build_investigation_guidance
 from app.services.telemetry_classification import is_context_or_supporting_column
 
 
@@ -647,6 +648,33 @@ def ensure_finding_context(
                 relationship_evidence=relationship_evidence,
             )
         )
+        existing_guidance = item.get("investigation_guidance")
+        if not isinstance(existing_guidance, list) or not existing_guidance:
+            existing_guidance = item.get("recommended_investigation")
+        if not isinstance(existing_guidance, list) or not existing_guidance:
+            existing_guidance = [
+                first_text(
+                    item.get("investigation_guidance"),
+                    item.get("recommended_investigation"),
+                    item.get("recommended_first_action"),
+                    item.get("recommended_operator_check"),
+                    item.get("recommended_check"),
+                    item.get("first_check"),
+                    item.get("operator_check"),
+                    item.get("recommended_action"),
+                )
+            ]
+        guidance = build_investigation_guidance(
+            classification=classification,
+            existing_guidance=existing_guidance,
+            source_signals=source_signals,
+            operating_mode=operating_mode,
+            data_confidence=data_confidence,
+            sensor_health=sensor_health,
+            relationship_evidence=relationship_evidence,
+            persistence=persistence,
+        )
+        source_ranges = item.get("source_time_ranges") if isinstance(item.get("source_time_ranges"), list) else []
         updated.setdefault("classification", classification)
         updated.setdefault("operating_mode", operating_mode)
         updated.setdefault("data_confidence", data_confidence)
@@ -656,12 +684,25 @@ def ensure_finding_context(
         updated.setdefault("data_limitations", data_confidence.get("reasons", []))
         updated.setdefault("persistence", persistence)
         updated.setdefault("relationship_evidence", relationship_evidence)
-        updated.setdefault(
-            "activity_timeline",
+        updated["investigation_guidance"] = guidance
+        updated["recommended_investigation"] = [entry["check"] for entry in guidance]
+        if guidance:
+            updated["recommended_first_action"] = guidance[0]["check"]
+        updated["activity_timeline"] = merge_finding_activity_timeline(
+            item.get("activity_timeline"),
             finding_activity_timeline(
                 classification,
-                item.get("source_time_ranges") if isinstance(item.get("source_time_ranges"), list) else [],
+                source_ranges,
                 first_text(item.get("what_changed"), item.get("explanation"), item.get("title")),
+                persistence=persistence,
+                operating_mode=operating_mode,
+                sensor_health=sensor_health,
+                first_detected_at=first_text(item.get("first_detected_at")),
+                generated_at=first_text(
+                    result.get("completed_at"),
+                    result.get("last_processed_at"),
+                    result.get("generated_at"),
+                ),
             ),
         )
         normalized.append(compact_dict(updated))
@@ -808,7 +849,7 @@ def relationship_classification_narrative(
 ) -> dict[str, str]:
     pair = relationship_pair_phrase(label)
     classification_type = classification.get("type")
-    reasons = "; ".join(classification.get("reasons", [])[:3])
+    reasons = join_reason_clauses(classification.get("reasons", []), limit=3)
     if classification_type == KNOWN_OPERATIONAL_CHANGE:
         baseline_label = first_text(operating_mode.get("baseline_mode_label"), operating_mode.get("baseline_mode"), "baseline operation")
         recent_label = first_text(operating_mode.get("recent_mode_label"), operating_mode.get("recent_mode"), "recent operation")
@@ -848,11 +889,16 @@ def relationship_classification_narrative(
             ),
             "why_it_matters": "Engineering review can determine whether the persistent relationship shift warrants further investigation.",
         }
-    limitations = "; ".join(data_confidence.get("reasons", [])[:2])
+    limitations = join_reason_clauses(data_confidence.get("reasons", []), limit=2)
+    limitation_detail = (
+        f"the available evidence prevents a reliable interpretation because: {limitations}"
+        if limitations
+        else "available comparability, quality, or persistence evidence prevents a reliable interpretation"
+    )
     return {
         "what_changed": (
             f"A possible change in the relationship between {pair} was observed, but "
-            f"{limitations or 'available comparability, quality, or persistence evidence'} prevents a reliable interpretation."
+            f"{limitation_detail}."
         ),
         "why_classified": reasons or "The finding did not clear all certainty gates.",
         "interpretation": "The evidence is insufficient to distinguish an operating, instrumentation, or physical-system explanation.",
@@ -867,7 +913,7 @@ def metric_classification_narrative(
     signal_label: str,
 ) -> dict[str, str]:
     classification_type = classification.get("type")
-    reasons = "; ".join(classification.get("reasons", [])[:3])
+    reasons = join_reason_clauses(classification.get("reasons", []), limit=3)
     if classification_type == KNOWN_OPERATIONAL_CHANGE:
         return {
             "what_changed": f"{observed_change} The movement aligns with an available operating-context change.",
@@ -893,6 +939,13 @@ def metric_classification_narrative(
     }
 
 
+
+def join_reason_clauses(values: Any, *, limit: int = 3) -> str:
+    if not isinstance(values, list):
+        return ""
+    clauses = [str(value).strip().rstrip(".;") for value in values if str(value).strip()]
+    return "; ".join(clauses[:limit])
+
 def classification_confidence_rationale(
     classification: dict[str, Any],
     data_confidence: dict[str, Any],
@@ -909,22 +962,158 @@ def finding_activity_timeline(
     classification: dict[str, Any],
     source_ranges: list[dict[str, Any]],
     observation: str,
+    *,
+    persistence: dict[str, Any] | None = None,
+    operating_mode: dict[str, Any] | None = None,
+    sensor_health: list[dict[str, Any]] | None = None,
+    first_detected_at: str = "",
+    generated_at: str = "",
 ) -> list[dict[str, str]]:
+    """Build evidence milestones without deriving timestamps or offsets."""
+
     bounds = source_ranges[0] if source_ranges and isinstance(source_ranges[0], dict) else {}
-    baseline_time = first_text(bounds.get("baseline_start"), bounds.get("start"), "Baseline window")
-    recent_time = first_text(bounds.get("current_start"), bounds.get("end"), "Recent window")
-    return [
-        {
-            "time": baseline_time,
-            "title": "Reference evidence",
-            "detail": "The baseline period supplied the reference behavior for this comparison.",
-        },
-        {
-            "time": recent_time,
-            "title": first_text(classification.get("label"), "Finding evidence reviewed"),
-            "detail": observation,
-        },
-    ]
+    persistence = persistence or {}
+    operating_mode = operating_mode or {}
+    sensor_health = [item for item in sensor_health or [] if isinstance(item, dict)]
+    entries: list[dict[str, str]] = []
+
+    baseline_start = first_text(bounds.get("baseline_start"))
+    baseline_end = first_text(bounds.get("baseline_end"))
+    if baseline_start or baseline_end:
+        entries.append(
+            compact_dict(
+                {
+                    "event_type": "baseline_reference",
+                    "title": "Baseline reference period",
+                    "detail": "Recorded behavior in this period supplied the learned relationship reference.",
+                    "start": baseline_start,
+                    "end": baseline_end,
+                    "precision": "range" if baseline_start and baseline_end else "boundary",
+                }
+            )
+        )
+
+    current_start = first_text(bounds.get("current_start"), bounds.get("start"))
+    current_end = first_text(bounds.get("current_end"), bounds.get("end"))
+    if first_detected_at:
+        entries.append(
+            {
+                "event_type": "first_detectable_deviation",
+                "title": "First detectable deviation",
+                "detail": observation,
+                "time": first_detected_at,
+                "precision": "source_timestamp",
+            }
+        )
+    elif current_start or current_end:
+        entries.append(
+            compact_dict(
+                {
+                    "event_type": "analysis_window",
+                    "title": "Relationship comparison period",
+                    "detail": observation,
+                    "start": current_start,
+                    "end": current_end,
+                    "precision": "range" if current_start and current_end else "boundary",
+                }
+            )
+        )
+
+    if classification.get("type") == KNOWN_OPERATIONAL_CHANGE:
+        mode_reason = first_text(
+            *[
+                item.get("reason")
+                for item in operating_mode.get("differences", [])
+                if isinstance(item, dict)
+            ],
+            *operating_mode.get("reasons", []),
+        )
+        entries.append(
+            compact_dict(
+                {
+                    "event_type": "operating_mode_event",
+                    "title": "Known operating-mode event",
+                    "detail": mode_reason or "Recorded operating context changed during the recent comparison period.",
+                    "period_label": "Recent comparison window",
+                    "precision": "period",
+                }
+            )
+        )
+
+    suspect_reasons = []
+    for signal in sensor_health:
+        if signal.get("health") != "suspect":
+            continue
+        for condition in signal.get("conditions", []):
+            if isinstance(condition, dict) and condition.get("evidence"):
+                suspect_reasons.append(f"{signal.get('signal')}: {condition['evidence']}")
+    if suspect_reasons:
+        entries.append(
+            {
+                "event_type": "sensor_health_warning",
+                "title": "Sensor-health warning",
+                "detail": "; ".join(suspect_reasons[:2]),
+                "period_label": "Recent comparison window",
+                "precision": "period",
+            }
+        )
+
+    if persistence.get("persistent") is True:
+        entries.append(
+            {
+                "event_type": "persistence_supported",
+                "title": "Persistence supported",
+                "detail": first_text(
+                    persistence.get("summary"),
+                    "The change persisted across the available recent evidence.",
+                ),
+                "period_label": "Recent comparison window",
+                "precision": "period",
+            }
+        )
+
+    if generated_at:
+        entries.append(
+            {
+                "event_type": "finding_generated",
+                "title": first_text(classification.get("label"), "Finding generated"),
+                "detail": "Neraium generated this evidence-bounded finding for human review.",
+                "time": generated_at,
+                "precision": "source_timestamp",
+            }
+        )
+    return entries
+
+
+def merge_finding_activity_timeline(existing: Any, generated: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Retain recorded milestones and add only source-bounded generated events."""
+
+    entries = existing if isinstance(existing, list) else []
+    merged: list[dict[str, str]] = []
+    seen: set[tuple[str, ...]] = set()
+    for raw in [*entries, *generated]:
+        if not isinstance(raw, dict):
+            continue
+        event = compact_dict(
+            {
+                "event_type": first_text(raw.get("event_type"), "analysis_window"),
+                "title": first_text(raw.get("title"), "Recorded evidence event"),
+                "detail": first_text(raw.get("detail")),
+                "time": first_text(raw.get("time")),
+                "start": first_text(raw.get("start")),
+                "end": first_text(raw.get("end")),
+                "period_label": first_text(raw.get("period_label")),
+                "precision": first_text(raw.get("precision")),
+            }
+        )
+        if not any(event.get(field) for field in ("time", "start", "end", "period_label")):
+            continue
+        key = tuple(str(event.get(field) or "").lower() for field in ("event_type", "time", "start", "end", "period_label", "title"))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(event)
+    return merged
 
 
 def build_systems(

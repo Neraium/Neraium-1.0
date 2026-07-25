@@ -125,6 +125,33 @@ describe("CommandCenterView hydration regressions", () => {
     expect(screen.queryByText("No data available")).toBeNull();
   });
 
+  it("keeps unexplained systemic findings on the electric-blue classification tone", () => {
+    const { container } = render(h(CommandCenterView, {
+      model: completedModel({
+        insights: [{
+          ...completedModel().insights[0],
+          classification: {
+            type: "unexplained_systemic_change",
+            confidence: "high",
+            reasons: ["Comparable operating conditions support review."],
+          },
+          dataConfidence: { rating: "high" },
+          operatingMode: { match: "strong" },
+          persistence: { persistent: true },
+        }],
+      }),
+      helpers,
+      selectedInsight: null,
+      onSelectInsight: vi.fn(),
+      onConnectLiveData: vi.fn(),
+      onFocusInvestigation: vi.fn(),
+    }));
+
+    const severity = container.querySelector(".priority-finding__severity");
+    expect(severity?.classList.contains("priority-finding__severity--systemic")).toBe(true);
+    expect(severity?.className).not.toMatch(/critical|danger|error|investigate/);
+  });
+
   it("renders a completed finding when dashboard system cards are not an array", () => {
     render(h(CommandCenterView, {
       model: completedModel({ dashboardSystemCards: { id: "stale-object", activeInsights: "1", name: "Legacy card" } }),

@@ -453,8 +453,12 @@ def test_canonical_result_preserves_new_finding_fields_and_legacy_fields() -> No
         "persistence",
         "relationship_evidence",
         "activity_timeline",
+        "investigation_guidance",
         "what_changed",
         "why_it_matters",
         "recommended_check",
         "evidence_refs",
     }
+    assert insight["investigation_guidance"]
+    assert insight["recommended_first_action"] == insight["investigation_guidance"][0]["check"]
+    assert all(item["reason"] and item["category"] and item["editable"] is True for item in insight["investigation_guidance"])

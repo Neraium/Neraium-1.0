@@ -1,6 +1,12 @@
 import { useMemo, useRef } from "react";
 
+import { normalizeFindingPresentation } from "../../viewModels/operatorFinding";
 import AnalysisRecordDetails from "./AnalysisRecordDetails";
+import FindingClassificationSummary from "./FindingClassificationSummary";
+
+function classificationTone(insight) {
+  return normalizeFindingPresentation(insight).tone;
+}
 
 function severityLabel(value) {
   const text = String(value ?? "").trim().toLowerCase();
@@ -68,7 +74,7 @@ function summaryFor(insight, helpers) {
 }
 
 function firstAction(insight) {
-  return insight?.recommendedFirstAction || insight?.recommendedAction || insight?.operatorCheck || insight?.recommendedInvestigation?.[0] || "Review the supporting evidence and compare the affected signals with current operating context.";
+  return insight?.investigationGuidance?.[0]?.check || insight?.recommendedFirstAction || insight?.recommendedAction || insight?.operatorCheck || insight?.recommendedInvestigation?.[0] || "Review the supporting evidence and compare the affected signals with current operating context.";
 }
 
 function normalizedSystemCards(model) {
@@ -224,7 +230,8 @@ function PriorityFinding({ insight, model, helpers, onOpen }) {
     <section className="command-section priority-finding" aria-labelledby="priority-finding-heading">
       <div className="command-section__header"><p className="command-section__label">Review first</p><h2 id="priority-finding-heading">Prioritized Finding</h2><p>Highest operator priority based on severity and confidence.</p></div>
       <article className="priority-finding__card">
-        <div className="priority-finding__heading"><div><span>Affected subsystem</span><p>{insight.system || "Unavailable"}</p><h3>{titleFor(insight, helpers)}</h3></div><span className={`priority-finding__severity priority-finding__severity--${helpers.severityToTone(insight.severity)}`}>{severityLabel(insight.severity)}</span></div>
+        <FindingClassificationSummary finding={insight} compact />
+        <div className="priority-finding__heading"><div><span>Affected subsystem</span><p>{insight.system || "Unavailable"}</p><h3>{titleFor(insight, helpers)}</h3></div><span className={`priority-finding__severity priority-finding__severity--${classificationTone(insight)}`}>{severityLabel(insight.severity)}</span></div>
         <p className="priority-finding__explanation">{summaryFor(insight, helpers)}</p>
         <dl className="priority-finding__trust">
           <div><dt>Finding confidence</dt><dd>{findingConfidenceLabel(insight)}</dd></div>
@@ -267,7 +274,7 @@ function EngineeringFindings({ insights, selectedInsight, onSelectInsight, helpe
 
   return <section className="command-section command-section--findings" aria-labelledby="engineering-findings-heading">
     <div className="command-section__header"><h2 id="engineering-findings-heading">Engineering Findings</h2><p>{insights.length ? "Additional findings in priority order." : "No additional active findings."}</p></div>
-    {insights.length ? <div className="operational-findings-list" role="list" ref={queueRef} onKeyDown={handleKeyDown}>{insights.map((insight, index) => <div role="listitem" className="operational-finding-row-wrap" key={insight.id || index}><button type="button" className={selectedInsight?.id === insight.id ? "operational-finding-row is-selected" : "operational-finding-row"} data-priority-item="true" onClick={() => onSelectInsight?.(insight.id)}><span className="operational-finding-row__title">{titleFor(insight, helpers)}</span><span className={`operational-finding-row__severity operational-finding-row__severity--${helpers.severityToTone(insight.severity)}`}>{severityLabel(insight.severity)}</span><span className="operational-finding-row__confidence">Finding confidence {findingConfidenceLabel(insight)}</span><span className="operational-finding-row__summary">{summaryFor(insight, helpers)}</span></button></div>)}</div> : <div className="operational-empty operational-empty--inline"><p className="operational-findings-empty">{selectedInsight ? "No additional findings require review." : "Connect telemetry to establish the baseline."}</p></div>}
+    {insights.length ? <div className="operational-findings-list" role="list" ref={queueRef} onKeyDown={handleKeyDown}>{insights.map((insight, index) => <div role="listitem" className="operational-finding-row-wrap" key={insight.id || index}><FindingClassificationSummary finding={insight} compact /><button type="button" className={selectedInsight?.id === insight.id ? "operational-finding-row is-selected" : "operational-finding-row"} data-priority-item="true" onClick={() => onSelectInsight?.(insight.id)}><span className="operational-finding-row__title">{titleFor(insight, helpers)}</span><span className={`operational-finding-row__severity operational-finding-row__severity--${classificationTone(insight)}`}>{severityLabel(insight.severity)}</span><span className="operational-finding-row__confidence">Finding confidence {findingConfidenceLabel(insight)}</span><span className="operational-finding-row__summary">{summaryFor(insight, helpers)}</span></button></div>)}</div> : <div className="operational-empty operational-empty--inline"><p className="operational-findings-empty">{selectedInsight ? "No additional findings require review." : "Connect telemetry to establish the baseline."}</p></div>}
   </section>;
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { normalizeFindingPresentation } from "../../viewModels/operatorFinding";
 import OperatorInsightDetail from "./OperatorInsightDetail";
 
 const FOCUSABLE_SELECTOR = [
@@ -121,6 +122,7 @@ export default function InvestigationDrawer({
   const visibleTitle = title ?? presented.title ?? "Investigation";
   const isFullWorkspace = visibleRoute.mode === "full";
   const isInteractive = Boolean(route) && phase !== "closing";
+  const classification = normalizeFindingPresentation(visibleInsight ?? {});
 
   return (
     <div
@@ -145,10 +147,10 @@ export default function InvestigationDrawer({
           <div className="investigation-panel__identity">
             <span className="section-token">{isFullWorkspace ? "Full evidence page" : "Evidence"}</span>
             <h2 id="investigation-panel-title">{visibleTitle}</h2>
-            <p id="investigation-panel-subsystem" className="investigation-panel__finding-state">
-              <span>Change detected</span>
+            <p id="investigation-panel-subsystem" className={`investigation-panel__finding-state investigation-panel__finding-state--${classification.tone}`}>
+              <span>{classification.label}</span>
               <span aria-hidden="true">·</span>
-              <strong>{(visibleInsight?.changedRelationshipCount || visibleInsight?.affectedRelationships?.length || visibleInsight?.observedFacts?.length) ? "Narrowed" : "Broad"}</strong>
+              <strong>{classification.reviewPriority}</strong>
             </p>
           </div>
           <div className="investigation-panel__actions">

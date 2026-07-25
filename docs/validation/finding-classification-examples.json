@@ -1,0 +1,585 @@
+{
+  "known_operational_change": {
+    "scenario": "Pump staging changed from one active pump to two during the recent comparison window.",
+    "classification": {
+      "type": "known_operational_change",
+      "label": "Known operational change",
+      "confidence": "high",
+      "reasons": [
+        "Active pump count changed from 1 to 2 during the recent window."
+      ],
+      "alternative_explanations": [
+        "A concurrent instrumentation condition is not supported by available checks but cannot be excluded.",
+        "A relationship change may remain after like-for-like operation resumes."
+      ],
+      "certainty_limit": "The relationship shift aligns with available operating context; this classification does not establish a root cause or prove that the operational change is the only influence.",
+      "rule_version": "deterministic_finding_classification_v1"
+    },
+    "data_confidence": {
+      "rating": "high",
+      "summary": "Telemetry passed recorded quality checks."
+    },
+    "sensor_health": [
+      {
+        "signal": "discharge_pressure",
+        "health": "healthy",
+        "conditions": []
+      },
+      {
+        "signal": "pump_speed",
+        "health": "healthy",
+        "conditions": []
+      }
+    ],
+    "operating_mode": {
+      "baseline_mode": "one_pump",
+      "baseline_mode_label": "One-pump operation",
+      "recent_mode": "two_pumps",
+      "recent_mode_label": "Two-pump operation",
+      "match": "weak",
+      "confidence": "high",
+      "known_operational_change": true,
+      "differences": [
+        {
+          "feature": "active_unit_count",
+          "reason": "Active pump count changed from 1 to 2 during the recent window."
+        }
+      ],
+      "reasons": [
+        "Equipment staging differs between the baseline and recent windows."
+      ]
+    },
+    "persistence": {
+      "status": "persistent",
+      "persistent": true,
+      "supporting_signals": [
+        "pump_speed",
+        "discharge_pressure"
+      ],
+      "summary": "The existing persistence assessment includes all 2 relationship signal(s); compared 24 baseline samples with 12 recent samples.",
+      "reasons": [
+        "The existing persistence assessment includes all 2 relationship signal(s); compared 24 baseline samples with 12 recent samples."
+      ]
+    },
+    "relationship_evidence": {
+      "evidence_type": "linear_correlation",
+      "change_type": "weakened",
+      "baseline_correlation": 0.91,
+      "recent_correlation": 0.19,
+      "correlation_delta": 0.72,
+      "baseline_sample_size": 24,
+      "recent_sample_size": 12,
+      "confidence_score": 0.9,
+      "time_window": {
+        "baseline_start": "2026-06-01T00:00:00Z",
+        "baseline_end": "2026-06-30T23:59:00Z",
+        "current_start": "2026-07-01T00:00:00Z",
+        "current_end": "2026-07-18T23:59:00Z"
+      }
+    },
+    "certainty_limit": "The relationship shift aligns with available operating context; this classification does not establish a root cause or prove that the operational change is the only influence.",
+    "engineer_wording": {
+      "title": "Pumping System operating-context change",
+      "what_changed": "The relationship between Pump speed and Discharge pressure shifted during a transition from One-pump operation to Two-pump operation. The observed change is consistent with the available operating context.",
+      "why_classified": "Active pump count changed from 1 to 2 during the recent window",
+      "why_it_matters": "Confirm the recorded staging, schedule, setpoint, or event context before escalating the relationship shift."
+    },
+    "investigation_guidance": [
+      {
+        "check": "Confirm the recorded equipment staging event in operating or maintenance records.",
+        "reason": "Active pump count changed from 1 to 2 during the recent window.",
+        "category": "operating_context",
+        "editable": true,
+        "rank": 1
+      },
+      {
+        "check": "Verify the observed relationship behavior is expected for Two-pump operation.",
+        "reason": "The relationship shift aligns with a recorded mode difference, but expected behavior still requires human confirmation.",
+        "category": "controls",
+        "editable": true,
+        "rank": 2
+      },
+      {
+        "check": "Review the next comparable operating window and continue monitoring if the relationship remains expected for that mode.",
+        "reason": "A like-for-like follow-up can show whether the contextual explanation remains consistent without implying physical degradation.",
+        "category": "operating_context",
+        "editable": true,
+        "rank": 3
+      }
+    ],
+    "recommended_first_check": "Confirm the recorded equipment staging event in operating or maintenance records.",
+    "relationship_timeline": [
+      {
+        "event_type": "baseline_reference",
+        "title": "Baseline reference period",
+        "detail": "Recorded behavior in this period supplied the learned relationship reference.",
+        "start": "2026-06-01T00:00:00Z",
+        "end": "2026-06-30T23:59:00Z",
+        "precision": "range"
+      },
+      {
+        "event_type": "analysis_window",
+        "title": "Relationship comparison period",
+        "detail": "The relationship between Pump speed and Discharge pressure shifted during a transition from One-pump operation to Two-pump operation. The observed change is consistent with the available operating context.",
+        "start": "2026-07-01T00:00:00Z",
+        "end": "2026-07-18T23:59:00Z",
+        "precision": "range"
+      },
+      {
+        "event_type": "operating_mode_event",
+        "title": "Known operating-mode event",
+        "detail": "Active pump count changed from 1 to 2 during the recent window.",
+        "period_label": "Recent comparison window",
+        "precision": "period"
+      },
+      {
+        "event_type": "persistence_supported",
+        "title": "Persistence supported",
+        "detail": "The existing persistence assessment includes all 2 relationship signal(s); compared 24 baseline samples with 12 recent samples.",
+        "period_label": "Recent comparison window",
+        "precision": "period"
+      },
+      {
+        "event_type": "finding_generated",
+        "title": "Known operational change",
+        "detail": "Neraium generated this evidence-bounded finding for human review.",
+        "time": "2026-07-19T00:05:00Z",
+        "precision": "source_timestamp"
+      }
+    ]
+  },
+  "possible_instrumentation_issue": {
+    "scenario": "Discharge pressure gradually diverged from its peer while pump operating context remained comparable.",
+    "classification": {
+      "type": "possible_instrumentation_issue",
+      "label": "Possible instrumentation issue",
+      "confidence": "limited",
+      "reasons": [
+        "discharge_pressure: Discharge pressure gradually diverged from a redundant pressure measurement."
+      ],
+      "alternative_explanations": [
+        "A physical-system relationship change remains possible.",
+        "An undocumented operating or control change may also explain the pattern."
+      ],
+      "certainty_limit": "Signal-health evidence can identify an instrumentation possibility, but it does not confirm that a sensor or transmitter is faulty.",
+      "rule_version": "deterministic_finding_classification_v1"
+    },
+    "data_confidence": {
+      "rating": "limited",
+      "summary": "One affected signal requires validation.",
+      "reasons": [
+        "Pressure is the only affected signal with peer divergence."
+      ],
+      "affected_signals": [
+        "discharge_pressure"
+      ]
+    },
+    "sensor_health": [
+      {
+        "signal": "discharge_pressure",
+        "health": "suspect",
+        "conditions": [
+          {
+            "type": "possible_drift",
+            "severity": "review",
+            "evidence": "Discharge pressure gradually diverged from a redundant pressure measurement."
+          }
+        ]
+      },
+      {
+        "signal": "pump_speed",
+        "health": "healthy",
+        "conditions": []
+      }
+    ],
+    "operating_mode": {
+      "baseline_mode": "lead_pump",
+      "baseline_mode_label": "Lead-pump operation",
+      "recent_mode": "lead_pump",
+      "recent_mode_label": "Lead-pump operation",
+      "match": "strong",
+      "confidence": "high",
+      "known_operational_change": false,
+      "reasons": [
+        "Available pump-state and load context matched."
+      ]
+    },
+    "persistence": {
+      "status": "persistent",
+      "persistent": true,
+      "supporting_signals": [
+        "pump_speed",
+        "discharge_pressure"
+      ],
+      "summary": "The existing persistence assessment includes all 2 relationship signal(s); compared 48 baseline samples with 18 recent samples.",
+      "reasons": [
+        "The existing persistence assessment includes all 2 relationship signal(s); compared 48 baseline samples with 18 recent samples."
+      ]
+    },
+    "relationship_evidence": {
+      "evidence_type": "linear_correlation",
+      "change_type": "weakened",
+      "baseline_correlation": 0.91,
+      "recent_correlation": 0.19,
+      "correlation_delta": 0.61,
+      "baseline_sample_size": 48,
+      "recent_sample_size": 18,
+      "confidence_score": 0.82,
+      "time_window": {
+        "baseline_start": "2026-06-01T00:00:00Z",
+        "baseline_end": "2026-06-30T23:59:00Z",
+        "current_start": "2026-07-01T00:00:00Z",
+        "current_end": "2026-07-18T23:59:00Z"
+      }
+    },
+    "certainty_limit": "Signal-health evidence can identify an instrumentation possibility, but it does not confirm that a sensor or transmitter is faulty.",
+    "engineer_wording": {
+      "title": "Pumping System instrumentation review",
+      "what_changed": "The relationship between Pump speed and Discharge pressure changed, but the evidence is more consistent with a possible instrumentation issue than a confirmed physical-system change.",
+      "why_classified": "discharge_pressure: Discharge pressure gradually diverged from a redundant pressure measurement",
+      "why_it_matters": "Validate the affected readings before using this relationship shift to guide a physical-system investigation."
+    },
+    "investigation_guidance": [
+      {
+        "check": "Verify discharge pressure against an independent measurement or source.",
+        "reason": "Discharge pressure gradually diverged from a redundant pressure measurement.",
+        "category": "instrumentation",
+        "editable": true,
+        "rank": 1
+      },
+      {
+        "check": "Compare discharge pressure with available peer measurements over the same analysis window.",
+        "reason": "Peer-signal divergence is part of the current signal-health evidence, so a like-for-like comparison can test that possibility.",
+        "category": "instrumentation",
+        "editable": true,
+        "rank": 2
+      },
+      {
+        "check": "Review calibration, timestamp, and sampling history for discharge pressure.",
+        "reason": "The current evidence specifically calls for review of calibration history.",
+        "category": "data_quality",
+        "editable": true,
+        "rank": 3
+      },
+      {
+        "check": "Inspect the relevant monitored boundary or equipment only if validated signals still support the relationship change.",
+        "reason": "The current classification keeps instrumentation and telemetry checks ahead of any physical-system interpretation.",
+        "category": "physical_system",
+        "editable": true,
+        "rank": 4
+      }
+    ],
+    "recommended_first_check": "Verify discharge pressure against an independent measurement or source.",
+    "relationship_timeline": [
+      {
+        "event_type": "baseline_reference",
+        "title": "Baseline reference period",
+        "detail": "Recorded behavior in this period supplied the learned relationship reference.",
+        "start": "2026-06-01T00:00:00Z",
+        "end": "2026-06-30T23:59:00Z",
+        "precision": "range"
+      },
+      {
+        "event_type": "analysis_window",
+        "title": "Relationship comparison period",
+        "detail": "The relationship between Pump speed and Discharge pressure changed, but the evidence is more consistent with a possible instrumentation issue than a confirmed physical-system change.",
+        "start": "2026-07-01T00:00:00Z",
+        "end": "2026-07-18T23:59:00Z",
+        "precision": "range"
+      },
+      {
+        "event_type": "sensor_health_warning",
+        "title": "Sensor-health warning",
+        "detail": "discharge_pressure: Discharge pressure gradually diverged from a redundant pressure measurement.",
+        "period_label": "Recent comparison window",
+        "precision": "period"
+      },
+      {
+        "event_type": "persistence_supported",
+        "title": "Persistence supported",
+        "detail": "The existing persistence assessment includes all 2 relationship signal(s); compared 48 baseline samples with 18 recent samples.",
+        "period_label": "Recent comparison window",
+        "precision": "period"
+      },
+      {
+        "event_type": "finding_generated",
+        "title": "Possible instrumentation issue",
+        "detail": "Neraium generated this evidence-bounded finding for human review.",
+        "time": "2026-07-19T00:05:00Z",
+        "precision": "source_timestamp"
+      }
+    ]
+  },
+  "unexplained_systemic_change": {
+    "scenario": "A persistent pump-speed and discharge-pressure relationship shift remains after like-for-like mode comparison.",
+    "classification": {
+      "type": "unexplained_systemic_change",
+      "label": "Unexplained systemic change",
+      "confidence": "high",
+      "reasons": [
+        "The existing persistence assessment includes all 2 relationship signal(s); compared 240 baseline samples with 96 recent samples.",
+        "Pump state, load band, schedule, and setpoint context matched.",
+        "No available operating-context or signal-health evidence explains the relationship shift."
+      ],
+      "alternative_explanations": [
+        "An undocumented staging, schedule, setpoint, or maintenance change.",
+        "An instrumentation condition not detectable from the available telemetry.",
+        "A load or environmental condition not represented in the uploaded signals."
+      ],
+      "certainty_limit": "This class describes a persistent relationship change under comparable conditions; it does not diagnose cause, predict a failure, or imply an emergency.",
+      "rule_version": "deterministic_finding_classification_v1"
+    },
+    "data_confidence": {
+      "rating": "high",
+      "summary": "Telemetry passed recorded quality checks."
+    },
+    "sensor_health": [
+      {
+        "signal": "discharge_pressure",
+        "health": "healthy",
+        "conditions": []
+      },
+      {
+        "signal": "pump_speed",
+        "health": "healthy",
+        "conditions": []
+      }
+    ],
+    "operating_mode": {
+      "baseline_mode": "lead_pump_mid_load",
+      "baseline_mode_label": "Lead-pump mid-load operation",
+      "recent_mode": "lead_pump_mid_load",
+      "recent_mode_label": "Lead-pump mid-load operation",
+      "match": "strong",
+      "confidence": "high",
+      "known_operational_change": false,
+      "reasons": [
+        "Pump state, load band, schedule, and setpoint context matched."
+      ]
+    },
+    "persistence": {
+      "status": "persistent",
+      "persistent": true,
+      "supporting_signals": [
+        "pump_speed",
+        "discharge_pressure"
+      ],
+      "summary": "The existing persistence assessment includes all 2 relationship signal(s); compared 240 baseline samples with 96 recent samples.",
+      "reasons": [
+        "The existing persistence assessment includes all 2 relationship signal(s); compared 240 baseline samples with 96 recent samples."
+      ]
+    },
+    "relationship_evidence": {
+      "evidence_type": "linear_correlation",
+      "change_type": "weakened",
+      "baseline_correlation": 0.91,
+      "recent_correlation": 0.19,
+      "correlation_delta": 0.68,
+      "baseline_sample_size": 240,
+      "recent_sample_size": 96,
+      "confidence_score": 0.91,
+      "time_window": {
+        "baseline_start": "2026-06-01T00:00:00Z",
+        "baseline_end": "2026-06-30T23:59:00Z",
+        "current_start": "2026-07-01T00:00:00Z",
+        "current_end": "2026-07-18T23:59:00Z"
+      }
+    },
+    "certainty_limit": "This class describes a persistent relationship change under comparable conditions; it does not diagnose cause, predict a failure, or imply an emergency.",
+    "engineer_wording": {
+      "title": "Pumping System relationship change",
+      "what_changed": "The relationship between Pump speed and Discharge pressure no longer follows its established pattern during comparable lead-pump mid-load operation. Available signal-health checks passed, and no recorded operating change explains the shift.",
+      "why_classified": "The existing persistence assessment includes all 2 relationship signal(s); compared 240 baseline samples with 96 recent samples; Pump state, load band, schedule, and setpoint context matched; No available operating-context or signal-health evidence explains the relationship shift",
+      "why_it_matters": "Engineering review can determine whether the persistent relationship shift warrants further investigation."
+    },
+    "investigation_guidance": [
+      {
+        "check": "Verify source data and control-state context for pump speed and discharge pressure.",
+        "reason": "Available checks support review, but source and control context should be confirmed before a physical-system interpretation.",
+        "category": "data_quality",
+        "editable": true,
+        "rank": 1
+      },
+      {
+        "check": "Review the affected relationship timeline during comparable operating conditions.",
+        "reason": "Pump state, load band, schedule, and setpoint context matched. The existing persistence assessment includes all 2 relationship signal(s); compared 240 baseline samples with 96 recent samples.",
+        "category": "operating_context",
+        "editable": true,
+        "rank": 2
+      },
+      {
+        "check": "Inspect filter differential pressure trend.",
+        "reason": "The persistent relationship evidence supports a bounded inspection after data and operating context have been verified.",
+        "category": "physical_system",
+        "editable": true,
+        "rank": 3
+      },
+      {
+        "check": "Escalate for engineering review only if the reviewed evidence continues to support concern.",
+        "reason": "This class describes a persistent relationship change under comparable conditions; it does not diagnose cause, predict a failure, or imply an emergency.",
+        "category": "documentation",
+        "editable": true,
+        "rank": 4
+      }
+    ],
+    "recommended_first_check": "Verify source data and control-state context for pump speed and discharge pressure.",
+    "relationship_timeline": [
+      {
+        "event_type": "baseline_reference",
+        "title": "Baseline reference period",
+        "detail": "Recorded behavior in this period supplied the learned relationship reference.",
+        "start": "2026-06-01T00:00:00Z",
+        "end": "2026-06-30T23:59:00Z",
+        "precision": "range"
+      },
+      {
+        "event_type": "analysis_window",
+        "title": "Relationship comparison period",
+        "detail": "The relationship between Pump speed and Discharge pressure no longer follows its established pattern during comparable lead-pump mid-load operation. Available signal-health checks passed, and no recorded operating change explains the shift.",
+        "start": "2026-07-01T00:00:00Z",
+        "end": "2026-07-18T23:59:00Z",
+        "precision": "range"
+      },
+      {
+        "event_type": "persistence_supported",
+        "title": "Persistence supported",
+        "detail": "The existing persistence assessment includes all 2 relationship signal(s); compared 240 baseline samples with 96 recent samples.",
+        "period_label": "Recent comparison window",
+        "precision": "period"
+      },
+      {
+        "event_type": "finding_generated",
+        "title": "Unexplained systemic change",
+        "detail": "Neraium generated this evidence-bounded finding for human review.",
+        "time": "2026-07-19T00:05:00Z",
+        "precision": "source_timestamp"
+      }
+    ]
+  },
+  "insufficient_evidence": {
+    "scenario": "Sparse baseline coverage and irregular sampling prevent a reliable like-for-like interpretation.",
+    "classification": {
+      "type": "insufficient_evidence",
+      "label": "Insufficient evidence",
+      "confidence": "low",
+      "reasons": [
+        "Sampling was irregular.",
+        "The baseline contains only two paired samples.",
+        "Fewer than three paired samples were available in a comparison window.",
+        "Relationship support did not clear the existing limited-confidence boundary."
+      ],
+      "alternative_explanations": [
+        "Signal-health evidence was unavailable.",
+        "Different or unobserved operating conditions may explain the pattern.",
+        "More persistence evidence may change the supported classification."
+      ],
+      "certainty_limit": "Data quality or relationship support is insufficient to distinguish an operational, instrumentation, or physical-system explanation.",
+      "rule_version": "deterministic_finding_classification_v1"
+    },
+    "data_confidence": {
+      "rating": "low",
+      "summary": "Recorded data quality does not support reliable interpretation.",
+      "reasons": [
+        "Sampling was irregular.",
+        "The baseline contains only two paired samples."
+      ],
+      "affected_signals": [
+        "pump_speed",
+        "discharge_pressure"
+      ]
+    },
+    "sensor_health": [],
+    "operating_mode": {
+      "baseline_mode": "unavailable",
+      "baseline_mode_label": "Operating context unavailable",
+      "recent_mode": "unavailable",
+      "recent_mode_label": "Operating context unavailable",
+      "match": "weak",
+      "confidence": "limited",
+      "known_operational_change": false,
+      "reasons": [
+        "Operating-state coverage was too sparse for a strong mode match."
+      ]
+    },
+    "persistence": {
+      "status": "limited",
+      "persistent": false,
+      "summary": "The existing persistence assessment did not confirm every signal in this relationship.",
+      "reasons": [
+        "The existing persistence assessment did not confirm every signal in this relationship."
+      ]
+    },
+    "relationship_evidence": {
+      "evidence_type": "linear_correlation",
+      "change_type": "weakened",
+      "baseline_correlation": 0.91,
+      "recent_correlation": 0.19,
+      "correlation_delta": 0.52,
+      "baseline_sample_size": 2,
+      "recent_sample_size": 2,
+      "confidence_score": 0.31,
+      "time_window": {
+        "baseline_start": "2026-06-01T00:00:00Z",
+        "baseline_end": "2026-06-30T23:59:00Z",
+        "current_start": "2026-07-01T00:00:00Z",
+        "current_end": "2026-07-18T23:59:00Z"
+      }
+    },
+    "certainty_limit": "Data quality or relationship support is insufficient to distinguish an operational, instrumentation, or physical-system explanation.",
+    "engineer_wording": {
+      "title": "Pumping System evidence review",
+      "what_changed": "A possible change in the relationship between Pump speed and Discharge pressure was observed, but the available evidence prevents a reliable interpretation because: Sampling was irregular; The baseline contains only two paired samples.",
+      "why_classified": "Sampling was irregular; The baseline contains only two paired samples; Fewer than three paired samples were available in a comparison window",
+      "why_it_matters": "Additional like-for-like telemetry or source validation is needed before this observation should guide engineering action."
+    },
+    "investigation_guidance": [
+      {
+        "check": "Review the evidence limitations: Sampling was irregular; The baseline contains only two paired samples; strong like-for-like operating-mode support is unavailable.",
+        "reason": "Sampling was irregular.",
+        "category": "data_quality",
+        "editable": true,
+        "rank": 1
+      },
+      {
+        "check": "Collect or validate the minimum additional evidence needed: a regularly sampled, quality-checked comparison window, recorded control state or operating-mode context, at least three paired samples in each comparison window, and another comparable window to evaluate persistence.",
+        "reason": "Closing the identified evidence gap is necessary before classification can become more specific.",
+        "category": "data_quality",
+        "editable": true,
+        "rank": 2
+      },
+      {
+        "check": "Compare the refreshed evidence with the learned relationship before forming a physical-system interpretation.",
+        "reason": "Data quality or relationship support is insufficient to distinguish an operational, instrumentation, or physical-system explanation.",
+        "category": "operating_context",
+        "editable": true,
+        "rank": 3
+      }
+    ],
+    "recommended_first_check": "Review the evidence limitations: Sampling was irregular; The baseline contains only two paired samples; strong like-for-like operating-mode support is unavailable.",
+    "relationship_timeline": [
+      {
+        "event_type": "baseline_reference",
+        "title": "Baseline reference period",
+        "detail": "Recorded behavior in this period supplied the learned relationship reference.",
+        "start": "2026-06-01T00:00:00Z",
+        "end": "2026-06-30T23:59:00Z",
+        "precision": "range"
+      },
+      {
+        "event_type": "analysis_window",
+        "title": "Relationship comparison period",
+        "detail": "A possible change in the relationship between Pump speed and Discharge pressure was observed, but the available evidence prevents a reliable interpretation because: Sampling was irregular; The baseline contains only two paired samples.",
+        "start": "2026-07-01T00:00:00Z",
+        "end": "2026-07-18T23:59:00Z",
+        "precision": "range"
+      },
+      {
+        "event_type": "finding_generated",
+        "title": "Insufficient evidence",
+        "detail": "Neraium generated this evidence-bounded finding for human review.",
+        "time": "2026-07-19T00:05:00Z",
+        "precision": "source_timestamp"
+      }
+    ]
+  }
+}

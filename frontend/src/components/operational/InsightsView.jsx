@@ -7,7 +7,7 @@ export default function InsightsView({ model, helpers, selectedInsight, onSelect
     <div className="operational-grid operational-grid--command-center">
       <section className="operational-panel operational-panel--wide" aria-label="Insights">
         <div className="operational-view-identity">
-          <PanelHeader eyebrow="Insights" title="Operational Insights" subtitle="Highest priority first." />
+          <PanelHeader eyebrow="Engineering review" title="Engineering Findings" subtitle="Classification-aware findings, highest review priority first." />
           <OperationalOrb state={model.orb} status={model.orb.status} minimal hideVisualLabel />
         </div>
         <InsightList

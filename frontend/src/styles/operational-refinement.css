@@ -1967,3 +1967,282 @@
     padding: var(--space-14);
   }
 }
+
+
+/* Classification-aware operational finding layout. */
+.priority-finding__card > .finding-classification {
+  margin-bottom: var(--space-14);
+}
+
+.operational-finding-row-wrap {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(130, 176, 255, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(130, 176, 255, 0.08);
+}
+
+.operational-finding-row-wrap > .finding-classification {
+  border: 0;
+  border-bottom: 1px solid rgba(130, 176, 255, 0.1);
+  border-left: 3px solid var(--finding-accent);
+  border-radius: 0;
+}
+
+.operational-finding-row-wrap > .operational-finding-row {
+  border: 0;
+  border-radius: 0;
+}
+
+.evidence-page__context {
+  margin: var(--space-8) 0 0;
+  color: var(--text-muted);
+  font-size: var(--type-body-sm);
+}
+
+.evidence-page__secondary {
+  color: var(--text-secondary) !important;
+  font-size: var(--type-body-sm) !important;
+}
+
+.evidence-page__secondary strong {
+  color: var(--text-primary);
+}
+
+.evidence-page__unavailable {
+  color: var(--text-muted) !important;
+  font-size: var(--type-body-sm) !important;
+}
+
+.evidence-context-grid {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.4fr) minmax(0, 1.6fr);
+  gap: 1px;
+  margin: 0;
+  border: 1px solid rgba(130, 176, 255, 0.12);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: rgba(130, 176, 255, 0.1);
+}
+
+.evidence-context-grid--mode {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.evidence-context-grid div {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-10);
+  background: rgba(5, 9, 15, 0.62);
+}
+
+.evidence-context-grid dt {
+  color: var(--text-muted);
+  font-size: 0.69rem;
+  font-weight: 720;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.evidence-context-grid dd {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.sensor-health-list,
+.sensor-health-list ul,
+.relationship-evidence-timeline,
+.investigation-guidance-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sensor-health-list {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.sensor-health-list__item {
+  display: grid;
+  gap: var(--space-8);
+  padding: var(--space-10);
+  border: 1px solid rgba(130, 176, 255, 0.12);
+  border-left: 3px solid #76a9c8;
+  border-radius: var(--radius-sm);
+  background: rgba(5, 9, 15, 0.52);
+}
+
+.sensor-health-list__item--suspect { border-left-color: #d6a15b; }
+
+.sensor-health-list__item > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-10);
+}
+
+.sensor-health-list__item > div span {
+  color: var(--text-secondary);
+  font-size: var(--type-body-sm);
+}
+
+.sensor-health-list__item p,
+.sensor-health-list__item li {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-sm);
+  line-height: 1.45;
+}
+
+.relationship-evidence-timeline {
+  position: relative;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.relationship-evidence-timeline::before {
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 5px;
+  width: 1px;
+  background: rgba(22, 140, 255, 0.34);
+  content: "";
+}
+
+.relationship-evidence-timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(145px, 0.36fr) minmax(0, 1fr);
+  gap: var(--space-4) var(--space-16);
+  padding: var(--space-8) 0 var(--space-8) 24px;
+}
+
+.relationship-evidence-timeline li::before {
+  position: absolute;
+  top: 13px;
+  left: 1px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #168cff;
+  border-radius: 50%;
+  background: var(--surface-a);
+  content: "";
+}
+
+.relationship-evidence-timeline time {
+  grid-row: span 2;
+  color: var(--color-blue-pale);
+  font-size: 0.73rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.relationship-evidence-timeline strong {
+  color: var(--text-primary);
+}
+
+.relationship-evidence-timeline p {
+  color: var(--text-secondary);
+  font-size: var(--type-body-sm);
+  line-height: 1.45;
+}
+
+.investigation-guidance-list {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.investigation-guidance-list li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: var(--space-10);
+  padding: var(--space-10);
+  border: 1px solid rgba(22, 140, 255, 0.15);
+  border-radius: var(--radius-sm);
+  background: rgba(5, 9, 15, 0.5);
+}
+
+.investigation-guidance-list__rank {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(22, 140, 255, 0.38);
+  border-radius: 50%;
+  color: var(--color-blue-pale);
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.investigation-guidance-list li > div {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.investigation-guidance-list strong {
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.investigation-guidance-list p {
+  color: var(--text-secondary) !important;
+  font-size: var(--type-body-sm) !important;
+  line-height: 1.45 !important;
+}
+
+@media (max-width: 640px) {
+  .evidence-context-grid,
+  .evidence-context-grid--mode {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .relationship-evidence-timeline li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .relationship-evidence-timeline time {
+    grid-row: auto;
+  }
+
+  .investigation-guidance-list li {
+    padding: var(--space-10) var(--space-8);
+  }
+}
+
+/* Classification-aware overrides keep legacy severity metadata subordinate to evidence class. */
+.operational-status--systemic,
+.priority-finding__severity--systemic,
+.operational-finding-row__severity--systemic {
+  border-color: rgba(22, 140, 255, 0.5);
+  background: rgba(22, 140, 255, 0.1);
+  color: #72bdff;
+}
+
+.operational-status--instrumentation,
+.priority-finding__severity--instrumentation,
+.operational-finding-row__severity--instrumentation {
+  border-color: rgba(214, 161, 91, 0.46);
+  background: rgba(214, 161, 91, 0.09);
+  color: #e4b979;
+}
+
+.operational-status--known,
+.priority-finding__severity--known,
+.operational-finding-row__severity--known {
+  border-color: rgba(132, 158, 181, 0.36);
+  background: rgba(132, 158, 181, 0.07);
+  color: #a9bfd1;
+}
+
+.operational-status--insufficient,
+.priority-finding__severity--insufficient,
+.operational-finding-row__severity--insufficient {
+  border-color: rgba(127, 139, 153, 0.3);
+  background: rgba(127, 139, 153, 0.06);
+  color: #8996a3;
+}

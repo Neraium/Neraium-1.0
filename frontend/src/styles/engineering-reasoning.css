@@ -544,3 +544,219 @@
   .portfolio-site-card > div { min-height: 74px; }
   .portfolio-site-card > button { grid-column: 1 / -1; width: auto; }
 }
+
+/* Classification-aware findings in the primary engineering workflow. */
+.operational-finding > .finding-classification {
+  margin: 14px 14px 0;
+}
+
+.operational-finding--classification-systemic {
+  border-color: rgba(22, 140, 255, 0.4);
+  box-shadow: inset 3px 0 #168cff;
+}
+
+.operational-finding--classification-instrumentation {
+  border-color: rgba(214, 161, 91, 0.38);
+  box-shadow: inset 3px 0 #d6a15b;
+}
+
+.operational-finding--classification-known {
+  border-color: rgba(118, 169, 200, 0.3);
+  box-shadow: inset 3px 0 #76a9c8;
+}
+
+.operational-finding--classification-insufficient {
+  border-color: rgba(117, 130, 146, 0.3);
+  border-style: dashed;
+  box-shadow: inset 3px 0 #758292;
+}
+
+.operational-evidence > .finding-classification {
+  margin-top: 18px;
+}
+
+.operational-evidence__sections--classification {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.operational-evidence__sections--classification .evidence-section {
+  min-height: 0;
+  border-right: 0;
+}
+
+.evidence-section > h3 {
+  margin: 14px 0 8px;
+  color: var(--fr-faint);
+  font-size: 8px;
+  font-weight: 680;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.evidence-section > h2 {
+  margin: 0 0 10px;
+  color: #8297ad;
+  font-size: 9px;
+  font-weight: 680;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.classification-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.5fr) minmax(0, 1.5fr);
+  gap: 1px;
+  margin: 0 0 12px;
+  border: 1px solid var(--fr-line);
+  background: var(--fr-line);
+}
+
+.classification-detail-grid--mode {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.classification-detail-grid > div {
+  min-width: 0;
+  padding: 10px 12px;
+  background: #0b121b;
+}
+
+.classification-detail-grid dt {
+  color: var(--fr-faint);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.classification-detail-grid dd {
+  margin: 5px 0 0;
+  color: #c5d0dc;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.classification-sensor-list,
+.classification-sensor-list ul,
+.classification-timeline,
+.classification-guidance {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.classification-sensor-list > li {
+  padding: 10px 12px;
+  border: 1px solid var(--fr-line);
+  border-left: 2px solid #76a9c8;
+  background: rgba(8, 14, 21, 0.58);
+}
+
+.classification-sensor-list > li + li { margin-top: 7px; }
+.classification-sensor-list ul { margin-top: 7px; }
+
+.classification-timeline {
+  position: relative;
+  display: grid;
+  gap: 4px;
+}
+
+.classification-timeline::before {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 5px;
+  width: 1px;
+  background: rgba(22, 140, 255, 0.38);
+  content: "";
+}
+
+.classification-timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(170px, 0.35fr) minmax(0, 1fr);
+  gap: 4px 16px;
+  padding: 7px 0 7px 24px;
+}
+
+.classification-timeline li::before {
+  position: absolute;
+  top: 11px;
+  left: 1px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #168cff;
+  border-radius: 50%;
+  background: #0b121b;
+  content: "";
+}
+
+.classification-timeline time {
+  grid-row: span 2;
+  color: #72bdff;
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.classification-timeline strong {
+  color: #d5e0ea;
+  font-size: 11px;
+}
+
+.classification-timeline p { margin: 0; font-size: 10px; }
+
+.classification-guidance {
+  display: grid;
+  gap: 8px;
+}
+
+.classification-guidance > li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid rgba(22, 140, 255, 0.18);
+  background: rgba(8, 14, 21, 0.58);
+}
+
+.classification-guidance > li > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(22, 140, 255, 0.4);
+  border-radius: 50%;
+  color: #72bdff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.classification-guidance > li > div {
+  display: grid;
+  gap: 4px;
+}
+
+.classification-guidance small {
+  color: #8297ad;
+  font-size: 8px;
+  font-weight: 680;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.classification-guidance strong {
+  color: #d5e0ea;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.classification-guidance p { margin: 0; font-size: 10px; }
+
+@media (max-width: 720px) {
+  .operational-finding > .finding-classification { margin: 12px 12px 0; }
+  .classification-detail-grid,
+  .classification-detail-grid--mode { grid-template-columns: minmax(0, 1fr); }
+  .classification-timeline li { grid-template-columns: minmax(0, 1fr); }
+  .classification-timeline time { grid-row: auto; }
+}

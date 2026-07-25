@@ -14,6 +14,13 @@ function reasoningPayload() {
       variables: ["Chiller-03", "Flow-01"],
       supporting_evidence: ["Flow response decreased 12.4%.", "Pump demand increased 6.1%.", "The relationship moved outside its learned range."],
       contributing_relationships: [{ id: "chiller-flow", columns: ["Chiller-03", "Flow-01"], change_type: "weakened", baseline_strength: 0.82, current_strength: 0.41 }],
+      classification: { type: "unexplained_systemic_change", label: "Unexplained systemic change", confidence: "high", reasons: ["Operating context matched strongly.", "The relationship shift remained persistent."], alternative_explanations: ["An undocumented control-state change may still explain the shift."], certainty_limit: "This describes a relationship change and does not establish a cause." },
+      data_confidence: { rating: "high", summary: "Telemetry passed recorded quality checks.", reasons: [] },
+      operating_mode: { match: "strong", confidence: "high", baseline_mode_label: "Mid-load operation", recent_mode_label: "Mid-load operation", differences: [] },
+      sensor_health: [{ signal: "Flow-01", health: "healthy", conditions: [] }],
+      persistence: { persistent: true, duration: "3 days", summary: "The relationship shift remained present across comparable windows." },
+      investigation_guidance: [{ rank: 1, check: "Verify source data and control-state context.", reason: "Source validation bounds the physical-system interpretation.", category: "data_quality", editable: true }],
+      activity_timeline: [{ event_type: "baseline_reference", title: "Baseline reference period", start: "2026-07-19T10:00:00Z", end: "2026-07-20T10:00:00Z", precision: "range" }, { event_type: "persistence_supported", title: "Persistence supported", period_label: "Recent comparison window", precision: "period" }],
     }],
   };
   const result = {
@@ -48,11 +55,15 @@ test.describe("Engineering reasoning decision cards", () => {
     await expect(card.getByText("Narrowed")).toBeVisible();
     await expect(card.locator(".operational-finding__evidence li")).toHaveCount(3);
     await expect(card.getByText("Missing telemetry limits the conclusion.")).toBeVisible();
+    await expect(card.getByLabel(/Classification: Unexplained systemic change/i)).toBeVisible();
+    await expect(card.locator(".finding-classification--systemic")).toBeVisible();
 
     await card.getByRole("button", { name: "Open Evidence" }).click();
     await expect(page).toHaveURL(/\/evidence\/flow-response$/);
     await expect(page.getByText("What changed")).toBeVisible();
     await expect(page.getByText("Supporting evidence")).toBeVisible();
+    await expect(page.getByText("Highest-value next checks")).toBeVisible();
+    await expect(page.getByText("Verify source data and control-state context.")).toBeVisible();
     const details = page.locator("details.evidence-technical");
     await expect(details).not.toHaveAttribute("open", "");
     await details.locator(":scope > summary").click();
@@ -74,12 +85,14 @@ test.describe("Engineering reasoning decision cards", () => {
         evidenceBeforeAction: Boolean(evidence && action && evidence.bottom <= action.top + 1),
         titleUsesCardWidth: Boolean(title && title.width >= cardBox.width - 32),
         actionVisible: Boolean(action && action.bottom <= window.innerHeight),
+        classificationFits: Boolean(node.querySelector(".finding-classification")?.getBoundingClientRect().right <= window.innerWidth + 1),
       };
     });
     expect(metrics.overflow).toBeLessThanOrEqual(1);
     expect(metrics.evidenceBeforeAction).toBe(true);
     expect(metrics.titleUsesCardWidth).toBe(true);
     expect(metrics.actionVisible).toBe(true);
+    expect(metrics.classificationFits).toBe(true);
   });
 
   test("asset search opens evidence directly and technical trace stays nested", async ({ page }) => {

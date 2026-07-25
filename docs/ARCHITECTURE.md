@@ -34,6 +34,7 @@ The SII engine remains unchanged and supplies relationship, persistence, and cor
 2. `sensor_health.py` extends existing profiles, normalization integrity, ingestion counts, timestamp checks, and confidence caps into qualitative per-signal health and `high`, `limited`, or `low` data confidence.
 3. `finding_classification.py` deterministically assigns `known_operational_change`, `possible_instrumentation_issue`, `unexplained_systemic_change`, or `insufficient_evidence`.
 4. `analysis_explanations.py` applies classification-specific language and preserves the supporting mode, quality, persistence, relationship, timeline, and uncertainty evidence in the canonical analysis contract.
+5. `investigation_guidance.py` structures the existing evidence-backed recommendation text, applies classification-specific ordering, and keeps every check editable and tied to a stated reason. It does not issue repair instructions or create a second diagnosis engine.
 
 Low data confidence or insufficient relationship support prevents stronger claims. Weak or unavailable mode matching prevents an unexplained systemic classification. An unexplained systemic change means only that a persistent relationship changed under comparable recorded conditions; it is not a root-cause diagnosis, failure prediction, or emergency state.
 
@@ -50,7 +51,7 @@ The frontend lives in `frontend`. The operator workspace is organized around dis
 - **Insights** are operator-facing behavior changes that may warrant investigation.
 - **Evidence** is the observed telemetry and comparison context supporting an insight.
 
-The Command Center prioritizes insights and discovered systems. Datasets & Connectors manages data availability. Analysis Details exposes analysis metadata and support diagnostics. Help & Status explains the product language and current service state. Administration provides governance records, user access, and session controls.
+The current site overview and retained Command Center surfaces prioritize insights and discovered systems. Classification summaries expose data confidence, operating-mode match, persistence, and review priority without using red for unexplained systemic change. Both the primary evidence workspace and investigation drawer order the engineer view from observed change and classification rationale through context, timeline, evidence, checks, alternatives, and limitations. Shared frontend normalization keeps older saved findings readable without silently strengthening their classification. Datasets & Connectors manages data availability. Analysis Details exposes analysis metadata and support diagnostics. Help & Status explains the product language and current service state. Administration provides governance records, user access, and session controls.
 
 ## Local Integration
 

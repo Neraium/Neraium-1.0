@@ -1,4 +1,4 @@
-import { sanitizeOperatorText } from "./operatorFinding";
+import { normalizeFindingPresentation, sanitizeOperatorText } from "./operatorFinding";
 
 export const CONFIDENCE_TIERS = ["Confirmed", "Qualified", "Narrowed", "Deferred", "Withheld"];
 export const OPERATIONAL_STATUSES = ["Normal", "Change detected", "Evidence insufficient"];
@@ -243,7 +243,7 @@ function isActiveRawFinding(raw) {
   return true;
 }
 function specificFindingTitle(raw, observedChange, relationship, tier, system, contextValues = []) {
-  if (["Deferred", "Withheld"].includes(tier)) return "Evidence insufficient to isolate cause";
+  if (["Deferred", "Withheld"].includes(tier)) return "Evidence insufficient for reliable interpretation";
   const supplied = stripPeriod(firstText(raw?.title, raw?.finding_title));
   const observed = stripPeriod(sentence(observedChange, 90));
   const fullContext = [contextValues, supplied, observed, relationship?.source, relationship?.target];
@@ -317,7 +317,54 @@ function buildFinding(raw, index, context) {
   const whyItMatters = sentence(firstText(raw?.why_it_matters, raw?.potential_impact, raw?.behavior_interpretation, raw?.interpretation)) || "Neraium flagged a repeatable difference between the learned baseline and the current comparison.";
   const primaryLimitation = limitations[0] || plainLimitation(contradictions[0]) || "";
   const status = ["Deferred", "Withheld"].includes(tier) ? "Evidence insufficient" : "Change detected";
-  return { id: String(raw?.id ?? raw?.finding_id ?? "finding-" + index), title, status, system: location.subsystem || location.system || context.siteLocation, location, relatedAreas: [], observedChange: sentence(observedChange), whyItMatters, tier, confidenceReason: confidenceReason(tier, primaryLimitation), supporting, visibleSupporting: supporting.slice(0, 3), rawSupporting, contradictions, limitations, primaryLimitation, technicalLimitations, firstPlaceToLook: recommendationAllowed ? specificRecommendation : "", confirmationCriteria: firstText(raw?.confirmation_criteria, raw?.confirm_or_rule_out, raw?.expected_confirmation), comparison: deriveComparison(raw, relationship, context.result), comparisonSummary: comparisonSummary(relationship), relationships: relatedRows.length ? relatedRows : (relationship ? [relationship] : []), variables, engineeringPrior: prior, interpretationLevel, recommendationAllowed, evidenceObjects, outcome: asArray(raw?.operator_feedback_history)[0] ?? null };
+  const finding = {
+    id: String(raw?.id ?? raw?.finding_id ?? "finding-" + index),
+    title,
+    status,
+    system: location.subsystem || location.system || context.siteLocation,
+    location,
+    relatedAreas: [],
+    observedChange: sentence(observedChange),
+    whyItMatters,
+    tier,
+    confidenceReason: confidenceReason(tier, primaryLimitation),
+    supporting,
+    visibleSupporting: supporting.slice(0, 3),
+    rawSupporting,
+    contradictions,
+    limitations,
+    primaryLimitation,
+    technicalLimitations,
+    firstPlaceToLook: recommendationAllowed ? specificRecommendation : "",
+    confirmationCriteria: firstText(raw?.confirmation_criteria, raw?.confirm_or_rule_out, raw?.expected_confirmation),
+    comparison: deriveComparison(raw, relationship, context.result),
+    comparisonSummary: comparisonSummary(relationship),
+    relationships: relatedRows.length ? relatedRows : (relationship ? [relationship] : []),
+    variables,
+    engineeringPrior: prior,
+    interpretationLevel,
+    recommendationAllowed,
+    evidenceObjects,
+    outcome: asArray(raw?.operator_feedback_history)[0] ?? null,
+    classification: raw?.classification,
+    dataConfidence: raw?.data_confidence ?? raw?.dataConfidence,
+    operatingMode: raw?.operating_mode ?? raw?.operatingMode,
+    sensorHealth: raw?.sensor_health ?? raw?.sensorHealth,
+    certaintyLimit: firstText(raw?.certainty_limit, raw?.certaintyLimit),
+    alternativeExplanations: raw?.alternative_explanations ?? raw?.alternativeExplanations ?? [],
+    dataLimitations: raw?.data_limitations ?? raw?.dataLimitations ?? [],
+    persistence: raw?.persistence,
+    relationshipEvidence: raw?.relationship_evidence ?? raw?.relationshipEvidence,
+    investigationGuidance: raw?.investigation_guidance ?? raw?.investigationGuidance ?? [],
+    recommendedInvestigation: raw?.recommended_investigation ?? raw?.recommendedInvestigation ?? [],
+    recommendedFirstAction: recommendationAllowed ? specificRecommendation : "",
+    activityTimeline: asArray(raw?.activity_timeline ?? raw?.activityTimeline),
+    sourceTimeRanges: asArray(raw?.source_time_ranges ?? raw?.sourceTimeRanges),
+    firstDetectedAt: firstText(raw?.first_detected_at, raw?.firstDetectedAt),
+    generatedAt: firstText(raw?.generated_at, raw?.generatedAt, context.result?.completed_at, context.result?.processed_at),
+  };
+  finding.classificationPresentation = normalizeFindingPresentation(finding);
+  return finding;
 }
 
 function evidenceKey(value) {
@@ -326,6 +373,7 @@ function evidenceKey(value) {
   return text;
 }
 function findingsOverlap(left, right) {
+  if (left.classificationPresentation.type !== right.classificationPresentation.type) return false;
   const leftKeys = new Set(left.supporting.map(evidenceKey));
   const rightKeys = new Set(right.supporting.map(evidenceKey));
   if (Math.min(leftKeys.size, rightKeys.size) < 2) return false;

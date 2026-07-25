@@ -1,4 +1,6 @@
 import React from "react";
+import { normalizeFindingPresentation } from "../../viewModels/operatorFinding";
+import FindingClassificationSummary from "../operational/FindingClassificationSummary";
 import ConfidenceTierChip from "./ConfidenceTierChip";
 
 function EvidenceList({ items }) {
@@ -9,8 +11,10 @@ function EvidenceList({ items }) {
 export default function FindingSummary({ finding, onEvidence }) {
   if (!finding) return null;
   const statusClass = finding.status.toLowerCase().replace(/\s+/g, "-");
+  const presentation = finding.classificationPresentation ?? normalizeFindingPresentation(finding);
   return (
-    <article className={`finding-summary operational-finding operational-finding--${statusClass}`} data-finding-id={finding.id}>
+    <article className={`finding-summary operational-finding operational-finding--${statusClass} operational-finding--classification-${presentation.tone}`} data-finding-id={finding.id}>
+      <FindingClassificationSummary finding={finding} compact />
       <header className="operational-finding__meta">
         <span className={`operational-status-chip operational-status-chip--${statusClass}`}>{finding.status}</span>
         <ConfidenceTierChip tier={finding.tier} />

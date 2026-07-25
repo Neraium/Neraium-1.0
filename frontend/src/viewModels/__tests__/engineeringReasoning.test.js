@@ -177,6 +177,36 @@ describe("engineering reasoning model", () => {
     expect(finding.supporting).toContain("Compressor current increased 5.5%.");
   });
 
+  it("carries classification context and normalizes plain legacy guidance for the live workspace", () => {
+    const model = buildEngineeringReasoningModel({ result: {
+      facility_name: "Legacy Site",
+      completed_at: "2026-07-25T10:00:00Z",
+      data_quality: { coverage_percent: 100 },
+      analysis_explanation: {
+        fingerprint: { status: "Established" },
+        insights: [{
+          id: "legacy-guidance",
+          title: "Historical relationship observation",
+          system: "Flow system",
+          variables: ["flow"],
+          supporting_evidence: ["Flow response changed."],
+          recommended_investigation: "Review the original operator notes.",
+        }],
+      },
+    } });
+
+    const presentation = model.selectedFinding.classificationPresentation;
+    expect(presentation.type).toBe("insufficient_evidence");
+    expect(presentation.legacy).toBe(true);
+    expect(presentation.dataConfidence.rating).toBe("Unavailable");
+    expect(presentation.investigationGuidance[0]).toMatchObject({
+      rank: 1,
+      check: "Review the original operator notes.",
+      category: "documentation",
+    });
+    expect(presentation.timeline.map((item) => item.eventType)).toEqual(["finding_generated"]);
+  });
+
   it("translates raw relationship coefficients into readable primary evidence", () => {
     expect(formatPrimaryEvidence("Relationship changed from 0.094013 to 0.833811.")).toBe("Relationship changed from weak to strong.");
   });

@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { buildEngineeringReasoningModel, buildEngineeringReasoningModelsFromEvidenceRuns } from "../viewModels/engineeringReasoning";
+import { normalizeFindingPresentation } from "../viewModels/operatorFinding";
 import ConfidenceTierChip from "./engineering/ConfidenceTierChip";
 import EvidenceLineage from "./engineering/EvidenceLineage";
 import EvidencePackageExport from "./engineering/EvidencePackageExport";
 import FindingSummary from "./engineering/FindingSummary";
+import FindingClassificationSummary from "./operational/FindingClassificationSummary";
 import GlobalAssetSearch from "./engineering/GlobalAssetSearch";
 import PortfolioWorkspace from "./engineering/PortfolioWorkspace";
 import TraceTimeline from "./engineering/TraceTimeline";
@@ -142,6 +144,23 @@ function LocationHierarchy({ items }) {
   return <ol className="location-hierarchy">{items.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ol>;
 }
 
+function findingTimelineLabel(event) {
+  if (event.periodLabel) return event.periodLabel;
+  if (event.time) return event.time;
+  if (event.start && event.end) return `${event.start} to ${event.end}`;
+  if (event.start) return `From ${event.start}`;
+  if (event.end) return `Through ${event.end}`;
+  return "";
+}
+
+function displayLabel(value) {
+  return String(value || "Unavailable").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function uniqueText(values) {
+  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
+}
+
 function EvidenceWorkspace({ model, finding, apiFetch, onTrace, onBack }) {
   const runId = runIdentity(model, finding);
   if (!finding) {
@@ -157,37 +176,66 @@ function EvidenceWorkspace({ model, finding, apiFetch, onTrace, onBack }) {
   }
   const limiting = [...finding.contradictions, ...finding.limitations];
   const relationship = finding.relationships[0] ?? model.relationships[0] ?? null;
+  const presentation = finding.classificationPresentation ?? normalizeFindingPresentation(finding);
+  const dataLimitations = uniqueText([...presentation.dataLimitations, ...limiting, presentation.certaintyLimit]);
   return (
     <div className="evidence-workspace operational-evidence">
       <button type="button" className="evidence-back" onClick={onBack}>Back to overview</button>
       <OverviewHeader eyebrow="Evidence" name={finding.title} status={finding.status} confidence={finding.tier} />
+      <FindingClassificationSummary finding={finding} />
       {finding.confidenceReason ? <p className="evidence-confidence-reason">{finding.confidenceReason}</p> : null}
-      <div className="operational-evidence__sections">
+      <div className="operational-evidence__sections operational-evidence__sections--classification">
         <section className="evidence-section evidence-section--what">
-          <span>What changed</span>
+          <h2>What changed</h2>
           <p>{finding.observedChange}</p>
-        </section>
-        <section className="evidence-section">
-          <span>Where</span>
+          <p><strong>Engineering relevance:</strong> {finding.whyItMatters}</p>
+          <h3>Where</h3>
           <LocationHierarchy items={finding.location.hierarchy} />
         </section>
         <section className="evidence-section">
-          <span>Supporting evidence</span>
+          <h2>Why Neraium classified it this way</h2>
+          <p>{presentation.meaning}</p>
+          <ul>{presentation.reasons.map((item) => <li key={item}>{item}</li>)}</ul>
+        </section>
+        <section className="evidence-section">
+          <h2>Data confidence and sensor-health context</h2>
+          <dl className="classification-detail-grid">
+            <div><dt>Data confidence</dt><dd>{presentation.dataConfidence.rating}</dd></div>
+            <div><dt>Summary</dt><dd>{presentation.dataConfidence.summary}</dd></div>
+          </dl>
+          {presentation.sensorHealth.length ? <ul className="classification-sensor-list">{presentation.sensorHealth.map((sensor) => <li key={sensor.signal}><strong>{displayLabel(sensor.signal)} · {displayLabel(sensor.health)}</strong>{sensor.conditions.length ? <ul>{sensor.conditions.map((condition, index) => <li key={`${condition.type}-${index}`}>{displayLabel(condition.type)}: {condition.evidence || "No supporting condition detail was recorded."}</li>)}</ul> : null}</li>)}</ul> : <p>Sensor-health conditions were not recorded for this finding.</p>}
+        </section>
+        <section className="evidence-section">
+          <h2>Operating-mode comparison</h2>
+          <dl className="classification-detail-grid classification-detail-grid--mode">
+            <div><dt>Baseline mode</dt><dd>{presentation.operatingMode.baseline}</dd></div>
+            <div><dt>Recent mode</dt><dd>{presentation.operatingMode.recent}</dd></div>
+            <div><dt>Mode match</dt><dd>{presentation.operatingMode.match}</dd></div>
+            <div><dt>Comparison confidence</dt><dd>{presentation.operatingMode.confidence}</dd></div>
+          </dl>
+          {presentation.operatingMode.differences.length ? <ul>{presentation.operatingMode.differences.map((item, index) => <li key={`${item.feature}-${index}`}><strong>{displayLabel(item.feature)}:</strong> {item.reason || "A recorded operating-mode difference was present."}</li>)}</ul> : null}
+          {presentation.operatingMode.reasons.length ? <ul>{presentation.operatingMode.reasons.map((item) => <li key={item}>{item}</li>)}</ul> : null}
+        </section>
+        <section className="evidence-section">
+          <h2>Relationship timeline</h2>
+          {presentation.timeline.length ? <ol className="classification-timeline">{presentation.timeline.map((event, index) => <li key={`${event.eventType}-${index}`}><time>{findingTimelineLabel(event)}</time><strong>{event.title}</strong>{event.detail ? <p>{event.detail}</p> : null}</li>)}</ol> : <p>No source-bounded timeline milestones were recorded for this finding.</p>}
+        </section>
+        <section className="evidence-section">
+          <h2>Supporting evidence</h2>
+          <p>{finding.comparisonSummary}</p>
           {finding.supporting.length ? <ul>{finding.supporting.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No supporting observation was supplied.</p>}
         </section>
-        {limiting.length ? (
-          <section className="evidence-section">
-            <span>Limiting evidence</span>
-            <ul>{limiting.map((item) => <li key={item}>{item}</li>)}</ul>
-          </section>
-        ) : null}
         <section className="evidence-section">
-          <span>Baseline vs current</span>
-          <p>{finding.comparisonSummary}</p>
+          <h2>Highest-value next checks</h2>
+          {presentation.investigationGuidance.length ? <ol className="classification-guidance">{presentation.investigationGuidance.map((item) => <li key={`${item.rank}-${item.check}`}><span>{item.rank}</span><div><small>{displayLabel(item.category)}</small><strong>{item.check}</strong><p>{item.reason}</p></div></li>)}</ol> : <p>No evidence-linked next check was recorded for this finding.</p>}
         </section>
         <section className="evidence-section">
-          <span>Why Neraium flagged it</span>
-          <p>{finding.whyItMatters}</p>
+          <h2>Alternative explanations</h2>
+          {presentation.alternativeExplanations.length ? <ul>{presentation.alternativeExplanations.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No alternative-explanation list was recorded for this finding.</p>}
+        </section>
+        <section className="evidence-section">
+          <h2>Data limitations</h2>
+          {dataLimitations.length ? <ul>{dataLimitations.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No additional data limitations were recorded.</p>}
         </section>
       </div>
       <details className="operational-technical evidence-technical">

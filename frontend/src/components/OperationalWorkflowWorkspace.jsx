@@ -7,6 +7,8 @@ import CommandCenterView from "./operational/CommandCenterView";
 import InvestigationDrawer from "./operational/InvestigationDrawer";
 import DataSourcesView from "./operational/DataSourcesView";
 import FingerprintView from "./operational/FingerprintView";
+import FindingClassificationSummary from "./operational/FindingClassificationSummary";
+import { normalizeFindingPresentation } from "../viewModels/operatorFinding";
 import InsightsView from "./operational/InsightsView";
 import SystemsView from "./operational/SystemsView";
 import { FALLBACK_SYSTEMS } from "../config/workspaces";
@@ -1819,6 +1821,11 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
       result?.site_timezone,
       result?.timezone,
     ),
+    generatedAt: firstText(
+      analysisExplanation?.generated_at,
+      result?.completed_at,
+      result?.last_processed_at,
+    ),
   };
   if (explanatoryInsights.length > 0) {
     const insights = explanatoryInsights.map((item, index) => {
@@ -1864,6 +1871,15 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         confidence: item.confidence,
         confidenceScore: item.confidence_score,
         persistenceScore: item.persistence_score ?? item.persistenceScore,
+        persistence: item.persistence,
+        classification: item.classification,
+        dataConfidence: item.data_confidence ?? item.dataConfidence,
+        sensorHealth: toList(item.sensor_health, item.sensorHealth).filter((entry) => entry && typeof entry === "object"),
+        certaintyLimit: firstText(item.certainty_limit, item.certaintyLimit),
+        alternativeExplanations: toList(item.alternative_explanations, item.alternativeExplanations),
+        dataLimitations: toList(item.data_limitations, item.dataLimitations),
+        relationshipEvidence: item.relationship_evidence ?? item.relationshipEvidence,
+        investigationGuidance: toList(item.investigation_guidance, item.investigationGuidance),
         confidenceRationale: operatorText(item.confidence_rationale),
         telemetryNote: telemetryStatus.detail,
         detectedAt: lastAnalysis,
@@ -1934,6 +1950,17 @@ function buildInsights({ finding, liveOps, result, primarySystem, telemetryStatu
         evidence,
         publicEvidenceItems: supporting,
         hasEvidence: evidence.length > 0,
+        classification: item.classification,
+        dataConfidence: item.dataConfidence ?? item.data_confidence,
+        sensorHealth: toList(item.sensorHealth, item.sensor_health).filter((entry) => entry && typeof entry === "object"),
+        certaintyLimit: firstText(item.certaintyLimit, item.certainty_limit),
+        alternativeExplanations: toList(item.alternativeExplanations, item.alternative_explanations),
+        dataLimitations: toList(item.dataLimitations, item.data_limitations),
+        persistence: item.persistence,
+        relationshipEvidence: item.relationshipEvidence ?? item.relationship_evidence,
+        investigationGuidance: toList(item.investigationGuidance, item.investigation_guidance),
+        sourceTimeRanges: toList(item.sourceTimeRanges, item.source_time_ranges).filter((entry) => entry && typeof entry === "object"),
+        firstDetectedAt: firstText(item.firstDetectedAt, item.first_detected_at),
         telemetryNote: telemetryStatus.detail,
         detectedAt: lastAnalysis,
         type: getInsightType(item),
@@ -2216,10 +2243,11 @@ function InsightList({ insights, empty, emptyTitle = "No active insights", onOpe
             className={selected ? "insight-card insight-card--compact is-selected" : "insight-card insight-card--compact"}
             aria-current={selected ? "true" : undefined}
           >
+            <FindingClassificationSummary finding={insight} compact />
             <div className="insight-card__header">
               <span className="section-token">{formatSubsystemName(insight.system)}</span>
               <div className="insight-card__badges">
-                <LabeledStatusChip label="Severity" value={insight.severity} tone={severityToTone(insight.severity)} />
+                <LabeledStatusChip label="Severity" value={insight.severity} tone={findingClassificationTone(insight)} />
                 <LabeledStatusChip label="Confidence" value={formatConfidenceLevel(insight.confidence, insight.confidenceScore)} tone="unknown" />
               </div>
             </div>
@@ -3266,6 +3294,10 @@ function severityToTone(severity) {
   if (text.includes("high") || text.includes("significant") || text.includes("critical")) return "investigate";
   if (text.includes("moderate") || text.includes("changed") || text.includes("review") || text.includes("drift")) return "changed";
   return "normal";
+}
+
+function findingClassificationTone(insight) {
+  return normalizeFindingPresentation(insight).tone;
 }
 
 function prioritizeEvidenceGroups(groups, selectedInsightId) {

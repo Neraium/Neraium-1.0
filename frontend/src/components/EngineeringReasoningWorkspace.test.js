@@ -108,8 +108,8 @@ describe("EngineeringReasoningWorkspace", () => {
 
     expect(screen.getByText("What changed")).toBeTruthy();
     expect(screen.getByText("Supporting evidence")).toBeTruthy();
-    expect(screen.getByText("Baseline vs current")).toBeTruthy();
-    expect(screen.getByText("Why Neraium flagged it")).toBeTruthy();
+    expect(screen.getByText("Operating-mode comparison")).toBeTruthy();
+    expect(screen.getByText("Why Neraium classified it this way")).toBeTruthy();
     expect(screen.getAllByText("North Plant").length).toBeGreaterThan(0);
     expect(screen.getByText("Cooling system")).toBeTruthy();
     expect(screen.getByText("Condenser Water")).toBeTruthy();
@@ -261,6 +261,75 @@ describe("EngineeringReasoningWorkspace", () => {
 
     const details = screen.getByText("Technical Details").closest("details");
     expect(within(details).getByText("811 rows contain missing numeric values.")).toBeTruthy();
+  });
+
+  it("renders classification-aware detail in evidence order with structured guidance", () => {
+    const classifiedInsight = {
+      ...result.analysis_explanation.insights[0],
+      classification: {
+        type: "unexplained_systemic_change",
+        label: "Unexplained systemic change",
+        confidence: "high",
+        reasons: ["Operating context matched strongly.", "The relationship shift remained persistent."],
+        alternative_explanations: ["An undocumented control-state change may still explain the shift."],
+        certainty_limit: "This describes a relationship change and does not establish a cause.",
+      },
+      data_confidence: { rating: "high", summary: "Telemetry passed recorded quality checks.", reasons: [] },
+      operating_mode: {
+        match: "strong",
+        confidence: "high",
+        baseline_mode_label: "Lead-pump mid-load operation",
+        recent_mode_label: "Lead-pump mid-load operation",
+        differences: [],
+      },
+      sensor_health: [{ signal: "discharge_pressure", health: "healthy", conditions: [] }],
+      persistence: { persistent: true, duration: "18 days", summary: "The shift remained present in comparable windows." },
+      investigation_guidance: [{ rank: 1, check: "Verify source data and control-state context.", reason: "Source validation bounds the physical-system interpretation.", category: "data_quality", editable: true }],
+      activity_timeline: [
+        { event_type: "baseline_reference", title: "Baseline reference period", start: "2026-06-01T00:00:00Z", end: "2026-06-30T23:59:00Z", precision: "range" },
+        { event_type: "persistence_supported", title: "Persistence supported", period_label: "Recent comparison window", precision: "period" },
+      ],
+      data_limitations: ["No independent control log was supplied."],
+    };
+    renderWorkspace("/portfolio", {
+      effectiveLatestUploadResult: {
+        ...result,
+        data_quality: { coverage_percent: 100 },
+        analysis_explanation: { ...result.analysis_explanation, insights: [classifiedInsight] },
+      },
+    });
+
+    const card = document.querySelector('[data-finding-id="finding-1"]');
+    expect(card.querySelector('[data-classification="unexplained_systemic_change"]')).toBeTruthy();
+    expect(card.className).toContain("operational-finding--classification-systemic");
+    expect(within(card).getByLabelText(/Classification: Unexplained systemic change/i)).toBeTruthy();
+
+    fireEvent.click(within(card).getByRole("button", { name: "Open Evidence" }));
+    const headings = [...document.querySelectorAll(".operational-evidence__sections--classification .evidence-section > h2")].map((node) => node.textContent);
+    expect(headings).toEqual([
+      "What changed",
+      "Why Neraium classified it this way",
+      "Data confidence and sensor-health context",
+      "Operating-mode comparison",
+      "Relationship timeline",
+      "Supporting evidence",
+      "Highest-value next checks",
+      "Alternative explanations",
+      "Data limitations",
+    ]);
+    expect(screen.getByText("Verify source data and control-state context.")).toBeTruthy();
+    expect(screen.getByText("Source validation bounds the physical-system interpretation.")).toBeTruthy();
+    expect(screen.getByText("Recent comparison window")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("18 days ago");
+  });
+
+  it("shows a conservative historical fallback for findings without classification fields", () => {
+    renderWorkspace();
+    const card = document.querySelector('[data-finding-id="finding-1"]');
+    expect(card.querySelector('[data-classification="insufficient_evidence"]')).toBeTruthy();
+    expect(within(card).getByText("Historical evidence review")).toBeTruthy();
+    fireEvent.click(within(card).getByRole("button", { name: "Open Evidence" }));
+    expect(screen.getAllByText("This historical finding was generated before contextual classification was available.").length).toBeGreaterThan(0);
   });
 
   it("does not expose control actions or duplicate the finding workflow", () => {
