@@ -43,7 +43,7 @@ ALB + ECS Container Insights + CloudWatch log metrics
                  SNS topic + OK recovery
 ```
 
-The in-application state file is `production_health_state.json` on the API runtime volume. It stores only sanitized evidence, incident transitions, and delivery results. It never stores a database URL, password, secret value, or API token.
+The in-application state is stored as `infrastructure/production-health-state.json` in the existing encrypted shared upload-state S3 bucket, with local runtime storage used only outside split-role production. This preserves incident and recovery history across ECS task replacement. Per-incident transition markers in the same bucket prevent duplicate open or recovery notifications during overlapping rollouts. The state stores only sanitized evidence, incident transitions, and delivery results; it never stores a database URL, password, secret value, or API token.
 
 The worker publishes `infrastructure/worker-heartbeat.json` into the existing shared upload-state bucket at most once every 30 seconds. The record contains timestamp, process role, build SHA, status, and whether a job was processed; it contains no customer data or credentials.
 

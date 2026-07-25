@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -26,6 +27,31 @@ class RecordingNotifier:
 
     def status(self):
         return {"configured_adapters": ["test"], "last_delivery_results": []}
+
+
+class FakeS3Error(Exception):
+    def __init__(self, code):
+        super().__init__(code)
+        self.response = {"Error": {"Code": code}}
+
+
+class FakeS3:
+    def __init__(self):
+        self.objects = {}
+
+    def get_object(self, *, Bucket, Key):
+        try:
+            body = self.objects[(Bucket, Key)]
+        except KeyError as error:
+            raise FakeS3Error("NoSuchKey") from error
+        return {"Body": io.BytesIO(body)}
+
+    def put_object(self, *, Bucket, Key, Body, IfNoneMatch=None, **kwargs):
+        object_key = (Bucket, Key)
+        if IfNoneMatch == "*" and object_key in self.objects:
+            raise FakeS3Error("PreconditionFailed")
+        self.objects[object_key] = bytes(Body)
+        return {"ETag": "test"}
 
 
 def observation(key: str, subsystem: str, status: str = "critical", *, evidence: str | None = None):
@@ -157,6 +183,63 @@ def test_incident_state_survives_evaluator_restart(tmp_path):
 
     assert len(snapshot["current_alerts"]) == 1
     assert restarted_notifier.events == []
+
+
+def test_shared_state_survives_task_replacement_and_deduplicates_notifications(tmp_path):
+    shared_s3 = FakeS3()
+    policy = {"worker_heartbeat": PersistencePolicy(3, 120)}
+    first_notifier = RecordingNotifier()
+    first = ProductionHealthEvaluator(
+        state_path=tmp_path / "first.json",
+        notifier=first_notifier,
+        policies=policy,
+        state_bucket="health-bucket",
+        s3_client=shared_s3,
+    )
+    started = datetime(2026, 7, 25, 12, 0, tzinfo=UTC)
+    for minute in range(3):
+        first.evaluate([observation("worker_heartbeat", "workers")], now=started + timedelta(minutes=minute))
+    assert [event["event_type"] for event in first_notifier.events] == ["opened"]
+
+    replacement_notifier = RecordingNotifier()
+    replacement = ProductionHealthEvaluator(
+        state_path=tmp_path / "replacement.json",
+        notifier=replacement_notifier,
+        policies=policy,
+        state_bucket="health-bucket",
+        s3_client=shared_s3,
+    )
+    active = replacement.evaluate(
+        [observation("worker_heartbeat", "workers")],
+        now=started + timedelta(minutes=3),
+    )
+    assert len(active["current_alerts"]) == 1
+    assert replacement_notifier.events == []
+
+    recovered = replacement.evaluate(
+        [observation("worker_heartbeat", "workers", "healthy", evidence="Worker recovered.")],
+        now=started + timedelta(minutes=4),
+    )
+    assert recovered["current_alerts"] == []
+    assert recovered["incidents"][0]["status"] == "resolved"
+    assert [event["event_type"] for event in replacement_notifier.events] == ["recovery"]
+
+    final_notifier = RecordingNotifier()
+    final = ProductionHealthEvaluator(
+        state_path=tmp_path / "final.json",
+        notifier=final_notifier,
+        policies=policy,
+        state_bucket="health-bucket",
+        s3_client=shared_s3,
+    )
+    final_snapshot = final.evaluate(
+        [observation("worker_heartbeat", "workers", "healthy", evidence="Worker remains healthy.")],
+        now=started + timedelta(minutes=5),
+    )
+    assert final_snapshot["incidents"][0]["status"] == "resolved"
+    assert final_notifier.events == []
+    marker_keys = [key for bucket, key in shared_s3.objects if "production-health-notifications" in key]
+    assert len(marker_keys) == 2
 
 
 def test_infrastructure_health_endpoint_is_structured(client: TestClient):

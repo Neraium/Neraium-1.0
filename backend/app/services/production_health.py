@@ -583,37 +583,106 @@ class ProductionHealthProbe:
 class ProductionHealthEvaluator:
     """Persist failure evidence, open one incident after policy thresholds, and close it once."""
 
+    STATE_KEY = "infrastructure/production-health-state.json"
+    NOTIFICATION_MARKER_PREFIX = "infrastructure/production-health-notifications/"
+
     def __init__(
         self,
         *,
         state_path: Path,
         notifier: InfrastructureNotificationEngine,
         policies: dict[str, PersistencePolicy] | None = None,
+        state_bucket: str | None = None,
+        s3_client: Any | None = None,
     ):
         self.state_path = Path(state_path)
+        self.state_bucket = str(state_bucket or "").strip()
         self.notifier = notifier
         self.policies = {**DEFAULT_POLICIES, **(policies or {})}
         self._lock = threading.RLock()
+        self._s3_client = s3_client
         self._state = self._load_state()
 
     @staticmethod
     def _empty_state() -> dict[str, Any]:
         return {"version": 1, "signals": {}, "incidents": [], "notifications": [], "last_snapshot": None}
 
+    @staticmethod
+    def _validated_state(raw: bytes | str) -> dict[str, Any]:
+        payload = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
+        if not isinstance(payload, dict) or payload.get("version") != 1:
+            raise ValueError("Unsupported production health state payload.")
+        return {**ProductionHealthEvaluator._empty_state(), **payload}
+
+    def _client(self):
+        if self._s3_client is None:
+            if boto3 is None:
+                raise RuntimeError("boto3 is required for shared production health state.")
+            self._s3_client = boto3.client("s3", region_name=os.getenv("AWS_REGION") or None)
+        return self._s3_client
+
+    @staticmethod
+    def _error_code(error: Exception) -> str:
+        return str(getattr(error, "response", {}).get("Error", {}).get("Code", ""))
+
     def _load_state(self) -> dict[str, Any]:
+        if self.state_bucket:
+            try:
+                response = self._client().get_object(Bucket=self.state_bucket, Key=self.STATE_KEY)
+                return self._validated_state(response["Body"].read())
+            except Exception as error:
+                if self._error_code(error) in {"NoSuchKey", "404", "NotFound"}:
+                    return self._empty_state()
+                raise RuntimeError("Shared production health state could not be loaded.") from error
         try:
-            payload = json.loads(self.state_path.read_text(encoding="utf-8"))
-            if isinstance(payload, dict) and payload.get("version") == 1:
-                return {**self._empty_state(), **payload}
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
-            pass
-        return self._empty_state()
+            return self._validated_state(self.state_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError, OSError, ValueError):
+            return self._empty_state()
 
     def _save_state(self) -> None:
+        body = json.dumps(self._state, indent=2, sort_keys=True).encode("utf-8")
+        if self.state_bucket:
+            self._client().put_object(
+                Bucket=self.state_bucket,
+                Key=self.STATE_KEY,
+                Body=body,
+                ContentType="application/json",
+                ServerSideEncryption="AES256",
+            )
+            return
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.state_path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(self._state, indent=2, sort_keys=True), encoding="utf-8")
+        temporary.write_bytes(body)
         os.replace(temporary, self.state_path)
+
+    def _claim_notification(self, event: dict[str, Any]) -> bool:
+        if not self.state_bucket:
+            return True
+        incident_id = str(event.get("incident_id") or "unknown")
+        event_type = str(event.get("event_type") or "transition")
+        key = f"{self.NOTIFICATION_MARKER_PREFIX}{incident_id}/{event_type}.json"
+        try:
+            self._client().put_object(
+                Bucket=self.state_bucket,
+                Key=key,
+                Body=json.dumps({
+                    "incident_id": incident_id,
+                    "event_type": event_type,
+                    "claimed_at": _iso(_utc_now()),
+                }, separators=(",", ":")).encode("utf-8"),
+                ContentType="application/json",
+                ServerSideEncryption="AES256",
+                IfNoneMatch="*",
+            )
+            return True
+        except Exception as error:
+            if self._error_code(error) in {"PreconditionFailed", "412", "ConditionalRequestConflict", "409"}:
+                return False
+            logger.exception(
+                "infrastructure_notification_claim_failed",
+                extra={"event": "infrastructure_notification_claim_failed", "incident_id": incident_id},
+            )
+            return False
 
     @staticmethod
     def _category(observation: HealthObservation, *, recovery: bool = False) -> str:
@@ -652,6 +721,8 @@ class ProductionHealthEvaluator:
         observed_at = (now or _utc_now()).astimezone(UTC)
         events: list[tuple[dict[str, Any], dict[str, Any]]] = []
         with self._lock:
+            if self.state_bucket:
+                self._state = self._load_state()
             for observation in observations:
                 policy = self.policies.get(observation.key, PersistencePolicy(3, 120))
                 signal = self._state["signals"].setdefault(observation.key, {
@@ -734,6 +805,8 @@ class ProductionHealthEvaluator:
             self._save_state()
 
         for event, incident in events:
+            if not self._claim_notification(event):
+                continue
             results = self.notifier.dispatch(event)
             with self._lock:
                 record = {
@@ -834,6 +907,7 @@ class ProductionHealthMonitor:
         self.evaluator = ProductionHealthEvaluator(
             state_path=Path(settings.runtime_dir) / "production_health_state.json",
             notifier=self.notifier,
+            state_bucket=os.getenv("NERAIUM_UPLOAD_STATE_BUCKET", ""),
         )
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -936,6 +1010,7 @@ def production_health_snapshot(settings: Settings | None = None) -> dict[str, An
     evaluator = ProductionHealthEvaluator(
         state_path=Path(settings.runtime_dir) / "production_health_state.json",
         notifier=InfrastructureNotificationEngine.from_settings(settings),
+        state_bucket=os.getenv("NERAIUM_UPLOAD_STATE_BUCKET", ""),
     )
     snapshot = evaluator.snapshot()
     snapshot["monitoring_enabled"] = bool(getattr(settings, "infrastructure_monitor_enabled", False))
