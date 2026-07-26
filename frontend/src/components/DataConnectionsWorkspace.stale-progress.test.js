@@ -240,8 +240,35 @@ it("mobile upload screen does not render backend milestone cards by default", ()
   expect(screen.queryByText("Current run at a glance")).toBeNull();
 });
 
-it("selected file state shows filename, size, and analysis action", () => {
+it("presents the first baseline action without repeated dataset copy", () => {
+  const openFilePicker = vi.fn();
+  renderPanel({ openFilePicker });
+
+  expect(screen.getByRole("heading", { name: "Import Historical Dataset" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Choose Dataset" })).toBeTruthy();
+  expect(screen.getByText("Import historical telemetry so Neraium can learn how your system normally behaves.")).toBeTruthy();
+  expect(screen.getByText("Future operation is compared with what Neraium learns here.")).toBeTruthy();
+  expect(screen.getByText("Awaiting Baseline")).toBeTruthy();
+  expect(screen.queryByText("Historical Dataset")).toBeNull();
+  expect(screen.queryByText("Choose a Historical Dataset")).toBeNull();
+  expect(document.querySelector(".upload-analysis-card--baseline .operational-orb")).toBeNull();
+
+  const labels = Array.from(document.querySelectorAll(".baseline-import-stepper__label")).map((node) => node.textContent);
+  expect(labels).toEqual(["Import", "Learn", "Analyze", "Ready"]);
+  expect(screen.getByText("Import").closest("li")?.getAttribute("aria-current")).toBe("step");
+
+  const chooseButton = screen.getByRole("button", { name: "Choose Dataset" });
+  const formatsLink = screen.getByText("View supported formats");
+  expect(screen.queryByRole("button", { name: "Start Baseline Analysis" })).toBeNull();
+  expect(chooseButton.compareDocumentPosition(formatsLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(chooseButton);
+  expect(openFilePicker).toHaveBeenCalledWith("csv");
+});
+
+it("selected file state promotes baseline analysis and keeps replacement secondary", () => {
+  const openFilePicker = vi.fn();
   renderPanel({
+    openFilePicker,
     uploadState: "validated",
     selectedFiles: [selectedCsv("operators.csv")],
     selectedFileSize: "15.7 MB",
@@ -249,9 +276,11 @@ it("selected file state shows filename, size, and analysis action", () => {
 
   expect(screen.getByText("operators.csv")).toBeTruthy();
   expect(screen.getByLabelText("operators.csv, 15.7 MB, Ready")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Choose Dataset" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Start Baseline Analysis" })).toBeTruthy();
-  expect(screen.getByText("Dataset Ready")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Choose Dataset" })).toBeNull();
+  expect(screen.getByText("Ready for Baseline")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Replace file" }));
+  expect(openFilePicker).toHaveBeenCalledWith("csv");
 });
 
 it("drag-over and drop use the premium upload card", () => {
@@ -287,6 +316,7 @@ it("processing state uses the behavior baseline as the progress indicator", () =
   });
 
   expect(screen.getByText("Comparing relationships")).toBeTruthy();
+  expect(screen.getByText("Analyze").closest("li")?.getAttribute("aria-current")).toBe("step");
   expect(screen.getByText("Checking current behavior against the learned baseline.")).toBeTruthy();
   expect(screen.getByText("progress.csv")).toBeTruthy();
   expect(screen.queryByText("1.0 KB")).toBeNull();
@@ -426,6 +456,7 @@ it("complete state shows the behavior baseline completion moment", () => {
   });
 
   expect(screen.getAllByRole("heading", { name: "Analysis complete" })).toHaveLength(1);
+  expect(screen.getByText("Ready").closest("li")?.getAttribute("aria-current")).toBe("step");
   expect(screen.queryByText("Behavior baseline established and evidence saved.")).toBeNull();
   const labels = Array.from(document.querySelectorAll(".upload-result-summary__item dt")).map((node) => node.textContent);
   expect(labels).toEqual(["Status", "Findings", "Evidence quality"]);

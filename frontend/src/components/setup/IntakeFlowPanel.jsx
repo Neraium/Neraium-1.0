@@ -1,7 +1,6 @@
 import { Component, useEffect, useRef, useState } from "react";
 
 import { buildIntakeStages, normalizeUploadStatus as normalizeUploadLifecycle } from "../../viewModels/uploadFlow";
-import OperationalOrb from "../operational/OperationalOrb";
 import { Panel } from "../workspacePrimitives";
 import "../../styles/operational-workflow.css";
 import "../../styles/upload-intelligence.css";
@@ -529,19 +528,39 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
 }
 
 const SUPPORTED_HISTORICAL_SOURCES = ["CSV", "SCADA Export", "Historian Export"];
+const BASELINE_WORKFLOW_STEPS = ["Import", "Learn", "Analyze", "Ready"];
 
-function uploadOrbStatus(viewState) {
-  if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "learning";
-  if (viewState === "complete") return "healthy";
-  return "awaiting";
+function baselineWorkflowStep({ viewState, uploadJob, uploadState }) {
+  if (["complete", "completion_error"].includes(viewState)) return 3;
+  if (viewState === "finalizing") return 2;
+  if (viewState !== "analyzing") return 0;
+  const normalized = primaryJobStatus(uploadJob, uploadState);
+  if (["processing", "baseline_modeling", "building_baseline"].includes(normalized)) return 1;
+  return 2;
+}
+
+function BaselineWorkflowStepper({ currentStep }) {
+  return (
+    <ol className="baseline-import-stepper" aria-label="Baseline analysis progress">
+      {BASELINE_WORKFLOW_STEPS.map((label, index) => {
+        const state = index < currentStep ? "complete" : index === currentStep ? "current" : "upcoming";
+        return (
+          <li key={label} className={`baseline-import-stepper__step baseline-import-stepper__step--${state}`} aria-current={state === "current" ? "step" : undefined}>
+            <span className="baseline-import-stepper__number" aria-hidden="true">{state === "complete" ? "✓" : index + 1}</span>
+            <span className="baseline-import-stepper__label">{label}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 function uploadFingerprintStatusText(viewState, hasSelectedFiles) {
   if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Analysis in Progress";
-  if (viewState === "complete") return "Behavior Baseline Active";
-  if (viewState === "failed") return hasSelectedFiles ? "Dataset Ready" : "Awaiting Behavior Baseline";
-  if (hasSelectedFiles) return "Dataset Ready";
-  return "Awaiting Behavior Baseline";
+  if (viewState === "complete") return "Baseline Active";
+  if (viewState === "failed") return hasSelectedFiles ? "Ready for Baseline" : "Awaiting Baseline";
+  if (hasSelectedFiles) return "Ready for Baseline";
+  return "Awaiting Baseline";
 }
 
 function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
@@ -683,9 +702,7 @@ export default function IntakeFlowPanel({
   const completed = analysisResult ? completionResult(analysisResult) : null;
   const showProgress = viewState === "uploading" || viewState === "analyzing" || viewState === "finalizing";
   const fingerprintStatus = uploadFingerprintStatusText(viewState, hasSelectedFiles);
-  const resolvedOrbStatus = uploadOrbStatus(viewState);
-  const chooseFileButtonText = "Choose Dataset";
-  const selectedFileDetail = hasSelectedFiles ? `${fileKind} dataset, ${selectedFileSize}` : "No file selected";
+  const workflowStep = baselineWorkflowStep({ viewState, uploadJob, uploadState });
   const dragClassName = isDragActive ? " upload-analysis-card--drag-active" : "";
 
   function handleUploadDragOver(event) {
@@ -708,35 +725,50 @@ export default function IntakeFlowPanel({
   return (
     <Panel title="Import Historical Dataset" className="span-7 upload-ops-panel upload-ops-panel--command">
       <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={handleUpload}>
-        {(["noFile", "fileSelected"].includes(viewState)) ? <p className="intake-flow__subtitle">Import historical telemetry so Neraium can learn normal behavior.</p> : null}
+        {(["noFile", "fileSelected"].includes(viewState)) ? <p className="intake-flow__subtitle">Import historical telemetry so Neraium can learn how your system normally behaves.</p> : null}
         <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose telemetry dataset CSV files" tabIndex={-1} onChange={handleFileSelection} />
+
+        <BaselineWorkflowStepper currentStep={workflowStep} />
 
         {(viewState === "noFile" || viewState === "fileSelected") ? (
           <section
-            className={`upload-analysis-card${dragClassName}`}
+            className={`upload-analysis-card upload-analysis-card--baseline${dragClassName}`}
             aria-label="Historical dataset import"
             onDragOver={handleUploadDragOver}
             onDragLeave={handleUploadDragLeave}
             onDrop={handleUploadDrop}
           >
-            <div className="upload-analysis-card__visual">
-              <OperationalOrb
-                status={resolvedOrbStatus}
-                state={{
-                  label: fingerprintStatus,
-                  visualLabel: "Behavior Baseline",
-                }}
-              />
-              <div className="upload-analysis-card__status" aria-live="polite">
-                <span>Status</span>
-                <strong>{fingerprintStatus}</strong>
-              </div>
-            </div>
-
             <div className="upload-analysis-card__content">
-              <div className="upload-analysis-card__copy">
-                <p className="section-token">Historical Dataset</p>
-                <h3>Choose a Historical Dataset</h3>
+              <div className="upload-baseline-card__header">
+                <div className="upload-analysis-card__copy">
+                  <h3>Choose Dataset</h3>
+                  <p>Future operation is compared with what Neraium learns here.</p>
+                </div>
+                <span className="upload-baseline-status" role="status" aria-live="polite"><i aria-hidden="true" />{fingerprintStatus}</span>
+              </div>
+
+              {hasSelectedFiles ? (
+                <DatasetFileRow filename={selectedFileLabel} size={selectedFileSize} status="Ready" />
+              ) : (
+                <div className="upload-analysis-card__file">
+                  <i className="upload-analysis-card__file-icon" aria-hidden="true" />
+                  <span className="upload-analysis-card__file-copy">
+                    <span>No file selected</span>
+                    <strong>{fileKind} telemetry</strong>
+                  </span>
+                  <i className="upload-analysis-card__file-state" aria-hidden="true" />
+                </div>
+              )}
+
+              <div className="upload-simple-actions upload-analysis-card__actions upload-baseline-card__actions">
+                {hasSelectedFiles ? (
+                  <>
+                    <button data-testid="process-upload-button" className="command-button upload-baseline-card__primary" type="submit" disabled={isUploadProcessing(uploadState)} title={isUploadProcessing(uploadState) ? "Analysis is already in progress." : "Start baseline analysis."}>Start Baseline Analysis</button>
+                    <button type="button" className="baseline-file-replace" onClick={() => openFilePicker("csv")}>Replace file</button>
+                  </>
+                ) : (
+                  <button type="button" className="command-button upload-baseline-card__primary" onClick={() => openFilePicker("csv")}>Choose Dataset</button>
+                )}
               </div>
 
               <details className="upload-analysis-card__sources">
@@ -745,25 +777,6 @@ export default function IntakeFlowPanel({
                   {SUPPORTED_HISTORICAL_SOURCES.map((source) => <li key={source}>{source}</li>)}
                 </ul>
               </details>
-
-              {hasSelectedFiles ? (
-                <DatasetFileRow filename={selectedFileLabel} size={selectedFileSize} status="Ready" />
-              ) : (
-                <div className="upload-analysis-card__file">
-                  <i className="upload-analysis-card__file-icon" aria-hidden="true" />
-                  <span className="upload-analysis-card__file-copy">
-                    <span>Dataset</span>
-                    <strong>{selectedFileDetail}</strong>
-                  </span>
-                </div>
-              )}
-
-              <div className="upload-simple-actions upload-analysis-card__actions">
-                <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
-                <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!hasSelectedFiles || isUploadProcessing(uploadState)} title={!hasSelectedFiles ? "Choose a CSV dataset before starting analysis." : isUploadProcessing(uploadState) ? "Analysis is already in progress." : "Start dataset analysis."}>
-                  Start Baseline Analysis
-                </button>
-              </div>
             </div>
           </section>
         ) : null}
@@ -830,20 +843,7 @@ export default function IntakeFlowPanel({
         ) : null}
 
         {viewState === "failed" ? (
-          <section className="upload-analysis-card upload-simple-card--failed" role="alert" aria-live="assertive">
-            <div className="upload-analysis-card__visual">
-              <OperationalOrb
-                status={resolvedOrbStatus}
-                state={{
-                  label: fingerprintStatus,
-                  visualLabel: "Behavior Baseline",
-                }}
-              />
-              <div className="upload-analysis-card__status">
-                <span>Status</span>
-                <strong>{fingerprintStatus}</strong>
-              </div>
-            </div>
+          <section className="upload-analysis-card upload-simple-card--failed upload-analysis-card--compact upload-analysis-card--single" role="alert" aria-live="assertive">
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
                 <h3>Dataset Import Failed</h3>
