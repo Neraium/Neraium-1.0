@@ -120,7 +120,7 @@ describe("CommandCenterView hydration regressions", () => {
     expect(screen.getByText("Watching")).toBeTruthy();
     expect(screen.getByText("No telemetry")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect Live Telemetry" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Import and Analyze Dataset" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import Historical Dataset" })).toBeTruthy();
     expect(screen.queryByText("Awaiting data")).toBeNull();
     expect(screen.queryByText("No data available")).toBeNull();
   });

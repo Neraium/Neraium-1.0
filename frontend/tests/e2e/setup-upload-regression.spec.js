@@ -22,7 +22,7 @@ async function openCommandCenter(page) {
 async function startCommandCenterUpload(page, { name, csv }) {
   await openCommandCenter(page);
   await page.getByRole("button", { name: "Data Connections" }).click();
-  await expect(page.getByRole("heading", { name: "Import and Analyze Dataset", level: 2 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
   const uploadAcceptedPromise = page.waitForResponse(
     (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
     { timeout: 30000 },
@@ -32,7 +32,7 @@ async function startCommandCenterUpload(page, { name, csv }) {
     mimeType: "text/csv",
     buffer: Buffer.from(csv, "utf8"),
   });
-  await page.getByRole("button", { name: "Analyze Dataset" }).click();
+  await page.getByRole("button", { name: "Start Baseline Analysis" }).click();
   await expect(page.getByTestId("upload-workspace")).toBeVisible({ timeout: 30000 });
   const uploadAccepted = await uploadAcceptedPromise;
   expect(uploadAccepted.ok()).toBeTruthy();
@@ -43,7 +43,7 @@ test.describe("Setup + Upload regression", () => {
     await openCommandCenter(page);
     await expect(page.getByTestId("onboarding-root")).toHaveCount(0);
     await page.getByRole("button", { name: "Data Connections" }).click();
-  await expect(page.getByRole("heading", { name: "Import and Analyze Dataset", level: 2 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
     await expect(page.getByTestId("csv-upload-input")).toBeAttached();
   });
 
@@ -70,12 +70,9 @@ test.describe("Setup + Upload regression", () => {
 
     await expect(page.getByRole("progressbar", { name: /Telemetry transfer|Analysis/i })).toHaveAttribute("aria-valuenow", /[1-9][0-9]*|100/, { timeout: 30000 });
     await expect(page.getByRole("region", { name: "Analysis complete" })).toBeVisible({ timeout: 120000 });
-    const viewResults = page.getByRole("button", { name: /View Results|Open Portfolio/i });
-    if (await viewResults.count()) {
-      await viewResults.first().click();
-      await expect(page.getByTestId("engineering-reasoning-platform")).toBeVisible({ timeout: 30000 });
-    } else {
-      await expect(page.getByRole("button", { name: "Review Data Requirements" })).toBeVisible();
-    }
+    const viewResults = page.getByRole("button", { name: /View Results|Review Evidence|Open Portfolio/i });
+    await expect(viewResults.first()).toBeVisible();
+    await viewResults.first().click();
+    await expect(page.getByTestId("engineering-reasoning-platform")).toBeVisible({ timeout: 30000 });
   });
 });

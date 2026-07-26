@@ -233,7 +233,7 @@ it("mobile upload screen does not render backend milestone cards by default", ()
   window.innerWidth = 390;
   renderPanel();
 
-  expect(screen.getAllByRole("heading", { name: "Import and Analyze Dataset" }).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole("heading", { name: "Import Historical Dataset" }).length).toBeGreaterThan(0);
   expect(screen.queryByLabelText("Backend milestones")).toBeNull();
   expect(screen.queryByText("Backend milestones")).toBeNull();
   expect(screen.queryByText("What this run returns")).toBeNull();
@@ -250,7 +250,7 @@ it("selected file state shows filename, size, and analysis action", () => {
   expect(screen.getByText("operators.csv")).toBeTruthy();
   expect(screen.getByLabelText("operators.csv, 15.7 MB, Ready")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Choose Dataset" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Analyze Dataset" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Start Baseline Analysis" })).toBeTruthy();
   expect(screen.getByText("Dataset Ready")).toBeTruthy();
 });
 
@@ -438,7 +438,7 @@ it("complete state shows the behavior baseline completion moment", () => {
   ]);
   expect(completedStages[4].classList.contains("is-final")).toBe(true);
   const primary = screen.getByRole("button", { name: "View Results" });
-  const secondary = screen.getByRole("button", { name: "Analyze Another Dataset" });
+  const secondary = screen.getByRole("button", { name: "Import Another Dataset" });
   expect(primary.classList.contains("upload-completion-actions__primary")).toBe(true);
   expect(secondary.classList.contains("upload-completion-actions__secondary")).toBe(true);
   expect(screen.queryByText("Analysis Details")).toBeNull();
@@ -577,7 +577,7 @@ it("selecting a file clears stale complete progress", async () => {
     expect(screen.getByText("fresh.csv")).toBeTruthy();
   });
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-  expect(screen.getByRole("button", { name: "Analyze Dataset" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Start Baseline Analysis" })).toBeTruthy();
 });
 
 it("analyze another CSV resets the completed workspace", async () => {
@@ -589,10 +589,10 @@ it("analyze another CSV resets the completed workspace", async () => {
   });
 
   await waitFor(() => {
-    expect(screen.getByRole("button", { name: "Analyze Another Dataset" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import Another Dataset" })).toBeTruthy();
   });
 
-  fireEvent.click(screen.getByRole("button", { name: "Analyze Another Dataset" }));
+  fireEvent.click(screen.getByRole("button", { name: "Import Another Dataset" }));
 
   await waitFor(() => {
     expect(onResetDemo).toHaveBeenCalledTimes(1);
@@ -923,7 +923,7 @@ it("uses the evidence-insufficient completion state when baseline gating fails",
   expect(status.textContent).toContain("Evidence insufficient");
   const quality = screen.getByText("Evidence quality").closest(".upload-result-summary__item");
   expect(quality.textContent).toContain("Deferred");
-  expect(screen.getByRole("button", { name: "Review Data Requirements" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Review Evidence" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "View Results" })).toBeNull();
   expect(screen.queryByText("Analysis Details")).toBeNull();
 });

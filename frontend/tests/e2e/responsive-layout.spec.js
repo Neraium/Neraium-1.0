@@ -48,13 +48,23 @@ test.describe("Responsive engineering workspace", () => {
       expect(layout.button.width, width + "px menu width").toBeGreaterThanOrEqual(44);
       expect(layout.button.width, width + "px menu width").toBeLessThanOrEqual(48);
       expect(layout.button.height, width + "px menu height").toBe(layout.button.width);
-      expect(layout.button.left, width + "px left padding").toBeCloseTo(16, 0);
-      expect(layout.viewport - layout.field.right, width + "px right padding").toBeCloseTo(16, 0);
+      expect(layout.button.left, width + "px left padding").toBeCloseTo(10, 0);
+      expect(layout.viewport - layout.field.right, width + "px right padding").toBeCloseTo(10, 0);
       expect(layout.field.left - layout.button.right, width + "px control gap").toBeGreaterThanOrEqual(8);
       expect(layout.field.left - layout.button.right, width + "px control gap").toBeLessThanOrEqual(12);
       expect(layout.button.top + layout.button.height / 2, width + "px vertical alignment").toBeCloseTo(layout.field.top + layout.field.height / 2, 0);
       expect(layout.field.width, width + "px search width").toBeGreaterThan(0);
     }
+  });
+
+  test("first-baseline action is visible without scrolling", async ({ page }) => {
+    await openPortfolio(page, { width: 390, height: 844 });
+    const action = page.getByRole("button", { name: "Import Historical Dataset" });
+    await expect(action).toBeVisible();
+    const box = await action.boundingBox();
+    expect(box?.y ?? 9999).toBeLessThan(844);
+    expect((box?.y ?? 9999) + (box?.height ?? 0)).toBeLessThanOrEqual(844);
+    await expect(page.getByText("Evidence insufficient")).toHaveCount(0);
   });
 
   test("wider collapsed header retains the full Menu label", async ({ page }) => {
@@ -70,7 +80,7 @@ test.describe("Responsive engineering workspace", () => {
     await toggle.click();
     const navigation = page.getByRole("navigation", { name: "Primary navigation" });
     await expect(navigation).toBeVisible();
-    await navigation.getByRole("button", { name: "Site Overview" }).click();
+    await navigation.getByRole("button", { name: "Shift Brief" }).click();
     await expect(page).toHaveURL(/\/sites\/[^/]+$/);
     await expect(page.locator(".forensic-sidebar")).not.toHaveClass(/is-open/);
   });

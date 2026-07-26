@@ -81,7 +81,7 @@ const EMPTY_TELEMETRY_COPY = {
   commandTitle: "Baseline Needed",
   commandDetail: "Import a telemetry dataset, then run an analysis to establish the facility's behavior baseline.",
   fileStatus: "No dataset imported",
-  cta: "Import and Analyze Dataset",
+  cta: "Import Historical Dataset",
   secondaryCta: "Configure Connector",
   headerStatus: "No telemetry data",
 };
@@ -1222,7 +1222,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: MONITORING_LIVE_STATUS,
       sourceStatusLabel: "Live telemetry connected",
       storyProgressLabel: "Live telemetry connected",
-      primaryCtaLabel: "Import and Analyze Dataset",
+      primaryCtaLabel: "Import Historical Dataset",
     };
   }
   if (analysisComplete) {
@@ -1231,7 +1231,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
       status: ANALYSIS_COMPLETE_STATUS,
       sourceStatusLabel: "Analysis ready",
       storyProgressLabel: "Analysis based on the selected dataset",
-      primaryCtaLabel: "Import and Analyze Dataset",
+      primaryCtaLabel: "Import Historical Dataset",
     };
   }
   return {
@@ -1239,7 +1239,7 @@ function deriveOperationalUiState({ telemetryAvailable, analysisRunning, analysi
     status: READY_TO_ANALYZE_STATUS,
     sourceStatusLabel: telemetryConnected ? "Live telemetry connected" : "Telemetry loaded",
     storyProgressLabel: "Telemetry loaded; analysis not run",
-    primaryCtaLabel: "Import and Analyze Dataset",
+    primaryCtaLabel: "Import Historical Dataset",
   };
 }
 

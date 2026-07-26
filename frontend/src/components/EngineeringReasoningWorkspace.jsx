@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { buildEngineeringReasoningModel, buildEngineeringReasoningModelsFromEvidenceRuns } from "../viewModels/engineeringReasoning";
+import { deriveWorkspacePresentationState } from "../viewModels/shiftBrief";
+import FirstBaselineExperience, { SupportedFormats, WorkflowSteps } from "./FirstBaselineExperience";
 import ConfidenceTierChip from "./engineering/ConfidenceTierChip";
 import EvidenceLineage from "./engineering/EvidenceLineage";
 import EvidencePackageExport from "./engineering/EvidencePackageExport";
 import FindingSummary from "./engineering/FindingSummary";
 import GlobalAssetSearch from "./engineering/GlobalAssetSearch";
 import PortfolioWorkspace from "./engineering/PortfolioWorkspace";
+import ShiftBrief from "./engineering/ShiftBrief";
 import TraceTimeline from "./engineering/TraceTimeline";
 import "../styles/engineering-reasoning.css";
 
@@ -40,14 +43,23 @@ function statusClass(status) {
   return String(status || "Evidence insufficient").toLowerCase().replace(/\s+/g, "-");
 }
 
-function EmptyAnalysis({ onConnect }) {
+function WorkspaceStateNotice({ state, onPrimary }) {
+  const [formatsVisible, setFormatsVisible] = useState(false);
+  const baselineNeeded = state.key === "noDataset";
   return (
-    <section className="operational-empty">
+    <section className={"operational-empty operational-empty--" + state.key} data-testid={"workspace-state-" + state.key}>
       <span className="operational-label">Status</span>
-      <strong className="operational-status operational-status--evidence-insufficient">Evidence insufficient</strong>
-      <h1>No analyzed dataset is available</h1>
-      <p>Analyze a dataset to establish a baseline and compare current behavior.</p>
-      <button type="button" className="forensic-button" onClick={onConnect}>Review Data Requirements</button>
+      <strong className="operational-status">{state.status}</strong>
+      <h1>{state.headline}</h1>
+      <p>{state.body}</p>
+      <div className="operational-empty__actions">
+        <button type="button" className="forensic-button" onClick={onPrimary}>{state.action}</button>
+        {baselineNeeded ? (
+          <button type="button" className="forensic-button forensic-button--secondary" aria-expanded={formatsVisible} onClick={() => setFormatsVisible((value) => !value)}>View Supported Formats</button>
+        ) : null}
+      </div>
+      {baselineNeeded ? <SupportedFormats visible={formatsVisible} /> : null}
+      {baselineNeeded ? <WorkflowSteps /> : null}
     </section>
   );
 }
@@ -95,35 +107,27 @@ function OverviewHeader({ eyebrow, name, status, confidence, location, summary =
   );
 }
 
-function SiteOverview({ model, onEvidence }) {
+function SiteOverview({ model, acknowledgedIds, onReview, onEvidence, onAcknowledge, onSystem }) {
   return (
-    <div className="site-overview operational-overview">
-      <OverviewHeader eyebrow={model.site.assigned ? "Site overview" : "Analysis overview"} name={model.site.name} status={model.status} confidence={model.evidenceQuality} summary={findingCountSummary(model.findings, model.status)} />
-      {model.findings.length ? (
-        <section className="active-findings" aria-label="Active findings">
-          <div>{model.findings.map((finding) => <FindingSummary key={finding.id} finding={finding} onEvidence={onEvidence} />)}</div>
-        </section>
-      ) : (
-        <section className="normal-summary">
-          <span>What</span>
-          <h2>{model.status === "Normal" ? "No active findings" : "No reliable finding can be shown"}</h2>
-          <p>{model.status === "Normal" ? "Measured relationships remain within the learned baseline." : "The available evidence does not support a reliable comparison."}</p>
-          <button type="button" className="forensic-button" onClick={() => onEvidence(null)}>Open Evidence</button>
-        </section>
-      )}
-      <TechnicalSummary model={model} />
-    </div>
+    <ShiftBrief
+      model={model}
+      acknowledgedIds={acknowledgedIds}
+      onReview={onReview}
+      onEvidence={onEvidence}
+      onAcknowledge={onAcknowledge}
+      onSystem={onSystem}
+    />
   );
 }
 
-function SystemOverview({ model, system, onEvidence }) {
-  if (!system) return <SiteOverview model={model} onEvidence={onEvidence} />;
+function SystemOverview({ model, system, acknowledgedIds = [], onReview, onEvidence, onAcknowledge }) {
+  if (!system) return <SiteOverview model={model} acknowledgedIds={acknowledgedIds} onReview={onReview} onEvidence={onEvidence} onAcknowledge={onAcknowledge} />;
   return (
     <div className="system-overview operational-overview">
       <OverviewHeader eyebrow="System overview" name={system.name} status={system.status} confidence={system.evidenceTier} location={system.location.join(" / ")} summary={findingCountSummary(system.findings, system.status)} />
       {system.findings.length ? (
         <section className="active-findings" aria-label="Active findings">
-          <div>{system.findings.map((finding) => <FindingSummary key={finding.id} finding={finding} onEvidence={onEvidence} />)}</div>
+          <div>{system.findings.map((finding) => <FindingSummary key={finding.id} finding={finding} acknowledged={acknowledgedIds.includes(String(finding.id))} onReview={onReview} onEvidence={onEvidence} onAcknowledge={onAcknowledge} />)}</div>
         </section>
       ) : (
         <section className="normal-summary">
@@ -226,6 +230,32 @@ function TraceWorkspace({ model, finding, apiFetch, onBack }) {
   );
 }
 
+const FIRST_BASELINE_STORAGE_PREFIX = "neraium.first-baseline.dismissed";
+const ACKNOWLEDGED_STORAGE_PREFIX = "neraium.shift-brief.acknowledged";
+
+function storageScopeFor(user) {
+  return String(user?.email ?? user?.id ?? "operator").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "-");
+}
+
+function readStorageValue(key, fallback) {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const value = window.localStorage.getItem(key);
+    return value === null ? fallback : JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStorageValue(key, value) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // The workspace remains usable when browser storage is unavailable.
+  }
+}
+
 export default function EngineeringReasoningWorkspace({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection, apiFetch, onWorkspaceNavigate, onSignOut, signOutPending = false, currentUser }) {
   const [route, setRoute] = useState(routeFromLocation);
   const [selectedFindingId, setSelectedFindingId] = useState(() => pathIdentity(["evidence", "investigations"]));
@@ -233,6 +263,14 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState(() => pathIdentity(["sites"]) || null);
   const [portfolioRuns, setPortfolioRuns] = useState([]);
+  const storageScope = storageScopeFor(currentUser);
+  const firstBaselineStorageKey = FIRST_BASELINE_STORAGE_PREFIX + "." + storageScope;
+  const acknowledgedStorageKey = ACKNOWLEDGED_STORAGE_PREFIX + "." + storageScope;
+  const [firstBaselineDismissed, setFirstBaselineDismissed] = useState(() => readStorageValue(firstBaselineStorageKey, false) === true);
+  const [acknowledgedIds, setAcknowledgedIds] = useState(() => {
+    const stored = readStorageValue(acknowledgedStorageKey, []);
+    return Array.isArray(stored) ? stored.map(String) : [];
+  });
   const currentModel = useMemo(() => buildEngineeringReasoningModel({ liveOps, canonicalFinding, currentSession, result: effectiveLatestUploadResult, snapshot: effectiveLatestUploadSnapshot, domainDetection }), [liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection]);
   const portfolioModels = useMemo(() => {
     const persisted = buildEngineeringReasoningModelsFromEvidenceRuns(portfolioRuns);
@@ -244,8 +282,10 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const model = portfolioModels.find((item) => item.site.id === selectedSiteId) ?? currentModel;
   const selectedFinding = selectedFindingId === "__overview__" ? null : model.findings.find((finding) => finding.id === selectedFindingId) ?? model.selectedFinding;
   const selectedSystem = model.subsystems.find((system) => system.name === selectedSystemName) ?? null;
+  const presentationState = useMemo(() => deriveWorkspacePresentationState(model), [model]);
+  const showFirstBaseline = presentationState.key === "noDataset" && !firstBaselineDismissed;
   const effectiveRoute = route === "portfolio" && portfolioModels.length <= 1 ? "site" : route;
-  const navItems = portfolioModels.length > 1 ? [["portfolio", "Portfolio"], ["site", "Site Overview"], ["data-connections", "Data Connections"]] : [["site", "Site Overview"], ["data-connections", "Data Connections"]];
+  const navItems = portfolioModels.length > 1 ? [["portfolio", "Portfolio"], ["site", "Shift Brief"], ["data-connections", "Data Connections"]] : [["site", "Shift Brief"], ["data-connections", "Data Connections"]];
 
   useEffect(() => {
     let cancelled = false;
@@ -317,6 +357,32 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     navigate(item.target);
   }
 
+  function dismissFirstBaseline() {
+    writeStorageValue(firstBaselineStorageKey, true);
+    setFirstBaselineDismissed(true);
+  }
+
+  function beginFirstBaseline() {
+    dismissFirstBaseline();
+    navigate("data-connections");
+  }
+
+  function acknowledgeFinding(finding) {
+    const id = String(finding?.id ?? "");
+    if (!id || acknowledgedIds.includes(id)) return;
+    const next = [...acknowledgedIds, id];
+    setAcknowledgedIds(next);
+    writeStorageValue(acknowledgedStorageKey, next);
+  }
+
+  function presentationPrimaryAction() {
+    if (["insufficientEvidence", "legacyAnalysis"].includes(presentationState.key)) {
+      openEvidence(model.selectedFinding);
+      return;
+    }
+    navigate("data-connections");
+  }
+
   return (
     <div className="forensic-shell" data-testid="engineering-reasoning-platform">
       <a className="skip-link" href="#forensic-main">Skip to main content</a>
@@ -338,12 +404,14 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
           <div className="forensic-topbar__site"><span>{model.site.name}</span><ConfidenceTierChip tier={model.evidenceQuality} /></div>
         </header>
         <main id="forensic-main" aria-label="Neraium operational workspace" tabIndex={-1}>
-          {!model.hasAnalysis ? <EmptyAnalysis onConnect={() => navigate("data-connections")} />
-            : effectiveRoute === "portfolio" ? <PortfolioWorkspace sites={portfolioModels.map((item) => item.site)} onSelectSite={(site) => { setSelectedSiteId(site.id); window.history.pushState({}, "", "/sites/" + encodeURIComponent(site.id)); setRoute("site"); setMobileNavOpen(false); }} />
-              : effectiveRoute === "site" ? <SiteOverview model={model} onEvidence={openEvidence} />
-                : effectiveRoute === "system" ? <SystemOverview model={model} system={selectedSystem} onEvidence={openEvidence} />
-                  : effectiveRoute === "evidence" ? <EvidenceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onTrace={() => navigate("trace")} onBack={() => navigate("site")} />
-                    : <TraceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onBack={() => openEvidence(selectedFinding)} />}
+          {showFirstBaseline ? <FirstBaselineExperience onImport={beginFirstBaseline} onExit={dismissFirstBaseline} />
+            : ["noDataset", "datasetReady", "analysisRunning"].includes(presentationState.key) ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
+              : effectiveRoute === "evidence" ? <EvidenceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onTrace={() => navigate("trace")} onBack={() => navigate("site")} />
+                : effectiveRoute === "trace" ? <TraceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onBack={() => openEvidence(selectedFinding)} />
+                  : ["insufficientEvidence", "legacyAnalysis"].includes(presentationState.key) ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
+                  : effectiveRoute === "portfolio" ? <PortfolioWorkspace sites={portfolioModels.map((item) => item.site)} onSelectSite={(site) => { setSelectedSiteId(site.id); window.history.pushState({}, "", "/sites/" + encodeURIComponent(site.id)); setRoute("site"); setMobileNavOpen(false); }} />
+                    : effectiveRoute === "site" ? <SiteOverview model={model} acknowledgedIds={acknowledgedIds} onReview={openEvidence} onEvidence={openEvidence} onAcknowledge={acknowledgeFinding} onSystem={openSystem} />
+                      : <SystemOverview model={model} system={selectedSystem} acknowledgedIds={acknowledgedIds} onReview={openEvidence} onEvidence={openEvidence} onAcknowledge={acknowledgeFinding} />}
         </main>
       </div>
     </div>

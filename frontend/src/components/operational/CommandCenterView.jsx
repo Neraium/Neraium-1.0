@@ -159,7 +159,7 @@ function OperatingStateSummary({ model, status, topInsight, helpers, systems, on
         <strong>{primaryAction}</strong>
         <div className="operating-state-card__buttons">
           {topInsight ? <button type="button" className="command-button" onClick={onOpenInvestigation}>Open investigation</button> : <button type="button" className="command-button" onClick={onConnectLiveData}>Connect Live Telemetry</button>}
-          {topInsight ? <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onViewEvidence}>View supporting evidence</button> : <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onConnectLiveData}>Import and Analyze Dataset</button>}
+          {topInsight ? <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onViewEvidence}>View supporting evidence</button> : <button type="button" className="secondary-command-button secondary-command-button--quiet" onClick={onConnectLiveData}>Import Historical Dataset</button>}
         </div>
       </div>
       <p className="operating-state-card__quality-note">Evidence quality is separate from finding confidence. {quality.reason}</p>

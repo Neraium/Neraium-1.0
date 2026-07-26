@@ -965,3 +965,17 @@ summary:focus-visible,
   .infra-subsystem-grid { grid-template-columns: 1fr; }
   .infra-overall-row { align-items: flex-start; }
 }
+
+/* Compact authenticated secondary workspaces */
+.data-connections-workspace { gap: var(--space-16); padding: clamp(14px, 1.8vw, 22px); }
+.data-connections-workspace .ops-panel__body { gap: var(--space-14); }
+
+@media (max-width: 620px) {
+  .workspace-back-control { min-height: 52px; align-items: center; flex-direction: row; padding: 6px 10px; }
+  .workspace-back-control__button { min-height: 40px; padding: 0 10px; }
+  .workspace-back-control__context { min-width: 0; }
+  .workspace-back-control__meta { margin-left: auto; }
+  .workspace-back-control__help { min-height: 40px; }
+  .data-connections-workspace { gap: 10px; padding: 8px; }
+  .data-connections-workspace .ops-panel { padding: 12px; }
+}
