@@ -135,6 +135,66 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(card.querySelector(".operational-finding__more").open).toBe(false);
   });
 
+  it("renders a corroborated condition as the primary engineering object", () => {
+    const supportingRelationships = [
+      { id: "rel-1", columns: ["Pump power", "Flow"], change_type: "weakened", baseline_strength: 0.9, current_strength: 0.3 },
+      { id: "rel-2", columns: ["Flow", "Discharge pressure"], change_type: "weakened", baseline_strength: 0.84, current_strength: 0.28 },
+      { id: "rel-3", columns: ["Discharge pressure", "Pump speed"], change_type: "weakened", baseline_strength: 0.81, current_strength: 0.24 },
+    ];
+    const condition = {
+      object_type: "condition",
+      condition_id: "condition-pump",
+      id: "condition-pump",
+      headline: "Pump response weakening in Rush Tower water system",
+      status: "open",
+      confidence: "high",
+      classification: { type: "unexplained_systemic_change", confidence: "high", reasons: ["Comparable operating evidence supports the condition."] },
+      data_confidence: { rating: "high", summary: "Telemetry passed the recorded checks." },
+      operating_mode: { match: "strong", confidence: "high", baseline_mode_label: "Two pumps", recent_mode_label: "Two pumps" },
+      affected_systems: ["Pumping System"],
+      affected_boundaries: ["Discharge boundary"],
+      affected_signals: ["Pump power", "Flow", "Discharge pressure", "Pump speed"],
+      localization: { system: "Pumping System", monitored_boundary: "Discharge boundary", likely_investigation_area: "Discharge boundary" },
+      trajectory: { state: "Strengthening", observed_for: "Observed for 18 days", corroboration_change: "Corroboration increased from 2 to 3 relationships", persistence: 0.85 },
+      corroboration: { corroboration_strength: "moderate", relationship_count: 3 },
+      comparable_operation: { status: "supported", comparable_period_count: 18, normal_behavior: "Pressure increased with pump speed.", current_behavior: "Pressure response weakened." },
+      supporting_relationships: supportingRelationships,
+      supporting_evidence: [
+        "3 relationship changes align through flow and discharge pressure.",
+        "Pump power and flow coupling changed from strong to weak.",
+        "Corroboration increased from 2 to 3 relationships.",
+      ],
+      next_checks: ["Verify source data and inspect the affected pressure boundary."],
+      recommended_investigation: [
+        { rank: 1, check: "Verify source data and inspect the affected pressure boundary.", category: "source_validation" },
+      ],
+      timeline: [
+        { event_type: "condition_evidence_window", title: "Condition evidence observed", period_label: "Recent comparison window" },
+        { event_type: "trajectory_classified", title: "Trajectory: Strengthening", period_label: "Observed for 18 days" },
+      ],
+    };
+    renderWorkspace({ result: analysisResult({ analysis: { conditions: [condition] } }) });
+
+    const card = screen.getByTestId("compact-finding-card");
+    const view = within(card);
+    expect(view.getByText("Condition")).toBeTruthy();
+    expect(view.getByRole("heading", { name: "Pump response weakening in Rush Tower water system" })).toBeTruthy();
+    expect(view.getByText("Moderate · 3")).toBeTruthy();
+    expect(view.getAllByText("Strengthening").length).toBeGreaterThan(0);
+    expect(card.querySelectorAll(".operational-finding__condition-evidence li")).toHaveLength(3);
+    expect(view.getByText("Observed for 18 days", { exact: false })).toBeTruthy();
+    expect(view.getByText("Details · 3 supporting relationships").closest("details").open).toBe(false);
+    expect(view.getByRole("button", { name: "Investigate" })).toBeTruthy();
+    expect(view.getByText("Actions")).toBeTruthy();
+
+    fireEvent.click(view.getByRole("button", { name: "Investigate" }));
+    expect(window.location.pathname).toBe("/findings/condition-pump");
+    expect(screen.getByRole("heading", { name: "Trajectory" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Comparable operation" })).toBeTruthy();
+    expect(screen.getByText("18 comparable periods")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Condition timeline" })).toBeTruthy();
+  });
+
   it("moves an acknowledged investigation out of New without changing classification", async () => {
     renderWorkspace();
     fireEvent.click(screen.getByText("More actions"));

@@ -149,6 +149,12 @@ class EvidenceRunResponse(BaseModel):
     governance_boundary: dict[str, Any] = Field(default_factory=dict)
     engineering_priors_used: list[dict[str, Any] | str] = Field(default_factory=list)
     audit_tags: list[dict[str, Any]] = Field(default_factory=list)
+    condition_id: str | None = None
+    finding_title: str | None = None
+    system_name: str | None = None
+    subsystem_name: str | None = None
+    potential_impact: str | None = None
+    condition: dict[str, Any] = Field(default_factory=dict)
 
 
 class OperatorFeedbackRequest(ContractModel):

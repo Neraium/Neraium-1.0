@@ -32,6 +32,7 @@ def test_csv_analysis_returns_canonical_analysis_result() -> None:
         "data_quality",
         "executive_summary",
         "systems",
+        "conditions",
         "relationships",
         "fingerprint",
         "insights",
@@ -45,6 +46,9 @@ def test_csv_analysis_returns_canonical_analysis_result() -> None:
         "current_state_window",
     }
     assert analysis["change_onset"]
+    assert analysis["primary_object"] == "condition"
+    assert analysis["conditions"][0]["object_type"] == "condition"
+    assert analysis["conditions"][0]["supporting_relationships"]
     assert analysis["stable_window"]["description"] == "Reference behavior window used for baseline comparison."
     assert analysis["deviation_window"]["description"] == "Window where current behavior diverged from the reference pattern."
     assert analysis["current_state_window"]["description"] == "Most recent behavior window represented by this analysis result."

@@ -244,7 +244,8 @@ function isActiveRawFinding(raw) {
 }
 function specificFindingTitle(raw, observedChange, relationship, tier, system, contextValues = []) {
   if (["Deferred", "Withheld"].includes(tier)) return "Evidence insufficient for reliable interpretation";
-  const supplied = stripPeriod(firstText(raw?.title, raw?.finding_title));
+  const supplied = stripPeriod(firstText(raw?.headline, raw?.title, raw?.finding_title));
+  if (raw?.object_type === "condition" && supplied && supplied.length <= 96 && !MALFORMED_FINDING_TITLE.test(supplied) && !OVERSTATED_FINDING_TITLE.test(supplied)) return supplied;
   const observed = stripPeriod(sentence(observedChange, 90));
   const fullContext = [contextValues, supplied, observed, relationship?.source, relationship?.target];
   const inferred = operationalTitleFromContext(fullContext, system);
@@ -260,21 +261,29 @@ function specificFindingTitle(raw, observedChange, relationship, tier, system, c
   return observedIsUsable && inferred === "Measured behavior changed" ? observed : inferred;
 }
 function deriveLocation(raw, context) {
-  const rawRelationships = asArray(raw?.contributing_relationships ?? raw?.relationships);
+  const rawRelationships = asArray(raw?.supporting_relationships ?? raw?.contributing_relationships ?? raw?.relationships);
+  const localization = raw?.localization ?? {};
   const signalContext = [
-    ...asArray(raw?.variables), ...asArray(raw?.affected_variables), ...asArray(raw?.supporting_signals),
+    ...asArray(raw?.variables), ...asArray(raw?.affected_variables), ...asArray(raw?.affected_signals), ...asArray(raw?.supporting_signals),
     raw?.title, raw?.what_changed, raw?.observed_change,
     ...rawRelationships.flatMap((item) => [...asArray(item?.columns), ...asArray(item?.display_columns), item?.source, item?.target]),
   ];
   const inferredSystem = inferredOperationalArea(signalContext);
-  const system = supportedLocationText(raw?.system, raw?.system_name, raw?.location?.system, context.primarySystem) || inferredSystem;
-  const subsystem = supportedLocationText(raw?.subsystem, raw?.subsystem_name, raw?.location?.subsystem);
-  const asset = supportedLocationText(raw?.asset, raw?.asset_name, raw?.equipment, raw?.equipment_name, raw?.mapped_asset, raw?.location?.asset);
+  const system = supportedLocationText(localization?.system, raw?.system, raw?.system_name, raw?.location?.system, asArray(raw?.affected_systems)[0], context.primarySystem) || inferredSystem;
+  const boundary = supportedLocationText(localization?.monitored_boundary, asArray(raw?.affected_boundaries)[0]);
+  const subsystem = supportedLocationText(localization?.subsystem, raw?.subsystem, raw?.subsystem_name, raw?.location?.subsystem, boundary);
+  const asset = raw?.object_type === "condition" ? "" : supportedLocationText(raw?.asset, raw?.asset_name, raw?.equipment, raw?.equipment_name, raw?.mapped_asset, raw?.location?.asset);
   const normalizedSubsystem = subsystem && subsystem !== system ? subsystem : "";
   const normalizedAsset = asset && asset !== normalizedSubsystem && asset !== system ? asset : "";
-  const supportedHierarchy = unique([context.siteLocation, system, normalizedSubsystem, normalizedAsset]);
+  const supportedHierarchy = unique([
+    context.siteLocation,
+    ...asArray(localization?.hierarchy).filter((item) => item?.supported && item?.level !== "site" && item?.level !== "signals").map((item) => item?.label),
+    system,
+    normalizedSubsystem,
+    normalizedAsset,
+  ]);
   const hierarchy = supportedHierarchy.length > 1 ? supportedHierarchy : [...supportedHierarchy, "Asset not identified"];
-  return { site: context.siteLocation, system, subsystem: normalizedSubsystem, asset: normalizedAsset, hierarchy, label: hierarchy.join(" · ") };
+  return { site: context.siteLocation, system, subsystem: normalizedSubsystem, boundary, asset: normalizedAsset, likelyInvestigationArea: localization?.likely_investigation_area ?? boundary ?? normalizedSubsystem ?? system, hierarchy, label: hierarchy.join(" · ") };
 }
 function comparisonSummary(relationship) {
   if (!relationship) return "A readable baseline comparison is not available.";
@@ -293,7 +302,7 @@ function confidenceReason(tier, primaryLimitation) {
 }
 
 function buildFinding(raw, index, context) {
-  const relatedRows = asArray(raw?.contributing_relationships ?? raw?.relationships).map((row, rowIndex) => normalizeRelationship(row, rowIndex, context.evidenceIndex));
+  const relatedRows = asArray(raw?.supporting_relationships ?? raw?.contributing_relationships ?? raw?.relationships).map((row, rowIndex) => normalizeRelationship(row, rowIndex, context.evidenceIndex));
   const relationship = relatedRows[0] ?? context.relationships[0] ?? null;
   const evidenceRefs = unique(asArray(raw?.evidence_refs ?? raw?.evidenceRefs));
   const evidenceObjects = compact([...asArray(raw?.evidence ?? raw?.evidence_items), ...evidenceRefs.map((ref) => context.evidenceIndex?.[ref]), ...relatedRows.flatMap((row) => row.evidence)]);
@@ -302,14 +311,14 @@ function buildFinding(raw, index, context) {
   const technicalLimitations = collectTechnicalLimitations(raw, context.result, context.gaps);
   const limitations = materialLimitations(raw, technicalLimitations, context.gaps);
   const contradictions = collectContradictions(raw);
-  const variables = unique([...asArray(raw?.variables), ...asArray(raw?.affected_variables), ...asArray(raw?.supporting_signals), relationship?.source, relationship?.target]);
+  const variables = unique([...asArray(raw?.variables), ...asArray(raw?.affected_variables), ...asArray(raw?.affected_signals), ...asArray(raw?.source_tags), ...asArray(raw?.supporting_signals), relationship?.source, relationship?.target]);
   const tier = deriveConfidenceTier({ explicit: raw?.confidence_tier ?? raw?.confidence ?? raw?.confidence_state, coverage: context.coverage, evidenceCount: rawSupporting.length + evidenceObjects.length, limitations, contradictions, processing: context.processing, baselineSufficient: raw?.baseline_sufficient === false ? false : context.baselineSufficient, reliable: isReliable(raw, context.result) });
   const observedChange = firstText(raw?.what_changed, raw?.observed_change, raw?.whatHappened, raw?.summary, raw?.title) || (relationship ? relationship.label + " moved outside its learned behavior." : "The available comparison indicates a change in measured behavior.");
   const location = deriveLocation(raw, context);
   const titleContext = [variables, rawSupporting, relatedRows.map((item) => [item.label, item.source, item.target])];
   const title = specificFindingTitle(raw, observedChange, relationship, tier, location.subsystem || location.system, titleContext);
   const supporting = unique(rawSupporting.map((item) => formatPrimaryEvidence(item, titleContext)).filter(Boolean));
-  const specificRecommendation = firstText(raw?.first_place_to_look, raw?.recommended_first_action, raw?.recommended_check, raw?.operator_check, raw?.recommended_action);
+  const specificRecommendation = firstText(raw?.first_place_to_look, raw?.recommended_first_action, raw?.recommended_check, asArray(raw?.next_checks)[0], raw?.operator_check, raw?.recommended_action);
   const hasMappedContext = Boolean(location.system || location.subsystem || location.asset) && variables.length > 0;
   const prior = raw?.engineering_prior ?? raw?.relationship_prior ?? raw?.prior_contribution ?? null;
   const interpretationLevel = prior && hasMappedContext ? 1 : specificRecommendation && hasMappedContext ? 2 : relationship ? 3 : 4;
@@ -347,6 +356,20 @@ function buildFinding(raw, index, context) {
     evidenceObjects,
     outcome: asArray(raw?.operator_feedback_history)[0] ?? null,
     classification: raw?.classification,
+    objectType: raw?.object_type ?? (raw?.condition_id ? "condition" : "finding"),
+    conditionId: firstText(raw?.condition_id, raw?.id),
+    confidence: raw?.confidence,
+    confidenceScore: firstNumber(raw?.confidence_score),
+    trajectory: raw?.trajectory ?? {},
+    corroboration: raw?.corroboration ?? {
+      corroboration_strength: raw?.corroboration_strength,
+      relationship_count: raw?.relationship_count,
+    },
+    comparableOperation: raw?.comparable_operation ?? {},
+    affectedBoundaries: asArray(raw?.affected_boundaries),
+    conflictingRelationships: asArray(raw?.conflicting_relationships),
+    uncertainRelationships: asArray(raw?.uncertain_relationships),
+    escalation: raw?.escalation ?? {},
     dataConfidence: raw?.data_confidence ?? raw?.dataConfidence,
     operatingMode: raw?.operating_mode ?? raw?.operatingMode,
     sensorHealth: raw?.sensor_health ?? raw?.sensorHealth,
@@ -358,7 +381,7 @@ function buildFinding(raw, index, context) {
     investigationGuidance: raw?.investigation_guidance ?? raw?.investigationGuidance ?? [],
     recommendedInvestigation: raw?.recommended_investigation ?? raw?.recommendedInvestigation ?? [],
     recommendedFirstAction: recommendationAllowed ? specificRecommendation : "",
-    activityTimeline: asArray(raw?.activity_timeline ?? raw?.activityTimeline),
+    activityTimeline: asArray(raw?.timeline ?? raw?.activity_timeline ?? raw?.activityTimeline),
     sourceTimeRanges: asArray(raw?.source_time_ranges ?? raw?.sourceTimeRanges),
     firstDetectedAt: firstText(raw?.first_detected_at, raw?.firstDetectedAt),
     generatedAt: firstText(raw?.generated_at, raw?.generatedAt, context.result?.completed_at, context.result?.processed_at),
@@ -503,13 +526,17 @@ export function buildEngineeringReasoningModel({ liveOps = {}, canonicalFinding 
   const relationships = collectRelationships(result, analysis);
   const baselineSufficient = deriveBaselineSufficiency(result, analysis, relationships);
   const siteIdentity = assignedSite(result, resolvedSnapshot, currentSession, liveOps);
+  const analysisConditions = asArray(analysis?.conditions);
+  const rawConditions = (analysisConditions.length ? analysisConditions : asArray(result?.conditions)).filter(isActiveRawFinding);
   const rawFindings = asArray(analysis?.insights ?? result?.findings).filter(isActiveRawFinding);
   const canonicalRaw = canonicalAsRaw(canonicalFinding);
-  const findingsSource = rawFindings.length ? rawFindings : (canonicalRaw ? [canonicalRaw] : []);
+  const findingsSource = rawConditions.length ? rawConditions : rawFindings.length ? rawFindings : (canonicalRaw ? [canonicalRaw] : []);
   const processing = /process|pending|queue|analyz/.test(firstText(resolvedSnapshot?.status, currentSession?.status).toLowerCase());
   const primarySystem = supportedLocationText(result?.system_name, analysis?.systems?.[0]?.name, liveOps?.primaryWindow?.label);
   const context = { result, evidenceIndex: analysis?.evidence_index ?? {}, relationships, coverage, gaps, processing, primarySystem, baselineSufficient, siteLocation: siteIdentity.location };
-  const findings = consolidateFindings(findingsSource.map((raw, index) => buildFinding(raw, index, context)));
+  const findings = rawConditions.length
+    ? findingsSource.map((raw, index) => buildFinding(raw, index, context))
+    : consolidateFindings(findingsSource.map((raw, index) => buildFinding(raw, index, context)));
   const systems = asArray(analysis?.systems).length ? analysis.systems : asArray(liveOps?.systems);
   const subsystems = deriveSubsystems(systems, findings, relationships, siteIdentity.location);
   const hasAnalysis = Boolean(result && Object.keys(result).length);
@@ -526,7 +553,7 @@ function buildSearchItems(site, subsystems, findings, nodes, evidenceIndex = {})
     { id: site.id, type: "Site", label: site.name, target: "site" },
     ...subsystems.map((item) => ({ id: item.id, type: "System", label: item.name, target: "system", systemName: item.name })),
     ...nodes.map((item) => ({ id: item.id, type: "Asset / signal", label: item.label, target: "evidence", nodeId: item.id, findingId: findings.find((finding) => finding.variables.includes(item.id))?.id })),
-    ...findings.map((item) => ({ id: item.id, type: "Finding", label: item.title, target: "evidence", findingId: item.id })),
+    ...findings.map((item) => ({ id: item.id, type: item.objectType === "condition" ? "Condition" : "Finding", label: item.title, target: "evidence", findingId: item.id })),
     ...Object.values(evidenceIndex ?? {}).map((item, index) => ({ id: item?.evidence_id ?? `evidence-${index}`, type: "Evidence", label: firstText(item?.description, item?.evidence_id, `Evidence ${index + 1}`), target: "evidence" })),
   ];
 }
@@ -545,7 +572,10 @@ export function buildEngineeringReasoningModelsFromEvidenceRuns(runs = []) {
     const active = !["resolved", "closed", "normal"].includes(String(run?.observation_status ?? "").toLowerCase());
     const evidence = asArray(run?.evidence_summary);
     const coverage = run?.rows_received ? Math.max(0, Math.min(1, Number(run?.rows_accepted ?? 0) / Number(run.rows_received))) : null;
-    const result = { ...run, job_id: run?.run_id, facility_name: firstText(run?.site_name, run?.room), site_id: siteKey === "unassigned-dataset" ? undefined : siteKey, data_quality: { coverage, warnings: [...asArray(run?.warnings), ...asArray(run?.data_conditions)] }, analysis_explanation: { fingerprint: { status: run?.baseline_status }, systems: compact([{ id: run?.system_id, name: firstText(run?.system_name, run?.system_id) }]), insights: active && evidence.length ? [{ id: `evidence-${run.run_id}`, title: firstText(run?.finding_title, run?.historical_fact, evidence[0]), what_changed: evidence[0], why_it_matters: firstText(run?.potential_impact, run?.historical_fact), confidence_tier: run?.confidence_tier, system: firstText(run?.system_name, run?.system_id), subsystem: run?.subsystem_name, asset: run?.asset_name, variables: asArray(run?.variables), supporting_evidence: evidence, limitations: [...asArray(run?.warnings), ...asArray(run?.data_conditions)], operator_feedback_history: asArray(run?.operator_feedback_history) }] : [] } };
+    const persistedCondition = run?.condition && typeof run.condition === "object"
+      ? { ...run.condition, supporting_evidence: asArray(run.condition.supporting_evidence).length ? run.condition.supporting_evidence : evidence, operator_feedback_history: asArray(run?.operator_feedback_history) }
+      : null;
+    const result = { ...run, job_id: run?.run_id, facility_name: firstText(run?.site_name, run?.room), site_id: siteKey === "unassigned-dataset" ? undefined : siteKey, data_quality: { coverage, warnings: [...asArray(run?.warnings), ...asArray(run?.data_conditions)] }, analysis_explanation: { fingerprint: { status: run?.baseline_status }, systems: compact([{ id: run?.system_id, name: firstText(run?.system_name, run?.system_id) }]), conditions: active && persistedCondition ? [persistedCondition] : [], insights: active && !persistedCondition && evidence.length ? [{ id: `evidence-${run.run_id}`, title: firstText(run?.finding_title, run?.historical_fact, evidence[0]), what_changed: evidence[0], why_it_matters: firstText(run?.potential_impact, run?.historical_fact), confidence_tier: run?.confidence_tier, system: firstText(run?.system_name, run?.system_id), subsystem: run?.subsystem_name, asset: run?.asset_name, variables: asArray(run?.variables), supporting_evidence: evidence, limitations: [...asArray(run?.warnings), ...asArray(run?.data_conditions)], operator_feedback_history: asArray(run?.operator_feedback_history) }] : [] } };
     return buildEngineeringReasoningModel({ result });
   });
 }

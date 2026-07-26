@@ -18,7 +18,11 @@ function analysisSource(result = {}) {
 }
 
 function rawFindingFor(finding, result = {}) {
-  const candidates = asArray(analysisSource(result).insights ?? result.findings);
+  const source = analysisSource(result);
+  const candidates = [
+    ...asArray(source.conditions ?? result.conditions),
+    ...asArray(source.insights ?? result.findings),
+  ];
   const identities = new Set([finding?.id, ...asArray(finding?.mergedFindingIds)].map((value) => String(value ?? "")));
   return candidates.find((item) => identities.has(String(item?.id ?? item?.finding_id ?? ""))) ?? {};
 }
@@ -47,7 +51,8 @@ function strengtheningEvidence(raw = {}) {
       ?? raw.severity_trajectory
       ?? raw.magnitude_trajectory
       ?? raw.spread_trajectory
-      ?? raw.evidence_trajectory,
+      ?? raw.evidence_trajectory
+      ?? raw.trajectory?.state,
     ["strengthening", "escalating", "increasing", "growing", "spreading"],
   );
 }
@@ -108,7 +113,8 @@ function priorityMetadata(finding, model, records, now) {
   const persistent = presentation.persistence.persistent;
   const strengthening = strengtheningEvidence(raw);
   const critical = explicitPositive(raw.critical_asset ?? raw.asset_criticality ?? raw.criticality, ["critical", "high"]);
-  const corroborated = asArray(finding.relationships).length >= 2 || Number(raw.supporting_relationship_count ?? 0) >= 2;
+  const corroborated = asArray(finding.relationships).length >= 2
+    || Number(raw.relationship_count ?? raw.corroboration?.relationship_count ?? raw.supporting_relationship_count ?? 0) >= 2;
   return {
     raw,
     presentation,
@@ -154,6 +160,29 @@ function rankingExplanation(meta) {
 
 export function deriveEscalationReadiness(finding, result = {}) {
   const raw = rawFindingFor(finding, result);
+  const governedEscalation = raw?.escalation ?? finding?.escalation;
+  const governedRelationshipCount = Number(
+    raw?.relationship_count
+      ?? raw?.corroboration?.relationship_count
+      ?? finding?.corroboration?.relationship_count
+      ?? asArray(finding?.relationships).length,
+  );
+  if (governedEscalation?.rule_version) {
+    const inputs = governedEscalation.inputs ?? {};
+    return {
+      unexplainedSystemicChange: inputs.classification === "unexplained_systemic_change",
+      modeMatchStrong: inputs.operating_mode_match === "strong",
+      dataConfidenceGood: ["high", "moderate"].includes(inputs.data_quality),
+      persistentChange: Number(finding?.trajectory?.persistence ?? raw?.trajectory?.persistence ?? 0) >= 0.6,
+      multipleSupportingRelationships: governedRelationshipCount >= 2,
+      criticalAsset: ["critical", "high"].includes(inputs.criticality),
+      noKnownOperationalExplanation: inputs.classification === "unexplained_systemic_change",
+      strengthening: ["Strengthening", "Sudden", "Recurring"].includes(inputs.trajectory),
+      serious: governedEscalation.prompt_engineering_review === true,
+      eligible: governedEscalation.eligible === true,
+      level: governedEscalation.level,
+    };
+  }
   const presentation = finding?.classificationPresentation ?? normalizeFindingPresentation(finding);
   const unexplainedSystemicChange = !presentation.legacy && presentation.type === "unexplained_systemic_change";
   const modeMatchStrong = explicitPositive(
@@ -169,7 +198,7 @@ export function deriveEscalationReadiness(finding, result = {}) {
     ["persistent", "confirmed", "sustained"],
   ) || Number(raw.persistence_windows ?? raw.changed_windows ?? 0) >= 2;
   const multipleSupportingRelationships = asArray(finding?.relationships).length >= 2
-    || Number(raw.supporting_relationship_count ?? 0) >= 2;
+    || Number(raw.relationship_count ?? raw.corroboration?.relationship_count ?? raw.supporting_relationship_count ?? 0) >= 2;
   const criticalAsset = explicitPositive(
     raw.critical_asset ?? raw.asset_criticality ?? raw.criticality,
     ["critical", "high"],
@@ -196,7 +225,7 @@ export function deriveWorkspacePresentationState(model = {}) {
   if (model.processing) return { key: "analysisRunning", status: "Analysis Running", headline: "Learning normal behavior", body: "Neraium is building the baseline and comparing relationships.", action: "View Analysis Progress" };
   if (!model.hasAnalysis) return { key: "noDataset", status: "Baseline Needed", headline: "No baseline available", body: "Import a historical dataset so Neraium can learn how your system normally behaves.", action: "Import Historical Dataset" };
   const source = analysisSource(result);
-  const hasAnalysisOutput = Boolean(result.sii_completed === true || asArray(source.insights).length || asArray(source.relationships).length || asArray(source.systems).length || result.baseline_analysis);
+  const hasAnalysisOutput = Boolean(result.sii_completed === true || asArray(source.conditions).length || asArray(source.insights).length || asArray(source.relationships).length || asArray(source.systems).length || result.baseline_analysis);
   const legacy = result.legacy_analysis === true || result.is_legacy === true || /legacy/i.test(firstText(result.analysis_version, result.schema_version));
   if (legacy) return { key: "legacyAnalysis", status: "Legacy Analysis", headline: "Earlier analysis available", body: "Review the saved evidence or import current data for a new comparison.", action: "Review Saved Evidence" };
   if (!hasAnalysisOutput) return { key: "datasetReady", status: "Dataset Ready", headline: "Ready to learn normal behavior", body: "The historical dataset is ready for baseline analysis.", action: "Start Baseline Analysis" };

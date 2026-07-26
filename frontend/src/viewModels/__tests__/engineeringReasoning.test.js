@@ -150,6 +150,39 @@ describe("engineering reasoning model", () => {
     expect(models.find((model) => model.site.id === "site-b").site.activeInvestigations).toBe(0);
   });
 
+  it("restores persisted canonical conditions without converting them to legacy findings", () => {
+    const models = buildEngineeringReasoningModelsFromEvidenceRuns([{
+      run_id: "condition-run",
+      adaptive_site_key: "rush-tower",
+      site_name: "Rush Tower",
+      status: "completed",
+      observation_status: "open",
+      rows_received: 100,
+      rows_accepted: 100,
+      evidence_summary: ["3 connected relationships changed together."],
+      condition: {
+        object_type: "condition",
+        condition_id: "condition-pump",
+        headline: "Pump response weakening in Rush Tower Pumping System",
+        confidence: "high",
+        affected_signals: ["Pump power", "Flow", "Discharge pressure"],
+        localization: { system: "Pumping System", monitored_boundary: "Discharge boundary" },
+        trajectory: { state: "Strengthening", persistence: 0.8 },
+        corroboration: { corroboration_strength: "moderate", relationship_count: 3 },
+        supporting_relationships: [
+          { id: "rel-1", columns: ["Pump power", "Flow"], change_type: "weakened" },
+          { id: "rel-2", columns: ["Flow", "Discharge pressure"], change_type: "weakened" },
+        ],
+        next_checks: ["Verify source data."],
+      },
+    }]);
+
+    expect(models).toHaveLength(1);
+    expect(models[0].selectedFinding.objectType).toBe("condition");
+    expect(models[0].selectedFinding.title).toBe("Pump response weakening in Rush Tower Pumping System");
+    expect(models[0].selectedFinding.corroboration.relationship_count).toBe(3);
+  });
+
   it("keeps generic finding language out of location and confidence fields", () => {
     const model = buildEngineeringReasoningModel({ result: {
       data_quality: { coverage_percent: 100, warnings: ["811 rows contain missing numeric values."] },
@@ -209,5 +242,72 @@ describe("engineering reasoning model", () => {
 
   it("translates raw relationship coefficients into readable primary evidence", () => {
     expect(formatPrimaryEvidence("Relationship changed from 0.094013 to 0.833811.")).toBe("Relationship changed from weak to strong.");
+  });
+
+  it("prefers canonical conditions and carries trajectory, corroboration, and localization", () => {
+    const supportingRelationships = [
+      { id: "rel-1", columns: ["Pump power", "Flow"], change_type: "weakened", baseline_strength: 0.9, current_strength: 0.3 },
+      { id: "rel-2", columns: ["Flow", "Discharge pressure"], change_type: "weakened", baseline_strength: 0.84, current_strength: 0.28 },
+      { id: "rel-3", columns: ["Discharge pressure", "Pump speed"], change_type: "weakened", baseline_strength: 0.81, current_strength: 0.24 },
+    ];
+    const model = buildEngineeringReasoningModel({ result: {
+      facility_name: "Rush Tower",
+      data_quality: { coverage_percent: 100 },
+      analysis_result: {
+        fingerprint: { status: "Established" },
+        systems: [{ name: "Pumping System" }],
+        relationships: supportingRelationships,
+        conditions: [{
+          object_type: "condition",
+          condition_id: "condition-pump",
+          headline: "Pump response weakening in Rush Tower water system",
+          status: "open",
+          confidence: "high",
+          classification: { type: "unexplained_systemic_change", confidence: "high", reasons: ["Comparable operating evidence supports the condition."] },
+          affected_systems: ["Pumping System"],
+          affected_boundaries: ["Discharge boundary"],
+          affected_signals: ["Pump power", "Flow", "Discharge pressure", "Pump speed"],
+          localization: {
+            system: "Pumping System",
+            monitored_boundary: "Discharge boundary",
+            likely_investigation_area: "Discharge boundary",
+          },
+          trajectory: {
+            state: "Strengthening",
+            observed_for: "Observed for 18 days",
+            corroboration_change: "Corroboration increased from 2 to 3 relationships",
+            persistence: 0.85,
+          },
+          corroboration: {
+            corroboration_strength: "moderate",
+            relationship_count: 3,
+          },
+          comparable_operation: {
+            status: "supported",
+            comparable_period_count: 18,
+            normal_behavior: "Pressure increased with pump speed.",
+            current_behavior: "Pressure response weakened.",
+          },
+          supporting_relationships: supportingRelationships,
+          supporting_evidence: [
+            "3 relationship changes align through flow and discharge pressure.",
+            "Pump power and flow coupling changed from strong to weak.",
+            "Corroboration increased from 2 to 3 relationships.",
+          ],
+          next_checks: ["Verify source data and inspect the affected pressure boundary."],
+          timeline: [{ event_type: "trajectory_classified", title: "Trajectory: Strengthening", period_label: "Observed for 18 days" }],
+        }],
+        insights: [{ id: "legacy-finding", title: "Relationship change detected", supporting_evidence: ["Legacy evidence"] }],
+      },
+    } });
+
+    expect(model.findings).toHaveLength(1);
+    expect(model.selectedFinding.objectType).toBe("condition");
+    expect(model.selectedFinding.title).toBe("Pump response weakening in Rush Tower water system");
+    expect(model.selectedFinding.trajectory.state).toBe("Strengthening");
+    expect(model.selectedFinding.corroboration.relationship_count).toBe(3);
+    expect(model.selectedFinding.location.likelyInvestigationArea).toBe("Discharge boundary");
+    expect(model.selectedFinding.location.asset).toBe("");
+    expect(model.selectedFinding.comparableOperation.comparable_period_count).toBe(18);
   });
 });

@@ -43,6 +43,38 @@ describe("serious escalation presentation gate", () => {
     expect(deriveEscalationReadiness({ ...finding, classification: null }, result).serious).toBe(false);
     expect(deriveEscalationReadiness(finding, { data_quality: { coverage_percent: 100 }, analysis_explanation: { insights: [{ id: "f-1" }] } }).serious).toBe(false);
   });
+
+  it("honors governed condition escalation for isolated evidence", () => {
+    const condition = {
+      ...finding,
+      id: "condition-1",
+      objectType: "condition",
+      relationships: [{ id: "r-1" }],
+      corroboration: { relationship_count: 1, corroboration_strength: "isolated" },
+      escalation: {
+        level: "hold",
+        eligible: false,
+        prompt_engineering_review: false,
+        rule_version: "deterministic_condition_escalation_v1",
+        inputs: {
+          classification: "unexplained_systemic_change",
+          operating_mode_match: "strong",
+          data_quality: "high",
+          criticality: "critical",
+          trajectory: "Strengthening",
+        },
+      },
+    };
+
+    const readiness = deriveEscalationReadiness(condition, {
+      analysis_explanation: { conditions: [{ ...condition, object_type: "condition" }] },
+    });
+
+    expect(readiness.serious).toBe(false);
+    expect(readiness.eligible).toBe(false);
+    expect(readiness.multipleSupportingRelationships).toBe(false);
+    expect(readiness.level).toBe("hold");
+  });
 });
 
 describe("operations brief grouping and ranking", () => {

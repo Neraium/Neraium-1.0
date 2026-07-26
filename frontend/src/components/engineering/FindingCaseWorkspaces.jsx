@@ -53,6 +53,35 @@ function RelationshipTimeline({ events }) {
   return <ol className="classification-timeline">{events.map((event, index) => <li key={`${event.eventType}-${index}`}><time>{timelineLabel(event)}</time><strong>{event.title}</strong>{event.detail ? <p>{event.detail}</p> : null}</li>)}</ol>;
 }
 
+function ConditionEvolution({ finding }) {
+  const trajectory = finding?.trajectory ?? {};
+  const corroboration = finding?.corroboration ?? {};
+  const comparable = finding?.comparableOperation ?? {};
+  if (finding?.objectType !== "condition") return null;
+  return (
+    <>
+      <section>
+        <h2>Trajectory</h2>
+        <p className="case-lead">{displayLabel(trajectory.state, "Unavailable")}</p>
+        {trajectory.observed_for ? <p>{trajectory.observed_for}</p> : null}
+        {trajectory.corroboration_change ? <p>{sentence(trajectory.corroboration_change)}</p> : null}
+        {trajectory.operational_explanation ? <p>{sentence(trajectory.operational_explanation)}</p> : null}
+      </section>
+      <section>
+        <h2>Comparable operation</h2>
+        {comparable.status === "supported" ? (
+          <ul>
+            <li>{comparable.comparable_period_count} comparable periods</li>
+            <li><strong>Normal behavior:</strong> {comparable.normal_behavior}</li>
+            <li><strong>Current behavior:</strong> {comparable.current_behavior}</li>
+          </ul>
+        ) : <p>{comparable.evidence_summary || "Comparable historical operation was not available."}</p>}
+        {corroboration.relationship_count ? <small>{corroboration.relationship_count} supporting relationships · {displayLabel(corroboration.corroboration_strength)} corroboration</small> : null}
+      </section>
+    </>
+  );
+}
+
 function ReviewStateBlock({ finding, reviewRecord, onReviewAction, showActions = true }) {
   return (
     <div className="case-review-state">
@@ -86,8 +115,9 @@ export function FindingReviewWorkspace({ finding, reviewRecord, onReviewAction, 
       <div className="case-sections case-sections--review">
         <section><h2>What changed</h2><p className="case-lead">{finding.observedChange}</p></section>
         <section><h2>Why it deserves attention</h2>{why.length ? <ul>{why.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No additional explanation was recorded.</p>}</section>
+        <ConditionEvolution finding={finding} />
         <section><h2>What to check first</h2>{guidance.length ? <GuidanceList items={guidance} /> : <p>No evidence-linked check was recorded.</p>}</section>
-        <section><h2>Relationship timeline</h2><RelationshipTimeline events={presentation.timeline} /></section>
+        <section><h2>{finding.objectType === "condition" ? "Condition timeline" : "Relationship timeline"}</h2><RelationshipTimeline events={presentation.timeline} /></section>
         <section><h2>Key evidence</h2>{keyEvidence.length ? <ul>{keyEvidence.map((item) => <li key={item}>{item}</li>)}</ul> : <p>{finding.comparisonSummary || "Review the supporting relationship evidence."}</p>}</section>
       </div>
       <div className="case-primary-action"><div><span className="forensic-kicker">Need the full case?</span><strong>Open the relationship evidence and technical guidance.</strong></div><button type="button" className="forensic-button" onClick={() => onOpenInvestigation?.(finding)}>Open investigation</button></div>
@@ -111,7 +141,8 @@ export function InvestigationWorkspace({ model, finding, reviewRecord, escalated
       <div className="case-primary-action case-primary-action--top"><div><span className="forensic-kicker">Evidence record</span><strong>Inspect source lineage and technical values.</strong></div><button type="button" className="forensic-button" onClick={() => onOpenEvidence?.(finding)}>Open evidence record</button></div>
       <div className="case-sections case-sections--investigation">
         <section><h2>Finding summary</h2><p className="case-lead">{finding.comparisonSummary}</p>{finding.location?.label ? <p>{finding.location.label}</p> : null}</section>
-        <section><h2>Relationship timeline</h2><RelationshipTimeline events={presentation.timeline} /></section>
+        <ConditionEvolution finding={finding} />
+        <section><h2>{finding.objectType === "condition" ? "Condition timeline" : "Relationship timeline"}</h2><RelationshipTimeline events={presentation.timeline} /></section>
         <section><h2>Supporting evidence</h2>{finding.supporting.length ? <ul>{finding.supporting.slice(0, 3).map((item) => <li key={item}>{item}</li>)}</ul> : <p>No supporting observation was supplied.</p>}{finding.supporting.length > 3 ? <details className="evidence-section__more"><summary>Show all supporting evidence</summary><ul>{finding.supporting.slice(3).map((item) => <li key={item}>{item}</li>)}</ul></details> : null}</section>
         <section><h2>Investigation guidance</h2>{guidance.length ? <GuidanceList items={guidance.slice(0, 3)} /> : <p>No evidence-linked guidance was recorded.</p>}{guidance.length > 3 ? <details className="evidence-section__more"><summary>Show all checks</summary><GuidanceList items={guidance.slice(3)} start={4} /></details> : null}</section>
         <section><h2>Current review state</h2><ReviewStateBlock finding={finding} reviewRecord={reviewRecord} onReviewAction={onReviewAction} /></section>
@@ -126,6 +157,7 @@ export function InvestigationWorkspace({ model, finding, reviewRecord, escalated
         <details><summary>Audit and replay information</summary><dl className="classification-detail-grid"><div><dt>Evidence run</dt><dd>{runId ?? "Not persisted"}</dd></div><div><dt>Review outcome</dt><dd>{finding.outcome ? JSON.stringify(finding.outcome) : "No persisted review outcome"}</dd></div></dl><button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open trace mode</button></details>
         <details><summary>Full classification reasoning</summary><p>{presentation.meaning}</p><ul>{presentation.reasons.map((item) => <li key={item}>{item}</li>)}</ul></details>
         <details><summary>Technical analysis metadata</summary><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Baseline relationship value</dt><dd>{finding.comparison.baselineValue ?? "Not supplied"}</dd></div><div><dt>Current relationship value</dt><dd>{finding.comparison.currentValue ?? "Not supplied"}</dd></div><div><dt>Relationship delta</dt><dd>{finding.comparison.delta ?? "Not supplied"}</dd></div><div><dt>Evidence records</dt><dd>{finding.evidenceObjects.length}</dd></div></dl></details>
+        {finding.objectType === "condition" ? <details><summary>Relationship details</summary>{finding.relationships.length ? <ul>{finding.relationships.map((item) => <li key={item.id || item.label}>{item.label}</li>)}</ul> : <p>No supporting relationship detail was recorded.</p>}{finding.conflictingRelationships.length ? <><h3>Conflicting evidence</h3><ul>{finding.conflictingRelationships.map((item) => <li key={item.relationship_id || item.id}>{(item.signals || item.columns || []).join(" / ")}</li>)}</ul></> : null}{finding.uncertainRelationships.length ? <><h3>Uncertain evidence</h3><ul>{finding.uncertainRelationships.map((item) => <li key={item.relationship_id || item.id}>{(item.signals || item.columns || []).join(" / ")}</li>)}</ul></> : null}</details> : null}
       </div>
     </div>
   );

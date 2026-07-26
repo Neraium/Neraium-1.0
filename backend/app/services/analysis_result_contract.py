@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.services.analysis_explanations import build_analysis_explanation
+from app.services.condition_corroboration import ConditionCorroborationService
 from app.services.cumulative_counters import is_cumulative_counter_name
 from app.services.data_quality import parse_numeric_value
 from app.services.telemetry_classification import (
@@ -17,6 +18,7 @@ from app.services.telemetry_classification import (
 
 
 CONTRACT_VERSION = "analysis-result-v1"
+CONDITION_CONTRACT_VERSION = "condition-v1"
 NORMALIZED_RECORD_LIMIT = 500
 PLACEHOLDER_TEXT = {
     "placeholder",
@@ -113,6 +115,8 @@ def empty_analysis_result(
         },
         "executive_summary": {},
         "systems": [],
+        "conditions": [],
+        "primary_object": "finding",
         "relationships": [],
         "fingerprint": {
             "drift_status": "unavailable",
@@ -361,6 +365,8 @@ def build_analysis_result(
                     "source": first_present(item.get("source"), f"tag:{columns[0]}" if columns else ""),
                     "target": first_present(item.get("target"), f"tag:{columns[1]}" if len(columns) > 1 else ""),
                     "relationship_type": first_present(item.get("relationship_type"), "linear_correlation"),
+                    "system": item.get("system"),
+                    "monitored_boundary": item.get("monitored_boundary"),
                     "strength": number_or_none(first_present(item.get("strength"), item.get("current_strength"))),
                     "confidence": first_present(item.get("confidence"), item.get("confidence_level")),
                     "confidence_score": number_or_none(first_present(item.get("confidence_score"), item.get("confidence"))),
@@ -503,6 +509,26 @@ def build_analysis_result(
             )
         )
 
+    result_conditions = result.get("conditions") if isinstance(result.get("conditions"), list) else []
+    explanation_conditions = explanation.get("conditions") if isinstance(explanation.get("conditions"), list) else []
+    raw_conditions = result_conditions or explanation_conditions
+    if not raw_conditions and relationships:
+        raw_conditions = ConditionCorroborationService().build_conditions(
+            relationships=relationships,
+            findings=insights,
+            baseline_analysis=baseline,
+            data_quality=data_quality,
+            operating_mode=data_quality.get("operating_mode"),
+            site_name=first_present(result.get("facility_name"), result.get("site_name")),
+            generated_at=generated_at,
+        )
+    conditions = build_condition_contracts(
+        raw_conditions=raw_conditions,
+        add_evidence=add_evidence,
+        relationship_refs_by_id=relationship_refs_by_id,
+        baseline_ref=baseline_ref,
+    )
+
     fingerprint = build_fingerprint_contract(
         result=result,
         baseline=baseline,
@@ -526,6 +552,7 @@ def build_analysis_result(
     executive_summary = build_executive_summary_contract(
         explanation=explanation,
         result=result,
+        conditions=conditions,
         insights=insights,
         recommendations=recommendations,
         fingerprint=fingerprint,
@@ -553,6 +580,8 @@ def build_analysis_result(
             "data_quality": data_quality,
             "executive_summary": executive_summary,
             "systems": systems,
+            "conditions": conditions,
+            "primary_object": "condition" if conditions else "finding",
             "relationships": relationships,
             "relationship_graph": relationship_model.get("relationship_graph", {}),
             "water_intelligence": result.get("water_intelligence") if isinstance(result.get("water_intelligence"), dict) else {},
@@ -574,10 +603,195 @@ def build_analysis_result(
                 "generated_from": "uploaded_csv_telemetry",
                 "processing_time_seconds": result.get("processing_time_seconds"),
                 "telemetry_signal_count": len(telemetry_signals),
+                "condition_contract_version": CONDITION_CONTRACT_VERSION,
+                "condition_count": len(conditions),
             },
             "normalized_telemetry": normalized_telemetry,
         }
     )
+
+
+def build_condition_contracts(
+    *,
+    raw_conditions: list[dict[str, Any]],
+    add_evidence: Any,
+    relationship_refs_by_id: dict[str, list[str]],
+    baseline_ref: str,
+) -> list[dict[str, Any]]:
+    conditions: list[dict[str, Any]] = []
+    for index, item in enumerate(raw_conditions):
+        if not isinstance(item, dict):
+            continue
+        condition_id = clean_text(item.get("condition_id") or item.get("id")) or f"condition-{index}"
+        support = [
+            relationship
+            for relationship in to_list(
+                item.get("supporting_relationships")
+                or (item.get("corroboration") or {}).get("supporting_relationships")
+            )
+            if isinstance(relationship, dict)
+        ]
+        conflicts = [
+            relationship
+            for relationship in to_list(
+                item.get("conflicting_relationships")
+                or (item.get("corroboration") or {}).get("conflicting_relationships")
+            )
+            if isinstance(relationship, dict)
+        ]
+        uncertain = [
+            relationship
+            for relationship in to_list(
+                item.get("uncertain_relationships")
+                or (item.get("corroboration") or {}).get("uncertain_relationships")
+            )
+            if isinstance(relationship, dict)
+        ]
+        relationship_ids = dedupe_text(
+            [
+                relationship.get("relationship_id") or relationship.get("id")
+                for relationship in [*support, *conflicts, *uncertain]
+            ]
+        )
+        refs = dedupe_text(
+            [
+                ref
+                for relationship_id in relationship_ids
+                for ref in relationship_refs_by_id.get(relationship_id, [])
+            ]
+        )
+        evidence_items = [
+            evidence
+            for evidence in to_list(item.get("evidence"))
+            if isinstance(evidence, dict)
+        ]
+        for evidence_index_number, evidence in enumerate(evidence_items):
+            refs.append(
+                add_evidence(
+                    f"{condition_id}-evidence-{evidence_index_number}",
+                    {
+                        **evidence,
+                        "description": first_present(evidence.get("summary"), evidence.get("description")),
+                        "source_tags": first_present(
+                            evidence.get("source_signals"),
+                            item.get("affected_signals"),
+                            [],
+                        ),
+                        "confidence": item.get("confidence"),
+                        "confidence_score": item.get("confidence_score"),
+                        "calculation_method": first_present(
+                            evidence.get("calculation_method"),
+                            "Deterministic condition corroboration over telemetry-supported relationship changes.",
+                        ),
+                    },
+                )
+            )
+        refs = dedupe_text(refs) or [baseline_ref]
+        corroboration = item.get("corroboration") if isinstance(item.get("corroboration"), dict) else {}
+        trajectory = item.get("trajectory") if isinstance(item.get("trajectory"), dict) else {}
+        localization = item.get("localization") if isinstance(item.get("localization"), dict) else {}
+        classification = item.get("classification") if isinstance(item.get("classification"), dict) else {}
+        comparable = item.get("comparable_operation") if isinstance(item.get("comparable_operation"), dict) else {}
+        next_checks = dedupe_text(
+            to_list(
+                first_present(
+                    item.get("next_checks"),
+                    item.get("recommended_investigation"),
+                    [item.get("recommended_check")],
+                )
+            )
+        )
+        condition = dict(item)
+        condition.update(
+            compact_dict(
+                {
+                    "schema_version": first_present(item.get("schema_version"), CONDITION_CONTRACT_VERSION),
+                    "object_type": "condition",
+                    "condition_id": condition_id,
+                    "id": condition_id,
+                    "headline": first_present(item.get("headline"), item.get("title"), "Monitored condition changed"),
+                    "title": first_present(item.get("headline"), item.get("title"), "Monitored condition changed"),
+                    "classification": classification,
+                    "trajectory": trajectory,
+                    "corroboration": corroboration,
+                    "corroboration_strength": first_present(
+                        item.get("corroboration_strength"),
+                        corroboration.get("corroboration_strength"),
+                        "isolated",
+                    ),
+                    "relationship_count": first_present(
+                        item.get("relationship_count"),
+                        corroboration.get("relationship_count"),
+                        len(support),
+                    ),
+                    "confidence": first_present(item.get("confidence"), corroboration.get("confidence"), "low"),
+                    "confidence_score": number_or_none(
+                        first_present(item.get("confidence_score"), corroboration.get("confidence_score"))
+                    ),
+                    "affected_signals": dedupe_text(
+                        to_list(
+                            first_present(
+                                item.get("affected_signals"),
+                                corroboration.get("affected_signals"),
+                                [],
+                            )
+                        )
+                    ),
+                    "affected_systems": dedupe_text(
+                        to_list(
+                            first_present(
+                                item.get("affected_systems"),
+                                corroboration.get("affected_systems"),
+                                [],
+                            )
+                        )
+                    ),
+                    "affected_boundaries": dedupe_text(
+                        to_list(
+                            first_present(
+                                item.get("affected_boundaries"),
+                                localization.get("affected_boundaries"),
+                                [],
+                            )
+                        )
+                    ),
+                    "localization": localization,
+                    "supporting_relationships": support,
+                    "contributing_relationships": support,
+                    "conflicting_relationships": conflicts,
+                    "uncertain_relationships": uncertain,
+                    "evidence": evidence_items,
+                    "supporting_evidence": dedupe_text(
+                        to_list(
+                            first_present(
+                                item.get("supporting_evidence"),
+                                [evidence.get("summary") for evidence in evidence_items],
+                                [],
+                            )
+                        )
+                    ),
+                    "evidence_summary": item.get("evidence_summary"),
+                    "comparable_operation": comparable,
+                    "timeline": to_list(first_present(item.get("timeline"), item.get("activity_timeline"))),
+                    "activity_timeline": to_list(first_present(item.get("timeline"), item.get("activity_timeline"))),
+                    "next_checks": next_checks,
+                    "recommended_check": first_present(item.get("recommended_check"), next_checks[0] if next_checks else ""),
+                    "recommended_investigation": next_checks,
+                    "escalation": item.get("escalation") if isinstance(item.get("escalation"), dict) else {},
+                    "status": first_present(item.get("status"), "open"),
+                    "evidence_refs": refs,
+                    "source_tags": dedupe_text(
+                        to_list(first_present(item.get("source_tags"), item.get("affected_signals"), []))
+                    ),
+                    "certainty_limit": first_present(
+                        item.get("certainty_limit"),
+                        classification.get("certainty_limit"),
+                    ),
+                }
+            )
+        )
+        conditions.append(condition)
+    return conditions
 
 
 def build_fingerprint_contract(
@@ -742,19 +956,21 @@ def build_executive_summary_contract(
     *,
     explanation: dict[str, Any],
     result: dict[str, Any],
+    conditions: list[dict[str, Any]],
     insights: list[dict[str, Any]],
     recommendations: list[dict[str, Any]],
     fingerprint: dict[str, Any],
 ) -> dict[str, Any]:
     raw = explanation.get("executive_summary") if isinstance(explanation.get("executive_summary"), dict) else {}
+    top_condition = conditions[0] if conditions else {}
     top_insight = insights[0] if insights else {}
     top_recommendation = recommendations[0] if recommendations else {}
     return compact_dict(
         {
             "overall_operational_status": first_present(raw.get("overall_operational_status"), result.get("operating_state"), "Analysis complete"),
-            "highest_priority_finding": first_present(top_insight.get("title"), raw.get("highest_priority_finding")),
+            "highest_priority_finding": first_present(top_condition.get("headline"), top_insight.get("title"), raw.get("highest_priority_finding")),
             "biggest_emerging_risk": first_present(top_insight.get("possible_consequence"), raw.get("biggest_emerging_risk"), fingerprint.get("explanation")),
-            "recommended_action": first_present(top_recommendation.get("recommendation"), top_insight.get("recommended_check"), raw.get("recommended_action")),
+            "recommended_action": first_present(top_condition.get("recommended_check"), top_recommendation.get("recommendation"), top_insight.get("recommended_check"), raw.get("recommended_action")),
         }
     )
 

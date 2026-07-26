@@ -13,6 +13,7 @@ from typing import Any
 from app.core.path_safety import safe_upload_suffix
 from app.services.analysis_explanations import build_analysis_explanation
 from app.services.analysis_result_contract import attach_analysis_result, build_normalized_telemetry
+from app.services.condition_corroboration import ConditionCorroborationService
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import build_data_quality, detect_timestamp_column, parse_numeric_value, parse_timestamp, profile_numeric_columns, profile_timestamps
@@ -957,6 +958,20 @@ def _build_csv_result(
         ),
     )
     result["analysis_explanation"] = build_analysis_explanation(result)
+    result["conditions"] = ConditionCorroborationService().build_conditions(
+        relationships=result["analysis_explanation"].get("relationships", []),
+        findings=result["analysis_explanation"].get("insights", []),
+        rows=rows,
+        timestamp_column=timestamp_column,
+        baseline_analysis=baseline_analysis,
+        data_quality=data_quality,
+        operating_mode=data_quality.get("operating_mode"),
+        telemetry_signal_catalog=telemetry_signal_catalog,
+        site_name=result.get("facility_name") or result.get("site_name"),
+        generated_at=now,
+    )
+    result["analysis_explanation"]["conditions"] = result["conditions"]
+    result["analysis_explanation"]["primary_object"] = "condition" if result["conditions"] else "finding"
     result["analysis"] = result["analysis_explanation"]
     result = attach_analysis_result(result, normalized_telemetry=normalized_telemetry)
 

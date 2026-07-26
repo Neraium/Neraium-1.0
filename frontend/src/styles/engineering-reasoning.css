@@ -1237,6 +1237,15 @@
 .operational-finding__brief { display: grid; grid-template-columns: repeat(2, 1fr); margin-top: 11px; border-top: 1px solid var(--fr-line); border-bottom: 1px solid var(--fr-line); }
 .operational-finding__brief p { min-width: 0; display: grid; gap: 5px; margin: 0; padding: 11px 15px; color: #c0ccd8; font-size: 10px; line-height: 1.45; }
 .operational-finding__brief p + p { border-left: 1px solid var(--fr-line); }
+.operational-finding__condition-evidence { display: grid; gap: 6px; margin-top: 11px; padding: 11px 15px; border-top: 1px solid var(--fr-line); color: #c0ccd8; }
+.operational-finding__condition-evidence > span { color: var(--fr-faint); font-size: 8px; font-weight: 680; letter-spacing: .12em; text-transform: uppercase; }
+.operational-finding__condition-evidence ul { margin: 0; padding-left: 17px; }
+.operational-finding__condition-evidence li { font-size: 10px; line-height: 1.45; }
+.operational-finding__condition-evidence li + li { margin-top: 4px; }
+.operational-finding__relationship-detail { margin: 0; padding: 9px 15px; border-bottom: 1px solid var(--fr-line); color: var(--fr-muted); font-size: 9px; }
+.operational-finding__relationship-detail summary { cursor: pointer; }
+.operational-finding__relationship-detail ul { margin: 8px 0 0; padding-left: 17px; }
+.operational-finding__relationship-detail li { line-height: 1.45; }
 .operational-finding__ranking { display: grid; gap: 4px; margin: 0; padding: 10px 15px; color: var(--fr-muted); font-size: 9px; line-height: 1.45; border-bottom: 1px solid var(--fr-line); }
 .operational-finding__action { align-items: center; gap: 8px; padding: 10px 14px 12px; }
 .operational-finding__action .forensic-button { min-height: 36px; padding: 0 13px; }
@@ -1351,6 +1360,8 @@
   .operational-finding__what h3 { font-size: 16px; overflow-wrap: anywhere; }
   .operational-finding__brief { grid-template-columns: 1fr; }
   .operational-finding__brief p { padding: 9px 12px; }
+  .operational-finding__condition-evidence,
+  .operational-finding__relationship-detail { padding-inline: 12px; }
   .operational-finding__brief p + p { border-top: 1px solid var(--fr-line); border-left: 0; }
   .operational-finding__ranking { padding-inline: 12px; }
   .operational-finding__action { flex-wrap: wrap; padding: 9px 12px 11px; }

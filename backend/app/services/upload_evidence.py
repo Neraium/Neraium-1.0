@@ -203,19 +203,31 @@ def build_evidence_record_from_result(
     rows_rejected: int | None = None,
 ) -> dict[str, Any]:
     sii = result.get("sii_intelligence") or {}
+    analysis_result = result.get("analysis_result") if isinstance(result.get("analysis_result"), dict) else {}
+    analysis_conditions = analysis_result.get("conditions") if isinstance(analysis_result.get("conditions"), list) else []
+    result_conditions = result.get("conditions") if isinstance(result.get("conditions"), list) else []
+    conditions = analysis_conditions or result_conditions
+    primary_condition = conditions[0] if conditions and isinstance(conditions[0], dict) else {}
     replay = result.get("replay_timeline") or (sii.get("replay_timeline")) or {}
     replay_timeline = replay.get("timeline") if isinstance(replay, dict) else []
     latest_frame = replay_timeline[-1] if isinstance(replay_timeline, list) and replay_timeline else {}
     baseline_payload = result.get("baseline_analysis") or {}
     relationship_drift = (baseline_payload.get("relationship_drift") or baseline_payload.get("top_relationship_changes") or [])
     primary_relationship = relationship_drift[0] if isinstance(relationship_drift, list) and relationship_drift else {}
-    variables = _observation_variables_from_result(result)
+    variables = [
+        str(value)
+        for value in (
+            primary_condition.get("affected_signals")
+            or _observation_variables_from_result(result)
+        )
+        if str(value).strip()
+    ][:12]
     data_conditions = _data_conditions_from_result(result)
     source_rows = _source_rows_from_result(result)
-    observation_type = _observation_type_from_result(result)
+    observation_type = "corroborated_condition" if primary_condition else _observation_type_from_result(result)
     structural_state = str(result.get("operating_state") or sii.get("facility_state") or "Monitoring")
     traceability = build_traceability_packet(job_id=run_id, filename=filename, result=result)
-    confidence_score = sii.get("confidence")
+    confidence_score = primary_condition.get("confidence_score") if primary_condition else sii.get("confidence")
     if confidence_score is None:
         confidence_score = ((sii.get("rooms") or [{}])[0] or {}).get("confidence")
     drift_metrics = {
@@ -230,8 +242,21 @@ def build_evidence_record_from_result(
         "active_observations": 1 if str(status).lower() == "completed" and observation_type != "data_condition" else 0,
         "replay_frame_count": len(replay_timeline) if isinstance(replay_timeline, list) else 0,
     }
-    primary_drivers = [str(sii.get("primary_driver"))] if sii.get("primary_driver") else []
-    supporting_evidence = [str(item) for item in (sii.get("supporting_evidence") or [])[:6]]
+    primary_drivers = (
+        [str(primary_condition.get("headline"))]
+        if primary_condition.get("headline")
+        else [str(sii.get("primary_driver"))]
+        if sii.get("primary_driver")
+        else []
+    )
+    supporting_evidence = [
+        str(item)
+        for item in (
+            primary_condition.get("supporting_evidence")
+            or sii.get("supporting_evidence")
+            or []
+        )[:6]
+    ]
     archetypes = [str(item) for item in (sii.get("structural_archetypes") or [])[:4]]
     water_intelligence = result.get("water_intelligence") if isinstance(result.get("water_intelligence"), dict) else {}
     water_prior_versions = [
@@ -284,6 +309,49 @@ def build_evidence_record_from_result(
         "regime_label": str(sii.get("baseline_regime") or sii.get("regime_label") or "State Group A"),
         "structural_state": structural_state,
         "deformation_started_at": _deformation_started_at(result),
+        "condition_id": primary_condition.get("condition_id"),
+        "finding_title": primary_condition.get("headline"),
+        "system_name": (primary_condition.get("localization") or {}).get("system") if isinstance(primary_condition.get("localization"), dict) else None,
+        "subsystem_name": (primary_condition.get("localization") or {}).get("monitored_boundary") if isinstance(primary_condition.get("localization"), dict) else None,
+        "potential_impact": primary_condition.get("why_it_matters"),
+        "condition": _evidence_condition_record(primary_condition),
         "water_intelligence": water_intelligence,
         "water_prior_versions": water_prior_versions,
+    }
+
+
+def _evidence_condition_record(condition: dict[str, Any]) -> dict[str, Any]:
+    if not condition:
+        return {}
+    comparable = dict(condition.get("comparable_operation") or {})
+    if isinstance(comparable.get("periods"), list):
+        comparable["periods"] = comparable["periods"][:8]
+    return {
+        key: value
+        for key, value in {
+            "object_type": "condition",
+            "condition_id": condition.get("condition_id"),
+            "id": condition.get("condition_id") or condition.get("id"),
+            "headline": condition.get("headline"),
+            "status": condition.get("status"),
+            "classification": condition.get("classification"),
+            "trajectory": condition.get("trajectory"),
+            "corroboration": condition.get("corroboration"),
+            "confidence": condition.get("confidence"),
+            "confidence_score": condition.get("confidence_score"),
+            "affected_systems": condition.get("affected_systems"),
+            "affected_boundaries": condition.get("affected_boundaries"),
+            "affected_signals": condition.get("affected_signals"),
+            "localization": condition.get("localization"),
+            "supporting_relationships": condition.get("supporting_relationships"),
+            "conflicting_relationships": condition.get("conflicting_relationships"),
+            "uncertain_relationships": condition.get("uncertain_relationships"),
+            "supporting_evidence": condition.get("supporting_evidence"),
+            "comparable_operation": comparable,
+            "timeline": condition.get("timeline"),
+            "next_checks": condition.get("next_checks"),
+            "escalation": condition.get("escalation"),
+            "why_it_matters": condition.get("why_it_matters"),
+        }.items()
+        if value not in (None, "", [], {})
     }
