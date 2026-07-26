@@ -2,7 +2,7 @@
 import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import DataConnectionsWorkspace, { formatAnalysisUpdateTime, queuedWorkerMessage } from "./DataConnectionsWorkspace";
+import DataConnectionsWorkspace, { formatAnalysisUpdateTime, frontendPollingTiming, queuedWorkerMessage } from "./DataConnectionsWorkspace";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { SERVICE_UNAVAILABLE_RETRY_MESSAGE, SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
@@ -229,6 +229,18 @@ it("eventually fails persistent polling HTML 503 responses with a clean message"
   const alert = screen.getByRole("alert");
   expect(alert.textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
   expect(alert.textContent).not.toContain("<html>");
+});
+
+it("measures backend-stage-to-frontend polling latency", () => {
+  const receivedAt = Date.parse("2026-07-26T10:00:02.000Z");
+  const timing = frontendPollingTiming({
+    stage_changed_at: "2026-07-26T10:00:00.800Z",
+    status_server_sent_at: "2026-07-26T10:00:01.950Z",
+  }, receivedAt - 180, receivedAt);
+
+  expect(timing.poll_request_ms).toBe(180);
+  expect(timing.frontend_polling_latency_ms).toBe(1200);
+  expect(timing.status_transport_latency_ms).toBe(50);
 });
 
 it("mobile upload screen does not render backend milestone cards by default", () => {

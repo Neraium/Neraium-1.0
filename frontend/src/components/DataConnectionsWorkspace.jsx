@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL, API_ROUTE_MODE, CONFIGURED_API_BASE_URL } from "../config";
 import {
   normalizeUploadJob,
@@ -25,7 +25,8 @@ const UPLOAD_REQUEST_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
 const MAX_STATUS_POLL_FAILURES = 8;
 const MAX_STATUS_POLL_ATTEMPTS = 240;
-const STATUS_ENDPOINT_FAILURE_BASE_DELAY_MS = 1500;
+const STATUS_ENDPOINT_FAILURE_BASE_DELAY_MS = 1000;
+const STATUS_POLL_INTERVAL_MS = 1000;
 const COMPLETION_HOLD_MS = 2500;
 const PARSING_COMPLETE_STATUSES = new Set([
   "validating_schema",
@@ -105,9 +106,21 @@ function fallbackPercentFromStatus(status) {
 }
 
 function boundedFailureDelay(failureCount) {
-  const baseDelay = 2000;
-  const backoff = Math.min(30000, baseDelay * (1.5 ** failureCount));
-  return Math.min(Math.max(backoff, 1000), 45000);
+  const failureIndex = Math.max(0, Number(failureCount || 1) - 1);
+  const backoff = Math.min(15000, STATUS_POLL_INTERVAL_MS * (1.5 ** failureIndex));
+  return Math.max(backoff, STATUS_POLL_INTERVAL_MS);
+}
+
+export function frontendPollingTiming(payload, requestStartedAt, receivedAt = Date.now()) {
+  const requestStarted = Number(requestStartedAt);
+  const stageChangedAt = Date.parse(String(payload?.stage_changed_at ?? payload?.updated_at ?? ""));
+  const serverSentAt = Date.parse(String(payload?.status_server_sent_at ?? payload?.status_checked_at ?? ""));
+  return {
+    poll_request_ms: Number.isFinite(requestStarted) ? Math.max(0, receivedAt - requestStarted) : null,
+    frontend_polling_latency_ms: Number.isFinite(stageChangedAt) ? Math.max(0, receivedAt - stageChangedAt) : null,
+    status_transport_latency_ms: Number.isFinite(serverSentAt) ? Math.max(0, receivedAt - serverSentAt) : null,
+    received_at: new Date(receivedAt).toISOString(),
+  };
 }
 
 export function formatAnalysisUpdateTime(value, now = Date.now()) {
@@ -613,24 +626,6 @@ export default function DataConnectionsWorkspace({
           throw new Error("Telemetry analysis did not report completion before the status polling timeout.");
         }
         try {
-          const streamPath = normalizeUploadStreamPath(pollingPath, requestedJobId);
-          if (streamPath && attempts === 1) {
-            const streamed = await streamUploadStatusOnce({ streamPath, pollingJobId: requestedJobId });
-            if (streamed) {
-              const streamedStatus = normalizeUploadStatus(streamed.status);
-              logTelemetryStatusProgress(streamedStatus, streamed);
-              if (isTerminalCompletedPayload(streamed)) {
-                const completedPayload = { ...streamed, status: "COMPLETE", percent: 100, progress: 100, processing_state: "saving_results", progress_label: "Saving Analysis", message: "Saving Analysis" };
-                logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
-                setUploadJob(completedPayload);
-                completionNavigationEligibleRef.current = false;
-                setUploadState("saving_results");
-                setUploadProcessingFlag(false);
-                return completedPayload;
-              }
-              pollingPath = normalizeUploadStatusPath(streamed?.status_url, requestedJobId) ?? pollingPath;
-            }
-          }
           const now = Date.now();
           const activeCooldownUntil = Math.max(Number(missingStatusCooldownUntilRef.current || 0), Number(statusEndpointCooldownUntilRef.current || 0));
           if (activeCooldownUntil > now) {
@@ -638,31 +633,36 @@ export default function DataConnectionsWorkspace({
             continue;
           }
           const requestPath = pollingPath;
+          const pollRequestStartedAt = Date.now();
           const response = await apiFetch(requestPath, { accessCode });
           const payload = await readJsonPayload(response, { route: requestPath, phase: "poll" });
+          const pollTiming = frontendPollingTiming(payload, pollRequestStartedAt);
+          console.info("[neraium] frontend polling timing", {
+            jobId: requestedJobId,
+            stage: payload?.processing_state ?? payload?.status ?? null,
+            ...pollTiming,
+          });
           uploadJobIdRef.current = payload.job_id ?? requestedJobId;
           if (!response.ok) {
             if (response.status === 404 || response.status >= 500) {
               statusEndpointFailureCountRef.current += 1;
               if (isTransientUploadServiceStatus(response.status)) {
-                startTransition(() => {
-                  setUploadState("running_sii");
-                  setUploadJob((current) => ({
-                    ...(current ?? {}),
-                    ...(payload ?? {}),
-                    job_id: requestedJobId,
-                    status: "PROCESSING",
-                    processing_state: "processing",
-                    progress_label: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
-                    message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
-                    error_type: payload?.error_type ?? "service_unavailable",
-                    response_status: response.status,
-                    failure_url: payload?.failure_url ?? requestPath,
-                    failure_phase: payload?.failure_phase ?? "poll",
-                    raw_response_body: payload?.raw_response_body ?? "",
-                    response_content_type: payload?.response_content_type ?? null,
-                  }));
-                });
+                setUploadState("running_sii");
+                setUploadJob((current) => ({
+                  ...(current ?? {}),
+                  ...(payload ?? {}),
+                  job_id: requestedJobId,
+                  status: "PROCESSING",
+                  processing_state: "processing",
+                  progress_label: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+                  message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+                  error_type: payload?.error_type ?? "service_unavailable",
+                  response_status: response.status,
+                  failure_url: payload?.failure_url ?? requestPath,
+                  failure_phase: payload?.failure_phase ?? "poll",
+                  raw_response_body: payload?.raw_response_body ?? "",
+                  response_content_type: payload?.response_content_type ?? null,
+                }));
               }
               if (statusEndpointFailureCountRef.current > MAX_STATUS_POLL_FAILURES) {
                 pollFailureCountRef.current = MAX_STATUS_POLL_FAILURES;
@@ -684,12 +684,10 @@ export default function DataConnectionsWorkspace({
             throw buildUploadRequestError(response, payload, "poll");
           }
           statusEndpointFailureCountRef.current = 0;
-          const normalizedPayload = normalizeStatusPayload(payload, requestedJobId);
+          const normalizedPayload = normalizeStatusPayload({ ...payload, frontend_polling_timing: pollTiming }, requestedJobId);
           pollingPath = normalizeUploadStatusPath(normalizedPayload?.status_url, requestedJobId) ?? pollingPath;
           uploadStatusPathRef.current = pollingPath;
-          startTransition(() => {
-            setUploadJob(normalizedPayload);
-          });
+          setUploadJob(normalizedPayload);
           const normalizedStatus = normalizeUploadStatus(normalizedPayload.status ?? normalizedPayload.processing_state ?? normalizedPayload.worker_state);
           logTelemetryStatusProgress(normalizedStatus, normalizedPayload);
           const progressPercent = normalizedPayload.percent ?? normalizedPayload.progress ?? fallbackPercentFromStatus(normalizedStatus);
@@ -714,15 +712,26 @@ export default function DataConnectionsWorkspace({
           if (isTerminalFailedPayload(normalizedPayload)) {
             throw buildUploadRequestError({ status: 500 }, normalizedPayload, "poll");
           }
-          startTransition(() => {
-            setUploadState("running_sii");
-            if (typeof progressPercent === "number") {
-              setUploadTransfer((current) => ({ ...(current ?? {}), percent: Math.max(current?.percent ?? 0, Math.min(progressPercent, 99)) }));
-            }
-          });
-          await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, 1500); });
+          setUploadState("running_sii");
+          if (typeof progressPercent === "number") {
+            setUploadTransfer((current) => ({ ...(current ?? {}), percent: Math.max(current?.percent ?? 0, Math.min(progressPercent, 99)) }));
+          }
+          await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, STATUS_POLL_INTERVAL_MS); });
         } catch (error) {
           pollFailureCountRef.current += 1;
+          console.warn("[neraium] upload status poll failed; retrying", {
+            jobId: requestedJobId,
+            failureCount: pollFailureCountRef.current,
+            name: error?.name ?? null,
+            status: error?.status ?? null,
+          });
+          setUploadJob((current) => ({
+            ...(current ?? {}),
+            poll_connection_state: "retrying",
+            poll_failure_count: pollFailureCountRef.current,
+            progress_label: "Analysis status connection interrupted. Retrying.",
+            message: "Analysis status connection interrupted. Retrying.",
+          }));
           if (pollFailureCountRef.current >= MAX_STATUS_POLL_FAILURES) {
             throw error;
           }
@@ -750,65 +759,6 @@ export default function DataConnectionsWorkspace({
       });
     pollOwnerJobIdRef.current = requestedJobId;
     return pollInFlightRef.current;
-  }
-
-  async function streamUploadStatusOnce({ streamPath, pollingJobId }) {
-    try {
-      const response = await apiFetch(streamPath, { accessCode });
-      if (!response.ok) {
-        const payload = await readJsonPayload(response, { route: streamPath, phase: "stream" });
-        if (isTransientUploadServiceStatus(response.status)) {
-          startTransition(() => {
-            setUploadState("running_sii");
-            setUploadJob((current) => ({
-              ...(current ?? {}),
-              ...(payload ?? {}),
-              job_id: pollingJobId,
-              status: "PROCESSING",
-              processing_state: "processing",
-              progress_label: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
-              message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
-              error_type: payload?.error_type ?? "service_unavailable",
-              response_status: response.status,
-              failure_url: payload?.failure_url ?? streamPath,
-              failure_phase: payload?.failure_phase ?? "stream",
-              raw_response_body: payload?.raw_response_body ?? "",
-              response_content_type: payload?.response_content_type ?? null,
-            }));
-          });
-        }
-        return null;
-      }
-      if (!response.body) return null;
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      const startedAt = Date.now();
-      while (Date.now() - startedAt < 6000 && shouldContinuePolling(pollingJobId)) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-        for (const eventText of events) {
-          const dataLine = eventText.split("\n").find((line) => line.startsWith("data:"));
-          if (!dataLine) continue;
-          const payload = JSON.parse(dataLine.slice(5).trim());
-          const normalizedPayload = normalizeStatusPayload(payload, pollingJobId);
-          const normalizedStatus = normalizeUploadStatus(normalizedPayload?.status ?? normalizedPayload?.processing_state);
-          logTelemetryStatusProgress(normalizedStatus, normalizedPayload);
-          startTransition(() => {
-            setUploadJob(normalizedPayload);
-          });
-          if (isTerminalCompletedPayload(normalizedPayload)) {
-            return payload;
-          }
-        }
-      }
-    } catch {
-      return null;
-    }
-    return null;
   }
 
   function normalizeStatusPayload(payload, requestedJobId) {
@@ -851,9 +801,11 @@ export default function DataConnectionsWorkspace({
     setUploadProcessingFlag(true);
     setUploadTransfer({ percent: 5, loaded: 0, total: file.size, label: `Sending telemetry ${formatFileSize(0)} of ${formatFileSize(file.size)}` });
     try {
+      const uploadInteractionStartedAt = Date.now();
       const uploadResponse = await uploadTelemetryFileWithProgress({
         file,
         apiFetch,
+        requestStartedAt: uploadInteractionStartedAt,
         accessCode,
         timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
         onProgress: (progress) => {
@@ -867,6 +819,12 @@ export default function DataConnectionsWorkspace({
           setUploadDebug((current) => ({
             ...current,
             ...debug,
+          }));
+        },
+        onTiming: (timing) => {
+          setUploadDebug((current) => ({
+            ...current,
+            timings: { ...(current?.timings ?? {}), [timing.event]: timing },
           }));
         },
       });
@@ -940,14 +898,8 @@ export default function DataConnectionsWorkspace({
   const visibleProgressPercent = Number.isFinite(Number(uploadPercent))
     ? Math.max(0, Math.min(100, Math.round(Number(uploadPercent))))
     : null;
-  const deferredProgressUploadJob = useDeferredValue(progressUploadJob);
-  const deferredProgressUploadTransfer = useDeferredValue(progressUploadTransfer);
   const latestStatusMessage = completionError || uploadError || visibleStatusLabel || readiness;
-  const deferredLatestStatusMessage = useDeferredValue(latestStatusMessage);
-  const announcedStatusMessage = uploadError || completionError ? latestStatusMessage : deferredLatestStatusMessage;
-  const deferredVisibleProgressPercent = useDeferredValue(visibleProgressPercent);
-  const deferredPropagationLabel = useDeferredValue(propagationLabel);
-  const deferredQueuedWorkerDetail = useDeferredValue(queuedWorkerDetail);
+  const announcedStatusMessage = latestStatusMessage;
 
   function handleFileSelection(event) {
     if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) {
@@ -1057,7 +1009,7 @@ export default function DataConnectionsWorkspace({
   if (headless) {
     return (
       <div className="data-connections-workspace data-connections-workspace--headless" data-testid="headless-upload-workspace" aria-live="polite">
-        <span className="sr-only">{deferredLatestStatusMessage}</span>
+        <span className="sr-only">{latestStatusMessage}</span>
       </div>
     );
   }
@@ -1079,12 +1031,12 @@ export default function DataConnectionsWorkspace({
         isUploadProcessing={isUploadProcessing}
         uploadState={uploadState}
         openFilePicker={openFilePicker}
-        uploadJob={deferredProgressUploadJob}
+        uploadJob={progressUploadJob}
         latestMessage={announcedStatusMessage}
-        visibleProgressPercent={deferredVisibleProgressPercent}
-        propagationLabel={deferredPropagationLabel}
-        queuedWorkerDetail={deferredQueuedWorkerDetail}
-        uploadTransfer={deferredProgressUploadTransfer}
+        visibleProgressPercent={visibleProgressPercent}
+        propagationLabel={propagationLabel}
+        queuedWorkerDetail={queuedWorkerDetail}
+        uploadTransfer={progressUploadTransfer}
         uploadDebug={uploadDebug}
         uploadStateMessage={uploadStateMessage}
         batchResults={batchResults}
@@ -1108,11 +1060,4 @@ function normalizeUploadStatusPath(path, jobId) {
   } catch {
     return text.startsWith("/") ? text : `/${text}`;
   }
-}
-
-function normalizeUploadStreamPath(path, jobId) {
-  const statusPath = normalizeUploadStatusPath(path, jobId);
-  if (!statusPath) return null;
-  if (statusPath.includes("/upload-stream/")) return statusPath;
-  return statusPath.replace("/upload-status/", "/upload-stream/");
 }

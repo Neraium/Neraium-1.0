@@ -3,6 +3,7 @@ import re
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -292,6 +293,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             request.state.upload_session_id = upload_session_id
         tokens = bind_log_context(request_id=request_id, upload_session_id=upload_session_id)
         started_at = time.perf_counter()
+        request.state.request_started_perf = started_at
+        request.state.request_received_at = datetime.now(timezone.utc).isoformat()
         response = None
         try:
             response = await call_next(request)
