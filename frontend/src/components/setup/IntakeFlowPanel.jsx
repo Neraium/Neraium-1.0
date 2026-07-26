@@ -53,9 +53,11 @@ function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) 
   return "noFile";
 }
 
-function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }) {
+function operatorStatusText({ viewState, uploadJob, uploadState, uploadTransfer, latestMessage }) {
   const cleanMessage = String(latestMessage || "").trim();
-  if (viewState === "uploading") return "Validating dataset";
+  if (viewState === "uploading") {
+    return uploadTransfer?.stage === "validating" ? "Validating data" : "Uploading dataset";
+  }
   if (viewState === "complete") return "Analysis complete";
   if (viewState === "finalizing") return "Preparing results";
   if (viewState === "failed") return "Dataset import failed";
@@ -64,7 +66,7 @@ function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }
 
   const normalized = primaryJobStatus(uploadJob, uploadState);
   if (["writing_state", "cognition_ready", "saving_result", "saving_results"].includes(normalized)) return "Preparing evidence";
-  if (["accepted", "queued", "validating_schema", "parsing"].includes(normalized)) return "Validating dataset";
+  if (["accepted", "queued", "validating_schema", "parsing"].includes(normalized)) return "Validating data";
   if (["mapping", "mapping_signals", "detecting_variables"].includes(normalized)) return "Mapping signals";
   if (["processing", "baseline_modeling", "building_baseline"].includes(normalized)) return "Building baseline";
   if (["building_fingerprint", "structural_scoring", "running_sii"].includes(normalized)) return "Comparing relationships";
@@ -179,7 +181,7 @@ function completionSummary({ analysisResult }) {
 const FINGERPRINT_BUILD_STAGES = [
   {
     id: "validate",
-    label: "Validating dataset",
+    label: "Validating data",
     description: "Checking the dataset format and required signals.",
     shortLabel: "Validate",
     states: ["uploading", "queued", "accepted", "validating_schema", "parsing", "validated"],
@@ -264,12 +266,23 @@ function networkProgress({ displayPercent, phase, stageIndex, complete }) {
   return Math.max(12, Math.min(100, Math.round(withinPhase)));
 }
 
-function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
+function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState, uploadTransfer }) {
   if (viewState === "complete") {
     return { id: "complete", label: "Analysis complete", description: "Evidence is ready to review.", index: FINGERPRINT_BUILD_STAGES.length };
   }
   if (viewState === "finalizing") return { ...FINGERPRINT_BUILD_STAGES[4], index: 4 };
-  if (viewState === "uploading") return { ...FINGERPRINT_BUILD_STAGES[0], index: 0 };
+  if (viewState === "uploading") {
+    if (uploadTransfer?.stage === "validating") {
+      return { ...FINGERPRINT_BUILD_STAGES[0], label: "Validating data", index: 0 };
+    }
+    return {
+      ...FINGERPRINT_BUILD_STAGES[0],
+      id: "upload",
+      label: "Uploading dataset",
+      description: "Sending the selected historical dataset securely.",
+      index: 0,
+    };
+  }
 
   const rawStage = String(
     uploadJob?.processing_state
@@ -665,6 +678,7 @@ export default function IntakeFlowPanel({
   latestUploadSnapshot,
   pendingUploadKind,
   selectedFileSize,
+  fileValidationError = "",
   isUploadProcessing,
   uploadState,
   openFilePicker,
@@ -693,9 +707,9 @@ export default function IntakeFlowPanel({
   const rawViewState = uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing });
   const analysisResult = finalAnalysisResult(latestUploadSnapshot, uploadJob);
   const viewState = rawViewState === "complete" && !analysisResult ? "finalizing" : rawViewState;
-  const statusText = operatorStatusText({ viewState, uploadJob, uploadState, latestMessage });
+  const statusText = operatorStatusText({ viewState, uploadJob, uploadState, uploadTransfer, latestMessage });
   const mainPercent = resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent });
-  const fingerprintBuildStage = resolveFingerprintBuildStage({ viewState, uploadJob, uploadState });
+  const fingerprintBuildStage = resolveFingerprintBuildStage({ viewState, uploadJob, uploadState, uploadTransfer });
   const errorMessage = String(latestMessage || "Choose another telemetry dataset and try again.").trim();
   const failureRecoveryRows = buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage });
   const summary = analysisResult ? completionSummary({ analysisResult }) : [];
@@ -724,7 +738,7 @@ export default function IntakeFlowPanel({
 
   return (
     <Panel title="Import Historical Dataset" className="span-7 upload-ops-panel upload-ops-panel--command">
-      <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={handleUpload}>
+      <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={handleUpload} aria-busy={showProgress}>
         {(["noFile", "fileSelected"].includes(viewState)) ? <p className="intake-flow__subtitle">Import historical telemetry so Neraium can learn how your system normally behaves.</p> : null}
         <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose telemetry dataset CSV files" tabIndex={-1} onChange={handleFileSelection} />
 
@@ -748,7 +762,7 @@ export default function IntakeFlowPanel({
               </div>
 
               {hasSelectedFiles ? (
-                <DatasetFileRow filename={selectedFileLabel} size={selectedFileSize} status="Ready" />
+                <DatasetFileRow filename={selectedFileLabel} size={selectedFileSize} status={fileValidationError ? "Unsupported" : "Ready"} />
               ) : (
                 <div className="upload-analysis-card__file">
                   <i className="upload-analysis-card__file-icon" aria-hidden="true" />
@@ -760,10 +774,21 @@ export default function IntakeFlowPanel({
                 </div>
               )}
 
+              {fileValidationError ? <p className="upload-error-message" role="alert">{fileValidationError}</p> : null}
+
               <div className="upload-simple-actions upload-analysis-card__actions upload-baseline-card__actions">
                 {hasSelectedFiles ? (
                   <>
-                    <button data-testid="process-upload-button" className="command-button upload-baseline-card__primary" type="submit" disabled={isUploadProcessing(uploadState)} title={isUploadProcessing(uploadState) ? "Analysis is already in progress." : "Start baseline analysis."}>Start Baseline Analysis</button>
+                    <button
+                      data-testid="process-upload-button"
+                      className="command-button upload-baseline-card__primary"
+                      type="submit"
+                      disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)}
+                      aria-disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)}
+                      title={fileValidationError || (isUploadProcessing(uploadState) ? "Analysis is already in progress." : "Start baseline analysis.")}
+                    >
+                      Start Baseline Analysis
+                    </button>
                     <button type="button" className="baseline-file-replace" onClick={() => openFilePicker("csv")}>Replace file</button>
                   </>
                 ) : (

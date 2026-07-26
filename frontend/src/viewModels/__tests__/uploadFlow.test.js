@@ -79,14 +79,14 @@ describe("uploadFlow poll error classification", () => {
   });
 
   it("sanitizes an upload network failure without exposing its route", () => {
-    const error = new Error("Analysis could not complete or save a usable result. Retry the analysis. If it happens again, contact an administrator.");
+    const error = new Error("Network failed at https://internal.example.test/api/data/upload?token=secret");
     error.name = "ApiNetworkError";
 
     expect(classifyUploadError(error, "upload")).toMatchObject({
       state: "error",
       retryable: false,
       errorType: "network",
-      message: "Analysis could not complete or save a usable result. Retry the analysis. If it happens again, contact an administrator.",
+      message: "Upload could not start. Check the connection and try again.",
     });
   });
 

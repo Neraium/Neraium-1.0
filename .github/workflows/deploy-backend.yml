@@ -29,7 +29,11 @@ env:
   CORS_ORIGINS: https://app.neraium.com
   API_CONTAINER_PORT: "8080"
   NERAIUM_MAX_UPLOAD_SIZE_BYTES: "262144000"
+  NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES: "536870912"
   NERAIUM_MAX_PENDING_UPLOAD_JOBS: "50"
+  WORKER_TASK_CPU: "1024"
+  WORKER_TASK_MEMORY: "4096"
+  WORKER_EPHEMERAL_STORAGE_GIB: "40"
   LOG_LEVEL: INFO
   LOG_FORMAT: json
   APP_TASK_ROLE_NAME: neraium-prod-task-app-role
@@ -285,7 +289,7 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
           echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_SECRET_ARN "$AUTH_DATABASE_SECRET_ARN" --arg AUTH_DATABASE_HOST "$AUTH_DATABASE_HOST" --arg AUTH_DATABASE_PORT "$AUTH_DATABASE_PORT" --arg AUTH_DATABASE_NAME "$AUTH_DATABASE_NAME" --arg AUTH_DATABASE_SSLMODE "$AUTH_DATABASE_SSLMODE" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg BACKEND_PORT "$API_CONTAINER_PORT" --argjson CONTAINER_PORT "$API_CONTAINER_PORT" --arg HEALTHCHECK_COMMAND "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${API_CONTAINER_PORT}/api/health', timeout=5).read()\" || exit 1" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" --arg ECS_CLUSTER "$ECS_CLUSTER" --arg ECS_API_SERVICE "$ECS_API_SERVICE" --arg ECS_WORKER_SERVICE "$ECS_WORKER_SERVICE" --arg TARGET_GROUP_ARN "$API_TARGET_GROUP_ARN" --arg INFRA_ALERT_TOPIC_ARN "$INFRA_ALERT_TOPIC_ARN" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_SECRET_ARN "$AUTH_DATABASE_SECRET_ARN" --arg AUTH_DATABASE_HOST "$AUTH_DATABASE_HOST" --arg AUTH_DATABASE_PORT "$AUTH_DATABASE_PORT" --arg AUTH_DATABASE_NAME "$AUTH_DATABASE_NAME" --arg AUTH_DATABASE_SSLMODE "$AUTH_DATABASE_SSLMODE" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg BACKEND_PORT "$API_CONTAINER_PORT" --argjson CONTAINER_PORT "$API_CONTAINER_PORT" --arg HEALTHCHECK_COMMAND "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${API_CONTAINER_PORT}/api/health', timeout=5).read()\" || exit 1" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_LARGE_UPLOAD_SIZE "$NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" --arg ECS_CLUSTER "$ECS_CLUSTER" --arg ECS_API_SERVICE "$ECS_API_SERVICE" --arg ECS_WORKER_SERVICE "$ECS_WORKER_SERVICE" --arg TARGET_GROUP_ARN "$API_TARGET_GROUP_ARN" --arg INFRA_ALERT_TOPIC_ARN "$INFRA_ALERT_TOPIC_ARN" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
             | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .containerDefinitions = (.containerDefinitions | map(
@@ -293,7 +297,7 @@ jobs:
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "BACKEND_HOST" and .name != "BACKEND_PORT" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" and .name != "NERAIUM_AUTH_DATABASE_SECRET_ARN" and .name != "NERAIUM_AUTH_DATABASE_HOST" and .name != "NERAIUM_AUTH_DATABASE_PORT" and .name != "NERAIUM_AUTH_DATABASE_NAME" and .name != "NERAIUM_AUTH_DATABASE_SSLMODE" and .name != "NERAIUM_INFRA_MONITOR_ENABLED" and .name != "NERAIUM_INFRA_MONITOR_INTERVAL_SECONDS" and .name != "NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS" and .name != "NERAIUM_ECS_CLUSTER" and .name != "NERAIUM_ECS_API_SERVICE" and .name != "NERAIUM_ECS_WORKER_SERVICE" and .name != "NERAIUM_ALB_TARGET_GROUP_ARN" and .name != "NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "BACKEND_HOST" and .name != "BACKEND_PORT" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" and .name != "NERAIUM_AUTH_DATABASE_SECRET_ARN" and .name != "NERAIUM_AUTH_DATABASE_HOST" and .name != "NERAIUM_AUTH_DATABASE_PORT" and .name != "NERAIUM_AUTH_DATABASE_NAME" and .name != "NERAIUM_AUTH_DATABASE_SSLMODE" and .name != "NERAIUM_INFRA_MONITOR_ENABLED" and .name != "NERAIUM_INFRA_MONITOR_INTERVAL_SECONDS" and .name != "NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS" and .name != "NERAIUM_ECS_CLUSTER" and .name != "NERAIUM_ECS_API_SERVICE" and .name != "NERAIUM_ECS_WORKER_SERVICE" and .name != "NERAIUM_ALB_TARGET_GROUP_ARN" and .name != "NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN"))
                     + [
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "api"},
                       {"name": "APP_ENV", "value": "prod"},
@@ -303,6 +307,7 @@ jobs:
                       {"name": "NERAIUM_RUNTIME_DIR", "value": $NERAIUM_RUNTIME_DIR},
                       {"name": "CORS_ORIGINS", "value": $CORS_ORIGINS},
                       {"name": "NERAIUM_MAX_UPLOAD_SIZE_BYTES", "value": $MAX_UPLOAD_SIZE},
+                      {"name": "NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES", "value": $MAX_LARGE_UPLOAD_SIZE},
                       {"name": "NERAIUM_MAX_PENDING_UPLOAD_JOBS", "value": $MAX_PENDING_JOBS},
                       {"name": "LOG_LEVEL", "value": $LOG_LEVEL},
                       {"name": "LOG_FORMAT", "value": $LOG_FORMAT},
@@ -379,15 +384,18 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-worker-task-definition.json)
           echo "Updating worker container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg WORKER_LOG_GROUP "$WORKER_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg WORKER_LOG_GROUP "$WORKER_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_LARGE_UPLOAD_SIZE "$NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" --arg WORKER_TASK_CPU "$WORKER_TASK_CPU" --arg WORKER_TASK_MEMORY "$WORKER_TASK_MEMORY" --argjson WORKER_EPHEMERAL_STORAGE_GIB "$WORKER_EPHEMERAL_STORAGE_GIB" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
             | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
+            | .cpu = $WORKER_TASK_CPU
+            | .memory = $WORKER_TASK_MEMORY
+            | .ephemeralStorage = {"sizeInGiB": $WORKER_EPHEMERAL_STORAGE_GIB}
             | .containerDefinitions = (.containerDefinitions | map(
               if .name == $CONTAINER_NAME then
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD"))
                     + [
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "worker"},
                       {"name": "APP_ENV", "value": "prod"},
@@ -395,6 +403,7 @@ jobs:
                       {"name": "NERAIUM_RUNTIME_DIR", "value": $NERAIUM_RUNTIME_DIR},
                       {"name": "CORS_ORIGINS", "value": $CORS_ORIGINS},
                       {"name": "NERAIUM_MAX_UPLOAD_SIZE_BYTES", "value": $MAX_UPLOAD_SIZE},
+                      {"name": "NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES", "value": $MAX_LARGE_UPLOAD_SIZE},
                       {"name": "NERAIUM_MAX_PENDING_UPLOAD_JOBS", "value": $MAX_PENDING_JOBS},
                       {"name": "LOG_LEVEL", "value": $LOG_LEVEL},
                       {"name": "LOG_FORMAT", "value": $LOG_FORMAT},

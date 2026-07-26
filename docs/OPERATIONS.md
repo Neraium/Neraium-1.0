@@ -95,7 +95,8 @@ Bootstrap passwords, API tokens, SMTP passwords, webhook URLs, and authenticated
 | `NERAIUM_START_BACKGROUND_WORKERS` | role-dependent | Defaults true for `all`, `monolith`, and `worker` |
 | `NERAIUM_START_DATA_POLLER` | `false` | Start scheduled telemetry polling |
 | `NERAIUM_SHUTDOWN_TIMEOUT_SECONDS` | `30` | Per-service graceful join budget |
-| `NERAIUM_MAX_UPLOAD_SIZE_BYTES` | 10 GiB | Set a production limit aligned with ALB/CDN controls |
+| `NERAIUM_MAX_UPLOAD_SIZE_BYTES` | 250 MiB | Multipart request limit for the API path |
+| `NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES` | 512 MiB | CSV limit for presigned browser-to-S3 uploads |
 | `NERAIUM_MAX_PENDING_UPLOAD_JOBS` | `50` | Queue admission bound |
 | `NERAIUM_CSV_CHUNK_SIZE_ROWS` | `5000` | Streaming parser chunk |
 | `NERAIUM_CSV_PROGRESS_UPDATE_EVERY` | `5000` | Progress publication interval |
@@ -119,6 +120,8 @@ The API stops the scheduled poller, stops the background queue worker, waits for
 Set the orchestrator stop grace period above the application's shutdown budget plus expected queue operation latency. A conservative starting value is 120 seconds for `NERAIUM_SHUTDOWN_TIMEOUT_SECONDS=30` because poller, worker, and request-worker waits are sequential. Long CPU-bound analysis is not forcibly terminated by the application; the queue's stale-claim recovery protects the next process if the orchestrator kills it.
 
 Temporary upload files and restored shared upload sources are deleted in `finally` paths after processing. Monitor runtime volume capacity and inode use. In-memory rate-limit buckets are swept after expiry, and upload-status caches retain at most 1,000 jobs per process; persisted history remains authoritative.
+
+CSV files above 250 MiB do not traverse CloudFront, the ALB, or the API task as multipart bodies. The authenticated API creates a one-hour presigned S3 `PUT`; the browser uploads the `File` directly, then the API verifies object size/ETag and creates the canonical job with the same upload-session ID. The shared bucket must allow CORS `PUT` from `https://app.neraium.com`, allow `content-type`, `if-none-match`, and `x-amz-tagging`, and expose `ETag`. The deployment bootstrap merges this rule and expires orphaned tagged upload objects after seven days. Production worker tasks are pinned to 1 vCPU, 4 GiB memory, and 40 GiB ephemeral storage for the 512 MiB contract; lowering these values invalidates that support claim until load validation is repeated.
 
 ## Monitoring recommendations
 

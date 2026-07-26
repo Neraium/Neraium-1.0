@@ -167,7 +167,7 @@ function getUploadResponseTimeoutMs(fileSizeBytes, baseTimeoutMs) {
   return Math.min(Math.max(base || largeFileMinimumMs, largeFileMinimumMs), 30 * 60 * 1000);
 }
 
-export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, accessCode } = {}) {
+function uploadTelemetryFileDirectWithProgress({ file, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, accessCode } = {}) {
   return new Promise((resolve, reject) => {
     if (!file) {
       reject(new Error("Choose a CSV or JSON telemetry file to upload."));
@@ -412,6 +412,231 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
 
     uploadAttempt(0);
   });
+}
+
+
+export const DIRECT_UPLOAD_MAX_BYTES = 250 * 1024 * 1024;
+export const LARGE_UPLOAD_MAX_BYTES = 512 * 1024 * 1024;
+
+const completedLargeTransfers = new WeakMap();
+
+function largeUploadRequestError(response, payload, phase, fallback) {
+  const requestError = buildUploadRequestError(response, payload, phase);
+  return Object.assign(new Error(requestError.detail || fallback), requestError);
+}
+
+async function requestLargeUploadSession({ file, apiFetch, accessCode }) {
+  const path = "/api/data/upload-session";
+  let response;
+  try {
+    response = await apiFetch(path, {
+      method: "POST",
+      accessCode,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: file.name,
+        size_bytes: file.size,
+        content_type: file.type || "text/csv",
+      }),
+    });
+  } catch (error) {
+    error.phase = error.phase || "upload_session";
+    throw error;
+  }
+  const payload = await readJsonPayload(response, { route: path, phase: "upload_session" });
+  if (!response.ok) {
+    throw largeUploadRequestError(response, payload, "upload_session", "Upload could not start. Check the connection and try again.");
+  }
+  const sessionId = String(payload?.upload_session_id || "").trim();
+  const uploadUrl = String(payload?.upload_url || "").trim();
+  if (!sessionId || !uploadUrl) {
+    throw Object.assign(new Error("Upload could not start. Check the connection and try again."), {
+      name: "UploadRequestError",
+      phase: "upload_session",
+      errorType: "invalid_upload_session",
+      detail: "Upload could not start. Check the connection and try again.",
+    });
+  }
+  console.info("[neraium] upload session created", { uploadSessionId: sessionId, filename: file.name, size: file.size });
+  return { ...payload, upload_session_id: sessionId, upload_url: uploadUrl };
+}
+
+function putFileToObjectStorage({ file, session, timeoutMs, onProgress }) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const startedAt = Date.now();
+    xhr.open("PUT", session.upload_url, true);
+    xhr.withCredentials = false;
+    xhr.timeout = timeoutMs;
+    Object.entries(session.upload_headers || {}).forEach(([key, value]) => {
+      if (String(value || "")) xhr.setRequestHeader(key, String(value));
+    });
+
+    const reportProgress = (event) => {
+      const loaded = Number(event?.loaded || 0);
+      const total = event?.lengthComputable ? Number(event.total || file.size) : file.size;
+      const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.001);
+      const percent = total > 0 ? Math.max(1, Math.min(100, Math.round((loaded / total) * 100))) : null;
+      onProgress?.({
+        stage: percent === 100 ? "upload_transferred" : "uploading",
+        loaded,
+        total,
+        percent,
+        speedBytesPerSecond: loaded / elapsedSeconds,
+        message: percent === 100 ? "Upload completed. Validating data." : "Uploading dataset.",
+        transport: "presigned_s3_put",
+      });
+    };
+
+    xhr.upload.onloadstart = () => reportProgress({ loaded: 0, total: file.size, lengthComputable: true });
+    xhr.upload.onprogress = reportProgress;
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        reportProgress({ loaded: file.size, total: file.size, lengthComputable: true });
+        resolve({ etag: xhrHeader(xhr, "etag") });
+        return;
+      }
+      reject(Object.assign(new Error("Upload could not be completed. Check the connection and try again."), {
+        name: "UploadRequestError",
+        status: xhr.status || null,
+        phase: "upload",
+        errorType: "object_storage_upload_failed",
+        detail: "Upload could not be completed. Check the connection and try again.",
+        retryable: true,
+      }));
+    };
+    xhr.onerror = () => reject(Object.assign(new Error("Upload could not be completed. Check the connection and try again."), {
+      name: "ApiNetworkError",
+      phase: "upload",
+      errorType: "network",
+      status: xhr.status || null,
+    }));
+    xhr.ontimeout = () => reject(Object.assign(new Error("Upload timed out. Check the connection and try again."), {
+      name: "ApiTimeoutError",
+      phase: "upload",
+      errorType: "timeout",
+      status: xhr.status || 408,
+      timeoutMs,
+    }));
+    xhr.onabort = () => reject(Object.assign(new Error("Upload was interrupted. Try again."), {
+      name: "ApiNetworkError",
+      phase: "upload",
+      errorType: "aborted",
+      status: xhr.status || null,
+    }));
+
+    console.info("[neraium] object storage upload started", {
+      uploadSessionId: session.upload_session_id,
+      filename: file.name,
+      size: file.size,
+    });
+    xhr.send(file);
+  });
+}
+
+async function completeLargeUploadSession({ session, etag, file, apiFetch, accessCode, onProgress }) {
+  const path = `/api/data/upload-session/${encodeURIComponent(session.upload_session_id)}/complete`;
+  onProgress?.({
+    stage: "validating",
+    loaded: file.size,
+    total: file.size,
+    percent: 100,
+    speedBytesPerSecond: 0,
+    message: "Validating data",
+    transport: "presigned_s3_put",
+  });
+  let response;
+  try {
+    response = await apiFetch(path, {
+      method: "POST",
+      accessCode,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ etag: String(etag || "").replace(/^"|"$/g, "") || null }),
+    });
+  } catch (error) {
+    error.phase = error.phase || "job_creation";
+    throw error;
+  }
+  const payload = await readJsonPayload(response, { route: path, phase: "job_creation" });
+  if (!response.ok) {
+    const fallback = response.status >= 500
+      ? "Upload completed, but analysis could not be started."
+      : "Upload could not be verified. Check the connection and try again.";
+    throw largeUploadRequestError(response, payload, "job_creation", fallback);
+  }
+  const normalized = normalizeUploadJob(payload);
+  if (!normalized?.job_id) {
+    throw Object.assign(new Error("Upload completed, but analysis could not be started."), {
+      name: "UploadRequestError",
+      phase: "job_creation",
+      errorType: "missing_job_id",
+      detail: "Upload completed, but analysis could not be started.",
+    });
+  }
+  console.info("[neraium] analysis job created", {
+    uploadSessionId: session.upload_session_id,
+    jobId: normalized.job_id,
+    filename: file.name,
+    size: file.size,
+  });
+  return { ok: true, status: response.status, payload: normalized };
+}
+
+async function uploadLargeTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, accessCode, apiFetch }) {
+  if (typeof apiFetch !== "function") {
+    throw new Error("Upload could not start. Check the connection and try again.");
+  }
+  onProgress?.({
+    stage: "upload_started",
+    loaded: 0,
+    total: file.size,
+    percent: 0,
+    speedBytesPerSecond: 0,
+    message: "Uploading dataset",
+    transport: "presigned_s3_put",
+  });
+  onDebug?.({
+    ...buildApiDebugState("/api/data/upload-session"),
+    uploadUrl: buildApiUrl("/api/data/upload-session"),
+    responseStatus: null,
+    responseBodyOrError: "",
+  });
+  let completedTransfer = completedLargeTransfers.get(file);
+  if (!completedTransfer) {
+    const session = await requestLargeUploadSession({ file, apiFetch, accessCode });
+    const transferred = await putFileToObjectStorage({ file, session, timeoutMs, onProgress });
+    completedTransfer = { session, etag: transferred.etag };
+    completedLargeTransfers.set(file, completedTransfer);
+    console.info("[neraium] object storage upload completed", {
+      uploadSessionId: session.upload_session_id,
+      filename: file.name,
+      size: file.size,
+    });
+  } else {
+    console.info("[neraium] resuming analysis job creation for completed upload", {
+      uploadSessionId: completedTransfer.session.upload_session_id,
+      filename: file.name,
+      size: file.size,
+    });
+  }
+  const result = await completeLargeUploadSession({
+    session: completedTransfer.session,
+    etag: completedTransfer.etag,
+    file,
+    apiFetch,
+    accessCode,
+    onProgress,
+  });
+  completedLargeTransfers.delete(file);
+  return result;
+}
+
+export function uploadTelemetryFileWithProgress(options = {}) {
+  const fileSize = Number(options?.file?.size || 0);
+  if (fileSize > DIRECT_UPLOAD_MAX_BYTES) {
+    return uploadLargeTelemetryFileWithProgress(options);
+  }
+  return uploadTelemetryFileDirectWithProgress(options);
 }
 
 

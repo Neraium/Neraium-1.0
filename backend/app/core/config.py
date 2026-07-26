@@ -25,9 +25,10 @@ DEFAULT_CORS_ORIGINS = [
 ]
 DEFAULT_CORS_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?neraium\.com$"
 DEFAULT_RUNTIME_DIR = Path(__file__).resolve().parents[1] / "runtime"
-# Allow larger historical telemetry uploads by default.
-# Override with NERAIUM_MAX_UPLOAD_SIZE_BYTES in production when needed.
-DEFAULT_MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024 * 1024
+# Direct multipart uploads traverse the CDN/load balancer and API task. Keep that
+# path bounded; larger CSVs use the browser-to-S3 upload-session workflow.
+DEFAULT_MAX_UPLOAD_SIZE_BYTES = 250 * 1024 * 1024
+DEFAULT_MAX_LARGE_UPLOAD_SIZE_BYTES = 512 * 1024 * 1024
 DEFAULT_MAX_PENDING_UPLOAD_JOBS = 50
 
 _VALID_APP_ENVS = {"development", "test", "staging", "prod", "production"}
@@ -51,6 +52,7 @@ class Settings:
     cors_origin_regex: str | None = None
     runtime_dir: Path = field(default_factory=lambda: DEFAULT_RUNTIME_DIR)
     max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_SIZE_BYTES
+    max_large_upload_size_bytes: int = DEFAULT_MAX_LARGE_UPLOAD_SIZE_BYTES
     max_pending_upload_jobs: int = DEFAULT_MAX_PENDING_UPLOAD_JOBS
     notification_webhook_url: str = ""
     notification_email_recipients: list[str] = field(default_factory=list)
@@ -96,6 +98,11 @@ def get_settings() -> Settings:
             os.getenv("NERAIUM_MAX_UPLOAD_SIZE_BYTES"),
             DEFAULT_MAX_UPLOAD_SIZE_BYTES,
             name="NERAIUM_MAX_UPLOAD_SIZE_BYTES",
+        ),
+        max_large_upload_size_bytes=parse_positive_int(
+            os.getenv("NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES"),
+            DEFAULT_MAX_LARGE_UPLOAD_SIZE_BYTES,
+            name="NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES",
         ),
         max_pending_upload_jobs=parse_positive_int(
             os.getenv("NERAIUM_MAX_PENDING_UPLOAD_JOBS"),

@@ -142,13 +142,89 @@ def _upload_source_object_key(job_id: str, filename: str | None = None, *, scope
     return f"{_upload_state_prefix()}scopes/{resolved.storage_id}/upload-sources/{job_id}{suffix}"
 
 
+UPLOAD_SOURCE_TAGGING = "neraium-upload-source=true"
+
+
+def create_presigned_upload_target(
+    job_id: str,
+    *,
+    filename: str,
+    content_type: str,
+    expires_in_seconds: int = 3600,
+) -> dict[str, Any]:
+    client = _get_s3_client()
+    bucket = _upload_state_bucket()
+    if client is None or not bucket or not hasattr(client, "generate_presigned_url"):
+        raise RuntimeError("large_upload_storage_unavailable")
+    key = _upload_source_object_key(job_id, filename)
+    normalized_content_type = str(content_type or "application/octet-stream")
+    url = client.generate_presigned_url(
+        "put_object",
+        Params={
+            "Bucket": bucket,
+            "Key": key,
+            "ContentType": normalized_content_type,
+            "Tagging": UPLOAD_SOURCE_TAGGING,
+            "IfNoneMatch": "*",
+        },
+        ExpiresIn=max(60, min(int(expires_in_seconds), 3600)),
+        HttpMethod="PUT",
+    )
+    return {
+        "object_key": key,
+        "upload_url": url,
+        "upload_headers": {
+            "Content-Type": normalized_content_type,
+            "x-amz-tagging": UPLOAD_SOURCE_TAGGING,
+            "If-None-Match": "*",
+        },
+    }
+
+
+def inspect_upload_source(source_key: str) -> dict[str, Any]:
+    client = _get_s3_client()
+    bucket = _upload_state_bucket()
+    if client is None or not bucket or not hasattr(client, "head_object"):
+        raise RuntimeError("large_upload_storage_unavailable")
+    response = client.head_object(Bucket=bucket, Key=str(source_key))
+    return {
+        "content_length": int(response.get("ContentLength") or 0),
+        "content_type": str(response.get("ContentType") or ""),
+        "etag": str(response.get("ETag") or "").strip('"'),
+    }
+
+
+def _large_upload_session_name(session_id: str, *, scope: DatasetScope | None = None) -> str:
+    resolved = scope or current_dataset_scope()
+    return f"scopes/{resolved.storage_id}/large-upload-sessions/{session_id}"
+
+
+def write_large_upload_session(session_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    scope = dataset_scope_from_payload(payload) or current_dataset_scope()
+    normalized = attach_dataset_scope(dict(payload or {}), scope=scope, dataset_id=session_id)
+    normalized["upload_session_id"] = str(session_id)
+    name = _large_upload_session_name(session_id, scope=scope)
+    write_local_json(f"{name}.json", normalized)
+    write_shared_state(name, normalized)
+    return normalized
+
+
+def read_large_upload_session(session_id: str) -> dict[str, Any] | None:
+    scope = current_dataset_scope()
+    name = _large_upload_session_name(session_id, scope=scope)
+    payload = read_shared_state(name, scope=scope) or read_local_json(f"{name}.json", scope=scope)
+    return payload if payload_matches_dataset_scope(payload, scope) else None
+
+
 def persist_upload_source(job_id: str, source_path: str | os.PathLike[str], *, filename: str, content_type: str | None = None) -> str:
     client = _get_s3_client()
     bucket = _upload_state_bucket()
     if client is None or not bucket:
         raise RuntimeError("shared_upload_source_client_unavailable")
     key = _upload_source_object_key(job_id, filename)
-    extra_args = {"ContentType": content_type} if content_type else None
+    extra_args = {"Tagging": UPLOAD_SOURCE_TAGGING}
+    if content_type:
+        extra_args["ContentType"] = content_type
     with Path(source_path).open("rb") as handle:
         if hasattr(client, "upload_fileobj"):
             kwargs = {"Fileobj": handle, "Bucket": bucket, "Key": key}
@@ -161,6 +237,7 @@ def persist_upload_source(job_id: str, source_path: str | os.PathLike[str], *, f
                 Key=key,
                 Body=handle.read(),
                 ContentType=content_type or "application/octet-stream",
+                Tagging=UPLOAD_SOURCE_TAGGING,
             )
     return key
 

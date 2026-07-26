@@ -16,10 +16,10 @@ import {
   uploadStateMessage,
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
-import { retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
+import { LARGE_UPLOAD_MAX_BYTES, retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
-const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = LARGE_UPLOAD_MAX_BYTES;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
@@ -92,7 +92,7 @@ function uploadReadinessMessage(file) {
 
 function validateTelemetryFile(file, kind) {
   if (!file) return "Choose a telemetry file.";
-  if (file.size > MAX_UPLOAD_BYTES) return `High-volume export above ${formatFileSize(MAX_UPLOAD_BYTES)}. Use partitioned export or enterprise batch intake.`;
+  if (file.size > MAX_UPLOAD_BYTES) return `File is larger than the supported upload limit of ${formatFileSize(MAX_UPLOAD_BYTES)}.`;
   const filename = String(file.name ?? "").toLowerCase();
   const mime = String(file.type ?? "").toLowerCase();
   const looksCsv = filename.endsWith(".csv") || mime.includes("csv") || mime === "text/plain" || mime === "";
@@ -148,7 +148,6 @@ function uploadFailureDiagnosticsFrom(value = {}) {
 }
 
 function logUploadFailureDiagnostics(value = {}) {
-  if (!import.meta.env.DEV) return;
   const diagnostics = uploadFailureDiagnosticsFrom(value);
   console.warn("[neraium] upload request failure", {
     url: diagnostics.failureUrl,
@@ -216,6 +215,7 @@ export default function DataConnectionsWorkspace({
   onInitialSelectedFilesConsumed,
   autoStartInitialFiles = false,
   headless = false,
+  currentUser = null,
 }) {
   const seededSelectedFiles = useMemo(() => (Array.isArray(initialSelectedFiles) ? initialSelectedFiles : []), [initialSelectedFiles]);
   const [selectedFiles, setSelectedFiles] = useState(() => seededSelectedFiles);
@@ -256,6 +256,8 @@ export default function DataConnectionsWorkspace({
   const autoStartedSignatureRef = useRef("");
   const completionNavigationTimerRef = useRef(null);
   const completionNavigationEligibleRef = useRef(false);
+  const flowOwnerRef = useRef(String(currentUser?.email ?? currentUser?.id ?? ""));
+  const flowSessionRef = useRef(0);
 
   const setUploadProcessingFlag = (active) => {
     if (typeof window !== "undefined") {
@@ -377,7 +379,30 @@ export default function DataConnectionsWorkspace({
     }
   }, [hasResumedSession, selectedFiles.length]);
 
+  useEffect(() => {
+    const owner = String(currentUser?.email ?? currentUser?.id ?? "");
+    if (owner === flowOwnerRef.current) return;
+    flowOwnerRef.current = owner;
+    flowSessionRef.current += 1;
+    stopUploadPolling("session_identity_changed");
+    uploadInFlightRef.current = false;
+    uploadJobIdRef.current = null;
+    uploadStatusPathRef.current = null;
+    setSelectedFiles([]);
+    setUploadTransfer(null);
+    setUploadJob(null);
+    setUploadResult(null);
+    setUploadError("");
+    setCompletionError("");
+    setUploadState("idle");
+    clearStoredUploadJobId();
+    if (uploadInputRef.current) uploadInputRef.current.value = "";
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.email, currentUser?.id]);
+
   useEffect(() => () => {
+    flowSessionRef.current += 1;
+    uploadInFlightRef.current = false;
     pollSessionRef.current += 1;
     if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
     clearCompletionNavigationTimer();
@@ -579,6 +604,7 @@ export default function DataConnectionsWorkspace({
     let pollingPath = normalizeUploadStatusPath(statusUrl, requestedJobId) ?? `/api/data/upload-status/${requestedJobId}`;
     uploadStatusPathRef.current = pollingPath;
     if (typeof window !== "undefined") window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, requestedJobId);
+    logTelemetryStage("job polling started", { jobId: requestedJobId, statusPath: pollingPath });
     const runPoll = async () => {
       let attempts = 0;
       while (shouldContinuePolling(requestedJobId) && pollSessionRef.current === pollSessionId) {
@@ -807,6 +833,7 @@ export default function DataConnectionsWorkspace({
       return;
     }
     const file = selectedFiles[0];
+    const flowSessionId = flowSessionRef.current;
     const validationError = validateTelemetryFile(file, pendingUploadKind);
     if (validationError) {
       setUploadError(validationError);
@@ -815,9 +842,10 @@ export default function DataConnectionsWorkspace({
     uploadInFlightRef.current = true;
     setUploadError("");
     setCompletionError("");
-    console.info("[neraium] upload start", {
+    console.info("[neraium] baseline submission initiated", {
       filename: file.name,
       size: file.size,
+      transport: file.size > 250 * 1024 * 1024 ? "presigned_s3_put" : "direct_multipart",
     });
     setUploadState("uploading");
     setUploadProcessingFlag(true);
@@ -829,21 +857,26 @@ export default function DataConnectionsWorkspace({
         accessCode,
         timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
         onProgress: (progress) => {
+          if (flowSessionRef.current !== flowSessionId) return;
           startTransition(() => {
             setUploadTransfer({ ...progress, label: formatUploadTransferLabel(progress) });
           });
         },
         onDebug: (debug) => {
+          if (flowSessionRef.current !== flowSessionId) return;
           setUploadDebug((current) => ({
             ...current,
             ...debug,
           }));
         },
       });
+      if (flowSessionRef.current !== flowSessionId) return;
       const payload = uploadResponse.payload;
       const jobId = uploadStateView.resolveCurrentUploadJobId(payload) || payload?.job_id;
-      console.info("[neraium] upload success response", {
+      console.info("[neraium] analysis job response received", {
         jobId: jobId ?? null,
+        filename: file.name,
+        size: file.size,
         status: normalizeUploadStatus(payload?.status ?? payload?.processing_state ?? payload?.worker_state),
       });
       if (!jobId) {
@@ -861,13 +894,16 @@ export default function DataConnectionsWorkspace({
         throw new Error("Telemetry analysis ended before results were available.");
       }
     } catch (error) {
+      if (flowSessionRef.current !== flowSessionId) return;
       const classified = classifyUploadError(error, error?.phase || "upload");
       logUploadFailureDiagnostics(classified);
       logTelemetryStage("error", { message: classified.message || error?.message || "Telemetry analysis failed." });
       markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, diagnostics: classified });
     } finally {
-      uploadInFlightRef.current = false;
-      setUploadProcessingFlag(false);
+      if (flowSessionRef.current === flowSessionId) {
+        uploadInFlightRef.current = false;
+        setUploadProcessingFlag(false);
+      }
     }
   }
 
@@ -879,7 +915,8 @@ export default function DataConnectionsWorkspace({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStartInitialFiles, selectedFiles, uploadState]);
 
-  const readiness = uploadReadinessMessage(selectedFiles[0]);
+  const selectedFileValidationError = validateTelemetryFile(selectedFiles[0], pendingUploadKind);
+  const readiness = selectedFileValidationError || uploadReadinessMessage(selectedFiles[0]);
   const hasActiveProgress = isActiveUploadProgressState(uploadState);
   const progressUploadJob = hasActiveProgress ? uploadJob : null;
   const isUploadingState = String(uploadState || "").toLowerCase() === "uploading";
@@ -1038,6 +1075,7 @@ export default function DataConnectionsWorkspace({
         latestUploadSnapshot={latestUploadSnapshot}
         pendingUploadKind={pendingUploadKind}
         selectedFileSize={formatFileSize(selectedFiles[0]?.size ?? 0)}
+        fileValidationError={selectedFileValidationError}
         isUploadProcessing={isUploadProcessing}
         uploadState={uploadState}
         openFilePicker={openFilePicker}

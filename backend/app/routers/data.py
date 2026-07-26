@@ -9,11 +9,12 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Annotated, Any
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import re
 
 from fastapi import APIRouter, Depends, File, HTTPException, Path as ApiPath, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
 from app.services.evidence_store import read_evidence_run, upsert_evidence_run
 from app.services.dataset_scope import payload_matches_dataset_scope
 from app.services.analysis_result_contract import ensure_analysis_result
@@ -31,7 +32,19 @@ from app.services.runtime_db import enqueue_upload_job
 from app.services.runtime_db import queue_metrics as runtime_queue_metrics
 from app.services.runtime_db import read_upload_queue_job, touch_upload_queue_job, peek_next_upload_job_for_worker
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
-from app.services.upload_state_repository import persist_upload_source, read_replay_payload, read_upload_result_by_job_id, reset_upload_state, resolve_upload_artifacts, shared_state_configured, upload_state_backend
+from app.services.upload_state_repository import (
+    create_presigned_upload_target,
+    inspect_upload_source,
+    persist_upload_source,
+    read_large_upload_session,
+    read_replay_payload,
+    read_upload_result_by_job_id,
+    reset_upload_state,
+    resolve_upload_artifacts,
+    shared_state_configured,
+    upload_state_backend,
+    write_large_upload_session,
+)
 from app.services.rate_limiter import consume_rate_limit
 from app.services.latest_upload_state import resolve_latest_upload_payload
 from app.services.upload_session_service import resolve_upload_status
@@ -46,6 +59,16 @@ UPLOAD_STATUS_RATE_WINDOW_SECONDS = 60
 _UPLOAD_WORKERS: set[threading.Thread] = set()
 _UPLOAD_WORKERS_LOCK = threading.Lock()
 UploadJobPath = Annotated[str, ApiPath(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
+
+
+class LargeUploadSessionRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    size_bytes: int = Field(gt=0)
+    content_type: str = Field(default="text/csv", max_length=255)
+
+
+class LargeUploadCompleteRequest(BaseModel):
+    etag: str | None = Field(default=None, max_length=256)
 
 
 def _upload_storage_root(runtime_dir: Path) -> Path:
@@ -469,6 +492,385 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
         "message": "Upload session expired or was not found.",
         "state_backend": state_backend,
     }, job_id)
+
+
+def _upload_actor(request: Request) -> str:
+    auth_context = getattr(request.state, "auth_context", {})
+    return str(
+        auth_context.get("auth_subject")
+        or request.headers.get("X-Neraium-User")
+        or request.headers.get("X-Authenticated-User")
+        or request.headers.get("X-Forwarded-Email")
+        or "anonymous"
+    )
+
+
+def _large_upload_error(status_code: int, error_type: str, message: str, **extra: Any) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "FAILED",
+            "processing_state": "failed",
+            "error_type": error_type,
+            "message": message,
+            **extra,
+        },
+    )
+
+
+def _valid_large_upload_filename(filename: str) -> bool:
+    return str(filename or "").lower().endswith(".csv")
+
+
+@router.post("/upload-session", status_code=201, dependencies=[Depends(require_operator_role)])
+def create_large_upload_session(request: Request, payload: LargeUploadSessionRequest):
+    if _strict_auth_mode(request):
+        allowed, retry_after = consume_rate_limit(
+            "data.upload-session",
+            _rate_limit_key(request),
+            limit=UPLOAD_RATE_LIMIT,
+            window_seconds=UPLOAD_RATE_WINDOW_SECONDS,
+        )
+        if not allowed:
+            return _rate_limit_response(retry_after, error_type="upload_rate_limited", message="Upload rate limit exceeded. Retry shortly.")
+
+    settings = request.app.state.settings
+    filename = str(payload.filename or "").strip()
+    size_bytes = int(payload.size_bytes)
+    max_size_bytes = int(getattr(settings, "max_large_upload_size_bytes", 512 * 1024 * 1024))
+    request_id = getattr(request.state, "request_id", None)
+    if not _valid_large_upload_filename(filename):
+        return _large_upload_error(400, "unsupported_file_type", "Large-file intake supports CSV telemetry files only.")
+    if size_bytes > max_size_bytes:
+        _log_upload_event(
+            "large_upload_session_rejected",
+            request_id=request_id,
+            endpoint="/api/data/upload-session",
+            filename=filename,
+            file_size_bytes=size_bytes,
+            failure_reason="upload_too_large",
+        )
+        return _large_upload_error(
+            413,
+            "upload_too_large",
+            f"File is larger than the supported upload limit of {format_upload_capacity(max_size_bytes)}.",
+            max_upload_size_bytes=max_size_bytes,
+            received_size_bytes=size_bytes,
+        )
+    if not shared_state_configured():
+        return _large_upload_error(
+            503,
+            "large_upload_storage_unavailable",
+            "Large-file upload is not configured. Try again later or use a smaller dataset.",
+        )
+
+    upload_session_id = uuid.uuid4().hex
+    content_type = str(payload.content_type or "text/csv").strip().lower() or "text/csv"
+    if "csv" not in content_type and content_type not in {"application/octet-stream", "text/plain"}:
+        content_type = "text/csv"
+    try:
+        target = create_presigned_upload_target(
+            upload_session_id,
+            filename=filename,
+            content_type=content_type,
+            expires_in_seconds=3600,
+        )
+    except Exception:
+        logger.exception("large_upload_session_create_failed request_id=%s size_bytes=%s", request_id, size_bytes)
+        return _large_upload_error(
+            503,
+            "large_upload_storage_unavailable",
+            "Upload could not start. Check the connection and try again.",
+        )
+
+    now = datetime.now(timezone.utc)
+    try:
+        session = write_large_upload_session(
+            upload_session_id,
+            {
+                "upload_session_id": upload_session_id,
+                "filename": filename,
+                "size_bytes": size_bytes,
+                "content_type": content_type,
+                "object_key": target["object_key"],
+                "state": "awaiting_upload",
+                "created_at": now.isoformat(),
+                "expires_at": (now + timedelta(hours=1)).isoformat(),
+                "initiated_by": _upload_actor(request),
+                "request_id": request_id,
+            },
+        )
+    except Exception:
+        logger.exception("large_upload_session_persist_failed request_id=%s upload_session_id=%s", request_id, upload_session_id)
+        return _large_upload_error(
+            503,
+            "large_upload_storage_unavailable",
+            "Upload could not start. Check the connection and try again.",
+        )
+    request.state.upload_session_id = upload_session_id
+    _log_upload_event(
+        "large_upload_session_created",
+        request_id=request_id,
+        upload_session_id=upload_session_id,
+        endpoint="/api/data/upload-session",
+        filename=filename,
+        file_size_bytes=size_bytes,
+        processing_stage="awaiting_upload",
+    )
+    return {
+        "upload_session_id": upload_session_id,
+        "upload_url": target["upload_url"],
+        "upload_headers": target["upload_headers"],
+        "expires_at": session["expires_at"],
+        "max_upload_size_bytes": max_size_bytes,
+        "upload_method": "PUT",
+    }
+
+
+@router.post("/upload-session/{upload_session_id}/complete", status_code=202, dependencies=[Depends(require_operator_role)])
+def complete_large_upload_session(
+    request: Request,
+    upload_session_id: UploadJobPath,
+    payload: LargeUploadCompleteRequest,
+):
+    request_id = getattr(request.state, "request_id", None)
+    session = read_large_upload_session(upload_session_id)
+    if not session:
+        return _large_upload_error(404, "upload_session_missing", "Upload session expired or was not found.")
+
+    existing_job = upload_jobs.read_upload_status(upload_session_id)
+    if existing_job and str(existing_job.get("status") or "").upper() in {"PENDING", "QUEUED", "PROCESSING", "RUNNING_SII", "COMPLETE"}:
+        return {
+            **existing_job,
+            "job_id": upload_session_id,
+            "status_url": existing_job.get("status_url") or f"/api/data/upload-status/{upload_session_id}",
+        }
+
+    expires_at = str(session.get("expires_at") or "").strip()
+    try:
+        expired = bool(expires_at) and datetime.fromisoformat(expires_at.replace("Z", "+00:00")) <= datetime.now(timezone.utc)
+    except ValueError:
+        expired = True
+    if expired:
+        return _large_upload_error(410, "upload_session_missing", "Upload session expired or was not found.")
+
+    expected_size = int(session.get("size_bytes") or 0)
+    max_size_bytes = int(getattr(request.app.state.settings, "max_large_upload_size_bytes", 512 * 1024 * 1024))
+    if expected_size <= 0 or expected_size > max_size_bytes:
+        return _large_upload_error(
+            413,
+            "upload_too_large",
+            f"File is larger than the supported upload limit of {format_upload_capacity(max_size_bytes)}.",
+            max_upload_size_bytes=max_size_bytes,
+        )
+
+    source_key = str(session.get("object_key") or "").strip()
+    try:
+        uploaded = inspect_upload_source(source_key)
+    except Exception:
+        logger.warning(
+            "large_upload_source_confirmation_failed request_id=%s upload_session_id=%s",
+            request_id,
+            upload_session_id,
+            exc_info=True,
+        )
+        return _large_upload_error(
+            409,
+            "upload_not_complete",
+            "Upload could not be confirmed. Check the connection and try again.",
+        )
+
+    received_size = int(uploaded.get("content_length") or 0)
+    if received_size != expected_size:
+        _log_upload_event(
+            "large_upload_completion_rejected",
+            request_id=request_id,
+            upload_session_id=upload_session_id,
+            endpoint=f"/api/data/upload-session/{upload_session_id}/complete",
+            filename=session.get("filename"),
+            file_size_bytes=received_size,
+            failure_reason="upload_size_mismatch",
+        )
+        return _large_upload_error(
+            409,
+            "upload_size_mismatch",
+            "Upload is incomplete. Check the connection and try again.",
+            expected_size_bytes=expected_size,
+            received_size_bytes=received_size,
+        )
+    submitted_etag = str(payload.etag or "").strip().strip('"')
+    uploaded_etag = str(uploaded.get("etag") or "").strip().strip('"')
+    if submitted_etag and uploaded_etag and submitted_etag != uploaded_etag:
+        return _large_upload_error(409, "upload_etag_mismatch", "Upload could not be verified. Try again.")
+
+    metrics = queue_metrics()
+    if int(metrics.get("pending", 0)) >= int(getattr(request.app.state.settings, "max_pending_upload_jobs", 3)):
+        return JSONResponse(
+            status_code=503,
+            headers={"retry-after": "30"},
+            content={"status": "FAILED", "error_type": "upload_queue_saturated", "message": "Upload queue is saturated. Retry shortly."},
+        )
+
+    filename = str(session.get("filename") or "upload.csv")
+    actor = str(session.get("initiated_by") or _upload_actor(request))
+    worker_dispatch_status = "thread_dispatched" if _should_dispatch_upload_worker(request.app.state.settings) else "external_worker_queue"
+    summary = {
+        "job_id": upload_session_id,
+        "filename": filename,
+        "status_url": f"/api/data/upload-status/{upload_session_id}",
+        "status": "PENDING",
+        "processing_state": "queued",
+        "percent": 5,
+        "progress": 5,
+        "progress_label": "Validating data",
+        "message": "Validating data",
+        "propagation_stage": "queued",
+        "propagation_progress": 5,
+        "propagation_label": "Validating data",
+        "runner_used": False if str(getattr(request.app.state.settings, "process_role", "")).lower() == "api" else True,
+        "runner_module": RUNNER_MODULE,
+        "core_engine": CORE_ENGINE,
+        "file_path": None,
+        "shared_upload_source_key": source_key,
+        "file_size_bytes": received_size,
+        "content_type": session.get("content_type") or uploaded.get("content_type") or "text/csv",
+        "initiated_by": actor,
+        "request_id": request_id or session.get("request_id"),
+        "upload_session_id": upload_session_id,
+        "worker_dispatch_status": worker_dispatch_status,
+        "upload_transport": "presigned_s3_put",
+    }
+    try:
+        upload_jobs.write_job(summary)
+    except Exception:
+        logger.exception("large_upload_job_state_write_failed request_id=%s upload_session_id=%s", request_id, upload_session_id)
+        return _large_upload_error(
+            503,
+            "upload_enqueue_failed",
+            "Upload completed, but analysis could not be started.",
+        )
+
+    try:
+        upsert_evidence_run(
+            {
+                "run_id": upload_session_id,
+                "source_name": filename,
+                "source_type": "csv_upload",
+                "status": "queued",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": None,
+                "rows_received": 0,
+                "rows_accepted": 0,
+                "rows_rejected": 0,
+                "sensors_detected": 0,
+                "room": "Uploaded telemetry",
+                "operating_state": "Monitoring",
+                "drift_status": "info",
+                "warnings": [],
+                "errors": [],
+                "primary_drivers": [],
+                "evidence_summary": [],
+                "structural_archetypes": [],
+                "initiated_by": actor,
+                "adaptive_site_key": "site::default",
+                "operator_feedback_history": [],
+                "observation_type": "baseline_shift",
+                "observation_status": "queued",
+                "variables": [],
+                "drift_metrics": {},
+                "data_conditions": [],
+                "regime_label": "State Group A",
+                "structural_state": "Monitoring",
+                "deformation_started_at": None,
+            }
+        )
+    except Exception:
+        logger.warning("large_upload_evidence_write_failed upload_session_id=%s", upload_session_id, exc_info=True)
+
+    try:
+        enqueue_upload_job(upload_session_id)
+    except Exception:
+        logger.exception("large_upload_job_enqueue_failed request_id=%s upload_session_id=%s", request_id, upload_session_id)
+        try:
+            upload_jobs.write_job(
+                {
+                    **summary,
+                    "status": "FAILED",
+                    "processing_state": "failed",
+                    "error_type": "upload_enqueue_failed",
+                    "message": "Upload completed, but analysis could not be started.",
+                }
+            )
+        except Exception:
+            logger.exception("large_upload_job_failure_state_write_failed upload_session_id=%s", upload_session_id)
+        try:
+            _upsert_failed_evidence_record(
+                job_id=upload_session_id,
+                filename=filename,
+                source_type="csv_upload",
+                error_message="Upload completed, but analysis could not be started.",
+                initiated_by=actor,
+            )
+        except Exception:
+            logger.warning("large_upload_failure_evidence_write_failed upload_session_id=%s", upload_session_id, exc_info=True)
+        return _large_upload_error(
+            503,
+            "upload_enqueue_failed",
+            "Upload completed, but analysis could not be started.",
+        )
+
+    try:
+        write_large_upload_session(
+            upload_session_id,
+            {
+                **session,
+                "state": "job_created",
+                "job_id": upload_session_id,
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    except Exception:
+        logger.warning("large_upload_session_completion_state_write_failed upload_session_id=%s", upload_session_id, exc_info=True)
+    request.state.upload_session_id = upload_session_id
+    try:
+        record_audit_event(
+            actor=actor,
+            action="upload.accepted",
+            resource_type="upload_job",
+            resource_id=upload_session_id,
+            request_id=getattr(request.state, "auth_context", {}).get("request_id"),
+            detail={"filename": filename, "size_bytes": received_size, "transport": "presigned_s3_put"},
+        )
+    except Exception:
+        logger.warning("large_upload_audit_write_failed upload_session_id=%s", upload_session_id, exc_info=True)
+    if worker_dispatch_status == "thread_dispatched":
+        _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
+    _log_upload_event(
+        "large_upload_job_created",
+        request_id=request_id,
+        upload_session_id=upload_session_id,
+        endpoint=f"/api/data/upload-session/{upload_session_id}/complete",
+        filename=filename,
+        file_size_bytes=received_size,
+        job_id=upload_session_id,
+        queue_status="pending",
+        worker_dispatch_status=worker_dispatch_status,
+        processing_stage="queued",
+    )
+    return {
+        "job_id": upload_session_id,
+        "status": "PENDING",
+        "processing_state": "queued",
+        "filename": filename,
+        "percent": 5,
+        "progress": 5,
+        "progress_label": "Validating data",
+        "message": "Validating data",
+        "status_url": f"/api/data/upload-status/{upload_session_id}",
+        "file_size_bytes": received_size,
+        "worker_dispatch_status": worker_dispatch_status,
+        "upload_transport": "presigned_s3_put",
+    }
 
 
 @router.post("/upload", status_code=202, dependencies=[Depends(require_operator_role)])

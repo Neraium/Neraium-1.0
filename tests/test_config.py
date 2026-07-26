@@ -138,6 +138,16 @@ def test_invalid_environment_values_fail_fast(monkeypatch, name: str, value: str
         get_settings()
 
 
+def test_upload_size_limits_are_configured_independently(monkeypatch) -> None:
+    monkeypatch.setenv("NERAIUM_MAX_UPLOAD_SIZE_BYTES", "262144000")
+    monkeypatch.setenv("NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES", "536870912")
+
+    settings = get_settings()
+
+    assert settings.max_upload_size_bytes == 250 * 1024 * 1024
+    assert settings.max_large_upload_size_bytes == 512 * 1024 * 1024
+
+
 def test_invalid_app_environment_fails_fast(monkeypatch) -> None:
     monkeypatch.setenv("APP_ENV", "prd")
 

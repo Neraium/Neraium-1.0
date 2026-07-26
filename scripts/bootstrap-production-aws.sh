@@ -26,8 +26,12 @@ TRUST_POLICY_FILE="$(mktemp)"
 INLINE_POLICY_FILE="$(mktemp)"
 EXECUTION_INLINE_POLICY_FILE="$(mktemp)"
 EXECUTION_SECRETS_POLICY_FILE="$(mktemp)"
+UPLOAD_CORS_FILE="$(mktemp)"
+CURRENT_CORS_FILE="$(mktemp)"
+UPLOAD_LIFECYCLE_FILE="$(mktemp)"
+CURRENT_LIFECYCLE_FILE="$(mktemp)"
 cleanup() {
-  rm -f "$TRUST_POLICY_FILE" "$INLINE_POLICY_FILE" "$EXECUTION_INLINE_POLICY_FILE" "$EXECUTION_SECRETS_POLICY_FILE"
+  rm -f "$TRUST_POLICY_FILE" "$INLINE_POLICY_FILE" "$EXECUTION_INLINE_POLICY_FILE" "$EXECUTION_SECRETS_POLICY_FILE" "$UPLOAD_CORS_FILE" "$CURRENT_CORS_FILE" "$UPLOAD_LIFECYCLE_FILE" "$CURRENT_LIFECYCLE_FILE"
 }
 trap cleanup EXIT
 
@@ -55,7 +59,7 @@ cat > "$INLINE_POLICY_FILE" <<JSON
     },
     {
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:PutObjectTagging", "s3:DeleteObject"],
       "Resource": ["arn:aws:s3:::${UPLOAD_STATE_BUCKET}/*"]
     },
     {
@@ -141,6 +145,41 @@ fi
 aws s3api put-bucket-versioning \
   --bucket "$UPLOAD_STATE_BUCKET" \
   --versioning-configuration Status=Enabled >/dev/null
+
+if ! aws s3api get-bucket-cors \
+  --bucket "$UPLOAD_STATE_BUCKET" > "$CURRENT_CORS_FILE" 2>/dev/null; then
+  printf '%s\n' '{"CORSRules":[]}' > "$CURRENT_CORS_FILE"
+fi
+jq '{
+  CORSRules: ([.CORSRules[]? | select(.ID != "neraium-browser-large-upload")] + [{
+    ID: "neraium-browser-large-upload",
+    AllowedOrigins: ["https://app.neraium.com"],
+    AllowedMethods: ["PUT"],
+    AllowedHeaders: ["content-type", "if-none-match", "x-amz-tagging"],
+    ExposeHeaders: ["ETag"],
+    MaxAgeSeconds: 3600
+  }])
+}' "$CURRENT_CORS_FILE" > "$UPLOAD_CORS_FILE"
+aws s3api put-bucket-cors \
+  --bucket "$UPLOAD_STATE_BUCKET" \
+  --cors-configuration "file://${UPLOAD_CORS_FILE}" >/dev/null
+
+if ! aws s3api get-bucket-lifecycle-configuration \
+  --bucket "$UPLOAD_STATE_BUCKET" > "$CURRENT_LIFECYCLE_FILE" 2>/dev/null; then
+  printf '%s\n' '{"Rules":[]}' > "$CURRENT_LIFECYCLE_FILE"
+fi
+jq '{
+  Rules: ([.Rules[]? | select(.ID != "neraium-orphaned-upload-source-expiry")] + [{
+    ID: "neraium-orphaned-upload-source-expiry",
+    Status: "Enabled",
+    Filter: {Tag: {Key: "neraium-upload-source", Value: "true"}},
+    Expiration: {Days: 7},
+    NoncurrentVersionExpiration: {NoncurrentDays: 7}
+  }])
+}' "$CURRENT_LIFECYCLE_FILE" > "$UPLOAD_LIFECYCLE_FILE"
+aws s3api put-bucket-lifecycle-configuration \
+  --bucket "$UPLOAD_STATE_BUCKET" \
+  --lifecycle-configuration "file://${UPLOAD_LIFECYCLE_FILE}" >/dev/null
 
 echo "Ensuring CloudWatch log groups"
 aws logs create-log-group --log-group-name "$API_LOG_GROUP" --region "$AWS_REGION" 2>/dev/null || true

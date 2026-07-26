@@ -88,6 +88,7 @@ function hasSpecificTransientPayload(errorType) {
     "upload_rate_limited",
     "upload_status_rate_limited",
     "shared_upload_queue_not_configured",
+    "large_upload_storage_unavailable",
   ].includes(String(errorType || ""));
 }
 
@@ -308,7 +309,9 @@ export function classifyUploadError(error, phase) {
         ? "Dataset analysis is in progress. Large datasets may require additional processing time."
         : error?.name === "ApiTimeoutError"
           ? "Dataset import timed out. Retry the analysis."
-          : normalizeErrorMessage(error?.message || "The dataset could not be imported because the analysis service could not be reached. Retry the analysis."),
+          : phase === "job_creation"
+            ? "Upload completed, but analysis could not be started."
+            : "Upload could not start. Check the connection and try again.",
     };
   }
   if (error instanceof TypeError) {
@@ -323,7 +326,9 @@ export function classifyUploadError(error, phase) {
       responseStatus: null,
       message: phase === "poll"
         ? "Dataset analysis is in progress. Large datasets may require additional processing time."
-        : normalizeErrorMessage(error?.message || "The dataset could not be imported because the analysis service could not be reached. Retry the analysis."),
+        : phase === "job_creation"
+            ? "Upload completed, but analysis could not be started."
+            : "Upload could not start. Check the connection and try again.",
     };
   }
   return {
@@ -354,6 +359,8 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
     if (phase === "poll") {
       return "Dataset analysis is in progress. Waiting for analysis status to become available.";
     }
+    if (phase === "job_creation") return "Upload completed, but analysis could not be started.";
+    if (phase === "upload_session") return "Upload could not start. Check the connection and try again.";
     return "Analysis status is unavailable. Refresh and retry.";
   }
   if (errorType === "shared_upload_queue_not_configured") {
@@ -361,6 +368,17 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
   }
   if (errorType === "upload_queue_saturated") {
     return "Analysis service is busy. Retry shortly.";
+  }
+  if (errorType === "large_upload_storage_unavailable") {
+    return "Upload could not start. Check the connection and try again.";
+  }
+  if (["object_storage_upload_failed", "upload_not_complete", "upload_size_mismatch", "upload_etag_mismatch"].includes(errorType)) {
+    return typeof detail === "string" && detail.trim()
+      ? normalizeErrorMessage(detail)
+      : "Upload could not be completed. Check the connection and try again.";
+  }
+  if (errorType === "missing_job_id") {
+    return "Upload completed, but analysis could not be started.";
   }
   if (errorType === "upload_enqueue_failed") {
     return typeof detail === "string" && detail.trim()
@@ -378,7 +396,7 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
   if (errorType === "upload_too_large" || status === 413) {
     return typeof detail === "string" && detail.trim()
       ? normalizeErrorMessage(detail)
-      : "File too large. Maximum supported size is 10 GB.";
+      : "File is larger than the supported upload limit.";
   }
   if (errorType === "upload_response_timeout" || errorType === "timeout" || status === 408) {
     return phase === "poll"

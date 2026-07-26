@@ -39,6 +39,30 @@ CHILLED_WATER_IMPORTANT_COLUMNS = (
 CHILLED_WATER_FLAG_COLUMNS = {"alarm_count", "maintenance_event", "operator_override"}
 CHILLED_WATER_SPARSE_MISSING_THRESHOLD = 0.05
 SHORT_GAP_LIMIT_ROWS = 6
+DEDUPLICATION_EXACT_HASH_LIMIT = 200_000
+
+
+class BoundedHashTracker:
+    """Track duplicates exactly up to a fixed cap without ever dropping a unique row."""
+
+    def __init__(self) -> None:
+        self._exact: set[bytes] = set()
+        self._saturated = False
+
+    @property
+    def bounded_mode(self) -> bool:
+        return self._saturated
+
+    def contains_or_add(self, digest: bytes) -> bool:
+        if digest in self._exact:
+            return True
+        if self._saturated:
+            return False
+        if len(self._exact) >= DEDUPLICATION_EXACT_HASH_LIMIT:
+            self._saturated = True
+            return False
+        self._exact.add(digest)
+        return False
 
 
 def detect_delimiter(sample: str) -> str:
@@ -284,8 +308,8 @@ def stream_csv_snapshot(
         duplicate_exact_rows = 0
         important_missing_by_column: dict[str, int] = {}
         invalid_numeric_cells = 0
-        seen_timestamps: set[bytes] = set()
-        seen_exact_rows: set[bytes] = set()
+        seen_timestamps = BoundedHashTracker()
+        seen_exact_rows = BoundedHashTracker()
         raw_rows_in_order: list[tuple[Any, dict[str, Any]]] = []
         header_skipped = not header_present
         rows_used = 0
@@ -314,10 +338,9 @@ def stream_csv_snapshot(
 
             raw_row = [token.strip() for token in tokens]
             exact_row_key = hashlib.blake2b("\x1f".join(raw_row).encode("utf-8", errors="replace"), digest_size=16).digest()
-            if exact_row_key in seen_exact_rows:
+            if seen_exact_rows.contains_or_add(exact_row_key):
                 duplicate_exact_rows += 1
                 continue
-            seen_exact_rows.add(exact_row_key)
             parsed_ts = None
             if timestamp_index is not None:
                 parsed_ts = parse_timestamp(raw_row[timestamp_index])
@@ -329,10 +352,9 @@ def stream_csv_snapshot(
                     f"{identity_value}::{parsed_ts.isoformat()}".encode("utf-8", errors="replace"),
                     digest_size=16,
                 ).digest()
-                if timestamp_key in seen_timestamps:
+                if seen_timestamps.contains_or_add(timestamp_key):
                     duplicate_timestamps += 1
                     continue
-                seen_timestamps.add(timestamp_key)
 
             row = {column: raw_row[index] for index, column in enumerate(columns)}
             row["__source_row_number"] = rows_received
@@ -422,6 +444,9 @@ def stream_csv_snapshot(
             warnings.append("No usable timestamp column was detected; row-order analysis was used.")
         if timestamps_were_unsorted:
             warnings.append("Timestamps were unsorted and were ordered before analysis.")
+        bounded_deduplication = seen_exact_rows.bounded_mode or seen_timestamps.bounded_mode
+        if bounded_deduplication:
+            warnings.append("Large-file duplicate detection was bounded to the first 200,000 unique keys.")
         schema_messages: list[str] = []
         analysis_gate_state = "READY"
         sparse_missing_columns = [
@@ -476,6 +501,7 @@ def stream_csv_snapshot(
             "analysis_population_rows": rows_used,
             "analysis_sampling_applied": len(sample_rows) < rows_used,
             "analysis_sample_stride": analysis_stride,
+            "deduplication_mode": "bounded" if bounded_deduplication else "exact",
             "rows_received": rows_received,
             "rows_used": rows_used,
             "rows_dropped": rows_dropped,

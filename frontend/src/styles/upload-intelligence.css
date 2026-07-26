@@ -752,7 +752,11 @@
   align-items: center;
 }
 .upload-analysis-card--baseline .upload-baseline-card__primary {
+  position: relative;
+  z-index: 1;
   flex: 1 1 auto;
+  pointer-events: auto;
+  touch-action: manipulation;
   width: 100%;
   min-height: 52px;
   justify-content: center;

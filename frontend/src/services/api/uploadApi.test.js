@@ -50,13 +50,22 @@ function installXhrSequence(responses) {
       return this._response?.headers?.[String(key).toLowerCase()] ?? "";
     }
 
-    send() {
+    send(body) {
+      this.body = body;
       const response = responses.shift();
       if (!response) throw new Error("Unexpected XHR send");
       this._response = response;
       this.status = response.status;
       this.responseText = response.body;
       this.readyState = 4;
+      if (response.progress) {
+        this.upload.onloadstart?.();
+        this.upload.onprogress?.({
+          loaded: response.progress.loaded,
+          total: response.progress.total,
+          lengthComputable: true,
+        });
+      }
       this.onload?.();
     }
 
@@ -222,6 +231,139 @@ describe("file ingestion failure handling", () => {
         accessCode: "",
       })).rejects.toMatchObject({ status: 400 });
       expect(xhr.instances).toHaveLength(1);
+    } finally {
+      xhr.restore();
+    }
+  });
+});
+
+
+describe("large telemetry upload transport", () => {
+  it("routes a synthetic 409.5 MiB CSV directly to object storage and creates the exact job", async () => {
+    const file = new File(["timestamp,value\n2026-06-22,1\n"], "ChillerPlant.csv", { type: "text/csv" });
+    Object.defineProperty(file, "size", { configurable: true, value: Math.round(409.5 * 1024 * 1024) });
+    const apiFetch = vi.fn()
+      .mockResolvedValueOnce(createResponse({
+        upload_session_id: "large-session-4095",
+        upload_url: "https://upload-bucket.s3.us-east-2.amazonaws.com/object?signed=redacted",
+        upload_headers: {
+          "Content-Type": "text/csv",
+          "x-amz-tagging": "neraium-upload-source=true",
+          "If-None-Match": "*",
+        },
+        upload_method: "PUT",
+      }, { status: 201 }))
+      .mockResolvedValueOnce(createResponse({
+        job_id: "large-session-4095",
+        status: "PENDING",
+        processing_state: "queued",
+        status_url: "/api/data/upload-status/large-session-4095",
+        filename: "ChillerPlant.csv",
+        upload_transport: "presigned_s3_put",
+      }, { status: 202 }));
+    const xhr = installXhrSequence([{
+      status: 200,
+      body: "",
+      headers: { etag: '"etag-4095"' },
+      progress: { loaded: file.size, total: file.size },
+    }]);
+    const progress = [];
+
+    try {
+      const response = await uploadTelemetryFileWithProgress({
+        file,
+        apiFetch,
+        accessCode: "",
+        onProgress: (event) => progress.push(event),
+      });
+
+      expect(apiFetch).toHaveBeenCalledTimes(2);
+      expect(apiFetch.mock.calls[0][0]).toBe("/api/data/upload-session");
+      expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({
+        filename: "ChillerPlant.csv",
+        size_bytes: file.size,
+        content_type: "text/csv",
+      });
+      expect(apiFetch.mock.calls[1][0]).toBe("/api/data/upload-session/large-session-4095/complete");
+      expect(JSON.parse(apiFetch.mock.calls[1][1].body)).toEqual({ etag: "etag-4095" });
+      expect(xhr.instances).toHaveLength(1);
+      expect(xhr.instances[0].method).toBe("PUT");
+      expect(xhr.instances[0].body).toBe(file);
+      expect(xhr.instances[0].withCredentials).toBe(false);
+      expect(xhr.instances[0].headers).toMatchObject({
+        "Content-Type": "text/csv",
+        "x-amz-tagging": "neraium-upload-source=true",
+        "If-None-Match": "*",
+      });
+      expect(progress.some((event) => event.stage === "uploading" || event.stage === "upload_transferred")).toBe(true);
+      expect(progress.at(-1)).toMatchObject({ stage: "validating", message: "Validating data" });
+      expect(response.payload).toMatchObject({
+        job_id: "large-session-4095",
+        filename: "ChillerPlant.csv",
+      });
+    } finally {
+      xhr.restore();
+    }
+  });
+
+
+
+  it("reuses a completed object upload when Retry follows a lost job-creation response", async () => {
+    const file = new File(["timestamp,value\n2026-06-22,1\n"], "resume.csv", { type: "text/csv" });
+    Object.defineProperty(file, "size", { configurable: true, value: (250 * 1024 * 1024) + 1 });
+    const lostResponse = Object.assign(new Error("connection lost"), { name: "ApiNetworkError" });
+    const apiFetch = vi.fn()
+      .mockResolvedValueOnce(createResponse({
+        upload_session_id: "resume-session",
+        upload_url: "https://upload.example.test/resume",
+        upload_headers: { "Content-Type": "text/csv" },
+      }, { status: 201 }))
+      .mockRejectedValueOnce(lostResponse)
+      .mockResolvedValueOnce(createResponse({
+        job_id: "resume-session",
+        status: "PENDING",
+        status_url: "/api/data/upload-status/resume-session",
+      }, { status: 202 }));
+    const xhr = installXhrSequence([{ status: 200, body: "", headers: { etag: '"resume-etag"' } }]);
+
+    try {
+      await expect(uploadTelemetryFileWithProgress({ file, apiFetch })).rejects.toMatchObject({
+        name: "ApiNetworkError",
+        phase: "job_creation",
+      });
+      const result = await uploadTelemetryFileWithProgress({ file, apiFetch });
+
+      expect(result.payload.job_id).toBe("resume-session");
+      expect(xhr.instances).toHaveLength(1);
+      expect(apiFetch).toHaveBeenCalledTimes(3);
+      expect(apiFetch.mock.calls.map(([path]) => path)).toEqual([
+        "/api/data/upload-session",
+        "/api/data/upload-session/resume-session/complete",
+        "/api/data/upload-session/resume-session/complete",
+      ]);
+    } finally {
+      xhr.restore();
+    }
+  });
+
+  it("shows a safe failure when upload completion does not return a job ID", async () => {
+    const file = new File(["timestamp,value\n2026-06-22,1\n"], "large.csv", { type: "text/csv" });
+    Object.defineProperty(file, "size", { configurable: true, value: (250 * 1024 * 1024) + 1 });
+    const apiFetch = vi.fn()
+      .mockResolvedValueOnce(createResponse({
+        upload_session_id: "missing-job-session",
+        upload_url: "https://upload.example.test/object",
+        upload_headers: { "Content-Type": "text/csv" },
+      }, { status: 201 }))
+      .mockResolvedValueOnce(createResponse({ status: "PENDING" }, { status: 202 }));
+    const xhr = installXhrSequence([{ status: 200, body: "", headers: { etag: '"etag"' } }]);
+
+    try {
+      await expect(uploadTelemetryFileWithProgress({ file, apiFetch })).rejects.toMatchObject({
+        name: "UploadRequestError",
+        errorType: "missing_job_id",
+        detail: "Upload completed, but analysis could not be started.",
+      });
     } finally {
       xhr.restore();
     }

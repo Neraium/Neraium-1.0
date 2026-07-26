@@ -74,7 +74,7 @@ command=["python","-m","app.entrypoint"]
 awslogs group=/ecs/neraium-prod-api or /ecs/neraium-prod-worker
 ```
 
-Upload path audit: the API streams FastAPI `UploadFile` chunks to disk, the default backend cap is 250 MiB, `NERAIUM_MAX_UPLOAD_SIZE_BYTES=262144000` is injected by the deployment workflow, and the ALB idle timeout is extended for slower mobile transfers. No NGINX reverse proxy is deployed in this stack; if you add CloudFront/CDN, WAF managed body-size rules, or NGINX later, align those request-body limits at or above 250 MiB before enabling mobile file intake.
+Upload path audit: multipart requests through the API are capped at 250 MiB (`NERAIUM_MAX_UPLOAD_SIZE_BYTES=262144000`). CSVs from 250 MiB through 512 MiB use an authenticated upload session, direct browser-to-S3 presigned `PUT`, server-side object verification, and canonical job creation. The deployment sets `NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES=536870912`, configures bucket CORS/ETag exposure and orphan cleanup, and gives the worker 1 vCPU, 4 GiB memory, and 40 GiB ephemeral storage. No NGINX reverse proxy is deployed in this stack.
 
 The API task also receives `NERAIUM_BOOTSTRAP_ADMIN_EMAIL` as an environment variable, `NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD` from the repository variable (default `false`), and `NERAIUM_BOOTSTRAP_ADMIN_PASSWORD` from the Secrets Manager secret referenced by `NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN`. The API startup normalizes the email, creates a missing administrator, and repairs an existing account's active/admin state. It resets the password only when the reset flag is `true`; otherwise the existing password is preserved. Neither bootstrap administrator value nor the reset flag is injected into the worker task. Startup emits only the non-secret result events `bootstrap_admin_created`, `bootstrap_admin_already_exists`, `bootstrap_admin_updated`, `bootstrap_admin_skipped_missing_configuration`, or `bootstrap_admin_failed`.
 
@@ -122,11 +122,13 @@ Two valid production patterns:
 - Keep frontend on static origin (Amplify/S3).
 - Add CloudFront behavior for `/api/*` with backend origin (ALB/ECS service).
 - Forward query strings, required headers, and cookies for authenticated requests.
-- Ensure all methods are allowed for API behavior (GET/HEAD/OPTIONS/POST at minimum).
+- Ensure all methods are allowed for API behavior (GET/HEAD/OPTIONS/POST at minimum). The presigned object upload is a separate S3 `PUT` governed by bucket CORS.
 
 Required API routes to backend origin:
 
 - `/api/data/upload`
+- `/api/data/upload-session`
+- `/api/data/upload-session/*/complete`
 - `/api/data/upload-status/*`
 - `/api/data/upload-stream/*`
 

@@ -26,7 +26,7 @@ The pilot rehearsal script adds deterministic bad-telemetry fixtures, captures e
 
 ## CSV Throughput Tuning (Pilot)
 
-Uploaded CSV analysis and SII ingestion now use every cleaned row from the uploaded dataset. Do not set pilot row caps for production validation; throughput tuning should use upload size, queue depth, worker count, and timeout settings without truncating the dataset.
+CSV validation scans the full uploaded file while downstream analysis uses the configured bounded sample (100,000 rows by default). Production supports multipart uploads through 250 MiB and presigned browser-to-S3 CSV uploads through 512 MiB. Keep the S3 upload CORS rule, 4 GiB worker memory, 40 GiB worker ephemeral storage, queue depth, and timeouts aligned with those limits.
 
 If metrics requires auth for CLI smoke checks:
 
@@ -97,8 +97,10 @@ The workflows discover the production RDS endpoint, rotating master secret ARN, 
 10. Evidence Trail.
 11. Historical Replay.
 12. Export Evidence.
-13. 413 oversize upload guardrail.
-14. 503 queue saturation guardrail in staging or documented safe local test.
+13. Validate a synthetic 409.5 MiB file identity selects the presigned path without allocating/uploading that fixture.
+14. Confirm the S3 CORS preflight permits `PUT` and exposes `ETag`.
+15. 413 oversize upload guardrail above 512 MiB.
+16. 503 queue saturation guardrail in staging or documented safe local test.
 
 ## Watch And Logs
 

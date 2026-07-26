@@ -10,6 +10,8 @@ import { SERVICE_UNAVAILABLE_RETRY_MESSAGE, SERVICE_UNAVAILABLE_UPLOAD_MESSAGE }
 const h = React.createElement;
 
 vi.mock("../services/api/uploadApi", () => ({
+  DIRECT_UPLOAD_MAX_BYTES: 250 * 1024 * 1024,
+  LARGE_UPLOAD_MAX_BYTES: 512 * 1024 * 1024,
   uploadTelemetryFileWithProgress: vi.fn(),
   retryUploadAnalysisJob: vi.fn(),
 }));
@@ -407,7 +409,7 @@ it("shows queued worker status as one visible processing line", () => {
   });
 
   expect(document.querySelector(".upload-processing-status")).toBeNull();
-  expect(screen.getByText("Validating dataset")).toBeTruthy();
+  expect(screen.getByText("Validating data")).toBeTruthy();
   expect(screen.queryByText("Preparing analysis resources")).toBeNull();
   expect(document.querySelector(".metadata-text")).toBeNull();
 });
@@ -957,4 +959,92 @@ it("uses the evidence-insufficient completion state when baseline gating fails",
   expect(screen.getByRole("button", { name: "Review Evidence" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "View Results" })).toBeNull();
   expect(screen.queryByText("Analysis Details")).toBeNull();
+});
+
+
+it("enables a valid current file and handles a rapid mobile-style tap exactly once", async () => {
+  uploadTelemetryFileWithProgress.mockImplementation(() => new Promise(() => {}));
+  renderWorkspace();
+  const file = selectedCsv("mobile-current.csv");
+
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [file] } });
+  const button = screen.getByRole("button", { name: "Start Baseline Analysis" });
+  expect(button.disabled).toBe(false);
+  expect(button.getAttribute("aria-disabled")).toBe("false");
+  expect(screen.getByLabelText("mobile-current.csv, 1.0 KB, Ready")).toBeTruthy();
+
+  fireEvent.touchStart(button);
+  fireEvent.touchEnd(button);
+  fireEvent.click(button);
+  fireEvent.click(button);
+
+  expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
+  expect(uploadTelemetryFileWithProgress.mock.calls[0][0].file).toBe(file);
+  expect(await screen.findByText("Uploading dataset")).toBeTruthy();
+  expect(document.querySelector("form.intake-flow")?.getAttribute("aria-busy")).toBe("true");
+  expect(screen.queryByRole("button", { name: "Start Baseline Analysis" })).toBeNull();
+  expect(Array.from(document.querySelectorAll(".upload-fingerprint-build__nodes b")).map((node) => node.textContent)).toEqual([
+    "Validate", "Map", "Baseline", "Compare", "Evidence",
+  ]);
+});
+
+it("uses the current replacement file and clears the prior analysis state", async () => {
+  uploadTelemetryFileWithProgress.mockImplementation(() => new Promise(() => {}));
+  renderWorkspace({ hasActiveSession: true, sessionStore: completedSessionStore() });
+
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("first.csv")] } });
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("replacement.csv")] } });
+
+  expect(screen.getByText("replacement.csv")).toBeTruthy();
+  expect(screen.queryByText("old.csv")).toBeNull();
+  expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "Start Baseline Analysis" }));
+
+  expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
+  expect(uploadTelemetryFileWithProgress.mock.calls[0][0].file.name).toBe("replacement.csv");
+});
+
+it("accepts a synthetic 409.5 MiB CSV identity for the large-file service path", () => {
+  uploadTelemetryFileWithProgress.mockImplementation(() => new Promise(() => {}));
+  const file = selectedCsv("ChillerPlant.csv");
+  Object.defineProperty(file, "size", { configurable: true, value: Math.round(409.5 * 1024 * 1024) });
+  renderWorkspace();
+
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [file] } });
+  const button = screen.getByRole("button", { name: "Start Baseline Analysis" });
+  expect(button.disabled).toBe(false);
+  expect(screen.getByLabelText("ChillerPlant.csv, 409.5 MB, Ready")).toBeTruthy();
+  fireEvent.click(button);
+
+  expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
+  expect(uploadTelemetryFileWithProgress.mock.calls[0][0].file).toBe(file);
+});
+
+it("rejects a CSV above the supported 512 MiB limit before submission", () => {
+  const file = selectedCsv("too-large.csv");
+  Object.defineProperty(file, "size", { configurable: true, value: (512 * 1024 * 1024) + 1 });
+  renderWorkspace();
+
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [file] } });
+
+  expect(screen.getByRole("alert").textContent).toBe("File is larger than the supported upload limit of 512.0 MB.");
+  expect(screen.getByLabelText("too-large.csv, 512.0 MB, Unsupported")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Start Baseline Analysis" }).disabled).toBe(true);
+  expect(uploadTelemetryFileWithProgress).not.toHaveBeenCalled();
+});
+
+it("renders a concise network failure with an enabled Retry action", async () => {
+  const error = Object.assign(new Error("network disconnected"), { name: "ApiNetworkError", phase: "upload" });
+  uploadTelemetryFileWithProgress.mockRejectedValue(error);
+  renderWorkspace();
+
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("retry.csv")] } });
+  fireEvent.click(screen.getByRole("button", { name: "Start Baseline Analysis" }));
+
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("Upload could not start. Check the connection and try again.");
+  const retry = screen.getByRole("button", { name: "Retry Analysis" });
+  expect(retry.disabled).toBe(false);
+  fireEvent.click(retry);
+  await waitFor(() => expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(2));
 });
