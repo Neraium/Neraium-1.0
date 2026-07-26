@@ -45,22 +45,22 @@ async function openSite(page, viewport) {
 }
 
 test.describe("Engineering reasoning decision cards", () => {
-  test("one site opens directly to a compact operational answer and evidence", async ({ page }) => {
+  test("one site opens directly to a shift brief and compact finding", async ({ page }) => {
     await openSite(page, { width: 1440, height: 900 });
-    await expect(page.getByText("1 behavioral change detected")).toBeVisible();
+    await expect(page.getByTestId("shift-brief")).toBeVisible();
+    await expect(page.getByText("1 unexplained system change needs review.")).toBeVisible();
     const card = page.locator(".operational-finding");
     await expect(card).toHaveCount(1);
     await expect(card.getByRole("heading", { name: "Pump demand no longer matches flow" })).toBeVisible();
+    await expect(card.getByText("Flow & Pressure")).toBeVisible();
     await expect(card.locator(".finding-classification__chip")).toHaveCount(3);
-    await expect(card.locator(".operational-finding__evidence-line")).toHaveCount(1);
-    await expect(card.locator(".operational-finding__next p")).toHaveCount(1);
-    await expect(card.getByText("Missing telemetry limits the conclusion.")).toHaveCount(0);
-    await expect(card.getByLabel(/Classification: Unexplained systemic change/i)).toBeVisible();
-    await expect(card.locator(".finding-classification--systemic")).toBeVisible();
-    await expect(card.getByRole("button", { name: "Review" })).toBeVisible();
-    await expect(card.getByRole("button", { name: "Acknowledge" })).toBeVisible();
+    await expect(card.getByText("Unexplained systemic change")).toBeVisible();
+    await expect(card.getByText("Flow response decreased 12.4%.")).toBeVisible();
+    await expect(card.getByText("Pump demand increased 6.1%.")).toHaveCount(0);
+    await expect(card.locator(".operational-finding__brief p")).toHaveCount(2);
+    for (const action of ["Review", "Acknowledge", "Evidence"]) await expect(card.getByRole("button", { name: action })).toBeVisible();
 
-    await card.getByRole("button", { name: "View evidence" }).click();
+    await card.getByRole("button", { name: "Review" }).click();
     await expect(page).toHaveURL(/\/evidence\/flow-response$/);
     await expect(page.getByText("What changed")).toBeVisible();
     await expect(page.getByText("Supporting evidence")).toBeVisible();
@@ -74,25 +74,24 @@ test.describe("Engineering reasoning decision cards", () => {
     await expect(page.getByRole("heading", { name: "Trace mode" })).toBeVisible();
   });
 
-  test("mobile uses a vertical answer and keeps evidence before the action", async ({ page }) => {
+  test("mobile keeps the brief and first finding action in the initial viewport", async ({ page }) => {
     await openSite(page, { width: 390, height: 844 });
     const card = page.locator(".operational-finding");
     const metrics = await card.evaluate((node) => {
-      const evidence = node.querySelector(".operational-finding__evidence-line")?.getBoundingClientRect();
-      const next = node.querySelector(".operational-finding__next")?.getBoundingClientRect();
+      const brief = node.querySelector(".operational-finding__brief")?.getBoundingClientRect();
       const action = node.querySelector(".operational-finding__action")?.getBoundingClientRect();
       const title = node.querySelector(".operational-finding__identity")?.getBoundingClientRect();
       const cardBox = node.getBoundingClientRect();
       return {
         overflow: document.documentElement.scrollWidth - window.innerWidth,
-        summaryOrder: Boolean(evidence && next && action && evidence.bottom <= next.top + 1 && next.bottom <= action.top + 1),
+        briefBeforeAction: Boolean(brief && action && brief.bottom <= action.top + 1),
         titleUsesCardWidth: Boolean(title && title.width >= cardBox.width - 32),
         actionsFitCard: Boolean(action && action.right <= cardBox.right + 1),
         classificationFits: Boolean(node.querySelector(".finding-classification")?.getBoundingClientRect().right <= window.innerWidth + 1),
       };
     });
     expect(metrics.overflow).toBeLessThanOrEqual(1);
-    expect(metrics.summaryOrder).toBe(true);
+    expect(metrics.briefBeforeAction).toBe(true);
     expect(metrics.titleUsesCardWidth).toBe(true);
     expect(metrics.actionsFitCard).toBe(true);
     expect(metrics.classificationFits).toBe(true);

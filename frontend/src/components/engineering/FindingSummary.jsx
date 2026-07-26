@@ -9,30 +9,32 @@ function sentence(value, fallback) {
   return /[.!?]$/.test(first) ? first : `${first}.`;
 }
 
-function FindingSummary({ finding, onEvidence }) {
-  const [acknowledged, setAcknowledged] = React.useState(false);
+function FindingSummary({ finding, acknowledged = false, escalated = false, onReview, onAcknowledge, onEvidence }) {
   if (!finding) return null;
-  const statusClass = finding.status.toLowerCase().replace(/\s+/g, "-");
+  const statusClass = String(finding.status ?? "change detected").toLowerCase().replace(/\s+/g, "-");
   const presentation = finding.classificationPresentation ?? normalizeFindingPresentation(finding);
-  const evidence = sentence(finding.visibleSupporting?.[0] || finding.observedChange, "Recorded behavior changed from the learned baseline.");
+  const evidence = sentence(finding.visibleSupporting?.[0] ?? finding.supporting?.[0] ?? finding.observedChange, "Supporting evidence is available.");
   const nextCheck = sentence(
-    presentation.investigationGuidance[0]?.check || finding.firstPlaceToLook || finding.recommendedFirstAction,
-    "Review source data and relationship evidence.",
+    presentation.investigationGuidance[0]?.check ?? finding.firstPlaceToLook ?? finding.recommendedFirstAction,
+    "Review relationship evidence.",
   );
-  const visibleFinding = acknowledged ? { ...finding, status: "Acknowledged" } : finding;
+  const displayStatus = escalated ? "Escalation" : acknowledged ? "Acknowledged" : "New";
+  const visibleFinding = { ...finding, reviewStatus: displayStatus };
   return (
-    <article className={`finding-summary operational-finding operational-finding--${statusClass} operational-finding--classification-${presentation.tone}`} data-finding-id={finding.id} data-testid="compact-finding-card">
+    <article className={`finding-summary operational-finding operational-finding--${statusClass} operational-finding--classification-${presentation.tone}${escalated ? " operational-finding--escalated" : ""}`} data-finding-id={finding.id} data-testid="compact-finding-card">
       <header className="operational-finding__identity">
-        <span className="forensic-kicker">{finding.location?.asset || finding.system || finding.location?.label || "Unassigned system"}</span>
-        <h2>{finding.title}</h2>
+        <div><span>System</span><strong>{finding.system || finding.location?.system || finding.location?.asset || "System not assigned"}</strong></div>
       </header>
+      <div className="operational-finding__what"><h3>{finding.title}</h3></div>
       <FindingClassificationSummary finding={visibleFinding} compact />
-      <p className="operational-finding__evidence-line">{evidence}</p>
-      <div className="operational-finding__next"><span>Next check</span><p>{nextCheck}</p></div>
+      <div className="operational-finding__brief">
+        <p><span>Evidence</span>{evidence}</p>
+        <p><span>Next check</span>{nextCheck}</p>
+      </div>
       <footer className="operational-finding__action" aria-label={`Actions for ${finding.title}`}>
-        <button type="button" className="forensic-button" onClick={() => onEvidence?.(finding)}>Review</button>
-        <button type="button" className="forensic-button forensic-button--secondary" aria-pressed={acknowledged} onClick={() => setAcknowledged(true)}>{acknowledged ? "Acknowledged" : "Acknowledge"}</button>
-        <button type="button" className="forensic-link-button" onClick={() => onEvidence?.(finding)}>View evidence</button>
+        <button type="button" className="forensic-button" onClick={() => (onReview ?? onEvidence)?.(finding)}>Review</button>
+        <button type="button" className="forensic-button forensic-button--secondary" aria-pressed={acknowledged} onClick={() => onAcknowledge?.(finding)}>{acknowledged ? "Acknowledged" : "Acknowledge"}</button>
+        <button type="button" className="baseline-text-button forensic-link-button" onClick={() => onEvidence?.(finding)}>Evidence</button>
       </footer>
     </article>
   );

@@ -68,7 +68,7 @@ async function startCommandCenterUpload(page, { name, csv }) {
   await page.goto("/", { waitUntil: "load" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
   await page.getByRole("button", { name: "Data Connections" }).click();
-  await expect(page.getByRole("heading", { name: "Import and Analyze Dataset", level: 2 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
 
   const uploadAcceptedPromise = page.waitForResponse(
     (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
@@ -79,7 +79,7 @@ async function startCommandCenterUpload(page, { name, csv }) {
     mimeType: "text/csv",
     buffer: Buffer.from(csv, "utf8"),
   });
-  await page.getByRole("button", { name: "Analyze Dataset" }).click();
+  await page.getByRole("button", { name: "Start Baseline Analysis" }).click();
   await expect(page.getByTestId("upload-workspace")).toBeVisible({ timeout: 30000 });
   const uploadAccepted = await uploadAcceptedPromise;
   expect(uploadAccepted.ok()).toBeTruthy();

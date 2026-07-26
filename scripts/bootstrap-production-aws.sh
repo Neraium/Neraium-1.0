@@ -7,11 +7,19 @@ APP_TASK_ROLE_NAME="${APP_TASK_ROLE_NAME:-neraium-prod-task-app-role}"
 TASK_EXECUTION_ROLE_NAME="${TASK_EXECUTION_ROLE_NAME:-neraium-prod-ecs-task-execution-role}"
 API_TOKEN_SECRET_ARN="${API_TOKEN_SECRET_ARN:?API_TOKEN_SECRET_ARN is required}"
 AUTH_DATABASE_URL_SECRET_ARN="${AUTH_DATABASE_URL_SECRET_ARN:?AUTH_DATABASE_URL_SECRET_ARN is required}"
+AUTH_DATABASE_SECRET_ARN="${AUTH_DATABASE_SECRET_ARN:?AUTH_DATABASE_SECRET_ARN is required}"
+AUTH_DATABASE_KMS_KEY_ARN="${AUTH_DATABASE_KMS_KEY_ARN:?AUTH_DATABASE_KMS_KEY_ARN is required}"
 NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN="${NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN:?NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN is required}"
 API_LOG_GROUP="${API_LOG_GROUP:-/ecs/neraium-prod-api}"
 WORKER_LOG_GROUP="${WORKER_LOG_GROUP:-/ecs/neraium-prod-worker}"
+ECS_CLUSTER="${ECS_CLUSTER:-neraium-prod-cluster}"
+ECS_API_SERVICE="${ECS_API_SERVICE:-neraium-prod-api-service}"
+ECS_WORKER_SERVICE="${ECS_WORKER_SERVICE:-neraium-prod-worker-service}"
+INFRA_ALERT_TOPIC_NAME="${INFRA_ALERT_TOPIC_NAME:-neraium-prod-infrastructure-alerts}"
+NERAIUM_INFRA_ALERT_EMAILS="${NERAIUM_INFRA_ALERT_EMAILS:-}"
 
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+INFRA_ALERT_TOPIC_ARN="$(aws sns create-topic --name "$INFRA_ALERT_TOPIC_NAME" --region "$AWS_REGION" --query TopicArn --output text)"
 APP_TASK_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${APP_TASK_ROLE_NAME}"
 TASK_EXECUTION_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${TASK_EXECUTION_ROLE_NAME}"
 TRUST_POLICY_FILE="$(mktemp)"
@@ -49,6 +57,31 @@ cat > "$INLINE_POLICY_FILE" <<JSON
       "Effect": "Allow",
       "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
       "Resource": ["arn:aws:s3:::${UPLOAD_STATE_BUCKET}/*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["secretsmanager:GetSecretValue"],
+      "Resource": ["${AUTH_DATABASE_SECRET_ARN}"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["secretsmanager:DescribeSecret"],
+      "Resource": ["${AUTH_DATABASE_SECRET_ARN}"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["kms:Decrypt"],
+      "Resource": ["${AUTH_DATABASE_KMS_KEY_ARN}"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["sns:Publish"],
+      "Resource": ["${INFRA_ALERT_TOPIC_ARN}"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["ecs:DescribeServices", "elasticloadbalancing:DescribeTargetHealth"],
+      "Resource": "*"
     }
   ]
 }
@@ -161,6 +194,20 @@ echo "TASK_EXECUTION_ROLE_NAME=${TASK_EXECUTION_ROLE_NAME}"
 echo "TASK_EXECUTION_ROLE_ARN=${TASK_EXECUTION_ROLE_ARN}"
 echo "API_TOKEN_SECRET_ARN=${API_TOKEN_SECRET_ARN}"
 echo "AUTH_DATABASE_URL_SECRET_ARN=${AUTH_DATABASE_URL_SECRET_ARN}"
+echo "AUTH_DATABASE_SECRET_ARN=${AUTH_DATABASE_SECRET_ARN}"
+echo "AUTH_DATABASE_KMS_KEY_ARN=${AUTH_DATABASE_KMS_KEY_ARN}"
 echo "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN=${NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN}"
 echo "API_LOG_GROUP=${API_LOG_GROUP}"
 echo "WORKER_LOG_GROUP=${WORKER_LOG_GROUP}"
+echo "INFRA_ALERT_TOPIC_ARN=${INFRA_ALERT_TOPIC_ARN}"
+
+AWS_REGION="$AWS_REGION" \
+ECS_CLUSTER="$ECS_CLUSTER" \
+ECS_API_SERVICE="$ECS_API_SERVICE" \
+ECS_WORKER_SERVICE="$ECS_WORKER_SERVICE" \
+API_LOG_GROUP="$API_LOG_GROUP" \
+WORKER_LOG_GROUP="$WORKER_LOG_GROUP" \
+INFRA_ALERT_TOPIC_NAME="$INFRA_ALERT_TOPIC_NAME" \
+NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN="$INFRA_ALERT_TOPIC_ARN" \
+NERAIUM_INFRA_ALERT_EMAILS="$NERAIUM_INFRA_ALERT_EMAILS" \
+./scripts/configure-production-monitoring.sh

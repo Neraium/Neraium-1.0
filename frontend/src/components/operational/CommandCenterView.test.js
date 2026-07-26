@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CommandCenterView from "./CommandCenterView";
 
@@ -10,141 +10,135 @@ const helpers = {
   formatInsightTitle: (insight) => insight?.summary || insight?.title || "Operating behavior changed",
   insightRelationshipLabels: () => [],
   operatorSummaryBriefing: (insight) => [insight?.whatHappened || "Operating behavior changed from the learned baseline."],
+  formatConfidenceDisplay: (label, score) => label || (score ? String(score) : ""),
+  severityToTone: (severity) => String(severity || "low").toLowerCase(),
 };
-
-function finding(overrides = {}) {
-  return {
-    id: "rush-pressure",
-    system: "Rush Tower Water System",
-    summary: "Pressure response changed during comparable operation.",
-    severity: "high",
-    confidence: "high",
-    status: "Strengthening",
-    whatHappened: "Pump speed and discharge pressure no longer follow their learned relationship.",
-    recommendedFirstAction: "Verify source data and inspect the affected pressure boundary.",
-    classification: { type: "unexplained_systemic_change", confidence: "high", reasons: ["Comparable operation matched."] },
-    dataConfidence: { rating: "high" },
-    operatingMode: { match: "strong" },
-    persistence: { persistent: true, duration: "18 days" },
-    ...overrides,
-  };
-}
 
 function completedModel(overrides = {}) {
   return {
-    insights: [finding()],
+    insights: [{
+      id: "stale-card-finding",
+      summary: "Operating behavior changed",
+      severity: "high",
+      confidenceScore: 0.91,
+      whatHappened: "Operating behavior changed during hydration.",
+      recommendedFirstAction: "Review the supporting evidence.",
+      evidence: [],
+      observedFacts: [],
+      publicEvidenceItems: [],
+    }],
     uiState: { key: "analysisComplete" },
     analysisComplete: true,
-    dashboardSystemCards: [
-      { id: "rush", name: "Rush Tower Water System", status: "Review", activeInsights: 1 },
-      { id: "quiet", name: "North Loop", status: "Normal", activeInsights: 0 },
-    ],
+    behaviorState: "Behavior Shift Detected",
+    dashboardSystemCards: [{ id: "system-1", name: "Pump system", status: "Critical", activeInsights: "1" }],
+    lastAnalysis: "Jul 19, 2026, 4:48 AM UTC",
+    telemetryStatus: { label: "Telemetry acceptable" },
+    dataCoveragePercent: 100,
+    analysisHistory: [],
+    historyItems: [],
+    dataSourceRows: [],
+    analysisMetadataRows: [],
+    behaviorWindowRows: [],
+    rawResultJson: "{}",
     ...overrides,
   };
 }
 
 afterEach(() => {
   cleanup();
-  window.innerWidth = 1024;
 });
 
-describe("CommandCenterView shift-start hierarchy", () => {
-  it("renders a sparse no-data state with only the useful actions", () => {
+describe("CommandCenterView hydration regressions", () => {
+  it("renders a compact operational no-data state", () => {
     const onImportDataset = vi.fn();
     const onConnectLiveData = vi.fn();
-    render(h(CommandCenterView, {
-      model: { insights: [], uiState: { key: "noTelemetry" }, analysisComplete: false, dashboardSystemCards: [] },
+    const { container } = render(h(CommandCenterView, {
+      model: {
+        insights: [],
+        uiState: { key: "noTelemetry" },
+        analysisComplete: false,
+        dashboardSystemCards: [],
+        commandCenterMessage: "Import a telemetry dataset, then run an analysis to establish the facility's behavior baseline.",
+      },
       helpers,
+      selectedInsight: null,
       onOpenInvestigation: vi.fn(),
       onImportDataset,
       onConnectLiveData,
     }));
 
-    expect(screen.getByRole("heading", { name: "Baseline not established" })).toBeTruthy();
-    expect(screen.getByText("Import telemetry to begin comparison.")).toBeTruthy();
-    expect(screen.queryByText(/evidence quality/i)).toBeNull();
+    expect(screen.getByText("Awaiting data")).toBeTruthy();
+    expect(screen.queryByText("Watching")).toBeNull();
+    expect(screen.getByText("Not established")).toBeTruthy();
+    expect(screen.getByText("No data available")).toBeTruthy();
+    expect(screen.getByText("No active status available")).toBeTruthy();
+    expect(screen.getByText("None active")).toBeTruthy();
+    expect(screen.queryByText("Primary action")).toBeNull();
+    expect(screen.queryByText("Secondary action")).toBeNull();
+    const actionButtons = container.querySelectorAll(".operating-state-card__actions button");
+    expect(actionButtons).toHaveLength(2);
+    expect(actionButtons[0].textContent).toBe("Import dataset");
+    expect(actionButtons[0].classList.contains("command-button")).toBe(true);
+    expect(actionButtons[1].textContent).toBe("Connect telemetry");
+    expect(actionButtons[1].classList.contains("secondary-command-button")).toBe(true);
+    expect(container.querySelectorAll(".command-section")).toHaveLength(3);
+    expect(screen.queryByRole("heading", { name: "Discovered Systems" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Analysis Details" })).toBeNull();
+    expect(screen.queryByText(/Import a telemetry dataset, then run an analysis/i)).toBeNull();
+    expect(screen.queryByText(/Evidence quality is separate from finding confidence/i)).toBeNull();
+
     fireEvent.click(screen.getByRole("button", { name: "Import dataset" }));
-    fireEvent.click(screen.getByRole("button", { name: "Connect telemetry" }));
     expect(onImportDataset).toHaveBeenCalledTimes(1);
+    expect(onConnectLiveData).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect telemetry" }));
     expect(onConnectLiveData).toHaveBeenCalledTimes(1);
+    expect(onImportDataset).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the quiet state without manufacturing urgency", () => {
-    render(h(CommandCenterView, { model: completedModel({ insights: [] }), helpers, onOpenInvestigation: vi.fn() }));
-
-    expect(screen.getByRole("heading", { name: "No new unexplained system changes." })).toBeTruthy();
-    expect(screen.getByText("All monitored systems are quiet.")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Quiet systems" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Review" })).toBeNull();
-  });
-
-  it("keeps an instrumentation issue quiet but available for review", () => {
+  it.each([
+    ["an imported dataset", false],
+    ["connected telemetry", true],
+  ])("preserves the pre-analysis actions for %s", (_state, telemetryConnected) => {
     render(h(CommandCenterView, {
-      model: completedModel({ insights: [finding({
-        id: "pressure-tx",
-        severity: "moderate",
-        status: "Open",
-        classification: { type: "possible_instrumentation_issue", confidence: "high", reasons: ["Peer divergence recorded."] },
-      })] }),
+      model: {
+        insights: [],
+        uiState: { key: "readyToAnalyze" },
+        analysisComplete: false,
+        telemetryConnected,
+        dashboardSystemCards: [],
+        telemetryStatus: { label: "No telemetry" },
+        analysisMetadataRows: [],
+        behaviorWindowRows: [],
+      },
       helpers,
+      selectedInsight: null,
       onOpenInvestigation: vi.fn(),
+      onConnectLiveData: vi.fn(),
     }));
 
-    expect(screen.getByText("1 instrumentation issue remains under review.")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Needs attention" })).toBeTruthy();
-    expect(screen.getByText("Possible instrumentation issue")).toBeTruthy();
+    expect(screen.getByText("Watching")).toBeTruthy();
+    expect(screen.getByText("No telemetry")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Connect Live Telemetry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import Historical Dataset" })).toBeTruthy();
+    expect(screen.queryByText("Awaiting data")).toBeNull();
+    expect(screen.queryByText("No data available")).toBeNull();
   });
 
-  it("renders one serious finding as a compact evidence-backed card", () => {
-    render(h(CommandCenterView, { model: completedModel(), helpers, onOpenInvestigation: vi.fn() }));
-
-    expect(screen.getByRole("heading", { name: "Escalated engineering review" })).toBeTruthy();
-    const card = screen.getByTestId("compact-finding-card");
-    expect(within(card).getByText("Rush Tower Water System")).toBeTruthy();
-    expect(within(card).getByRole("heading", { name: "Pressure response changed during comparable operation." })).toBeTruthy();
-    expect(within(card).getByText("Unexplained systemic change")).toBeTruthy();
-    expect(within(card).getByText("High confidence")).toBeTruthy();
-    expect(within(card).getByText("Strengthening")).toBeTruthy();
-    expect(card.querySelectorAll(".shift-finding-card__evidence")).toHaveLength(1);
-    expect(card.querySelectorAll(".shift-finding-card__next p")).toHaveLength(1);
-    expect(card.textContent).not.toContain("Comparable operation matched");
-    expect(card.textContent).not.toContain("18 days");
-  });
-
-  it("keeps review, acknowledgement, and evidence access keyboard-visible", () => {
-    const onOpenInvestigation = vi.fn();
-    render(h(CommandCenterView, { model: completedModel(), helpers, onOpenInvestigation }));
-
-    const review = screen.getByRole("button", { name: "Review" });
-    const acknowledge = screen.getByRole("button", { name: "Acknowledge" });
-    const evidence = screen.getByRole("button", { name: "View evidence" });
-    review.focus();
-    expect(document.activeElement).toBe(review);
-    fireEvent.click(review);
-    fireEvent.click(evidence);
-    expect(onOpenInvestigation).toHaveBeenNthCalledWith(1, "rush-pressure");
-    expect(onOpenInvestigation).toHaveBeenNthCalledWith(2, "rush-pressure", { focusTarget: "insight-evidence" });
-    fireEvent.click(acknowledge);
-    expect(screen.getByRole("button", { name: "Acknowledged" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("heading", { name: "Monitoring" })).toBeTruthy();
-  });
-
-  it("preserves the conservative legacy fallback and mobile card structure", () => {
-    window.innerWidth = 390;
+  it("renders a completed finding when dashboard system cards are not an array", () => {
     render(h(CommandCenterView, {
-      model: completedModel({
-        insights: [finding({ classification: undefined, dataConfidence: undefined, operatingMode: undefined, persistence: undefined })],
-        dashboardSystemCards: { id: "legacy-object" },
-      }),
+      model: completedModel({ dashboardSystemCards: { id: "stale-object", activeInsights: "1", name: "Legacy card" } }),
       helpers,
-      onOpenInvestigation: vi.fn(),
+      selectedInsight: null,
+      onSelectInsight: vi.fn(),
+      onConnectLiveData: vi.fn(),
+      onFocusInvestigation: vi.fn(),
     }));
 
-    const card = screen.getByTestId("compact-finding-card");
-    expect(within(card).getByText("Insufficient evidence")).toBeTruthy();
-    expect(card.querySelector("[data-classification='insufficient_evidence']")).toBeTruthy();
-    expect(within(card).getAllByRole("button")).toHaveLength(3);
-    expect(screen.queryByRole("heading", { name: "Quiet systems" })).toBeNull();
+    expect(screen.getByTestId("operational-command-center")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operational Fingerprint Summary" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Prioritized Finding" })).toBeTruthy();
+    expect(screen.getAllByText("Operating behavior changed").length).toBeGreaterThan(0);
+    expect(screen.getByText("No systems are listed because no completed telemetry analysis is active.")).toBeTruthy();
   });
 });

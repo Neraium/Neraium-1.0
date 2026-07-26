@@ -11,7 +11,15 @@ import uvicorn
 
 from app.core.config import Settings, get_settings, validate_environment_completeness
 from app.core.logging_config import configure_logging
+from app.services.worker_heartbeat import publish_worker_heartbeat
 logger = logging.getLogger(__name__)
+
+
+def _publish_worker_health(**kwargs: Any) -> None:
+    try:
+        publish_worker_heartbeat(**kwargs)
+    except Exception:
+        logger.exception("worker_heartbeat_publish_failed", extra={"event": "worker_heartbeat_publish_failed"})
 
 
 # Keep service imports behind configuration validation. Several service modules
@@ -169,6 +177,7 @@ def run_worker(
                 "poll_interval_seconds": poll_interval_seconds,
             },
         )
+        _publish_worker_health(status="healthy", force=True)
         while not stop_event.is_set():
             logger.debug(
                 "worker_polling_queue",
@@ -189,7 +198,8 @@ def run_worker(
                             "runtime_dir": str(settings.runtime_dir),
                         },
                     )
-                else:
+                _publish_worker_health(status="healthy", processed_job=bool(processed))
+                if not processed:
                     logger.debug(
                         "worker_poll_result",
                         extra={
@@ -200,7 +210,7 @@ def run_worker(
                     )
             except KeyboardInterrupt:
                 stop_event.set()
-            except Exception:
+            except Exception as error:
                 logger.exception(
                     "upload_worker_iteration_failed",
                     extra={
@@ -208,8 +218,10 @@ def run_worker(
                         "runtime_dir": str(settings.runtime_dir),
                     },
                 )
+                _publish_worker_health(status="degraded", error_type=type(error).__name__, force=True)
             stop_event.wait(max(float(poll_interval_seconds), 0.01))
     finally:
+        _publish_worker_health(status="stopped", force=True)
         _restore_shutdown_handlers(previous_handlers)
         logger.info("worker_loop_stopped", extra={"event": "worker_loop_stopped"})
 

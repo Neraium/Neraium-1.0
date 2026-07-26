@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
+from app.services.auth_store import auth_store_available
 from app.services.runtime_db import db_connection, queue_metrics, queue_operational_metrics, upload_queue_backend
 from app.services.service_status import STARTUP_STATUS, service_health_snapshot
 from app.services.sii_runner import build_runner_status
@@ -101,6 +102,17 @@ def _runtime_db_available() -> bool:
         return False
 
 
+def _auth_store_available() -> bool:
+    try:
+        return auth_store_available()
+    except Exception:
+        logger.warning(
+            "readiness_dependency_failed",
+            extra={"event": "readiness_dependency_failed", "dependency": "auth_store"},
+        )
+        return False
+
+
 def readiness_snapshot(settings) -> tuple[dict[str, str], list[str]]:
     checks: dict[str, str] = {
         "startup": "ok",
@@ -114,7 +126,7 @@ def readiness_snapshot(settings) -> tuple[dict[str, str], list[str]]:
         checks["startup"] = "error"
     if not STARTUP_STATUS.get("runtime_db_ready", False) or not _runtime_db_available():
         checks["runtime_db"] = "error"
-    if not STARTUP_STATUS.get("auth_store_ready", False):
+    if not STARTUP_STATUS.get("auth_store_ready", False) or not _auth_store_available():
         checks["auth_store"] = "error"
     if not STARTUP_STATUS.get("default_connection_ready", False):
         checks["default_connection"] = "error"

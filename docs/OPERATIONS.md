@@ -76,7 +76,12 @@ All values are read at process startup. Invalid enums, booleans, ports, positive
 | `NERAIUM_BUILD_SHA` | deployed commit SHA | Its 12-character prefix is included in diagnostics; the ECS workflow pins the full value |
 | `NERAIUM_PROCESS_ROLE` | `api` or `worker` | Selects process behavior |
 | `NERAIUM_UPLOAD_STATE_BUCKET` | shared S3 bucket | Required operationally for split API/worker state |
-| `NERAIUM_AUTH_DATABASE_URL` | PostgreSQL DSN from Secrets Manager | Required for production API/monolith authentication persistence |
+| `NERAIUM_AUTH_DATABASE_SECRET_ARN` | RDS-managed JSON secret ARN | Preferred production API/monolith authentication credential source; task role needs `GetSecretValue` and KMS decrypt |
+| `NERAIUM_AUTH_DATABASE_HOST` | RDS endpoint hostname | Required with the managed secret ARN |
+| `NERAIUM_AUTH_DATABASE_PORT` | `5432` | PostgreSQL port used with the managed secret |
+| `NERAIUM_AUTH_DATABASE_NAME` | `postgres` | Authentication database used with the managed secret |
+| `NERAIUM_AUTH_DATABASE_SSLMODE` | `require` | Enforces encrypted PostgreSQL transport |
+| `NERAIUM_AUTH_DATABASE_URL` | Complete PostgreSQL DSN | Local/legacy alternative; must not be set with the managed secret ARN |
 | `NERAIUM_API_TOKEN` | secret-manager injection | Service authentication secret where configured |
 
 Bootstrap passwords, API tokens, SMTP passwords, webhook URLs, and authenticated database URLs must be injected through the deployment platform's secret facility. In ECS, use task-definition `secrets` backed by AWS Secrets Manager or SSM Parameter Store; do not put them in the plain `environment` array or workflow logs.

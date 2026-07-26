@@ -14,9 +14,15 @@ env:
   APP_TASK_ROLE_NAME: ${{ vars.NERAIUM_APP_TASK_ROLE_NAME }}
   API_TOKEN_SECRET_ARN: ${{ vars.NERAIUM_API_TOKEN_SECRET_ARN }}
   AUTH_DATABASE_URL_SECRET_ARN: ${{ vars.NERAIUM_AUTH_DATABASE_URL_SECRET_ARN }}
+  RDS_AUTH_INSTANCE_ID: neraium-prod-postgres
   NERAIUM_BOOTSTRAP_ADMIN_EMAIL: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_EMAIL }}
   NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN: ${{ vars.NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN }}
   TASK_EXECUTION_ROLE_NAME: neraium-prod-ecs-task-execution-role
+  ECS_CLUSTER: neraium-prod-cluster
+  ECS_API_SERVICE: neraium-prod-api-service
+  ECS_WORKER_SERVICE: neraium-prod-worker-service
+  INFRA_ALERT_TOPIC_NAME: neraium-prod-infrastructure-alerts
+  NERAIUM_INFRA_ALERT_EMAILS: ${{ vars.NERAIUM_INFRA_ALERT_EMAILS || vars.NERAIUM_BOOTSTRAP_ADMIN_EMAIL }}
 
 jobs:
   bootstrap-production-aws:
@@ -33,6 +39,23 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Resolve rotating RDS auth secret
+        run: |
+          set -euo pipefail
+          RDS_AUTH_CONFIG=$(aws rds describe-db-instances \
+            --db-instance-identifier "$RDS_AUTH_INSTANCE_ID" \
+            --region "$AWS_REGION" \
+            --query 'DBInstances[0].{secretArn:MasterUserSecret.SecretArn,kmsKeyArn:MasterUserSecret.KmsKeyId}' \
+            --output json)
+          AUTH_DATABASE_SECRET_ARN=$(jq -r '.secretArn' <<<"$RDS_AUTH_CONFIG")
+          AUTH_DATABASE_KMS_KEY_ARN=$(jq -r '.kmsKeyArn' <<<"$RDS_AUTH_CONFIG")
+          test -n "$AUTH_DATABASE_SECRET_ARN"
+          test "$AUTH_DATABASE_SECRET_ARN" != "null"
+          test -n "$AUTH_DATABASE_KMS_KEY_ARN"
+          test "$AUTH_DATABASE_KMS_KEY_ARN" != "null"
+          echo "AUTH_DATABASE_SECRET_ARN=$AUTH_DATABASE_SECRET_ARN" >> "$GITHUB_ENV"
+          echo "AUTH_DATABASE_KMS_KEY_ARN=$AUTH_DATABASE_KMS_KEY_ARN" >> "$GITHUB_ENV"
+
       - name: Validate bootstrap inputs
         run: |
           set -euo pipefail
@@ -40,6 +63,9 @@ jobs:
           test -n "$APP_TASK_ROLE_NAME"
           test -n "$API_TOKEN_SECRET_ARN"
           test -n "$AUTH_DATABASE_URL_SECRET_ARN"
+          test -n "$RDS_AUTH_INSTANCE_ID"
+          test -n "$AUTH_DATABASE_SECRET_ARN"
+          test -n "$AUTH_DATABASE_KMS_KEY_ARN"
           test -n "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL"
           test -n "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN"
           test -n "$TASK_EXECUTION_ROLE_NAME"

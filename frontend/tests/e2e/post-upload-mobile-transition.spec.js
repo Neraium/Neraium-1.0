@@ -67,10 +67,9 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
 async function startCommandCenterUpload(page, { name, csv }) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-  await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
-  await page.getByRole("button", { name: "Toggle navigation" }).click();
-  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "Data Connections" }).click();
-  await expect(page.getByRole("heading", { name: "Import and Analyze Dataset", level: 2 })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
+  await page.getByRole("button", { name: "Import Historical Dataset" }).click();
+  await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
 
   const uploadAcceptedPromise = page.waitForResponse(
     (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
@@ -81,7 +80,7 @@ async function startCommandCenterUpload(page, { name, csv }) {
     mimeType: "text/csv",
     buffer: Buffer.from(csv, "utf8"),
   });
-  await page.getByRole("button", { name: "Analyze Dataset" }).click();
+  await page.getByRole("button", { name: "Start Baseline Analysis" }).click();
   await expect(page.getByTestId("upload-workspace")).toBeVisible({ timeout: 30000 });
   const uploadAccepted = await uploadAcceptedPromise;
   const uploadPayload = await uploadAccepted.json().catch(() => ({}));
@@ -107,8 +106,8 @@ test.describe("Mobile post-upload transition", () => {
     await waitForUploadComplete(page, uploadJobId, 180000);
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
 
-    const completionFallback = page.getByRole("button", { name: /View Results|Open Portfolio/i });
-    const workspace = page.getByRole("main", { name: "Neraium platform workspace" });
+    const completionFallback = page.getByRole("button", { name: /View Results|Review Evidence|Open Portfolio/i });
+    const workspace = page.getByRole("main", { name: "Neraium operational workspace" });
     await expect(completionFallback.or(workspace).first()).toBeVisible({ timeout: 30000 });
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
   });

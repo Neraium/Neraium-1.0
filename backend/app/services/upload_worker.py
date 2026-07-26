@@ -6,6 +6,7 @@ import time
 
 from app.services.runtime_db import upload_queue_backend
 from app.services.upload_jobs import process_next_queued_upload_job
+from app.services.worker_heartbeat import publish_worker_heartbeat
 
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,15 @@ def stop_upload_worker(timeout_seconds: float = 30.0) -> bool:
     return stopped
 
 
+def _safe_heartbeat(**kwargs) -> None:
+    try:
+        publish_worker_heartbeat(**kwargs)
+    except Exception:
+        logger.exception("worker_heartbeat_publish_failed", extra={"event": "worker_heartbeat_publish_failed"})
+
+
 def _worker_loop(poll_interval_seconds: float) -> None:
+    _safe_heartbeat(status="healthy", force=True)
     while not _stop_event.is_set():
         logger.debug("upload_worker_polling_queue queue_backend=%s", upload_queue_backend())
         try:
@@ -59,6 +68,9 @@ def _worker_loop(poll_interval_seconds: float) -> None:
                 logger.info("upload_worker_poll_result processed=true")
             else:
                 logger.debug("upload_worker_poll_result processed=false")
-        except Exception:
+            _safe_heartbeat(status="healthy", processed_job=bool(processed))
+        except Exception as error:
             logger.exception("upload_worker_iteration_failed")
+            _safe_heartbeat(status="degraded", error_type=type(error).__name__, force=True)
         _stop_event.wait(poll_interval_seconds)
+    _safe_heartbeat(status="stopped", force=True)

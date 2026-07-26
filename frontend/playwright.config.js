@@ -4,7 +4,7 @@ const backendPort = Number(process.env.PLAYWRIGHT_BACKEND_PORT || 8012);
 const frontendPort = Number(process.env.PLAYWRIGHT_FRONTEND_PORT || 3012);
 const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_SERVER === "1";
 const externalServer = process.env.PLAYWRIGHT_EXTERNAL_SERVER === "1";
-const pythonBin = process.platform === "win32" ? "python" : "../.venv/bin/python";
+const pythonBin = process.env.PLAYWRIGHT_PYTHON_BIN || (process.platform === "win32" ? "python" : "../.venv/bin/python");
 
 export default defineConfig({
   testDir: "./tests/e2e",

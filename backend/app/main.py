@@ -15,12 +15,17 @@ from app.contracts import ErrorResponse, enforce_query_contract, validate_contra
 from app.core.config import Settings, get_settings
 from app.core.logging_config import bind_log_context, configure_logging, reset_log_context
 from app.core.security import require_admin_role, require_api_access
-from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, observability, replay
+from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, infrastructure, observability, replay
 from app.routers.data import wait_for_upload_workers
 from app.services.auth_store import initialize_auth_store
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
 from app.services.rate_limiter import clear_rate_limits
+from app.services.production_health import (
+    record_api_request_metric,
+    start_production_health_monitor,
+    stop_production_health_monitor,
+)
 from app.services.runtime_db import clear_stale_processing_queue_jobs, configure_runtime_dir as configure_runtime_db_dir, init_runtime_db, prune_runtime_db_records
 from app.services.service_status import STARTUP_STATUS, reset_startup_status, service_health_snapshot
 from app.services.sii_runner import build_runner_status, configure_runtime_dir as configure_sii_runner_dir
@@ -36,6 +41,7 @@ async def app_lifespan(app: FastAPI):
     settings = app.state.settings
     upload_worker_started = False
     data_poller_started = False
+    production_monitor_started = False
     startup_started_at = time.perf_counter()
     reset_startup_status()
     STARTUP_STATUS["upload_state_backend"] = upload_state_backend()
@@ -127,6 +133,7 @@ async def app_lifespan(app: FastAPI):
                 raise RuntimeError("Data connection poller startup failed.") from error
 
         STARTUP_STATUS["startup_complete"] = True
+        production_monitor_started = start_production_health_monitor(settings)
         logger.info(
             "runtime_services_started",
             extra={
@@ -141,6 +148,13 @@ async def app_lifespan(app: FastAPI):
     finally:
         shutdown_started_at = time.perf_counter()
         shutdown_failures: list[str] = []
+        if production_monitor_started:
+            try:
+                if not stop_production_health_monitor(timeout_seconds=min(settings.shutdown_timeout_seconds, 10.0)):
+                    shutdown_failures.append("production_health_monitor_timeout")
+            except Exception:
+                shutdown_failures.append("production_health_monitor_failure")
+                logger.exception("production_health_monitor_shutdown_failure")
         if data_poller_started:
             try:
                 if not stop_data_connection_poller(timeout_seconds=settings.shutdown_timeout_seconds):
@@ -215,6 +229,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(data.router, prefix="/api")
     app.include_router(evidence.router, prefix="/api")
     app.include_router(observability.router, prefix="/api")
+    app.include_router(infrastructure.router, prefix="/api")
     app.include_router(replay.router, prefix="/api")
     app.include_router(audit.router, prefix="/api")
     app.include_router(ecosystem.router, prefix="/api")

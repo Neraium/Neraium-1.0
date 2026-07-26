@@ -57,7 +57,12 @@ Production split-role backend behavior does require a shared upload-state bucket
 ```text
 NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_PROCESS_ROLE=api|worker
-NERAIUM_AUTH_DATABASE_URL=<postgresql-dsn-from-secrets-manager-on-api-task>
+# API task only; the workflow discovers these values from the managed RDS instance.
+NERAIUM_AUTH_DATABASE_SECRET_ARN=<rds-managed-json-secret-arn>
+NERAIUM_AUTH_DATABASE_HOST=<rds-endpoint>
+NERAIUM_AUTH_DATABASE_PORT=5432
+NERAIUM_AUTH_DATABASE_NAME=postgres
+NERAIUM_AUTH_DATABASE_SSLMODE=require
 ```
 
 The ECS deployment workflow registers both task definitions directly with AWS CLI. It expects the production ECS cluster, API service, worker service, and both task-definition families to already exist, validates those resources before image build, and fails fast if any are missing or inactive. New revisions pin the entrypoint, process role, CORS, upload limits, JSON logging, build SHA, runtime path, shared-state bucket, log group, and secret references.
@@ -194,7 +199,9 @@ AWS_REGION=us-east-2 \
 UPLOAD_STATE_BUCKET=<shared-s3-bucket> \
 APP_TASK_ROLE_NAME=neraium-prod-task-app-role \
 API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name> \
-AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<postgres-dsn-secret> \
+AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<legacy-postgres-dsn-secret> \
+AUTH_DATABASE_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<rds-managed-secret> \
+AUTH_DATABASE_KMS_KEY_ARN=arn:aws:kms:us-east-2:<account-id>:key/<rds-secret-key-id> \
 NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<bootstrap-admin-password-secret> \
 TASK_EXECUTION_ROLE_NAME=neraium-prod-ecs-task-execution-role \
 API_LOG_GROUP=/ecs/neraium-prod-api \
@@ -208,7 +215,7 @@ GitHub Actions configuration required by the active deploy path:
 secret: NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
 NERAIUM_API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name>
-NERAIUM_AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<postgres-dsn-secret>
+NERAIUM_AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<legacy-postgres-dsn-secret>  # rollback compatibility
 NERAIUM_BOOTSTRAP_ADMIN_EMAIL=<pilot-admin-email>
 NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<bootstrap-admin-password-secret>
 ```

@@ -706,9 +706,9 @@ export default function IntakeFlowPanel({
   }
 
   return (
-    <Panel title="Import and Analyze Dataset" className="span-7 upload-ops-panel upload-ops-panel--command">
+    <Panel title="Import Historical Dataset" className="span-7 upload-ops-panel upload-ops-panel--command">
       <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={handleUpload}>
-        {(["noFile", "fileSelected"].includes(viewState)) ? <p className="intake-flow__subtitle">Import a historical telemetry dataset so SII can learn the facility behavior baseline and produce evidence-backed insights.</p> : null}
+        {(["noFile", "fileSelected"].includes(viewState)) ? <p className="intake-flow__subtitle">Import historical telemetry so Neraium can learn normal behavior.</p> : null}
         <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose telemetry dataset CSV files" tabIndex={-1} onChange={handleFileSelection} />
 
         {(viewState === "noFile" || viewState === "fileSelected") ? (
@@ -736,16 +736,15 @@ export default function IntakeFlowPanel({
             <div className="upload-analysis-card__content">
               <div className="upload-analysis-card__copy">
                 <p className="section-token">Historical Dataset</p>
-                <h3>Import and Analyze Dataset</h3>
-                <p>Import a historical telemetry dataset so SII can learn the facility behavior baseline and produce evidence-backed insights.</p>
+                <h3>Choose a Historical Dataset</h3>
               </div>
 
-              <div className="upload-analysis-card__sources" role="group" aria-label="Supported dataset types">
-                <span>Supported Dataset Types</span>
+              <details className="upload-analysis-card__sources">
+                <summary>View supported formats</summary>
                 <ul>
                   {SUPPORTED_HISTORICAL_SOURCES.map((source) => <li key={source}>{source}</li>)}
                 </ul>
-              </div>
+              </details>
 
               {hasSelectedFiles ? (
                 <DatasetFileRow filename={selectedFileLabel} size={selectedFileSize} status="Ready" />
@@ -762,7 +761,7 @@ export default function IntakeFlowPanel({
               <div className="upload-simple-actions upload-analysis-card__actions">
                 <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>{chooseFileButtonText}</button>
                 <button data-testid="process-upload-button" className="command-button" type="submit" disabled={!hasSelectedFiles || isUploadProcessing(uploadState)} title={!hasSelectedFiles ? "Choose a CSV dataset before starting analysis." : isUploadProcessing(uploadState) ? "Analysis is already in progress." : "Start dataset analysis."}>
-                  Analyze Dataset
+                  Start Baseline Analysis
                 </button>
               </div>
             </div>
@@ -799,8 +798,8 @@ export default function IntakeFlowPanel({
                 ))}
               </dl>
               <div className="upload-simple-actions upload-completion-actions">
-                <button type="button" className="command-button upload-completion-actions__primary" onClick={onViewResults}>{completed?.status === "Evidence insufficient" ? "Review Data Requirements" : "View Results"}</button>
-                <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onResetWorkspace}>Analyze Another Dataset</button>
+                <button type="button" className="command-button upload-completion-actions__primary" onClick={onViewResults}>{completed?.status === "Evidence insufficient" ? "Review Evidence" : "View Results"}</button>
+                <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onResetWorkspace}>Import Another Dataset</button>
               </div>
             </div>
           </section>
@@ -824,7 +823,7 @@ export default function IntakeFlowPanel({
               <RecoverySummary rows={failureRecoveryRows} />
               <div className="upload-simple-actions">
                 <button type="button" className="command-button" onClick={onViewResults}>Open Analysis Again</button>
-                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Analyze Another Dataset</button>
+                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Import Another Dataset</button>
               </div>
             </div>
           </section>

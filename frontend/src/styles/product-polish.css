@@ -115,5 +115,6 @@ details > summary::-webkit-details-marker { display: none; }
 
 @media (max-width: 720px) {
   :root { --control-height: 42px; }
+  html { scrollbar-gutter: auto; }
   .empty-state { min-height: 0; padding: var(--space-18); }
 }

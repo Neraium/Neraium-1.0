@@ -155,6 +155,80 @@ def test_postgres_backend_is_selected_when_configured(monkeypatch, tmp_path) -> 
     assert state["users"]["admin@example.com"]["role"] == "admin"
 
 
+def test_managed_postgres_secret_refreshes_after_rds_rotation(monkeypatch, caplog) -> None:
+    old_password = "old-password-with-@"
+    current_password = "current-password-with-@"
+    responses = [
+        {"SecretString": json.dumps({"username": "postgres", "password": old_password})},
+        {"SecretString": json.dumps({"username": "postgres", "password": current_password})},
+    ]
+    secret_reads = []
+    connection_dsns = []
+    connected = object()
+
+    class FakeSecretsClient:
+        def get_secret_value(self, *, SecretId):
+            secret_reads.append(SecretId)
+            return responses.pop(0)
+
+    class PasswordRejected(Exception):
+        sqlstate = "28P01"
+
+    class FakePsycopg:
+        @staticmethod
+        def connect(dsn):
+            connection_dsns.append(dsn)
+            if len(connection_dsns) == 1:
+                raise PasswordRejected("password authentication failed")
+            return connected
+
+    monkeypatch.setattr(auth_store, "_AUTH_SECRETS_CLIENT", FakeSecretsClient())
+    monkeypatch.setattr(auth_store, "psycopg", FakePsycopg())
+    backend = auth_store._SecretsManagerPostgresAuthBackend(
+        secret_arn="arn:aws:secretsmanager:us-east-2:123456789012:secret:rds-managed",
+        host="database.example.test",
+        port=5432,
+        database="postgres",
+        sslmode="require",
+    )
+
+    with caplog.at_level("WARNING", logger="app.services.auth_store"):
+        result = backend._connect()
+
+    assert result is connected
+    assert secret_reads == [backend.secret_arn, backend.secret_arn]
+    assert len(connection_dsns) == 2
+    assert connection_dsns[0] != connection_dsns[1]
+    assert "old-password-with-%40" in connection_dsns[0]
+    assert "current-password-with-%40" in connection_dsns[1]
+    assert "auth_database_credentials_refreshing" in caplog.text
+    assert old_password not in caplog.text
+    assert current_password not in caplog.text
+
+
+def test_managed_postgres_backend_key_uses_secret_reference_not_password(monkeypatch) -> None:
+    monkeypatch.delenv("NERAIUM_AUTH_DATABASE_URL", raising=False)
+    monkeypatch.setenv(
+        "NERAIUM_AUTH_DATABASE_SECRET_ARN",
+        "arn:aws:secretsmanager:us-east-2:123456789012:secret:rds-managed",
+    )
+    monkeypatch.setenv("NERAIUM_AUTH_DATABASE_HOST", "database.example.test")
+    monkeypatch.setenv("NERAIUM_AUTH_DATABASE_PORT", "5432")
+    monkeypatch.setenv("NERAIUM_AUTH_DATABASE_NAME", "postgres")
+    monkeypatch.setenv("NERAIUM_AUTH_DATABASE_SSLMODE", "require")
+
+    key = auth_store._backend_key()
+
+    assert key == (
+        "postgres_secrets_manager",
+        "arn:aws:secretsmanager:us-east-2:123456789012:secret:rds-managed",
+        "database.example.test",
+        "5432",
+        "postgres",
+        "require",
+    )
+
+
 def test_admin_can_manage_users_and_sessions(monkeypatch, tmp_path) -> None:
     clear_rate_limits()
     monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")

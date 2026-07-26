@@ -11,7 +11,7 @@ test.describe("Accessibility audit", () => {
   test("skip navigation and primary workspaces work by keyboard", async ({ page }) => {
     await page.goto("/portfolio", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-    const main = page.getByRole("main", { name: "Neraium platform workspace" });
+    const main = page.getByRole("main", { name: "Neraium operational workspace" });
     const skipLink = page.getByRole("link", { name: "Skip to main content" });
     await expect(page.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
     await page.keyboard.press("Tab");
@@ -21,7 +21,7 @@ test.describe("Accessibility audit", () => {
     const connections = page.getByRole("button", { name: "Data Connections", exact: true });
     await connections.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { name: "Import and Analyze Dataset", level: 2 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
   });
 
   test("portfolio passes automated serious and critical WCAG rules", async ({ page }) => {
@@ -37,14 +37,15 @@ test.describe("Accessibility audit", () => {
       const sizes = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, body: document.body.scrollWidth }));
       expect(sizes.scroll).toBeLessThanOrEqual(sizes.client + 1);
       expect(sizes.body).toBeLessThanOrEqual(sizes.client + 1);
-      await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
+      await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
     }
   });
 
   test("reduced-motion preference removes workspace transitions", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/portfolio", { waitUntil: "domcontentloaded" });
-    const duration = await page.locator(".forensic-button").evaluate((node) => getComputedStyle(node).transitionDuration);
+    const duration = await page.locator(".forensic-sidebar").evaluate((node) => getComputedStyle(node).transitionDuration);
     expect(parseFloat(duration || "0")).toBeLessThanOrEqual(0.001);
   });
 });
