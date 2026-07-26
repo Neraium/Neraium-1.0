@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { apiFetch, ENABLE_ADMISSION_GATE } from "./config";
 
-import AppWorkspaceRouter from "./components/AppWorkspaceRouter";
-import AuthScreen from "./components/AuthScreen";
+import WorkspaceLoadingState from "./components/WorkspaceLoadingState";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
 import useWorkspaceSessionController, { readStoredAllowPersistedLatest } from "./hooks/useWorkspaceSessionController";
 import { fetchCurrentUser, logoutUser } from "./services/api/authApi";
@@ -15,6 +14,9 @@ import {
 } from "./services/datasetSessionCache";
 import { resolveSessionStore } from "./viewModels/sessionState";
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
+
+const AppWorkspaceRouter = lazy(() => import("./components/AppWorkspaceRouter"));
+const AuthScreen = lazy(() => import("./components/AuthScreen"));
 
 const HOME_PATH = "/";
 const WORKSPACE_PATHS = {
@@ -341,53 +343,59 @@ function App() {
   }, []);
 
   if (authState.status === "checking") {
-    return <main className="auth-shell" data-testid="auth-loading"><section className="auth-panel" aria-live="polite"><h1>Loading session</h1><p>Checking your access...</p></section></main>;
+    return <WorkspaceLoadingState label="Opening Neraium" detail="Checking your secure session." fullScreen />;
   }
 
   if (!hasAccess) {
-    return <AuthScreen notice={authState.notice} onAuthenticated={handleAuthenticated} />;
+    return (
+      <Suspense fallback={<WorkspaceLoadingState label="Opening secure access" detail="Loading sign-in." fullScreen />}>
+        <AuthScreen notice={authState.notice} onAuthenticated={handleAuthenticated} />
+      </Suspense>
+    );
   }
 
   return (
-    <AppWorkspaceRouter
-      activeWorkspace={activeWorkspace}
-      appReady={appReady}
-      errorBoundaryResetKey={errorBoundaryResetKey}
-      apiFetch={apiFetch}
-      accessCode={accessCode}
-      apiStatus={apiStatus}
-      liveOps={liveOps}
-      historianReplayState={historianReplayState}
-      currentSession={currentSession}
-      canonicalFinding={canonicalFinding}
-      gateProcessing={gateProcessing}
-      effectiveLatestUploadResult={effectiveLatestUploadResult}
-      effectiveLatestUploadSnapshot={effectiveLatestUploadSnapshot}
-      hasActiveSession={hasActiveSession}
-      hasCurrentUploadResult={hasCurrentUploadResult}
-      hasResumedSession={hasResumedSession}
-      hasRealSiiOutput={hasRealSiiOutput}
-      roomContext={roomContext}
-      domainMode={domainMode}
-      domainDetection={domainDetection}
-      formatClockTime={formatClockTime}
-      handleBackToGate={handleBackToGate}
-      handleRetryWorkspace={handleRetryWorkspace}
-      handleGateUploadComplete={handleTelemetryAnalysisComplete}
-      handleResumePreviousSession={handleResumePreviousSession}
-      handleReopenHistoricalAnalysis={handleReopenHistoricalAnalysis}
-      handleDeleteHistoricalAnalysis={handleDeleteHistoricalAnalysis}
-      handleResetDemo={handleResetDemo}
-      handleReplayFrameChange={handleReplayFrameChange}
-      handleReplayModeChange={handleReplayModeChange}
-      handleSignOut={handleSignOut}
-      signOutPending={signOutPending}
-      currentUser={authState.user}
-      setActiveWorkspace={setActiveWorkspace}
-      pendingUploadFiles={pendingUploadFiles}
-      setPendingUploadFiles={setPendingUploadFiles}
-      resultsNavigationKey={resultsNavigationKey}
-    />
+    <Suspense fallback={<WorkspaceLoadingState label="Opening workspace" detail="Loading the latest site context." fullScreen />}>
+      <AppWorkspaceRouter
+        activeWorkspace={activeWorkspace}
+        appReady={appReady}
+        errorBoundaryResetKey={errorBoundaryResetKey}
+        apiFetch={apiFetch}
+        accessCode={accessCode}
+        apiStatus={apiStatus}
+        liveOps={liveOps}
+        historianReplayState={historianReplayState}
+        currentSession={currentSession}
+        canonicalFinding={canonicalFinding}
+        gateProcessing={gateProcessing}
+        effectiveLatestUploadResult={effectiveLatestUploadResult}
+        effectiveLatestUploadSnapshot={effectiveLatestUploadSnapshot}
+        hasActiveSession={hasActiveSession}
+        hasCurrentUploadResult={hasCurrentUploadResult}
+        hasResumedSession={hasResumedSession}
+        hasRealSiiOutput={hasRealSiiOutput}
+        roomContext={roomContext}
+        domainMode={domainMode}
+        domainDetection={domainDetection}
+        formatClockTime={formatClockTime}
+        handleBackToGate={handleBackToGate}
+        handleRetryWorkspace={handleRetryWorkspace}
+        handleGateUploadComplete={handleTelemetryAnalysisComplete}
+        handleResumePreviousSession={handleResumePreviousSession}
+        handleReopenHistoricalAnalysis={handleReopenHistoricalAnalysis}
+        handleDeleteHistoricalAnalysis={handleDeleteHistoricalAnalysis}
+        handleResetDemo={handleResetDemo}
+        handleReplayFrameChange={handleReplayFrameChange}
+        handleReplayModeChange={handleReplayModeChange}
+        handleSignOut={handleSignOut}
+        signOutPending={signOutPending}
+        currentUser={authState.user}
+        setActiveWorkspace={setActiveWorkspace}
+        pendingUploadFiles={pendingUploadFiles}
+        setPendingUploadFiles={setPendingUploadFiles}
+        resultsNavigationKey={resultsNavigationKey}
+      />
+    </Suspense>
   );
 }
 

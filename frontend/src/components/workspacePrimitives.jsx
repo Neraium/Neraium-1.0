@@ -697,13 +697,16 @@ export function DataTable({ columns, rows, caption = "Operational data" }) {
   );
 }
 
-export function EmptyState({ title, body, compact = false }) {
+export function EmptyState({ title, body, compact = false, actionLabel = "", onAction = null }) {
   const displayTitle = String(title ?? "").trim() || EMPTY_VALUE;
   const displayBody = String(body ?? "").trim() || EMPTY_VALUE;
+  const hasAction = Boolean(actionLabel && typeof onAction === "function");
   return (
-    <div className={`empty-state ${compact ? "empty-state--compact" : ""}`}>
+    <div className={`empty-state ${compact ? "empty-state--compact" : ""}`} role={hasAction ? undefined : "status"}>
+      <span className="empty-state__mark" aria-hidden="true" />
       <strong>{displayTitle}</strong>
       <p>{displayBody}</p>
+      {hasAction ? <button type="button" className="command-button empty-state__action" onClick={onAction}>{actionLabel}</button> : null}
     </div>
   );
 }

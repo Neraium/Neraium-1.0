@@ -34,7 +34,7 @@ test.describe("Responsive engineering workspace", () => {
     const navigation = page.getByRole("navigation", { name: "Primary navigation" });
     await expect(navigation).toBeVisible();
     await navigation.getByRole("button", { name: "Site Overview" }).click();
-    await expect(page).toHaveURL(/\/sites\/current$/);
+    await expect(page).toHaveURL(/\/sites\/[^/]+$/);
     await expect(page.locator(".forensic-sidebar")).not.toHaveClass(/is-open/);
   });
 

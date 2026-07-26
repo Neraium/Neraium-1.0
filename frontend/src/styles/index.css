@@ -15,4 +15,3 @@
 @import "./design-system.css" layer(overrides);
 @import "./refinement.css" layer(overrides);
 @import "./cyber-theme.css" layer(overrides);
-@import "./auth-premium.css" layer(overrides);

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildEngineeringReasoningModel, buildEngineeringReasoningModelsFromEvidenceRuns } from "../viewModels/engineeringReasoning";
 import { normalizeFindingPresentation } from "../viewModels/operatorFinding";
 import ConfidenceTierChip from "./engineering/ConfidenceTierChip";
@@ -44,12 +44,13 @@ function statusClass(status) {
 
 function EmptyAnalysis({ onConnect }) {
   return (
-    <section className="operational-empty">
-      <span className="operational-label">Status</span>
-      <strong className="operational-status operational-status--evidence-insufficient">Evidence insufficient</strong>
-      <h1>No analyzed dataset is available</h1>
-      <p>Analyze a dataset to establish a baseline and compare current behavior.</p>
-      <button type="button" className="forensic-button" onClick={onConnect}>Review Data Requirements</button>
+    <section className="operational-empty" aria-labelledby="empty-analysis-title">
+      <span className="operational-empty__mark" aria-hidden="true" />
+      <span className="operational-label">Shift brief</span>
+      <h1 id="empty-analysis-title">No analyzed telemetry is available</h1>
+      <p>Connect a source or import a dataset. Neraium will establish a baseline and surface the first change here.</p>
+      <button type="button" className="forensic-button" onClick={onConnect}>Open data connections</button>
+      <small>Read-only analysis. No control actions.</small>
     </section>
   );
 }
@@ -100,17 +101,21 @@ function OverviewHeader({ eyebrow, name, status, confidence, location, summary =
 function SiteOverview({ model, onEvidence }) {
   return (
     <div className="site-overview operational-overview">
-      <OverviewHeader eyebrow={model.site.assigned ? "Site overview" : "Analysis overview"} name={model.site.name} status={model.status} confidence={model.evidenceQuality} summary={findingCountSummary(model.findings, model.status)} />
+      <OverviewHeader eyebrow={model.site.assigned ? "Shift brief" : "Analysis brief"} name={model.site.name} status={model.status} confidence={model.evidenceQuality} summary={findingCountSummary(model.findings, model.status)} />
       {model.findings.length ? (
-        <section className="active-findings" aria-label="Active findings">
+        <section className="active-findings" aria-labelledby="attention-question">
+          <header className="active-findings__header">
+            <h2 id="attention-question">What deserves attention?</h2>
+            <span>{model.findings.length} open</span>
+          </header>
           <div>{model.findings.map((finding) => <FindingSummary key={finding.id} finding={finding} onEvidence={onEvidence} />)}</div>
         </section>
       ) : (
-        <section className="normal-summary">
-          <span>What</span>
-          <h2>{model.status === "Normal" ? "No new unexplained system changes." : "No reliable finding can be shown"}</h2>
-          <p>{model.status === "Normal" ? "All monitored systems are quiet." : "The available evidence does not support a reliable comparison."}</p>
-          <button type="button" className="forensic-button" onClick={() => onEvidence(null)}>Open Evidence</button>
+        <section className="normal-summary" aria-labelledby="quiet-shift-title">
+          <span>Shift brief</span>
+          <h2 id="quiet-shift-title">{model.status === "Normal" ? "No new unexplained system changes." : "No reliable finding can be shown"}</h2>
+          <p>{model.status === "Normal" ? "All monitored systems are quiet." : "The current evidence does not support a comparison."}</p>
+          <button type="button" className="forensic-button forensic-button--secondary" onClick={() => onEvidence(null)}>Review evidence</button>
         </section>
       )}
       <TechnicalSummary model={model} />
@@ -178,7 +183,7 @@ function EvidenceWorkspace({ model, finding, apiFetch, onTrace, onBack }) {
     return (
       <div className="evidence-workspace operational-evidence">
         <button type="button" className="evidence-back" onClick={onBack}>Back to overview</button>
-        <OverviewHeader eyebrow="Evidence" name={model.status === "Normal" ? "No active findings" : "Evidence requirements not met"} status={model.status} confidence={model.evidenceQuality} />
+        <OverviewHeader eyebrow="Evidence" name={model.status === "Normal" ? "No active findings" : "Evidence is not yet sufficient"} status={model.status} confidence={model.evidenceQuality} />
         <section className="evidence-section"><h2>What changed</h2><p>{model.status === "Normal" ? "Mapped relationships remain within their learned behavior." : "A reliable baseline comparison is not available."}</p></section>
         <TechnicalSummary model={model} />
       </div>
@@ -200,7 +205,7 @@ function EvidenceWorkspace({ model, finding, apiFetch, onTrace, onBack }) {
   return (
     <div className="evidence-workspace operational-evidence">
       <button type="button" className="evidence-back" onClick={onBack}>Back to overview</button>
-      <OverviewHeader eyebrow="Evidence" name={finding.title} status={finding.status} confidence={finding.tier} />
+      <OverviewHeader eyebrow="Investigation" name={finding.title} status={finding.status} confidence={finding.tier} />
       <FindingClassificationSummary finding={finding} showDefinition={false} />
       <div className="operational-evidence__sections operational-evidence__sections--classification">
         <section className="evidence-section evidence-section--what">
@@ -312,6 +317,9 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const [selectedFindingId, setSelectedFindingId] = useState(() => pathIdentity(["evidence", "investigations"]));
   const [selectedSystemName, setSelectedSystemName] = useState(() => pathIdentity(["systems"]));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [compactNavigation, setCompactNavigation] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 1024px)")?.matches);
+  const mobileMenuButtonRef = useRef(null);
+  const mobileSidebarRef = useRef(null);
   const [selectedSiteId, setSelectedSiteId] = useState(() => pathIdentity(["sites"]) || null);
   const [portfolioRuns, setPortfolioRuns] = useState([]);
   const currentModel = useMemo(() => buildEngineeringReasoningModel({ liveOps, canonicalFinding, currentSession, result: effectiveLatestUploadResult, snapshot: effectiveLatestUploadSnapshot, domainDetection }), [liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection]);
@@ -322,6 +330,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     if (currentModel.hasAnalysis) return [currentModel, ...withoutCurrent];
     return persisted.length ? persisted : [currentModel];
   }, [currentModel, portfolioRuns]);
+  const portfolioSites = useMemo(() => portfolioModels.map((item) => item.site), [portfolioModels]);
   const model = portfolioModels.find((item) => item.site.id === selectedSiteId) ?? currentModel;
   const selectedFinding = selectedFindingId === "__overview__" ? null : model.findings.find((finding) => finding.id === selectedFindingId) ?? model.selectedFinding;
   const selectedSystem = model.subsystems.find((system) => system.name === selectedSystemName) ?? null;
@@ -347,7 +356,6 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-
   useEffect(() => {
     const keyHandler = (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -359,6 +367,52 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     return () => window.removeEventListener("keydown", keyHandler);
   }, []);
 
+  useEffect(() => {
+    const media = window.matchMedia?.("(max-width: 1024px)");
+    if (!media) return undefined;
+    const syncNavigationMode = () => {
+      setCompactNavigation(media.matches);
+      if (!media.matches) setMobileNavOpen(false);
+    };
+    syncNavigationMode();
+    media.addEventListener?.("change", syncNavigationMode);
+    return () => media.removeEventListener?.("change", syncNavigationMode);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return undefined;
+    const sidebar = mobileSidebarRef.current;
+    const previousOverflow = document.body.style.overflow;
+    const focusable = Array.from(sidebar?.querySelectorAll("button:not([disabled])") ?? []);
+    focusable[0]?.focus();
+    if (window.matchMedia?.("(max-width: 1024px)")?.matches) document.body.style.overflow = "hidden";
+
+    function handleMenuKeyDown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMobileNavOpen(false);
+        mobileMenuButtonRef.current?.focus();
+        return;
+      }
+      if (event.key !== "Tab" || !focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleMenuKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleMenuKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileNavOpen]);
+
   function navigate(target) {
     if (target === "data-connections" || target === "governance-admin") {
       onWorkspaceNavigate?.(target);
@@ -368,14 +422,15 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     window.history.pushState({}, "", path);
     setRoute(target);
     setMobileNavOpen(false);
+    if (mobileNavOpen) window.requestAnimationFrame?.(() => mobileMenuButtonRef.current?.focus());
   }
 
-  function openEvidence(finding) {
+  const openEvidence = useCallback((finding) => {
     setSelectedFindingId(finding?.id || "__overview__");
     const evidencePath = finding ? `/evidence/${encodeURIComponent(finding.id)}` : "/evidence";
     window.history.pushState({}, "", evidencePath);
     setRoute("evidence");
-  }
+  }, []);
 
   function openSystem(name) {
     setSelectedSystemName(name);
@@ -398,10 +453,17 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     navigate(item.target);
   }
 
+  const handleSelectSite = useCallback((site) => {
+    setSelectedSiteId(site.id);
+    window.history.pushState({}, "", `/sites/${encodeURIComponent(site.id)}`);
+    setRoute("site");
+    setMobileNavOpen(false);
+  }, []);
+
   return (
     <div className="forensic-shell" data-testid="engineering-reasoning-platform">
       <a className="skip-link" href="#forensic-main">Skip to main content</a>
-      <aside className={`forensic-sidebar${mobileNavOpen ? " is-open" : ""}`} aria-label="Application sidebar">
+      <aside id="forensic-navigation" ref={mobileSidebarRef} className={`forensic-sidebar${mobileNavOpen ? " is-open" : ""}`} aria-label="Application sidebar" aria-hidden={compactNavigation && !mobileNavOpen} inert={compactNavigation && !mobileNavOpen ? "" : undefined}>
         <div className="forensic-brand"><span className="forensic-brand__mark" aria-hidden="true">N</span><div><strong>Neraium</strong><small>Operational evidence</small></div></div>
         <nav aria-label="Primary navigation">
           {navItems.map(([id, label]) => <button key={id} type="button" className={effectiveRoute === id ? "is-active" : ""} aria-current={effectiveRoute === id ? "page" : undefined} onClick={() => navigate(id)}><span aria-hidden="true" className={`nav-glyph nav-glyph--${id}`} />{label}</button>)}
@@ -412,15 +474,24 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
           {onSignOut ? <button type="button" onClick={onSignOut} disabled={signOutPending}>{signOutPending ? "Signing out..." : "Sign out"}</button> : null}
         </div>
       </aside>
+      {mobileNavOpen ? <button type="button" className="forensic-sidebar-scrim" aria-label="Close navigation" onClick={() => { setMobileNavOpen(false); mobileMenuButtonRef.current?.focus(); }} /> : null}
       <div className="forensic-app">
-        <header className="forensic-topbar">
-          <button type="button" className="forensic-mobile-menu" aria-expanded={mobileNavOpen} aria-label="Toggle navigation" onClick={() => setMobileNavOpen((value) => !value)}>Menu</button>
+        <header className="forensic-topbar" aria-label="Workspace controls">
+          <button
+            ref={mobileMenuButtonRef}
+            type="button"
+            className="forensic-mobile-menu"
+            aria-expanded={mobileNavOpen}
+            aria-controls="forensic-navigation"
+            aria-label="Toggle navigation"
+            onClick={() => setMobileNavOpen((value) => !value)}
+          ><span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" /></button>
           <GlobalAssetSearch items={model.searchItems} onSelect={handleSearch} />
           <div className="forensic-topbar__site"><span>{model.site.name}</span><ConfidenceTierChip tier={model.evidenceQuality} /></div>
         </header>
-        <main id="forensic-main" aria-label="Neraium operational workspace" tabIndex={-1}>
+        <main id="forensic-main" aria-label="Neraium platform workspace" tabIndex={-1} data-route={effectiveRoute}>
           {!model.hasAnalysis ? <EmptyAnalysis onConnect={() => navigate("data-connections")} />
-            : effectiveRoute === "portfolio" ? <PortfolioWorkspace sites={portfolioModels.map((item) => item.site)} onSelectSite={(site) => { setSelectedSiteId(site.id); window.history.pushState({}, "", "/sites/" + encodeURIComponent(site.id)); setRoute("site"); setMobileNavOpen(false); }} />
+            : effectiveRoute === "portfolio" ? <PortfolioWorkspace sites={portfolioSites} onSelectSite={handleSelectSite} />
               : effectiveRoute === "site" ? <SiteOverview model={model} onEvidence={openEvidence} />
                 : effectiveRoute === "system" ? <SystemOverview model={model} system={selectedSystem} onEvidence={openEvidence} />
                   : effectiveRoute === "evidence" ? <EvidenceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onTrace={() => navigate("trace")} onBack={() => navigate("site")} />

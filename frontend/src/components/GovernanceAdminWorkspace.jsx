@@ -17,9 +17,9 @@ function AdministrationHeader({ currentUser }) {
   return (
     <header className="workspace-page-header">
       <div className="workspace-page-header__copy">
-        <p className="section-token">Administration</p>
-        <h1>Access & Intelligence Governance</h1>
-        <p>Manage account access, active sessions, evidence admission records, and analysis service health.</p>
+        <p className="section-token">Configure</p>
+        <h1>Access & governance</h1>
+        <p>Manage users, sessions, evidence records, and service health.</p>
       </div>
       <span className="workspace-page-header__meta">{currentUser?.email || "Administrator"} · Administrator</span>
     </header>
@@ -74,7 +74,7 @@ export default function GovernanceAdminWorkspace({
       <section className="workspace-surface">
         <AdministrationHeader currentUser={currentUser} />
         <ConnectorSetupPanel apiFetch={apiFetch} accessCode={accessCode} currentUser={currentUser} />
-        <Panel title="Intelligence Governance" subtitle="Loading SII evidence review records..." />
+        <Panel title="Intelligence Governance" subtitle="Loading governance records…" />
       </section>
     );
   }
@@ -96,8 +96,8 @@ export default function GovernanceAdminWorkspace({
       <ConnectorSetupPanel apiFetch={apiFetch} accessCode={accessCode} currentUser={currentUser} />
       <div className="workspace-grid workspace-grid--two admin-summary-grid">
       <Panel
-        title="Intelligence Governance"
-        subtitle="Administrator audit records for decisions about which SII evidence can appear in operator workspaces."
+        title="Evidence governance"
+        subtitle="Evidence admission audit."
       >
         <div className="metric-grid">
           <article className="metric-card"><span className="metric-label">Decision records</span><strong className="metric-value">{payload?.total ?? 0}</strong></article>
@@ -105,7 +105,7 @@ export default function GovernanceAdminWorkspace({
           <article className="metric-card"><span className="metric-label">Held for administrator review</span><strong className="metric-value">{payload?.no_pass_count ?? 0}</strong></article>
         </div>
       </Panel>
-      <Panel title="Analysis Service Performance" subtitle="Recent analysis timing and queue status">
+      <Panel title="Analysis performance" subtitle="Queue and timing">
         <div className="metric-grid">
           <article className="metric-card"><span className="metric-label">Queued analyses</span><strong className="metric-value">{performance?.queue_depth ?? 0}</strong></article>
           <article className="metric-card"><span className="metric-label">Median analysis time (s)</span><strong className="metric-value">{performance?.upload_duration_seconds?.p50 ?? "-"}</strong></article>
@@ -188,7 +188,7 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser }) {
   return (
     <Panel
       title="User Access"
-      subtitle={`Signed in as ${currentUser?.email || "administrator"}. Create accounts, change access status, and revoke sessions.`}
+      subtitle={`Signed in as ${currentUser?.email || "administrator"}.`}
     >
       {loading ? <p role="status">Loading user accounts and active sessions...</p> : null}
       <form className="admin-access-form" onSubmit={createAccount} aria-busy={Boolean(busy)}>

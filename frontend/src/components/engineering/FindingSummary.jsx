@@ -9,7 +9,7 @@ function sentence(value, fallback) {
   return /[.!?]$/.test(first) ? first : `${first}.`;
 }
 
-export default function FindingSummary({ finding, onEvidence }) {
+function FindingSummary({ finding, onEvidence }) {
   const [acknowledged, setAcknowledged] = React.useState(false);
   if (!finding) return null;
   const statusClass = finding.status.toLowerCase().replace(/\s+/g, "-");
@@ -37,3 +37,5 @@ export default function FindingSummary({ finding, onEvidence }) {
     </article>
   );
 }
+
+export default React.memo(FindingSummary);

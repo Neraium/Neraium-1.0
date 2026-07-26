@@ -5,9 +5,9 @@ test.describe("Production smoke", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/portfolio", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-    await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Where does the evidence warrant attention|No analyzed dataset is available/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Data Connections" })).toBeVisible();
+    await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Where does the evidence warrant attention|No analyzed telemetry is available/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Data Connections", exact: true })).toBeVisible();
   });
 
   test("mobile opens compact portfolio navigation without overflow", async ({ page }) => {

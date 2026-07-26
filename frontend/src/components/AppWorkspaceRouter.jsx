@@ -1,7 +1,9 @@
 import { Suspense, lazy } from "react";
+import "../styles/product-polish.css";
 
 import AppErrorBoundary from "./AppErrorBoundary";
 import SkipToMainContent from "./SkipToMainContent";
+import WorkspaceLoadingState from "./WorkspaceLoadingState";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 import { extractTelemetryBoundaryMeta } from "../viewModels/uploadState";
 
@@ -14,16 +16,7 @@ const ObservationCenterWorkspace = lazy(() => import("./ObservationCenterWorkspa
 const HelpChangelogWorkspace = lazy(() => import("./HelpChangelogWorkspace"));
 
 function renderLoadingPanel(title, message) {
-  return (
-    <div className="workspace-grid workspace-loading-shell" role="status" aria-live="polite" aria-atomic="true">
-      <Panel title={title} className="span-12 workspace-loading-panel">
-        <p className="narrative-text">{message}</p>
-        <div className="workspace-loading-panel__meter" aria-hidden="true">
-          <span />
-        </div>
-      </Panel>
-    </div>
-  );
+  return <WorkspaceLoadingState label={title} detail={message} fullScreen />;
 }
 
 function WorkspaceWithBackControl({
@@ -55,7 +48,7 @@ function WorkspaceWithBackControl({
               {contextLabel ? <span className="workspace-back-control__breadcrumb" aria-current="page">{contextLabel}</span> : null}
             </div>
             <div className="workspace-back-control__meta">
-              <span className="workspace-back-control__product"><strong>Neraium</strong> · SII intelligence · Read-only</span>
+              <span className="workspace-back-control__product"><strong>Neraium</strong> · Read-only</span>
               {typeof onHelp === "function" ? (
                 <button type="button" className="workspace-back-control__help" onClick={onHelp}>Help</button>
               ) : null}
@@ -211,7 +204,7 @@ export default function AppWorkspaceRouter({
         activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
       >
-        <EmptyState title="Administrator access required" body="Your account can review operational results, but only administrators can manage users, sessions, and governance records." />
+        <EmptyState title="Administrator access required" body="This workspace is limited to administrators." actionLabel="Return to Portfolio" onAction={() => setActiveWorkspace("system-body")} />
       </WorkspaceWithBackControl>
     );
   }

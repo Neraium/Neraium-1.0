@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "../styles/auth-premium.css";
 
 import { loginUser } from "../services/api/authApi";
 import { PRODUCT_NAME } from "../content/productLanguage";

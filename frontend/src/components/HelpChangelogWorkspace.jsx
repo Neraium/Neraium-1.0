@@ -1,20 +1,20 @@
-import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
+import { EmptyState, Panel } from "./workspacePrimitives";
 
 const CHANGELOG_ENTRIES = [
   {
     date: "2026-07-16",
     title: "Product language standardized",
-    detail: "Neraium now names the platform separately from Systemic Infrastructure Intelligence and uses consistent operator-facing terms across every workspace.",
+    detail: "Operator terms are now consistent across workspaces.",
   },
   {
     date: "2026-07-16",
     title: "Datasets and connectors separated",
-    detail: "Dataset imports, connector setup, and connector health now have distinct labels and status messages.",
+    detail: "Dataset imports and live connectors now use distinct labels and health states.",
   },
   {
     date: "2026-07-16",
     title: "Insight review clarified",
-    detail: "Insights, evidence, severity, and facility state now use consistent labels and explain the next operator action.",
+    detail: "Findings now show one evidence line and one next check.",
   },
 ];
 
@@ -53,24 +53,13 @@ export default function HelpChangelogWorkspace({
   return (
     <section className="workspace-surface help-changelog">
       <div className="observation-center__hero">
-        <section className="observation-center__summary help-changelog__hero" aria-label="Platform guide and service status">
-          <p className="section-token">Help & Status</p>
-          <h1>Platform Guide & Service Status</h1>
-          <p>
-            Neraium is the platform. Systemic Infrastructure Intelligence (SII) analyzes infrastructure behavior and presents operator-reviewable insights with evidence. Neraium remains read-only.
-          </p>
-          <MetricGrid
-            metrics={[
-              { label: "Control boundary", value: "Read-only" },
-              { label: "Sharing", value: "Operator-controlled" },
-              { label: "Insight priority", value: "Severity labels" },
-              { label: "Intelligence", value: "SII" },
-            ]}
-            compact
-          />
+        <section className="observation-center__summary help-changelog__hero" aria-label="Help and service status">
+          <p className="section-token">Help</p>
+          <h1>Help & status</h1>
+          <p>Operator terms, service health, and recent changes.</p>
           <div className="intake-flow__controls">
             <button type="button" className="secondary-command-button" onClick={() => onWorkspaceNavigate?.("observation-center")}>
-              Open Insights
+              Open findings
             </button>
           </div>
         </section>

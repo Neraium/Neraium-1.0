@@ -18,7 +18,7 @@ test.describe("Accessibility audit", () => {
     await expect(skipLink).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(main).toBeFocused();
-    const connections = page.getByRole("button", { name: "Data Connections" });
+    const connections = page.getByRole("button", { name: "Data Connections", exact: true });
     await connections.focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { name: "Import and Analyze Dataset", level: 2 })).toBeVisible();
@@ -44,7 +44,7 @@ test.describe("Accessibility audit", () => {
   test("reduced-motion preference removes workspace transitions", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/portfolio", { waitUntil: "domcontentloaded" });
-    const duration = await page.locator(".site-bubble").first().evaluate((node) => getComputedStyle(node).transitionDuration);
+    const duration = await page.locator(".forensic-button").evaluate((node) => getComputedStyle(node).transitionDuration);
     expect(parseFloat(duration || "0")).toBeLessThanOrEqual(0.001);
   });
 });

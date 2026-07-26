@@ -101,7 +101,7 @@ test.describe("Engineering reasoning decision cards", () => {
   test("asset search opens evidence directly and technical trace stays nested", async ({ page }) => {
     await openSite(page, { width: 1280, height: 800 });
     await page.getByRole("combobox", { name: /Search sites/ }).fill("Chiller-03");
-    await page.getByRole("button", { name: "Asset / signal: Chiller-03" }).click();
+    await page.getByRole("option", { name: "Asset / signal: Chiller-03" }).click();
     await expect(page).toHaveURL(/\/evidence\/flow-response$/);
     await expect(page.getByRole("button", { name: "Open trace mode" })).toHaveCount(0);
     await page.locator("details.evidence-technical > summary").click();

@@ -69,6 +69,7 @@ function renderWorkspace(path = "/portfolio", overrides = {}) {
 afterEach(() => {
   cleanup();
   window.history.replaceState({}, "", "/");
+  window.localStorage.clear();
 });
 
 describe("EngineeringReasoningWorkspace progressive disclosure", () => {
@@ -182,7 +183,7 @@ describe("EngineeringReasoningWorkspace progressive disclosure", () => {
     renderWorkspace();
     const search = screen.getByRole("combobox", { name: /Search sites/i });
     fireEvent.change(search, { target: { value: "Cooling system" } });
-    fireEvent.click(screen.getByRole("button", { name: "System: Cooling system" }));
+    fireEvent.click(screen.getByRole("option", { name: "System: Cooling system" }));
     expect(screen.getByRole("heading", { name: "Cooling system" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Review" })).toBeTruthy();
   });
@@ -196,5 +197,19 @@ describe("EngineeringReasoningWorkspace progressive disclosure", () => {
 
     expect(await screen.findByRole("heading", { name: "Sites" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Open Site" })).toHaveLength(2);
+  });
+  it("supports keyboard selection and recent searches", () => {
+    renderWorkspace();
+    const search = screen.getByRole("combobox", { name: /Search sites/i });
+    fireEvent.change(search, { target: { value: "Cooling system" } });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "Cooling system" })).toBeTruthy();
+
+    cleanup();
+    renderWorkspace();
+    const recentSearch = screen.getByRole("combobox", { name: /Search sites/i });
+    fireEvent.focus(recentSearch);
+    expect(screen.getByText("Recent searches")).toBeTruthy();
+    expect(screen.getByRole("option", { name: "System: Cooling system" })).toBeTruthy();
   });
 });

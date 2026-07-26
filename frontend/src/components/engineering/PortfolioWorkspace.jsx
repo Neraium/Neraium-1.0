@@ -1,14 +1,14 @@
 import React from "react";
 import ConfidenceTierChip from "./ConfidenceTierChip";
 
-export default function PortfolioWorkspace({ sites = [], onSelectSite }) {
+function PortfolioWorkspace({ sites = [], onSelectSite }) {
   return (
     <div className="portfolio-workspace">
       <header className="forensic-page-header">
         <div>
           <span className="forensic-kicker">Portfolio</span>
           <h1>Sites</h1>
-          <p>Open a site to review its active findings and evidence.</p>
+          <p>Review where evidence warrants attention.</p>
         </div>
       </header>
       <section className="portfolio-site-list" aria-label="Portfolio sites">
@@ -37,3 +37,5 @@ export default function PortfolioWorkspace({ sites = [], onSelectSite }) {
     </div>
   );
 }
+
+export default React.memo(PortfolioWorkspace);
