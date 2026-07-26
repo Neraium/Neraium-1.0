@@ -62,8 +62,8 @@ function CompactSummary({ finding, presentation, ariaLabel }) {
   );
 }
 
-export default function FindingClassificationSummary({ finding, compact = false, showDefinition = true }) {
-  const presentation = normalizeFindingPresentation(finding);
+export default function FindingClassificationSummary({ finding, presentation: suppliedPresentation = null, compact = false, showDefinition = true }) {
+  const presentation = suppliedPresentation ?? normalizeFindingPresentation(finding);
   const ariaLabel = [
     `Classification: ${presentation.label}`,
     `Classification confidence: ${presentation.classificationConfidence}`,
@@ -91,6 +91,8 @@ export default function FindingClassificationSummary({ finding, compact = false,
         <div><dt>Data confidence</dt><dd>{presentation.dataConfidence.rating}</dd></div>
         <div><dt>Mode match</dt><dd>{presentation.operatingMode.match}</dd></div>
         <div><dt>Persistence</dt><dd>{presentation.persistence.label}</dd></div>
+        <div><dt>Operational state</dt><dd>{displayLabel(finding?.status)}</dd></div>
+        {finding?.reviewStatus || finding?.review_status || finding?.hypothesisStatus ? <div><dt>Review state</dt><dd>{statusLabel(finding, presentation)}</dd></div> : null}
         <div><dt>Priority</dt><dd>{presentation.reviewPriority}</dd></div>
       </dl>
       {showDefinition ? (

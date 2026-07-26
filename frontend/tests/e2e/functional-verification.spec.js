@@ -67,7 +67,7 @@ async function waitForUploadComplete(page, jobId, timeoutMs = 120000) {
 async function startCommandCenterUpload(page, { name, csv }) {
   await page.goto("/", { waitUntil: "load" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-  await page.getByRole("button", { name: "Data Connections" }).click();
+  await page.getByRole("button", { name: "Data" }).click();
   await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
 
   const uploadAcceptedPromise = page.waitForResponse(

@@ -7,7 +7,7 @@ test.describe("Production smoke", () => {
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
     await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Create Your First Baseline" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Data Connections", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Data", exact: true })).toBeVisible();
   });
 
   test("mobile opens compact portfolio navigation without overflow", async ({ page }) => {

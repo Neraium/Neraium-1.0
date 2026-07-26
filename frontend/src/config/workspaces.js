@@ -1,13 +1,13 @@
 export const WORKSPACES = [
   {
     id: "system-body",
-    label: "Sites",
-    eyebrow: "Operational Status",
-    description: "Site status, active findings, locations, and supporting evidence.",
+    label: "Operations Brief",
+    eyebrow: "Current Conditions",
+    description: "New findings, active review work, instrumentation concerns, and recently resolved items.",
   },
   {
     id: "data-connections",
-    label: "Data Connections",
+    label: "Data",
     eyebrow: "Telemetry",
     description: "Import telemetry datasets and configure supported read-only connectors.",
   },

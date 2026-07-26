@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EngineeringReasoningWorkspace from "./EngineeringReasoningWorkspace";
 
@@ -39,13 +39,26 @@ function analysisResult(overrides = {}) {
         current_strength: 0.833811,
         correlation_delta: 0.739798,
       }],
+      classification: { type: "unexplained_systemic_change", confidence: "high", reasons: ["The relationship remained outside learned behavior."] },
+      data_confidence: { rating: "high", summary: "Telemetry passed the recorded checks." },
+      operating_mode: { match: "strong", confidence: "high", baseline_mode_label: "Mid-load", recent_mode_label: "Mid-load" },
+      persistence: { persistent: true, duration: "3 days", summary: "The shift persisted across comparable windows." },
+      investigation_guidance: [
+        { rank: 1, check: "Verify pressure transmitter.", reason: "Source validation bounds the interpretation.", category: "instrumentation" },
+        { rank: 2, check: "Review the affected pressure boundary.", reason: "The mapped relationship changed there.", category: "physical_system" },
+        { rank: 3, check: "Confirm the active control state.", reason: "Comparable operation is required.", category: "controls" },
+        { rank: 4, check: "Compare the next operating window.", reason: "A follow-up window tests persistence.", category: "operating_context" },
+      ],
+      activity_timeline: [{ event_type: "persistence_supported", title: "Persistence supported", period_label: "Three comparable windows" }],
+      alternative_explanations: ["An undocumented control change may explain the shift."],
+      certainty_limit: "The evidence does not establish a cause.",
     }],
     ...overrides.analysis,
   };
   return {
     facility_name: "North Plant",
     job_id: "run-42",
-    processed_at: new Date().toISOString(),
+    processed_at: "2026-07-26T05:00:00Z",
     sii_completed: true,
     sii_reliable_enough_to_show: true,
     data_quality: { coverage_percent: 82, warnings: ["Historian X was unavailable.", "3 dropped rows."] },
@@ -56,7 +69,7 @@ function analysisResult(overrides = {}) {
   };
 }
 
-function renderWorkspace({ path = "/portfolio", result = analysisResult(), apiFetch = vi.fn(), onWorkspaceNavigate = vi.fn() } = {}) {
+function renderWorkspace({ path = "/sites/current", result = analysisResult(), apiFetch = vi.fn(), onWorkspaceNavigate = vi.fn(), role = "operator" } = {}) {
   window.history.replaceState({}, "", path);
   const props = {
     liveOps: {},
@@ -66,7 +79,7 @@ function renderWorkspace({ path = "/portfolio", result = analysisResult(), apiFe
     effectiveLatestUploadSnapshot: result ? { status: "complete", sii_completed: true } : {},
     apiFetch,
     onWorkspaceNavigate,
-    currentUser: { name: "Engineer One", email: "engineer@neraium.test", role: "operator" },
+    currentUser: { name: "Engineer One", email: "engineer@neraium.test", role },
   };
   return { ...render(React.createElement(EngineeringReasoningWorkspace, props)), onWorkspaceNavigate };
 }
@@ -77,15 +90,11 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-describe("EngineeringReasoningWorkspace shift workflow", () => {
+describe("EngineeringReasoningWorkspace daily workflows", () => {
   it("launches first-baseline onboarding instead of an analytical empty dashboard", () => {
     const { onWorkspaceNavigate } = renderWorkspace({ result: null });
-
     expect(screen.getByTestId("first-baseline-experience")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Create Your First Baseline" })).toBeTruthy();
-    expect(screen.queryByText("Evidence insufficient")).toBeNull();
-    expect(screen.getAllByText(/Import|Learn|Compare|Review/).length).toBeGreaterThan(0);
-
     fireEvent.click(screen.getByRole("button", { name: "Import Historical Dataset" }));
     expect(onWorkspaceNavigate).toHaveBeenCalledWith("data-connections");
   });
@@ -93,128 +102,139 @@ describe("EngineeringReasoningWorkspace shift workflow", () => {
   it("lets the operator exit onboarding into the baseline-needed workspace", () => {
     renderWorkspace({ result: null });
     fireEvent.click(screen.getByRole("button", { name: "Go to workspace" }));
-
     expect(screen.getByTestId("workspace-state-noDataset")).toBeTruthy();
-    expect(screen.getByText(/Baseline Needed/)).toBeTruthy();
+    expect(screen.getByText(/Operations Brief · Baseline Needed/)).toBeTruthy();
     expect(screen.getByRole("heading", { name: "No baseline available" })).toBeTruthy();
-    expect(screen.getByText("Import a historical dataset so Neraium can learn how your system normally behaves.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "View supported formats" }));
-    expect(screen.getByRole("region", { name: "Supported historical dataset formats" })).toBeTruthy();
   });
 
-  it("opens on a concise shift brief with the requested operational sections", () => {
+  it("opens on a restrained Operations Brief and hides empty sections", () => {
     renderWorkspace();
-
-    expect(screen.getByTestId("shift-brief")).toBeTruthy();
+    expect(screen.getByTestId("operations-brief")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "North Plant" })).toBeTruthy();
-    for (const heading of ["New today", "Needs attention", "Monitoring", "Quiet systems"]) {
-      expect(screen.getByRole("heading", { name: heading })).toBeTruthy();
-    }
-    const summary = screen.getByRole("region", { name: "Morning summary" });
-    for (const label of ["New findings", "Escalations", "Resolved", "Monitoring"]) {
-      expect(within(summary).getByText(label)).toBeTruthy();
-    }
-    expect(screen.getByText("1 instrumentation issue remains under review.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "New" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Monitoring" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Needs attention" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Recently resolved" })).toBeNull();
+    expect(screen.queryByText("New findings")).toBeNull();
+    expect(screen.getByText("1 new unexplained change.")).toBeTruthy();
   });
 
-  it("caps a finding card at one evidence sentence, one next check, and three actions", () => {
+  it("caps a brief item at one evidence sentence, one next check, and one primary action", () => {
     renderWorkspace();
-    const card = document.querySelector(".operational-finding");
+    const card = screen.getByTestId("compact-finding-card");
     const finding = within(card);
-
     expect(finding.getByText("Condenser Water")).toBeTruthy();
     expect(finding.getByRole("heading", { name: "Condenser-side behavior changed" })).toBeTruthy();
-    expect(finding.getByText("Insufficient evidence")).toBeTruthy();
-    expect(finding.getByText("Unavailable confidence")).toBeTruthy();
-    expect(finding.getByText("New")).toBeTruthy();
+    expect(finding.getByText("Unexplained systemic change")).toBeTruthy();
     expect(finding.getByText("Condenser approach temperature increased 15.3%.")).toBeTruthy();
     expect(finding.getByText("Verify pressure transmitter.")).toBeTruthy();
     expect(card.querySelectorAll(".operational-finding__brief p")).toHaveLength(2);
     expect(card.textContent).not.toContain("Compressor current increased 5.5%.");
-    for (const action of ["Review", "Acknowledge", "Evidence"]) {
-      expect(finding.getByRole("button", { name: action })).toBeTruthy();
+    expect(finding.getByRole("button", { name: "Review" })).toBeTruthy();
+    expect(finding.getByText("More actions")).toBeTruthy();
+    expect(card.querySelector(".operational-finding__more").open).toBe(false);
+  });
+
+  it("moves an acknowledged investigation out of New without changing classification", async () => {
+    renderWorkspace();
+    fireEvent.click(screen.getByText("More actions"));
+    fireEvent.click(screen.getByRole("button", { name: "I’m checking this" }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "New" })).toBeNull());
+    expect(screen.getByRole("heading", { name: "Monitoring" })).toBeTruthy();
+    expect(screen.getByText("Unexplained systemic change")).toBeTruthy();
+    expect(screen.getByText("Investigating")).toBeTruthy();
+  });
+
+  it("normalizes a known condition into the existing feedback endpoint", async () => {
+    const apiFetch = vi.fn(async (url) => String(url).includes("/feedback")
+      ? { ok: true, json: async () => ({ latest_feedback_category: "expected_behavior" }) }
+      : { ok: true, json: async () => ({ runs: [] }) });
+    renderWorkspace({ apiFetch });
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Known or explained" }));
+    expect(screen.getByLabelText("Known condition")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save explanation" }));
+    await waitFor(() => expect(screen.getByText("Explained.")).toBeTruthy());
+    const feedbackCall = apiFetch.mock.calls.find(([url]) => String(url).includes("/feedback"));
+    expect(feedbackCall[0]).toBe("/api/evidence/runs/run-42/feedback");
+    expect(JSON.parse(feedbackCall[1].body)).toEqual({ category: "expected_behavior", outcome: "Scheduled staging change", note: "Scheduled staging change" });
+    expect(screen.getAllByText("Explained").length).toBeGreaterThan(0);
+  });
+
+  it("records Not useful as presentation feedback without altering evidence", async () => {
+    const apiFetch = vi.fn(async (url) => String(url).includes("/feedback")
+      ? { ok: true, json: async () => ({ latest_feedback_category: "nothing_meaningful" }) }
+      : { ok: true, json: async () => ({ runs: [] }) });
+    renderWorkspace({ apiFetch });
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Not useful" }));
+    await waitFor(() => expect(screen.getByText("Not useful.")).toBeTruthy());
+    expect(screen.getByText("Unexplained systemic change")).toBeTruthy();
+    const feedbackCall = apiFetch.mock.calls.find(([url]) => String(url).includes("/feedback"));
+    expect(JSON.parse(feedbackCall[1].body)).toEqual({ category: "nothing_meaningful", outcome: "Not useful", note: null });
+  });
+
+  it("orders finding review around change, importance, checks, timeline, and evidence", () => {
+    renderWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    expect(window.location.pathname).toBe("/findings/finding-1");
+    const headings = [...document.querySelectorAll(".case-sections--review > section > h2")].map((node) => node.textContent);
+    expect(headings).toEqual(["What changed", "Why it deserves attention", "What to check first", "Relationship timeline", "Key evidence"]);
+    expect(screen.getAllByRole("button", { name: "I’m checking this" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Open investigation" })).toBeTruthy();
+  });
+
+  it("opens a progressive investigation and keeps technical depth collapsed", () => {
+    renderWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
+    expect(window.location.pathname).toBe("/investigations/finding-1");
+    const headings = [...document.querySelectorAll(".case-sections--investigation > section > h2")].map((node) => node.textContent);
+    expect(headings).toEqual(["Finding summary", "Relationship timeline", "Supporting evidence", "Investigation guidance", "Current review state"]);
+    for (const label of ["Operating-mode evidence", "Sensor-health evidence", "Alternative explanations", "Certainty limits", "Data limitations", "Source lineage", "Audit and replay information"]) {
+      expect(screen.getByText(label).closest("details").open).toBe(false);
     }
   });
 
-  it("acknowledges a finding without changing its evidence classification", () => {
-    renderWorkspace();
-    const card = document.querySelector(".operational-finding");
-    const action = within(card).getByRole("button", { name: "Acknowledge" });
-    fireEvent.click(action);
-
-    const acknowledgedCard = document.querySelector(".operational-finding");
-    expect(within(acknowledgedCard).getByText("Insufficient evidence")).toBeTruthy();
-    expect(within(acknowledgedCard).getByRole("button", { name: "Acknowledged" }).getAttribute("aria-pressed")).toBe("true");
-  });
-
-  it("keeps why and how one click deeper with technical values collapsed", () => {
+  it("moves directly from finding to investigation to the evidence record", () => {
     renderWorkspace();
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
-
-    expect(screen.getByText("What changed")).toBeTruthy();
-    expect(screen.getByText("Why Neraium classified it this way")).toBeTruthy();
-    const details = screen.getByText("Technical analysis details").closest("details");
-    expect(details.open).toBe(false);
-    expect(document.querySelector(".operational-evidence__sections").textContent).not.toContain("0.094013");
-    fireEvent.click(screen.getByText("Technical analysis details"));
-    expect(within(details).getByText("0.094013")).toBeTruthy();
-    expect(within(details).getByRole("button", { name: "Open trace mode" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open evidence record" }));
+    expect(window.location.pathname).toBe("/evidence/finding-1");
+    expect(screen.getByTestId("evidence-record")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Source lineage" })).toBeTruthy();
+    expect(screen.getByText("Baseline relationship value")).toBeTruthy();
   });
 
-  it("keeps the case-file evidence order one level deeper", () => {
+  it("supports direct workflow navigation and keyboard search", () => {
     renderWorkspace();
-    fireEvent.click(screen.getByRole("button", { name: "Review" }));
-
-    const headings = [...document.querySelectorAll(".operational-evidence__sections--classification .evidence-section > h2")].map((node) => node.textContent);
-    expect(headings).toEqual(["What changed", "Why it matters", "Highest-value next checks", "Relationship timeline", "Supporting evidence"]);
-    expect(screen.getByText("Why Neraium classified it this way").closest("details").open).toBe(false);
-  });
-
-  it("supports keyboard search selection and recent searches", () => {
-    renderWorkspace();
+    const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
+    for (const label of ["Operations Brief", "Systems", "Findings", "Investigations", "Data"]) expect(within(navigation).getByRole("button", { name: label })).toBeTruthy();
+    fireEvent.click(within(navigation).getByRole("button", { name: "Investigations" }));
+    expect(window.location.pathname).toBe("/investigations");
+    fireEvent.click(within(navigation).getByRole("button", { name: "Systems" }));
+    expect(screen.getByRole("heading", { name: "North Plant" })).toBeTruthy();
     const search = screen.getByRole("combobox", { name: /Search sites/i });
     fireEvent.change(search, { target: { value: "Cooling system" } });
     fireEvent.keyDown(search, { key: "Enter" });
     expect(screen.getByRole("heading", { name: "Cooling system" })).toBeTruthy();
-
-    cleanup();
-    renderWorkspace();
-    const recentSearch = screen.getByRole("combobox", { name: /Search sites/i });
-    fireEvent.focus(recentSearch);
-    expect(screen.getByText("Recent searches")).toBeTruthy();
-    expect(screen.getByRole("option", { name: "System: Cooling system" })).toBeTruthy();
   });
 
   it("speaks confidently when the completed analysis has no meaningful changes", () => {
-    const result = analysisResult({
-      analysis: { insights: [] },
-      result: { data_gaps: [], data_quality: { coverage_percent: 100, warnings: [] } },
-    });
+    const result = analysisResult({ analysis: { insights: [] }, result: { data_gaps: [], data_quality: { coverage_percent: 100, warnings: [] } } });
     renderWorkspace({ result });
-
-    expect(screen.getByText("No new unexplained system changes.")).toBeTruthy();
-    expect(screen.getAllByText("Instrumentation is reporting normally.").length).toBeGreaterThan(0);
+    expect(screen.getByText("All monitored systems are within learned behavior.")).toBeTruthy();
+    expect(screen.getByText("No new unexplained changes require review.")).toBeTruthy();
     expect(screen.queryByText("Evidence insufficient")).toBeNull();
   });
 
-  it("shows the portfolio only when more than one site is available", async () => {
-    const apiFetch = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ runs: [{
-        run_id: "site-b-run",
-        adaptive_site_key: "site-b",
-        site_name: "South Plant",
-        system_name: "Pumping",
-        rows_received: 10,
-        rows_accepted: 10,
-        evidence_summary: [],
-        observation_status: "normal",
-        baseline_status: "Established",
-      }] }),
-    }));
+  it("keeps the multi-site portfolio available without replacing the default brief", async () => {
+    const apiFetch = vi.fn(async () => ({ ok: true, json: async () => ({ runs: [{ run_id: "site-b-run", adaptive_site_key: "site-b", site_name: "South Plant", system_name: "Pumping", rows_received: 10, rows_accepted: 10, evidence_summary: [], observation_status: "normal", baseline_status: "Established" }] }) }));
     renderWorkspace({ apiFetch });
-
-    expect(await screen.findByRole("heading", { name: "Sites" })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Open Site" })).toHaveLength(2);
+    expect(await screen.findByRole("button", { name: "Sites" })).toBeTruthy();
+    expect(screen.getByTestId("operations-brief")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Sites" }));
+    expect(screen.getByRole("heading", { name: "Sites" })).toBeTruthy();
   });
 });

@@ -21,7 +21,7 @@ async function openCommandCenter(page) {
 
 async function startCommandCenterUpload(page, { name, csv }) {
   await openCommandCenter(page);
-  await page.getByRole("button", { name: "Data Connections" }).click();
+  await page.getByRole("button", { name: "Data" }).click();
   await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
   const uploadAcceptedPromise = page.waitForResponse(
     (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
@@ -42,7 +42,7 @@ test.describe("Setup + Upload regression", () => {
   test("opens command-center upload entry without the setup wizard", async ({ page }) => {
     await openCommandCenter(page);
     await expect(page.getByTestId("onboarding-root")).toHaveCount(0);
-    await page.getByRole("button", { name: "Data Connections" }).click();
+    await page.getByRole("button", { name: "Data" }).click();
     await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
     await expect(page.getByTestId("csv-upload-input")).toBeAttached();
   });

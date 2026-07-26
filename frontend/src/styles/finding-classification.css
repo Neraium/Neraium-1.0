@@ -44,7 +44,7 @@
 
 .finding-classification__facts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-6);
   min-width: 0;
   margin: 0;
@@ -133,7 +133,7 @@
 
 @media (max-width: 640px) {
   .finding-classification { padding: var(--space-10); }
-  .finding-classification__facts { grid-template-columns: minmax(0, 1fr); }
+  .finding-classification__facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .finding-classification--compact { padding: 0; }
   .finding-classification__chips { gap: var(--space-4); }
   .finding-classification__chip { font-size: 0.65rem; }

@@ -81,16 +81,16 @@ test.describe("Authentication, navigation, connectors, and permissions", () => {
 
   test("direct links, refresh, back, and forward preserve engineering workspaces", async ({ page }) => {
     await page.goto("/sites/current");
-    await expect(page.getByRole("button", { name: "Shift Brief" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "Operations Brief" })).toHaveAttribute("aria-current", "page");
     await page.reload();
-    await expect(page.getByRole("button", { name: "Shift Brief" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "Operations Brief" })).toHaveAttribute("aria-current", "page");
 
-    await page.getByRole("button", { name: "Portfolio" }).click();
-    await expect(page).toHaveURL(/\/portfolio$/);
+    await page.getByRole("button", { name: "Systems" }).click();
+    await expect(page).toHaveURL(/\/systems$/);
     await page.goBack();
-    await expect(page.getByRole("button", { name: "Shift Brief" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "Operations Brief" })).toHaveAttribute("aria-current", "page");
     await page.goForward();
-    await expect(page.getByRole("button", { name: "Portfolio" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "Systems" })).toHaveAttribute("aria-current", "page");
   });
 
   test("an expired server session returns the user to sign in", async ({ page, context }) => {

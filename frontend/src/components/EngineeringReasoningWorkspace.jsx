@@ -1,22 +1,26 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { buildEngineeringReasoningModel, buildEngineeringReasoningModelsFromEvidenceRuns } from "../viewModels/engineeringReasoning";
-import { normalizeFindingPresentation } from "../viewModels/operatorFinding";
-import { deriveWorkspacePresentationState } from "../viewModels/shiftBrief";
+import { deriveEscalationReadiness, deriveWorkspacePresentationState } from "../viewModels/operationsBrief";
+import { feedbackForReviewAction, normalizeReviewRecords, reviewRecordFor } from "../viewModels/findingReviewState";
 import FirstBaselineExperience, { SupportedFormats, WorkflowSteps } from "./FirstBaselineExperience";
 import ConfidenceTierChip from "./engineering/ConfidenceTierChip";
-import EvidenceLineage from "./engineering/EvidenceLineage";
 import EvidencePackageExport from "./engineering/EvidencePackageExport";
 import FindingSummary from "./engineering/FindingSummary";
-import FindingClassificationSummary from "./operational/FindingClassificationSummary";
 import GlobalAssetSearch from "./engineering/GlobalAssetSearch";
 import PortfolioWorkspace from "./engineering/PortfolioWorkspace";
-import ShiftBrief from "./engineering/ShiftBrief";
+import OperationsBrief from "./engineering/OperationsBrief";
+import { EvidenceRecordWorkspace, FindingReviewWorkspace, InvestigationWorkspace } from "./engineering/FindingCaseWorkspaces";
 import TraceTimeline from "./engineering/TraceTimeline";
 import "../styles/engineering-reasoning.css";
 
 const ROUTES = {
   portfolio: "/portfolio",
   site: "/sites/current",
+  systems: "/systems",
+  findings: "/findings",
+  finding: "/findings",
+  investigation: "/investigations",
+  investigations: "/investigations",
   evidence: "/evidence",
   trace: "/trace",
 };
@@ -25,10 +29,15 @@ function routeFromLocation() {
   if (typeof window === "undefined") return "portfolio";
   const path = window.location.pathname;
   if (path.startsWith("/systems/")) return "system";
+  if (path === "/systems") return "systems";
   if (path.startsWith("/sites/")) return "site";
-  if (path.startsWith("/evidence") || path.startsWith("/investigations")) return "evidence";
+  if (path.startsWith("/findings/")) return "finding";
+  if (path === "/findings") return "findings";
+  if (path.startsWith("/investigations")) return "investigation";
+  if (path.startsWith("/evidence")) return "evidence";
   if (path.startsWith("/trace")) return "trace";
-  return "portfolio";
+  if (path === "/portfolio") return "portfolio";
+  return "site";
 }
 
 function pathIdentity(prefixes) {
@@ -51,7 +60,7 @@ function WorkspaceStateNotice({ state, onPrimary }) {
   return (
     <section className={"operational-empty operational-empty--" + state.key} aria-labelledby={"workspace-state-" + state.key + "-title"} data-testid={"workspace-state-" + state.key}>
       <span className="operational-empty__mark" aria-hidden="true" />
-      <span className="operational-label">Shift brief · {state.status}</span>
+      <span className="operational-label">Operations Brief · {state.status}</span>
       <h1 id={"workspace-state-" + state.key + "-title"}>{state.headline}</h1>
       <p>{state.body}</p>
       <div className="operational-empty__actions">
@@ -110,34 +119,25 @@ function OverviewHeader({ eyebrow, name, status, confidence, location, summary =
   );
 }
 
-function SiteOverview({ model, acknowledgedIds, onReview, onEvidence, onAcknowledge, onSystem }) {
-  return (
-    <ShiftBrief
-      model={model}
-      acknowledgedIds={acknowledgedIds}
-      onReview={onReview}
-      onEvidence={onEvidence}
-      onAcknowledge={onAcknowledge}
-      onSystem={onSystem}
-    />
-  );
+function SiteOverview({ model, reviewRecords, onReview, onReviewAction }) {
+  return <OperationsBrief model={model} reviewRecords={reviewRecords} onReview={onReview} onReviewAction={onReviewAction} />;
 }
 
-function SystemOverview({ model, system, acknowledgedIds = [], onReview, onEvidence, onAcknowledge }) {
-  if (!system) return <SiteOverview model={model} acknowledgedIds={acknowledgedIds} onReview={onReview} onEvidence={onEvidence} onAcknowledge={onAcknowledge} />;
+function SystemOverview({ model, system, reviewRecords = {}, onReview, onReviewAction, onEvidence }) {
+  if (!system) return <SystemsOverview model={model} onSystem={() => {}} />;
   return (
     <div className="system-overview operational-overview">
       <OverviewHeader eyebrow="System overview" name={system.name} status={system.status} confidence={system.evidenceTier} location={system.location.join(" / ")} summary={findingCountSummary(system.findings, system.status)} />
       {system.findings.length ? (
         <section className="active-findings" aria-label="Active findings">
-          <div>{system.findings.map((finding) => <FindingSummary key={finding.id} finding={finding} acknowledged={acknowledgedIds.includes(String(finding.id))} onReview={onReview} onEvidence={onEvidence} onAcknowledge={onAcknowledge} />)}</div>
+          <div>{system.findings.map((finding) => <FindingSummary key={finding.id} finding={finding} reviewRecord={reviewRecordFor(finding, reviewRecords)} onReview={onReview} onReviewAction={onReviewAction} />)}</div>
         </section>
       ) : (
         <section className="normal-summary">
-          <span>What</span>
-          <h2>{system.status === "Normal" ? "No new unexplained system changes." : "Evidence is insufficient for this system"}</h2>
-          <p>{system.status === "Normal" ? "This system is quiet." : "A reliable system comparison is not available."}</p>
-          <button type="button" className="forensic-button" onClick={() => onEvidence(null)}>Open Evidence</button>
+          <span>Current conditions</span>
+          <h2>{system.status === "Normal" ? "Within learned behavior." : "More evidence is needed."}</h2>
+          <p>{system.status === "Normal" ? "No new unexplained changes require review." : "A reliable system comparison is not available."}</p>
+          <button type="button" className="forensic-button" onClick={() => onEvidence(null)}>Open evidence</button>
         </section>
       )}
       <TechnicalSummary model={model} />
@@ -145,156 +145,21 @@ function SystemOverview({ model, system, acknowledgedIds = [], onReview, onEvide
   );
 }
 
-function LocationHierarchy({ items }) {
-  return <ol className="location-hierarchy">{items.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ol>;
-}
-
-function findingTimelineLabel(event) {
-  if (event.periodLabel) return event.periodLabel;
-  if (event.time) return event.time;
-  if (event.start && event.end) return `${event.start} to ${event.end}`;
-  if (event.start) return `From ${event.start}`;
-  if (event.end) return `Through ${event.end}`;
-  return "";
-}
-
-function displayLabel(value) {
-  return String(value || "Unavailable").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function uniqueText(values) {
-  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
-}
-
-function briefSentence(value) {
-  const clean = String(value ?? "").replace(/\s+/g, " ").trim();
-  if (!clean) return "";
-  const first = clean.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() ?? clean;
-  return /[.!?]$/.test(first) ? first : `${first}.`;
-}
-
-function EngineeringGuidance({ items, start = 1 }) {
-  return <ol className="classification-guidance" start={start}>{items.map((item, index) => <li key={`${item.rank}-${item.check}`}><span>{item.rank || start + index}</span><div><strong>{item.check}</strong><p>{briefSentence(item.reason)}</p><small>{displayLabel(item.category)}</small></div></li>)}</ol>;
-}
-
-function EvidenceWorkspace({ model, finding, apiFetch, onTrace, onBack }) {
-  const runId = runIdentity(model, finding);
-  if (!finding) {
-    return (
-      <div className="evidence-workspace operational-evidence">
-        <button type="button" className="evidence-back" onClick={onBack}>Back to overview</button>
-        <OverviewHeader eyebrow="Evidence" name={model.status === "Normal" ? "No active findings" : "Evidence is not yet sufficient"} status={model.status} confidence={model.evidenceQuality} />
-        <section className="evidence-section"><h2>What changed</h2><p>{model.status === "Normal" ? "Mapped relationships remain within their learned behavior." : "A reliable baseline comparison is not available."}</p></section>
-        <TechnicalSummary model={model} />
-      </div>
-    );
-  }
-  const limiting = [...finding.contradictions, ...finding.limitations];
-  const relationship = finding.relationships[0] ?? model.relationships[0] ?? null;
-  const presentation = finding.classificationPresentation ?? normalizeFindingPresentation(finding);
-  const dataLimitations = uniqueText([...presentation.dataLimitations, ...limiting, finding.confidenceReason, presentation.certaintyLimit]);
-  const visibleGuidance = presentation.investigationGuidance.slice(0, 3);
-  const additionalGuidance = presentation.investigationGuidance.slice(3);
-  const visibleEvidence = finding.supporting.slice(0, 3);
-  const additionalEvidence = finding.supporting.slice(3);
-  const whyBullets = uniqueText([
-    briefSentence(finding.whyItMatters),
-    presentation.persistence.persistent ? `The change persisted.` : "",
-    presentation.operatingMode.match !== "Unavailable" ? `Operating-mode match is ${presentation.operatingMode.match.toLowerCase()}.` : "",
-  ]);
+function SystemsOverview({ model, onSystem }) {
   return (
-    <div className="evidence-workspace operational-evidence">
-      <button type="button" className="evidence-back" onClick={onBack}>Back to overview</button>
-      <OverviewHeader eyebrow="Investigation" name={finding.title} status={finding.status} confidence={finding.tier} />
-      <FindingClassificationSummary finding={finding} showDefinition={false} />
-      <div className="operational-evidence__sections operational-evidence__sections--classification">
-        <section className="evidence-section evidence-section--what">
-          <h2>What changed</h2>
-          <p>{finding.observedChange}</p>
-        </section>
-        <section className="evidence-section">
-          <h2>Why it matters</h2>
-          <ul>{whyBullets.map((item) => <li key={item}>{item}</li>)}</ul>
-        </section>
-        <section className="evidence-section">
-          <h2>Highest-value next checks</h2>
-          {visibleGuidance.length ? <EngineeringGuidance items={visibleGuidance} /> : <p>No evidence-linked next check was recorded for this finding.</p>}
-          {additionalGuidance.length ? <details className="evidence-section__more"><summary>Show all checks</summary><EngineeringGuidance items={additionalGuidance} start={4} /></details> : null}
-        </section>
-        <section className="evidence-section">
-          <h2>Relationship timeline</h2>
-          {presentation.timeline.length ? <ol className="classification-timeline">{presentation.timeline.map((event, index) => <li key={`${event.eventType}-${index}`}><time>{findingTimelineLabel(event)}</time><strong>{event.title}</strong>{event.detail ? <p>{event.detail}</p> : null}</li>)}</ol> : <p>No source-bounded timeline milestones were recorded for this finding.</p>}
-        </section>
-        <section className="evidence-section">
-          <h2>Supporting evidence</h2>
-          <p>{finding.comparisonSummary}</p>
-          {visibleEvidence.length ? <ul>{visibleEvidence.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No supporting observation was supplied.</p>}
-          {additionalEvidence.length ? <details className="evidence-section__more"><summary>Show all supporting evidence</summary><ul>{additionalEvidence.map((item) => <li key={item}>{item}</li>)}</ul></details> : null}
-        </section>
-      </div>
+    <div className="systems-overview operational-overview">
+      <OverviewHeader eyebrow="Systems" name={model.site.name} status={model.status} confidence={model.evidenceQuality} summary={`${model.subsystems.length} monitored ${model.subsystems.length === 1 ? "system" : "systems"}`} />
+      {model.subsystems.length ? <div className="systems-list">{model.subsystems.map((system) => <button type="button" key={system.id} onClick={() => onSystem(system.name)}><span><strong>{system.name}</strong><small>{system.location.join(" / ")}</small></span><span>{system.status}<small>{system.findingCount} active {system.findingCount === 1 ? "finding" : "findings"}</small></span></button>)}</div> : <section className="normal-summary"><span>Systems</span><h2>No mapped systems are available.</h2><p>Import mapped telemetry to establish system-level context.</p></section>}
+    </div>
+  );
+}
 
-      <div className="engineering-investigation-disclosures" aria-label="Additional investigation detail">
-        <details>
-          <summary>Why Neraium classified it this way</summary>
-          <p>{presentation.meaning}</p>
-          <ul>{presentation.reasons.map((item) => <li key={item}>{item}</li>)}</ul>
-        </details>
-        <details>
-          <summary>Operating-mode comparison details</summary>
-          <dl className="classification-detail-grid classification-detail-grid--mode">
-            <div><dt>Baseline mode</dt><dd>{presentation.operatingMode.baseline}</dd></div>
-            <div><dt>Recent mode</dt><dd>{presentation.operatingMode.recent}</dd></div>
-            <div><dt>Mode match</dt><dd>{presentation.operatingMode.match}</dd></div>
-            <div><dt>Comparison confidence</dt><dd>{presentation.operatingMode.confidence}</dd></div>
-          </dl>
-          {presentation.operatingMode.differences.length ? <ul>{presentation.operatingMode.differences.map((item, index) => <li key={`${item.feature}-${index}`}><strong>{displayLabel(item.feature)}:</strong> {item.reason || "A recorded operating-mode difference was present."}</li>)}</ul> : null}
-          {presentation.operatingMode.reasons.length ? <ul>{presentation.operatingMode.reasons.map((item) => <li key={item}>{item}</li>)}</ul> : null}
-        </details>
-        <details>
-          <summary>Sensor-health details</summary>
-          <dl className="classification-detail-grid"><div><dt>Data confidence</dt><dd>{presentation.dataConfidence.rating}</dd></div><div><dt>Summary</dt><dd>{presentation.dataConfidence.summary}</dd></div></dl>
-          {presentation.sensorHealth.length ? <ul className="classification-sensor-list">{presentation.sensorHealth.map((sensor) => <li key={sensor.signal}><strong>{displayLabel(sensor.signal)} · {displayLabel(sensor.health)}</strong>{sensor.conditions.length ? <ul>{sensor.conditions.map((condition, index) => <li key={`${condition.type}-${index}`}>{displayLabel(condition.type)}: {condition.evidence || "No supporting condition detail was recorded."}</li>)}</ul> : null}</li>)}</ul> : <p>Sensor-health conditions were not recorded for this finding.</p>}
-        </details>
-        <details>
-          <summary>Alternative explanations</summary>
-          {presentation.alternativeExplanations.length ? <ul>{presentation.alternativeExplanations.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No alternative explanations were recorded.</p>}
-        </details>
-        <details>
-          <summary>Data limitations</summary>
-          {dataLimitations.length ? <ul>{dataLimitations.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No additional data limitations were recorded.</p>}
-        </details>
-        <details>
-          <summary>Source metadata</summary>
-          <LocationHierarchy items={finding.location.hierarchy} />
-          <dl className="classification-detail-grid classification-detail-grid--mode">
-            <div><dt>Baseline window</dt><dd>{finding.comparison.baseline}</dd></div>
-            <div><dt>Current window</dt><dd>{finding.comparison.current}</dd></div>
-            <div><dt>Evidence run</dt><dd>{runId ?? "Not persisted"}</dd></div>
-            <div><dt>Generated</dt><dd>{finding.generatedAt || "Not supplied"}</dd></div>
-          </dl>
-        </details>
-        <details className="operational-technical evidence-technical">
-          <summary>Technical analysis details</summary>
-          <div className="operational-technical__content">
-            <dl>
-              <div><dt>Baseline relationship value</dt><dd>{finding.comparison.baselineValue ?? "Not supplied"}</dd></div>
-              <div><dt>Current relationship value</dt><dd>{finding.comparison.currentValue ?? "Not supplied"}</dd></div>
-              <div><dt>Relationship delta</dt><dd>{finding.comparison.delta ?? "Not supplied"}</dd></div>
-              <div><dt>Evidence records</dt><dd>{finding.evidenceObjects.length}</dd></div>
-            </dl>
-            {finding.technicalLimitations.length ? <section><h3>All processing notes</h3><ul>{finding.technicalLimitations.map((item) => <li key={item}>{item}</li>)}</ul></section> : null}
-            <EvidenceLineage finding={finding} relationship={relationship} result={model.result} />
-            <div className="technical-actions">
-              <EvidencePackageExport runId={runId} apiFetch={apiFetch} />
-              <button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open trace mode</button>
-            </div>
-          </div>
-        </details>
-        <details>
-          <summary>Audit history</summary>
-          <dl className="classification-detail-grid"><div><dt>Evidence run</dt><dd>{runId ?? "Not persisted"}</dd></div><div><dt>Review outcome</dt><dd>{finding.outcome ? JSON.stringify(finding.outcome) : "No review outcome recorded"}</dd></div></dl>
-        </details>
-      </div>
+function FindingsOverview({ model, reviewRecords, onReview, onReviewAction }) {
+  const visible = model.findings.filter((finding) => reviewRecordFor(finding, reviewRecords).state !== "not_useful");
+  return (
+    <div className="findings-overview operational-overview">
+      <OverviewHeader eyebrow="Findings" name="Current findings" status={model.status} confidence={model.evidenceQuality} summary={visible.length ? `${visible.length} active ${visible.length === 1 ? "finding" : "findings"}` : "No active findings"} />
+      {visible.length ? <section className="active-findings" aria-label="Current findings"><div>{visible.map((finding) => <FindingSummary key={finding.id} finding={finding} reviewRecord={reviewRecordFor(finding, reviewRecords)} onReview={onReview} onReviewAction={onReviewAction} />)}</div></section> : <section className="normal-summary"><span>Current conditions</span><h2>All monitored systems are within learned behavior.</h2><p>No new unexplained changes require review.</p></section>}
     </div>
   );
 }
@@ -313,7 +178,8 @@ function TraceWorkspace({ model, finding, apiFetch, onBack }) {
 }
 
 const FIRST_BASELINE_STORAGE_PREFIX = "neraium.first-baseline.dismissed";
-const ACKNOWLEDGED_STORAGE_PREFIX = "neraium.shift-brief.acknowledged";
+const REVIEW_STATE_STORAGE_PREFIX = "neraium.operations-brief.review-state";
+const LEGACY_ACKNOWLEDGED_STORAGE_PREFIX = "neraium.shift-brief.acknowledged";
 
 function storageScopeFor(user) {
   return String(user?.email ?? user?.id ?? "operator").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "-");
@@ -329,6 +195,11 @@ function readStorageValue(key, fallback) {
   }
 }
 
+function scrollWindowTo(top) {
+  if (typeof window === "undefined" || /jsdom/i.test(window.navigator?.userAgent ?? "")) return;
+  window.scrollTo({ top, behavior: "auto" });
+}
+
 function writeStorageValue(key, value) {
   if (typeof window === "undefined") return;
   try {
@@ -340,21 +211,27 @@ function writeStorageValue(key, value) {
 
 export default function EngineeringReasoningWorkspace({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection, apiFetch, onWorkspaceNavigate, onSignOut, signOutPending = false, currentUser }) {
   const [route, setRoute] = useState(routeFromLocation);
-  const [selectedFindingId, setSelectedFindingId] = useState(() => pathIdentity(["evidence", "investigations"]));
+  const [selectedFindingId, setSelectedFindingId] = useState(() => pathIdentity(["findings", "evidence", "investigations"]));
   const [selectedSystemName, setSelectedSystemName] = useState(() => pathIdentity(["systems"]));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [compactNavigation, setCompactNavigation] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 1024px)")?.matches);
   const mobileMenuButtonRef = useRef(null);
   const mobileSidebarRef = useRef(null);
+  const restoreScrollRef = useRef(0);
   const [selectedSiteId, setSelectedSiteId] = useState(() => pathIdentity(["sites"]) || null);
   const [portfolioRuns, setPortfolioRuns] = useState([]);
   const storageScope = storageScopeFor(currentUser);
   const firstBaselineStorageKey = FIRST_BASELINE_STORAGE_PREFIX + "." + storageScope;
-  const acknowledgedStorageKey = ACKNOWLEDGED_STORAGE_PREFIX + "." + storageScope;
+  const reviewStorageKey = REVIEW_STATE_STORAGE_PREFIX + "." + storageScope;
+  const legacyAcknowledgedStorageKey = LEGACY_ACKNOWLEDGED_STORAGE_PREFIX + "." + storageScope;
   const [firstBaselineDismissed, setFirstBaselineDismissed] = useState(() => readStorageValue(firstBaselineStorageKey, false) === true);
-  const [acknowledgedIds, setAcknowledgedIds] = useState(() => {
-    const stored = readStorageValue(acknowledgedStorageKey, []);
-    return Array.isArray(stored) ? stored.map(String) : [];
+  const [reviewRecords, setReviewRecords] = useState(() => {
+    const records = normalizeReviewRecords(readStorageValue(reviewStorageKey, {}));
+    const legacy = readStorageValue(legacyAcknowledgedStorageKey, []);
+    if (Array.isArray(legacy)) {
+      for (const id of legacy.map(String)) if (!records[id]) records[id] = { state: "acknowledged", reason: "", note: "", reviewedAt: "", owner: "", persisted: false };
+    }
+    return records;
   });
   const currentModel = useMemo(() => buildEngineeringReasoningModel({ liveOps, canonicalFinding, currentSession, result: effectiveLatestUploadResult, snapshot: effectiveLatestUploadSnapshot, domainDetection }), [liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection]);
   const portfolioModels = useMemo(() => {
@@ -367,11 +244,21 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const portfolioSites = useMemo(() => portfolioModels.map((item) => item.site), [portfolioModels]);
   const model = portfolioModels.find((item) => item.site.id === selectedSiteId) ?? currentModel;
   const selectedFinding = selectedFindingId === "__overview__" ? null : model.findings.find((finding) => finding.id === selectedFindingId) ?? model.selectedFinding;
+  const selectedReviewRecord = selectedFinding ? reviewRecordFor(selectedFinding, reviewRecords) : null;
   const selectedSystem = model.subsystems.find((system) => system.name === selectedSystemName) ?? null;
   const presentationState = useMemo(() => deriveWorkspacePresentationState(model), [model]);
   const showFirstBaseline = presentationState.key === "noDataset" && !firstBaselineDismissed;
   const effectiveRoute = route === "portfolio" && portfolioModels.length <= 1 ? "site" : route;
-  const navItems = portfolioModels.length > 1 ? [["portfolio", "Portfolio"], ["site", "Shift Brief"], ["data-connections", "Data Connections"]] : [["site", "Shift Brief"], ["data-connections", "Data Connections"]];
+  const activeNavigation = ["finding", "findings"].includes(effectiveRoute) ? "findings" : ["investigation", "evidence", "trace"].includes(effectiveRoute) ? "investigations" : ["system", "systems"].includes(effectiveRoute) ? "systems" : effectiveRoute;
+  const navItems = [
+    ["site", "Operations Brief"],
+    ["systems", "Systems"],
+    ["findings", "Findings"],
+    ["investigations", "Investigations"],
+    ["data-connections", "Data"],
+    ...(portfolioModels.length > 1 ? [["portfolio", "Sites"]] : []),
+    ...(currentUser?.role === "admin" ? [["governance-admin", "Administration"]] : []),
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -383,11 +270,13 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   }, [apiFetch]);
 
   useEffect(() => {
-    const onPop = () => {
+    const onPop = (event) => {
       setRoute(routeFromLocation());
-      setSelectedFindingId(pathIdentity(["evidence", "investigations"]));
+      setSelectedFindingId(pathIdentity(["findings", "evidence", "investigations"]));
       setSelectedSystemName(pathIdentity(["systems"]));
       setSelectedSiteId(pathIdentity(["sites"]) || null);
+      restoreScrollRef.current = Number(event.state?.scrollY ?? 0);
+      window.requestAnimationFrame?.(() => scrollWindowTo(restoreScrollRef.current));
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -449,29 +338,48 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     };
   }, [mobileNavOpen]);
 
+  function pushRoute(path, nextRoute) {
+    const scrollY = typeof window === "undefined" ? 0 : window.scrollY;
+    window.history.replaceState({ ...window.history.state, scrollY }, "", window.location.pathname);
+    window.history.pushState({ neraiumRoute: true }, "", path);
+    setRoute(nextRoute);
+    setMobileNavOpen(false);
+    window.requestAnimationFrame?.(() => scrollWindowTo(0));
+    if (mobileNavOpen) window.requestAnimationFrame?.(() => mobileMenuButtonRef.current?.focus());
+  }
+
   function navigate(target) {
     if (target === "data-connections" || target === "governance-admin") {
       onWorkspaceNavigate?.(target);
       return;
     }
     const path = target === "site" ? `/sites/${encodeURIComponent(model.site.id)}` : ROUTES[target];
-    window.history.pushState({}, "", path);
-    setRoute(target);
-    setMobileNavOpen(false);
-    if (mobileNavOpen) window.requestAnimationFrame?.(() => mobileMenuButtonRef.current?.focus());
+    pushRoute(path, target === "investigations" ? "investigation" : target);
   }
 
-  const openEvidence = useCallback((finding) => {
+  function goBack(fallback) {
+    if (window.history.state?.neraiumRoute) window.history.back();
+    else navigate(fallback);
+  }
+
+  function openFinding(finding) {
     setSelectedFindingId(finding?.id || "__overview__");
-    const evidencePath = finding ? `/evidence/${encodeURIComponent(finding.id)}` : "/evidence";
-    window.history.pushState({}, "", evidencePath);
-    setRoute("evidence");
-  }, []);
+    pushRoute(finding ? `/findings/${encodeURIComponent(finding.id)}` : "/findings", finding ? "finding" : "findings");
+  }
+
+  function openInvestigation(finding) {
+    setSelectedFindingId(finding?.id || "__overview__");
+    pushRoute(finding ? `/investigations/${encodeURIComponent(finding.id)}` : "/investigations", "investigation");
+  }
+
+  function openEvidence(finding) {
+    setSelectedFindingId(finding?.id || "__overview__");
+    pushRoute(finding ? `/evidence/${encodeURIComponent(finding.id)}` : "/evidence", "evidence");
+  }
 
   function openSystem(name) {
     setSelectedSystemName(name);
-    window.history.pushState({}, "", `/systems/${encodeURIComponent(name)}`);
-    setRoute("system");
+    pushRoute(`/systems/${encodeURIComponent(name)}`, "system");
   }
 
   function handleSearch(item) {
@@ -489,12 +397,10 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     navigate(item.target);
   }
 
-  const handleSelectSite = useCallback((site) => {
+  function handleSelectSite(site) {
     setSelectedSiteId(site.id);
-    window.history.pushState({}, "", `/sites/${encodeURIComponent(site.id)}`);
-    setRoute("site");
-    setMobileNavOpen(false);
-  }, []);
+    pushRoute(`/sites/${encodeURIComponent(site.id)}`, "site");
+  }
 
   function dismissFirstBaseline() {
     writeStorageValue(firstBaselineStorageKey, true);
@@ -506,12 +412,42 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     navigate("data-connections");
   }
 
-  function acknowledgeFinding(finding) {
+  async function handleFindingReviewAction(finding, action) {
     const id = String(finding?.id ?? "");
-    if (!id || acknowledgedIds.includes(id)) return;
-    const next = [...acknowledgedIds, id];
-    setAcknowledgedIds(next);
-    writeStorageValue(acknowledgedStorageKey, next);
+    if (!id) return { persisted: false };
+    const record = {
+      state: action.state,
+      reason: action.reason ?? "",
+      note: action.note ?? "",
+      reviewedAt: new Date().toISOString(),
+      owner: currentUser?.name || currentUser?.email || "Signed-in engineer",
+      persisted: false,
+    };
+    setReviewRecords((current) => {
+      const next = { ...current, [id]: record };
+      writeStorageValue(reviewStorageKey, next);
+      return next;
+    });
+    const feedback = feedbackForReviewAction(action);
+    const runId = runIdentity(model, finding);
+    if (!feedback || !runId || typeof apiFetch !== "function") return { persisted: false };
+    try {
+      const response = await apiFetch(`/api/evidence/runs/${encodeURIComponent(runId)}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(feedback),
+      });
+      if (!response?.ok) return { persisted: false };
+      const persistedRecord = { ...record, persisted: true };
+      setReviewRecords((current) => {
+        const next = { ...current, [id]: persistedRecord };
+        writeStorageValue(reviewStorageKey, next);
+        return next;
+      });
+      return { persisted: true };
+    } catch {
+      return { persisted: false };
+    }
   }
 
   function presentationPrimaryAction() {
@@ -528,11 +464,10 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
       <aside id="forensic-navigation" ref={mobileSidebarRef} className={`forensic-sidebar${mobileNavOpen ? " is-open" : ""}`} aria-label="Application sidebar" aria-hidden={compactNavigation && !mobileNavOpen} inert={compactNavigation && !mobileNavOpen ? "" : undefined}>
         <div className="forensic-brand"><span className="forensic-brand__mark" aria-hidden="true">N</span><div><strong>Neraium</strong><small>Operational evidence</small></div></div>
         <nav aria-label="Primary navigation">
-          {navItems.map(([id, label]) => <button key={id} type="button" className={effectiveRoute === id ? "is-active" : ""} aria-current={effectiveRoute === id ? "page" : undefined} onClick={() => navigate(id)}><span aria-hidden="true" className={`nav-glyph nav-glyph--${id}`} />{label}</button>)}
+          {navItems.map(([id, label]) => <button key={id} type="button" className={activeNavigation === id ? "is-active" : ""} aria-current={activeNavigation === id ? "page" : undefined} onClick={() => navigate(id)}><span aria-hidden="true" className={`nav-glyph nav-glyph--${id}`} />{label}</button>)}
         </nav>
         <div className="forensic-sidebar__account">
           <span>{currentUser?.name || currentUser?.email || "Signed in"}</span><small>{currentUser?.role || "engineer"}</small>
-          {currentUser?.role === "admin" ? <button type="button" onClick={() => navigate("governance-admin")}>Administration</button> : null}
           {onSignOut ? <button type="button" onClick={onSignOut} disabled={signOutPending}>{signOutPending ? "Signing out..." : "Sign out"}</button> : null}
         </div>
       </aside>
@@ -554,12 +489,16 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
         <main id="forensic-main" aria-label="Neraium operational workspace" tabIndex={-1} data-route={effectiveRoute}>
           {showFirstBaseline ? <FirstBaselineExperience onImport={beginFirstBaseline} onExit={dismissFirstBaseline} />
             : ["noDataset", "datasetReady", "analysisRunning"].includes(presentationState.key) ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
-              : effectiveRoute === "evidence" ? <EvidenceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onTrace={() => navigate("trace")} onBack={() => navigate("site")} />
-                : effectiveRoute === "trace" ? <TraceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onBack={() => openEvidence(selectedFinding)} />
-                  : ["insufficientEvidence", "legacyAnalysis"].includes(presentationState.key) ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
-                    : effectiveRoute === "portfolio" ? <PortfolioWorkspace sites={portfolioSites} onSelectSite={handleSelectSite} />
-                      : effectiveRoute === "site" ? <SiteOverview model={model} acknowledgedIds={acknowledgedIds} onReview={openEvidence} onEvidence={openEvidence} onAcknowledge={acknowledgeFinding} onSystem={openSystem} />
-                        : <SystemOverview model={model} system={selectedSystem} acknowledgedIds={acknowledgedIds} onReview={openEvidence} onEvidence={openEvidence} onAcknowledge={acknowledgeFinding} />}
+              : effectiveRoute === "finding" ? <FindingReviewWorkspace model={model} finding={selectedFinding} reviewRecord={selectedReviewRecord} onReviewAction={handleFindingReviewAction} onOpenInvestigation={openInvestigation} onBack={() => goBack("site")} />
+                : effectiveRoute === "investigation" ? <InvestigationWorkspace model={model} finding={selectedFinding} reviewRecord={selectedReviewRecord} escalated={deriveEscalationReadiness(selectedFinding, model.result).serious} onReviewAction={handleFindingReviewAction} onOpenEvidence={openEvidence} onTrace={() => navigate("trace")} onBack={() => goBack("findings")} />
+                  : effectiveRoute === "evidence" ? <EvidenceRecordWorkspace model={model} finding={selectedFinding} reviewRecord={selectedReviewRecord} apiFetch={apiFetch} onTrace={() => navigate("trace")} onBack={() => goBack("investigations")} />
+                    : effectiveRoute === "trace" ? <TraceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onBack={() => goBack("investigations")} />
+                      : effectiveRoute === "portfolio" ? <PortfolioWorkspace sites={portfolioSites} onSelectSite={handleSelectSite} />
+                        : effectiveRoute === "systems" ? <SystemsOverview model={model} onSystem={openSystem} />
+                          : effectiveRoute === "findings" ? <FindingsOverview model={model} reviewRecords={reviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} />
+                            : effectiveRoute === "system" ? <SystemOverview model={model} system={selectedSystem} reviewRecords={reviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} onEvidence={openEvidence} />
+                              : ["insufficientEvidence", "legacyAnalysis"].includes(presentationState.key) ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
+                                : <SiteOverview model={model} reviewRecords={reviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} />}
         </main>
       </div>
     </div>

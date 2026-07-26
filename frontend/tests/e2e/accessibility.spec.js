@@ -18,7 +18,7 @@ test.describe("Accessibility audit", () => {
     await expect(skipLink).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(main).toBeFocused();
-    const connections = page.getByRole("button", { name: "Data Connections", exact: true });
+    const connections = page.getByRole("button", { name: "Data", exact: true });
     await connections.focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
