@@ -233,6 +233,7 @@ function App() {
       await logoutUser();
       clearDatasetSessionCache();
       clearUploadSessionState();
+      setPendingUploadFiles([]);
       setDatasetScopeKey("signed-out");
       setAuthState({ status: "signed-out", user: null, notice: "You have been signed out." });
     } catch (error) {
@@ -245,6 +246,7 @@ function App() {
   const handleAuthenticated = useCallback((user) => {
     const scope = activateDatasetCacheScope(user);
     clearUploadSessionState();
+    setPendingUploadFiles([]);
     setAllowPersistedLatest(true);
     setDatasetScopeKey(scope.scopeKey);
     setAuthState({ status: "authenticated", user, notice: "" });
@@ -286,6 +288,7 @@ function App() {
     const handleSessionExpired = () => {
       clearDatasetSessionCache();
       clearUploadSessionState();
+      setPendingUploadFiles([]);
       setDatasetScopeKey("signed-out");
       setAuthState({ status: "signed-out", user: null, notice: "Your session expired. Sign in again to continue." });
     };
@@ -298,6 +301,7 @@ function App() {
     const applyWorkspaceChange = () => {
       const scope = activateDatasetCacheScope(authState.user, getCurrentWorkspaceId());
       clearUploadSessionState();
+      setPendingUploadFiles([]);
       setAllowPersistedLatest(true);
       setDatasetScopeKey(scope.scopeKey);
       void loadLatestUploadState({ includePersisted: true, forceRefresh: true });
@@ -351,6 +355,7 @@ function App() {
   return (
     <AppWorkspaceRouter
       activeWorkspace={activeWorkspace}
+      datasetScopeKey={datasetScopeKey}
       appReady={appReady}
       errorBoundaryResetKey={errorBoundaryResetKey}
       apiFetch={apiFetch}

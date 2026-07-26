@@ -6,6 +6,7 @@ import {
   buildApiDebugState,
   buildApiUrl,
 } from "../../config";
+import { getCurrentWorkspaceId } from "../datasetSessionCache";
 import * as uploadStateView from "../../viewModels/uploadState";
 import { normalizeUploadJob } from "../../viewModels/uploadContract";
 import {
@@ -37,14 +38,18 @@ function isTransientLatestUploadError(error) {
 }
 const latestUploadInflight = new Map();
 const latestUploadCache = new Map();
+let latestUploadCacheGeneration = 0;
 
 export function clearLatestUploadStateCache() {
+  latestUploadCacheGeneration += 1;
   latestUploadInflight.clear();
   latestUploadCache.clear();
 }
 
 export async function fetchLatestUploadState({ apiFetch, accessCode, includePersisted = false, forceRefresh = false } = {}) {
-  const key = `latest:${includePersisted ? 1 : 0}`;
+  const workspaceId = getCurrentWorkspaceId();
+  const key = `latest:${workspaceId}:${includePersisted ? 1 : 0}`;
+  const requestGeneration = latestUploadCacheGeneration;
   const now = Date.now();
   if (forceRefresh) {
     latestUploadInflight.delete(key);
@@ -78,7 +83,7 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
           snapshot: normalizedSnapshot,
           latestResult: normalizedLatestResult,
         };
-        latestUploadCache.set(key, { expiresAt: Date.now() + LATEST_UPLOAD_DEDUPE_TTL_MS, value });
+        if (requestGeneration === latestUploadCacheGeneration) latestUploadCache.set(key, { expiresAt: Date.now() + LATEST_UPLOAD_DEDUPE_TTL_MS, value });
         return value;
       } catch (error) {
         lastError = error;
@@ -222,6 +227,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
       xhr.withCredentials = true;
       xhr.timeout = timeoutMs;
 
+      xhr.setRequestHeader("X-Neraium-Workspace-Id", getCurrentWorkspaceId());
       Object.entries(buildAccessHeaders(accessCode)).forEach(([key, value]) => {
         xhr.setRequestHeader(key, value);
       });

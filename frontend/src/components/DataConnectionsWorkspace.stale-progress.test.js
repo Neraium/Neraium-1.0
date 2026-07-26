@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import DataConnectionsWorkspace, { formatAnalysisUpdateTime, queuedWorkerMessage } from "./DataConnectionsWorkspace";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
-import { SERVICE_UNAVAILABLE_RETRY_MESSAGE, SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
+import { SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
 
 const h = React.createElement;
 
@@ -15,11 +15,32 @@ vi.mock("../services/api/uploadApi", () => ({
 }));
 
 function renderPanel(overrides = {}) {
+  const selectedFiles = overrides.selectedFiles ?? [];
+  const uploadState = overrides.uploadState ?? "idle";
+  const processingState = String(overrides.uploadJob?.processing_state ?? "").toLowerCase();
+  const inferredAnalysisState = !selectedFiles.length
+    ? "no_dataset"
+    : uploadState === "validated"
+      ? "ready_to_analyze"
+      : uploadState === "complete"
+        ? "completed"
+        : ["failed", "error", "validation_error", "timeout"].includes(uploadState)
+          ? "failed"
+          : processingState === "building_baseline"
+            ? "baseline_creation"
+            : processingState === "building_fingerprint"
+              ? "comparison"
+              : "analysis_queued";
+  const snapshotAnalysis = overrides.latestUploadSnapshot?.latest_result?.analysis_result ?? null;
+  const analysisResult = overrides.analysisResult ?? (snapshotAnalysis ? { status: "complete", ...snapshotAnalysis } : null);
   return render(h(IntakeFlowPanel, {
     handleUpload: vi.fn((event) => event?.preventDefault?.()),
     uploadInputRef: { current: null },
     handleFileSelection: vi.fn(),
-    selectedFiles: [],
+    selectedFiles,
+    analysisState: overrides.analysisState ?? inferredAnalysisState,
+    analysisResult,
+    completionReady: overrides.completionReady ?? (uploadState === "complete" && Boolean(analysisResult)),
     pendingUploadKind: "csv",
     selectedFileSize: "Awaiting file",
     isUploadProcessing: (state) => ["uploading", "accepted", "queued", "processing", "running_sii", "structural_scoring", "building_fingerprint", "saving_results", "navigation_pending"].includes(String(state)),
@@ -56,10 +77,22 @@ function completedSessionStore() {
       job_id: "completed-job-1",
       filename: "old.csv",
       analysis_result: {
+        status: "complete",
         systems: [{ name: "Recovered system" }],
         insights: [{ title: "Recovered insight" }],
         fingerprint: { status: "Established" },
       },
+    },
+  };
+}
+
+function completedHydration(payload) {
+  return {
+    latestResult: payload,
+    latestSnapshot: {
+      ...payload,
+      current_upload: { job_id: payload?.job_id, dataset_id: payload?.job_id, result: payload },
+      latest_result: payload,
     },
   };
 }
@@ -73,7 +106,7 @@ function renderWorkspace(props = {}) {
     hasActiveSession: false,
     hasResumedSession: false,
     sessionStore: null,
-    onUploadComplete: vi.fn(),
+    onUploadComplete: vi.fn(async (payload) => completedHydration(payload)),
     onResetDemo: vi.fn(async () => ({})),
     ...props,
   }));
@@ -161,7 +194,7 @@ it("continues polling after temporary stream and status HTML 503 responses", asy
   uploadTelemetryFileWithProgress.mockResolvedValue({
     ok: true,
     status: 202,
-    payload: { job_id: "job-temporary-503", status_url: "/api/data/upload-status/job-temporary-503", status: "queued", message: "Upload accepted." },
+    payload: { job_id: "job-temporary-503", status_url: "/api/data/upload-status/job-temporary-503", status: "queued", analysis_state: "analysis_queued", message: "Upload accepted." },
   });
   let statusCalls = 0;
   const apiFetch = vi.fn(async (path) => {
@@ -172,12 +205,14 @@ it("continues polling after temporary stream and status HTML 503 responses", asy
       return jsonResponse({
         job_id: "job-temporary-503",
         status: "COMPLETE",
+        analysis_state: "completed",
         processing_state: "complete",
         result_available: true,
         first_usable_available: true,
         progress_label: "Analysis ready.",
         message: "Analysis ready.",
         analysis_result: {
+          status: "complete",
           systems: [{ name: "Recovered system" }],
           insights: [{ title: "Recovered insight" }],
           fingerprint: { status: "Established" },
@@ -186,13 +221,13 @@ it("continues polling after temporary stream and status HTML 503 responses", asy
     }
     return jsonResponse({});
   });
-  const onUploadComplete = vi.fn(async () => {});
+  const onUploadComplete = vi.fn(async (payload) => completedHydration(payload));
 
   renderWorkspace({ apiFetch, onUploadComplete });
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("temporary.csv")] } });
   fireEvent.click(screen.getByTestId("process-upload-button"));
 
-  expect(await screen.findByLabelText(`Analysis progress: ${SERVICE_UNAVAILABLE_RETRY_MESSAGE}`)).toBeTruthy();
+  expect(await screen.findByLabelText("Analysis progress: Analysis queued")).toBeTruthy();
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-temporary-503" }), { navigateToGate: false });
@@ -204,7 +239,7 @@ it("eventually fails persistent polling HTML 503 responses with a clean message"
   uploadTelemetryFileWithProgress.mockResolvedValue({
     ok: true,
     status: 202,
-    payload: { job_id: "job-persistent-503", status_url: "/api/data/upload-status/job-persistent-503", status: "queued", message: "Upload accepted." },
+    payload: { job_id: "job-persistent-503", status_url: "/api/data/upload-status/job-persistent-503", status: "queued", analysis_state: "analysis_queued", message: "Upload accepted." },
   });
   const apiFetch = vi.fn(async (path) => {
     if (String(path).includes("/api/data/upload-stream/job-persistent-503")) return htmlResponse(503);
@@ -277,6 +312,7 @@ it("processing state uses the behavior baseline as the progress indicator", () =
     uploadJob: {
       job_id: "progress-job",
       status: "PROCESSING",
+      analysis_state: "comparison",
       processing_state: "building_fingerprint",
       percent: 65,
       progress: 65,
@@ -306,6 +342,7 @@ it("baseline renderer fallback keeps the active analysis job visible", () => {
     uploadJob: {
       job_id: "active-job",
       status: "PROCESSING",
+      analysis_state: "comparison",
       processing_state: "building_fingerprint",
       percent: 65,
       progress: 65,
@@ -342,6 +379,7 @@ it("baseline renderer uses enhanced mode on mobile-capable constraints", () => {
     uploadJob: {
       job_id: "mobile-job",
       status: "PROCESSING",
+      analysis_state: "comparison",
       processing_state: "building_fingerprint",
       percent: 65,
       progress: 65,
@@ -416,19 +454,20 @@ it("complete state shows the behavior baseline completion moment", () => {
     latestUploadSnapshot: {
       latest_result: {
         analysis_result: {
+          status: "complete",
           systems: [{ name: "Pumping" }, { name: "Storage" }],
           insights: [{ title: "Pump cycling changed." }],
           fingerprint: { status: "Established" },
         },
       },
     },
-    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
+    uploadJob: { job_id: "complete-job", status: "COMPLETE", analysis_state: "completed", result_available: true },
   });
 
   expect(screen.getAllByRole("heading", { name: "Analysis complete" })).toHaveLength(1);
   expect(screen.queryByText("Behavior baseline established and evidence saved.")).toBeNull();
   const labels = Array.from(document.querySelectorAll(".upload-result-summary__item dt")).map((node) => node.textContent);
-  expect(labels).toEqual(["Status", "Findings", "Evidence quality"]);
+  expect(labels).toEqual(["Status", "Findings"]);
   expect(screen.getByText("complete.csv")).toBeTruthy();
   expect(screen.queryByText("8.4 MB")).toBeNull();
   const completedStages = document.querySelector(".upload-fingerprint-build__nodes").querySelectorAll("li.is-complete");
@@ -454,6 +493,7 @@ it("completed upload screen omits system metrics", () => {
       latest_result: {
         identified_systems: [{ name: "Legacy single system" }],
         analysis_result: {
+          status: "complete",
           systems: [
             { name: "Chilled Water" },
             { name: "Condenser Water" },
@@ -464,7 +504,7 @@ it("completed upload screen omits system metrics", () => {
         },
       },
     },
-    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
+    uploadJob: { job_id: "complete-job", status: "COMPLETE", analysis_state: "completed", result_available: true },
   });
 
   expect(screen.queryByText("Systems analyzed")).toBeNull();
@@ -480,6 +520,7 @@ it("completed upload screen count matches AnalysisResult insights length", () =>
       latest_result: {
         insights: [{ title: "Legacy finding" }],
         analysis_result: {
+          status: "complete",
           systems: [],
           insights: [
             { title: "Pump vibration increased sharply" },
@@ -491,7 +532,7 @@ it("completed upload screen count matches AnalysisResult insights length", () =>
         },
       },
     },
-    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
+    uploadJob: { job_id: "complete-job", status: "COMPLETE", analysis_state: "completed", result_available: true },
   });
 
   const item = screen.getByText("Findings").closest(".upload-result-summary__item");
@@ -509,6 +550,7 @@ it("uses the analysis result for not-detected relationship wording", () => {
     latestUploadSnapshot: {
       latest_result: {
         analysis_result: {
+          status: "complete",
           systems: [{ name: "Stable loop" }],
           insights: [{ id: "baseline-stable", severity: "low", title: "Operating fingerprint remains stable" }],
           relationships: [],
@@ -516,7 +558,7 @@ it("uses the analysis result for not-detected relationship wording", () => {
         },
       },
     },
-    uploadJob: { job_id: "stable-job", status: "COMPLETE", result_available: true },
+    uploadJob: { job_id: "stable-job", status: "COMPLETE", analysis_state: "completed", result_available: true },
   });
 
   const statusItem = screen.getByText("Status").closest(".upload-result-summary__item");
@@ -543,7 +585,7 @@ it("shows finalizing results instead of fake zero counts before AnalysisResult i
         fingerprint_status: "Pending",
       },
     },
-    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
+    uploadJob: { job_id: "complete-job", status: "COMPLETE", analysis_state: "completed", result_available: true },
   });
 
   expect(screen.getByLabelText("Analysis progress: Preparing results")).toBeTruthy();
@@ -580,7 +622,7 @@ it("selecting a file clears stale complete progress", async () => {
   expect(screen.getByRole("button", { name: "Start Baseline Analysis" })).toBeTruthy();
 });
 
-it("analyze another CSV resets the completed workspace", async () => {
+it("a completed previous session cannot populate a new import workflow", () => {
   const onResetDemo = vi.fn(async () => ({}));
   renderWorkspace({
     hasResumedSession: true,
@@ -588,16 +630,11 @@ it("analyze another CSV resets the completed workspace", async () => {
     onResetDemo,
   });
 
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "Import Another Dataset" })).toBeTruthy();
-  });
-
-  fireEvent.click(screen.getByRole("button", { name: "Import Another Dataset" }));
-
-  await waitFor(() => {
-    expect(onResetDemo).toHaveBeenCalledTimes(1);
-  });
-  expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
+  expect(screen.getAllByText("No file selected").length).toBeGreaterThan(0);
+  expect(screen.queryByRole("heading", { name: "Analysis complete" })).toBeNull();
+  expect(screen.queryByText("Findings")).toBeNull();
+  expect(screen.queryByText("Evidence quality")).toBeNull();
+  expect(onResetDemo).not.toHaveBeenCalled();
 });
 
 it("previous completed upload does not leak progress into new idle upload screen", () => {
@@ -615,7 +652,7 @@ it("treats the first complete payload with a saved result as terminal and auto-o
   uploadTelemetryFileWithProgress.mockResolvedValue({
     ok: true,
     status: 202,
-    payload: { job_id: "job-complete", status_url: "/api/data/upload-status/job-complete", status: "queued", message: "Upload accepted." },
+    payload: { job_id: "job-complete", status_url: "/api/data/upload-status/job-complete", status: "queued", analysis_state: "analysis_queued", message: "Upload accepted." },
   });
 
   const apiFetch = vi.fn(async (path) => {
@@ -625,12 +662,14 @@ it("treats the first complete payload with a saved result as terminal and auto-o
         json: async () => ({
           job_id: "job-complete",
           status: "COMPLETE",
+          analysis_state: "completed",
           processing_state: "complete",
           result_available: true,
           replay_ready: false,
           progress_label: "Analysis ready.",
           message: "Analysis ready.",
           analysis_result: {
+            status: "complete",
             systems: [{ name: "Completed system" }],
             insights: [{ title: "Completed insight" }],
             fingerprint: { status: "Established" },
@@ -640,7 +679,7 @@ it("treats the first complete payload with a saved result as terminal and auto-o
     }
     return { ok: true, json: async () => ({}) };
   });
-  const onUploadComplete = vi.fn(async () => {});
+  const onUploadComplete = vi.fn(async (payload) => completedHydration(payload));
 
   renderWorkspace({ apiFetch, onUploadComplete });
 
@@ -664,12 +703,13 @@ it("continues polling when stream status includes a placeholder analysis result"
   uploadTelemetryFileWithProgress.mockResolvedValue({
     ok: true,
     status: 202,
-    payload: { job_id: "job-stream", status_url: "/api/data/upload-status/job-stream", status: "queued", message: "Upload accepted." },
+    payload: { job_id: "job-stream", status_url: "/api/data/upload-status/job-stream", status: "queued", analysis_state: "analysis_queued", message: "Upload accepted." },
   });
 
   const streamPayload = {
     job_id: "job-stream",
     status: "PENDING",
+    analysis_state: "analysis_queued",
     processing_state: "queued",
     result_available: false,
     first_usable_available: false,
@@ -694,6 +734,7 @@ it("continues polling when stream status includes a placeholder analysis result"
         json: async () => ({
           job_id: "job-stream",
           status: "COMPLETE",
+          analysis_state: "completed",
           processing_state: "complete",
           result_available: true,
           first_usable_available: true,
@@ -711,7 +752,7 @@ it("continues polling when stream status includes a placeholder analysis result"
     }
     return { ok: true, json: async () => ({}) };
   });
-  const onUploadComplete = vi.fn(async () => {});
+  const onUploadComplete = vi.fn(async (payload) => completedHydration(payload));
 
   renderWorkspace({ apiFetch, onUploadComplete });
 
@@ -735,6 +776,7 @@ it("renders intermediate processing progress without jumping to complete", () =>
     uploadJob: {
       job_id: "progress-job",
       status: "PROCESSING",
+      analysis_state: "comparison",
       processing_state: "building_baseline",
       percent: 65,
       progress: 65,
@@ -759,6 +801,7 @@ it("does not show processing 100 until status is complete", () => {
     uploadJob: {
       job_id: "not-complete-job",
       status: "PROCESSING",
+      analysis_state: "comparison",
       processing_state: "saving_result",
       percent: 100,
       progress: 100,
@@ -780,13 +823,14 @@ it("continues polling when a result is available but backend state is still proc
   uploadTelemetryFileWithProgress.mockResolvedValue({
     ok: true,
     status: 202,
-    payload: { job_id: "job-nonterminal-result", status_url: "/api/data/upload-status/job-nonterminal-result", status: "queued", message: "Upload accepted." },
+    payload: { job_id: "job-nonterminal-result", status_url: "/api/data/upload-status/job-nonterminal-result", status: "queued", analysis_state: "analysis_queued", message: "Upload accepted." },
   });
 
   const events = [];
   const streamPayload = {
     job_id: "job-nonterminal-result",
     status: "PROCESSING",
+    analysis_state: "comparison",
     job_state: "processing",
     processing_state: "saving_result",
     result_available: true,
@@ -818,6 +862,7 @@ it("continues polling when a result is available but backend state is still proc
       return jsonResponse({
         job_id: "job-nonterminal-result",
         status: "COMPLETE",
+        analysis_state: "completed",
         job_state: "completed",
         terminal: true,
         processing_state: "complete",
@@ -826,6 +871,7 @@ it("continues polling when a result is available but backend state is still proc
         progress_label: "Analysis ready.",
         message: "Analysis ready.",
         analysis_result: {
+          status: "complete",
           systems: [{ name: "Completed system" }],
           insights: [{ title: "Completed insight" }],
           fingerprint: { status: "Established" },
@@ -834,7 +880,7 @@ it("continues polling when a result is available but backend state is still proc
     }
     return jsonResponse({});
   });
-  const onUploadComplete = vi.fn(async () => { events.push("complete"); });
+  const onUploadComplete = vi.fn(async (payload) => { events.push("complete"); return completedHydration(payload); });
 
   renderWorkspace({ apiFetch, onUploadComplete });
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("nonterminal.csv")] } });
@@ -853,7 +899,7 @@ it("prevents duplicate upload and polling events from repeated process clicks", 
     releaseUpload = () => resolve({
       ok: true,
       status: 202,
-      payload: { job_id: "job-duplicate-click", status_url: "/api/data/upload-status/job-duplicate-click", status: "queued", message: "Upload accepted." },
+      payload: { job_id: "job-duplicate-click", status_url: "/api/data/upload-status/job-duplicate-click", status: "queued", analysis_state: "analysis_queued", message: "Upload accepted." },
     });
   }));
 
@@ -863,6 +909,7 @@ it("prevents duplicate upload and polling events from repeated process clicks", 
       return jsonResponse({
         job_id: "job-duplicate-click",
         status: "COMPLETE",
+        analysis_state: "completed",
         job_state: "completed",
         terminal: true,
         processing_state: "complete",
@@ -871,6 +918,7 @@ it("prevents duplicate upload and polling events from repeated process clicks", 
         progress_label: "Analysis ready.",
         message: "Analysis ready.",
         analysis_result: {
+          status: "complete",
           systems: [{ name: "Completed system" }],
           insights: [{ title: "Completed insight" }],
           fingerprint: { status: "Established" },
@@ -879,7 +927,7 @@ it("prevents duplicate upload and polling events from repeated process clicks", 
     }
     return jsonResponse({});
   });
-  const onUploadComplete = vi.fn(async () => {});
+  const onUploadComplete = vi.fn(async (payload) => completedHydration(payload));
 
   renderWorkspace({ apiFetch, onUploadComplete });
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("duplicate.csv")] } });
@@ -909,6 +957,7 @@ it("uses the evidence-insufficient completion state when baseline gating fails",
     latestUploadSnapshot: {
       latest_result: {
         analysis_result: {
+          status: "complete",
           systems: [{ name: "Cooling" }],
           insights: [{ title: "Relationship change detected", confidence_tier: "Qualified" }],
           baseline_sufficient: false,
@@ -916,13 +965,13 @@ it("uses the evidence-insufficient completion state when baseline gating fails",
         },
       },
     },
-    uploadJob: { job_id: "insufficient-job", status: "COMPLETE", result_available: true },
+    uploadJob: { job_id: "insufficient-job", status: "COMPLETE", analysis_state: "completed", result_available: true },
   });
 
   const status = screen.getByText("Status").closest(".upload-result-summary__item");
   expect(status.textContent).toContain("Evidence insufficient");
   const quality = screen.getByText("Evidence quality").closest(".upload-result-summary__item");
-  expect(quality.textContent).toContain("Deferred");
+  expect(quality.textContent).toContain("Qualified");
   expect(screen.getByRole("button", { name: "Review Evidence" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "View Results" })).toBeNull();
   expect(screen.queryByText("Analysis Details")).toBeNull();

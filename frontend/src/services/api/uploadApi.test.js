@@ -2,6 +2,7 @@
 /* global globalThis */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SERVICE_UNAVAILABLE_RETRY_MESSAGE, SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../../viewModels/uploadFlow";
+import { setCurrentWorkspaceId } from "../datasetSessionCache";
 import { clearLatestUploadStateCache, fetchLatestUploadState, uploadTelemetryFileWithProgress } from "./uploadApi";
 
 function createResponse(payload, { ok = true, status = 200 } = {}) {
@@ -97,6 +98,24 @@ describe("fetchLatestUploadState", () => {
 
     expect(first.latestResult).toBeNull();
     expect(second.latestResult?.job_id).toBe("job-42");
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not reuse a latest-upload response after the workspace changes", async () => {
+    const apiFetch = vi.fn()
+      .mockResolvedValueOnce(createResponse({
+        status: "complete",
+        latest_result: { job_id: "workspace-a-job", filename: "a.csv" },
+      }))
+      .mockResolvedValueOnce(createResponse({ status: "empty", latest_result: null }));
+
+    setCurrentWorkspaceId("workspace-a");
+    const workspaceA = await fetchLatestUploadState({ apiFetch, accessCode: "", includePersisted: true });
+    setCurrentWorkspaceId("workspace-b");
+    const workspaceB = await fetchLatestUploadState({ apiFetch, accessCode: "", includePersisted: true });
+
+    expect(workspaceA.latestResult?.job_id).toBe("workspace-a-job");
+    expect(workspaceB.latestResult).toBeNull();
     expect(apiFetch).toHaveBeenCalledTimes(2);
   });
 
@@ -209,6 +228,27 @@ describe("latest telemetry retry and failure handling", () => {
     await rejection;
     expect(apiFetch).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
+  });
+});
+
+describe("upload dataset scope", () => {
+  it("sends the selected workspace on the XHR upload request", async () => {
+    setCurrentWorkspaceId("central-plant");
+    const xhr = installXhrSequence([{
+      status: 202,
+      body: JSON.stringify({ job_id: "scoped-job", status: "PENDING", analysis_state: "analysis_queued" }),
+      headers: { "content-type": "application/json" },
+    }]);
+
+    try {
+      await uploadTelemetryFileWithProgress({
+        file: new File(["timestamp,value\n2026-06-22,1\n"], "scoped.csv", { type: "text/csv" }),
+        accessCode: "",
+      });
+      expect(xhr.instances[0].headers["X-Neraium-Workspace-Id"]).toBe("central-plant");
+    } finally {
+      xhr.restore();
+    }
   });
 });
 

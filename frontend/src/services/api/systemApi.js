@@ -1,14 +1,19 @@
+import { getCurrentWorkspaceId } from "../datasetSessionCache";
+
 const FACILITY_SYSTEMS_DEDUPE_TTL_MS = 4000;
 const facilitySystemsInflight = new Map();
 const facilitySystemsCache = new Map();
+let facilitySystemsCacheGeneration = 0;
 
 export function clearFacilitySystemsCache() {
+  facilitySystemsCacheGeneration += 1;
   facilitySystemsInflight.clear();
   facilitySystemsCache.clear();
 }
 
 export async function fetchFacilitySystems({ apiFetch, accessCode, domainMode = null, forceRefresh = false }) {
-  const key = `systems:${String(domainMode ?? "")}`;
+  const key = `systems:${getCurrentWorkspaceId()}:${String(domainMode ?? "")}`;
+  const requestGeneration = facilitySystemsCacheGeneration;
   const now = Date.now();
   if (forceRefresh) {
     facilitySystemsInflight.delete(key);
@@ -35,7 +40,7 @@ export async function fetchFacilitySystems({ apiFetch, accessCode, domainMode = 
     if (!Array.isArray(payload.systems)) {
       throw new Error("System data was incomplete. Refresh and retry.");
     }
-    facilitySystemsCache.set(key, { expiresAt: Date.now() + FACILITY_SYSTEMS_DEDUPE_TTL_MS, value: payload });
+    if (requestGeneration === facilitySystemsCacheGeneration) facilitySystemsCache.set(key, { expiresAt: Date.now() + FACILITY_SYSTEMS_DEDUPE_TTL_MS, value: payload });
     return payload;
   })();
 

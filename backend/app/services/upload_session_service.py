@@ -31,7 +31,7 @@ from app.services.upload_state_repository import (
     reset_block_persisted_active,
     upload_state_backend,
 )
-from app.services.upload_status_contract import normalize_upload_status_payload
+from app.services.upload_status_contract import canonical_analysis_state, normalize_upload_status_payload, with_canonical_analysis_state
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +222,7 @@ def _empty_response(*, include_persisted: bool, request_id: str | None) -> dict[
         "traceability": {},
         "current_upload": record,
         "metrics": session_metrics_snapshot(),
+        "analysis_state": "no_dataset",
         "analysis_result": empty_analysis_result(status="empty", message="No active upload session."),
     }
     _lifecycle_log(
@@ -237,6 +238,7 @@ def _empty_response(*, include_persisted: bool, request_id: str | None) -> dict[
         "current_result": None,
         "latest_result": None,
         "latestResult": None,
+        "analysis_state": "no_dataset",
         "analysis_result": snapshot["analysis_result"],
         "summary": {},
         "history": [] if not include_persisted else [],
@@ -353,8 +355,16 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
         or working_summary.get("result_source")
         or working_summary.get("upload_result_source")
     )
+    analysis_state = canonical_analysis_state({
+        **(working_summary if isinstance(working_summary, dict) else {}),
+        "status": snapshot_status,
+        "processing_state": snapshot_processing_state,
+        "job_state": "completed" if analysis_complete else None,
+        "job_id": working_job_id,
+    })
     snapshot = {
         **(working_summary if isinstance(working_summary, dict) else {}),
+        "analysis_state": analysis_state,
         "state_backend": state_backend,
         "session_state": session_state,
         "session_source": source,
@@ -395,6 +405,7 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
         "current_result": result,
         "latest_result": result,
         "latestResult": result,
+        "analysis_state": analysis_state,
         "analysis_result": analysis_result,
         "summary": working_summary if isinstance(working_summary, dict) else {},
         "history": history if use_persisted else [],
@@ -424,6 +435,7 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
             "job_id": None,
             "status": "NOT_FOUND",
             "processing_state": "missing",
+            "analysis_state": "no_dataset",
             "session_state": SESSION_STATE_EMPTY,
             "session_source": SESSION_SOURCE_EMPTY,
             "upload_session_id": None,
@@ -492,6 +504,7 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
                 "state_backend": upload_state_backend(),
             }
         )
+        normalized = with_canonical_analysis_state(normalized)
         return _with_worker_visibility(normalized, requested_id)
 
     if isinstance(result_payload, dict):
@@ -519,6 +532,7 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
             "progress_label": "Analysis ready.",
             "message": "Analysis ready.",
             "job_state": "completed",
+            "analysis_state": "completed",
             "terminal": True,
             "sii_completion_artifacts": result_payload.get("sii_completion_artifacts", {}),
             "error": None,
@@ -543,6 +557,7 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
         "error_type": "upload_session_missing",
         "error": "upload_session_missing",
         "message": "Upload session expired or was not found.",
+        "analysis_state": "failed",
         "state_backend": upload_state_backend(),
         "analysis_result": empty_analysis_result(
             analysis_id=requested_id or None,

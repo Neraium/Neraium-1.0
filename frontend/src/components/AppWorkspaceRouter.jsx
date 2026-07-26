@@ -73,6 +73,7 @@ function WorkspaceWithBackControl({
 
 export default function AppWorkspaceRouter({
   activeWorkspace,
+  datasetScopeKey,
   appReady,
   errorBoundaryResetKey,
   apiFetch,
@@ -138,21 +139,10 @@ export default function AppWorkspaceRouter({
       >
         <Suspense fallback={renderLoadingPanel("Preparing telemetry intake", "Loading dataset validation and connector status...")}>
           <DataConnectionsWorkspace
+            key={`intake:${datasetScopeKey}`}
             accessCode={accessCode}
             apiFetch={apiFetch}
-            apiStatus={apiStatus}
-            latestUploadSnapshot={effectiveLatestUploadSnapshot}
-            latestUploadResult={effectiveLatestUploadResult}
-            hasActiveSession={hasActiveSession}
-            hasResumedSession={hasResumedSession}
-            hasCurrentUploadResult={hasCurrentUploadResult}
-            hasRealSiiOutput={hasRealSiiOutput}
-            roomContext={roomContext}
             onUploadComplete={handleGateUploadComplete}
-            sessionStore={liveOps.session}
-            onResetDemo={handleResetDemo}
-            formatClockTime={formatClockTime}
-            currentUser={currentUser}
             initialSelectedFiles={pendingUploadFiles}
             onInitialSelectedFilesConsumed={() => setPendingUploadFiles([])}
             autoStartInitialFiles={pendingUploadFiles.length > 0}
@@ -326,21 +316,10 @@ export default function AppWorkspaceRouter({
           />
           {pendingUploadFiles.length > 0 ? (
             <DataConnectionsWorkspace
+              key={`headless-intake:${datasetScopeKey}`}
               accessCode={accessCode}
               apiFetch={apiFetch}
-              apiStatus={apiStatus}
-              latestUploadSnapshot={effectiveLatestUploadSnapshot}
-              latestUploadResult={effectiveLatestUploadResult}
-              hasActiveSession={hasActiveSession}
-              hasResumedSession={hasResumedSession}
-              hasCurrentUploadResult={hasCurrentUploadResult}
-              hasRealSiiOutput={hasRealSiiOutput}
-              roomContext={roomContext}
               onUploadComplete={handleGateUploadComplete}
-              sessionStore={liveOps.session}
-              onResetDemo={handleResetDemo}
-              formatClockTime={formatClockTime}
-              currentUser={currentUser}
               initialSelectedFiles={pendingUploadFiles}
               autoStartInitialFiles={true}
               headless={true}

@@ -442,6 +442,7 @@ def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
             "job_id": job_id,
             "status_url": f"/api/data/upload-status/{job_id}",
             "status": "PENDING",
+            "analysis_state": "analysis_queued",
             "processing_state": "queued",
             "percent": 0,
             "progress": 0,
@@ -585,6 +586,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 status_code=400,
                 content={
                     "status": "FAILED",
+                    "analysis_state": "failed",
                     "processing_state": "failed",
                     "error_type": "csv_parse_error",
                     "message": "CSV file is empty.",
@@ -615,6 +617,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             "filename": filename,
             "status_url": f"/api/data/upload-status/{job_id}",
             "status": "PENDING",
+            "analysis_state": "analysis_queued",
             "processing_state": "queued",
             "percent": 5,
             "progress": 5,
@@ -774,6 +777,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             content={
                 "job_id": failed_job_id,
                 "status": "FAILED",
+                "analysis_state": "failed",
                 "filename": filename,
                 "message": "Shared upload queue is not configured for split-role production." if error_type == "shared_upload_queue_not_configured" else "Telemetry processing failed.",
                 "error_type": error_type,
@@ -783,7 +787,9 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         )
     return {
         "job_id": summary.get("job_id"),
+        "dataset_id": summary.get("job_id"),
         "status": "PENDING",
+        "analysis_state": "analysis_queued",
         "processing_state": "queued",
         "filename": filename,
         "percent": 5,
@@ -814,6 +820,7 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
             status_code=400,
             content={
                 "status": "FAILED",
+                "analysis_state": "failed",
                 "error_type": "invalid_upload_job",
                 "message": "Upload job id is invalid.",
             },
@@ -831,6 +838,7 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
             content={
                 "job_id": requested_job_id,
                 "status": "FAILED",
+                "analysis_state": "failed",
                 "error_type": "upload_source_missing",
                 "message": "The uploaded source file is no longer available. Select the CSV again.",
                 "status_url": f"/api/data/upload-status/{requested_job_id}",
@@ -843,6 +851,7 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         **status_payload,
         "job_id": requested_job_id,
         "status": "PENDING",
+        "analysis_state": "analysis_queued",
         "processing_state": "queued",
         "percent": 5,
         "progress": 5,
@@ -878,7 +887,9 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
     )
     return {
         "job_id": requested_job_id,
+        "dataset_id": requested_job_id,
         "status": "PENDING",
+        "analysis_state": "analysis_queued",
         "processing_state": "queued",
         "percent": 5,
         "progress": 5,

@@ -93,6 +93,8 @@ def test_empty_workspace_has_no_dataset_metadata() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["session_state"] == SESSION_STATE_EMPTY
+    assert payload["analysis_state"] == "no_dataset"
+    assert payload["snapshot"]["analysis_state"] == "no_dataset"
     assert payload["latest_result"] is None
     assert payload["rows_processed"] == 0
     assert payload["last_filename"] is None
@@ -111,14 +113,17 @@ def test_imported_dataset_is_restored_only_for_its_user_workspace_and_dataset() 
     other_user = _latest(client, USER_B, WORKSPACE_A).json()
     workspace_a_again = _latest(client, USER_A, WORKSPACE_A).json()
 
+    assert workspace_a["analysis_state"] == "completed"
     assert workspace_a["latest_result"]["dataset_id"] == JOB_A
     assert workspace_a["rows_processed"] == 120
     assert workspace_a["last_filename"] == "central.csv"
     assert workspace_a["latest_result"]["last_processed_at"] == "2026-07-20T06:32:53.260378+00:00"
+    assert workspace_b["analysis_state"] == "completed"
     assert workspace_b["latest_result"]["dataset_id"] == JOB_B
     assert workspace_b["rows_processed"] == 240
     assert workspace_b["last_filename"] == "north.csv"
     assert other_user["session_state"] == SESSION_STATE_EMPTY
+    assert other_user["analysis_state"] == "no_dataset"
     assert other_user["latest_result"] is None
     assert workspace_a_again["latest_result"]["dataset_id"] == JOB_A
     assert workspace_a_again["rows_processed"] == 120

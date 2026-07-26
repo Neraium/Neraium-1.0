@@ -1,6 +1,7 @@
 import { Component, useEffect, useRef, useState } from "react";
 
-import { buildIntakeStages, normalizeUploadStatus as normalizeUploadLifecycle } from "../../viewModels/uploadFlow";
+import { buildIntakeStages } from "../../viewModels/uploadFlow";
+import { BASELINE_ANALYSIS_STATES } from "../../viewModels/baselineAnalysisState";
 import OperationalOrb from "../operational/OperationalOrb";
 import { Panel } from "../workspacePrimitives";
 import "../../styles/operational-workflow.css";
@@ -33,115 +34,53 @@ function normalizeStatusText(value) {
     .toLowerCase();
 }
 
-function primaryJobStatus(uploadJob, uploadState) {
-  return normalizeUploadLifecycle(
-    uploadJob?.processing_state
-      ?? uploadJob?.processingState
-      ?? uploadJob?.status
-      ?? uploadState
-  );
+function uploadViewState({ analysisState, hasSelectedFiles, completionReady, uploadState }) {
+  if (!hasSelectedFiles || analysisState === BASELINE_ANALYSIS_STATES.NO_DATASET) return "noFile";
+  if ([BASELINE_ANALYSIS_STATES.DATASET_SELECTED, BASELINE_ANALYSIS_STATES.READY_TO_ANALYZE].includes(analysisState)) return "fileSelected";
+  if (analysisState === BASELINE_ANALYSIS_STATES.UPLOADING) return "uploading";
+  if (analysisState === BASELINE_ANALYSIS_STATES.COMPLETED && String(uploadState || "").toLowerCase() === "completion_error") return "completion_error";
+  if (analysisState === BASELINE_ANALYSIS_STATES.COMPLETED) return completionReady ? "complete" : "finalizing";
+  if ([BASELINE_ANALYSIS_STATES.FAILED, BASELINE_ANALYSIS_STATES.CANCELLED].includes(analysisState)) return "failed";
+  return "analyzing";
 }
 
-function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) {
-  const normalized = normalizeUploadLifecycle(uploadState);
-  if (normalized === "completion_error") return "completion_error";
-  if (["failed", "error", "validation_error", "cancelled", "timeout"].includes(normalized)) return "failed";
-  if (["save_complete", "complete"].includes(normalized)) return "complete";
-  if (["saving_results", "navigation_pending"].includes(normalized)) return "finalizing";
-  if (normalized === "uploading") return "uploading";
-  if (isUploadProcessing(uploadState)) return "analyzing";
-  if (hasSelectedFiles || normalized === "validated") return "fileSelected";
-  return "noFile";
-}
-
-function operatorStatusText({ viewState, uploadJob, uploadState, latestMessage }) {
-  const cleanMessage = String(latestMessage || "").trim();
-  if (viewState === "uploading") return "Validating dataset";
+function operatorStatusText({ viewState, analysisState, latestMessage }) {
+  if (viewState === "uploading") return "Uploading dataset";
   if (viewState === "complete") return "Analysis complete";
   if (viewState === "finalizing") return "Preparing results";
-  if (viewState === "failed") return "Dataset import failed";
-  if (viewState === "completion_error") return "Analysis saved, results not opened";
-  if (/temporarily unavailable/i.test(cleanMessage)) return cleanMessage;
+  if (viewState === "failed") return analysisState === BASELINE_ANALYSIS_STATES.CANCELLED ? "Analysis cancelled" : "Dataset import failed";
 
-  const normalized = primaryJobStatus(uploadJob, uploadState);
-  if (["writing_state", "cognition_ready", "saving_result", "saving_results"].includes(normalized)) return "Preparing evidence";
-  if (["accepted", "queued", "validating_schema", "parsing"].includes(normalized)) return "Validating dataset";
-  if (["mapping", "mapping_signals", "detecting_variables"].includes(normalized)) return "Mapping signals";
-  if (["processing", "baseline_modeling", "building_baseline"].includes(normalized)) return "Building baseline";
-  if (["building_fingerprint", "structural_scoring", "running_sii"].includes(normalized)) return "Comparing relationships";
-  return cleanMessage || "Preparing analysis";
+  const labels = {
+    [BASELINE_ANALYSIS_STATES.UPLOAD_COMPLETE]: "Dataset uploaded",
+    [BASELINE_ANALYSIS_STATES.ANALYSIS_QUEUED]: "Analysis queued",
+    [BASELINE_ANALYSIS_STATES.VALIDATING]: "Validating dataset",
+    [BASELINE_ANALYSIS_STATES.MAPPING]: "Mapping signals",
+    [BASELINE_ANALYSIS_STATES.BASELINE_CREATION]: "Building baseline",
+    [BASELINE_ANALYSIS_STATES.COMPARISON]: "Comparing relationships",
+    [BASELINE_ANALYSIS_STATES.EVIDENCE_GENERATION]: "Preparing evidence",
+  };
+  return labels[analysisState] || String(latestMessage || "").trim() || "Preparing analysis";
 }
 
-function resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent }) {
+function resolveMainPercent({ viewState, uploadJob, uploadTransfer, visibleProgressPercent }) {
   if (viewState === "complete") return 100;
   if (viewState === "finalizing") return 99;
-  if (viewState === "uploading") {
-    return clampPercent(uploadTransfer?.percent ?? visibleProgressPercent ?? 0);
-  }
+  if (viewState === "uploading") return clampPercent(uploadTransfer?.percent ?? visibleProgressPercent ?? 0);
   if (viewState === "analyzing") {
-    const jobPercent = uploadJob?.propagation_progress
+    const jobPercent = uploadJob?.contract_progress
+      ?? uploadJob?.propagation_progress
       ?? uploadJob?.propagationProgress
       ?? uploadJob?.percent
       ?? uploadJob?.progress;
-    const fallback = jobPercent ?? visibleProgressPercent ?? 0;
-    return Math.min(99, clampPercent(fallback));
+    return Math.min(99, clampPercent(jobPercent ?? visibleProgressPercent ?? 0));
   }
-  if (["failed", "error", "validation_error", "cancelled", "timeout", "completion_error"].includes(normalizeUploadLifecycle(uploadState))) return 100;
   return 0;
 }
 
-function relationshipChangeDetected(analysisResult) {
-  const explicit = analysisResult?.relationship_change_detected
-    ?? analysisResult?.relationshipChangeDetected
-    ?? analysisResult?.fingerprint?.relationship_change_detected
-    ?? analysisResult?.fingerprint?.change_detected;
-  if (typeof explicit === "boolean") return explicit;
-
-  const fingerprintStatus = String(
-    analysisResult?.fingerprint?.status
-      ?? analysisResult?.fingerprint?.drift_status
-      ?? analysisResult?.fingerprint?.label
-      ?? ""
-  ).trim().toLowerCase();
-  if (["changed", "drifting", "review", "unstable", "detected", "elevated", "alert", "watch"].includes(fingerprintStatus)) return true;
-  if (["stable", "established", "unchanged", "not detected", "nominal"].includes(fingerprintStatus)) return false;
-  if (Array.isArray(analysisResult?.relationships) && analysisResult.relationships.length > 0) return true;
-
-  const primaryInsight = analysisResult?.insights?.find((insight) => insight && insight.id !== "baseline-stable");
-  return Boolean(primaryInsight && String(primaryInsight.severity || "").toLowerCase() !== "low");
-}
-
-function isFinalAnalysisResult(value) {
-  return Boolean(
-    value
-    && typeof value === "object"
-    && Array.isArray(value.systems)
-    && Array.isArray(value.insights)
-  );
-}
-
-function finalAnalysisResult(latestUploadSnapshot, uploadJob) {
-  const candidates = [
-    latestUploadSnapshot?.latest_result?.analysis_result,
-    latestUploadSnapshot?.analysis_result,
-    latestUploadSnapshot?.current_upload?.result?.analysis_result,
-    uploadJob?.latest_result?.analysis_result,
-    uploadJob?.result?.analysis_result,
-    uploadJob?.analysis_result,
-    uploadJob?.result,
-  ];
-  return candidates.find(isFinalAnalysisResult) ?? null;
-}
-
-function normalizeEvidenceTier(value, analysisResult) {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === "confirmed") return "Confirmed";
-  if (["qualified", "high", "moderate"].includes(normalized)) return "Qualified";
-  if (["narrowed", "low", "weak"].includes(normalized)) return "Narrowed";
-  if (["deferred", "pending", "incomplete"].includes(normalized)) return "Deferred";
-  if (["withheld", "insufficient", "unreliable"].includes(normalized)) return "Withheld";
-  const baselineStatus = String(analysisResult?.fingerprint?.status ?? analysisResult?.fingerprint?.drift_status ?? "").toLowerCase();
-  return /established|stable|changed|complete/.test(baselineStatus) ? "Qualified" : "Deferred";
+function displayEvidenceQuality(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function activeFindingCount(analysisResult) {
@@ -154,17 +93,28 @@ function activeFindingCount(analysisResult) {
 
 function completionResult(analysisResult) {
   const findings = activeFindingCount(analysisResult);
-  let evidenceQuality = normalizeEvidenceTier(
+  const evidenceQuality = displayEvidenceQuality(
     analysisResult?.evidence_quality
       ?? analysisResult?.confidence_tier
+      ?? analysisResult?.fingerprint?.confidence
       ?? analysisResult?.insights?.[0]?.confidence_tier
       ?? analysisResult?.insights?.[0]?.confidence,
-    analysisResult,
   );
-  if (analysisResult?.reliable === false) evidenceQuality = "Withheld";
-  else if (analysisResult?.baseline_sufficient === false && evidenceQuality !== "Withheld") evidenceQuality = "Deferred";
-  const insufficient = ["Deferred", "Withheld"].includes(evidenceQuality);
-  const status = insufficient ? "Evidence insufficient" : findings || relationshipChangeDetected(analysisResult) ? "Change detected" : "Normal";
+  const driftStatus = String(
+    analysisResult?.relationship_change_detected === true
+      ? "changed"
+      : analysisResult?.fingerprint?.drift_status ?? analysisResult?.fingerprint?.status ?? "",
+  ).trim().toLowerCase();
+  const insufficient = analysisResult?.reliable === false
+    || analysisResult?.baseline_sufficient === false
+    || ["deferred", "withheld", "insufficient", "unavailable"].includes(String(evidenceQuality || "").toLowerCase());
+  const status = insufficient
+    ? "Evidence insufficient"
+    : ["changed", "drifting", "review", "unstable", "detected", "elevated", "alert", "watch"].includes(driftStatus)
+      ? "Change detected"
+      : ["stable", "established", "unchanged", "not detected", "nominal"].includes(driftStatus)
+        ? "Normal"
+        : null;
   return { status, findings, evidenceQuality };
 }
 
@@ -174,7 +124,7 @@ function completionSummary({ analysisResult }) {
     { label: "Status", value: completed.status },
     { label: "Findings", value: String(completed.findings) },
     { label: "Evidence quality", value: completed.evidenceQuality },
-  ];
+  ].filter((item) => item.value !== null && item.value !== "");
 }
 
 const FINGERPRINT_BUILD_STAGES = [
@@ -265,25 +215,16 @@ function networkProgress({ displayPercent, phase, stageIndex, complete }) {
   return Math.max(12, Math.min(100, Math.round(withinPhase)));
 }
 
-function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState }) {
+function resolveFingerprintBuildStage({ viewState, analysisState }) {
   if (viewState === "complete") {
     return { id: "complete", label: "Analysis complete", description: "Evidence is ready to review.", index: FINGERPRINT_BUILD_STAGES.length };
   }
-  if (viewState === "finalizing") return { ...FINGERPRINT_BUILD_STAGES[4], index: 4 };
-  if (viewState === "uploading") return { ...FINGERPRINT_BUILD_STAGES[0], index: 0 };
-
-  const rawStage = String(
-    uploadJob?.processing_state
-      ?? uploadJob?.processingState
-      ?? uploadJob?.status
-      ?? uploadState
-      ?? ""
-  ).trim().toLowerCase();
-  const normalized = primaryJobStatus(uploadJob, uploadState);
-  const rawMatchedIndex = FINGERPRINT_BUILD_STAGES.findIndex((stage) => stage.states.includes(rawStage));
-  const normalizedMatchedIndex = FINGERPRINT_BUILD_STAGES.findIndex((stage) => stage.states.includes(normalized));
-  const index = rawMatchedIndex >= 0 ? rawMatchedIndex : normalizedMatchedIndex >= 0 ? normalizedMatchedIndex : 2;
-  return { ...FINGERPRINT_BUILD_STAGES[index], index };
+  if (viewState === "finalizing" || analysisState === BASELINE_ANALYSIS_STATES.EVIDENCE_GENERATION) return { ...FINGERPRINT_BUILD_STAGES[4], index: 4 };
+  if (viewState === "uploading" || [BASELINE_ANALYSIS_STATES.UPLOAD_COMPLETE, BASELINE_ANALYSIS_STATES.ANALYSIS_QUEUED, BASELINE_ANALYSIS_STATES.VALIDATING].includes(analysisState)) return { ...FINGERPRINT_BUILD_STAGES[0], index: 0 };
+  if (analysisState === BASELINE_ANALYSIS_STATES.MAPPING) return { ...FINGERPRINT_BUILD_STAGES[1], index: 1 };
+  if (analysisState === BASELINE_ANALYSIS_STATES.BASELINE_CREATION) return { ...FINGERPRINT_BUILD_STAGES[2], index: 2 };
+  if (analysisState === BASELINE_ANALYSIS_STATES.COMPARISON) return { ...FINGERPRINT_BUILD_STAGES[3], index: 3 };
+  return { ...FINGERPRINT_BUILD_STAGES[0], index: 0 };
 }
 
 function safeStorage(storageName) {
@@ -599,10 +540,10 @@ function RecoverySummary({ rows }) {
   );
 }
 
-function AdvancedDetails({ latestUploadSnapshot, uploadJob, uploadState, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
+function AdvancedDetails({ uploadJob, uploadState, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
   const rows = buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug });
   const stages = buildIntakeStages(
-    latestUploadSnapshot?.latest_result ?? null,
+    null,
     uploadJob?.processing_state ?? uploadJob?.status ?? uploadState,
     null,
     uploadJob,
@@ -643,7 +584,9 @@ export default function IntakeFlowPanel({
   uploadInputRef,
   handleFileSelection,
   selectedFiles,
-  latestUploadSnapshot,
+  analysisState,
+  analysisResult,
+  completionReady = false,
   pendingUploadKind,
   selectedFileSize,
   isUploadProcessing,
@@ -671,12 +614,10 @@ export default function IntakeFlowPanel({
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
     : "No file selected";
   const fileKind = String(pendingUploadKind || "csv").toUpperCase();
-  const rawViewState = uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing });
-  const analysisResult = finalAnalysisResult(latestUploadSnapshot, uploadJob);
-  const viewState = rawViewState === "complete" && !analysisResult ? "finalizing" : rawViewState;
-  const statusText = operatorStatusText({ viewState, uploadJob, uploadState, latestMessage });
-  const mainPercent = resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent });
-  const fingerprintBuildStage = resolveFingerprintBuildStage({ viewState, uploadJob, uploadState });
+  const viewState = uploadViewState({ analysisState, hasSelectedFiles, completionReady, uploadState });
+  const statusText = operatorStatusText({ viewState, analysisState, latestMessage });
+  const mainPercent = resolveMainPercent({ viewState, uploadJob, uploadTransfer, visibleProgressPercent });
+  const fingerprintBuildStage = resolveFingerprintBuildStage({ viewState, analysisState });
   const errorMessage = String(latestMessage || "Choose another telemetry dataset and try again.").trim();
   const failureRecoveryRows = buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage });
   const summary = analysisResult ? completionSummary({ analysisResult }) : [];
@@ -782,7 +723,7 @@ export default function IntakeFlowPanel({
         {viewState === "complete" ? (
           <section className="upload-analysis-card upload-simple-card--complete upload-analysis-card--compact" aria-labelledby="analysis-complete-heading" aria-live="polite">
             <div className="upload-analysis-card__visual">
-              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
+              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", analysisState })} complete />
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
@@ -808,7 +749,7 @@ export default function IntakeFlowPanel({
         {viewState === "completion_error" ? (
           <section className="upload-analysis-card upload-simple-card--failed" role="alert" aria-live="assertive">
             <div className="upload-analysis-card__visual">
-              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
+              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", analysisState })} complete />
               <div className="upload-analysis-card__status">
                 <span>Status</span>
                 <strong>Behavior Baseline Established</strong>
@@ -861,7 +802,6 @@ export default function IntakeFlowPanel({
 
         {["failed", "completion_error"].includes(viewState) ? (
           <AdvancedDetails
-            latestUploadSnapshot={latestUploadSnapshot}
             uploadJob={uploadJob}
             uploadState={uploadState}
             uploadTransfer={uploadTransfer}

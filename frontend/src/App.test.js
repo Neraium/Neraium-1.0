@@ -61,6 +61,7 @@ vi.mock("./config", () => ({
 
 vi.mock("./services/api/authApi", () => ({
   fetchCurrentUser: vi.fn().mockResolvedValue({ authenticated: true, user: { email: "operator@facility.com", name: "Operator", role: "operator" } }),
+  loginUser: vi.fn().mockResolvedValue({ authenticated: true, user: { email: "operator@facility.com", name: "Operator", role: "operator" } }),
   logoutUser: vi.fn().mockResolvedValue({ authenticated: false }),
 }));
 
@@ -243,6 +244,38 @@ it("routes Command Center CSV selections into the visible auto-start upload work
   expect(screen.getByTestId("telemetry-auto-start").textContent).toBe("true");
 });
 
+it("remounts onboarding without the selected dataset after a workspace switch", async () => {
+  render(h(App));
+  await launchWorkspace();
+
+  const file = new File(["timestamp,flow\n2026-01-01,1"], "central.csv", { type: "text/csv" });
+  fireEvent.change(screen.getByTestId("mock-overview-csv-upload-input"), { target: { files: [file] } });
+  await waitFor(() => expect(screen.getByTestId("telemetry-initial-file-count").textContent).toBe("1"));
+
+  window.localStorage.setItem("neraium.current_workspace_id", "north-plant");
+  window.dispatchEvent(new CustomEvent("neraium:workspace-changed", { detail: { workspaceId: "north-plant" } }));
+
+  await waitFor(() => expect(screen.getByTestId("telemetry-initial-file-count").textContent).toBe("0"));
+  expect(runtimeMocks.clearUploadSessionState).toHaveBeenCalled();
+});
+
+it("starts re-authenticated onboarding without the previous selected dataset", async () => {
+  render(h(App));
+  await launchWorkspace();
+
+  const file = new File(["timestamp,flow\n2026-01-01,1"], "previous-session.csv", { type: "text/csv" });
+  fireEvent.change(screen.getByTestId("mock-overview-csv-upload-input"), { target: { files: [file] } });
+  await waitFor(() => expect(screen.getByTestId("telemetry-initial-file-count").textContent).toBe("1"));
+
+  window.dispatchEvent(new CustomEvent("neraium:session-expired"));
+  expect(await screen.findByTestId("auth-screen")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "operator@facility.com" } });
+  fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+  fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+  await waitFor(() => expect(screen.getByTestId("telemetry-initial-file-count").textContent).toBe("0"));
+});
+
 it("automatically restores a completed persisted latest analysis", async () => {
   runtimeState.latestUploadResult = {
     job_id: "persisted-job-42",
@@ -312,17 +345,16 @@ describe("App telemetry completion navigation", () => {
     expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledTimes(1);
   });
 
-  it("reset workspace clears the current analysis state", async () => {
+  it("does not wipe canonical facility history when onboarding is reset locally", async () => {
     render(h(App));
     await launchWorkspace();
 
     fireEvent.click(screen.getByRole("button", { name: "Open telemetry intake" }));
+    const clearCallsBeforeLocalReset = runtimeMocks.clearUploadSessionState.mock.calls.length;
     fireEvent.click(screen.getByRole("button", { name: "Clear Telemetry Workspace" }));
 
-    await waitFor(() => {
-      expect(runtimeMocks.clearUploadSessionState).toHaveBeenCalledTimes(1);
-    });
-    expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: false });
+    expect(runtimeMocks.clearUploadSessionState).toHaveBeenCalledTimes(clearCallsBeforeLocalReset);
+    expect(runtimeMocks.loadLatestUploadState).not.toHaveBeenCalledWith({ includePersisted: false });
   });
 
   it("does not leave Data Connections when an existing analysis is restored", async () => {

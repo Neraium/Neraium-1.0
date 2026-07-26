@@ -46,10 +46,12 @@ def test_shared_api_helper_forces_credentials_include() -> None:
 def test_upload_and_polling_use_shared_api_helper() -> None:
     source = read_upload_surface()
     system_api_source = read_frontend(SYSTEM_API)
+    upload_api_source = read_frontend(ROOT / "frontend" / "src" / "services" / "api" / "uploadApi.js")
 
     assert "let pollingPath = normalizeUploadStatusPath(statusUrl, requestedJobId) ?? `/api/data/upload-status/${requestedJobId}`;" in source
     assert "const response = await apiFetch(requestPath, { accessCode });" in source
-    assert 'apiFetch("/api/data/latest-upload?include_persisted=1"' in source
+    assert "const path = `/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`;" in upload_api_source
+    assert "const response = await apiFetch(path, { accessCode });" in upload_api_source
     assert 'apiFetch("/api/health"' in read_frontend(HEALTH_API)
     assert 'apiFetch("/api/ready"' in read_frontend(HEALTH_API)
     assert "apiFetch(`/api/facility/systems?include_persisted=1${domainQuery}`" in system_api_source
@@ -315,6 +317,6 @@ def test_retry_analysis_targets_current_uploaded_job() -> None:
     assert "/api/data/upload/${encodeURIComponent(cleanJobId)}/retry" in upload_api_source
     assert "retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode })" in workspace_source
     assert "await handleUpload();" in workspace_source
-    assert "Import and Analyze Dataset" in panel_source
+    assert "Start Baseline Analysis" in panel_source
     assert "Choose Dataset" in panel_source
     assert "onClick={() => onRetryFailedUploads?.()}" in panel_source

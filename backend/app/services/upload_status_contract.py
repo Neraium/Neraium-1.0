@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.services.upload_lifecycle import (
     LEGACY_STAGE_DEFAULTS,
+    canonical_stage_for,
     canonical_stage_payload,
     infer_legacy_stage,
 )
@@ -16,6 +17,85 @@ REQUIRED_COMPLETION_ARTIFACTS = (
     "final_result_persisted",
     "terminal_backend_state_published",
 )
+
+ANALYSIS_STATES = (
+    "no_dataset",
+    "dataset_selected",
+    "upload_complete",
+    "ready_to_analyze",
+    "analysis_queued",
+    "validating",
+    "mapping",
+    "baseline_creation",
+    "comparison",
+    "evidence_generation",
+    "completed",
+    "failed",
+    "cancelled",
+)
+
+_ANALYSIS_STATE_BY_STAGE = {
+    "empty": "no_dataset",
+    "idle": "no_dataset",
+    "validated": "ready_to_analyze",
+    "accepted": "upload_complete",
+    "queued": "analysis_queued",
+    "pending": "analysis_queued",
+    "validating_schema": "validating",
+    "parsing": "validating",
+    "mapping": "mapping",
+    "mapping_signals": "mapping",
+    "detecting_variables": "mapping",
+    "baseline_modeling": "baseline_creation",
+    "processing": "baseline_creation",
+    "structural_scoring": "comparison",
+    "running_sii": "comparison",
+    "building_fingerprint": "comparison",
+    "writing_state": "evidence_generation",
+    "cognition_ready": "evidence_generation",
+    "saving_result": "evidence_generation",
+    "saving_results": "evidence_generation",
+    "complete": "completed",
+    "completed": "completed",
+    "failed": "failed",
+    "error": "failed",
+    "validation_error": "failed",
+    "timeout": "failed",
+    "cancelled": "cancelled",
+}
+
+
+def canonical_analysis_state(payload: dict | None) -> str:
+    """Return the backend-owned baseline analysis state for a status payload."""
+    value = payload if isinstance(payload, dict) else {}
+    explicit = str(value.get("analysis_state") or "").strip().lower()
+    job_state = str(value.get("job_state") or "").strip().lower()
+    if job_state in {"completed", "completed_compatibility"}:
+        return "completed"
+    if job_state == "failed":
+        return "failed"
+    if job_state == "cancelled":
+        return "cancelled"
+    stage = canonical_stage_for(
+        value.get("contract_stage")
+        or value.get("processing_state")
+        or value.get("propagation_stage")
+        or value.get("status")
+    )
+    derived = _ANALYSIS_STATE_BY_STAGE.get(stage)
+    if derived:
+        return derived
+    if job_state == "queued":
+        return "analysis_queued"
+    if explicit in ANALYSIS_STATES:
+        return explicit
+    return "analysis_queued" if value.get("job_id") else "no_dataset"
+
+
+def with_canonical_analysis_state(payload: dict | None) -> dict:
+    normalized = dict(payload or {})
+    normalized["analysis_state"] = canonical_analysis_state(normalized)
+    return normalized
 
 
 def _truthy(value):
@@ -78,7 +158,8 @@ def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_sta
     )
     normalized["job_state"] = _canonical_job_state(normalized.get("status"), normalized)
     normalized["terminal"] = normalized["job_state"] in {"completed", "completed_compatibility", "failed", "cancelled"}
-    return normalized
+    normalized.setdefault("dataset_id", normalized.get("job_id"))
+    return with_canonical_analysis_state(normalized)
 
 
 def normalize_upload_status_payload(payload: dict) -> dict:
