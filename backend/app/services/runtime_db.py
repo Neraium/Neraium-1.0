@@ -672,6 +672,9 @@ def enqueue_upload_job(job_id: str) -> None:
         _ensure_shared_upload_queue_backend()
         timestamp = now_iso()
         existing = _read_s3_queue_job(job_id) or {}
+        if _normalize_upload_queue_status(existing.get("status")) in {"pending", "processing"}:
+            logger.info("upload_queue_duplicate_enqueue_ignored queue_backend=%s job_id=%s status=%s", backend, job_id, existing.get("status"))
+            return
         _write_s3_queue_job(
             {
                 "job_id": job_id,
@@ -698,6 +701,7 @@ def enqueue_upload_job(job_id: str) -> None:
                 updated_at=excluded.updated_at,
                 last_error=NULL,
                 locked_at=NULL
+            WHERE upload_queue.status NOT IN ('pending', 'processing')
             """,
             (job_id, timestamp, timestamp),
         )

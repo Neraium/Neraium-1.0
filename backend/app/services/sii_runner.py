@@ -44,7 +44,10 @@ COVARIANCE_REGULARIZATION_FLOOR = 1e-3
 
 _IMPORT_ERROR: str | None = None
 _SII_ENGINE_ADAPTER: Any = None
-MAX_RUNNER_VECTOR_ROWS = max(0, int(os.getenv("NERAIUM_SII_MAX_VECTOR_ROWS", "4096") or "0"))
+# A 4,096-vector sequential covariance run accounted for roughly half of normal
+# upload latency in profiling. Preserve both historical coverage and the recent
+# tail through limit_runner_vectors while bounding synchronous evidence work.
+MAX_RUNNER_VECTOR_ROWS = max(0, int(os.getenv("NERAIUM_SII_MAX_VECTOR_ROWS", "1024") or "0"))
 RECENT_VECTOR_TAIL = max(100, int(os.getenv("NERAIUM_SII_RECENT_VECTOR_TAIL", "512") or "512"))
 
 def configure_runtime_dir(runtime_dir: Path) -> None:
@@ -292,13 +295,12 @@ def _baseline_mahalanobis_distances(
     baseline_mean: np.ndarray,
     covariance_inverse: np.ndarray,
 ) -> list[float]:
-    distances: list[float] = []
-    for baseline_vector in baseline_matrix:
-        centered = np.nan_to_num(baseline_vector - baseline_mean, nan=0.0)
-        distance_sq = float(centered.T @ covariance_inverse @ centered)
-        if np.isfinite(distance_sq):
-            distances.append(float(np.sqrt(max(distance_sq, 0.0))))
-    return distances
+    centered = np.nan_to_num(np.asarray(baseline_matrix, dtype=float) - baseline_mean, nan=0.0)
+    if centered.size == 0:
+        return []
+    distance_squares = np.einsum("ij,jk,ik->i", centered, covariance_inverse, centered, optimize=True)
+    finite = distance_squares[np.isfinite(distance_squares)]
+    return np.sqrt(np.clip(finite, 0.0, None)).astype(float).tolist()
 
 
 def _nanmean_columns(matrix: np.ndarray) -> np.ndarray:

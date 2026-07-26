@@ -13,9 +13,20 @@ from app.services.runtime_db import (
     complete_upload_queue_job,
     mark_queue_job_failed,
     read_upload_job,
+    read_upload_queue_job,
     touch_upload_queue_job,
 )
 from app.services.upload_runtime_state import UploadRuntimeState
+
+
+def _parse_iso_timestamp(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
 def _log_queue_event(logger: logging.Logger, event: str, **fields: Any) -> None:
@@ -96,6 +107,18 @@ class UploadQueueLifecycleService:
         if not job_id:
             return False
         metadata = self._read_processing_metadata(job_id)
+        claimed_at = datetime.now(timezone.utc)
+        queue_entry = read_upload_queue_job(job_id) or {}
+        queued_at = _parse_iso_timestamp(queue_entry.get("created_at")) or _parse_iso_timestamp(metadata.get("enqueued_at"))
+        worker_pickup_delay_ms = max(0.0, (claimed_at - queued_at).total_seconds() * 1000) if queued_at else None
+        timings = {**dict(metadata.get("timings") or {})}
+        if worker_pickup_delay_ms is not None:
+            timings["worker_pickup_delay_ms"] = round(worker_pickup_delay_ms, 3)
+        metadata.update({
+            "worker_started_at": claimed_at.isoformat(),
+            "worker_pickup_delay_ms": round(worker_pickup_delay_ms, 3) if worker_pickup_delay_ms is not None else None,
+            "timings": timings,
+        })
         dataset_scope = dataset_scope_from_payload(metadata)
         if dataset_scope is None:
             mark_queue_job_failed(job_id, "missing_dataset_scope")
@@ -112,6 +135,9 @@ class UploadQueueLifecycleService:
             filename=filename,
             queue_status="processing",
             processing_stage="claim",
+            worker_pickup_delay_ms=round(worker_pickup_delay_ms, 3) if worker_pickup_delay_ms is not None else None,
+            queue_attempts=queue_entry.get("attempts"),
+            duplicate_claim=bool(int(queue_entry.get("attempts") or 0) > 1),
         )
         try:
             path = self._resolve_processing_path(job_id, metadata)
@@ -224,6 +250,9 @@ class UploadQueueLifecycleService:
                     "propagation_stage": "parsing_telemetry",
                     "propagation_progress": 20,
                     "propagation_label": "Parsing telemetry.",
+                    "worker_started_at": metadata.get("worker_started_at"),
+                    "worker_pickup_delay_ms": metadata.get("worker_pickup_delay_ms"),
+                    "timings": timings,
                 }
             )
             try:

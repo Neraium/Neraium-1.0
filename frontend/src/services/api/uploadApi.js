@@ -172,7 +172,7 @@ function getUploadResponseTimeoutMs(fileSizeBytes, baseTimeoutMs) {
   return Math.min(Math.max(base || largeFileMinimumMs, largeFileMinimumMs), 30 * 60 * 1000);
 }
 
-export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, accessCode } = {}) {
+export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, onTiming, requestStartedAt, accessCode } = {}) {
   return new Promise((resolve, reject) => {
     if (!file) {
       reject(new Error("Choose a CSV or JSON telemetry file to upload."));
@@ -180,7 +180,13 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
     }
 
     const startedAt = Date.now();
+    const interactionStartedAt = Number.isFinite(Number(requestStartedAt)) ? Number(requestStartedAt) : startedAt;
     const uploadUrl = buildApiUrl("/api/data/upload");
+    const emitTiming = (event, values = {}) => {
+      const timing = { event, at: new Date().toISOString(), ...values };
+      console.info("[neraium] upload timing", timing);
+      onTiming?.(timing);
+    };
     const debugState = buildApiDebugState("/api/data/upload");
     console.info("[neraium] upload endpoint", {
       uploadUrl,
@@ -216,6 +222,9 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
       const formData = new FormData();
       let responseGraceTimer = null;
       let responseSettled = false;
+      let attemptLoaded = 0;
+      let transferCompletedAt = null;
+      let requestDispatchedAt = startedAt;
       const clearResponseGraceTimer = () => {
         if (responseGraceTimer) {
           cancelTimer(responseGraceTimer);
@@ -254,6 +263,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
 
       xhr.upload.onprogress = (event) => {
         const loaded = event.loaded ?? 0;
+        attemptLoaded = Math.max(attemptLoaded, loaded);
         const total = event.lengthComputable ? event.total : file.size;
         const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.001);
         const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : null;
@@ -283,11 +293,31 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
         }
       };
 
+      xhr.upload.onload = () => {
+        attemptLoaded = Math.max(attemptLoaded, file.size || 0);
+        transferCompletedAt = Date.now();
+        emitTiming("upload_transfer_complete", {
+          attempt: retryCount + 1,
+          upload_transfer_ms: Math.max(0, transferCompletedAt - startedAt),
+          file_size_bytes: file.size,
+        });
+      };
+
       xhr.onload = () => {
         responseSettled = true;
         clearResponseGraceTimer();
+        const responseReceivedAt = Date.now();
         const payload = normalizeUploadJob(readJsonResponse(xhr, { route: uploadUrl, phase: "upload" }));
         const response = { ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, payload };
+        emitTiming("upload_response_received", {
+          attempt: retryCount + 1,
+          frontend_request_dispatch_ms: Math.max(0, requestDispatchedAt - interactionStartedAt),
+          upload_transfer_ms: transferCompletedAt ? Math.max(0, transferCompletedAt - startedAt) : null,
+          backend_confirmation_ms: transferCompletedAt ? Math.max(0, responseReceivedAt - transferCompletedAt) : null,
+          upload_request_total_ms: Math.max(0, responseReceivedAt - interactionStartedAt),
+          backend_timings: payload?.timings ?? null,
+          status: xhr.status,
+        });
         onDebug?.({
           ...debugState,
           responseStatus: xhr.status,
@@ -313,7 +343,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
           status: xhr.status,
           errorType,
         });
-        if (isTransientUploadServiceStatus(xhr.status) && retryCount < MAX_SAME_URL_RETRIES) {
+        if (isTransientUploadServiceStatus(xhr.status) && retryCount < MAX_SAME_URL_RETRIES && attemptLoaded === 0) {
           onProgress?.({
             stage: "upload_retrying",
             loaded: file.size,
@@ -344,7 +374,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
           errorType: "network",
         });
 
-        if (retryCount < MAX_SAME_URL_RETRIES) {
+        if (retryCount < MAX_SAME_URL_RETRIES && attemptLoaded === 0) {
           onProgress?.({
             stage: "upload_retrying",
             loaded: file.size,
@@ -358,7 +388,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
         }
 
         const error = new Error(
-          `Upload network error before server accepted the file. Failed URL: ${uploadUrl}`
+          `Upload connection failed before server acceptance could be confirmed. Failed URL: ${uploadUrl}`
         );
         error.name = "ApiNetworkError";
         error.apiBaseUrl = uploadUrl;
@@ -385,7 +415,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
           errorType: "timeout",
         });
 
-        if (retryCount < MAX_SAME_URL_RETRIES) {
+        if (retryCount < MAX_SAME_URL_RETRIES && attemptLoaded === 0) {
           onProgress?.({
             stage: "upload_retrying",
             loaded: file.size,
@@ -399,7 +429,7 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
         }
 
         const error = new Error(
-          `Upload request timed out before server accepted the file. Failed URL: ${uploadUrl}`
+          `Upload request timed out before server acceptance could be confirmed. Failed URL: ${uploadUrl}`
         );
         error.name = "ApiTimeoutError";
         error.timeoutMs = timeoutMs;
@@ -413,6 +443,11 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
         clearResponseGraceTimer();
       };
 
+      requestDispatchedAt = Date.now();
+      emitTiming("frontend_request_dispatched", {
+        attempt: retryCount + 1,
+        frontend_request_dispatch_ms: Math.max(0, requestDispatchedAt - interactionStartedAt),
+      });
       xhr.send(formData);
     };
 

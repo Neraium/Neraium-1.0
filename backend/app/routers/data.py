@@ -14,7 +14,7 @@ import re
 
 from fastapi import APIRouter, Depends, File, HTTPException, Path as ApiPath, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
-from app.services.evidence_store import read_evidence_run, upsert_evidence_run
+from app.services.evidence_store import upsert_evidence_run
 from app.services.dataset_scope import payload_matches_dataset_scope
 from app.services.analysis_result_contract import ensure_analysis_result
 from app.core.security import _strict_auth_mode, require_api_access, require_operator_role
@@ -23,15 +23,14 @@ from app.services import upload_jobs
 from app.services.upload_evidence import build_evidence_record_from_result
 from app.services.upload_persistence import summarize_result
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
-from app.services.upload_state import build_empty_latest_upload_record, has_active_session_artifact
-from app.services.upload_status_contract import normalize_upload_status_payload
+from app.services.upload_state import has_active_session_artifact
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services.runtime_db import record_audit_event
 from app.services.runtime_db import enqueue_upload_job
 from app.services.runtime_db import queue_metrics as runtime_queue_metrics
-from app.services.runtime_db import read_upload_queue_job, touch_upload_queue_job, peek_next_upload_job_for_worker
+from app.services.runtime_db import touch_upload_queue_job, peek_next_upload_job_for_worker
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
-from app.services.upload_state_repository import persist_upload_source, read_replay_payload, read_upload_result_by_job_id, reset_upload_state, resolve_upload_artifacts, shared_state_configured, upload_state_backend
+from app.services.upload_state_repository import persist_upload_source, read_latest_upload_record, read_replay_payload, read_upload_result_by_job_id, reset_upload_state, resolve_upload_artifacts, shared_state_configured
 from app.services.rate_limiter import consume_rate_limit
 from app.services.latest_upload_state import resolve_latest_upload_payload
 from app.services.upload_session_service import resolve_upload_status
@@ -236,57 +235,6 @@ def _dispatch_upload_worker_for_runtime(runtime_dir: Path) -> None:
         logger.exception("upload_worker_thread_start_failed runtime_dir=%s", runtime_dir)
 
 
-def _extract_timeline(result: dict | None, job_id: str | None = None) -> list[dict]:
-    replay = (
-        (result or {}).get("replay_timeline")
-        or ((result or {}).get("sii_intelligence") or {}).get("replay_timeline")
-        or {}
-    )
-    timeline = replay.get("timeline") if isinstance(replay, dict) else []
-    if timeline:
-        return timeline
-    fallback = upload_jobs.replay_payload(job_id)
-    fallback_timeline = fallback.get("timeline", []) if isinstance(fallback, dict) else []
-    return fallback_timeline if isinstance(fallback_timeline, list) else []
-
-
-def _process_upload_inline(job_id: str, status: dict) -> dict:
-    file_path = status.get("file_path")
-    path = _resolve_upload_source_path(UPLOAD_RUNTIME_STATE.runtime_dir, file_path)
-    if path is None:
-        return status
-    try:
-        filename = status.get("filename") or path.name
-        if path.suffix.lower() == ".json":
-            upload_jobs.process_json_payload(path.read_text(encoding="utf-8"), filename=filename, job_id=job_id)
-        else:
-            upload_jobs.process_csv_file(path, filename=filename, job_id=job_id)
-        return upload_jobs.read_upload_status(job_id) or status
-    except Exception as exc:
-        logger.exception("upload_status_inline_processing_failed job_id=%s", job_id)
-        failed = {
-            **status,
-            "job_id": job_id,
-            "status": "FAILED",
-            "processing_state": "failed",
-            "error_type": "processing_error",
-            "error": str(exc),
-            "message": "Telemetry processing failed.",
-            "progress_label": "Telemetry processing failed.",
-            "result_available": False,
-        }
-        upload_jobs.write_job(failed)
-        _upsert_failed_evidence_record(
-            job_id=job_id,
-            filename=str(failed.get("filename") or "upload.csv"),
-            source_type="json_upload" if str(failed.get("filename") or "").lower().endswith(".json") else "csv_upload",
-            error_message=str(exc) or exc.__class__.__name__,
-            initiated_by=str(failed.get("initiated_by") or "anonymous"),
-        )
-        return failed
-
-
-
 def _upsert_failed_evidence_record(
     *,
     job_id: str,
@@ -332,146 +280,6 @@ def _upsert_failed_evidence_record(
 
 
 
-def _parse_iso_ts(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except Exception:
-        return None
-
-
-def _with_worker_visibility(payload: dict, job_id: str) -> dict:
-    enriched = dict(payload or {})
-    now = datetime.now(timezone.utc)
-    enriched["status_checked_at"] = now.isoformat()
-
-    queue_entry = read_upload_queue_job(str(job_id))
-    queue_position = queue_entry.get("queue_position") if isinstance(queue_entry, dict) else None
-    enriched["queue_position"] = int(queue_position) if isinstance(queue_position, int) else None
-
-    created_at = _parse_iso_ts((queue_entry or {}).get("created_at") if isinstance(queue_entry, dict) else None)
-    queued_seconds = max(0, int((now - created_at).total_seconds())) if created_at else None
-    enriched["queued_seconds"] = queued_seconds
-
-    payload_last_seen = _parse_iso_ts(enriched.get("worker_last_seen_at"))
-    last_seen = _parse_iso_ts((queue_entry or {}).get("updated_at") if isinstance(queue_entry, dict) else None) or payload_last_seen
-    worker_last_seen_at = last_seen.isoformat() if last_seen else None
-    enriched["worker_last_seen_at"] = worker_last_seen_at
-
-    if str(enriched.get("worker_state") or "").lower() == "running" and worker_last_seen_at:
-        enriched["worker_state"] = "running"
-        return enriched
-
-    state = "unknown"
-    status_text = str(enriched.get("status") or "").upper()
-    processing_state = str(enriched.get("processing_state") or "").lower()
-    queue_status = str((queue_entry or {}).get("status") or "").lower() if isinstance(queue_entry, dict) else ""
-
-    if status_text == "PENDING" and processing_state == "queued":
-        state = "starting"
-    if queue_status == "processing" or status_text in {"PROCESSING", "RUNNING_SII"} or processing_state in {"parsing_telemetry", "building_relationship_baselines", "scoring_relationship_drift", "building_propagation_model", "generating_system_interpretation", "complete"}:
-        state = "running"
-
-    if state == "starting" and queued_seconds is not None and queued_seconds > 15:
-        stale = True
-        if last_seen and (now - last_seen).total_seconds() <= 15:
-            stale = False
-        state = "stalled" if stale else "starting"
-
-    if not isinstance(queue_entry, dict):
-        state = "unknown" if status_text not in {"PENDING", "PROCESSING", "RUNNING_SII"} else "starting"
-
-    enriched["worker_state"] = state
-    return enriched
-
-
-def _resolve_upload_status_payload(job_id: str, state_backend: str) -> dict:
-    status = upload_jobs.read_upload_status(job_id)
-    if status and str(status.get("status", "")).upper() in {"PENDING", "QUEUED", "PROCESSING"}:
-        processed = upload_jobs.process_next_queued_upload_job()
-        status = upload_jobs.read_upload_status(job_id) or status
-        if not processed and str(status.get("status", "")).upper() in {"PENDING", "QUEUED", "PROCESSING"}:
-            status = _process_upload_inline(job_id, status)
-    if status:
-        normalized = normalize_upload_status_payload(status)
-        normalized.setdefault("state_backend", state_backend)
-        return _with_worker_visibility(normalized, job_id)
-    latest_record = read_latest_upload_record() or {}
-    latest_summary = latest_record.get("summary") if isinstance(latest_record.get("summary"), dict) else {}
-    if str(latest_summary.get("job_id") or latest_record.get("job_id") or "") == str(job_id):
-        normalized = normalize_upload_status_payload(latest_summary)
-        normalized.setdefault("state_backend", state_backend)
-        return _with_worker_visibility(normalized, job_id)
-    latest_result = read_upload_result_by_job_id(job_id)
-    if isinstance(latest_result, dict) and latest_result.get("job_id") == job_id:
-        timeline = _extract_timeline(latest_result, job_id)
-        return _with_worker_visibility({
-            "job_id": job_id,
-            "status_url": f"/api/data/upload-status/{job_id}",
-            "status": "COMPLETE",
-            "processing_state": "complete",
-            "percent": 100,
-            "progress": 100,
-            "result_available": True,
-            "first_usable_available": True,
-            "sii_completed": True,
-            "replay_ready": len(timeline or []) > 0,
-            "replay_frame_count": len(timeline or []),
-            "latest_replay_frames": len(timeline or []),
-            "replay_source": "persisted" if timeline else "unknown",
-            "last_processed_at": latest_result.get("last_processed_at") or latest_result.get("completed_at"),
-            "filename": latest_result.get("filename"),
-            "row_count": latest_result.get("row_count", 0),
-            "column_count": latest_result.get("column_count", 0),
-            "rows_processed": latest_result.get("row_count", 0),
-            "columns_detected": latest_result.get("column_count", 0),
-            "progress_label": "Analysis ready.",
-            "message": "Analysis ready.",
-            "job_state": "completed",
-            "terminal": True,
-            "sii_completion_artifacts": latest_result.get("sii_completion_artifacts", {}),
-            "error": None,
-            "propagation_stage": "complete",
-            "propagation_progress": 100,
-            "propagation_label": "Analysis ready.",
-            "state_backend": state_backend,
-        }, job_id)
-    if UPLOAD_JOB_ID_PATTERN.match(str(job_id or "")):
-        return _with_worker_visibility({
-            "job_id": job_id,
-            "status_url": f"/api/data/upload-status/{job_id}",
-            "status": "PENDING",
-            "analysis_state": "analysis_queued",
-            "processing_state": "queued",
-            "percent": 0,
-            "progress": 0,
-            "replay_ready": False,
-            "replay_frame_count": 0,
-            "result_available": False,
-            "first_usable_available": False,
-            "sii_completed": False,
-            "message": "Upload accepted. Waiting for status propagation.",
-            "propagation_stage": "queued",
-            "propagation_progress": 10,
-            "propagation_label": "Queued.",
-            "state_backend": state_backend,
-        }, job_id)
-    return _with_worker_visibility({
-        "job_id": job_id,
-        "status": "NOT_FOUND",
-        "processing_state": "missing",
-        "percent": 0,
-        "replay_ready": False,
-        "replay_frame_count": 0,
-        "result_available": False,
-        "error_type": "upload_session_missing",
-        "error": "upload_session_missing",
-        "message": "Upload session expired or was not found.",
-        "state_backend": state_backend,
-    }, job_id)
-
-
 @router.post("/upload", status_code=202, dependencies=[Depends(require_operator_role)])
 async def upload_data(request: Request, file: UploadFile = File(...)):
     if _strict_auth_mode(request):
@@ -484,7 +292,12 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         if not allowed:
             return _rate_limit_response(retry_after, error_type="upload_rate_limited", message="Upload rate limit exceeded. Retry shortly.")
     settings = request.app.state.settings
-    started_at = time.perf_counter()
+    handler_started_at = time.perf_counter()
+    handler_started_wall = datetime.now(timezone.utc).isoformat()
+    request_started_at = float(getattr(request.state, "request_started_perf", handler_started_at))
+    request_received_at = getattr(request.state, "request_received_at", datetime.now(timezone.utc).isoformat())
+    upload_transfer_ms = max(0.0, (handler_started_at - request_started_at) * 1000)
+    started_at = handler_started_at
     request_id = getattr(request.state, "request_id", None)
     filename = file.filename or "upload.csv"
     if len(filename) > 255:
@@ -544,6 +357,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
     upload_storage_key: str | None = None
     summary: dict[str, Any] = {}
     try:
+        spool_started_at = time.perf_counter()
         spool_dir = _upload_storage_root(settings.runtime_dir)
         with NamedTemporaryFile(
             delete=False,
@@ -593,9 +407,20 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 },
             )
 
+        backend_spool_ms = max(0.0, (time.perf_counter() - spool_started_at) * 1000)
         upload_storage_key = storage_key_for_server_path(spool_dir, temp_path)
 
-        _log_upload_event("request_bytes_received", request_id=request_id, endpoint="/api/data/upload", filename=filename, file_size_bytes=file_size_bytes, content_type=content_type or "unknown", processing_stage="spooled")
+        _log_upload_event(
+            "request_bytes_received",
+            request_id=request_id,
+            endpoint="/api/data/upload",
+            filename=filename,
+            file_size_bytes=file_size_bytes,
+            content_type=content_type or "unknown",
+            processing_stage="spooled",
+            upload_transfer_ms=round(upload_transfer_ms, 3),
+            backend_spool_ms=round(backend_spool_ms, 3),
+        )
 
         request.state.upload_session_id = job_id
         shared_upload_source_key = None
@@ -607,6 +432,9 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 content_type=content_type or None,
             )
         worker_dispatch_status = "thread_dispatched" if _should_dispatch_upload_worker(settings) else "external_worker_queue"
+        job_creation_started_at = time.perf_counter()
+        job_created_at = datetime.now(timezone.utc).isoformat()
+        enqueued_at = job_created_at
         processing_file_path = (
             None
             if worker_dispatch_status == "external_worker_queue" and shared_upload_source_key
@@ -637,6 +465,17 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             "request_id": request_id,
             "upload_session_id": job_id,
             "worker_dispatch_status": worker_dispatch_status,
+            "request_received_at": request_received_at,
+            "backend_handler_started_at": handler_started_wall,
+            "upload_completed_at": datetime.now(timezone.utc).isoformat(),
+            "job_created_at": job_created_at,
+            "enqueued_at": enqueued_at,
+            "stage_changed_at": job_created_at,
+            "timings": {
+                "upload_transfer_ms": round(upload_transfer_ms, 3),
+                "backend_spool_ms": round(backend_spool_ms, 3),
+                "backend_request_handling_ms": round((time.perf_counter() - handler_started_at) * 1000, 3),
+            },
         }
         upload_jobs.write_job(summary)
         record_audit_event(
@@ -683,6 +522,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 }
             )
         enqueue_upload_job(job_id)
+        job_creation_ms = max(0.0, (time.perf_counter() - job_creation_started_at) * 1000)
         if processing_file_path is None:
             Path(temp_path).unlink(missing_ok=True)
             temp_path = ""
@@ -699,6 +539,9 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             worker_dispatch_status=worker_dispatch_status,
             processing_stage="queued",
             elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+            upload_transfer_ms=round(upload_transfer_ms, 3),
+            backend_request_handling_ms=round((time.perf_counter() - handler_started_at) * 1000, 3),
+            job_creation_ms=round(job_creation_ms, 3),
         )
     except Exception as exc:
         try:
@@ -785,6 +628,22 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 "status_url": f"/api/data/upload-status/{failed_job_id}",
             },
         )
+    response_finished_at = time.perf_counter()
+    response_timings = {
+        "upload_transfer_ms": round(upload_transfer_ms, 3),
+        "backend_spool_ms": round(float(locals().get("backend_spool_ms", 0.0)), 3),
+        "backend_request_handling_ms": round(max(0.0, (response_finished_at - handler_started_at) * 1000), 3),
+        "job_creation_ms": round(float(locals().get("job_creation_ms", 0.0)), 3),
+        "request_to_job_created_ms": round(max(0.0, (response_finished_at - request_started_at) * 1000), 3),
+    }
+    _log_upload_event(
+        "request_timing",
+        request_id=request_id,
+        endpoint="/api/data/upload",
+        filename=filename,
+        job_id=summary.get("job_id"),
+        **response_timings,
+    )
     return {
         "job_id": summary.get("job_id"),
         "dataset_id": summary.get("job_id"),
@@ -807,6 +666,11 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         "queue_position": None,
         "queued_seconds": 0,
         "status_checked_at": datetime.now(timezone.utc).isoformat(),
+        "request_received_at": request_received_at,
+        "job_created_at": summary.get("job_created_at"),
+        "enqueued_at": summary.get("enqueued_at"),
+        "stage_changed_at": summary.get("stage_changed_at"),
+        "timings": response_timings,
     }
 
 
@@ -829,6 +693,20 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
     status_payload = upload_jobs.read_upload_status(requested_job_id) or {}
     if status_payload and not payload_matches_dataset_scope(status_payload):
         status_payload = {}
+    active_status = str(status_payload.get("status") or "").strip().upper()
+    active_processing_state = str(status_payload.get("processing_state") or "").strip().lower()
+    if active_status in {"PENDING", "QUEUED", "PROCESSING", "RUNNING_SII"} or active_processing_state in {"queued", "pending", "processing", "running_sii"}:
+        return JSONResponse(
+            status_code=409,
+            content={
+                **status_payload,
+                "job_id": requested_job_id,
+                "error_type": "upload_job_already_active",
+                "message": "This analysis job is already queued or running.",
+                "status_url": f"/api/data/upload-status/{requested_job_id}",
+            },
+        )
+
     file_path = status_payload.get("file_path")
     shared_upload_source_key = str(status_payload.get("shared_upload_source_key") or "").strip()
     has_local_file = _resolve_upload_source_path(settings.runtime_dir, file_path) is not None
@@ -904,6 +782,7 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
 
 @router.get("/upload-status/{job_id}")
 async def upload_status(request: Request, job_id: UploadJobPath):
+    status_started_at = time.perf_counter()
     if _strict_auth_mode(request):
         allowed, retry_after = consume_rate_limit(
             "data.upload_status",
@@ -916,6 +795,16 @@ async def upload_status(request: Request, job_id: UploadJobPath):
     request_id = getattr(request.state, "request_id", None)
     request.state.upload_session_id = job_id
     normalized = resolve_upload_status(job_id, request_id=request_id)
+    status_request_ms = round(max(0.0, (time.perf_counter() - status_started_at) * 1000), 3)
+    normalized["status_server_sent_at"] = datetime.now(timezone.utc).isoformat()
+    normalized["status_request_ms"] = status_request_ms
+    logger.info(
+        "upload_poll_timing event=status_response job_id=%s request_id=%s stage=%s status_request_ms=%s",
+        job_id,
+        request_id,
+        normalized.get("processing_state") or normalized.get("status"),
+        status_request_ms,
+    )
     if str(normalized.get("status", "")).upper() == "NOT_FOUND":
         logger.warning("upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False", job_id)
         return JSONResponse(status_code=404, content=normalized)
@@ -927,13 +816,14 @@ async def upload_stream(job_id: UploadJobPath, request: Request = None):
     request_id = getattr(request.state, "request_id", None) if request is not None else None
 
     async def event_generator():
-        # Stream for up to ~12 minutes with heartbeat-like cadence.
-        for _ in range(180):
+        # One-second cadence keeps backend stage transitions visible within the
+        # same two-second budget as direct status polling.
+        for _ in range(720):
             payload = resolve_upload_status(job_id, request_id=request_id)
             yield f"data: {json.dumps(payload)}\n\n"
             if str(payload.get("status", "")).upper() in {"COMPLETE", "FAILED", "TIMEOUT", "CANCELLED"}:
                 break
-            await asyncio.sleep(4)
+            await asyncio.sleep(1)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

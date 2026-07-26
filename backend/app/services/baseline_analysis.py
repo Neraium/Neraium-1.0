@@ -366,9 +366,9 @@ def select_adaptive_baseline_window(
             "stability_score": 0.0,
             "candidate_windows": 1 if rows else 0,
         }
+    prefix_stats = numeric_prefix_stats(rows, numeric_indexes)
     for start in range(0, max(1, search_limit - window_size + 1)):
-        window = rows[start:start + window_size]
-        score = window_stability_score(window, numeric_indexes)
+        score = prefix_window_stability_score(prefix_stats, start, start + window_size)
         candidates.append((score, start))
     if not candidates:
         return {
@@ -386,6 +386,50 @@ def select_adaptive_baseline_window(
         "stability_score": round_number(1 / (1 + score)),
         "candidate_windows": len(candidates),
     }
+
+
+def numeric_prefix_stats(
+    rows: list[list[str]],
+    numeric_indexes: list[int],
+) -> dict[int, tuple[list[int], list[float], list[float]]]:
+    """Build rolling count/sum/sum-of-squares arrays for exact window scoring."""
+
+    stats: dict[int, tuple[list[int], list[float], list[float]]] = {}
+    for column_index in numeric_indexes:
+        counts = [0]
+        sums = [0.0]
+        sums_of_squares = [0.0]
+        for row in rows:
+            raw_value = row[column_index].strip() if column_index < len(row) else ""
+            try:
+                value = float(raw_value) if raw_value else None
+            except ValueError:
+                value = None
+            valid = value is not None and math.isfinite(value)
+            counts.append(counts[-1] + (1 if valid else 0))
+            sums.append(sums[-1] + (value if valid else 0.0))
+            sums_of_squares.append(sums_of_squares[-1] + (value * value if valid else 0.0))
+        stats[column_index] = (counts, sums, sums_of_squares)
+    return stats
+
+
+def prefix_window_stability_score(
+    prefix_stats: dict[int, tuple[list[int], list[float], list[float]]],
+    start: int,
+    end: int,
+) -> float:
+    scores: list[float] = []
+    for counts, sums, sums_of_squares in prefix_stats.values():
+        count = counts[end] - counts[start]
+        if count < 2:
+            continue
+        total = sums[end] - sums[start]
+        average = total / count
+        square_total = sums_of_squares[end] - sums_of_squares[start]
+        variance = max(0.0, (square_total / count) - (average * average))
+        spread = math.sqrt(variance)
+        scores.append(spread / max(abs(average), 1.0))
+    return sum(scores) / len(scores) if scores else 999.0
 
 
 def window_stability_score(rows: list[list[str]], numeric_indexes: list[int]) -> float:

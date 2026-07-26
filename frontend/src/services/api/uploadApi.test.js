@@ -57,6 +57,10 @@ function installXhrSequence(responses) {
       this._response = response;
       this.status = response.status;
       this.responseText = response.body;
+      if (response.uploaded) {
+        this.upload.onprogress?.({ loaded: response.uploaded, total: response.uploaded, lengthComputable: true });
+        this.upload.onload?.();
+      }
       this.readyState = 4;
       this.onload?.();
     }
@@ -117,6 +121,62 @@ describe("fetchLatestUploadState", () => {
     expect(workspaceA.latestResult?.job_id).toBe("workspace-a-job");
     expect(workspaceB.latestResult).toBeNull();
     expect(apiFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry a non-idempotent upload after all bytes transferred", async () => {
+    const body = "timestamp,value\n2026-06-22,1\n";
+    const xhr = installXhrSequence([
+      {
+        status: 503,
+        body: "<html><body>temporarily unavailable</body></html>",
+        headers: { "content-type": "text/html" },
+        uploaded: body.length,
+      },
+    ]);
+
+    try {
+      await expect(uploadTelemetryFileWithProgress({
+        file: new File([body], "transferred.csv", { type: "text/csv" }),
+        accessCode: "",
+      })).rejects.toMatchObject({ status: 503 });
+      expect(xhr.instances).toHaveLength(1);
+    } finally {
+      xhr.restore();
+    }
+  });
+
+  it("reports dispatch, transfer, and backend confirmation timings", async () => {
+    const body = "timestamp,value\n2026-06-22,1\n";
+    const xhr = installXhrSequence([{
+      status: 202,
+      body: JSON.stringify({ job_id: "timed-job", status: "PENDING", timings: { job_creation_ms: 12 } }),
+      headers: { "content-type": "application/json" },
+      uploaded: body.length,
+    }]);
+    const timings = [];
+
+    try {
+      await uploadTelemetryFileWithProgress({
+        file: new File([body], "timed.csv", { type: "text/csv" }),
+        onTiming: (timing) => timings.push(timing),
+        requestStartedAt: Date.now() - 5,
+        accessCode: "",
+      });
+      expect(timings.map((timing) => timing.event)).toEqual([
+        "frontend_request_dispatched",
+        "upload_transfer_complete",
+        "upload_response_received",
+      ]);
+      expect(timings[2]).toMatchObject({
+        backend_timings: { job_creation_ms: 12 },
+        status: 202,
+      });
+      expect(timings[2].frontend_request_dispatch_ms).toBeGreaterThanOrEqual(0);
+      expect(timings[2].upload_transfer_ms).toBeGreaterThanOrEqual(0);
+      expect(timings[2].backend_confirmation_ms).toBeGreaterThanOrEqual(0);
+    } finally {
+      xhr.restore();
+    }
   });
 
   it("sanitizes HTML 503 latest-upload result failures", async () => {

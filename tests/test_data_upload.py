@@ -690,6 +690,7 @@ def test_upload_processing_persists_intermediate_progress_states(monkeypatch) ->
     from app.services import upload_jobs
 
     original = upload_jobs.repository_write_upload_status_progress
+    original_completion = upload_jobs.repository_write_upload_completion
     progress_events = []
 
     def record_progress(job_id, payload, *args, **kwargs):
@@ -702,7 +703,12 @@ def test_upload_processing_persists_intermediate_progress_states(monkeypatch) ->
             })
         return original(job_id, payload, *args, **kwargs)
 
+    def record_completion(job_id, *, result, summary):
+        record_progress(job_id, summary)
+        return original_completion(job_id, result=result, summary=summary)
+
     monkeypatch.setattr(upload_jobs, "repository_write_upload_status_progress", record_progress)
+    monkeypatch.setattr(upload_jobs, "repository_write_upload_completion", record_completion)
     rows = "\n".join(
         f"2026-05-01T08:{index:02d}:00Z,Room A,{75 + index * 0.1:.1f},{58 + index * 0.2:.1f},{120 + index}"
         for index in range(24)
