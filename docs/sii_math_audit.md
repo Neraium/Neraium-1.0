@@ -12,6 +12,12 @@ backend/app/engine/sii_engine.py::evaluate_sii
 
 The upload pipeline calls it exactly once. The detailed formulas, constants, minimums, missing-value behavior, assumptions, and limitations are maintained in [sii_math_specification.md](sii_math_specification.md). This audit records execution paths, duplicate calculations, active/retained functions, and public consumers.
 
+Post-Phase-4 in-place mathematical improvements are documented in
+[sii_mathematical_refinement.md](sii_mathematical_refinement.md). They preserve
+this entrypoint and architecture while adding graph-Laplacian, lag-aware robust
+response, physical-window, propagation, temporal, multiscale, uncertainty, and
+baseline-evolution evidence.
+
 ## Active execution path
 
 ```text

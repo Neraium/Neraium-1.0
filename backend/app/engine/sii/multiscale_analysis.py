@@ -98,6 +98,15 @@ def analyze_multiscale(
             "scales_used": [],
             "agreement": _empty_agreement(int(cfg["minimum_agreeing_scales"])),
             "cross_scale_interpretation": _cross_scale_interpretation([], _empty_agreement(int(cfg["minimum_agreeing_scales"])), minimum_scales=int(cfg["minimum_agreeing_scales"]), elapsed_time=True),
+            "behavior_patterns": {
+                "status": "limited",
+                "elapsed_time_basis": True,
+                "signals": [],
+                "classification_counts": {},
+                "limitations": [
+                    "Reliable chronological scale profiles were unavailable."
+                ],
+            },
         }
 
     latest = valid_pairs[-1][1]
@@ -221,6 +230,10 @@ def analyze_multiscale(
         minimum_scales=minimum_scales,
         elapsed_time=True,
     )
+    behavior_patterns = _scale_behavior_patterns(
+        eligible,
+        elapsed_time=True,
+    )
     status = "complete" if eligible else "limited"
     reason = None if eligible else "no_supported_elapsed_time_scales"
     metrics = {
@@ -258,6 +271,7 @@ def analyze_multiscale(
         "scales_used": [item["name"] for item in eligible],
         "agreement": agreement,
         "cross_scale_interpretation": interpretation,
+        "behavior_patterns": behavior_patterns,
         "thresholds": {
             "signal_activation_ratio": float(cfg["signal_activation_ratio"]),
             "agreement_fraction": float(cfg["agreement_fraction"]),
@@ -348,6 +362,10 @@ def _row_fallback(
         minimum_scales=minimum_scales,
         elapsed_time=False,
     )
+    behavior_patterns = _scale_behavior_patterns(
+        eligible,
+        elapsed_time=False,
+    )
     status = "limited"
     reason = fallback_reason if eligible else "no_supported_row_fallback_scales"
     envelope = module_envelope(
@@ -380,6 +398,7 @@ def _row_fallback(
         "scales_used": [item["name"] for item in eligible],
         "agreement": agreement,
         "cross_scale_interpretation": interpretation,
+        "behavior_patterns": behavior_patterns,
         "thresholds": {
             "signal_activation_ratio": float(config["signal_activation_ratio"]),
             "agreement_fraction": float(config["agreement_fraction"]),
@@ -626,6 +645,118 @@ def _cross_scale_interpretation(
         "agreeing_signal_count": len(agreeing),
         "conflicting_signal_count": len(conflicting),
     }
+
+
+def _scale_behavior_patterns(
+    eligible: list[dict[str, Any]],
+    *,
+    elapsed_time: bool,
+) -> dict[str, Any]:
+    by_signal: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for scale_index, scale in enumerate(eligible):
+        for metric in scale.get("signal_metrics", []):
+            if not isinstance(metric, dict) or not metric.get("column"):
+                continue
+            direction = str(metric.get("direction") or "flat")
+            sign = 1.0 if direction == "up" else -1.0 if direction == "down" else 0.0
+            by_signal[str(metric["column"])].append(
+                {
+                    "scale_index": scale_index,
+                    "scale": scale.get("name"),
+                    "horizon_seconds": scale.get("horizon_seconds"),
+                    "window_rows": scale.get("window_rows"),
+                    "active": bool(metric.get("active")),
+                    "direction": direction,
+                    "normalized_change": float(metric.get("normalized_change") or 0.0),
+                    "signed_normalized_change": round(
+                        sign * float(metric.get("normalized_change") or 0.0),
+                        6,
+                    ),
+                }
+            )
+    signals = []
+    for signal, profile in sorted(by_signal.items()):
+        ordered = sorted(profile, key=lambda item: int(item["scale_index"]))
+        active = [item for item in ordered if item["active"]]
+        directions = [item["direction"] for item in active if item["direction"] != "flat"]
+        reversals = sum(
+            current != previous
+            for previous, current in zip(directions, directions[1:])
+        )
+        magnitudes = [
+            (float(index), float(item["normalized_change"]))
+            for index, item in enumerate(ordered)
+        ]
+        magnitude_slope = _median_pairwise_slope(magnitudes)
+        if not active:
+            classification = "stable_across_scales"
+        elif reversals >= 2:
+            classification = "recurring_or_oscillatory_scale_pattern"
+        elif len(active) == 1:
+            classification = (
+                "transient_event"
+                if active[0]["scale_index"] == 0 and elapsed_time
+                else "scale_specific_change"
+            )
+        elif not elapsed_time:
+            classification = "consistent_across_row_scales"
+        elif (
+            magnitude_slope is not None
+            and magnitude_slope > 1e-12
+            and magnitudes[-1][1] > magnitudes[0][1]
+        ):
+            classification = "gradual_evolution"
+        elif (
+            magnitude_slope is not None
+            and magnitude_slope < -1e-12
+            and magnitudes[-1][1] < magnitudes[0][1]
+        ):
+            classification = "transient_event"
+        else:
+            classification = "persistent_instability"
+        signals.append(
+            {
+                "column": signal,
+                "classification": classification,
+                "scale_profile": ordered,
+                "active_scale_count": len(active),
+                "eligible_scale_count": len(ordered),
+                "direction_reversal_count": reversals,
+                "normalized_magnitude_slope_per_scale": round(
+                    magnitude_slope,
+                    6,
+                )
+                if magnitude_slope is not None
+                else None,
+                "method": "direction_reversals_and_theil_sen_scale_profile_slope",
+            }
+        )
+    counts: dict[str, int] = defaultdict(int)
+    for item in signals:
+        counts[str(item["classification"])] += 1
+    return {
+        "status": "complete" if signals else "limited",
+        "elapsed_time_basis": elapsed_time,
+        "signals": signals,
+        "classification_counts": dict(sorted(counts.items())),
+        "limitations": []
+        if elapsed_time
+        else [
+            "Row-scale patterns cannot establish elapsed-time persistence or evolution."
+        ],
+    }
+
+
+def _median_pairwise_slope(
+    pairs: list[tuple[float, float]],
+) -> float | None:
+    slopes = [
+        (right_value - left_value) / (right_position - left_position)
+        for left_index, (left_position, left_value) in enumerate(pairs)
+        for right_position, right_value in pairs[left_index + 1 :]
+        if right_position > left_position
+    ]
+    return float(median(slopes)) if slopes else None
 
 
 def _empty_agreement(minimum_scales: int = 2) -> dict[str, Any]:

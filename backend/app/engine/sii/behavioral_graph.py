@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections import defaultdict, deque
 from copy import deepcopy
 from hashlib import sha256
@@ -84,6 +85,12 @@ def compare_behavioral_graph(
         "fragmentation_observed": bool(active_edges and current_components > active_components),
     }
     concentration = _concentration_change(active_edges, current_edges)
+    graph_mathematics = _graph_mathematics(
+        current_nodes=current_nodes,
+        current_edges=current_edges,
+        active_nodes=active_nodes,
+        active_edges=active_edges,
+    )
     topology = _topology_classification(
         current_edges=current_edges,
         active_edges=active_edges,
@@ -100,6 +107,7 @@ def compare_behavioral_graph(
         clusters=clusters,
         fragmentation=fragmentation,
         topology=topology,
+        graph_mathematics=graph_mathematics,
     )
     status = "complete" if current_edges and active_edges else "limited"
     return {
@@ -120,6 +128,7 @@ def compare_behavioral_graph(
         "neighborhood_disruption": _neighborhood_disruption(changed),
         "graph_fragmentation": fragmentation,
         "concentration_changes": concentration,
+        "graph_mathematics": graph_mathematics,
         "coordinated_edge_weakening": len(weakened) >= 2,
         "coordinated_edge_emergence": len(emerged) >= 2,
         "structural_change_scope": topology,
@@ -131,6 +140,7 @@ def compare_behavioral_graph(
             "active_edge_ids": sorted(active_edges),
             "changed_edge_ids": [item["relationship_id"] for item in changed],
             "change_threshold": float(change_threshold),
+            "graph_mathematics_method": graph_mathematics["method"],
             "causal_inference_performed": False,
             "diagnosis_performed": False,
         },
@@ -430,6 +440,330 @@ def _concentration_change(
     }
 
 
+def _graph_mathematics(
+    *,
+    current_nodes: dict[str, dict[str, Any]],
+    current_edges: dict[str, dict[str, Any]],
+    active_nodes: dict[str, dict[str, Any]],
+    active_edges: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Return inspectable weighted-graph metrics over the graph comparison.
+
+    Node weighted-degree displacement is treated as a graph signal. Its
+    Dirichlet energy is x' L x = sum(w_ij * (x_i - x_j)^2), where the
+    comparison weight is the larger observed edge weight in either graph.
+    This identifies coordinated neighborhood change without embedding nodes
+    or assigning causal meaning.
+    """
+
+    node_ids = sorted(
+        set(current_nodes)
+        | set(active_nodes)
+        | {
+            str(node)
+            for edge in [*current_edges.values(), *active_edges.values()]
+            for node in (edge.get("source_signal"), edge.get("target_signal"))
+            if node
+        }
+    )
+    active_weights = _edge_weights_by_pair(active_edges)
+    current_weights = _edge_weights_by_pair(current_edges)
+    all_pairs = sorted(set(active_weights) | set(current_weights))
+    reference_weights = {
+        pair: max(active_weights.get(pair, 0.0), current_weights.get(pair, 0.0))
+        for pair in all_pairs
+    }
+    active_degree = _weighted_degrees(node_ids, active_weights)
+    current_degree = _weighted_degrees(node_ids, current_weights)
+    displacement = {
+        node: current_degree.get(node, 0.0) - active_degree.get(node, 0.0)
+        for node in node_ids
+    }
+    local_energy = {node: 0.0 for node in node_ids}
+    dirichlet_energy = 0.0
+    total_variation = 0.0
+    for (left, right), weight in reference_weights.items():
+        difference = displacement[left] - displacement[right]
+        edge_energy = weight * difference * difference
+        dirichlet_energy += edge_energy
+        total_variation += weight * abs(difference)
+        local_energy[left] += edge_energy / 2.0
+        local_energy[right] += edge_energy / 2.0
+    signal_energy = sum(value * value for value in displacement.values())
+    normalized_smoothness = (
+        dirichlet_energy / signal_energy if signal_energy > 1e-12 else 0.0
+    )
+    weighted_union = sum(max(active_weights.get(pair, 0.0), current_weights.get(pair, 0.0)) for pair in all_pairs)
+    weighted_intersection = sum(min(active_weights.get(pair, 0.0), current_weights.get(pair, 0.0)) for pair in all_pairs)
+    weighted_jaccard = weighted_intersection / weighted_union if weighted_union else 1.0
+    normalized_l1_change = (
+        sum(abs(current_weights.get(pair, 0.0) - active_weights.get(pair, 0.0)) for pair in all_pairs)
+        / weighted_union
+        if weighted_union
+        else 0.0
+    )
+    neighborhoods = _neighborhood_consistency(
+        node_ids=node_ids,
+        active_weights=active_weights,
+        current_weights=current_weights,
+    )
+    centrality = _centrality_metrics(node_ids, current_weights)
+    active_node_ids = sorted(
+        set(active_nodes)
+        | {node for pair in active_weights for node in pair}
+    )
+    current_node_ids = sorted(
+        set(current_nodes)
+        | {node for pair in current_weights for node in pair}
+    )
+    active_communities = _component_memberships(
+        active_node_ids,
+        active_weights,
+    )
+    current_communities = _component_memberships(
+        current_node_ids,
+        current_weights,
+    )
+    community_evolution = _community_evolution(active_communities, current_communities)
+    return {
+        "method": "weighted_laplacian_structural_comparison_v1",
+        "node_signal": {
+            "definition": "current_minus_active_weighted_degree",
+            "values": [
+                {
+                    "node": node,
+                    "active_weighted_degree": round(active_degree.get(node, 0.0), 6),
+                    "current_weighted_degree": round(current_degree.get(node, 0.0), 6),
+                    "weighted_degree_displacement": round(displacement[node], 6),
+                }
+                for node in node_ids
+            ],
+        },
+        "graph_signal_smoothness": {
+            "dirichlet_energy": round(dirichlet_energy, 6),
+            "normalized_dirichlet_energy": round(normalized_smoothness, 6),
+            "weighted_total_variation": round(total_variation, 6),
+            "signal_energy": round(signal_energy, 6),
+            "formula": "x' L x = sum_{(i,j)} w_ij (x_i - x_j)^2",
+            "interpretation": "Lower energy indicates more spatially coordinated weighted-degree displacement on the observed graph.",
+        },
+        "localized_graph_energy": [
+            {
+                "node": node,
+                "energy": round(local_energy[node], 6),
+                "energy_fraction": round(local_energy[node] / dirichlet_energy, 6)
+                if dirichlet_energy > 1e-12
+                else 0.0,
+            }
+            for node in sorted(node_ids, key=lambda item: (-local_energy[item], item))
+        ],
+        "centrality": centrality,
+        "neighborhood_consistency": neighborhoods,
+        "structural_entropy": {
+            "active": round(_degree_entropy(active_degree), 6),
+            "current": round(_degree_entropy(current_degree), 6),
+            "delta": round(_degree_entropy(current_degree) - _degree_entropy(active_degree), 6),
+            "normalization": "shannon_entropy_divided_by_log_node_count",
+        },
+        "graph_stability": {
+            "weighted_jaccard_similarity": round(weighted_jaccard, 6),
+            "normalized_weight_l1_change": round(normalized_l1_change, 6),
+            "edge_union_count": len(all_pairs),
+            "comparable_reference_available": bool(active_edges),
+        },
+        "community_evolution": community_evolution,
+        "limitations": [
+            "Graph metrics describe weighted association structure and do not establish direction or cause.",
+            "The graph signal is weighted-degree displacement, not a learned embedding.",
+        ],
+    }
+
+
+def _edge_weights_by_pair(edges: dict[str, dict[str, Any]]) -> dict[tuple[str, str], float]:
+    weights: dict[tuple[str, str], float] = defaultdict(float)
+    for edge in edges.values():
+        left = str(edge.get("source_signal") or "")
+        right = str(edge.get("target_signal") or "")
+        if not left or not right or left == right:
+            continue
+        pair = tuple(sorted((left, right)))
+        weights[pair] += _strength(edge)
+    return dict(weights)
+
+
+def _weighted_degrees(
+    node_ids: list[str], weights: dict[tuple[str, str], float]
+) -> dict[str, float]:
+    degrees = {node: 0.0 for node in node_ids}
+    for (left, right), weight in weights.items():
+        degrees[left] = degrees.get(left, 0.0) + weight
+        degrees[right] = degrees.get(right, 0.0) + weight
+    return degrees
+
+
+def _neighborhood_consistency(
+    *,
+    node_ids: list[str],
+    active_weights: dict[tuple[str, str], float],
+    current_weights: dict[tuple[str, str], float],
+) -> list[dict[str, Any]]:
+    incident: dict[str, list[float]] = defaultdict(list)
+    for pair in sorted(set(active_weights) | set(current_weights)):
+        delta = current_weights.get(pair, 0.0) - active_weights.get(pair, 0.0)
+        for node in pair:
+            incident[node].append(delta)
+    output = []
+    for node in node_ids:
+        values = incident.get(node, [])
+        positive = sum(value > 1e-12 for value in values)
+        negative = sum(value < -1e-12 for value in values)
+        unchanged = len(values) - positive - negative
+        directional = positive + negative
+        output.append(
+            {
+                "node": node,
+                "incident_edge_count": len(values),
+                "strengthened_incident_edges": positive,
+                "weakened_incident_edges": negative,
+                "unchanged_incident_edges": unchanged,
+                "directional_consistency": round(max(positive, negative) / directional, 6)
+                if directional
+                else 1.0,
+                "median_incident_weight_delta": round(float(median(values)), 6)
+                if values
+                else 0.0,
+            }
+        )
+    return sorted(
+        output,
+        key=lambda item: (-int(item["incident_edge_count"]), str(item["node"])),
+    )
+
+
+def _centrality_metrics(
+    node_ids: list[str], weights: dict[tuple[str, str], float]
+) -> list[dict[str, Any]]:
+    adjacency: dict[str, set[str]] = {node: set() for node in node_ids}
+    degrees = _weighted_degrees(node_ids, weights)
+    for left, right in weights:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    betweenness = {node: 0.0 for node in node_ids}
+    for source in node_ids:
+        stack: list[str] = []
+        predecessors = {node: [] for node in node_ids}
+        paths = {node: 0.0 for node in node_ids}
+        paths[source] = 1.0
+        distance = {node: -1 for node in node_ids}
+        distance[source] = 0
+        queue = deque([source])
+        while queue:
+            node = queue.popleft()
+            stack.append(node)
+            for neighbor in sorted(adjacency[node]):
+                if distance[neighbor] < 0:
+                    queue.append(neighbor)
+                    distance[neighbor] = distance[node] + 1
+                if distance[neighbor] == distance[node] + 1:
+                    paths[neighbor] += paths[node]
+                    predecessors[neighbor].append(node)
+        dependency = {node: 0.0 for node in node_ids}
+        while stack:
+            node = stack.pop()
+            for predecessor in predecessors[node]:
+                if paths[node] > 0:
+                    dependency[predecessor] += (
+                        paths[predecessor] / paths[node]
+                    ) * (1.0 + dependency[node])
+            if node != source:
+                betweenness[node] += dependency[node]
+    normalization = (
+        1.0 / ((len(node_ids) - 1) * (len(node_ids) - 2))
+        if len(node_ids) > 2
+        else 0.0
+    )
+    return [
+        {
+            "node": node,
+            "degree_centrality": round(
+                len(adjacency[node]) / max(1, len(node_ids) - 1), 6
+            ),
+            "weighted_degree_centrality": round(
+                degrees[node] / max(1, len(node_ids) - 1), 6
+            ),
+            "betweenness_centrality": round(betweenness[node] * normalization, 6),
+        }
+        for node in sorted(
+            node_ids,
+            key=lambda item: (-degrees[item], -betweenness[item], item),
+        )
+    ]
+
+
+def _degree_entropy(degrees: dict[str, float]) -> float:
+    positive = [max(0.0, float(value)) for value in degrees.values()]
+    total = sum(positive)
+    if total <= 1e-12 or len(positive) <= 1:
+        return 0.0
+    entropy = -sum(
+        (value / total) * math.log(value / total)
+        for value in positive
+        if value > 0.0
+    )
+    return entropy / math.log(len(positive))
+
+
+def _component_memberships(
+    node_ids: list[str], weights: dict[tuple[str, str], float]
+) -> list[list[str]]:
+    adjacency = {node: set() for node in node_ids}
+    for (left, right), weight in weights.items():
+        if weight <= 0.0:
+            continue
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    visited: set[str] = set()
+    output = []
+    for start in node_ids:
+        if start in visited:
+            continue
+        queue = deque([start])
+        members = []
+        while queue:
+            node = queue.popleft()
+            if node in visited:
+                continue
+            visited.add(node)
+            members.append(node)
+            queue.extend(sorted(adjacency[node] - visited))
+        output.append(sorted(members))
+    return output
+
+
+def _community_evolution(
+    active: list[list[str]], current: list[list[str]]
+) -> dict[str, Any]:
+    active_sets = [set(item) for item in active]
+    current_sets = [set(item) for item in current]
+    splits = sum(
+        sum(bool(group & current_group) for current_group in current_sets) > 1
+        for group in active_sets
+    )
+    merges = sum(
+        sum(bool(group & active_group) for active_group in active_sets) > 1
+        for group in current_sets
+    )
+    return {
+        "method": "deterministic_connected_component_overlap",
+        "active_communities": active,
+        "current_communities": current,
+        "active_community_count": len(active),
+        "current_community_count": len(current),
+        "split_count": splits,
+        "merge_count": merges,
+    }
+
+
 def _topology_classification(
     *,
     current_edges: dict[str, dict[str, Any]],
@@ -457,6 +791,7 @@ def _graph_evidence(
     clusters: list[dict[str, Any]],
     fragmentation: dict[str, Any],
     topology: str,
+    graph_mathematics: dict[str, Any],
 ) -> list[dict[str, Any]]:
     evidence = []
     for item in changed:
@@ -494,6 +829,20 @@ def _graph_evidence(
                     relationship_id for cluster in clusters for relationship_id in cluster["relationship_ids"]
                 ),
                 "source_evidence": deepcopy(clusters),
+                "causal_claim": False,
+            }
+        )
+    if changed:
+        evidence.append(
+            {
+                "evidence_id": "behavioral_graph:graph_mathematics",
+                "classification": "Supporting",
+                "originating_module": "behavioral_graph",
+                "observation": "Weighted Laplacian, neighborhood, entropy, centrality, and stability metrics characterize the structural scope of the observed graph change.",
+                "source_relationships": sorted(
+                    item["relationship_id"] for item in changed
+                ),
+                "source_evidence": deepcopy(graph_mathematics),
                 "causal_claim": False,
             }
         )

@@ -133,6 +133,7 @@ def evaluate_phase4(
         expected_behavior=expected_behavior,
         learning_decision={"decision": "not_evaluated_yet"},
         current_confidence=None,
+        timestamp_column=timestamp_column,
     )
     advanced = _advanced_modules(
         rows=rows,

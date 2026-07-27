@@ -38,7 +38,10 @@ SUPPORTED_OPERATORS = {
     "not_contains",
     "not_eq",
     "not_in",
+    "outside",
+    "approximately_eq",
     "truthy",
+    "within",
 }
 
 
@@ -102,18 +105,34 @@ def evaluate_physics_reasoning(
             trace.append(_prior_trace(result))
             continue
 
-        expectation = _condition_group(prior["expected_behavior"])
-        condition_results = [
-            _evaluate_condition(
-                condition,
-                evidence,
-                evidence_id=f"physics:{prior_id}:expectation:{condition_index + 1}",
+        response_configuration = _response_configuration(prior, evidence)
+        group_results = []
+        condition_results = []
+        for group_name, raw_group in response_configuration["groups"]:
+            group = _condition_group(raw_group)
+            results = [
+                _evaluate_condition(
+                    _normalize_response_condition(condition, group_name),
+                    evidence,
+                    evidence_id=f"physics:{prior_id}:{group_name}:{condition_index + 1}",
+                )
+                for condition_index, condition in enumerate(group["conditions"])
+            ]
+            condition_results.extend(results)
+            group_results.append(
+                {
+                    "group": group_name,
+                    "logic": group["logic"],
+                    "result": _combine_results(
+                        [item["satisfied"] for item in results],
+                        group["logic"],
+                    ),
+                    "condition_results": results,
+                }
             )
-            for condition_index, condition in enumerate(expectation["conditions"])
-        ]
         expectation_result = _combine_results(
-            [item["satisfied"] for item in condition_results],
-            expectation["logic"],
+            [item["result"] for item in group_results],
+            "all",
         )
         if expectation_result is True:
             status = "supported"
@@ -157,8 +176,15 @@ def evaluate_physics_reasoning(
             "reasoning_trace": {
                 "applicability": "applicable",
                 "applicability_checks": applicability["checks"],
-                "expected_behavior_logic": expectation["logic"],
+                "expected_behavior_logic": _condition_group(
+                    response_configuration["base_expected_behavior"]
+                )["logic"],
                 "condition_results": condition_results,
+                "response_characteristics": {
+                    "active_operating_mode": response_configuration["active_mode"],
+                    "operating_mode_override_applied": response_configuration["mode_override_applied"],
+                    "groups_evaluated": group_results,
+                },
                 "expectation_result": status,
                 "rendered_reasoning": _render_reasoning(prior, status),
             },
@@ -223,6 +249,8 @@ def evaluate_physics_reasoning(
             "confidence_modifiers_are_not_aggregated": True,
             "diagnosis_performed": False,
             "recommendations_generated": False,
+            "response_characteristics_are_configured": True,
+            "hardcoded_engineering_assumptions": False,
         },
     }
     if reason:
@@ -256,8 +284,33 @@ def _validate_prior(prior: dict[str, Any]) -> list[str]:
         *(_condition_group(prior.get("prerequisites"))["conditions"]),
         *(_condition_group(prior.get("validity_conditions"))["conditions"]),
         *expectation["conditions"],
+        *[
+            condition
+            for field in (
+                "response_delay",
+                "expected_response_window",
+                "allowable_physical_variability",
+            )
+            for condition in _condition_group(prior.get(field))["conditions"]
+        ],
     ]:
         reasons.extend(_validate_condition(condition))
+    sensitivity = prior.get("operating_mode_sensitivity")
+    if sensitivity is not None and not isinstance(sensitivity, dict):
+        reasons.append("operating_mode_sensitivity_must_be_a_mapping")
+    elif isinstance(sensitivity, dict):
+        for mode_config in sensitivity.values():
+            if not isinstance(mode_config, dict):
+                reasons.append("operating_mode_sensitivity_entry_must_be_a_mapping")
+                continue
+            for field in (
+                "expected_behavior",
+                "response_delay",
+                "expected_response_window",
+                "allowable_physical_variability",
+            ):
+                for condition in _condition_group(mode_config.get(field))["conditions"]:
+                    reasons.extend(_validate_condition(condition))
     if not isinstance(prior.get("reasoning_template"), (str, dict)):
         reasons.append("reasoning_template_must_be_text_or_mapping")
     return _deduplicate(reasons)
@@ -268,7 +321,19 @@ def _validate_condition(condition: Any) -> list[str]:
         return ["condition_must_be_a_mapping"]
     if not str(condition.get("path") or "").strip():
         return ["condition_requires_path"]
-    operator = str(condition.get("operator") or "eq").lower()
+    operator = str(
+        condition.get("operator")
+        or (
+            "within"
+            if any(
+                field in condition
+                for field in ("minimum", "maximum", "minimum_seconds", "maximum_seconds")
+            )
+            else "approximately_eq"
+            if any(field in condition for field in ("tolerance", "absolute_tolerance", "relative_tolerance"))
+            else "eq"
+        )
+    ).lower()
     if operator not in SUPPORTED_OPERATORS:
         return [f"unsupported_condition_operator:{operator}"]
     quantifier = str(condition.get("quantifier") or "any").lower()
@@ -507,6 +572,78 @@ def _condition_group(value: Any) -> dict[str, Any]:
     return {"logic": "all", "conditions": []}
 
 
+def _response_configuration(
+    prior: dict[str, Any],
+    evidence: dict[str, Any],
+) -> dict[str, Any]:
+    modes = evidence.get("operating_modes")
+    active_mode = (
+        str(modes.get("recent_mode"))
+        if isinstance(modes, dict) and modes.get("recent_mode")
+        else None
+    )
+    sensitivity = prior.get("operating_mode_sensitivity")
+    mode_config = (
+        sensitivity.get(active_mode)
+        if isinstance(sensitivity, dict)
+        and active_mode is not None
+        and isinstance(sensitivity.get(active_mode), dict)
+        else {}
+    )
+    base_expected = mode_config.get(
+        "expected_behavior",
+        prior.get("expected_behavior"),
+    )
+    groups: list[tuple[str, Any]] = [("expectation", base_expected)]
+    for field in (
+        "response_delay",
+        "expected_response_window",
+        "allowable_physical_variability",
+    ):
+        configured = mode_config.get(field, prior.get(field))
+        if _condition_group(configured)["conditions"]:
+            groups.append((field, configured))
+    return {
+        "active_mode": active_mode,
+        "mode_override_applied": bool(mode_config),
+        "base_expected_behavior": base_expected,
+        "groups": groups,
+    }
+
+
+def _normalize_response_condition(
+    condition: Any,
+    group_name: str,
+) -> dict[str, Any]:
+    if not isinstance(condition, dict):
+        return {}
+    normalized = deepcopy(condition)
+    if "operator" not in normalized:
+        if any(
+            field in normalized
+            for field in ("minimum", "maximum", "minimum_seconds", "maximum_seconds")
+        ):
+            lower = normalized.get(
+                "minimum_seconds",
+                normalized.get("minimum"),
+            )
+            upper = normalized.get(
+                "maximum_seconds",
+                normalized.get("maximum"),
+            )
+            normalized["operator"] = "within"
+            normalized["value"] = [lower, upper]
+        elif group_name == "allowable_physical_variability" or any(
+            field in normalized
+            for field in ("tolerance", "absolute_tolerance", "relative_tolerance")
+        ):
+            normalized["operator"] = "approximately_eq"
+            normalized.setdefault("value", normalized.get("expected"))
+        else:
+            normalized["operator"] = "eq"
+    return normalized
+
+
 def _evaluate_condition(
     condition: dict[str, Any],
     evidence: dict[str, Any],
@@ -520,10 +657,17 @@ def _evaluate_condition(
     filtered = _filter_values(values, condition.get("where"))
     field = str(condition.get("field") or "").strip()
     observed = _resolve_values(filtered, field) if field else filtered
-    operator = str(condition.get("operator") or "eq").lower()
+    operator = _condition_operator(condition)
     expected = deepcopy(condition.get("value"))
+    tolerance = _tolerance(condition)
     quantifier = str(condition.get("quantifier") or "any").lower()
-    satisfied = _apply_condition(observed, operator, expected, quantifier)
+    satisfied = _apply_condition(
+        observed,
+        operator,
+        expected,
+        quantifier,
+        tolerance=tolerance,
+    )
     source_reference = ".".join(part for part in (source, path, field) if part)
     return {
         "evidence_id": evidence_id,
@@ -533,6 +677,7 @@ def _evaluate_condition(
         "operator": operator,
         "quantifier": quantifier,
         "expected": expected,
+        "tolerance": deepcopy(tolerance),
         "observed_values": deepcopy(observed),
         "selector": deepcopy(condition),
         "satisfied": satisfied,
@@ -544,6 +689,54 @@ def _evaluate_condition(
             else "condition_evidence_unavailable"
         ),
     }
+
+
+def _condition_operator(condition: dict[str, Any]) -> str:
+    if condition.get("operator"):
+        return str(condition["operator"]).lower()
+    if any(
+        field in condition
+        for field in ("minimum", "maximum", "minimum_seconds", "maximum_seconds")
+    ):
+        return "within"
+    if any(
+        field in condition
+        for field in ("tolerance", "absolute_tolerance", "relative_tolerance")
+    ):
+        return "approximately_eq"
+    return "eq"
+
+
+def _tolerance(condition: dict[str, Any]) -> dict[str, float] | None:
+    raw = condition.get("tolerance")
+    if isinstance(raw, (int, float)):
+        raw = {"absolute": raw}
+    elif not isinstance(raw, dict):
+        raw = {}
+    absolute = finite_number(
+        condition.get("absolute_tolerance", raw.get("absolute"))
+    )
+    relative = finite_number(
+        condition.get("relative_tolerance", raw.get("relative"))
+    )
+    if absolute is None and relative is None:
+        return None
+    return {
+        "absolute": max(0.0, float(absolute or 0.0)),
+        "relative": max(0.0, float(relative or 0.0)),
+    }
+
+
+def _within_tolerance(
+    observed: float,
+    expected: float,
+    tolerance: dict[str, float],
+) -> bool:
+    allowable = max(
+        float(tolerance.get("absolute") or 0.0),
+        float(tolerance.get("relative") or 0.0) * max(abs(expected), 1e-12),
+    )
+    return abs(observed - expected) <= allowable
 
 
 def _resolve_values(value: Any, path: str) -> list[Any]:
@@ -601,12 +794,17 @@ def _apply_condition(
     operator: str,
     expected: Any,
     quantifier: str,
+    *,
+    tolerance: dict[str, float] | None = None,
 ) -> bool | None:
     if operator == "exists":
         return bool(observed_values)
     if not observed_values:
         return None
-    comparisons = [_compare(value, operator, expected) for value in observed_values]
+    comparisons = [
+        _compare(value, operator, expected, tolerance=tolerance)
+        for value in observed_values
+    ]
     usable = [item for item in comparisons if item is not None]
     if not usable:
         return None
@@ -617,14 +815,42 @@ def _apply_condition(
     return any(usable)
 
 
-def _compare(observed: Any, operator: str, expected: Any) -> bool | None:
+def _compare(
+    observed: Any,
+    operator: str,
+    expected: Any,
+    *,
+    tolerance: dict[str, float] | None = None,
+) -> bool | None:
     if operator == "truthy":
         return bool(observed)
     if operator == "falsy":
         return not bool(observed)
     if operator in {"eq", "not_eq"}:
+        left_number = finite_number(observed)
+        right_number = finite_number(expected)
+        if tolerance and left_number is not None and right_number is not None:
+            equal = _within_tolerance(left_number, right_number, tolerance)
+            return equal if operator == "eq" else not equal
         equal = _comparable(observed) == _comparable(expected)
         return equal if operator == "eq" else not equal
+    if operator == "approximately_eq":
+        left = finite_number(observed)
+        right = finite_number(expected)
+        if left is None or right is None:
+            return None
+        return _within_tolerance(left, right, tolerance or {})
+    if operator in {"within", "outside"}:
+        observed_number = finite_number(observed)
+        bounds = expected if isinstance(expected, (list, tuple)) else []
+        if observed_number is None or len(bounds) != 2:
+            return None
+        lower = finite_number(bounds[0])
+        upper = finite_number(bounds[1])
+        if lower is None or upper is None:
+            return None
+        inside = min(lower, upper) <= observed_number <= max(lower, upper)
+        return inside if operator == "within" else not inside
     if operator in {"in", "not_in"}:
         expected_values = expected if isinstance(expected, (list, tuple, set)) else [expected]
         included = any(_comparable(observed) == _comparable(item) for item in expected_values)
@@ -683,6 +909,7 @@ def _condition_evidence(
         "operator": result["operator"],
         "quantifier": result["quantifier"],
         "expected": deepcopy(result["expected"]),
+        "tolerance": deepcopy(result.get("tolerance")),
         "observed_values": deepcopy(result["observed_values"]),
         "selector": deepcopy(result["selector"]),
         "limitations": [],

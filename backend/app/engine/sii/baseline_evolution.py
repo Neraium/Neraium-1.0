@@ -11,6 +11,8 @@ DEFAULT_CONFIG = {
     "human_validation_required": False,
     "maximum_instability_index": 0.20,
     "require_expected_model_validation_after_initialization": True,
+    "minimum_stable_evolution_runs": 2,
+    "infrastructure_aging_prior_ids": (),
 }
 
 LEARNING_DECISIONS = {
@@ -113,6 +115,15 @@ def evaluate_baseline_evolution(
     unresolved.extend(
         item for item in expected_behavior.get("residual_evidence", []) if isinstance(item, dict)
     )
+    if unresolved:
+        exclusions.extend(
+            {
+                "type": "active_instability",
+                "reason": "unresolved_significant_observation",
+                "source_evidence": deepcopy(item),
+            }
+            for item in unresolved
+        )
     check(
         "unresolved_significant_observation",
         not unresolved,
@@ -134,16 +145,30 @@ def evaluate_baseline_evolution(
         or (multiscale_analysis.get("cross_scale_interpretation") or {}).get("classification")
         or ""
     ).lower()
-    multiscale_ok = multiscale_analysis.get("status") == "complete" and multiscale_classification in {
-        "agreement",
-        "consistent",
-        "stable",
-        "stable_across_scales",
-    }
+    evolution_assessment = _baseline_evolution_assessment(
+        active_model=active_model,
+        operating_mode=operating_mode,
+        temporal_analysis=temporal_analysis,
+        multiscale_analysis=multiscale_analysis,
+        physics_reasoning=physics_reasoning,
+        expected_behavior=expected_behavior,
+        graph_comparison=graph_comparison,
+        active_observations=active_observations,
+        config=cfg,
+    )
+    multiscale_ok = (
+        multiscale_analysis.get("status") == "complete"
+        and evolution_assessment["learning_compatible"]
+    )
     check(
         "multiscale_stability",
         multiscale_ok,
-        {"status": multiscale_analysis.get("status"), "classification": multiscale_analysis.get("cross_scale_classification"), "scales_used": deepcopy(multiscale_analysis.get("scales_used", []))},
+        {
+            "status": multiscale_analysis.get("status"),
+            "classification": multiscale_classification,
+            "scales_used": deepcopy(multiscale_analysis.get("scales_used", [])),
+            "baseline_evolution_assessment": deepcopy(evolution_assessment),
+        },
         "blocked_by_instability",
         "multiscale_evidence_does_not_support_stability",
     )
@@ -193,8 +218,13 @@ def evaluate_baseline_evolution(
         stable_candidates = _consecutive_stable_candidates(
             active_model,
             prior_learning_decisions,
+            required_assessment=evolution_assessment["classification"],
         ) + 1
-        delay = max(1, int(cfg["learning_delay_runs"]))
+        delay = max(
+            1,
+            int(cfg["learning_delay_runs"]),
+            int(evolution_assessment["minimum_confirmation_runs"]),
+        )
         if stable_candidates < delay:
             decision = "deferred"
             reason = "configured_learning_delay_not_satisfied"
@@ -236,7 +266,15 @@ def evaluate_baseline_evolution(
             "evidence_limiting_update": deepcopy(limiting),
             "evidence_contradicting_update": deepcopy(contradicting),
             "excluded_data": deepcopy(exclusions),
-            "learning_delay": {"required_runs": max(1, int(cfg["learning_delay_runs"])), "satisfied": True},
+            "baseline_evolution_assessment": deepcopy(evolution_assessment),
+            "learning_delay": {
+                "required_runs": max(
+                    1,
+                    int(cfg["learning_delay_runs"]),
+                    int(evolution_assessment["minimum_confirmation_runs"]),
+                ),
+                "satisfied": True,
+            },
             "approval_status": "pending_validation" if pending_validation else "automatic",
             "source_run_id": source_run_id,
             "processing_trace": {"checks": deepcopy(checks), "decision": decision},
@@ -261,11 +299,16 @@ def evaluate_baseline_evolution(
         "human_validation_required": human_required,
         "pending_validation": pending_validation,
         "learning_exclusions": deepcopy(exclusions),
+        "baseline_evolution_assessment": evolution_assessment,
         "processing_trace": {
             "checks_evaluated": len(checks),
             "checks_failed": [item["check"] for item in failed_checks],
             "model_update_after_evidence_evaluation": True,
             "silent_adaptation_performed": False,
+            "active_instability_learned": False,
+            "baseline_evolution_classification": evolution_assessment[
+                "classification"
+            ],
         },
     }
 
@@ -293,6 +336,8 @@ def _candidate_baseline_version(active_version: str | None, source_run_id: str) 
 def _consecutive_stable_candidates(
     active_model: dict[str, Any] | None,
     prior_learning_decisions: list[dict[str, Any]] | None,
+    *,
+    required_assessment: str,
 ) -> int:
     decisions = (
         prior_learning_decisions
@@ -303,8 +348,187 @@ def _consecutive_stable_candidates(
     )
     count = 0
     for item in reversed(decisions):
-        if isinstance(item, dict) and item.get("decision") in {"accepted", "deferred"}:
+        assessment = (
+            item.get("baseline_evolution_assessment")
+            if isinstance(item, dict)
+            else None
+        )
+        assessment_classification = (
+            assessment.get("classification")
+            if isinstance(assessment, dict)
+            else None
+        )
+        same_evolution_context = (
+            required_assessment != "stable_evolution_candidate"
+            or assessment_classification == required_assessment
+        )
+        if (
+            isinstance(item, dict)
+            and item.get("decision") in {"accepted", "deferred"}
+            and same_evolution_context
+        ):
             count += 1
         else:
             break
     return count
+
+
+def _baseline_evolution_assessment(
+    *,
+    active_model: dict[str, Any] | None,
+    operating_mode: dict[str, Any],
+    temporal_analysis: dict[str, Any],
+    multiscale_analysis: dict[str, Any],
+    physics_reasoning: dict[str, Any],
+    expected_behavior: dict[str, Any],
+    graph_comparison: dict[str, Any],
+    active_observations: list[dict[str, Any]] | None,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    classification = str(
+        multiscale_analysis.get("cross_scale_classification")
+        or (
+            multiscale_analysis.get("cross_scale_interpretation")
+            or {}
+        ).get("classification")
+        or ""
+    ).lower()
+    pattern_items = (
+        (multiscale_analysis.get("behavior_patterns") or {}).get("signals")
+        or []
+    )
+    pattern_classes = sorted(
+        {
+            str(item.get("classification"))
+            for item in pattern_items
+            if isinstance(item, dict) and item.get("classification")
+        }
+    )
+    temporal_state = str(
+        (temporal_analysis.get("decision_thresholding") or {}).get("state")
+        or ""
+    ).lower()
+    instability = float(
+        (temporal_analysis.get("instability_index") or {}).get("score")
+        or 0.0
+    )
+    residuals = [
+        item
+        for item in expected_behavior.get("residual_evidence", [])
+        if isinstance(item, dict)
+    ]
+    graph_changes = [
+        item
+        for item in graph_comparison.get("changed_edges", [])
+        if isinstance(item, dict)
+    ]
+    observations = [
+        item
+        for item in (active_observations or [])
+        if isinstance(item, dict)
+    ]
+    mode_match = str(operating_mode.get("match") or "").lower()
+    configured_aging_priors = config.get("infrastructure_aging_prior_ids", ())
+    if not isinstance(configured_aging_priors, (list, tuple, set)):
+        configured_aging_priors = ()
+    aging_prior_ids = {
+        str(item)
+        for item in configured_aging_priors
+        if str(item)
+    }
+    supported_aging_priors = sorted(
+        aging_prior_ids
+        & {
+            str(item)
+            for item in physics_reasoning.get("supporting_priors", [])
+        }
+    )
+    active_instability = bool(
+        observations
+        or residuals
+        or (graph_changes and active_model)
+        or temporal_state not in {"", "normal", "stable"}
+        or instability > float(config["maximum_instability_index"])
+        or classification == "conflicting_scales"
+    )
+    temporary_context = bool(
+        mode_match in {"weak", "unavailable"}
+        or classification == "transient_or_scale_specific"
+        or "transient_event" in pattern_classes
+    )
+    sustained_change = bool(
+        classification
+        in {
+            "agreement",
+            "consistent",
+            "sustained_across_elapsed_scales",
+        }
+        or any(
+            item in {"gradual_evolution", "persistent_instability"}
+            for item in pattern_classes
+        )
+    )
+    stable_context = bool(
+        classification in {"stable", "stable_across_scales"}
+        or (
+            classification in {"agreement", "consistent"}
+            and not pattern_classes
+        )
+    )
+    if active_instability:
+        result_classification = "behavioral_drift_or_active_instability"
+        learning_compatible = False
+        minimum_runs = 1
+    elif temporary_context:
+        result_classification = "temporary_operational_change"
+        learning_compatible = False
+        minimum_runs = 1
+    elif supported_aging_priors:
+        result_classification = "configured_infrastructure_aging_context"
+        learning_compatible = False
+        minimum_runs = 1
+    elif active_model and sustained_change and not stable_context:
+        result_classification = "stable_evolution_candidate"
+        learning_compatible = True
+        minimum_runs = max(
+            2,
+            int(config["minimum_stable_evolution_runs"]),
+        )
+    elif stable_context or not active_model:
+        result_classification = "stable_baseline_context"
+        learning_compatible = True
+        minimum_runs = 1
+    else:
+        result_classification = "indeterminate_baseline_change"
+        learning_compatible = False
+        minimum_runs = 1
+    return {
+        "classification": result_classification,
+        "learning_compatible": learning_compatible,
+        "minimum_confirmation_runs": minimum_runs,
+        "active_instability_present": active_instability,
+        "stable_evolution_supported": result_classification
+        == "stable_evolution_candidate",
+        "behavioral_drift_supported": result_classification
+        == "behavioral_drift_or_active_instability",
+        "temporary_operational_change_supported": result_classification
+        == "temporary_operational_change",
+        "infrastructure_aging": {
+            "status": "configured_context_supported"
+            if supported_aging_priors
+            else "not_inferred",
+            "supporting_configured_prior_ids": supported_aging_priors,
+            "diagnosis": None,
+        },
+        "source_evidence": {
+            "multiscale_classification": classification,
+            "multiscale_pattern_classes": pattern_classes,
+            "temporal_state": temporal_state,
+            "instability_index": instability,
+            "operating_mode_match": operating_mode.get("match"),
+            "residual_evidence_count": len(residuals),
+            "graph_change_count": len(graph_changes),
+            "active_observation_count": len(observations),
+        },
+        "interpretation": "This deterministic classification controls baseline learning eligibility; it is not a degradation or aging diagnosis.",
+    }

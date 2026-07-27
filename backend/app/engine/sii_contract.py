@@ -127,6 +127,13 @@ def uncertainty_section(
     sensor_health: dict[str, Any],
     temporal_analysis: dict[str, Any],
     module_failures: list[dict[str, str]],
+    relationship_analysis: dict[str, Any] | None = None,
+    relationship_graph: dict[str, Any] | None = None,
+    operating_modes: dict[str, Any] | None = None,
+    expected_behavior: dict[str, Any] | None = None,
+    covariance_analysis: dict[str, Any] | None = None,
+    multiscale_analysis: dict[str, Any] | None = None,
+    propagation_analysis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     confidence = data_quality.get("data_confidence") if isinstance(data_quality, dict) else None
     temporal = temporal_analysis.get("uncertainty_summary") if isinstance(temporal_analysis, dict) else None
@@ -136,15 +143,316 @@ def uncertainty_section(
         if isinstance(data_quality, dict) and str(item).strip()
     ]
     limitations.extend(item["reason"] for item in module_failures if item.get("reason"))
+    components = {
+        "data_uncertainty": _data_uncertainty_component(
+            data_quality,
+            sensor_health,
+        ),
+        "model_uncertainty": _model_uncertainty_component(
+            expected_behavior,
+            covariance_analysis,
+            temporal_analysis,
+            module_failures,
+        ),
+        "relationship_uncertainty": _relationship_uncertainty_component(
+            relationship_analysis,
+            relationship_graph,
+        ),
+        "operating_context_uncertainty": _operating_context_uncertainty_component(
+            operating_modes,
+            multiscale_analysis,
+        ),
+        "propagation_uncertainty": _propagation_uncertainty_component(
+            propagation_analysis,
+        ),
+    }
     return {
         "status": "limited" if limitations or module_failures else "complete",
         "data_confidence": confidence if isinstance(confidence, dict) else {},
         "sensor_health": sensor_health,
         "temporal_uncertainty": temporal if isinstance(temporal, dict) else {},
         "module_failures": module_failures,
+        "components": components,
+        **components,
         "limitations": list(dict.fromkeys(limitations)),
-        "interpretation": "These are deterministic evidence limitations, not probabilities.",
+        "interpretation": "Each component is a separately traceable deterministic evidence limitation, not a probability.",
+        "processing_trace": {
+            "components_reported": list(components),
+            "components_aggregated_into_probability": False,
+            "component_weighting_performed": False,
+        },
     }
+
+
+def _component(
+    *,
+    status: str,
+    sources: list[str],
+    metrics: dict[str, Any],
+    limitations: list[str],
+) -> dict[str, Any]:
+    return {
+        "status": status,
+        "not_probability": True,
+        "source_references": sources,
+        "traceable_metrics": metrics,
+        "limitations": list(dict.fromkeys(limitations)),
+    }
+
+
+def _data_uncertainty_component(
+    data_quality: dict[str, Any],
+    sensor_health: dict[str, Any],
+) -> dict[str, Any]:
+    warnings = [
+        str(item)
+        for item in data_quality.get("warnings", [])
+        if str(item).strip()
+    ]
+    signals = [
+        item
+        for item in sensor_health.get("signals", [])
+        if isinstance(item, dict)
+    ]
+    limited_health = [
+        str(item.get("signal") or item.get("column") or "unknown")
+        for item in signals
+        if str(item.get("health") or "").lower()
+        not in {"healthy", "good"}
+    ]
+    limitations = [
+        *warnings,
+        *[
+            f"sensor_health_not_acceptable:{signal}"
+            for signal in limited_health
+        ],
+    ]
+    readiness = str(data_quality.get("readiness") or "unavailable")
+    if readiness.lower() == "not_ready":
+        limitations.append("data_quality_not_ready")
+    return _component(
+        status="limited" if limitations else "complete",
+        sources=[
+            "data_conditions.data_quality",
+            "data_conditions.sensor_health",
+        ],
+        metrics={
+            "readiness": readiness,
+            "data_confidence": data_quality.get("data_confidence", {}),
+            "sensor_count": len(signals),
+            "limited_sensor_count": len(limited_health),
+        },
+        limitations=limitations,
+    )
+
+
+def _model_uncertainty_component(
+    expected_behavior: dict[str, Any] | None,
+    covariance_analysis: dict[str, Any] | None,
+    temporal_analysis: dict[str, Any],
+    module_failures: list[dict[str, str]],
+) -> dict[str, Any]:
+    expected = expected_behavior if isinstance(expected_behavior, dict) else {}
+    covariance = covariance_analysis if isinstance(covariance_analysis, dict) else {}
+    model_intervals = [
+        {
+            "target_signal": item.get("target_signal"),
+            "model_version": item.get("model_version"),
+            "uncertainty": item.get("uncertainty", {}),
+        }
+        for item in expected.get("expected_values", [])
+        if isinstance(item, dict)
+    ]
+    limitations = []
+    if not expected:
+        limitations.append("expected_behavior_not_yet_available")
+    elif expected.get("status") != "complete":
+        limitations.append(
+            str(expected.get("reason") or "expected_behavior_limited")
+        )
+    if covariance and covariance.get("status") in {"limited", "failed"}:
+        limitations.append(
+            str(covariance.get("reason") or "covariance_analysis_limited")
+        )
+    limitations.extend(
+        str(item.get("reason"))
+        for item in module_failures
+        if item.get("reason")
+    )
+    return _component(
+        status="limited" if limitations else "complete",
+        sources=[
+            "expected_behavior.expected_values.*.uncertainty",
+            "covariance_analysis",
+            "temporal_analysis.uncertainty_summary",
+            "processing_trace.module_failures",
+        ],
+        metrics={
+            "models_evaluated": int(expected.get("models_evaluated") or 0),
+            "model_intervals": model_intervals,
+            "covariance_status": covariance.get("status"),
+            "temporal_uncertainty": temporal_analysis.get(
+                "uncertainty_summary",
+                {},
+            ),
+            "module_failure_count": len(module_failures),
+        },
+        limitations=limitations,
+    )
+
+
+def _relationship_uncertainty_component(
+    relationship_analysis: dict[str, Any] | None,
+    relationship_graph: dict[str, Any] | None,
+) -> dict[str, Any]:
+    analysis = (
+        relationship_analysis
+        if isinstance(relationship_analysis, dict)
+        else {}
+    )
+    graph = relationship_graph if isinstance(relationship_graph, dict) else {}
+    edges = graph.get("edges")
+    if not isinstance(edges, list):
+        edges = (
+            graph.get("changed_edges")
+            if isinstance(graph.get("changed_edges"), list)
+            else []
+        )
+    reported_edge_count = int(
+        (graph.get("current_run_graph") or {}).get("edge_count")
+        or len(edges)
+    )
+    sample_counts = [
+        max(
+            int(item.get("baseline_sample_count") or item.get("baseline_sample_size") or 0),
+            int(item.get("current_sample_count") or item.get("recent_sample_size") or 0),
+        )
+        for item in edges
+        if isinstance(item, dict)
+    ]
+    ambiguous = sum(
+        str(item.get("directionality_status") or "").lower()
+        in {"", "association_only_direction_not_established", "ambiguous"}
+        for item in edges
+        if isinstance(item, dict)
+    )
+    stability = graph.get("graph_mathematics", {}).get("graph_stability", {})
+    limitations = []
+    if reported_edge_count <= 0:
+        limitations.append("comparable_relationship_edges_unavailable")
+    if ambiguous:
+        limitations.append("relationship_direction_not_established")
+    if analysis and analysis.get("status") in {"limited", "failed"}:
+        limitations.append(
+            str(analysis.get("reason") or "relationship_analysis_limited")
+        )
+    return _component(
+        status="limited" if limitations else "complete",
+        sources=[
+            "relationship_analysis",
+            "relationship_graph.edges",
+            "relationship_graph.graph_mathematics.graph_stability",
+        ],
+        metrics={
+            "edge_count": reported_edge_count,
+            "minimum_edge_sample_support": min(sample_counts)
+            if sample_counts
+            else None,
+            "direction_ambiguous_edge_count": ambiguous,
+            "graph_stability": stability,
+        },
+        limitations=limitations,
+    )
+
+
+def _operating_context_uncertainty_component(
+    operating_modes: dict[str, Any] | None,
+    multiscale_analysis: dict[str, Any] | None,
+) -> dict[str, Any]:
+    modes = operating_modes if isinstance(operating_modes, dict) else {}
+    multiscale = (
+        multiscale_analysis
+        if isinstance(multiscale_analysis, dict)
+        else {}
+    )
+    match = str(modes.get("match") or "unavailable").lower()
+    recent = modes.get("recent_mode")
+    limitations = []
+    if not recent or recent == "unavailable":
+        limitations.append("recent_operating_mode_unavailable")
+    if match in {"weak", "unavailable", ""}:
+        limitations.append("operating_mode_match_limited")
+    if multiscale and multiscale.get("status") == "limited":
+        limitations.append("cross_scale_context_limited")
+    return _component(
+        status="limited" if limitations else "complete",
+        sources=[
+            "operating_modes",
+            "multiscale_analysis.cross_scale_interpretation",
+        ],
+        metrics={
+            "baseline_mode": modes.get("baseline_mode"),
+            "recent_mode": recent,
+            "mode_match": modes.get("match"),
+            "mode_confidence": modes.get("confidence"),
+            "cross_scale_classification": (
+                multiscale.get("cross_scale_classification")
+                or (
+                    multiscale.get("cross_scale_interpretation")
+                    or {}
+                ).get("classification")
+            ),
+        },
+        limitations=limitations,
+    )
+
+
+def _propagation_uncertainty_component(
+    propagation_analysis: dict[str, Any] | None,
+) -> dict[str, Any]:
+    propagation = (
+        propagation_analysis
+        if isinstance(propagation_analysis, dict)
+        else {}
+    )
+    nested = (
+        propagation.get("uncertainty", {})
+        .get("propagation_uncertainty", {})
+        if propagation
+        else {}
+    )
+    limitations = list(propagation.get("limitations") or [])
+    if not propagation:
+        limitations.append("propagation_analysis_not_yet_available")
+    elif propagation.get("status") != "complete":
+        limitations.append(
+            str(
+                propagation.get("reason")
+                or "supported_propagation_path_unavailable"
+            )
+        )
+    return _component(
+        status="limited" if limitations else "complete",
+        sources=[
+            "propagation_analysis.candidate_paths",
+            "propagation_analysis.competing_paths",
+            "propagation_analysis.unsupported_segments",
+            "propagation_analysis.uncertainty.propagation_uncertainty",
+        ],
+        metrics={
+            **nested,
+            "candidate_path_count": len(
+                propagation.get("candidate_paths", [])
+            ),
+            "competing_path_count": len(
+                propagation.get("competing_paths", [])
+            ),
+            "unsupported_segment_count": len(
+                propagation.get("unsupported_segments", [])
+            ),
+        },
+        limitations=limitations,
+    )
 
 
 def canonical_status(

@@ -562,6 +562,11 @@ def evaluate_sii(
         sensor_health=sensor_health_result,
         temporal_analysis=temporal_analysis,
         module_failures=list(failures),
+        relationship_analysis=relationship_model,
+        relationship_graph=canonical_graph,
+        operating_modes=operating_mode_result,
+        covariance_analysis=covariance,
+        multiscale_analysis=multiscale_analysis,
     )
     phase_2_evidence = {
         "signal_drift": status_copy(baseline_analysis, status=signal_status),
@@ -665,6 +670,13 @@ def evaluate_sii(
         sensor_health=sensor_health_result,
         temporal_analysis=temporal_analysis,
         module_failures=list(failures),
+        relationship_analysis=relationship_model,
+        relationship_graph=phase_4.get("behavioral_graph_comparison"),
+        operating_modes=operating_mode_result,
+        expected_behavior=phase_4.get("expected_behavior"),
+        covariance_analysis=covariance,
+        multiscale_analysis=multiscale_analysis,
+        propagation_analysis=phase_4.get("propagation_analysis"),
     )
     fusion_inputs = {
         **phase_2_evidence,
@@ -762,6 +774,13 @@ def evaluate_sii(
         sensor_health=sensor_health_result,
         temporal_analysis=temporal_analysis,
         module_failures=list(failures),
+        relationship_analysis=relationship_model,
+        relationship_graph=phase_4.get("behavioral_graph_comparison"),
+        operating_modes=operating_mode_result,
+        expected_behavior=phase_4.get("expected_behavior"),
+        covariance_analysis=covariance,
+        multiscale_analysis=multiscale_analysis,
+        propagation_analysis=phase_4.get("propagation_analysis"),
     )
     runtime = round(max(0.0, time.perf_counter() - started), 6)
     final_statuses = {

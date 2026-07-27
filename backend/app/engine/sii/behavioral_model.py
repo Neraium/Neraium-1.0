@@ -635,14 +635,50 @@ def _update_signal_memory(
         current_scale = max(1.4826 * current_mad, EPSILON)
         previous_count = int(existing.get("observation_count") or 0)
         combined_count = previous_count + len(values)
-        historical_center = (
-            (float(existing.get("historical_center") or current_center) * previous_count + current_center * len(values))
-            / max(1, combined_count)
+        historical_summaries = [
+            item
+            for item in existing.get("trend_history", [])
+            if isinstance(item, dict)
+            and finite_number(item.get("center")) is not None
+        ]
+        centers_and_weights = [
+            (
+                float(item["center"]),
+                math.sqrt(max(1, int(item.get("sample_support") or 1))),
+            )
+            for item in historical_summaries
+        ]
+        if not centers_and_weights and existing:
+            prior_center = finite_number(existing.get("historical_center"))
+            if prior_center is not None:
+                centers_and_weights.append(
+                    (prior_center, math.sqrt(max(1, previous_count)))
+                )
+        centers_and_weights.append((current_center, math.sqrt(len(values))))
+        historical_center = _weighted_median(centers_and_weights)
+        scales_and_weights = [
+            (
+                float(item["robust_scale"]),
+                math.sqrt(max(1, int(item.get("sample_support") or 1))),
+            )
+            for item in historical_summaries
+            if finite_number(item.get("robust_scale")) is not None
+        ]
+        if not scales_and_weights and existing:
+            prior_scale = finite_number(existing.get("historical_scale"))
+            if prior_scale is not None:
+                scales_and_weights.append(
+                    (prior_scale, math.sqrt(max(1, previous_count)))
+                )
+        scales_and_weights.append((current_scale, math.sqrt(len(values))))
+        within_run_scale = _weighted_median(scales_and_weights)
+        between_run_scale = 1.4826 * _weighted_median(
+            [
+                (abs(center - historical_center), weight)
+                for center, weight in centers_and_weights
+            ]
         )
-        historical_scale = (
-            (float(existing.get("historical_scale") or current_scale) * previous_count + current_scale * len(values))
-            / max(1, combined_count)
-        )
+        historical_scale = max(within_run_scale, between_run_scale, EPSILON)
         differences = [right - left for left, right in zip(values, values[1:])]
         accelerations = [right - left for left, right in zip(differences, differences[1:])]
         metadata = catalog.get(column, {})
@@ -652,6 +688,7 @@ def _update_signal_memory(
             "source_run_id": source_run_id,
             "center": round(current_center, 6),
             "robust_scale": round(current_scale, 6),
+            "sample_support": len(values),
             "direction": signal_drift.get("direction"),
         }
         sensor_history = _append_history(existing.get("sensor_health_history"), {"observed_at": observed_at, "source_run_id": source_run_id, **deepcopy(health.get(column, {}))}, config)
@@ -723,12 +760,13 @@ def _update_signal_memory(
             "data_quality_history": quality_history,
             "historical_residual_behavior": residual_history[-int(config["maximum_history_entries"]):],
             "confidence": confidence,
-            "limitations": ["Historical center and scale evolve through transparent observation-count-weighted robust summaries."],
+            "limitations": ["Historical center and scale evolve only after learning safeguards pass, using transparent run-level weighted medians and robust between-run dispersion."],
             "status": "active",
             "method_metadata": {
-                "center": "median_per_run_then_observation_count_weighted_history",
-                "scale": "1.4826_times_median_absolute_deviation",
+                "center": "square_root_sample_weighted_median_of_accepted_run_medians",
+                "scale": "maximum_of_weighted_within_run_robust_scale_and_between_run_mad",
                 "distribution_assumption": "non_parametric",
+                "active_instability_learning_allowed": False,
             },
         }
         if existing:
@@ -1004,6 +1042,28 @@ def _append_history(history: Any, item: dict[str, Any], config: dict[str, Any]) 
     output = [deepcopy(value) for value in history if isinstance(value, dict)] if isinstance(history, list) else []
     output.append(deepcopy(item))
     return output[-int(config["maximum_history_entries"]):]
+
+
+def _weighted_median(values_and_weights: list[tuple[float, float]]) -> float:
+    ordered = sorted(
+        (
+            (float(value), max(0.0, float(weight)))
+            for value, weight in values_and_weights
+            if math.isfinite(float(value))
+            and math.isfinite(float(weight))
+            and float(weight) > 0.0
+        ),
+        key=lambda item: item[0],
+    )
+    if not ordered:
+        return 0.0
+    threshold = sum(weight for _value, weight in ordered) / 2.0
+    cumulative = 0.0
+    for value, weight in ordered:
+        cumulative += weight
+        if cumulative >= threshold:
+            return value
+    return ordered[-1][0]
 
 
 def _duration(start: Any, end: Any) -> str | None:

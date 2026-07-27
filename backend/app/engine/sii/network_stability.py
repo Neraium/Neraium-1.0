@@ -55,7 +55,7 @@ def analyze_network_stability(
         }
     return {
         "status": "complete",
-        "method": "deterministic_edge_sensitivity_and_connectivity_v1",
+        "method": "deterministic_edge_sensitivity_connectivity_and_laplacian_v2",
         "graph_structural_stability": graph_comparison.get("structural_change_scope"),
         "edge_weight_sensitivity": {
             "comparable_edges": len(deltas),
@@ -63,6 +63,9 @@ def analyze_network_stability(
             "maximum_absolute_weight_change": round(max(deltas), 6) if deltas else None,
         },
         "neighborhood_disruption": deepcopy(graph_comparison.get("neighborhood_disruption", [])),
+        "graph_mathematics": deepcopy(
+            graph_comparison.get("graph_mathematics", {})
+        ),
         "connectivity_changes": connectivity,
         "eigenvalue_indicators": eigenvalues,
         "limitations": [
@@ -74,6 +77,7 @@ def analyze_network_stability(
             "edges_evaluated": len(current_edges),
             "eigenvalues_attempted": bool(cfg["eigenvalue_indicators_enabled"]),
             "network_risk_score_generated": False,
+            "opaque_graph_embedding_used": False,
         },
     }
 
@@ -143,7 +147,7 @@ def _limited(reason: str, nodes: int, edges: int) -> dict[str, Any]:
     return {
         "status": "limited",
         "reason": reason,
-        "method": "deterministic_edge_sensitivity_and_connectivity_v1",
+        "method": "deterministic_edge_sensitivity_connectivity_and_laplacian_v2",
         "graph_structural_stability": None,
         "edge_weight_sensitivity": {},
         "neighborhood_disruption": [],
