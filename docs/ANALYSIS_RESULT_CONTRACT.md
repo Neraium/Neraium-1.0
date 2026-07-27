@@ -3,6 +3,10 @@
 Neraium analysis endpoints expose one canonical `AnalysisResult` object at `analysis_result`.
 Legacy fields can remain for compatibility, but frontend rendering should prefer this contract.
 
+## Canonical SII Source
+
+Uploaded telemetry is evaluated once through `app.engine.sii_engine.evaluate_sii`. The raw canonical evidence object is available at top-level `sii_result` with engine identity `neraium_sii/v2`. `analysis_result` remains the frontend-oriented presentation and evidence-index contract derived from the canonical compatibility fields. During Phase 1, clients may continue reading legacy top-level fields, but no client should trigger or infer a second analytical pass.
+
 ## Schema
 
 Required top-level fields:

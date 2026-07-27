@@ -5,8 +5,8 @@ This note records the active Neraium SII path after the legacy cleanup. The curr
 1. Telemetry enters through `POST /api/data/upload` in `backend/app/routers/data.py`, or through the data connection poller in `backend/app/services/data_connections.py`.
 2. Uploads are recorded as queued evidence runs and queue jobs through `backend/app/services/runtime_db.py`, `backend/app/services/upload_jobs.py`, and `backend/app/services/evidence_store.py`.
 3. Upload processing runs through `backend/app/services/upload_jobs.py` into `backend/app/services/upload_pipeline.py`.
-4. `upload_pipeline.py` builds data quality, baseline, relationship, driver attribution, operator report, and upload intelligence outputs, then runs `backend/app/services/sii_runner.py`.
-5. `sii_runner.py` uses `BackendSiiRunner` and persists `latest_sii_state` through runtime DB/latest-payload storage.
+4. `upload_pipeline.py` performs upload-only normalization and calls `backend/app/engine/sii_engine.py::evaluate_sii` exactly once.
+5. `evaluate_sii` orchestrates baseline, relationship, operating-context, sensor-health, fixed-persistence, temporal, and covariance/runner modules and returns canonical `neraium_sii` v2 output. `sii_runner.py` persists `latest_sii_state` through runtime DB/latest-payload storage as a wrapped covariance component.
 6. Upload completion writes canonical result, summary, latest-upload state, replay, and evidence through `backend/app/services/upload_state_repository.py` and `backend/app/services/upload_evidence.py`.
 7. `GET /api/data/latest-upload` resolves the canonical latest upload through `backend/app/services/latest_upload_state.py`.
 8. `GET /api/facility/systems` returns systems only when a valid active upload/result exists. Before analysis it returns empty systems and empty intelligence status.
@@ -21,6 +21,10 @@ The active upload/analyze/dashboard path depends on these backend areas:
 - `backend/app/routers/evidence.py`
 - `backend/app/services/upload_jobs.py`
 - `backend/app/services/upload_pipeline.py`
+- `backend/app/engine/sii_engine.py`
+- `backend/app/engine/sii_contract.py`
+- `backend/app/engine/sii_inputs.py`
+- `backend/app/engine/temporal_math.py`
 - `backend/app/services/sii_runner.py`
 - `backend/app/services/sii_intelligence.py`
 - `backend/app/services/structural_cognition.py`
@@ -62,6 +66,6 @@ The current replay route keeps explicit `mode=demo` and `mode=aquatic_demo` synt
 
 ## Do Not Reintroduce
 
-Do not reintroduce a second SII engine, FD004 validation runner, monolith runner, embedded cognition shim, demo replay package, or legacy upload/replay router into the production import path. New analysis work should extend the active upload pipeline and `BackendSiiRunner`, or return an empty state until real telemetry-backed analysis exists.
+Do not reintroduce a second SII engine, FD004 validation runner, monolith runner, embedded cognition shim, demo replay package, or legacy upload/replay router into the production import path. New analysis work should add a focused analytical module orchestrated by `evaluate_sii`, or return a structured limited state until real telemetry-backed analysis exists. It must not add a second upload-side analytical call path.
 
 Do not show facility systems before analysis. Avoid hardcoded commercial pool or `Source / Intake` labels in active UI or API responses; systems should come from active analysis state and neutral domain profiles.
