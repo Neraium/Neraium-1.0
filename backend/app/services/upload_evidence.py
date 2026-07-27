@@ -4,20 +4,118 @@ import json
 from typing import Any
 
 
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _compatibility(result: dict[str, Any]) -> dict[str, Any]:
+    return _mapping(result.get("compatibility"))
+
+
+def _canonical_data_conditions(result: dict[str, Any]) -> dict[str, Any]:
+    return _mapping(result.get("data_conditions"))
+
+
+def _baseline_payload_from_result(result: dict[str, Any]) -> dict[str, Any]:
+    legacy = _mapping(result.get("baseline_analysis"))
+    if legacy:
+        return legacy
+    signal_drift = _mapping(result.get("signal_drift"))
+    relationship_analysis = _mapping(result.get("relationship_analysis"))
+    compatibility_baseline = _mapping(_compatibility(result).get("baseline_analysis"))
+    if compatibility_baseline:
+        return compatibility_baseline
+    if relationship_analysis:
+        return relationship_analysis
+    return signal_drift
+
+
+def _data_quality_from_result(result: dict[str, Any]) -> dict[str, Any]:
+    legacy = _mapping(result.get("data_quality"))
+    if legacy:
+        return legacy
+    canonical = _mapping(_canonical_data_conditions(result).get("data_quality"))
+    if canonical:
+        return canonical
+    return _mapping(_compatibility(result).get("data_quality"))
+
+
+def _timestamp_profile_from_result(result: dict[str, Any]) -> dict[str, Any]:
+    legacy = _mapping(result.get("timestamp_profile"))
+    if legacy:
+        return legacy
+    canonical = _mapping(_canonical_data_conditions(result).get("timestamp_profile"))
+    if canonical:
+        return canonical
+    return _mapping(_compatibility(result).get("timestamp_profile"))
+
+
+def _relationship_drift_from_result(result: dict[str, Any]) -> list[dict[str, Any]]:
+    baseline = _baseline_payload_from_result(result)
+    candidates = baseline.get("relationship_drift") or baseline.get("top_relationship_changes") or []
+    if not candidates:
+        relationship_analysis = _mapping(result.get("relationship_analysis"))
+        candidates = (
+            relationship_analysis.get("relationship_drift")
+            or relationship_analysis.get("top_relationship_changes")
+            or []
+        )
+    return [item for item in candidates if isinstance(item, dict)] if isinstance(candidates, list) else []
+
+
+def _processing_trace_from_result(result: dict[str, Any]) -> dict[str, Any]:
+    trace = _mapping(result.get("processing_trace"))
+    if trace:
+        return trace
+    return _mapping(_compatibility(result).get("processing_trace"))
+
+
+def _row_count_from_result(result: dict[str, Any]) -> int:
+    for value in (
+        result.get("row_count"),
+        _canonical_data_conditions(result).get("rows_used"),
+        _canonical_data_conditions(result).get("rows_received"),
+        _processing_trace_from_result(result).get("rows_used"),
+        _processing_trace_from_result(result).get("rows_received"),
+    ):
+        try:
+            if value is not None:
+                return max(0, int(value))
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
+def _sensor_count_from_result(result: dict[str, Any]) -> int:
+    try:
+        if result.get("column_count") is not None:
+            return max(0, int(result.get("column_count")) - 1)
+    except (TypeError, ValueError):
+        pass
+    numeric_columns = _canonical_data_conditions(result).get("numeric_columns")
+    if isinstance(numeric_columns, list):
+        return len([column for column in numeric_columns if str(column).strip()])
+    return 0
+
+
 def _observation_type_from_result(result: dict[str, Any]) -> str:
-    relationship_drift = ((result.get("baseline_analysis") or {}).get("relationship_drift")) or []
-    if relationship_drift:
+    if _relationship_drift_from_result(result):
         return "baseline_shift"
-    warnings = ((result.get("data_quality") or {}).get("warnings")) or []
+    warnings = _data_quality_from_result(result).get("warnings") or []
     if warnings:
         return "data_condition"
-    return "baseline_shift"
+    return "monitoring_observation"
 
 
 def _observation_variables_from_result(result: dict[str, Any]) -> list[str]:
     variables = [str(column) for column in (result.get("columns") or []) if str(column).strip()]
     if variables:
         return variables[:12]
+    numeric_columns = _canonical_data_conditions(result).get("numeric_columns")
+    if isinstance(numeric_columns, list):
+        variables = [str(column) for column in numeric_columns if str(column).strip()]
+        if variables:
+            return variables[:12]
     cultivation_mapping = result.get("cultivation_mapping") or {}
     categories = cultivation_mapping.get("categories") if isinstance(cultivation_mapping, dict) else {}
     inferred: list[str] = []
@@ -29,17 +127,20 @@ def _observation_variables_from_result(result: dict[str, Any]) -> list[str]:
 
 
 def _data_conditions_from_result(result: dict[str, Any]) -> list[str]:
-    data_quality = result.get("data_quality") or {}
-    warnings = (data_quality.get("warnings") if isinstance(data_quality, dict) else []) or []
+    data_quality = _data_quality_from_result(result)
+    warnings = data_quality.get("warnings") or []
     conditions = [str(item) for item in warnings if str(item).strip()]
-    processing_trace = result.get("processing_trace") or {}
+    processing_trace = _processing_trace_from_result(result)
     if processing_trace.get("completed_with_partial_result"):
         conditions.append("partial_processing")
+    failed_modules = processing_trace.get("modules_failed")
+    if isinstance(failed_modules, list) and failed_modules:
+        conditions.append("module_failures_present")
     return list(dict.fromkeys(conditions))[:8]
 
 
 def _deformation_started_at(result: dict[str, Any]) -> str | None:
-    replay = result.get("replay_timeline") or ((result.get("sii_intelligence") or {}).get("replay_timeline")) or {}
+    replay = result.get("replay_timeline") or ((_mapping(result.get("sii_intelligence"))).get("replay_timeline")) or {}
     timeline = replay.get("timeline") if isinstance(replay, dict) else []
     if isinstance(timeline, list):
         for frame in timeline:
@@ -49,18 +150,13 @@ def _deformation_started_at(result: dict[str, Any]) -> str | None:
             drift_index = topology_state.get("drift_index") if isinstance(topology_state, dict) else None
             if isinstance(drift_index, (int, float)) and drift_index >= 0.15:
                 return str(frame.get("timestamp_start") or frame.get("timestamp") or "") or None
-    profile = result.get("timestamp_profile") or {}
-    if isinstance(profile, dict):
-        return profile.get("first_timestamp")
-    return None
+    profile = _timestamp_profile_from_result(result)
+    return profile.get("first_timestamp")
 
 
 def _source_rows_from_result(result: dict[str, Any]) -> list[dict[str, Any]]:
-    baseline = result.get("baseline_analysis") or {}
     anchors: list[dict[str, Any]] = []
-    for item in baseline.get("top_relationship_changes") or baseline.get("relationship_drift") or []:
-        if not isinstance(item, dict):
-            continue
+    for item in _relationship_drift_from_result(result):
         for anchor in item.get("source_rows") or []:
             if isinstance(anchor, dict):
                 anchors.append(
@@ -84,9 +180,9 @@ def _source_rows_from_result(result: dict[str, Any]) -> list[dict[str, Any]]:
                         }
                     )
     if not anchors:
-        profile = result.get("timestamp_profile") or {}
-        first = profile.get("first_timestamp") if isinstance(profile, dict) else None
-        last = profile.get("last_timestamp") if isinstance(profile, dict) else None
+        profile = _timestamp_profile_from_result(result)
+        first = profile.get("first_timestamp")
+        last = profile.get("last_timestamp")
         if first:
             anchors.append({"window": "upload_start", "timestamp": first})
         if last and last != first:
@@ -103,11 +199,8 @@ def _source_rows_from_result(result: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _evidence_windows_from_result(result: dict[str, Any]) -> list[dict[str, Any]]:
-    baseline = result.get("baseline_analysis") or {}
     windows: list[dict[str, Any]] = []
-    for item in baseline.get("top_relationship_changes") or baseline.get("relationship_drift") or []:
-        if not isinstance(item, dict):
-            continue
+    for item in _relationship_drift_from_result(result):
         for ref in item.get("evidence_refs") or []:
             if not isinstance(ref, dict):
                 continue
@@ -118,7 +211,7 @@ def _evidence_windows_from_result(result: dict[str, Any]) -> list[dict[str, Any]
                     "recent_window": ref.get("recent_window") if not isinstance(ref.get("recent_window"), (dict, list)) else json.dumps(ref.get("recent_window"), sort_keys=True, default=str),
                 }
             )
-    replay = result.get("replay_timeline") or ((result.get("sii_intelligence") or {}).get("replay_timeline")) or {}
+    replay = result.get("replay_timeline") or ((_mapping(result.get("sii_intelligence"))).get("replay_timeline")) or {}
     timeline = replay.get("timeline") if isinstance(replay, dict) else []
     if isinstance(timeline, list):
         for frame in timeline[:8]:
@@ -150,8 +243,8 @@ def _evidence_windows_from_result(result: dict[str, Any]) -> list[dict[str, Any]
 
 
 def _traceability_timestamps_from_result(result: dict[str, Any]) -> dict[str, Any]:
-    profile = result.get("timestamp_profile") or {}
-    replay = result.get("replay_timeline") or ((result.get("sii_intelligence") or {}).get("replay_timeline")) or {}
+    profile = _timestamp_profile_from_result(result)
+    replay = result.get("replay_timeline") or ((_mapping(result.get("sii_intelligence"))).get("replay_timeline")) or {}
     timeline = replay.get("timeline") if isinstance(replay, dict) else []
     first_frame = timeline[0] if isinstance(timeline, list) and timeline else {}
     last_frame = timeline[-1] if isinstance(timeline, list) and timeline else {}
@@ -159,8 +252,8 @@ def _traceability_timestamps_from_result(result: dict[str, Any]) -> dict[str, An
         "created_at": result.get("created_at") or result.get("completed_at") or result.get("last_processed_at"),
         "completed_at": result.get("completed_at") or result.get("last_processed_at"),
         "processed_at": result.get("last_processed_at") or result.get("completed_at"),
-        "upload_start": (profile.get("first_timestamp") if isinstance(profile, dict) else None) or first_frame.get("timestamp_start") or first_frame.get("timestamp"),
-        "upload_end": (profile.get("last_timestamp") if isinstance(profile, dict) else None) or last_frame.get("timestamp_end") or last_frame.get("timestamp"),
+        "upload_start": profile.get("first_timestamp") or first_frame.get("timestamp_start") or first_frame.get("timestamp"),
+        "upload_end": profile.get("last_timestamp") or last_frame.get("timestamp_end") or last_frame.get("timestamp"),
     }
 
 
@@ -202,18 +295,17 @@ def build_evidence_record_from_result(
     rows_accepted: int | None = None,
     rows_rejected: int | None = None,
 ) -> dict[str, Any]:
-    sii = result.get("sii_intelligence") or {}
-    analysis_result = result.get("analysis_result") if isinstance(result.get("analysis_result"), dict) else {}
+    sii = _mapping(result.get("sii_intelligence"))
+    analysis_result = _mapping(result.get("analysis_result"))
     analysis_conditions = analysis_result.get("conditions") if isinstance(analysis_result.get("conditions"), list) else []
     result_conditions = result.get("conditions") if isinstance(result.get("conditions"), list) else []
     conditions = analysis_conditions or result_conditions
     primary_condition = conditions[0] if conditions and isinstance(conditions[0], dict) else {}
-    replay = result.get("replay_timeline") or (sii.get("replay_timeline")) or {}
+    replay = result.get("replay_timeline") or sii.get("replay_timeline") or {}
     replay_timeline = replay.get("timeline") if isinstance(replay, dict) else []
     latest_frame = replay_timeline[-1] if isinstance(replay_timeline, list) and replay_timeline else {}
-    baseline_payload = result.get("baseline_analysis") or {}
-    relationship_drift = (baseline_payload.get("relationship_drift") or baseline_payload.get("top_relationship_changes") or [])
-    primary_relationship = relationship_drift[0] if isinstance(relationship_drift, list) and relationship_drift else {}
+    relationship_drift = _relationship_drift_from_result(result)
+    primary_relationship = relationship_drift[0] if relationship_drift else {}
     variables = [
         str(value)
         for value in (
@@ -237,9 +329,9 @@ def build_evidence_record_from_result(
         "drift_velocity": latest_frame.get("drift_velocity") if isinstance(latest_frame, dict) else None,
         "drift_acceleration": latest_frame.get("drift_acceleration") if isinstance(latest_frame, dict) else None,
         "coupling_delta": primary_relationship.get("correlation_delta") if isinstance(primary_relationship, dict) else None,
-        "relationship_change_count": len(relationship_drift) if isinstance(relationship_drift, list) else 0,
+        "relationship_change_count": len(relationship_drift),
         "observed_persistence": sii.get("observed_persistence"),
-        "active_observations": 1 if str(status).lower() == "completed" and observation_type != "data_condition" else 0,
+        "active_observations": 1 if str(status).lower() == "completed" and observation_type not in {"data_condition", "monitoring_observation"} else 0,
         "replay_frame_count": len(replay_timeline) if isinstance(replay_timeline, list) else 0,
     }
     primary_drivers = (
@@ -258,7 +350,7 @@ def build_evidence_record_from_result(
         )[:6]
     ]
     archetypes = [str(item) for item in (sii.get("structural_archetypes") or [])[:4]]
-    water_intelligence = result.get("water_intelligence") if isinstance(result.get("water_intelligence"), dict) else {}
+    water_intelligence = _mapping(result.get("water_intelligence"))
     water_prior_versions = [
         {
             "relationship_prior_id": item.get("relationship_prior_id"),
@@ -268,6 +360,7 @@ def build_evidence_record_from_result(
         for item in water_intelligence.get("insights", [])
         if isinstance(item, dict) and item.get("relationship_prior_id")
     ]
+    row_count = _row_count_from_result(result)
     return {
         "run_id": run_id,
         "job_id": run_id,
@@ -278,10 +371,10 @@ def build_evidence_record_from_result(
         "status": status,
         "created_at": created_at,
         "completed_at": completed_at,
-        "rows_received": rows_received if rows_received is not None else int(result.get("row_count") or 0),
-        "rows_accepted": rows_accepted if rows_accepted is not None else int(result.get("row_count") or 0),
+        "rows_received": rows_received if rows_received is not None else row_count,
+        "rows_accepted": rows_accepted if rows_accepted is not None else row_count,
         "rows_rejected": rows_rejected if rows_rejected is not None else 0,
-        "sensors_detected": max(0, int(result.get("column_count") or 0) - 1),
+        "sensors_detected": _sensor_count_from_result(result),
         "room": (sii.get("primary_room") or "Uploaded telemetry"),
         "operating_state": result.get("operating_state"),
         "neraium_score": sii.get("neraium_score"),
