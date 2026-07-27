@@ -336,6 +336,23 @@ summary:focus-visible,
   gap: var(--space-12);
 }
 
+.workspace-loading-panel__failure {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-16);
+  max-width: 42rem;
+}
+
+.workspace-loading-panel__failure p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.workspace-loading-panel__failure .command-button {
+  min-width: 7rem;
+}
+
 .workspace-loading-panel__meter {
   width: min(360px, 100%);
   height: 4px;

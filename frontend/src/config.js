@@ -171,16 +171,57 @@ export function buildAccessHeaders(accessCode = "") {
   return explicit ? { "X-Neraium-Access-Code": explicit } : {};
 }
 
-async function fetchCandidate(url, requestInit, timeoutMs, path) {
+function createAbortError() {
+  if (typeof DOMException === "function") {
+    return new DOMException("The API request was cancelled.", "AbortError");
+  }
+  const error = new Error("The API request was cancelled.");
+  error.name = "AbortError";
+  return error;
+}
+
+function responseMatchesExpectedType(response, expectedResponseType) {
+  if (!expectedResponseType) return true;
+  const contentType = response?.headers?.get?.("content-type") ?? "";
+  if (!contentType) return true;
+  if (expectedResponseType === "json") return /(?:application|text)\/(?:[a-z0-9.+-]*\+)?json\b/i.test(contentType);
+  return contentType.toLowerCase().includes(String(expectedResponseType).toLowerCase());
+}
+
+function shouldTryNextCandidate({ response, expectedResponseType, method, hasNextCandidate }) {
+  if (!hasNextCandidate || !["GET", "HEAD"].includes(method)) return false;
+  if (response.status >= 500 || [404, 405, 408, 425].includes(response.status)) return true;
+  return response.ok && !responseMatchesExpectedType(response, expectedResponseType);
+}
+
+function logFallback(path, method, reason, candidateIndex) {
+  if (!import.meta.env.DEV) return;
+  console.info("[neraium] API fallback candidate selected", {
+    path: normalizeApiPath(path),
+    method,
+    reason,
+    candidate: candidateIndex + 1,
+  });
+}
+
+async function fetchCandidate(url, requestInit, timeoutMs, path, externalSignal = null) {
   const setTimer = typeof window !== "undefined" ? window.setTimeout.bind(window) : setTimeout;
   const clearTimer = typeof window !== "undefined" ? window.clearTimeout.bind(window) : clearTimeout;
   const controller = new AbortController();
-  const timeoutId = setTimer(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const handleExternalAbort = () => controller.abort(externalSignal?.reason);
+  if (externalSignal?.aborted) throw createAbortError();
+  externalSignal?.addEventListener("abort", handleExternalAbort, { once: true });
+  const timeoutId = setTimer(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
 
   try {
     return await fetch(url, { ...requestInit, signal: controller.signal });
   } catch (error) {
-    if (error?.name === "AbortError") {
+    if (externalSignal?.aborted) throw createAbortError();
+    if (timedOut || error?.name === "AbortError") {
       const timeoutError = new Error(timeoutMessage(timeoutMs, path));
       timeoutError.name = "ApiTimeoutError";
       timeoutError.timeoutMs = timeoutMs;
@@ -190,11 +231,12 @@ async function fetchCandidate(url, requestInit, timeoutMs, path) {
     throw error;
   } finally {
     clearTimer(timeoutId);
+    externalSignal?.removeEventListener("abort", handleExternalAbort);
   }
 }
 
 export async function apiFetch(path, options = {}) {
-  const { accessCode, headers, timeoutMs, ...rest } = options;
+  const { accessCode, expectedResponseType, headers, signal, timeoutMs, ...rest } = options;
   const normalizedMethod = String(rest.method || "GET").toUpperCase();
   const requestOptions = { ...rest };
   delete requestOptions.method;
@@ -233,11 +275,14 @@ export async function apiFetch(path, options = {}) {
         },
         effectiveTimeoutMs,
         path,
+        signal,
       );
 
-      const shouldRetrySameOrigin = index < candidates.length - 1 && response.status >= 500;
-      if (shouldRetrySameOrigin) {
+      const hasNextCandidate = index < candidates.length - 1;
+      if (shouldTryNextCandidate({ response, expectedResponseType, method: normalizedMethod, hasNextCandidate })) {
+        const reason = response.ok ? "unexpected-content-type" : `http-${response.status}`;
         lastError = new Error(`API candidate returned ${response.status}`);
+        logFallback(path, normalizedMethod, reason, index);
         continue;
       }
 
@@ -247,7 +292,12 @@ export async function apiFetch(path, options = {}) {
       return response;
     } catch (error) {
       lastError = error;
-      if (index < candidates.length - 1) continue;
+      if (signal?.aborted || error?.name === "AbortError") throw createAbortError();
+      if (index < candidates.length - 1 && ["GET", "HEAD"].includes(normalizedMethod)) {
+        logFallback(path, normalizedMethod, error?.name ?? "network-error", index);
+        continue;
+      }
+      break;
     }
   }
 

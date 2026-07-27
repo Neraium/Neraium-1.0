@@ -1,5 +1,5 @@
 /* @vitest-environment jsdom */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   CURRENT_WORKSPACE_STORAGE_KEY,
@@ -31,6 +31,10 @@ function expectDatasetCacheCleared() {
 beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("dataset session cache scoping", () => {
@@ -99,5 +103,23 @@ describe("dataset session cache scoping", () => {
 
     expect(getCurrentWorkspaceId()).toBe("default");
     expect(datasetCacheScopeKey({ email: "alice@example.com" })).toBe("alice@example.com::default");
+  });
+
+  it("keeps workspace startup usable when Safari denies storage access", () => {
+    const denied = () => {
+      throw new DOMException("Storage denied", "SecurityError");
+    };
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(denied);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(denied);
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(denied);
+
+    expect(getCurrentWorkspaceId()).toBe("default");
+    expect(activateDatasetCacheScope({ email: "alice@example.com" }, "central-plant")).toEqual({
+      changed: true,
+      scopeKey: "alice@example.com::central-plant",
+      workspaceId: "central-plant",
+    });
+    expect(() => clearDatasetSessionCache()).not.toThrow();
+    expect(setCurrentWorkspaceId("north-plant")).toBe("north-plant");
   });
 });

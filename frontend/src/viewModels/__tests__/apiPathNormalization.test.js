@@ -9,8 +9,8 @@ describe("api path normalization", () => {
 
   it("uses the canonical upload route without stale fallbacks", () => {
     const urls = buildApiCandidateUrls("/api/data/upload");
-    expect(urls).toHaveLength(1);
-    expect(urls[0]).toContain("/api/data/upload");
+    expect(urls.length).toBeGreaterThan(0);
+    expect(urls.every((url) => url.includes("/api/data/upload"))).toBe(true);
     const staleHost = ["api", "neraium", "com"].join(".");
     expect(urls.some((url) => url.includes(staleHost))).toBe(false);
   });

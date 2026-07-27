@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { apiFetch } from "./config";
+import { fetchCurrentUser } from "./services/api/authApi";
 
 const h = React.createElement;
 const runtimeMocks = vi.hoisted(() => ({
@@ -164,11 +165,116 @@ beforeEach(() => {
   Object.values(runtimeMocks).forEach((mock) => mock.mockClear());
   apiFetch.mockReset();
   apiFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+  fetchCurrentUser.mockReset();
+  fetchCurrentUser.mockResolvedValue({
+    authenticated: true,
+    user: { email: "operator@facility.com", name: "Operator", role: "operator" },
+  });
 });
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+
+describe("App session initialization", () => {
+  it("opens an authenticated session with one verification request", async () => {
+    render(h(App));
+
+    await launchWorkspace();
+
+    expect(fetchCurrentUser).toHaveBeenCalledTimes(1);
+    expect(fetchCurrentUser.mock.calls[0][0].signal).toBeInstanceOf(AbortSignal);
+    expect(screen.queryByText("Opening Neraium", { exact: true })).toBeNull();
+  });
+
+  it("treats a signed-out session as a normal sign-in state", async () => {
+    fetchCurrentUser.mockResolvedValueOnce({ authenticated: false, user: null, session: null });
+
+    render(h(App));
+
+    expect(await screen.findByTestId("auth-screen")).toBeTruthy();
+    expect(screen.queryByTestId("workspace-loading-state")).toBeNull();
+    expect(fetchCurrentUser).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["backend-unavailable", "Session service unavailable", "temporarily unavailable"],
+    ["timeout", "Session verification timed out", "timed out"],
+    ["malformed-response", "Session response unavailable", "unexpected response"],
+  ])("shows a retryable %s startup failure", async (kind, label, message) => {
+    fetchCurrentUser.mockRejectedValueOnce(Object.assign(new Error(message), {
+      name: "SessionInitializationError",
+      kind,
+    }));
+
+    render(h(App));
+
+    expect(await screen.findByTestId("startup-error")).toBeTruthy();
+    expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.getByText(message)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.queryByText("Opening Neraium", { exact: true })).toBeNull();
+  });
+
+  it("retries exactly once without restarting session verification in a loop", async () => {
+    fetchCurrentUser
+      .mockRejectedValueOnce(Object.assign(new Error("offline"), { kind: "backend-unavailable" }))
+      .mockResolvedValueOnce({ authenticated: false, user: null, session: null });
+
+    render(h(App));
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByTestId("auth-screen")).toBeTruthy();
+    await waitFor(() => expect(fetchCurrentUser).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId("workspace-loading-state")).toBeNull();
+  });
+
+  it("aborts session verification when the component unmounts", async () => {
+    let requestSignal = null;
+    fetchCurrentUser.mockImplementationOnce(({ signal }) => {
+      requestSignal = signal;
+      return new Promise(() => {});
+    });
+
+    const view = render(h(App));
+    await waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal));
+    view.unmount();
+
+    expect(requestSignal.aborted).toBe(true);
+    expect(fetchCurrentUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores session-expired events while the initial verification is pending", async () => {
+    let resolveSession;
+    fetchCurrentUser.mockImplementationOnce(() => new Promise((resolve) => { resolveSession = resolve; }));
+
+    render(h(App));
+    window.dispatchEvent(new CustomEvent("neraium:session-expired"));
+    expect(screen.getByText("Opening Neraium", { exact: true })).toBeTruthy();
+
+    resolveSession({ authenticated: false, user: null, session: null });
+    expect(await screen.findByTestId("auth-screen")).toBeTruthy();
+    expect(fetchCurrentUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves checking even when signed-out cache cleanup is denied", async () => {
+    fetchCurrentUser.mockResolvedValueOnce({ authenticated: false, user: null, session: null });
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const removeItem = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new DOMException("Storage access denied", "SecurityError");
+    });
+
+    try {
+      render(h(App));
+      expect(await screen.findByTestId("auth-screen")).toBeTruthy();
+      expect(screen.queryByText("Opening Neraium", { exact: true })).toBeNull();
+    } finally {
+      removeItem.mockRestore();
+      consoleWarn.mockRestore();
+    }
+  });
 });
 
 

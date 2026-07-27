@@ -16,17 +16,35 @@ import {
 const SESSION_INTENT_STORAGE_KEY = "neraium.session_intent";
 const ALLOW_PERSISTED_LATEST_STORAGE_KEY = "neraium.allow_persisted_latest";
 
+function logStorageWarning(operation, error) {
+  if (!import.meta.env.DEV) return;
+  console.warn("[neraium] workspace storage unavailable", {
+    operation,
+    name: error?.name ?? "StorageError",
+  });
+}
+
 function readStoredSessionIntent() {
   if (typeof window === "undefined") return "neutral";
-  const allowPersisted = window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY);
-  if (allowPersisted === "0") return "neutral";
-  const value = window.sessionStorage.getItem(SESSION_INTENT_STORAGE_KEY);
-  return value === "current" || value === "resumed" ? value : "neutral";
+  try {
+    const allowPersisted = window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY);
+    if (allowPersisted === "0") return "neutral";
+    const value = window.sessionStorage.getItem(SESSION_INTENT_STORAGE_KEY);
+    return value === "current" || value === "resumed" ? value : "neutral";
+  } catch (error) {
+    logStorageWarning("read-session-intent", error);
+    return "neutral";
+  }
 }
 
 export function readStoredAllowPersistedLatest() {
   if (typeof window === "undefined") return true;
-  return window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY) !== "0";
+  try {
+    return window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY) !== "0";
+  } catch (error) {
+    logStorageWarning("read-persisted-latest", error);
+    return true;
+  }
 }
 
 export default function useWorkspaceSessionController({
@@ -384,10 +402,14 @@ export default function useWorkspaceSessionController({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (effectiveSessionIntent === "neutral") {
-      window.sessionStorage.removeItem(SESSION_INTENT_STORAGE_KEY);
-    } else {
-      window.sessionStorage.setItem(SESSION_INTENT_STORAGE_KEY, effectiveSessionIntent);
+    try {
+      if (effectiveSessionIntent === "neutral") {
+        window.sessionStorage.removeItem(SESSION_INTENT_STORAGE_KEY);
+      } else {
+        window.sessionStorage.setItem(SESSION_INTENT_STORAGE_KEY, effectiveSessionIntent);
+      }
+    } catch (error) {
+      logStorageWarning("write-session-intent", error);
     }
   }, [effectiveSessionIntent]);
 
@@ -399,7 +421,11 @@ export default function useWorkspaceSessionController({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, allowPersistedLatest ? "1" : "0");
+    try {
+      window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, allowPersistedLatest ? "1" : "0");
+    } catch (error) {
+      logStorageWarning("write-persisted-latest", error);
+    }
   }, [allowPersistedLatest]);
 
   return {

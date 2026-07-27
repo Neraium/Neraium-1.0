@@ -44,7 +44,8 @@ function App() {
   const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
   const [resultsNavigationKey, setResultsNavigationKey] = useState(0);
   const [appReady, setAppReady] = useState(false);
-  const [authState, setAuthState] = useState({ status: "checking", user: null, notice: "" });
+  const [authState, setAuthState] = useState({ status: "checking", user: null, notice: "", errorKind: null });
+  const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
   const [signOutPending, setSignOutPending] = useState(false);
   const [datasetScopeKey, setDatasetScopeKey] = useState("signed-out");
   const initialAllowPersistedLatest = readStoredAllowPersistedLatest();
@@ -228,29 +229,63 @@ function App() {
     };
   }, [analysisHistory, apiStatus.state, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, persistedLatestUpload, previousUploadHistory, resolvedSessionStore, roomContext.primary, systems, systemsState, telemetrySession, telemetryTick]);
 
+  const logSessionDiagnostic = useCallback((event, error = null) => {
+    if (!import.meta.env.DEV) return;
+    console.warn(`[neraium] ${event}`, {
+      kind: error?.kind ?? null,
+      name: error?.name ?? null,
+    });
+  }, []);
+
+  const resetSignedOutSession = useCallback(() => {
+    setDatasetScopeKey("signed-out");
+    try {
+      clearDatasetSessionCache();
+    } catch (error) {
+      logSessionDiagnostic("dataset cache cleanup failed", error);
+    }
+    try {
+      clearUploadSessionState();
+    } catch (error) {
+      logSessionDiagnostic("upload session cleanup failed", error);
+    }
+  }, [clearUploadSessionState, logSessionDiagnostic]);
+
   const handleSignOut = useCallback(async () => {
     if (signOutPending) return;
     setSignOutPending(true);
     try {
       await logoutUser();
-      clearDatasetSessionCache();
-      clearUploadSessionState();
-      setDatasetScopeKey("signed-out");
-      setAuthState({ status: "signed-out", user: null, notice: "You have been signed out." });
+      resetSignedOutSession();
+      setAuthState({ status: "signed-out", user: null, notice: "You have been signed out.", errorKind: null });
     } catch (error) {
       setAuthState((current) => ({ ...current, notice: String(error?.message ?? "Sign out failed. Try again.") }));
     } finally {
       setSignOutPending(false);
     }
-  }, [clearUploadSessionState, signOutPending]);
+  }, [resetSignedOutSession, signOutPending]);
 
   const handleAuthenticated = useCallback((user) => {
-    const scope = activateDatasetCacheScope(user);
-    clearUploadSessionState();
-    setAllowPersistedLatest(true);
-    setDatasetScopeKey(scope.scopeKey);
-    setAuthState({ status: "authenticated", user, notice: "" });
-  }, [clearUploadSessionState, setAllowPersistedLatest]);
+    setAuthState({ status: "authenticated", user, notice: "", errorKind: null });
+    try {
+      const scope = activateDatasetCacheScope(user);
+      setDatasetScopeKey(scope.scopeKey);
+    } catch (error) {
+      setDatasetScopeKey("authenticated");
+      logSessionDiagnostic("dataset scope activation failed", error);
+    }
+    try {
+      clearUploadSessionState();
+      setAllowPersistedLatest(true);
+    } catch (error) {
+      logSessionDiagnostic("authenticated workspace initialization failed", error);
+    }
+  }, [clearUploadSessionState, logSessionDiagnostic, setAllowPersistedLatest]);
+
+  const handleRetrySession = useCallback(() => {
+    setAuthState({ status: "checking", user: null, notice: "", errorKind: null });
+    setAuthCheckAttempt((current) => current + 1);
+  }, []);
 
   const handleTelemetryAnalysisComplete = useCallback(async (completedPayload = null, options = {}) => {
     await handleGateUploadComplete(completedPayload, options);
@@ -261,39 +296,51 @@ function App() {
   }, [handleGateUploadComplete]);
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
-    fetchCurrentUser()
+
+    fetchCurrentUser({ signal: controller.signal })
       .then((payload) => {
         if (cancelled) return;
         if (payload?.authenticated && payload?.user) {
           handleAuthenticated(payload.user);
-        } else {
-          clearDatasetSessionCache();
-          setDatasetScopeKey("signed-out");
-          setAuthState({ status: "signed-out", user: null, notice: "Sign in to continue." });
+          return;
         }
+        resetSignedOutSession();
+        setAuthState({ status: "signed-out", user: null, notice: "Sign in to continue.", errorKind: null });
       })
       .catch((error) => {
-        if (!cancelled) {
-          clearDatasetSessionCache();
-          clearUploadSessionState();
-          setDatasetScopeKey("signed-out");
-          setAuthState({ status: "signed-out", user: null, notice: String(error?.message ?? "Unable to verify your session.") });
-        }
+        if (cancelled || error?.name === "AbortError") return;
+        const errorKind = ["backend-unavailable", "malformed-response", "timeout"].includes(error?.kind)
+          ? error.kind
+          : "backend-unavailable";
+        logSessionDiagnostic("session initialization failed", { ...error, kind: errorKind, name: error?.name });
+        setAuthState({
+          status: "error",
+          user: null,
+          notice: String(error?.message ?? "Unable to verify your session. Retry session verification."),
+          errorKind,
+        });
       });
-    return () => { cancelled = true; };
-  }, [clearUploadSessionState, handleAuthenticated]);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [authCheckAttempt, handleAuthenticated, logSessionDiagnostic, resetSignedOutSession]);
 
   useEffect(() => {
     const handleSessionExpired = () => {
-      clearDatasetSessionCache();
-      clearUploadSessionState();
-      setDatasetScopeKey("signed-out");
-      setAuthState({ status: "signed-out", user: null, notice: "Your session expired. Sign in again to continue." });
+      if (authState.status === "checking") {
+        logSessionDiagnostic("ignored session-expired event during session initialization");
+        return;
+      }
+      resetSignedOutSession();
+      setAuthState({ status: "signed-out", user: null, notice: "Your session expired. Sign in again to continue.", errorKind: null });
     };
     window.addEventListener("neraium:session-expired", handleSessionExpired);
     return () => window.removeEventListener("neraium:session-expired", handleSessionExpired);
-  }, [clearUploadSessionState]);
+  }, [authState.status, logSessionDiagnostic, resetSignedOutSession]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !authState.user) return undefined;
@@ -344,6 +391,24 @@ function App() {
 
   if (authState.status === "checking") {
     return <WorkspaceLoadingState label="Opening Neraium" detail="Checking your secure session." fullScreen />;
+  }
+
+  if (authState.status === "error") {
+    const errorLabel = authState.errorKind === "timeout"
+      ? "Session verification timed out"
+      : authState.errorKind === "malformed-response"
+        ? "Session response unavailable"
+        : "Session service unavailable";
+    return (
+      <WorkspaceLoadingState
+        label={errorLabel}
+        detail={authState.notice}
+        fullScreen
+        variant="error"
+        actionLabel="Retry"
+        onAction={handleRetrySession}
+      />
+    );
   }
 
   if (!hasAccess) {
