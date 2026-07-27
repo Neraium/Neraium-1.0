@@ -22,7 +22,7 @@ import numpy as np
 
 RUNNER_MODULE = "app.services.sii_runner.BackendSiiRunner"
 RUNNER_CALLABLE = "app.services.sii_runner.BackendSiiRunner.ingest"
-CORE_ENGINE = "app.engine.sii_engine.evaluate_sii"
+CORE_ENGINE = "app.engine.analysis.run_engine_analysis"
 VALIDATION_RUNNER = None
 logger = logging.getLogger(__name__)
 STATE_PATH = get_settings().runtime_dir / "latest_sii_state.json"
@@ -44,7 +44,10 @@ COVARIANCE_REGULARIZATION_FLOOR = 1e-3
 
 _IMPORT_ERROR: str | None = None
 _SII_ENGINE_ADAPTER: Any = None
-MAX_RUNNER_VECTOR_ROWS = max(0, int(os.getenv("NERAIUM_SII_MAX_VECTOR_ROWS", "4096") or "0"))
+# A 4,096-vector sequential covariance run accounted for roughly half of normal
+# upload latency in profiling. Preserve both historical coverage and the recent
+# tail through limit_runner_vectors while bounding synchronous evidence work.
+MAX_RUNNER_VECTOR_ROWS = max(0, int(os.getenv("NERAIUM_SII_MAX_VECTOR_ROWS", "1024") or "0"))
 RECENT_VECTOR_TAIL = max(100, int(os.getenv("NERAIUM_SII_RECENT_VECTOR_TAIL", "512") or "512"))
 
 def configure_runtime_dir(runtime_dir: Path) -> None:
@@ -292,15 +295,12 @@ def _baseline_mahalanobis_distances(
     baseline_mean: np.ndarray,
     covariance_inverse: np.ndarray,
 ) -> list[float]:
-    centered = np.nan_to_num(
-        np.asarray(baseline_matrix, dtype=float) - np.asarray(baseline_mean, dtype=float),
-        nan=0.0,
-    )
+    centered = np.nan_to_num(np.asarray(baseline_matrix, dtype=float) - baseline_mean, nan=0.0)
     if centered.size == 0:
         return []
-    distance_squares = np.sum((centered @ covariance_inverse) * centered, axis=1)
+    distance_squares = np.einsum("ij,jk,ik->i", centered, covariance_inverse, centered, optimize=True)
     finite = distance_squares[np.isfinite(distance_squares)]
-    return [float(value) for value in np.sqrt(np.maximum(finite, 0.0))]
+    return np.sqrt(np.clip(finite, 0.0, None)).astype(float).tolist()
 
 
 def _nanmean_columns(matrix: np.ndarray) -> np.ndarray:
@@ -397,9 +397,7 @@ def runner_identity() -> dict[str, str | None]:
     if _SII_ENGINE_ADAPTER is not None:
         runner_file = inspect.getsourcefile(_SII_ENGINE_ADAPTER)
         try:
-            from app.engine.sii_engine import evaluate_sii
-
-            core_file = inspect.getsourcefile(evaluate_sii)
+            core_file = inspect.getsourcefile(BackendSiiRunner)
         except Exception:
             core_file = None
     return {

@@ -87,6 +87,98 @@ CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "
 CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "5000"))
 logger = logging.getLogger(__name__)
 
+_STAGE_TIMING_PHASES = {
+    "reading_csv": "validation",
+    "parsing_telemetry": "validation",
+    "detecting_schema_signals": "validation",
+    "cleaning_imputing_data": "validation",
+    "profiling_data_quality": "validation",
+    "building_baseline": "baseline_creation",
+    "scoring_drift_relationships": "mapping",
+    "building_fingerprint": "comparison",
+    "generating_findings_evidence": "evidence_generation",
+    "writing_result_replay": "persistence",
+    "saving_result": "persistence",
+    "finalizing_report": "persistence",
+    "complete": "persistence",
+}
+_JOB_TIMING_CONTEXTS: dict[str, dict[str, Any]] = {}
+_JOB_TIMING_LOCK = threading.Lock()
+
+
+def _begin_job_timing(job_id: str, initial_timings: dict[str, Any] | None = None) -> None:
+    now = time.perf_counter()
+    with _JOB_TIMING_LOCK:
+        _JOB_TIMING_CONTEXTS[str(job_id)] = {
+            "started_perf": now,
+            "phase": None,
+            "phase_started_perf": now,
+            "durations_ms": {
+                key: float(value)
+                for key, value in dict(initial_timings or {}).items()
+                if key.endswith("_ms") and isinstance(value, (int, float))
+            },
+        }
+
+
+def _timing_snapshot_locked(context: dict[str, Any], now: float) -> dict[str, Any]:
+    durations = dict(context.get("durations_ms") or {})
+    phase = context.get("phase")
+    if phase:
+        key = f"{phase}_ms"
+        durations[key] = round(
+            float(durations.get(key, 0.0)) + max(0.0, now - float(context["phase_started_perf"])) * 1000,
+            3,
+        )
+    durations["total_job_ms"] = round(max(0.0, now - float(context["started_perf"])) * 1000, 3)
+    durations["parse_seconds"] = round(float(durations.get("validation_ms", 0.0)) / 1000, 6)
+    durations["baseline_build_seconds"] = round(float(durations.get("baseline_creation_ms", 0.0)) / 1000, 6)
+    structural_ms = sum(float(durations.get(key, 0.0)) for key in ("mapping_ms", "comparison_ms", "evidence_generation_ms"))
+    durations["structural_scoring_seconds"] = round(structural_ms / 1000, 6)
+    durations["total_job_seconds"] = round(float(durations["total_job_ms"]) / 1000, 6)
+    return durations
+
+
+def _advance_job_timing(job_id: str, stage: str) -> tuple[dict[str, Any], str | None, float | None]:
+    now = time.perf_counter()
+    phase = _STAGE_TIMING_PHASES.get(str(stage), str(stage))
+    with _JOB_TIMING_LOCK:
+        context = _JOB_TIMING_CONTEXTS.setdefault(
+            str(job_id),
+            {"started_perf": now, "phase": None, "phase_started_perf": now, "durations_ms": {}},
+        )
+        previous_phase = context.get("phase")
+        completed_ms = None
+        if previous_phase != phase:
+            if previous_phase:
+                key = f"{previous_phase}_ms"
+                completed_ms = max(0.0, now - float(context["phase_started_perf"])) * 1000
+                context["durations_ms"][key] = round(
+                    float(context["durations_ms"].get(key, 0.0)) + completed_ms,
+                    3,
+                )
+            context["phase"] = phase
+            context["phase_started_perf"] = now
+        return _timing_snapshot_locked(context, now), previous_phase if previous_phase != phase else None, completed_ms
+
+
+def _job_timing_snapshot(job_id: str) -> dict[str, Any]:
+    now = time.perf_counter()
+    with _JOB_TIMING_LOCK:
+        context = _JOB_TIMING_CONTEXTS.get(str(job_id))
+        return _timing_snapshot_locked(context, now) if context else {}
+
+
+def _finish_job_timing(job_id: str, *, completion_write_ms: float = 0.0) -> dict[str, Any]:
+    now = time.perf_counter()
+    with _JOB_TIMING_LOCK:
+        context = _JOB_TIMING_CONTEXTS.pop(str(job_id), None)
+        if not context:
+            return {"completion_write_ms": round(max(0.0, completion_write_ms), 3)}
+        snapshot = _timing_snapshot_locked(context, now)
+    snapshot["completion_write_ms"] = round(max(0.0, completion_write_ms), 3)
+    return snapshot
+
 
 
 def write_latest_upload_record(record: dict[str, Any] | None) -> dict[str, Any]:
@@ -233,8 +325,10 @@ def _complete_with_partial_result(
 
 
 def _persist_completed_upload(job_id: str, *, result: dict[str, Any], summary: dict[str, Any]) -> None:
+    # write_upload_completion already publishes the job status, latest summary,
+    # result, and canonical record. Repeating write_upload_status_progress here
+    # doubled the largest persistence payload and added avoidable commits.
     repository_write_upload_completion(job_id, result=result, summary=summary)
-    repository_write_upload_status_progress(job_id, summary, latest_summary=summary, keep_result=True)
     try:
         complete_upload_queue_job(job_id, "completed")
     except Exception:
@@ -422,7 +516,31 @@ def _finalize_completed_upload(
         "runner_errors": [],
     }
     finalized_summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label="Analysis ready."))
+    terminal_stage_changed_at = datetime.now(timezone.utc).isoformat()
+    finalized_summary["stage_changed_at"] = terminal_stage_changed_at
+    finalized_summary["updated_at"] = terminal_stage_changed_at
+    finalized_result["stage_changed_at"] = terminal_stage_changed_at
+    timing_snapshot = _job_timing_snapshot(job_id)
+    finalized_summary["timings"] = {**dict(finalized_summary.get("timings") or {}), **timing_snapshot}
+    processing_stats = dict(finalized_result.get("processing_stats") or {})
+    processing_stats["timings"] = {**dict(processing_stats.get("timings") or {}), **timing_snapshot}
+    finalized_result["processing_stats"] = processing_stats
+    persistence_started = time.perf_counter()
     _persist_completed_upload(job_id, result=finalized_result, summary=finalized_summary)
+    completion_write_ms = (time.perf_counter() - persistence_started) * 1000
+    completed_timings = _finish_job_timing(job_id, completion_write_ms=completion_write_ms)
+    logger.info(
+        "upload_stage_timing event=job_completed job_id=%s total_job_ms=%s validation_ms=%s mapping_ms=%s baseline_creation_ms=%s comparison_ms=%s evidence_generation_ms=%s persistence_ms=%s completion_write_ms=%s",
+        job_id,
+        completed_timings.get("total_job_ms"),
+        completed_timings.get("validation_ms"),
+        completed_timings.get("mapping_ms"),
+        completed_timings.get("baseline_creation_ms"),
+        completed_timings.get("comparison_ms"),
+        completed_timings.get("evidence_generation_ms"),
+        completed_timings.get("persistence_ms"),
+        completed_timings.get("completion_write_ms"),
+    )
 
 
 def _start_optional_upload_finalization(**kwargs: Any) -> None:
@@ -439,8 +557,10 @@ def _start_optional_upload_finalization(**kwargs: Any) -> None:
 
 
 def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str) -> None:
+    timings, completed_phase, completed_ms = _advance_job_timing(job_id, stage)
     current = read_job(job_id) or read_upload_status(job_id) or {"job_id": job_id}
     bounded_progress = int(max(0, min(100, progress)))
+    stage_changed_at = datetime.now(timezone.utc).isoformat()
     pending_stages = {"queued", "accepted", "reading_csv"}
     payload = {
         **current,
@@ -454,10 +574,24 @@ def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str
         "propagation_stage": stage,
         "propagation_progress": bounded_progress,
         "propagation_label": label,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": stage_changed_at,
+        "stage_changed_at": stage_changed_at,
+        "timings": {**dict(current.get("timings") or {}), **timings},
     }
     payload.update(canonical_stage_payload(legacy_stage=stage, status=payload["status"], progress=progress, label=label))
+    persistence_started = time.perf_counter()
     write_job(payload)
+    stage_persist_ms = (time.perf_counter() - persistence_started) * 1000
+    logger.info(
+        "upload_stage_timing event=stage_entered job_id=%s stage=%s phase=%s previous_phase=%s previous_phase_ms=%s stage_persist_ms=%.3f total_job_ms=%s",
+        job_id,
+        stage,
+        _STAGE_TIMING_PHASES.get(stage, stage),
+        completed_phase,
+        round(completed_ms, 3) if completed_ms is not None else None,
+        stage_persist_ms,
+        timings.get("total_job_ms"),
+    )
 
 
 def _progress_label(stage: str, *, row_count: int | None = None, signal_count: int | None = None) -> str:
@@ -1376,6 +1510,8 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
 
     snapshot: dict[str, Any] | None = None
     processing_started_at = time.perf_counter()
+    existing_job = read_job(job_id) or {}
+    _begin_job_timing(job_id, dict(existing_job.get("timings") or {}))
 
     if job_id:
         _set_propagation_stage(job_id, stage="reading_csv", progress=10, label=_progress_label("reading_csv"))
@@ -1433,6 +1569,18 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
 
     except Exception as exc:
         logger.exception("CSV upload processing failed job_id=%s filename=%s", job_id, filename)
+        failed_timings = _finish_job_timing(job_id)
+        logger.info(
+            "upload_stage_timing event=job_failed job_id=%s total_job_ms=%s validation_ms=%s baseline_creation_ms=%s mapping_ms=%s comparison_ms=%s evidence_generation_ms=%s persistence_ms=%s",
+            job_id,
+            failed_timings.get("total_job_ms"),
+            failed_timings.get("validation_ms"),
+            failed_timings.get("baseline_creation_ms"),
+            failed_timings.get("mapping_ms"),
+            failed_timings.get("comparison_ms"),
+            failed_timings.get("evidence_generation_ms"),
+            failed_timings.get("persistence_ms"),
+        )
 
         if snapshot:
             summary = _complete_with_partial_result(

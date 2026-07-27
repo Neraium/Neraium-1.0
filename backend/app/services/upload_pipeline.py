@@ -193,6 +193,12 @@ def run_structural_analysis_pipeline(
     engine_result = compatibility.get("engine_result") or {}
     driver_attribution = compatibility.get("driver_attribution") or {}
     runner_result = compatibility.get("sii_runner_result") or {}
+    temporal_math = (
+        compatibility.get("temporal_analysis")
+        or sii_result.get("temporal_analysis")
+        or {}
+    )
+    engine_result["temporal_math"] = temporal_math
 
     baseline_reliable = (
         baseline_analysis.get("baseline_window_rows", 0) >= 5
@@ -275,6 +281,7 @@ def run_structural_analysis_pipeline(
     sii_intelligence["runner_module"] = RUNNER_MODULE
     sii_intelligence["replay_timeline"] = replay
     sii_intelligence["telemetry_integrity"] = normalization_report
+    sii_intelligence["temporal_math"] = temporal_math
     sii_intelligence = apply_telemetry_confidence_adjustment(
         sii_intelligence,
         data_quality=data_quality,
@@ -294,6 +301,14 @@ def run_structural_analysis_pipeline(
         "normalization_layer_ran": True,
         "normalization_window_suppressed": bool(normalization_report.get("window_suppressed")),
         "normalization_source_status": normalization_report.get("status"),
+        "temporal_math_ran": (
+            temporal_math.get("engine", {}).get("name") == "temporal_math_engine"
+        ),
+        "temporal_math_status": temporal_math.get("status", "complete"),
+        "temporal_math_reason": temporal_math.get("reason"),
+        "temporal_math_columns_used": list(temporal_math.get("columns_used") or []),
+        "temporal_math_baseline_rows": int(temporal_math.get("baseline_rows") or 0),
+        "temporal_math_active_rows": int(temporal_math.get("active_rows") or 0),
         "sii_confidence_adjusted_for_telemetry": bool(
             sii_intelligence.get("telemetry_confidence_adjusted")
         ),
@@ -336,6 +351,7 @@ def run_structural_analysis_pipeline(
         "room_assessments": room_assessments,
         "runner_result": runner_result,
         "sii_intelligence": sii_intelligence,
+        "temporal_math": temporal_math,
         "timestamp_profile": timestamp_profile,
         "normalization_report": normalization_report,
         "chunk_count": chunk_count,

@@ -506,7 +506,8 @@ def abrupt_step_evidence(values: list[float]) -> bool:
     if len(nonzero) < 3:
         return False
     typical = median(nonzero)
-    spread = median(abs(value - median(values)) for value in values)
+    center = median(values)
+    spread = median(abs(value - center) for value in values)
     return max(diffs) > max(typical * 10, spread * 4, 1e-9)
 
 
