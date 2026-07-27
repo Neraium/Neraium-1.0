@@ -200,3 +200,25 @@ def test_run_sii_runner_samples_large_vector_sets_while_preserving_recent_tail(m
     assert result["processing_trace"]["sii_vector_rows_source_count"] == 200
     assert result["processing_trace"]["sii_sampling_applied"] is True
     assert result["latest_state"]["timestamp"] > 0
+
+
+def test_vectorized_baseline_mahalanobis_matches_scalar_quadratic_form() -> None:
+    from app.services.sii_runner import _baseline_mahalanobis_distances
+
+    matrix = np.array(
+        [
+            [1.0, 2.0, 3.0],
+            [2.0, 1.0, 4.0],
+            [3.0, 4.0, 2.0],
+        ]
+    )
+    mean = np.mean(matrix, axis=0)
+    covariance_inverse = np.linalg.pinv(np.cov(matrix, rowvar=False, bias=True) + np.eye(3) * 0.05)
+    expected = []
+    for vector in matrix:
+        centered = vector - mean
+        expected.append(float(np.sqrt(max(float(centered.T @ covariance_inverse @ centered), 0.0))))
+
+    actual = _baseline_mahalanobis_distances(matrix, mean, covariance_inverse)
+
+    assert np.allclose(actual, expected, rtol=1e-12, atol=1e-12)
