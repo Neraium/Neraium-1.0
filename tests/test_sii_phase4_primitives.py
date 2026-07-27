@@ -362,3 +362,64 @@ def test_unhealthy_sensor_is_excluded_from_candidate_memory() -> None:
     assert model["relationship_memory"] == {}
     assert changes["relationships_added"] == 0
     assert any("sensor_health_not_acceptable" in item["reason"] for item in changes["learning_exclusions"])
+
+
+def test_relationship_lifecycle_preserves_history_through_weakening_inactive_and_retired() -> None:
+    identity = resolve_infrastructure_identity(
+        columns=["timestamp", "flow", "pressure"],
+        telemetry_signal_catalog={},
+        config=_identity_config("facility-lifecycle", "system-lifecycle"),
+    )
+
+    def build(active_model, run_id: str, strength: float | None):
+        edges = [] if strength is None else [
+            {
+                "columns": ["flow", "pressure"],
+                "relationship_type": "linear_correlation",
+                "baseline_strength": 0.95,
+                "current_strength": strength,
+                "baseline_sample_count": 50,
+                "current_sample_count": 30,
+            }
+        ]
+        return build_candidate_model(
+            active_model=active_model,
+            identity=identity,
+            rows=_rows(),
+            numeric_columns=["flow", "pressure"],
+            timestamp_column="timestamp",
+            telemetry_signal_catalog={},
+            signal_drift={"column_drift": []},
+            relationship_graph={"eligible_edges": edges, "nodes": []},
+            operating_mode={"recent_mode": "running", "baseline_mode": "running"},
+            sensor_health=_health(),
+            data_quality={"readiness": "ready", "data_confidence": {"rating": "high"}},
+            temporal_analysis={},
+            multiscale_analysis={"status": "complete", "cross_scale_classification": "stable"},
+            physics_reasoning={},
+            expected_behavior={"expected_values": []},
+            trained_expected_models={},
+            baseline_record=None,
+            event_references=[],
+            source_run_id=run_id,
+            observed_at=f"2026-01-0{run_id[-1]}T01:19:00+00:00",
+            allow_learning=True,
+        )
+
+    model, _ = build(None, "run-1", 0.95)
+    relationship_id = next(iter(model["relationship_memory"]))
+    assert model["relationship_memory"][relationship_id]["status"] == "emerged"
+
+    model, _ = build(model, "run-2", 0.50)
+    assert model["relationship_memory"][relationship_id]["status"] == "weakened"
+    assert model["relationship_memory"][relationship_id]["stability"] == "volatile"
+
+    model, _ = build(model, "run-3", None)
+    model, _ = build(model, "run-4", None)
+    assert model["relationship_memory"][relationship_id]["status"] == "inactive"
+    model, changes = build(model, "run-5", None)
+    relationship = model["relationship_memory"][relationship_id]
+    assert relationship["status"] == "retired"
+    assert changes["relationships_retired"] == 1
+    assert len(relationship["strength_history"]) == 2
+    assert {item["status"] for item in relationship["change_history"]} >= {"emerged", "weakened", "inactive", "retired"}

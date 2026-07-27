@@ -784,12 +784,12 @@ def _update_relationship_memory(
         delta = current_strength - prior_strength
         if not existing:
             status = "emerged"
-        elif volatility >= 0.20:
-            status = "volatile"
         elif delta >= 0.20:
             status = "strengthened"
         elif delta <= -0.20:
             status = "weakened"
+        elif volatility >= 0.20:
+            status = "volatile"
         else:
             status = "active"
         sample_count = _edge_sample_count(edge)
@@ -854,8 +854,9 @@ def _update_relationship_memory(
         changed = deepcopy(existing)
         changed["missed_observations"] = missed
         if missed >= int(config["relationship_retire_after_runs"]):
+            if changed.get("status") != "retired":
+                retired += 1
             changed["status"] = "retired"
-            retired += 1
         elif missed >= int(config["relationship_inactive_after_runs"]):
             changed["status"] = "inactive"
         changed["change_history"] = _append_history(changed.get("change_history"), {"observed_at": observed_at, "source_run_id": source_run_id, "status": changed.get("status"), "reason": "relationship_not_observed_in_compatible_mode"}, config)

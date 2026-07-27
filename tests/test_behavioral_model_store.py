@@ -96,3 +96,6 @@ def test_candidate_baseline_requires_approval_when_marked_pending() -> None:
     )
     assert active["active_version"] == "baseline-v1"
     assert active["human_approval"]["actor"] == "operator"
+    state = store.export_state("facility-a")
+    assert state["candidate_baselines"]["baseline-v1"]["approval_status"] == "pending_validation"
+    assert state["activated_baselines"]["baseline-v1"]["approval_status"] == "approved"

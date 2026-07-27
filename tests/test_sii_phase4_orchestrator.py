@@ -160,3 +160,15 @@ def test_storage_failure_returns_limited_phase4_without_raising() -> None:
     assert result["behavioral_model"]["learning_decision"]["decision"] == "insufficient_evidence"
     assert result["processing_trace"]["storage_failures"]
     assert result["bayesian_evidence"]["posterior"] is None
+
+
+def test_data_quality_block_does_not_change_active_model_version_or_memory() -> None:
+    store = InMemoryBehavioralModelStore()
+    first = evaluate_phase4(**_phase4_args(store, run_id="quality-good"))
+    model_id = first["behavioral_model"]["model_id"]
+    model_before = store.load_model(model_id)
+    inputs = _phase4_args(store, run_id="quality-bad")
+    inputs["data_quality"] = {"readiness": "not_ready", "data_confidence": {"rating": "low"}}
+    result = evaluate_phase4(**inputs)
+    assert result["behavioral_model"]["learning_decision"]["decision"] == "blocked_by_data_quality"
+    assert store.load_model(model_id) == model_before

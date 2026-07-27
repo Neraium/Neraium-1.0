@@ -31,6 +31,7 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
                 "learning_decisions": {},
                 "decision_order": [],
                 "candidate_baselines": {},
+                "activated_baselines": {},
                 "active_baseline_version": None,
                 "write_audit": [],
             },
@@ -163,7 +164,7 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
             state = self._state.get(str(model_id))
             if not state or state.get("active_baseline_version") is None:
                 return None
-            baseline = state["candidate_baselines"].get(str(state["active_baseline_version"]))
+            baseline = state["activated_baselines"].get(str(state["active_baseline_version"]))
             return deepcopy(baseline) if isinstance(baseline, dict) else None
 
     def save_candidate_baseline(
@@ -203,7 +204,12 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
             if approval:
                 activated["human_approval"] = deepcopy(approval)
             activated["activation_source_run_id"] = str(source_run_id)
-            state["candidate_baselines"][str(baseline_version)] = activated
+            existing_activation = state["activated_baselines"].get(str(baseline_version))
+            if existing_activation is not None and existing_activation != activated:
+                raise BehavioralModelVersionConflict(
+                    f"baseline_activation_already_exists:{baseline_version}"
+                )
+            state["activated_baselines"].setdefault(str(baseline_version), activated)
             state["active_baseline_version"] = str(baseline_version)
             self._audit(state, "activate_baseline", source_run_id, str(baseline_version))
             return deepcopy(activated)
@@ -264,17 +270,24 @@ class RuntimeBehavioralModelStore(InMemoryBehavioralModelStore):
         *,
         reader: Callable[[str], Any] | None = None,
         writer: Callable[[str, Any], None] | None = None,
+        mutator: Callable[[str, Callable[[Any | None], Any]], Any] | None = None,
     ) -> None:
         super().__init__()
         if reader is None or writer is None:
             try:
-                from app.services.runtime_db import read_latest_payload, upsert_latest_payload
+                from app.services.runtime_db import (
+                    mutate_latest_payload,
+                    read_latest_payload,
+                    upsert_latest_payload,
+                )
             except Exception as exc:  # pragma: no cover - import environment failure
                 raise BehavioralModelStorageUnavailable(f"runtime_persistence_import_failed:{type(exc).__name__}:{exc}") from exc
             reader = reader or read_latest_payload
             writer = writer or upsert_latest_payload
+            mutator = mutator or mutate_latest_payload
         self._reader = reader
         self._writer = writer
+        self._mutator = mutator
         self._loaded: set[str] = set()
 
     def _model_state(self, model_id: str) -> dict[str, Any]:
@@ -314,7 +327,18 @@ class RuntimeBehavioralModelStore(InMemoryBehavioralModelStore):
 
     def _persist(self, model_id: str) -> None:
         try:
-            self._writer(self.KEY_PREFIX + str(model_id), deepcopy(self._state[str(model_id)]))
+            local = deepcopy(self._state[str(model_id)])
+            if self._mutator is not None:
+                merged = self._mutator(
+                    self.KEY_PREFIX + str(model_id),
+                    lambda current: _merge_ledgers(current, local),
+                )
+                if isinstance(merged, dict):
+                    self._state[str(model_id)] = deepcopy(merged)
+            else:
+                self._writer(self.KEY_PREFIX + str(model_id), local)
+        except BehavioralModelVersionConflict:
+            raise
         except Exception as exc:
             raise BehavioralModelStorageUnavailable(
                 f"behavioral_model_write_failed:{type(exc).__name__}:{exc}"
@@ -411,3 +435,51 @@ def _version_number(version: str) -> int:
 def _next_version(version: str) -> str:
     prefix = "v" if str(version).startswith("v") else ""
     return f"{prefix}{_version_number(version) + 1}"
+
+
+def _merge_ledgers(current: Any, local: dict[str, Any]) -> dict[str, Any]:
+    """Merge append-only runtime ledgers inside one repository transaction."""
+
+    if not isinstance(current, dict):
+        return deepcopy(local)
+    merged = deepcopy(current)
+    mapping_fields = (
+        "models",
+        "snapshots",
+        "events",
+        "learning_decisions",
+        "candidate_baselines",
+        "activated_baselines",
+    )
+    for field in mapping_fields:
+        merged.setdefault(field, {})
+        for key, value in (local.get(field) or {}).items():
+            existing = merged[field].get(key)
+            if existing is not None and existing != value:
+                raise BehavioralModelVersionConflict(
+                    f"runtime_ledger_immutable_record_conflict:{field}:{key}"
+                )
+            merged[field].setdefault(key, deepcopy(value))
+    for field in ("snapshot_order", "event_order", "decision_order"):
+        merged[field] = list(
+            dict.fromkeys([*(merged.get(field) or []), *(local.get(field) or [])])
+        )
+    merged["write_audit"] = [
+        *merged.get("write_audit", []),
+        *[
+            item
+            for item in local.get("write_audit", [])
+            if item not in merged.get("write_audit", [])
+        ],
+    ]
+    current_model = str(merged.get("active_model_version") or "")
+    local_model = str(local.get("active_model_version") or "")
+    merged["active_model_version"] = (
+        local_model
+        if _version_number(local_model) >= _version_number(current_model)
+        else current_model or None
+    )
+    current_baseline = str(merged.get("active_baseline_version") or "")
+    local_baseline = str(local.get("active_baseline_version") or "")
+    merged["active_baseline_version"] = local_baseline or current_baseline or None
+    return merged
