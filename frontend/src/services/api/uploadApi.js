@@ -172,7 +172,7 @@ function getUploadResponseTimeoutMs(fileSizeBytes, baseTimeoutMs) {
   return Math.min(Math.max(base || largeFileMinimumMs, largeFileMinimumMs), 30 * 60 * 1000);
 }
 
-export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, onTiming, requestStartedAt, accessCode } = {}) {
+export function uploadTelemetryFileWithProgress({ file, workflow = "legacy_analysis", approvalRequired, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, onTiming, requestStartedAt, accessCode } = {}) {
   return new Promise((resolve, reject) => {
     if (!file) {
       reject(new Error("Choose a CSV or JSON telemetry file to upload."));
@@ -232,6 +232,10 @@ export function uploadTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 
         }
       };
       formData.append("file", file);
+      formData.append("workflow", String(workflow || "legacy_analysis"));
+      if (typeof approvalRequired === "boolean") {
+        formData.append("approval_required", approvalRequired ? "true" : "false");
+      }
       xhr.open("POST", uploadUrl, true);
       xhr.withCredentials = true;
       xhr.timeout = timeoutMs;

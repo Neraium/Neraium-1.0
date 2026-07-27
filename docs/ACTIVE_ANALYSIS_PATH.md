@@ -1,10 +1,16 @@
 # Active Analysis Path
 
+Baseline construction is intentionally outside this path. Upload routing sends
+`create_baseline` and `extend_baseline` to
+`build_behavioral_baseline(...)`; only `analyze_new_data` (and the temporary
+`legacy_analysis` compatibility value) enters the SII analysis orchestration.
+See [Behavioral baseline workflows](BEHAVIORAL_BASELINE_WORKFLOWS.md).
+
 This note records the active Neraium SII path after the legacy cleanup. The current product flow is:
 
 1. Telemetry enters through `POST /api/data/upload` in `backend/app/routers/data.py`, or through the data connection poller in `backend/app/services/data_connections.py`.
-2. Uploads are recorded as queued evidence runs and queue jobs through `backend/app/services/runtime_db.py`, `backend/app/services/upload_jobs.py`, and `backend/app/services/evidence_store.py`.
-3. Upload processing runs through `backend/app/services/upload_jobs.py` into `backend/app/services/upload_pipeline.py`.
+2. Analysis uploads are recorded as queued evidence runs and queue jobs through `backend/app/services/runtime_db.py`, `backend/app/services/upload_jobs.py`, and `backend/app/services/evidence_store.py`. Baseline uploads create queue jobs but never evidence runs.
+3. Analysis upload processing runs through `backend/app/services/upload_jobs.py` into `backend/app/services/upload_pipeline.py`.
 4. `upload_pipeline.py` builds data quality, baseline, relationship, driver attribution, operator report, and upload intelligence outputs, then runs `backend/app/services/sii_runner.py`.
 5. `sii_runner.py` uses `BackendSiiRunner` and persists `latest_sii_state` through runtime DB/latest-payload storage.
 6. Upload completion writes canonical result, summary, latest-upload state, replay, and evidence through `backend/app/services/upload_state_repository.py` and `backend/app/services/upload_evidence.py`.

@@ -51,7 +51,8 @@ function installXhrSequence(responses) {
       return this._response?.headers?.[String(key).toLowerCase()] ?? "";
     }
 
-    send() {
+    send(body) {
+      this.sentBody = body;
       const response = responses.shift();
       if (!response) throw new Error("Unexpected XHR send");
       this._response = response;
@@ -174,6 +175,27 @@ describe("fetchLatestUploadState", () => {
       expect(timings[2].frontend_request_dispatch_ms).toBeGreaterThanOrEqual(0);
       expect(timings[2].upload_transfer_ms).toBeGreaterThanOrEqual(0);
       expect(timings[2].backend_confirmation_ms).toBeGreaterThanOrEqual(0);
+    } finally {
+      xhr.restore();
+    }
+  });
+
+  it("sends the selected telemetry workflow as upload routing metadata", async () => {
+    const xhr = installXhrSequence([{
+      status: 202,
+      body: JSON.stringify({ job_id: "workflow-job", status: "PENDING" }),
+      headers: { "content-type": "application/json" },
+    }]);
+
+    try {
+      await uploadTelemetryFileWithProgress({
+        file: new File(["timestamp,value\n2026-06-22,1\n"], "extension.csv", { type: "text/csv" }),
+        workflow: "extend_baseline",
+        approvalRequired: true,
+        accessCode: "",
+      });
+      expect(xhr.instances[0].sentBody.get("workflow")).toBe("extend_baseline");
+      expect(xhr.instances[0].sentBody.get("approval_required")).toBe("true");
     } finally {
       xhr.restore();
     }

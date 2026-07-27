@@ -6,6 +6,7 @@ from app.services.upload_lifecycle import (
     canonical_stage_payload,
     infer_legacy_stage,
 )
+from app.services.baseline_contracts import is_baseline_workflow
 
 
 
@@ -55,6 +56,12 @@ _ANALYSIS_STATE_BY_STAGE = {
     "cognition_ready": "evidence_generation",
     "saving_result": "evidence_generation",
     "saving_results": "evidence_generation",
+    "baseline_validating": "validating",
+    "baseline_quality_assessment": "baseline_creation",
+    "baseline_mode_identification": "baseline_creation",
+    "baseline_relationship_learning": "baseline_creation",
+    "baseline_model_fitting": "baseline_creation",
+    "baseline_candidate_persistence": "baseline_creation",
     "complete": "completed",
     "completed": "completed",
     "failed": "failed",
@@ -183,6 +190,18 @@ def normalize_upload_status_payload(payload: dict) -> dict:
         normalized.setdefault("error", str(normalized.get("message") or status.title()))
         return _with_propagation_fields(normalized, payload, status)
     if status == "COMPLETE":
+        if is_baseline_workflow(payload.get("workflow")):
+            normalized["sii_completed"] = False
+            normalized["sii_engine_invoked"] = False
+            normalized["result_available"] = True
+            normalized["baseline_result_available"] = True
+            normalized.setdefault("workflow_state", payload.get("baseline_activation_state") or "awaiting_approval")
+            normalized.setdefault("error", None)
+            if str(normalized.get("progress_label") or "").strip() in {"", "Complete.", "Complete"}:
+                normalized["progress_label"] = "Behavioral baseline candidate ready."
+            if str(normalized.get("message") or "").strip() in {"", "Complete.", "Complete"}:
+                normalized["message"] = "Behavioral baseline candidate ready."
+            return _with_propagation_fields(normalized, payload, status)
         artifacts = _completion_artifacts(payload)
         sii_completed = bool(payload.get("sii_completed") or (payload.get("result_summary") or {}).get("sii_completed"))
         requires_contract_enforcement = "result_summary" in payload or "result_available" in payload

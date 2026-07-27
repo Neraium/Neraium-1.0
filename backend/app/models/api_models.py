@@ -24,6 +24,13 @@ class UploadAcceptedResponse(BaseModel):
     rows_processed: int = 0
     result_available: bool = False
     sii_completed: bool = False
+    workflow: Literal[
+        "create_baseline",
+        "analyze_new_data",
+        "extend_baseline",
+        "legacy_analysis",
+    ] = "legacy_analysis"
+    baseline_result_url: str | None = None
 
 
 
@@ -64,6 +71,65 @@ class UploadStatusResponse(BaseModel):
     result_summary: dict[str, Any] | None = None 
     ingest_request_id: str | None = None
     request_id: str | None = None
+    workflow: Literal[
+        "create_baseline",
+        "analyze_new_data",
+        "extend_baseline",
+        "legacy_analysis",
+    ] = "legacy_analysis"
+    workflow_state: str | None = None
+    baseline_candidate_created: bool = False
+    baseline_activation_state: str | None = None
+
+
+class BaselineSuitabilityResponse(BaseModel):
+    contract_version: Literal["baseline-suitability.v1"]
+    decision: Literal["suitable", "conditionally_suitable", "unsuitable"]
+    score: int = Field(ge=0, le=100)
+    eligible_for_activation: bool
+    dimensions: dict[str, int | float] = Field(default_factory=dict)
+    blocking_reasons: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class BehavioralModelResponse(BaseModel):
+    contract_version: Literal["behavioral-digital-model.v1"]
+    model_id: str
+    version: int = Field(ge=1)
+    status: Literal["awaiting_approval", "active", "unsuitable", "superseded"]
+    workflow: Literal["create_baseline", "extend_baseline"]
+    created_at: str
+    source: dict[str, Any]
+    lineage: dict[str, Any]
+    telemetry_schema: dict[str, Any]
+    timestamp_quality: dict[str, Any]
+    data_quality: dict[str, Any]
+    sensor_health: dict[str, Any]
+    operating_modes: list[dict[str, Any]]
+    signal_characteristics: dict[str, Any]
+    relationship_graph: dict[str, Any]
+    expected_behavior_models: list[dict[str, Any]]
+    suitability: BaselineSuitabilityResponse
+    activation: dict[str, Any]
+
+
+class BaselineConstructionResultResponse(BaseModel):
+    contract_version: Literal["baseline-suitability.v1"]
+    job_id: str
+    dataset_id: str
+    workflow: Literal["create_baseline", "extend_baseline"]
+    status: Literal["COMPLETE"]
+    processing_state: Literal["complete"]
+    filename: str
+    completed_at: str
+    candidate_model: BehavioralModelResponse
+    baseline_suitability: BaselineSuitabilityResponse
+    activation: dict[str, Any]
+    processing_trace: dict[str, Any]
+
+
+class BehavioralModelApprovalRequest(ContractModel):
+    note: OptionalNote | None = None
 
 
 class LatestUploadResponse(BaseModel):

@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timezone
 import re
 
-from fastapi import APIRouter, Depends, File, HTTPException, Path as ApiPath, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path as ApiPath, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.services.evidence_store import upsert_evidence_run
 from app.services.dataset_scope import payload_matches_dataset_scope
@@ -20,6 +20,22 @@ from app.services.analysis_result_contract import ensure_analysis_result
 from app.core.security import _strict_auth_mode, require_api_access, require_operator_role
 from app.core.path_safety import StoragePathError, ensure_storage_root, resolve_existing_storage_path, safe_upload_suffix, storage_key_for_server_path
 from app.services import upload_jobs
+from app.services.baseline_contracts import (
+    WORKFLOW_ANALYZE_NEW_DATA,
+    WORKFLOW_EXTEND_BASELINE,
+    WORKFLOW_LEGACY_ANALYSIS,
+    is_baseline_workflow,
+    normalize_workflow,
+)
+from app.services.behavioral_model_repository import (
+    activate_candidate,
+    read_active_behavioral_model,
+    read_baseline_result,
+    read_latest_candidate,
+    read_model,
+    read_model_index,
+)
+from app.models.api_models import BehavioralModelApprovalRequest
 from app.services.upload_evidence import build_evidence_record_from_result
 from app.services.upload_persistence import summarize_result
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
@@ -179,13 +195,14 @@ def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
                 "result_available": False,
             })
             upload_jobs.write_job(failed)
-            _upsert_failed_evidence_record(
-                job_id=worker_job_id,
-                filename=str(failed.get("filename") or "upload.csv"),
-                source_type="json_upload" if str(failed.get("filename") or "").lower().endswith(".json") else "csv_upload",
-                error_message=str(exc) or exc.__class__.__name__,
-                initiated_by=str(failed.get("initiated_by") or "anonymous"),
-            )
+            if not is_baseline_workflow(failed.get("workflow")):
+                _upsert_failed_evidence_record(
+                    job_id=worker_job_id,
+                    filename=str(failed.get("filename") or "upload.csv"),
+                    source_type="json_upload" if str(failed.get("filename") or "").lower().endswith(".json") else "csv_upload",
+                    error_message=str(exc) or exc.__class__.__name__,
+                    initiated_by=str(failed.get("initiated_by") or "anonymous"),
+                )
 
 
 def _run_tracked_upload_worker(runtime_dir: Path) -> None:
@@ -281,7 +298,12 @@ def _upsert_failed_evidence_record(
 
 
 @router.post("/upload", status_code=202, dependencies=[Depends(require_operator_role)])
-async def upload_data(request: Request, file: UploadFile = File(...)):
+async def upload_data(
+    request: Request,
+    file: UploadFile = File(...),
+    workflow: str = Form(WORKFLOW_LEGACY_ANALYSIS),
+    approval_required: bool | None = Form(None),
+):
     if _strict_auth_mode(request):
         allowed, retry_after = consume_rate_limit(
             "data.upload",
@@ -292,6 +314,33 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         if not allowed:
             return _rate_limit_response(retry_after, error_type="upload_rate_limited", message="Upload rate limit exceeded. Retry shortly.")
     settings = request.app.state.settings
+    try:
+        workflow = normalize_workflow(workflow)
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "status": "FAILED",
+                "error_type": "invalid_workflow",
+                "message": str(exc),
+            },
+        )
+    active_baseline = read_active_behavioral_model()
+    if workflow in {WORKFLOW_ANALYZE_NEW_DATA, WORKFLOW_EXTEND_BASELINE} and not active_baseline:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "status": "FAILED",
+                "workflow": workflow,
+                "error_type": "active_behavioral_baseline_required",
+                "message": "Activate a suitable Behavioral Digital Model before starting this workflow.",
+            },
+        )
+    resolved_approval_required = (
+        bool(getattr(settings, "baseline_approval_required", True))
+        if approval_required is None
+        else bool(approval_required)
+    )
     handler_started_at = time.perf_counter()
     handler_started_wall = datetime.now(timezone.utc).isoformat()
     request_started_at = float(getattr(request.state, "request_started_perf", handler_started_at))
@@ -476,7 +525,26 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 "backend_spool_ms": round(backend_spool_ms, 3),
                 "backend_request_handling_ms": round((time.perf_counter() - handler_started_at) * 1000, 3),
             },
+            "workflow": workflow,
+            "workflow_state": "queued",
+            "approval_required": resolved_approval_required if is_baseline_workflow(workflow) else None,
+            "active_baseline_model_id": (active_baseline or {}).get("model_id"),
+            "active_baseline_version": (active_baseline or {}).get("version"),
         }
+        if is_baseline_workflow(workflow):
+            summary.update(
+                {
+                    "runner_used": False,
+                    "runner_module": None,
+                    "core_engine": None,
+                    "sii_completed": False,
+                    "sii_engine_invoked": False,
+                    "baseline_result_url": f"/api/data/baselines/jobs/{job_id}",
+                    "message": "Baseline construction queued.",
+                    "progress_label": "Baseline construction queued.",
+                    "propagation_label": "Baseline construction queued.",
+                }
+            )
         upload_jobs.write_job(summary)
         record_audit_event(
             actor=actor,
@@ -487,7 +555,7 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
             detail={"filename": filename, "size_bytes": file_size_bytes},
         )
         run_id = summary.get("job_id")
-        if run_id:
+        if run_id and not is_baseline_workflow(workflow):
             upsert_evidence_run(
                 {
                     "run_id": run_id,
@@ -582,8 +650,9 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 "propagation_label": "Failed.",
             }
         )
-        upsert_evidence_run(
-            {
+        if not is_baseline_workflow(workflow):
+            upsert_evidence_run(
+                {
                 "run_id": failed_job_id,
                 "source_name": filename,
                 "source_type": "json_upload" if lowered.endswith(".json") else "csv_upload",
@@ -613,8 +682,8 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
                 "regime_label": None,
                 "structural_state": "Error",
                 "deformation_started_at": None,
-            }
-        )
+                }
+            )
         return JSONResponse(
             status_code=503 if error_type == "shared_upload_queue_not_configured" else 500,
             content={
@@ -671,6 +740,11 @@ async def upload_data(request: Request, file: UploadFile = File(...)):
         "enqueued_at": summary.get("enqueued_at"),
         "stage_changed_at": summary.get("stage_changed_at"),
         "timings": response_timings,
+        "workflow": workflow,
+        "workflow_state": "queued",
+        "baseline_result_url": f"/api/data/baselines/jobs/{summary.get('job_id')}" if is_baseline_workflow(workflow) else None,
+        "sii_completed": False,
+        "sii_engine_invoked": False if is_baseline_workflow(workflow) else None,
     }
 
 
@@ -874,6 +948,96 @@ async def intake_result(job_id: UploadJobPath):
         "status": "COMPLETE",
         "result": result,
         "analysis_result": ensure_analysis_result(result),
+    }
+
+
+@router.get("/baselines")
+async def behavioral_baseline_state():
+    return {
+        "active_model": read_active_behavioral_model(),
+        "latest_candidate": read_latest_candidate(),
+        "model_index": read_model_index(),
+        "workflows": {
+            "create": "create_baseline",
+            "analyze": "analyze_new_data",
+            "extend": "extend_baseline",
+        },
+    }
+
+
+@router.get("/baselines/jobs/{job_id}")
+async def baseline_construction_result(job_id: UploadJobPath):
+    result = read_baseline_result(job_id)
+    if not isinstance(result, dict) or not payload_matches_dataset_scope(result):
+        raise HTTPException(status_code=404, detail="Baseline construction result was not found.")
+    return result
+
+
+@router.get("/baselines/candidates/{model_id}")
+async def behavioral_model_candidate(model_id: UploadJobPath):
+    model = read_model(model_id)
+    if not isinstance(model, dict) or not payload_matches_dataset_scope(model):
+        raise HTTPException(status_code=404, detail="Behavioral model candidate was not found.")
+    return model
+
+
+@router.post(
+    "/baselines/candidates/{model_id}/approve",
+    dependencies=[Depends(require_operator_role)],
+)
+async def approve_behavioral_model_candidate(
+    request: Request,
+    model_id: UploadJobPath,
+    approval: BehavioralModelApprovalRequest,
+):
+    auth_context = getattr(request.state, "auth_context", {})
+    actor = str(
+        auth_context.get("auth_subject")
+        or request.headers.get("X-Neraium-User")
+        or "operator"
+    )
+    try:
+        activated = activate_candidate(model_id, approved_by=actor)
+    except ValueError as exc:
+        error_type = str(exc)
+        status_code = 404 if error_type == "behavioral_model_candidate_not_found" else 409
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "status": "FAILED",
+                "error_type": error_type,
+                "message": "The Behavioral Digital Model candidate could not be activated.",
+            },
+        )
+
+    source_job_id = str((activated.get("source") or {}).get("job_id") or "").strip()
+    if source_job_id:
+        current = upload_jobs.read_upload_status(source_job_id) or {}
+        upload_jobs.write_job(
+            {
+                **current,
+                "job_id": source_job_id,
+                "baseline_activation_state": "active",
+                "workflow_state": "active",
+                "approval": {
+                    "approved_by": actor,
+                    "approved_at": (activated.get("activation") or {}).get("activated_at"),
+                    "note": approval.note,
+                },
+            }
+        )
+    record_audit_event(
+        actor=actor,
+        action="behavioral_model.approved",
+        resource_type="behavioral_model",
+        resource_id=model_id,
+        request_id=auth_context.get("request_id"),
+        detail={"version": activated.get("version"), "source_job_id": source_job_id},
+    )
+    return {
+        "status": "active",
+        "message": "Behavioral Digital Model activated.",
+        "active_model": activated,
     }
 
 

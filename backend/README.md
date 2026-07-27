@@ -55,7 +55,8 @@ docker run --rm -p 8080:8080 neraium-backend:local
 - `GET /api/health` returns API availability.
 - `GET /api/app` returns basic app metadata.
 - `GET /api/facility/systems` returns the active domain profile, including commercial water system categories by default.
-- `POST /api/data/upload` accepts a CSV file, validates structure, and returns metadata, preview rows, schema mapping, timestamp profile, numeric column profiles, baseline comparison, deterministic Neraium SII v1 engine result, warnings, data readiness, and a plain-English operator report.
+- `POST /api/data/upload` accepts telemetry plus an explicit workflow. `create_baseline` and `extend_baseline` use the dedicated Behavioral Digital Model builder; `analyze_new_data` uses the SII analysis path and requires an active model. Baseline construction never generates SII findings or evidence.
+- `GET /api/data/baselines` returns the active model and latest candidate. Baseline job results and approval use `/api/data/baselines/jobs/{job_id}` and `/api/data/baselines/candidates/{model_id}/approve`.
 
 Uploaded CSV files are deleted after processing completes or fails. Job metadata and latest SII state are written under `NERAIUM_RUNTIME_DIR`. Schema mapping uses deterministic keyword matching only. Baseline comparison uses the first 20% of rows and last 20% of rows for descriptive drift checks only. Neraium SII v1 is deterministic and returns signals, system-level evidence, corroboration level, persistence assessment, recommended checks, limitations, and audit trace without prediction or root-cause claims.
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.core.path_safety import StoragePathError, resolve_existing_storage_path, storage_key_for_server_path
+from app.services.baseline_contracts import is_baseline_workflow
 from app.services.dataset_scope import dataset_scope_from_payload, set_current_dataset_scope
 from app.services.runtime_db import (
     claim_next_upload_job,
@@ -175,8 +176,17 @@ class UploadQueueLifecycleService:
             has_required_artifacts = all(existing_artifacts.get(key) is True for key in required_artifacts)
             has_completed_status = (
                 existing_status_text == "COMPLETE"
-                and existing_status.get("sii_completed") is True
-                and has_required_artifacts
+                and (
+                    (
+                        existing_status.get("sii_completed") is True
+                        and has_required_artifacts
+                    )
+                    or (
+                        is_baseline_workflow(existing_status.get("workflow"))
+                        and existing_status.get("baseline_candidate_created") is True
+                        and existing_status.get("sii_engine_invoked") is False
+                    )
+                )
             )
             has_completed_result = (
                 isinstance(existing_result, dict)
@@ -407,6 +417,8 @@ class UploadQueueLifecycleService:
                 "propagation_label": "Failed.",
             }
             try:
+                if is_baseline_workflow(metadata.get("workflow")):
+                    raise LookupError("baseline_workflows_do_not_persist_evidence")
                 from app.services.evidence_store import upsert_evidence_run
 
                 now = datetime.now(timezone.utc).isoformat()
@@ -443,6 +455,8 @@ class UploadQueueLifecycleService:
                         "deformation_started_at": None,
                     }
                 )
+            except LookupError:
+                pass
             except Exception:
                 self.logger.exception("failed_evidence_persistence_failed job_id=%s", job_id)
             self.write_job(failed_payload)

@@ -62,6 +62,11 @@ const UPLOAD_OPERATOR_COPY = Object.freeze({
   queuedWorkerLine: "Preparing analysis resources",
   queuedWorkerAnnouncement: "Preparing analysis resources...",
 });
+const BASELINE_WORKFLOWS = new Set(["create_baseline", "extend_baseline"]);
+
+function isBaselineWorkflow(value) {
+  return BASELINE_WORKFLOWS.has(String(value || "").trim().toLowerCase());
+}
 
 
 function formatTransferSpeed(bytesPerSecond) {
@@ -196,6 +201,7 @@ export default function DataConnectionsWorkspace({
   const [completionError, setCompletionError] = useState("");
   const [uploadResult, setUploadResult] = useState(null);
   const [uploadJob, setUploadJob] = useState(null);
+  const [currentWorkflow, setCurrentWorkflow] = useState("create_baseline");
   const [activeDatasetId, setActiveDatasetId] = useState(null);
   const [uploadTransfer, setUploadTransfer] = useState(null);
   const [uploadDebug, setUploadDebug] = useState({
@@ -442,6 +448,32 @@ export default function DataConnectionsWorkspace({
     const jobId = completedPayload?.dataset_id ?? completedPayload?.job_id ?? requestedJobId ?? uploadJobIdRef.current ?? null;
     if (!payloadMatchesDataset(completedPayload, jobId) || backendAnalysisState(completedPayload) !== BASELINE_ANALYSIS_STATES.COMPLETED) {
       throw new Error("The backend did not return a completed analysis for the selected dataset.");
+    }
+    const completedWorkflow = completedPayload?.workflow ?? "legacy_analysis";
+    if (isBaselineWorkflow(completedWorkflow)) {
+      const resultPath = completedPayload?.baseline_result_url ?? `/api/data/baselines/jobs/${encodeURIComponent(jobId)}`;
+      const response = await apiFetch(resultPath, { accessCode });
+      const baselineResult = await readJsonPayload(response, { route: resultPath, phase: "baseline_result" });
+      if (!response.ok || !baselineResult?.candidate_model) {
+        throw buildUploadRequestError(response, baselineResult, "baseline_result");
+      }
+      const activationState = baselineResult?.activation?.state ?? baselineResult?.candidate_model?.status;
+      setUploadProcessingFlag(false);
+      setCompletionError("");
+      setUploadResult(baselineResult);
+      setUploadJob({
+        ...completedPayload,
+        baseline_result: baselineResult,
+        status: "COMPLETE",
+        processing_state: "save_complete",
+        percent: 100,
+        progress: 100,
+        progress_label: activationState === "active" ? "Behavioral Baseline Active" : "Baseline Candidate Ready",
+        message: activationState === "active" ? "Behavioral Baseline Active" : "Baseline Candidate Ready",
+      });
+      completionNavigationEligibleRef.current = false;
+      setUploadState("save_complete");
+      return completedPayload;
     }
     const savedAnalysis = completedAnalysisForDataset(jobId, completedPayload);
     const savedResult = savedAnalysis ? completedPayload : null;
@@ -693,7 +725,7 @@ export default function DataConnectionsWorkspace({
     };
   }
 
-  async function handleUpload() {
+  async function handleUpload(workflow = "create_baseline") {
     if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) {
       logTelemetryStage("duplicate processing prevented", { state: uploadStateRef.current });
       return;
@@ -703,6 +735,8 @@ export default function DataConnectionsWorkspace({
       return;
     }
     const file = selectedFiles[0];
+    const selectedWorkflow = String(workflow || "create_baseline");
+    setCurrentWorkflow(selectedWorkflow);
     const validationError = validateTelemetryFile(file, pendingUploadKind);
     if (validationError) {
       setUploadError(validationError);
@@ -722,6 +756,7 @@ export default function DataConnectionsWorkspace({
       const uploadInteractionStartedAt = Date.now();
       const uploadResponse = await uploadTelemetryFileWithProgress({
         file,
+        workflow: selectedWorkflow,
         apiFetch,
         requestStartedAt: uploadInteractionStartedAt,
         accessCode,
@@ -813,8 +848,14 @@ export default function DataConnectionsWorkspace({
   const announcedStatusMessage = latestStatusMessage;
   const analysisState = resolveBaselineAnalysisState({ selectedFiles, uploadState, uploadJob, activeDatasetId });
   const analysisResult = completedAnalysisForDataset(activeDatasetId, uploadJob, uploadResult);
-  const completionReady = canRenderCompletedAnalysis({ analysisState, activeDatasetId, selectedFiles, analysisResult })
-    && ["save_complete", "complete", "navigation_pending", "completion_error"].includes(String(uploadState || "").toLowerCase());
+  const baselineResult = uploadResult?.candidate_model ? uploadResult : uploadJob?.baseline_result ?? null;
+  const baselineCompletionReady = isBaselineWorkflow(uploadJob?.workflow ?? currentWorkflow)
+    && analysisState === BASELINE_ANALYSIS_STATES.COMPLETED
+    && Boolean(baselineResult?.candidate_model);
+  const completionReady = (
+    baselineCompletionReady
+    || canRenderCompletedAnalysis({ analysisState, activeDatasetId, selectedFiles, analysisResult })
+  ) && ["save_complete", "complete", "navigation_pending", "completion_error"].includes(String(uploadState || "").toLowerCase());
 
   function handleFileSelection(event) {
     if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) {
@@ -923,6 +964,42 @@ export default function DataConnectionsWorkspace({
     }
   }
 
+  async function approveBaselineCandidate() {
+    const candidateResult = uploadResult?.candidate_model ? uploadResult : uploadJob?.baseline_result;
+    const modelId = String(candidateResult?.candidate_model?.model_id ?? "").trim();
+    if (!modelId) {
+      setCompletionError("The baseline candidate identifier is unavailable.");
+      return;
+    }
+    const path = `/api/data/baselines/candidates/${encodeURIComponent(modelId)}/approve`;
+    const response = await apiFetch(path, {
+      method: "POST",
+      accessCode,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const payload = await readJsonPayload(response, { route: path, phase: "baseline_approval" });
+    if (!response.ok || !payload?.active_model) {
+      setCompletionError(normalizeErrorMessage(payload?.message || "The baseline candidate could not be activated."));
+      return;
+    }
+    const updated = {
+      ...candidateResult,
+      candidate_model: payload.active_model,
+      activation: payload.active_model.activation,
+    };
+    setCompletionError("");
+    setUploadResult(updated);
+    setUploadJob((current) => ({
+      ...(current ?? {}),
+      baseline_result: updated,
+      baseline_activation_state: "active",
+      workflow_state: "active",
+      progress_label: "Behavioral Baseline Active",
+      message: "Behavioral Baseline Active",
+    }));
+  }
+
   if (headless) {
     return (
       <div className="data-connections-workspace data-connections-workspace--headless" data-testid="headless-upload-workspace" aria-live="polite">
@@ -934,15 +1011,17 @@ export default function DataConnectionsWorkspace({
   return (
     <div className="data-connections-workspace" data-testid="upload-workspace">
       <IntakeFlowPanel
-        handleUpload={(event) => {
+        handleUpload={(event, workflow) => {
           event?.preventDefault?.();
-          void handleUpload();
+          void handleUpload(workflow || event?.nativeEvent?.submitter?.value || "create_baseline");
         }}
         uploadInputRef={uploadInputRef}
         handleFileSelection={handleFileSelection}
         selectedFiles={selectedFiles}
         analysisState={analysisState}
         analysisResult={analysisResult}
+        baselineResult={baselineResult}
+        workflow={uploadJob?.workflow ?? currentWorkflow}
         completionReady={completionReady}
         pendingUploadKind={pendingUploadKind}
         selectedFileSize={formatFileSize(selectedFiles[0]?.size ?? 0)}
@@ -962,6 +1041,7 @@ export default function DataConnectionsWorkspace({
         onReprocessCurrentBatch={() => { void retryCurrentBatch(); }}
         onResetWorkspace={() => { void clearUploadClientState(); }}
         onViewResults={() => { void viewCompletedResults(); }}
+        onApproveBaseline={() => { void approveBaselineCandidate(); }}
       />
     </div>
   );
