@@ -21,7 +21,7 @@ from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
 from app.services.notifications import dispatch_observation_notification
 from app.services.sii_intelligence import build_upload_intelligence
-from app.services.sii_runner import RUNNER_MODULE, run_sii_runner, read_latest_sii_state
+from app.services.sii_runner import RUNNER_MODULE, read_latest_sii_state
 from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job, enqueue_upload_job, complete_upload_queue_job, touch_upload_queue_job
 from app.services.upload_completion import build_partial_upload_artifacts
 from app.services.upload_evidence import build_evidence_record_from_result, build_traceability_packet
@@ -786,10 +786,6 @@ def _build_csv_result(
     if overall_urgency == "nominal" and max_room_drift > 0.08:
         overall_urgency = "review"
 
-    # Pandas-backed relationship analysis is only needed once an upload reaches
-    # the structural pipeline; keep it out of API process startup.
-    from app.services.relationship_baselines import build_relationship_baseline as _build_relationship_baseline
-
     pipeline = run_structural_analysis_pipeline(
         job_id=job_id,
         filename=filename,
@@ -815,12 +811,12 @@ def _build_csv_result(
         chunk_count=chunk_count,
         memory_estimate_bytes=memory_estimate_bytes,
         processing_started_at=processing_started_at,
-        build_relationship_baseline=_build_relationship_baseline,
         build_replay=_build_replay,
         minimal_replay=_minimal_replay,
         build_upload_engine_result=_build_upload_engine_result,
         stage_notifier=_set_propagation_stage,
     )
+    sii_result = pipeline["sii_result"]
     replay = pipeline["replay"]
     frame_count = pipeline["frame_count"]
     now = pipeline["now"]
@@ -882,6 +878,7 @@ def _build_csv_result(
             "source": "uploaded_telemetry",
             "synthetic_fallback_used": False,
         },
+        "sii_result": sii_result,
         "baseline_analysis": baseline_analysis,
         "telemetry_signal_catalog": telemetry_signal_catalog,
         "telemetry_signals": list(telemetry_signal_catalog.values()) if isinstance(telemetry_signal_catalog, dict) else telemetry_signal_catalog,

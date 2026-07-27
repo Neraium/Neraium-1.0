@@ -1,0 +1,489 @@
+from __future__ import annotations
+
+import time
+from typing import Any
+
+from app.engine.analysis import assess_persistence
+from app.engine.sii_contract import (
+    ENGINE_NAME,
+    ENGINE_VERSION,
+    canonical_status,
+    covariance_section,
+    failed_result,
+    limited_result,
+    persistence_section,
+    planned_section,
+    status_copy,
+    uncertainty_section,
+)
+from app.engine.sii_inputs import build_data_conditions, normalize_rows, numeric_columns
+from app.engine.temporal_math import TemporalMathConfig, evaluate_temporal_math
+from app.services.baseline_analysis import build_baseline_analysis
+from app.services.operating_modes import apply_operating_mode_context, assess_operating_modes
+from app.services.relationship_baselines import build_relationship_baseline
+from app.services.sensor_health import (
+    apply_sensor_health_context,
+    assess_sensor_health,
+    build_data_confidence,
+)
+from app.services.sii_runner import run_sii_runner
+from app.services.telemetry_classification import (
+    build_telemetry_signal_catalog,
+    update_catalog_from_baseline,
+)
+
+
+def evaluate_sii(
+    *,
+    columns,
+    rows,
+    numeric_profiles,
+    timestamp_column,
+    telemetry_signal_catalog=None,
+    data_quality=None,
+    sensor_health=None,
+    operating_mode=None,
+    config=None,
+    progress_callback=None,
+) -> dict:
+    """Run the authoritative, read-only SII evidence orchestration path.
+
+    Phase 1 delegates every calculation to an existing analytical module. It
+    does not diagnose root cause, prescribe work, or treat heuristic confidence
+    as probability.
+    """
+
+    started = time.perf_counter()
+    cfg = dict(config) if isinstance(config, dict) else {}
+    column_names = [str(column) for column in columns]
+    profile_list = [dict(item) for item in numeric_profiles if isinstance(item, dict)]
+    dict_rows, matrix_rows = normalize_rows(column_names, rows)
+    numeric_columns_used = numeric_columns(
+        columns=column_names,
+        numeric_profiles=profile_list,
+        configured_columns=cfg.get("numeric_columns"),
+    )
+    attempted: list[str] = []
+    completed: list[str] = []
+    limited: list[str] = []
+    failed: list[str] = []
+    failures: list[dict[str, str]] = []
+
+    def notify(step: str, progress: float) -> None:
+        if not progress_callback:
+            return
+        try:
+            progress_callback(
+                step,
+                float(progress),
+                {
+                    "modules_attempted": list(attempted),
+                    "modules_completed": list(completed),
+                    "modules_limited": list(limited),
+                    "modules_failed": list(failed),
+                },
+            )
+        except Exception:
+            pass
+
+    def record(module: str, status: str, reason: str | None = None) -> None:
+        if module not in attempted:
+            attempted.append(module)
+        target = completed if status == "complete" else limited if status == "limited" else failed
+        if module not in target:
+            target.append(module)
+        if status == "failed":
+            failures.append({"module": module, "reason": str(reason or "module_failed")})
+
+    notify("prepare_inputs", 0.02)
+
+    try:
+        attempted.append("telemetry_catalog")
+        catalog = telemetry_signal_catalog
+        if catalog is None:
+            catalog = build_telemetry_signal_catalog(
+                column_names,
+                numeric_profiles=profile_list,
+                timestamp_column=timestamp_column,
+                header_present=bool(cfg.get("header_present", True)),
+            )
+        record("telemetry_catalog", "complete")
+    except Exception as exc:
+        catalog = telemetry_signal_catalog or {}
+        record("telemetry_catalog", "failed", f"{type(exc).__name__}: {exc}")
+
+    notify("signal_drift", 0.10)
+    try:
+        attempted.append("signal_drift")
+        baseline_analysis = build_baseline_analysis(
+            column_names,
+            matrix_rows,
+            profile_list,
+            telemetry_signal_catalog=catalog,
+        )
+        drift_status = "complete" if int(baseline_analysis.get("baseline_window_rows") or 0) > 0 else "limited"
+        record("signal_drift", drift_status, (baseline_analysis.get("warnings") or [None])[0])
+    except Exception as exc:
+        baseline_analysis = failed_result(exc)
+        record("signal_drift", "failed", baseline_analysis["reason"])
+
+    try:
+        attempted.append("telemetry_catalog_enrichment")
+        catalog = update_catalog_from_baseline(catalog, baseline_analysis)
+        record("telemetry_catalog_enrichment", "complete")
+    except Exception as exc:
+        record(
+            "telemetry_catalog_enrichment",
+            "failed",
+            f"{type(exc).__name__}: {exc}",
+        )
+
+    notify("relationship_analysis", 0.22)
+    try:
+        attempted.append("relationship_analysis")
+        relationship_model = build_relationship_baseline(
+            dict_rows,
+            numeric_columns_used,
+            total_row_count=int(cfg.get("row_count_total") or len(dict_rows)),
+            baseline_analysis=baseline_analysis,
+            telemetry_signal_catalog=catalog,
+        )
+        relationship_status = "complete"
+        if len(dict_rows) < 12 or int(relationship_model.get("relationship_columns_analyzed") or 0) < 2:
+            relationship_status = "limited"
+        record(
+            "relationship_analysis",
+            relationship_status,
+            "insufficient_relationship_history"
+            if relationship_status == "limited"
+            else None,
+        )
+    except Exception as exc:
+        relationship_model = failed_result(exc)
+        record("relationship_analysis", "failed", relationship_model["reason"])
+
+    notify("operating_modes", 0.30)
+    try:
+        attempted.append("operating_modes")
+        operating_mode_result = (
+            dict(operating_mode)
+            if isinstance(operating_mode, dict)
+            else assess_operating_modes(
+                dict_rows,
+                timestamp_column=timestamp_column,
+                telemetry_signal_catalog=catalog,
+            )
+        )
+        mode_status = "complete" if operating_mode_result.get("match") != "unavailable" else "limited"
+        relationship_model = apply_operating_mode_context(relationship_model, operating_mode_result)
+        record("operating_modes", mode_status, (operating_mode_result.get("reasons") or [None])[0])
+    except Exception as exc:
+        operating_mode_result = failed_result(exc)
+        record("operating_modes", "failed", operating_mode_result["reason"])
+
+    notify("data_conditions", 0.38)
+    try:
+        attempted.append("data_conditions")
+        data_quality_result, timestamp_profile = build_data_conditions(
+            columns=column_names,
+            matrix_rows=matrix_rows,
+            numeric_columns_used=numeric_columns_used,
+            numeric_profiles=profile_list,
+            timestamp_column=timestamp_column,
+            baseline_analysis=baseline_analysis,
+            provided_data_quality=data_quality if isinstance(data_quality, dict) else None,
+            config=cfg,
+        )
+        data_quality_result["operating_mode"] = operating_mode_result
+        record("data_conditions", "complete")
+    except Exception as exc:
+        data_quality_result = {
+            "readiness": "not_ready",
+            "warnings": [f"Data-condition assembly failed: {type(exc).__name__}: {exc}"],
+        }
+        timestamp_profile = cfg.get("timestamp_profile") if isinstance(cfg.get("timestamp_profile"), dict) else {}
+        record("data_conditions", "failed", data_quality_result["warnings"][0])
+
+    notify("sensor_health", 0.46)
+    try:
+        attempted.append("sensor_health")
+        sensor_health_result = (
+            dict(sensor_health)
+            if isinstance(sensor_health, dict)
+            else assess_sensor_health(
+                dict_rows,
+                numeric_columns_used,
+                timestamp_column=timestamp_column,
+                numeric_profiles=profile_list,
+                normalization_report=(
+                    cfg.get("normalization_report")
+                    if isinstance(cfg.get("normalization_report"), dict)
+                    else {}
+                ),
+                ingestion_report=cfg.get("ingestion_report") if isinstance(cfg.get("ingestion_report"), dict) else {},
+                timestamp_profile=timestamp_profile,
+                relationship_model=relationship_model,
+                telemetry_signal_catalog=catalog,
+            )
+        )
+        data_quality_result["sensor_health"] = list(sensor_health_result.get("signals") or [])
+        data_quality_result["sensor_health_summary"] = {
+            key: sensor_health_result.get(key)
+            for key in (
+                "source_conditions",
+                "population_rows",
+                "assessed_rows",
+                "sampled_for_signal_health",
+                "assessment_method",
+            )
+        }
+        data_quality_result["data_confidence"] = build_data_confidence(data_quality_result, sensor_health_result)
+        relationship_model = apply_sensor_health_context(
+            relationship_model,
+            sensor_health=sensor_health_result,
+            data_quality=data_quality_result,
+        )
+        record("sensor_health", "complete")
+    except Exception as exc:
+        sensor_health_result = failed_result(exc)
+        data_quality_result["data_confidence"] = {
+            "rating": "low",
+            "summary": "Signal-health evidence was unavailable.",
+            "reasons": [sensor_health_result["reason"]],
+            "affected_signals": [],
+        }
+        record("sensor_health", "failed", sensor_health_result["reason"])
+
+    notify("fixed_persistence", 0.54)
+    try:
+        attempted.append("fixed_persistence")
+        fixed_persistence = assess_persistence(column_names, matrix_rows, baseline_analysis)
+        fixed_status = "limited" if fixed_persistence.get("status") == "limited" else "complete"
+        record("fixed_persistence", fixed_status, (fixed_persistence.get("limitations") or [None])[0])
+    except Exception as exc:
+        fixed_persistence = failed_result(exc)
+        record("fixed_persistence", "failed", fixed_persistence["reason"])
+
+    notify("temporal_analysis", 0.62)
+    try:
+        attempted.append("temporal_analysis")
+        temporal_config = cfg.get("temporal_config")
+        if isinstance(temporal_config, dict):
+            temporal_config = TemporalMathConfig(**temporal_config)
+        if not isinstance(temporal_config, TemporalMathConfig):
+            temporal_config = None
+        temporal_analysis = evaluate_temporal_math(
+            columns=column_names,
+            rows=matrix_rows,
+            numeric_profiles=profile_list,
+            timestamp_column=timestamp_column,
+            config=temporal_config,
+            progress_callback=None,
+        )
+        temporal_status = str(temporal_analysis.get("status") or "complete")
+        record("temporal_analysis", temporal_status, temporal_analysis.get("reason"))
+    except Exception as exc:
+        temporal_analysis = failed_result(exc)
+        record("temporal_analysis", "failed", temporal_analysis["reason"])
+
+    legacy_baseline_analysis = {
+        **baseline_analysis,
+        "top_relationship_changes": relationship_model.get("top_relationship_changes", []),
+        "baseline_relationships": relationship_model.get("baseline_relationships", []),
+        "relationship_graph": relationship_model.get("relationship_graph", {}),
+        "sampled_for_baseline": bool(relationship_model.get("sampled_for_baseline")),
+    }
+    compatibility_payload = {
+        "engine_result": cfg.get("engine_result") if isinstance(cfg.get("engine_result"), dict) else {},
+        "driver_attribution": cfg.get("driver_attribution") if isinstance(cfg.get("driver_attribution"), dict) else {},
+        "primary_room": str(cfg.get("primary_room") or "Uploaded telemetry"),
+        "processing_trace": cfg.get("processing_trace") if isinstance(cfg.get("processing_trace"), dict) else {},
+    }
+    context_factory = cfg.get("compatibility_context_factory")
+    if callable(context_factory):
+        try:
+            attempted.append("compatibility_context")
+            built_context = context_factory(
+                {
+                    "baseline_analysis": legacy_baseline_analysis,
+                    "relationship_model": relationship_model,
+                    "operating_mode": operating_mode_result,
+                    "data_quality": data_quality_result,
+                    "sensor_health": sensor_health_result,
+                    "timestamp_profile": timestamp_profile,
+                    "telemetry_signal_catalog": catalog,
+                }
+            )
+            if isinstance(built_context, dict):
+                compatibility_payload.update(built_context)
+            record("compatibility_context", "complete")
+        except Exception as exc:
+            record(
+                "compatibility_context",
+                "failed",
+                f"{type(exc).__name__}: {exc}",
+            )
+
+    notify("covariance_analysis", 0.78)
+    try:
+        attempted.append("covariance_analysis")
+        runner_result = run_sii_runner(
+            columns=column_names,
+            rows=matrix_rows,
+            numeric_profiles=profile_list,
+            timestamp_column=timestamp_column,
+            primary_room=str(compatibility_payload.get("primary_room") or "Uploaded telemetry"),
+            driver_attribution=(
+                compatibility_payload.get("driver_attribution")
+                if isinstance(compatibility_payload.get("driver_attribution"), dict)
+                else {}
+            ),
+            engine_result=(
+                compatibility_payload.get("engine_result")
+                if isinstance(compatibility_payload.get("engine_result"), dict)
+                else {}
+            ),
+            processing_trace=(
+                compatibility_payload.get("processing_trace")
+                if isinstance(compatibility_payload.get("processing_trace"), dict)
+                else {}
+            ),
+            telemetry_signal_catalog=catalog,
+        )
+        covariance = covariance_section(runner_result)
+        record("covariance_analysis", str(covariance.get("status") or "complete"), covariance.get("reason"))
+    except Exception as exc:
+        runner_result = {
+            "runner_used": False,
+            "rows_received": len(matrix_rows),
+            "rows_processed": 0,
+            "columns_used": [],
+            "errors": [f"{type(exc).__name__}: {exc}"],
+        }
+        covariance = failed_result(exc)
+        record("covariance_analysis", "failed", covariance["reason"])
+
+    relationship_graph = relationship_model.get("relationship_graph")
+    if isinstance(relationship_graph, dict):
+        graph_status = "complete" if relationship_graph.get("edges") else "limited"
+        canonical_graph = status_copy(
+            relationship_graph,
+            status=graph_status,
+            reason="no_comparable_relationship_edges" if graph_status == "limited" else None,
+        )
+    else:
+        canonical_graph = limited_result("relationship_graph_unavailable", nodes=[], edges=[], changed_edges=[])
+
+    signal_status = (
+        "limited"
+        if baseline_analysis.get("status") == "failed"
+        or int(baseline_analysis.get("baseline_window_rows") or 0) <= 0
+        else "complete"
+    )
+    mode_status = "complete" if operating_mode_result.get("match") not in {None, "unavailable"} else "limited"
+    relationship_status = "failed" if relationship_model.get("status") == "failed" else (
+        "limited"
+        if len(dict_rows) < 12
+        or int(relationship_model.get("relationship_columns_analyzed") or 0) < 2
+        else "complete"
+    )
+    temporal_status = str(temporal_analysis.get("status") or "complete")
+    persistence = persistence_section(
+        fixed_persistence=fixed_persistence,
+        baseline_analysis=baseline_analysis,
+        runner_result=runner_result,
+        temporal_analysis=temporal_analysis,
+    )
+    operating_modes_used = [
+        str(value)
+        for value in (
+            operating_mode_result.get("baseline_mode"),
+            operating_mode_result.get("recent_mode"),
+        )
+        if value and value != "unavailable"
+    ]
+    runtime = round(max(0.0, time.perf_counter() - started), 6)
+    rows_received = int(cfg.get("row_count_total") or len(matrix_rows))
+    processing_trace = {
+        "sii_engine_called": True,
+        "sii_engine_version": ENGINE_VERSION,
+        "modules_attempted": attempted,
+        "modules_completed": completed,
+        "modules_limited": limited,
+        "modules_failed": failed,
+        "rows_received": rows_received,
+        "rows_used": len(matrix_rows),
+        "columns_used": numeric_columns_used,
+        "operating_modes_used": list(dict.fromkeys(operating_modes_used)),
+        "scales_used": [],
+        "total_runtime_seconds": runtime,
+    }
+    runner_trace = runner_result.get("processing_trace") if isinstance(runner_result, dict) else None
+    if isinstance(runner_trace, dict):
+        processing_trace = {**runner_trace, **processing_trace}
+
+    notify("complete", 1.0)
+    result = {
+        "engine": {"name": ENGINE_NAME, "version": ENGINE_VERSION},
+        "status": canonical_status(
+            rows_used=len(matrix_rows),
+            core_statuses=[
+                signal_status,
+                relationship_status,
+                temporal_status,
+                str(covariance.get("status") or "limited"),
+            ],
+            failed_modules=failed,
+        ),
+        "data_conditions": {
+            "status": "complete" if data_quality_result.get("readiness") != "not_ready" else "limited",
+            "data_quality": data_quality_result,
+            "sensor_health": sensor_health_result,
+            "timestamp_profile": timestamp_profile,
+            "rows_received": rows_received,
+            "rows_used": len(matrix_rows),
+            "numeric_columns": numeric_columns_used,
+        },
+        "operating_modes": status_copy(operating_mode_result, status=mode_status),
+        "signal_drift": status_copy(baseline_analysis, status=signal_status),
+        "relationship_analysis": status_copy(relationship_model, status=relationship_status),
+        "relationship_graph": canonical_graph,
+        "covariance_analysis": covariance,
+        "temporal_analysis": status_copy(temporal_analysis, status=temporal_status),
+        "multiscale_analysis": planned_section("phase_2", "multi_scale_analysis"),
+        "physics_evidence": planned_section("phase_3", "configurable_physics_priors"),
+        "propagation_analysis": planned_section("phase_3", "candidate_propagation_paths"),
+        "persistence_analysis": persistence,
+        "evidence_fusion": planned_section("phase_3", "transparent_evidence_fusion"),
+        "behavioral_model": planned_section("phase_4", "behavioral_digital_model"),
+        "findings": [],
+        "uncertainty": uncertainty_section(
+            data_quality=data_quality_result,
+            sensor_health=sensor_health_result,
+            temporal_analysis=temporal_analysis,
+            module_failures=failures,
+        ),
+        "processing_trace": processing_trace,
+        "compatibility": {
+            "baseline_analysis": legacy_baseline_analysis,
+            "relationship_model": relationship_model,
+            "engine_result": (
+                compatibility_payload.get("engine_result")
+                if isinstance(compatibility_payload.get("engine_result"), dict)
+                else {}
+            ),
+            "driver_attribution": (
+                compatibility_payload.get("driver_attribution")
+                if isinstance(compatibility_payload.get("driver_attribution"), dict)
+                else {}
+            ),
+            "sii_runner_result": runner_result,
+            "telemetry_signal_catalog": catalog,
+            "data_quality": data_quality_result,
+            "sensor_health": sensor_health_result,
+            "operating_mode": operating_mode_result,
+            "timestamp_profile": timestamp_profile,
+            "temporal_analysis": temporal_analysis,
+        },
+    }
+    return result

@@ -22,7 +22,7 @@ import numpy as np
 
 RUNNER_MODULE = "app.services.sii_runner.BackendSiiRunner"
 RUNNER_CALLABLE = "app.services.sii_runner.BackendSiiRunner.ingest"
-CORE_ENGINE = "app.engine.analysis.run_engine_analysis"
+CORE_ENGINE = "app.engine.sii_engine.evaluate_sii"
 VALIDATION_RUNNER = None
 logger = logging.getLogger(__name__)
 STATE_PATH = get_settings().runtime_dir / "latest_sii_state.json"
@@ -292,13 +292,15 @@ def _baseline_mahalanobis_distances(
     baseline_mean: np.ndarray,
     covariance_inverse: np.ndarray,
 ) -> list[float]:
-    distances: list[float] = []
-    for baseline_vector in baseline_matrix:
-        centered = np.nan_to_num(baseline_vector - baseline_mean, nan=0.0)
-        distance_sq = float(centered.T @ covariance_inverse @ centered)
-        if np.isfinite(distance_sq):
-            distances.append(float(np.sqrt(max(distance_sq, 0.0))))
-    return distances
+    centered = np.nan_to_num(
+        np.asarray(baseline_matrix, dtype=float) - np.asarray(baseline_mean, dtype=float),
+        nan=0.0,
+    )
+    if centered.size == 0:
+        return []
+    distance_squares = np.sum((centered @ covariance_inverse) * centered, axis=1)
+    finite = distance_squares[np.isfinite(distance_squares)]
+    return [float(value) for value in np.sqrt(np.maximum(finite, 0.0))]
 
 
 def _nanmean_columns(matrix: np.ndarray) -> np.ndarray:
@@ -395,7 +397,9 @@ def runner_identity() -> dict[str, str | None]:
     if _SII_ENGINE_ADAPTER is not None:
         runner_file = inspect.getsourcefile(_SII_ENGINE_ADAPTER)
         try:
-            core_file = inspect.getsourcefile(BackendSiiRunner)
+            from app.engine.sii_engine import evaluate_sii
+
+            core_file = inspect.getsourcefile(evaluate_sii)
         except Exception:
             core_file = None
     return {
