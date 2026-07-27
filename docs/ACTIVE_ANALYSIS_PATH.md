@@ -6,11 +6,11 @@ This note records the active Neraium SII path after the legacy cleanup. The curr
 2. Uploads are recorded as queued evidence runs and queue jobs through `backend/app/services/runtime_db.py`, `backend/app/services/upload_jobs.py`, and `backend/app/services/evidence_store.py`.
 3. Upload processing runs through `backend/app/services/upload_jobs.py` into `backend/app/services/upload_pipeline.py`.
 4. `upload_pipeline.py` performs upload-only normalization and calls `backend/app/engine/sii_engine.py::evaluate_sii` exactly once.
-5. `evaluate_sii` orchestrates baseline, relationship, operating-context, sensor-health, empirical-threshold, exact-mode, non-causal graph, fixed/adaptive-persistence, temporal, multiscale, and covariance/runner modules and returns canonical `neraium_sii` v2 output. Phase 2 modules are supporting evidence only. `sii_runner.py` persists `latest_sii_state` through runtime DB/latest-payload storage as a wrapped covariance component.
-6. Upload completion writes canonical result, summary, latest-upload state, replay, and evidence through `backend/app/services/upload_state_repository.py` and `backend/app/services/upload_evidence.py`; evidence records include an explicitly non-authoritative `phase_2_supporting_evidence` snapshot.
+5. `evaluate_sii` orchestrates telemetry classification, signal drift, relationship baselines, operating context, data conditions, sensor health, empirical thresholds, mode-conditioned baselines, dynamic relationship-graph analysis, fixed persistence, adaptive elapsed-time persistence, temporal analysis, multiscale analysis, and covariance/runner analysis. It returns canonical `neraium_sii` v2 output. Phase 2 modules remain supporting evidence only and do not independently control frontend-visible findings, state, severity, or confidence. `sii_runner.py` persists `latest_sii_state` through runtime DB/latest-payload storage as the wrapped covariance component.
+6. Upload completion writes canonical result, summary, latest-upload state, replay, and evidence through `backend/app/services/upload_state_repository.py` and `backend/app/services/upload_evidence.py`; evidence records may include a bounded, explicitly non-authoritative `phase_2_supporting_evidence` snapshot.
 7. `GET /api/data/latest-upload` resolves the canonical latest upload through `backend/app/services/latest_upload_state.py`.
 8. `GET /api/facility/systems` returns systems only when a valid active upload/result exists. Before analysis it returns empty systems and empty intelligence status.
-9. Frontend runtime state in `frontend/src/hooks/useFacilityRuntime.js` consumes latest-upload and facility-system APIs. It now starts with no fallback systems and only displays systems returned by the backend.
+9. Frontend runtime state in `frontend/src/hooks/useFacilityRuntime.js` consumes latest-upload and facility-system APIs. It starts with no fallback systems and only displays systems returned by the backend.
 
 ## Active Modules
 
@@ -25,11 +25,20 @@ The active upload/analyze/dashboard path depends on these backend areas:
 - `backend/app/engine/sii_contract.py`
 - `backend/app/engine/sii_inputs.py`
 - `backend/app/engine/temporal_math.py`
+- `backend/app/engine/sii/empirical_thresholds.py`
+- `backend/app/engine/sii/mode_conditioned_baseline.py`
+- `backend/app/engine/sii/relationship_graph.py`
+- `backend/app/engine/sii/adaptive_persistence.py`
+- `backend/app/engine/sii/multiscale_analysis.py`
+- `backend/app/services/baseline_analysis.py`
+- `backend/app/services/relationship_baselines.py`
+- `backend/app/services/operating_modes.py`
+- `backend/app/services/sensor_health.py`
 - `backend/app/services/sii_runner.py`
 - `backend/app/services/sii_intelligence.py`
 - `backend/app/services/structural_cognition.py`
-- `backend/app/engine/*`
 - `backend/app/services/upload_state_repository.py`
+- `backend/app/services/upload_evidence.py`
 - `backend/app/services/latest_upload_state.py`
 - `backend/app/services/system_interpretation.py`
 - `backend/app/services/evidence_store.py`
