@@ -60,7 +60,8 @@ def test_evaluate_sii_returns_canonical_phase_1_result_with_preserved_math() -> 
         "not_persistent",
         "persistent",
     }
-    assert result["multiscale_analysis"]["reason"] == "not_active_in_phase_1"
+    assert result["multiscale_analysis"]["status"] == "complete"
+    assert result["multiscale_analysis"]["scales_used"] == ["15_minutes", "1_hour"]
     assert result["physics_evidence"]["reason"] == "not_active_in_phase_1"
     assert result["evidence_fusion"]["reason"] == "not_active_in_phase_1"
     assert result["behavioral_model"]["reason"] == "not_active_in_phase_1"

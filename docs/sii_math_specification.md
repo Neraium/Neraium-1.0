@@ -2,7 +2,7 @@
 
 ## Scope and notation
 
-This specification describes Phase 1 as implemented by `evaluate_sii`. It records existing formulas without claiming physical causation. Unless stated otherwise, a baseline window is earlier in row order and an active/recent window is later in row order. Upload parsing sorts usable timestamps first when timestamps are available; absent reliable timestamps, row order is not elapsed time.
+This specification describes the preserved Phase 1 calculations and the additive Phase 2 modules orchestrated by `evaluate_sii`. It records formulas without claiming physical causation. Unless stated otherwise, a baseline window is earlier in row order and an active/recent window is later in row order. Upload parsing sorts usable timestamps first when timestamps are available; absent reliable timestamps, row order is not elapsed time.
 
 Notation:
 
@@ -29,12 +29,15 @@ All confidence outputs in this document are deterministic heuristic scores or qu
 | Fixed persistence | Active | `engine/analysis.py` | 3 recent rows |
 | Covariance/Mahalanobis | Active | `services/sii_runner.py` | 8 baseline vectors and baseline completeness ≥ 0.65 |
 | Temporal math | Active | `engine/temporal_math.py` | Default 16 usable rows, 1 numeric feature; pair metrics need 2 features |
-| Multiscale analysis | Planned Phase 2 | — | Not active |
-| Learned thresholds | Planned Phase 2 | — | Not active |
-| Physics priors | Planned Phase 3 | — | Not active |
-| Candidate propagation paths | Planned Phase 3 | — | Not active; temporal topology scalar remains active |
-| Evidence fusion | Planned Phase 3 | — | Not active; existing composites remain separate |
-| Behavioral digital model | Planned Phase 4 | — | Not active |
+| Graph-level relationship metrics | Active Phase 2 | `engine/sii/relationship_graph.py` | 1 eligible edge; promotion has stricter gates |
+| Mode-conditioned baseline | Active Phase 2 | `engine/sii/mode_conditioned_baseline.py` | 12 exact-mode historical rows, 6 recent rows |
+| Adaptive elapsed-time persistence | Active Phase 2 | `engine/sii/adaptive_persistence.py` | 3 recent rows and reliable chronological timestamps |
+| Multiscale analysis | Active Phase 2 | `engine/sii/multiscale_analysis.py` | 12 prior and 6 active rows per supported horizon |
+| Empirical thresholds | Active Phase 2 | `engine/sii/empirical_thresholds.py` | 48 baseline rows; per-signal and pair minimums |
+| Physics priors | Planned Phase 3 | : | Not active |
+| Candidate propagation paths | Planned Phase 3 | : | Not active; temporal topology scalar remains active |
+| Evidence fusion | Planned Phase 3 | : | Not active; existing composites remain separate |
+| Behavioral digital model | Planned Phase 4 | : | Not active |
 
 ## Input and missing-value behavior
 
@@ -228,7 +231,7 @@ importance = 100 * raw * context_factor
 
 ### Graph output
 
-Nodes represent eligible metrics plus optional inferred system-label nodes. Metric-to-metric edges contain the Pearson fields, paired counts, source anchors, operating-mode context, sensor-health context, and data-confidence context. The graph is explicitly non-causal. Phase 1 returns edge classifications but does not calculate changed-edge fraction, connected changed components, degree changes, or subsystem concentration; those are Phase 2.
+Nodes represent eligible metrics plus optional inferred system-label nodes. Metric-to-metric edges contain the Pearson fields, paired counts, source anchors, operating-mode context, sensor-health context, and data-confidence context. The graph is explicitly non-causal. Phase 1 returns the preserved edge calculations and classifications. Phase 2 consumes those edges, or successful like-mode edges, to calculate changed-edge fraction, connected changed components, node disruption, degree and density changes, and subsystem concentration.
 
 ## 3. Operating-mode context
 
@@ -243,7 +246,7 @@ Mode match is:
 - `partial`: some but not all explicit features differ without the weak rule.
 - `unavailable`: no shared explicit feature.
 
-Confidence is high with at least 2 shared explicit features and limited with 1. Phase 1 attaches this context to relationships but does not reselect a mode-conditioned baseline. Therefore an operating-mode difference can bound interpretation but does not alter Pearson or signal-drift formulas.
+Confidence is high with at least 2 shared explicit features and limited with 1. The preserved global Phase 1 calculation only attaches this context. Phase 2 separately selects strictly earlier rows that exactly match every available explicit feature in the recent mode. The global result remains unchanged and an insufficient like-mode sample is reported as an explicit fallback.
 
 ## 4. Data quality, sensor health, and telemetry confidence
 
@@ -298,7 +301,7 @@ accumulation_condition = len(distance_window) ≥ 3 and accumulation ≥ 3*dynam
 corroborated = persistence_condition and accumulation_condition and structural_drift_score ≥ 0.08
 ```
 
-Adaptive persistence is not active; Phase 1 returns these preserved gates and the fixed row-support view separately.
+Phase 2 adds a separate elapsed-time-weighted persistence view while retaining all of these Phase 1 gates unchanged.
 
 ## 6. Covariance and Mahalanobis analysis
 
@@ -522,19 +525,117 @@ The temporal engine forms `0.45*state_drift + 0.30*relationship_series + 0.25*en
 
 The runner's older `projected_time_to_failure*` keys are compatibility aliases for a conditional review window. They do not represent a failure prediction and are excluded from new terminology.
 
-## 8. Fusion and findings in Phase 1
+## 8. Phase 2 analytical additions
 
-There is no cross-module SII fusion formula in Phase 1. Signal, relationship, covariance, temporal, operating-context, health, and persistence outputs remain separately traceable. Existing runner and temporal internal composites are preserved under their own module names.
+### 8.1 Baseline-only empirical thresholds
 
-Canonical `findings` is empty in Phase 1. Existing frontend condition/finding generation remains in the compatibility presentation contract and retains its current persistence/evidence guards. Phase 3 will add a documented deterministic fusion method before canonical finding generation is activated.
+Threshold fitting uses only the first `floor(0.70N)` rows; all later rows are explicitly excluded. A full fit needs at least 48 baseline rows. For signal `j`, at least 24 usable values are required:
+
+```text
+center_j = median(B_j)
+deviation_q95_j = q95(|x-center_j|)
+robust_sigma_j = 1.4826 * MAD(B_j)
+fixed_floor_j = max(0.01, 0.05*|center_j|)
+signal_threshold_j = max(deviation_q95_j, robust_sigma_j, fixed_floor_j)
+```
+
+For relationships, only metric columns retained by the preserved Phase 1 relationship graph are fitted. The baseline is divided into non-overlapping 12-row windows. Pearson correlation is calculated for each eligible pair/window, then consecutive-window absolute deltas are collected. At least four valid windows are required:
+
+```text
+relationship_threshold = max(0.25, q95(consecutive_baseline_correlation_deltas))
+```
+
+Insufficient history retains the fixed `0.25` threshold with `status=fallback` and an exact reason. Learned thresholds can make promotion stricter but never lower a Phase 1 evidence floor. They are behavioral variability thresholds, not physical alarms.
+
+### 8.2 Exact like-mode historical selection
+
+The global 70/30 relationship comparison remains unchanged. The Phase 2 selector summarizes the recent 30 percent window using the existing deterministic context features, then evaluates each strictly earlier row under the same learned numeric-band references. A historical row is selected only when it supplies and exactly matches every explicit recent-mode feature.
+
+A conditioned calculation requires at least 12 selected historical rows and 6 recent rows. Pearson pairs still require 3 pairwise-complete values in each window and use the Phase 1 change classification. If mode features or counts are insufficient, `used_global_fallback=true`; no global edge is labeled as conditioned.
+
+### 8.3 Dynamic non-causal relationship graph
+
+Eligible edges require two metric columns, finite baseline/current Pearson values, at least 3 paired values per window, and operator-primary eligibility. Signal-health evidence multiplies raw confidence by a factor in `[0.25,1]`; the global data-confidence factor is also bounded to `[0,1]`.
+
+```text
+absolute_delta_e = |r_A,e-r_B,e|
+effective_confidence_e = raw_confidence_e * sensor_health_factor_e
+data_quality_factor_e = global_quality_factor * sensor_health_factor_e
+edge_displacement_e = absolute_delta_e
+                      * effective_confidence_e
+                      * data_quality_factor_e
+```
+
+A changed edge is promoted only when it passes the preserved change-type strength gate, the empirical relationship threshold (never below `0.25`), effective confidence `>=0.45`, and data-quality factor `>=0.35`.
+
+```text
+changed_edge_fraction = promoted_changed_edges / max(eligible_edges,1)
+weighted_edge_displacement = sum(edge_displacement over eligible edges)
+                             / max(sum(effective_confidence over eligible edges), epsilon)
+node_disruption_v = sum(incident promoted edge displacement)
+                    / max(sum(incident effective_confidence*data_quality_factor), epsilon)
+```
+
+Promoted edges form undirected connected components. Component coherence is:
+
+```text
+coherence = 0.20*shared_node_factor
+          + 0.20*compatible_direction_factor
+          + 0.15*time_window_alignment_factor
+          + 0.15*confidence_factor
+          + 0.15*persistence_factor
+          + 0.15*sensor_health_factor
+```
+
+A coherent component needs at least 2 promoted edges and coherence `>=0.62`. Weighted-degree and density deltas remain association summaries. Subsystem concentration is calculated only from explicit telemetry-catalog subsystem metadata; names are never used to invent subsystem identity. Every graph field is non-causal.
+
+### 8.4 Adaptive elapsed-time persistence
+
+When at least 90 percent of recent timestamps parse and valid timestamps are strictly increasing, each observation receives its actual interval to the next valid timestamp; the terminal observation receives one median interval. Irregular intervals are retained as elapsed time and reported as a limitation rather than converted from row counts.
+
+For a non-flat watch/review signal:
+
+```text
+deviation_threshold = max(0.01*|baseline_mean|, 0.01, learned_signal_threshold_if_available)
+support_fraction = supporting_duration / observed_duration
+required_continuous_duration = max(3*median_interval, 0.70*observed_duration)
+persistent = support_fraction >= 0.70
+             and longest_continuous_support >= required_continuous_duration
+```
+
+Without adequate chronological timestamps, the module is `limited` and exposes the preserved fixed row-support calculation as an explicit fallback.
+
+### 8.5 Multiscale timestamp horizons
+
+Default horizons are 15 minutes, 1 hour, 6 hours, and 24 hours. For horizon `h` ending at the latest timestamp `t`, the active window is lower-exclusive and upper-inclusive: `(t-h,t]`. Its baseline contains only rows at or before `t-h`, so the windows never overlap. Each scale needs at least 12 baseline and 6 active rows.
+
+For each signal:
+
+```text
+center_B = median(B)
+center_A = median(A)
+scale_floor = max(1.4826*MAD(B), 0.05*|center_B|, 0.01,
+                  learned_signal_threshold_if_available)
+normalized_change = |center_A-center_B| / scale_floor
+signal_score = clip(normalized_change/4,0,1)
+active = normalized_change >= 1
+```
+
+A signal agrees across scales when it is active in at least `max(2,ceil(0.67*eligible_scales))` horizons. Unsupported horizons remain individually `limited` with exact row counts and reasons. Multi-scale agreement records sustained observational change, not cause or predicted failure time.
+
+## 9. Fusion and findings after Phase 2
+
+There is no cross-module SII fusion formula after Phase 2. Signal, relationship, covariance, temporal, operating-context, health, and persistence outputs remain separately traceable. Existing runner and temporal internal composites are preserved under their own module names.
+
+Canonical `findings` remains empty after Phase 2. Existing frontend condition/finding generation remains in the compatibility presentation contract and retains its current persistence/evidence guards. Phase 3 will add a documented deterministic fusion method before canonical finding generation is activated.
 
 ## Limitations common to active components
 
-- Most derivatives and persistence gates are row-based, not time-normalized.
+- Preserved Phase 1 derivatives and gates remain row-based; only the Phase 2 adaptive and multiscale sections use elapsed timestamps.
 - Pearson detects linear association and is non-causal.
 - Histogram MI depends on binning and sample size.
 - Lag ordering is non-causal and currently limited to the first two temporal features.
-- Mode assessment annotates but does not condition the baseline in Phase 1.
+- The global Phase 1 comparison remains unconditioned; Phase 2 exposes like-mode evidence separately and may fall back when explicit features are unavailable.
 - Covariance missing values are zero-filled after a completeness gate.
-- Heuristic thresholds have not been learned from historical false-positive distributions.
+- Phase 2 empirical thresholds describe within-upload baseline variability; they are not calibrated false-positive probabilities or fleet-level alarm limits.
 - No current component is a physics simulation, digital twin, calibrated probability, root-cause model, repair recommender, or exact failure-time predictor.

@@ -76,6 +76,7 @@ def covariance_section(runner_result: dict[str, Any]) -> dict[str, Any]:
 def persistence_section(
     *,
     fixed_persistence: dict[str, Any],
+    adaptive_persistence: dict[str, Any],
     baseline_analysis: dict[str, Any],
     runner_result: dict[str, Any],
     temporal_analysis: dict[str, Any],
@@ -115,8 +116,8 @@ def persistence_section(
             "dynamic_threshold": components.get("dynamic_threshold") if isinstance(components, dict) else None,
         },
         "temporal_evidence_accumulation": temporal_evidence if isinstance(temporal_evidence, dict) else {},
-        "method": "preserved_phase_1_persistence_views",
-        "adaptive_persistence": planned_section("phase_2", "adaptive_persistence"),
+        "method": "phase_1_views_with_phase_2_elapsed_time_persistence",
+        "adaptive_persistence": adaptive_persistence,
     }
 
 

@@ -2,7 +2,7 @@
 
 ## Scope
 
-Phase 1 establishes `backend/app/engine/sii_engine.py::evaluate_sii` as the single authoritative Systemic Infrastructure Intelligence (SII) entrypoint for uploaded telemetry. The entrypoint is orchestration code. Mathematical implementations remain in focused modules and services.
+Phase 1 established `backend/app/engine/sii_engine.py::evaluate_sii` as the single authoritative Systemic Infrastructure Intelligence (SII) entrypoint for uploaded telemetry. Phase 2 keeps that entrypoint and every Phase 1 compatibility calculation unchanged while adding focused graph-level, like-mode, elapsed-time persistence, multiscale, and empirical-threshold modules. The entrypoint remains orchestration code.
 
 Neraium is read-only and human-in-the-loop. The engine records persistent behavioral change and supporting evidence. It does not control equipment, diagnose root cause, prescribe repairs, assert causality, or predict an exact failure time. No generative-AI or LLM interpretation is part of the analytical engine.
 
@@ -16,8 +16,12 @@ upload/API or future live adapter
        -> Pearson relationship analysis and graph
        -> deterministic operating-mode assessment
        -> data-quality and sensor-health context
-       -> fixed persistence views
+       -> baseline-only empirical thresholds
+       -> like-mode historical selection
+       -> graph-level relationship metrics
+       -> fixed and elapsed-time persistence views
        -> temporal math engine
+       -> elapsed-time multiscale windows
        -> regularized covariance/Mahalanobis runner
        -> canonical SII v2 contract
   -> legacy compatibility mapping
@@ -28,7 +32,7 @@ The uploaded-telemetry implementation is:
 
 1. `backend/app/services/upload_jobs.py` parses and profiles the upload.
 2. `backend/app/services/upload_pipeline.py` performs upload-only normalization, constructs a compatibility-context callback, and calls `evaluate_sii` once.
-3. `backend/app/engine/sii_engine.py` invokes every Phase 1 analytical component and returns the canonical result.
+3. `backend/app/engine/sii_engine.py` invokes the preserved Phase 1 components and the isolated Phase 2 modules, then returns one canonical result.
 4. The pipeline maps `sii_result.compatibility` into the unchanged top-level upload fields used by the frontend and evidence persistence.
 5. `backend/app/services/analysis_result_contract.py` and `backend/app/services/upload_evidence.py` continue to build and persist public evidence contracts.
 
@@ -36,7 +40,7 @@ A future live adapter should prepare the same arguments and call `evaluate_sii`;
 
 ## Module boundaries
 
-| Responsibility | Implementation | Phase 1 disposition |
+| Responsibility | Implementation | Disposition |
 |---|---|---|
 | Canonical orchestration | `engine/sii_engine.py` | New authoritative entrypoint |
 | Canonical status and compatibility sections | `engine/sii_contract.py` | New; no analytical formulas |
@@ -50,6 +54,11 @@ A future live adapter should prepare the same arguments and call `evaluate_sii`;
 | Covariance, Mahalanobis, motion, and accumulation gates | `services/sii_runner.py` | Wrapped unchanged |
 | Upload intelligence and public analysis contract | `services/sii_intelligence.py`, `services/analysis_result_contract.py` | Retained compatibility/presentation layer |
 | Evidence persistence | `services/upload_evidence.py`, `services/evidence_store.py` | Retained |
+| Baseline-only empirical thresholds | `engine/sii/empirical_thresholds.py` | Active Phase 2; fixed-floor fallback is explicit |
+| Like-mode historical selection | `engine/sii/mode_conditioned_baseline.py` | Active Phase 2; global fallback is explicit |
+| Dynamic relationship-graph metrics | `engine/sii/relationship_graph.py` | Active Phase 2; non-causal |
+| Elapsed-time persistence | `engine/sii/adaptive_persistence.py` | Active Phase 2; row fallback is explicit |
+| Timestamp-horizon comparisons | `engine/sii/multiscale_analysis.py` | Active Phase 2; unsupported horizons remain limited |
 
 `engine/relationships.py` remains a legacy direct engine component but is no longer invoked independently by the upload pipeline. Its formulas were not deleted. The active upload Pearson implementation remains `services/relationship_baselines.py`.
 
@@ -89,11 +98,11 @@ The canonical object is stored at upload-result key `sii_result` and returned di
 
 The overall status is `failed` only when there are no usable rows or every core analytical component failed. An optional component failure produces an overall `limited` result while other evidence is preserved.
 
-### Phase 1 placeholders
+### Active Phase 2 sections and later placeholders
 
-`multiscale_analysis`, `physics_evidence`, `propagation_analysis`, `evidence_fusion`, and `behavioral_model` return structured `limited` results with `reason=not_active_in_phase_1` and an owning phase. They are not empty success objects and make no analytical claim.
+`relationship_graph`, `operating_modes.mode_conditioned_baseline`, `data_conditions.empirical_thresholds`, `persistence_analysis.adaptive_persistence`, and `multiscale_analysis` contain active Phase 2 evidence. A Phase 2 module returns `limited` with an exact fallback reason when its timestamp, mode-feature, history, or pair-count minimum is not met. It never reports fallback evidence as a successful conditioned calculation.
 
-Temporal math's existing `topology_propagation` scalar remains available inside `temporal_analysis`; Phase 3 candidate path analysis is not active. Existing runner and temporal composite scores remain separate; Phase 3 fusion is not emulated by averaging them.
+`physics_evidence`, `propagation_analysis`, `evidence_fusion`, and `behavioral_model` remain structured later-phase placeholders. Temporal math's existing `topology_propagation` scalar remains available inside `temporal_analysis`; Phase 3 candidate path analysis is not active. Existing runner and temporal composite scores remain separate; Phase 3 fusion is not emulated by averaging them.
 
 ## Compatibility contract
 
@@ -132,13 +141,13 @@ The upload pipeline adds replay, normalization, population/sample, and completio
 
 ## Failure isolation
 
-Each analytical call is isolated. A temporal failure, unavailable operating context, sparse relationship history, or covariance limitation remains visible in its section and in `uncertainty.module_failures`. Other modules continue. Canonical confidence fields describe deterministic sufficiency or consistency; they are not probabilities.
+Each analytical call is isolated. A Phase 2 module failure, temporal failure, unavailable operating context, sparse relationship history, or covariance limitation remains visible in its section and in `uncertainty.module_failures`. Other modules continue. Canonical confidence fields describe deterministic sufficiency or consistency; they are not probabilities.
 
 ## Phase boundaries
 
-- Phase 1: active in this branch—unified entrypoint, preserved math, temporal integration, schema, compatibility, trace, tests, and documentation.
-- Phase 2: planned—graph-level metrics, mode-conditioned baseline selection, adaptive persistence, multiscale windows, empirical thresholds.
-- Phase 3: planned—configurable physics priors, candidate propagation paths, transparent evidence fusion.
-- Phase 4: planned—auditable behavioral digital model and calibration tooling.
+- Phase 1: active and preserved:unified entrypoint, original math, temporal integration, schema, compatibility, trace, tests, and documentation.
+- Phase 2: active:graph-level metrics, exact like-mode historical selection, elapsed-time persistence, timestamp-horizon multiscale windows, and baseline-only empirical thresholds.
+- Phase 3: planned:configurable physics priors, candidate propagation paths, transparent evidence fusion.
+- Phase 4: planned:auditable behavioral digital model and calibration tooling.
 
-No Phase 2–4 component affects production evidence in Phase 1.
+Phase 2 evidence is additive to the canonical result. The legacy upload compatibility payload remains populated only from the preserved Phase 1 calculations, preventing silent frontend or persisted-evidence changes.

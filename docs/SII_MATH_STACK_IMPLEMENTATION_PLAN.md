@@ -1,5 +1,7 @@
 # SII Math Stack Implementation Plan
 
+> Historical roadmap note: this document predates the unified SII Phase 1 audit. Mutual-information and entropy evidence were activated in unified Phase 1. The authoritative Phase 2 scope is maintained in `sii_architecture.md` and `sii_math_specification.md`; calibrated Bayesian posterior evidence remains deferred because the current engine does not have validated likelihoods or calibration data.
+
 ## Purpose
 Implement a generalized Systemic Infrastructure Intelligence (SII) stack where every uploaded/streamed dataset is processed as time-series system behavior, and outputs always include:
 
@@ -59,10 +61,10 @@ Implement a generalized Systemic Infrastructure Intelligence (SII) stack where e
 - Persist decomposition in runtime state + top-level intelligence payload.
 - Keep replay and UI aligned on same run artifact.
 
-### Phase 2: Information + Entropy + Bayesian Evidence
-- Add MI and entropy calculators.
-- Upgrade confidence from static heuristic to evidence-updating posterior.
-- Add tests for early-warning lift vs threshold-only baseline.
+### Historical Phase 2 target: Information + Entropy + Bayesian Evidence
+- MI and entropy calculators were activated during unified Phase 1 and remain separately traceable temporal evidence.
+- A Bayesian posterior was not activated; current confidence remains deterministic sufficiency/consistency evidence, not probability.
+- Unified Phase 2 instead adds graph-level metrics, like-mode baseline selection, elapsed-time persistence, multiscale windows, and conservative empirical thresholds.
 
 ### Phase 3: Graph/Spectral/Dynamics/Network Stability
 - Add topology-propagation calculations, spectral indicators, and network stability metrics.

@@ -16,6 +16,13 @@ from app.engine.sii_contract import (
     status_copy,
     uncertainty_section,
 )
+from app.engine.sii import (
+    analyze_mode_conditioned_baseline,
+    analyze_multiscale,
+    analyze_relationship_graph,
+    estimate_empirical_thresholds,
+    evaluate_adaptive_persistence,
+)
 from app.engine.sii_inputs import build_data_conditions, normalize_rows, numeric_columns
 from app.engine.temporal_math import TemporalMathConfig, evaluate_temporal_math
 from app.services.baseline_analysis import build_baseline_analysis
@@ -48,9 +55,10 @@ def evaluate_sii(
 ) -> dict:
     """Run the authoritative, read-only SII evidence orchestration path.
 
-    Phase 1 delegates every calculation to an existing analytical module. It
-    does not diagnose root cause, prescribe work, or treat heuristic confidence
-    as probability.
+    Phase 1 calculations remain unchanged. Phase 2 adds isolated graph-level,
+    like-mode, elapsed-time persistence, multi-scale, and empirical-threshold
+    evidence. No module diagnoses root cause, prescribes work, or treats
+    heuristic confidence as probability.
     """
 
     started = time.perf_counter()
@@ -254,7 +262,84 @@ def evaluate_sii(
         }
         record("sensor_health", "failed", sensor_health_result["reason"])
 
-    notify("fixed_persistence", 0.54)
+    notify("empirical_thresholds", 0.50)
+    try:
+        attempted.append("empirical_thresholds")
+        relationship_source_graph = relationship_model.get("relationship_graph") if isinstance(relationship_model, dict) else None
+        relationship_fit_columns = [
+            str(node.get("source_column"))
+            for node in (relationship_source_graph.get("nodes", []) if isinstance(relationship_source_graph, dict) else [])
+            if isinstance(node, dict) and node.get("type") == "metric" and node.get("source_column")
+        ]
+        empirical_thresholds = estimate_empirical_thresholds(
+            rows=dict_rows,
+            numeric_columns=numeric_columns_used,
+            relationship_columns=list(dict.fromkeys(relationship_fit_columns)),
+            config=cfg.get("empirical_threshold_config") if isinstance(cfg.get("empirical_threshold_config"), dict) else None,
+        )
+        record(
+            "empirical_thresholds",
+            str(empirical_thresholds.get("status") or "limited"),
+            empirical_thresholds.get("reason"),
+        )
+    except Exception as exc:
+        empirical_thresholds = failed_result(exc)
+        record("empirical_thresholds", "failed", empirical_thresholds["reason"])
+
+    notify("mode_conditioned_baseline", 0.54)
+    try:
+        attempted.append("mode_conditioned_baseline")
+        mode_conditioned = analyze_mode_conditioned_baseline(
+            rows=dict_rows,
+            numeric_columns=numeric_columns_used,
+            timestamp_column=timestamp_column,
+            telemetry_signal_catalog=catalog,
+            relationship_model=relationship_model,
+            operating_mode=operating_mode_result,
+            config=cfg.get("mode_conditioned_config") if isinstance(cfg.get("mode_conditioned_config"), dict) else None,
+        )
+        record(
+            "mode_conditioned_baseline",
+            str(mode_conditioned.get("status") or "limited"),
+            mode_conditioned.get("reason"),
+        )
+    except Exception as exc:
+        mode_conditioned = failed_result(exc)
+        mode_conditioned["used_global_fallback"] = True
+        mode_conditioned["fallback_reason"] = mode_conditioned["reason"]
+        record("mode_conditioned_baseline", "failed", mode_conditioned["reason"])
+
+    notify("relationship_graph_analysis", 0.58)
+    try:
+        attempted.append("relationship_graph_analysis")
+        learned_relationship = empirical_thresholds.get("relationship_change") if isinstance(empirical_thresholds, dict) else None
+        learned_change_threshold = (
+            learned_relationship.get("threshold")
+            if isinstance(learned_relationship, dict)
+            else None
+        )
+        graph_config = dict(cfg.get("relationship_graph_config") or {}) if isinstance(cfg.get("relationship_graph_config"), dict) else {}
+        if learned_change_threshold is not None:
+            graph_config.setdefault("change_inclusion_threshold", float(learned_change_threshold))
+        dynamic_relationship_graph = analyze_relationship_graph(
+            relationship_model=relationship_model,
+            telemetry_signal_catalog=catalog,
+            sensor_health=sensor_health_result,
+            data_quality=data_quality_result,
+            operating_mode=operating_mode_result,
+            mode_conditioned_analysis=mode_conditioned,
+            config=graph_config,
+        )
+        record(
+            "relationship_graph_analysis",
+            str(dynamic_relationship_graph.get("status") or "limited"),
+            dynamic_relationship_graph.get("reason"),
+        )
+    except Exception as exc:
+        dynamic_relationship_graph = failed_result(exc)
+        record("relationship_graph_analysis", "failed", dynamic_relationship_graph["reason"])
+
+    notify("fixed_persistence", 0.62)
     try:
         attempted.append("fixed_persistence")
         fixed_persistence = assess_persistence(column_names, matrix_rows, baseline_analysis)
@@ -264,7 +349,27 @@ def evaluate_sii(
         fixed_persistence = failed_result(exc)
         record("fixed_persistence", "failed", fixed_persistence["reason"])
 
-    notify("temporal_analysis", 0.62)
+    notify("adaptive_persistence", 0.66)
+    try:
+        attempted.append("adaptive_persistence")
+        adaptive_persistence = evaluate_adaptive_persistence(
+            rows=dict_rows,
+            timestamp_column=timestamp_column,
+            baseline_analysis=baseline_analysis,
+            fixed_persistence=fixed_persistence,
+            empirical_thresholds=empirical_thresholds,
+            config=cfg.get("adaptive_persistence_config") if isinstance(cfg.get("adaptive_persistence_config"), dict) else None,
+        )
+        record(
+            "adaptive_persistence",
+            str(adaptive_persistence.get("status") or "limited"),
+            adaptive_persistence.get("reason"),
+        )
+    except Exception as exc:
+        adaptive_persistence = failed_result(exc)
+        record("adaptive_persistence", "failed", adaptive_persistence["reason"])
+
+    notify("temporal_analysis", 0.70)
     try:
         attempted.append("temporal_analysis")
         temporal_config = cfg.get("temporal_config")
@@ -285,6 +390,27 @@ def evaluate_sii(
     except Exception as exc:
         temporal_analysis = failed_result(exc)
         record("temporal_analysis", "failed", temporal_analysis["reason"])
+
+    notify("multiscale_analysis", 0.76)
+    try:
+        attempted.append("multiscale_analysis")
+        multiscale_config = dict(cfg.get("multiscale_config") or {}) if isinstance(cfg.get("multiscale_config"), dict) else {}
+        multiscale_analysis = analyze_multiscale(
+            rows=dict_rows,
+            numeric_columns=numeric_columns_used,
+            timestamp_column=timestamp_column,
+            empirical_thresholds=empirical_thresholds,
+            config=multiscale_config,
+        )
+        record(
+            "multiscale_analysis",
+            str(multiscale_analysis.get("status") or "limited"),
+            multiscale_analysis.get("reason"),
+        )
+    except Exception as exc:
+        multiscale_analysis = failed_result(exc)
+        multiscale_analysis["scales_used"] = []
+        record("multiscale_analysis", "failed", multiscale_analysis["reason"])
 
     legacy_baseline_analysis = {
         **baseline_analysis,
@@ -324,7 +450,7 @@ def evaluate_sii(
                 f"{type(exc).__name__}: {exc}",
             )
 
-    notify("covariance_analysis", 0.78)
+    notify("covariance_analysis", 0.84)
     try:
         attempted.append("covariance_analysis")
         runner_result = run_sii_runner(
@@ -364,13 +490,19 @@ def evaluate_sii(
         record("covariance_analysis", "failed", covariance["reason"])
 
     relationship_graph = relationship_model.get("relationship_graph")
-    if isinstance(relationship_graph, dict):
+    if isinstance(dynamic_relationship_graph, dict) and dynamic_relationship_graph.get("status") != "failed":
+        canonical_graph = dynamic_relationship_graph
+    elif isinstance(relationship_graph, dict):
         graph_status = "complete" if relationship_graph.get("edges") else "limited"
-        canonical_graph = status_copy(
-            relationship_graph,
-            status=graph_status,
-            reason="no_comparable_relationship_edges" if graph_status == "limited" else None,
-        )
+        canonical_graph = {
+            **status_copy(
+                relationship_graph,
+                status=graph_status,
+                reason="no_comparable_relationship_edges" if graph_status == "limited" else None,
+            ),
+            "phase_2_status": dynamic_relationship_graph,
+            "edge_basis": "global_relationship_model_failure_fallback",
+        }
     else:
         canonical_graph = limited_result("relationship_graph_unavailable", nodes=[], edges=[], changed_edges=[])
 
@@ -390,6 +522,7 @@ def evaluate_sii(
     temporal_status = str(temporal_analysis.get("status") or "complete")
     persistence = persistence_section(
         fixed_persistence=fixed_persistence,
+        adaptive_persistence=adaptive_persistence,
         baseline_analysis=baseline_analysis,
         runner_result=runner_result,
         temporal_analysis=temporal_analysis,
@@ -415,7 +548,7 @@ def evaluate_sii(
         "rows_used": len(matrix_rows),
         "columns_used": numeric_columns_used,
         "operating_modes_used": list(dict.fromkeys(operating_modes_used)),
-        "scales_used": [],
+        "scales_used": list(multiscale_analysis.get("scales_used") or []) if isinstance(multiscale_analysis, dict) else [],
         "total_runtime_seconds": runtime,
     }
     runner_trace = runner_result.get("processing_trace") if isinstance(runner_result, dict) else None
@@ -437,6 +570,7 @@ def evaluate_sii(
         ),
         "data_conditions": {
             "status": "complete" if data_quality_result.get("readiness") != "not_ready" else "limited",
+            "empirical_thresholds": empirical_thresholds,
             "data_quality": data_quality_result,
             "sensor_health": sensor_health_result,
             "timestamp_profile": timestamp_profile,
@@ -444,13 +578,19 @@ def evaluate_sii(
             "rows_used": len(matrix_rows),
             "numeric_columns": numeric_columns_used,
         },
-        "operating_modes": status_copy(operating_mode_result, status=mode_status),
+        "operating_modes": {
+            **status_copy(operating_mode_result, status=mode_status),
+            "mode_conditioned_baseline": mode_conditioned,
+        },
         "signal_drift": status_copy(baseline_analysis, status=signal_status),
-        "relationship_analysis": status_copy(relationship_model, status=relationship_status),
+        "relationship_analysis": {
+            **status_copy(relationship_model, status=relationship_status),
+            "mode_conditioned_baseline": mode_conditioned,
+        },
         "relationship_graph": canonical_graph,
         "covariance_analysis": covariance,
         "temporal_analysis": status_copy(temporal_analysis, status=temporal_status),
-        "multiscale_analysis": planned_section("phase_2", "multi_scale_analysis"),
+        "multiscale_analysis": multiscale_analysis,
         "physics_evidence": planned_section("phase_3", "configurable_physics_priors"),
         "propagation_analysis": planned_section("phase_3", "candidate_propagation_paths"),
         "persistence_analysis": persistence,
