@@ -2,7 +2,7 @@
 
 ## Scope
 
-Phase 1 established `backend/app/engine/sii_engine.py::evaluate_sii` as the single authoritative Systemic Infrastructure Intelligence (SII) entrypoint for uploaded telemetry. Phase 2 keeps that entrypoint and every Phase 1 compatibility calculation unchanged while adding focused graph-level, like-mode, elapsed-time persistence, multiscale, and empirical-threshold modules. The entrypoint remains orchestration code.
+Phase 1 established `backend/app/engine/sii_engine.py::evaluate_sii` as the single authoritative Systemic Infrastructure Intelligence (SII) entrypoint for uploaded telemetry. Phase 2 keeps that entrypoint and every Phase 1 compatibility calculation unchanged while adding focused graph-level, like-mode, elapsed-time persistence, multiscale, and empirical-threshold modules. Phase 3 adds downstream evaluation of externally configured engineering priors and transparent evidence organization. The entrypoint remains orchestration code.
 
 Neraium is read-only and human-in-the-loop. The engine records persistent behavioral change and supporting evidence. It does not control equipment, diagnose root cause, prescribe repairs, assert causality, or predict an exact failure time. No generative-AI or LLM interpretation is part of the analytical engine.
 
@@ -23,6 +23,8 @@ upload/API or future live adapter
        -> temporal math engine
        -> elapsed-time multiscale windows
        -> regularized covariance/Mahalanobis runner
+       -> configurable physics-informed reasoning
+       -> transparent evidence fusion
        -> canonical SII v2 contract
   -> legacy compatibility mapping
   -> presentation contracts and evidence persistence
@@ -32,7 +34,7 @@ The uploaded-telemetry implementation is:
 
 1. `backend/app/services/upload_jobs.py` parses and profiles the upload.
 2. `backend/app/services/upload_pipeline.py` performs upload-only normalization, constructs a compatibility-context callback, and calls `evaluate_sii` once.
-3. `backend/app/engine/sii_engine.py` invokes the preserved Phase 1 components and the isolated Phase 2 modules, then returns one canonical result.
+3. `backend/app/engine/sii_engine.py` invokes the preserved Phase 1 components and isolated Phase 2 modules, evaluates configured Phase 3 priors, fuses evidence transparently, then returns one canonical result.
 4. The pipeline maps `sii_result.compatibility` into the unchanged top-level upload fields used by the frontend and evidence persistence.
 5. `backend/app/services/analysis_result_contract.py` and `backend/app/services/upload_evidence.py` continue to build and persist public evidence contracts.
 
@@ -59,6 +61,8 @@ A future live adapter should prepare the same arguments and call `evaluate_sii`;
 | Dynamic relationship-graph metrics | `engine/sii/relationship_graph.py` | Active Phase 2 supporting evidence; non-causal |
 | Elapsed-time persistence | `engine/sii/adaptive_persistence.py` | Active Phase 2 supporting evidence; row fallback is explicit |
 | Timestamp-horizon comparisons | `engine/sii/multiscale_analysis.py` | Active Phase 2 supporting evidence; unsupported horizons remain limited |
+| Configurable engineering priors | `engine/sii/physics_reasoning.py` | Active Phase 3; generic declarative evaluation with explicit applicability |
+| Transparent evidence organization | `engine/sii/evidence_fusion.py` | Active Phase 3; no weighting, voting, probability, or diagnosis |
 
 `engine/relationships.py` remains a legacy direct engine component but is no longer invoked independently by the upload pipeline. Its formulas were not deleted. The active upload Pearson implementation remains `services/relationship_baselines.py`.
 
@@ -78,6 +82,7 @@ The canonical object is stored at upload-result key `sii_result` and returned di
   "covariance_analysis": {},
   "temporal_analysis": {},
   "multiscale_analysis": {},
+  "physics_reasoning": {},
   "physics_evidence": {},
   "propagation_analysis": {},
   "persistence_analysis": {},
@@ -98,11 +103,11 @@ The canonical object is stored at upload-result key `sii_result` and returned di
 
 The overall status is `failed` only when there are no usable rows or every core analytical component failed. An optional component failure produces an overall `limited` result while other evidence is preserved.
 
-### Active supporting Phase 2 sections and later placeholders
+### Active Phase 2 and Phase 3 sections
 
 `relationship_graph`, `operating_modes.mode_conditioned_baseline`, `data_conditions.empirical_thresholds`, `persistence_analysis.adaptive_persistence`, and `multiscale_analysis` contain active Phase 2 supporting evidence. They are non-authoritative: they do not create or suppress compatibility findings, replace runner or temporal state, or alter frontend-visible severity. A Phase 2 module returns `limited` with an exact fallback reason when its timestamp, mode-feature, history, or pair-count minimum is not met. It never reports fallback evidence as a successful conditioned calculation.
 
-`physics_evidence`, `propagation_analysis`, `evidence_fusion`, and `behavioral_model` remain structured later-phase placeholders. Temporal math's existing `topology_propagation` scalar remains available inside `temporal_analysis`; Phase 3 candidate path analysis is not active. Existing runner and temporal composite scores remain separate; Phase 3 fusion is not emulated by averaging them.
+`physics_reasoning` and `evidence_fusion` are active Phase 3 sections. `physics_evidence` is a backward-compatible alias of `physics_reasoning`. Priors come only from external configuration, and unmet applicability contributes no evidence. Fusion preserves the full canonical payload from each input module and never averages, weights, votes, estimates probability, or produces an engineering interpretation. `propagation_analysis` and `behavioral_model` remain structured placeholders. Temporal math's existing `topology_propagation` scalar remains available inside `temporal_analysis`; candidate path analysis is not active.
 
 ## Compatibility contract
 
@@ -134,6 +139,11 @@ Every evaluation records:
 - `module_failures`
 - `phase_2_authoritative` (currently `false`)
 - `phase_2_effect` (currently `supporting_evidence_only`)
+- `phase_3_active` (currently `true`)
+- `phase_3_effect` (currently `transparent_evidence_enrichment_only`)
+- `engineering_priors_evaluated`
+- `engineering_priors_applicable`
+- `engineering_observations_generated`
 - `rows_received`
 - `rows_used`
 - `columns_used`
@@ -151,7 +161,7 @@ Each analytical call is isolated. A Phase 2 module failure, temporal failure, un
 
 - Phase 1: active and preserved: unified entrypoint, original math, temporal integration, schema, compatibility, trace, tests, and documentation.
 - Phase 2: active as supporting evidence, non-authoritative: graph-level metrics, exact like-mode historical selection, elapsed-time persistence, timestamp-horizon multiscale windows, and baseline-only empirical thresholds.
-- Phase 3: planned: configurable physics priors, candidate propagation paths, transparent evidence fusion.
+- Phase 3: active and additive: externally configurable physics priors and transparent evidence fusion. Candidate propagation paths remain deferred.
 - Phase 4: planned: auditable behavioral digital model and calibration tooling.
 
-Phase 2 evidence is additive to the canonical result. The legacy upload compatibility payload remains populated only from the preserved Phase 1 calculations, preventing silent frontend changes. Evidence records additionally persist a compact `phase_2_supporting_evidence` snapshot; it is labeled non-authoritative and does not replace existing evidence fields.
+Phase 2 and Phase 3 evidence are additive to the canonical result. The legacy upload compatibility payload remains populated only from the preserved Phase 1 calculations, preventing silent frontend changes. Evidence records additionally persist a compact `phase_2_supporting_evidence` snapshot; it is labeled non-authoritative and does not replace existing evidence fields.

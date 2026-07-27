@@ -1,6 +1,6 @@
 # SII Math Stack Implementation Plan
 
-> Historical roadmap note: this document predates the unified SII Phase 1 audit. Mutual-information and entropy evidence were activated in unified Phase 1. The authoritative Phase 2 scope is maintained in `sii_architecture.md` and `sii_math_specification.md`; calibrated Bayesian posterior evidence remains deferred because the current engine does not have validated likelihoods or calibration data.
+> Historical roadmap note: this document predates the unified SII Phase 1 audit. Mutual-information and entropy evidence were activated in unified Phase 1. Unified Phase 2 statistical evidence and Phase 3 physics-informed reasoning/evidence fusion are now active. Calibrated Bayesian posterior evidence remains deferred because the current engine does not have validated likelihoods or calibration data.
 
 ## Purpose
 Implement a generalized Systemic Infrastructure Intelligence (SII) stack where uploaded telemetry is interpreted as time-series system behavior and produces evidence for:
@@ -51,6 +51,7 @@ The decomposition remains a compatibility and roadmap model. Canonical SII evide
 
 6. Evidence Confidence and Bayesian Updating
    - Current: confidence is deterministic sufficiency and consistency evidence informed by data quality, sensor health, operating mode, persistence, and module support.
+   - Current Phase 3: configured `confidence_modifier` values are preserved as descriptive prior metadata and explicitly are not applied or aggregated.
    - Current confidence must not be presented as a calibrated probability or causal posterior.
    - Deferred target: Bayesian posterior updates only after validated likelihood models, calibration data, and acceptance criteria exist.
 
@@ -94,16 +95,30 @@ Unified Phase 2 adds non-authoritative supporting analysis without independently
 
 Phase 2 evidence may be exposed through canonical `sii_result` sections and `phase_2_supporting_evidence`. It must not create a second upload-side analytical pass or silently override compatibility-derived frontend findings.
 
+### Unified Phase 3: Physics-Informed Reasoning and Transparent Evidence Fusion
+
+Unified Phase 3 is complete and runs only after all Phase 2 analyses:
+
+- `backend/app/engine/sii/physics_reasoning.py` evaluates externally configured, domain-specific engineering priors through a generic declarative condition language.
+- Every prior checks equipment type, required telemetry, relationships, operating mode, prerequisites, validity, quality, health, and any configured historical-support condition before expected behavior is evaluated.
+- Unmet applicability returns `not_applicable` with reasons and contributes no evidence.
+- Applicable priors report supporting, contradictory, or indeterminate evidence with unchanged confidence-modifier metadata and complete source references.
+- `backend/app/engine/sii/evidence_fusion.py` preserves all canonical source modules and classifies each item as supporting, limiting, contradictory, or neutral.
+- Fusion generates deterministic behavioral observations with analytical uncertainty, evaluated and ignored priors, evidence references, and processing trace.
+- Statistical evidence remains independent and authoritative. No score, vote, posterior, probability, diagnosis, prediction, remaining-life estimate, maintenance recommendation, or autonomous decision is generated.
+
+The canonical engine version remains `neraium_sii/v2` for backward compatibility. `physics_reasoning` and `evidence_fusion` are additive, and the existing `physics_evidence` key remains as an alias of `physics_reasoning`.
+
 ### Deferred Bayesian Evidence
 
 A Bayesian posterior is not active. Current confidence remains deterministic sufficiency and consistency evidence, not probability. Posterior evidence remains deferred until validated likelihoods, calibration datasets, and evaluation standards exist.
 
-### Phase 3: Propagation, Spectral, Dynamics, and Network Stability
+### Deferred Propagation, Spectral, Dynamics, and Network Stability
 
 - Add topology-propagation calculations with explicit activation paths and uncertainty.
 - Add spectral indicators with sampling-quality safeguards.
 - Add recovery, attractor-distance, and network-stability metrics where telemetry and graph structure support them.
-- Encode explanatory traces linking instability changes to observed subsystem behavior.
+- Do not present these as active Phase 3 capabilities until independently specified and validated.
 
 ## Canonical SII Data Contract
 
@@ -118,6 +133,9 @@ The raw canonical engine object is exposed at top-level `sii_result` with engine
 - `temporal_analysis`
 - `multiscale_analysis`
 - `persistence_analysis`
+- `physics_reasoning`
+- `physics_evidence` (compatibility alias)
+- `evidence_fusion`
 - `uncertainty`
 - `processing_trace`
 
@@ -180,6 +198,17 @@ Clients must not infer a second analysis from compatibility fields. Canonical an
     - Confirm canonical evidence, Phase 2 supporting evidence, and frontend evidence references are persisted from the same run artifact.
     - Confirm unresolved evidence references are not displayed as findings.
 
+11. Configurable engineering priors
+    - Confirm the engine supplies no default domain rules.
+    - Confirm every required prior field is validated and unmet applicability is recorded as `not_applicable`.
+    - Confirm expected behavior is evaluated only from configured selectors and retains exact source references and observed values.
+
+12. Transparent evidence fusion
+    - Confirm all 12 input-module payloads remain present in the evidence inventory.
+    - Confirm every evidence item has one allowed classification and retains origin, limitations, uncertainty, and trace.
+    - Confirm observations expose evaluated/ignored priors and require human review.
+    - Confirm no weighting, voting, probability, diagnosis, prediction, recommendation, or autonomous decision is produced.
+
 ## Definition of Done
 
 - Every verified ingestion path runs through the shared `evaluate_sii` path exactly once.
@@ -187,4 +216,6 @@ Clients must not infer a second analysis from compatibility fields. Canonical an
 - Replay, evidence, latest-upload state, compatibility output, and intelligence views read the same persisted run artifact.
 - Canonical SII sections, uncertainty, processing trace, and compatibility contracts are enforced in tests.
 - Phase 2 modules remain supporting evidence until an explicitly versioned contract makes them authoritative.
+- Phase 3 physics-informed reasoning and transparent evidence fusion are active, additive, deterministic, and fully traceable.
+- Canonical output contains `physics_reasoning` and `evidence_fusion`, with `physics_evidence` preserved as a compatibility alias.
 - Deferred Bayesian, spectral, propagation, and network-stability claims are not presented as active capabilities before validation.

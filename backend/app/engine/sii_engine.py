@@ -22,6 +22,8 @@ from app.engine.sii import (
     analyze_relationship_graph,
     estimate_empirical_thresholds,
     evaluate_adaptive_persistence,
+    evaluate_physics_reasoning,
+    fuse_evidence,
 )
 from app.engine.sii_inputs import build_data_conditions, normalize_rows, numeric_columns
 from app.engine.temporal_math import TemporalMathConfig, evaluate_temporal_math
@@ -57,8 +59,9 @@ def evaluate_sii(
 
     Phase 1 calculations remain unchanged. Phase 2 adds isolated graph-level,
     like-mode, elapsed-time persistence, multi-scale, and empirical-threshold
-    evidence. No module diagnoses root cause, prescribes work, or treats
-    heuristic confidence as probability.
+    evidence. Phase 3 evaluates externally configured engineering priors and
+    organizes independent evidence without scoring it. No module diagnoses
+    root cause, prescribes work, or treats confidence as probability.
     """
 
     started = time.perf_counter()
@@ -551,24 +554,179 @@ def evaluate_sii(
         )
         if value and value != "unavailable"
     ]
-    runtime = round(max(0.0, time.perf_counter() - started), 6)
     rows_received = int(cfg.get("row_count_total") or len(matrix_rows))
-    processing_trace = {
+    phase_2_uncertainty = uncertainty_section(
+        data_quality=data_quality_result,
+        sensor_health=sensor_health_result,
+        temporal_analysis=temporal_analysis,
+        module_failures=list(failures),
+    )
+    phase_2_evidence = {
+        "signal_drift": status_copy(baseline_analysis, status=signal_status),
+        "relationship_analysis": {
+            **status_copy(relationship_model, status=relationship_status),
+            "mode_conditioned_baseline": mode_conditioned,
+        },
+        "operating_modes": {
+            **status_copy(operating_mode_result, status=mode_status),
+            "mode_conditioned_baseline": mode_conditioned,
+        },
+        "adaptive_persistence": adaptive_persistence,
+        "temporal_analysis": status_copy(temporal_analysis, status=temporal_status),
+        "multiscale_analysis": multiscale_analysis,
+        "relationship_graph": canonical_graph,
+        "covariance_analysis": covariance,
+        "data_quality": data_quality_result,
+        "sensor_health": sensor_health_result,
+        "uncertainty": phase_2_uncertainty,
+    }
+
+    notify("physics_reasoning", 0.90)
+    try:
+        attempted.append("physics_reasoning")
+        physics_config = (
+            dict(cfg.get("physics_reasoning_config"))
+            if isinstance(cfg.get("physics_reasoning_config"), dict)
+            else {}
+        )
+        configured_priors = physics_config.get("priors")
+        if not isinstance(configured_priors, list):
+            configured_priors = (
+                cfg.get("engineering_priors")
+                if isinstance(cfg.get("engineering_priors"), list)
+                else []
+            )
+        equipment_context = physics_config.get("equipment_context")
+        if not isinstance(equipment_context, dict):
+            equipment_context = (
+                cfg.get("equipment_context")
+                if isinstance(cfg.get("equipment_context"), dict)
+                else {}
+            )
+        physics_reasoning = evaluate_physics_reasoning(
+            priors=configured_priors,
+            analytical_evidence=phase_2_evidence,
+            equipment_context=equipment_context,
+        )
+        record(
+            "physics_reasoning",
+            str(physics_reasoning.get("status") or "limited"),
+            physics_reasoning.get("reason"),
+        )
+    except Exception as exc:
+        physics_reasoning = {
+            **failed_result(exc),
+            "active": True,
+            "evaluated_priors": [],
+            "applicable_priors": [],
+            "supporting_priors": [],
+            "contradictory_priors": [],
+            "ignored_priors": [],
+            "limitations": [f"{type(exc).__name__}: {exc}"],
+            "reasoning_trace": [],
+        }
+        record("physics_reasoning", "failed", physics_reasoning["reason"])
+
+    preliminary_uncertainty = uncertainty_section(
+        data_quality=data_quality_result,
+        sensor_health=sensor_health_result,
+        temporal_analysis=temporal_analysis,
+        module_failures=list(failures),
+    )
+    fusion_inputs = {
+        **phase_2_evidence,
+        "uncertainty": preliminary_uncertainty,
+    }
+    preliminary_statuses = {
+        **module_statuses,
+        "relationship_graph": dict(
+            module_statuses.get("relationship_graph_analysis", {"status": "limited"})
+        ),
+        "data_quality": dict(
+            module_statuses.get("data_conditions", {"status": "limited"})
+        ),
+        "uncertainty": {"status": str(preliminary_uncertainty.get("status") or "limited")},
+    }
+    preliminary_trace = {
         "sii_engine_called": True,
         "sii_engine_version": ENGINE_VERSION,
-        "modules_attempted": attempted,
-        "modules_completed": completed,
-        "modules_limited": limited,
-        "modules_failed": failed,
-        "module_statuses": module_statuses,
-        "module_failures": failures,
+        "modules_attempted": list(attempted),
+        "modules_completed": list(completed),
+        "modules_limited": list(limited),
+        "modules_failed": list(failed),
+        "module_statuses": preliminary_statuses,
+        "module_failures": list(failures),
         "phase_2_authoritative": False,
         "phase_2_effect": "supporting_evidence_only",
+        "phase_3_active": True,
+        "phase_3_effect": "transparent_evidence_enrichment_only",
         "rows_received": rows_received,
         "rows_used": len(matrix_rows),
-        "columns_used": numeric_columns_used,
+        "columns_used": list(numeric_columns_used),
         "operating_modes_used": list(dict.fromkeys(operating_modes_used)),
         "scales_used": list(multiscale_analysis.get("scales_used") or []) if isinstance(multiscale_analysis, dict) else [],
+    }
+
+    notify("evidence_fusion", 0.96)
+    try:
+        attempted.append("evidence_fusion")
+        evidence_fusion = fuse_evidence(
+            analytical_evidence=fusion_inputs,
+            physics_reasoning=physics_reasoning,
+            processing_trace=preliminary_trace,
+        )
+        record(
+            "evidence_fusion",
+            str(evidence_fusion.get("status") or "limited"),
+            evidence_fusion.get("reason"),
+        )
+    except Exception as exc:
+        evidence_fusion = {
+            **failed_result(exc),
+            "active": True,
+            "observations": [],
+            "supporting_evidence": [],
+            "limiting_evidence": [],
+            "contradictory_evidence": [],
+            "neutral_evidence": [],
+            "evidence_inventory": [],
+            "uncertainty": preliminary_uncertainty,
+            "processing_trace": {
+                "weighted_scoring_performed": False,
+                "diagnosis_performed": False,
+                "recommendations_generated": False,
+            },
+        }
+        record("evidence_fusion", "failed", evidence_fusion["reason"])
+
+    uncertainty = uncertainty_section(
+        data_quality=data_quality_result,
+        sensor_health=sensor_health_result,
+        temporal_analysis=temporal_analysis,
+        module_failures=list(failures),
+    )
+    runtime = round(max(0.0, time.perf_counter() - started), 6)
+    final_statuses = {
+        **module_statuses,
+        "relationship_graph": dict(
+            module_statuses.get("relationship_graph_analysis", {"status": "limited"})
+        ),
+        "data_quality": dict(
+            module_statuses.get("data_conditions", {"status": "limited"})
+        ),
+        "uncertainty": {"status": str(uncertainty.get("status") or "limited")},
+    }
+    processing_trace = {
+        **preliminary_trace,
+        "modules_attempted": list(attempted),
+        "modules_completed": list(completed),
+        "modules_limited": list(limited),
+        "modules_failed": list(failed),
+        "module_statuses": final_statuses,
+        "module_failures": list(failures),
+        "engineering_priors_evaluated": len(physics_reasoning.get("evaluated_priors") or []),
+        "engineering_priors_applicable": len(physics_reasoning.get("applicable_priors") or []),
+        "engineering_observations_generated": len(evidence_fusion.get("observations") or []),
         "total_runtime_seconds": runtime,
     }
     runner_trace = runner_result.get("processing_trace") if isinstance(runner_result, dict) else None
@@ -611,18 +769,14 @@ def evaluate_sii(
         "covariance_analysis": covariance,
         "temporal_analysis": status_copy(temporal_analysis, status=temporal_status),
         "multiscale_analysis": multiscale_analysis,
-        "physics_evidence": planned_section("phase_3", "configurable_physics_priors"),
+        "physics_reasoning": physics_reasoning,
+        "physics_evidence": physics_reasoning,
         "propagation_analysis": planned_section("phase_3", "candidate_propagation_paths"),
         "persistence_analysis": persistence,
-        "evidence_fusion": planned_section("phase_3", "transparent_evidence_fusion"),
+        "evidence_fusion": evidence_fusion,
         "behavioral_model": planned_section("phase_4", "behavioral_digital_model"),
         "findings": [],
-        "uncertainty": uncertainty_section(
-            data_quality=data_quality_result,
-            sensor_health=sensor_health_result,
-            temporal_analysis=temporal_analysis,
-            module_failures=failures,
-        ),
+        "uncertainty": uncertainty,
         "processing_trace": processing_trace,
         "compatibility": {
             "baseline_analysis": legacy_baseline_analysis,

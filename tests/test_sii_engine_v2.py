@@ -62,8 +62,11 @@ def test_evaluate_sii_returns_canonical_phase_1_result_with_preserved_math() -> 
     }
     assert result["multiscale_analysis"]["status"] == "complete"
     assert result["multiscale_analysis"]["scales_used"] == ["15_minutes", "1_hour"]
-    assert result["physics_evidence"]["reason"] == "not_active_in_phase_1"
-    assert result["evidence_fusion"]["reason"] == "not_active_in_phase_1"
+    assert result["physics_reasoning"]["active"] is True
+    assert result["physics_reasoning"]["reason"] == "no_configured_engineering_priors"
+    assert result["physics_evidence"] == result["physics_reasoning"]
+    assert result["evidence_fusion"]["active"] is True
+    assert result["evidence_fusion"]["observations"] == []
     assert result["behavioral_model"]["reason"] == "not_active_in_phase_1"
     assert result["findings"] == []
 
