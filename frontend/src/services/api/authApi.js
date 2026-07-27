@@ -3,6 +3,8 @@ import { apiFetch } from "../../config";
 const LOCAL_AUTH_SESSION_KEY = "neraium.local_auth.session";
 const SIGN_IN_SERVICE_UNAVAILABLE = "The sign-in service is temporarily unavailable. Try again.";
 const SESSION_SERVICE_UNAVAILABLE = "The session service is temporarily unavailable. Refresh and retry.";
+const SESSION_CHECK_TIMEOUT_MS = 8000;
+const AUTH_WRITE_TIMEOUT_MS = 15000;
 
 async function authFetch(path, options, unavailableMessage) {
   try {
@@ -40,7 +42,7 @@ function setLocalSessionEmail(email) {
 export async function fetchCurrentUser() {
   const response = await authFetch(
     "/api/auth/me",
-    { cache: "no-store" },
+    { cache: "no-store", timeoutMs: SESSION_CHECK_TIMEOUT_MS },
     SESSION_SERVICE_UNAVAILABLE,
   );
   const payload = await readJson(response);
@@ -59,6 +61,7 @@ export async function loginUser({ email, password }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: normalizedEmail, password }),
+      timeoutMs: AUTH_WRITE_TIMEOUT_MS,
     },
     SIGN_IN_SERVICE_UNAVAILABLE,
   );
@@ -80,7 +83,7 @@ export async function loginUser({ email, password }) {
 export async function logoutUser() {
   const response = await authFetch(
     "/api/auth/logout",
-    { method: "POST" },
+    { method: "POST", timeoutMs: AUTH_WRITE_TIMEOUT_MS },
     "The sign-out service is unavailable. Check the connection and try again.",
   );
   const payload = await readJson(response);
