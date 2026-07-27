@@ -7,7 +7,7 @@ Legacy fields can remain for compatibility, but frontend rendering should prefer
 
 Uploaded telemetry is evaluated once through `app.engine.sii_engine.evaluate_sii`. The raw canonical evidence object is available at top-level `sii_result` with engine identity `neraium_sii/v2`.
 
-`analysis_result` remains the frontend-oriented presentation and evidence-index contract derived from canonical Phase 1 compatibility fields. Phase 2 empirical-threshold, graph, mode-conditioned baseline, adaptive-persistence, multiscale, and temporal sections are active supporting evidence. Phase 3 physics-informed reasoning and transparent evidence fusion are active downstream evidence-enrichment sections. Neither phase independently determines `analysis_result` findings, state, severity, or confidence. Evidence records may expose Phase 2 support at `phase_2_supporting_evidence`.
+`analysis_result` remains the frontend-oriented presentation and evidence-index contract derived from canonical Phase 1 compatibility fields. Phase 2 empirical-threshold, graph, mode-conditioned baseline, adaptive-persistence, multiscale, and temporal sections are active supporting evidence. Phase 3 physics-informed reasoning is active downstream evidence enrichment. Phase 4 persistent behavioral memory, expected behavior, longitudinal evolution, propagation context, events, snapshots, and assumption-gated advanced mathematics are active additive evidence. Transparent fusion preserves Phase 1–4 sources. These later phases do not independently replace existing `analysis_result` findings, state, severity, or confidence. Evidence records may expose Phase 2 support at `phase_2_supporting_evidence`.
 
 The canonical `sii_result` may include:
 
@@ -23,6 +23,16 @@ The canonical `sii_result` may include:
 - `physics_reasoning`
 - `physics_evidence` (backward-compatible alias of `physics_reasoning`)
 - `evidence_fusion`
+- `behavioral_model`
+- `expected_behavior`
+- `behavioral_evolution`
+- `propagation_analysis`
+- `behavioral_snapshots`
+- `event_memory`
+- `spectral_analysis`
+- `dynamical_stability`
+- `network_stability`
+- `bayesian_evidence`
 - `uncertainty`
 - `processing_trace`
 
@@ -206,3 +216,64 @@ Historical canonical payloads may not contain these fields. Frontends must use `
 - Phase 3 engineering observations may be displayed only as traceable behavioral context. A client must not relabel them as diagnoses, causes, predictions, decisions, or recommendations.
 - Never render placeholder findings, generic pending-verification text, demo systems, fake recommendations, or stale previous analysis as the current result.
 - If a field is unavailable, hide it instead of showing placeholder copy.
+
+## Phase 4 Behavioral Memory Contract
+
+Phase 4 replaces the former canonical placeholders with active structured sections while preserving every prior field and compatibility payload.
+
+### `behavioral_model`
+
+The section contains `status`, `active`, `model_id`, `model_version`, `snapshot_id`, `identity`, `behavioral_identity`, signal/relationship memory summaries, persistent `behavioral_graph`, operating-mode memory, baseline state, confidence, limitations, learning decision, and processing trace.
+
+A model is attached only when identity is adequate and conflict-free. `identity` exposes all configured scope fields, the observed telemetry schema fingerprint, deterministic confidence factors with `not_probability: true`, status, limitations, conflicts, and whether memory updates are allowed. Unidentified or conflicting telemetry never uses an arbitrary model and never writes memory.
+
+Signal memory retains robust centers/scales, empirical quantiles, variability, trends, drift, velocity/acceleration, temporal/multiscale context, expected-response contexts, residuals, quality/health histories, mode support, confidence decomposition, status, limitations, and method metadata. Relationship memory is mode-separated and retains strength, MI/covariance/lag histories, stability, volatility, persistence, lifecycle, configured-physics references, graph context, confidence factors, limitations, and methods. Retirement preserves the complete record.
+
+Behavioral confidence is deterministic evidence quality, not probability. Every normalized compatibility value contains `not_probability: true`, a complete factor map, and its aggregation method.
+
+### `expected_behavior`
+
+Validated, mode-compatible expected models use transparent deterministic robust linear response with fixed settings and empirical residual intervals. Each evaluation exposes the target, predictors, mode, type/version/parameters, training window, samples/duration, expected value/interval, observation, residual, normalized residual, historical residual distribution, confidence factors, uncertainty, limitations, source relationships/model version, and trace. Invalid identity, quality, health, mode, predictor coverage, support, validation, or residual stability returns `limited` without fabricating an expected value.
+
+Residual departures are evidence only. They do not create a failure, diagnosis, prediction, recommendation, or control decision.
+
+### `behavioral_evolution` and `propagation_analysis`
+
+Evolution compares active memory and immutable snapshots and separates temporary deviation, persistent behavioral change, validated adaptation, behavioral recovery, unresolved instability, and insufficient evidence. Long-term change is not labeled degradation without separate engineering interpretation.
+
+Propagation returns activated nodes/edges, candidate and competing paths, unsupported segments, earliest observed changes, downstream-compatible changes, path evidence, deterministic confidence factors, uncertainty, limitations, and traces. A supported path says: “Candidate propagation path consistent with observed timing and graph structure.” Competing paths remain visible and no cause is selected. Missing timestamp, lag, direction, strength, health, mode, multiscale, or history support limits or rejects the relevant path.
+
+### `behavioral_snapshots` and `event_memory`
+
+Snapshots are immutable and versioned. The canonical summary exposes the current/previous ids, model version, changes, and rollback reference. The stored snapshot also retains full behavioral identity, signal/relationship memory, graph, operating modes, expected models, baseline versions, event refs, confidence, limitations, trace, and previous snapshot id. Restore creates a new forward model version.
+
+Events expose counts/references and separate `externally_supplied_events` from `telemetry_derived_events`. Each stored event includes its id/type/time/source/run, affected objects, supporting/limiting evidence, human validation, before/after model and baseline versions, limitations, and notes. Operational, maintenance, and validation events are never fabricated.
+
+### Advanced and Bayesian sections
+
+`spectral_analysis`, `dynamical_stability`, and `network_stability` are optional evidence modules with explicit safeguards. They are `complete` only when their assumptions pass; otherwise they return structured `limited` states. They do not emit formal stability claims or network-risk scores.
+
+`bayesian_evidence` normally has this invariant:
+
+```json
+{
+  "status": "deferred",
+  "active": false,
+  "reason": "validated_likelihoods_and_calibration_unavailable",
+  "posterior": null
+}
+```
+
+The interface lists future likelihood, calibration, reliability, validation, and acceptance requirements. Deterministic confidence is never converted into probability.
+
+## Phase 4 Persistence and Failure Semantics
+
+The engine depends on `BehavioralModelStore`, not SQLite directly. Operations cover model load/create/save, snapshot creation/load/list/restore, event append, learning-decision recording, relationship retirement, and candidate/active baselines. Production uses the existing runtime latest-payload repository; tests use an in-memory implementation. All records are source-run-attributed, append-only, versioned, defensively copied, and recoverable.
+
+A storage failure does not fail current telemetry analysis. Phase 1–3 sections and evidence fusion still complete; Phase 4 returns `limited`, lists exact `storage_failures`, performs no silent learning, and retains the active baseline if one exists.
+
+## Extended Processing Trace
+
+In addition to existing Phase 1–3 fields, the canonical trace includes Phase 4 activation, model load/create state, before/after versions, current/previous snapshots, evaluated signal/relationship/model/residual/path counts, relationship additions/updates/retirements, baseline update/defer counts, event count, learning permission/decision/exclusions, advanced module attempted/completed/limited/failed lists, Bayesian inactive reason, storage writes/failures, rollback reference, and `current_evidence_evaluated_before_model_update: true`.
+
+Every Phase 4 source also appears independently in transparent `evidence_fusion.evidence_inventory`. Fusion does not collapse Phase 1–3 evidence, weight sources, vote, estimate probability, or generate conclusions.
