@@ -358,6 +358,9 @@ def evaluate_sii(
             baseline_analysis=baseline_analysis,
             fixed_persistence=fixed_persistence,
             empirical_thresholds=empirical_thresholds,
+            data_quality=data_quality_result,
+            sensor_health=sensor_health_result,
+            operating_mode=operating_mode_result,
             config=cfg.get("adaptive_persistence_config") if isinstance(cfg.get("adaptive_persistence_config"), dict) else None,
         )
         record(
