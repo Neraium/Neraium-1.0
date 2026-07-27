@@ -172,3 +172,22 @@ def test_data_quality_block_does_not_change_active_model_version_or_memory() -> 
     result = evaluate_phase4(**inputs)
     assert result["behavioral_model"]["learning_decision"]["decision"] == "blocked_by_data_quality"
     assert store.load_model(model_id) == model_before
+
+
+def test_configured_learning_delay_matures_from_persisted_decision_history() -> None:
+    store = InMemoryBehavioralModelStore()
+    first_inputs = _phase4_args(store, run_id="delay-run-1")
+    first_inputs["config"]["phase_4_config"] = {
+        "baseline_evolution_config": {"learning_delay_runs": 2}
+    }
+    first = evaluate_phase4(**first_inputs)
+    assert first["behavioral_model"]["learning_decision"]["decision"] == "deferred"
+    assert first["behavioral_model"]["model_version"] is None
+
+    second_inputs = _phase4_args(store, run_id="delay-run-2")
+    second_inputs["config"]["phase_4_config"] = {
+        "baseline_evolution_config": {"learning_delay_runs": 2}
+    }
+    second = evaluate_phase4(**second_inputs)
+    assert second["behavioral_model"]["learning_decision"]["decision"] == "accepted"
+    assert second["behavioral_model"]["model_version"] == "v1"

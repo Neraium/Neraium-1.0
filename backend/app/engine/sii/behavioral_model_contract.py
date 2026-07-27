@@ -62,6 +62,10 @@ class BehavioralModelStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def list_learning_decisions(self, model_id: str) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    @abstractmethod
     def retire_relationship(
         self,
         model_id: str,

@@ -46,6 +46,7 @@ def evaluate_baseline_evolution(
     source_run_id: str,
     effective_time: str,
     model_version: str | None,
+    prior_learning_decisions: list[dict[str, Any]] | None = None,
     config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Gate every behavioral/baseline write with explicit deterministic rules."""
@@ -189,7 +190,10 @@ def evaluate_baseline_evolution(
         decision = str(failed_checks[0]["failure_decision"])
         reason = str(failed_checks[0]["reason"])
     else:
-        stable_candidates = _consecutive_stable_candidates(active_model) + 1
+        stable_candidates = _consecutive_stable_candidates(
+            active_model,
+            prior_learning_decisions,
+        ) + 1
         delay = max(1, int(cfg["learning_delay_runs"]))
         if stable_candidates < delay:
             decision = "deferred"
@@ -286,10 +290,17 @@ def _candidate_baseline_version(active_version: str | None, source_run_id: str) 
     return f"baseline-v{sequence}-{digest}"
 
 
-def _consecutive_stable_candidates(active_model: dict[str, Any] | None) -> int:
-    if not isinstance(active_model, dict):
-        return 0
-    decisions = active_model.get("learning_decisions") or []
+def _consecutive_stable_candidates(
+    active_model: dict[str, Any] | None,
+    prior_learning_decisions: list[dict[str, Any]] | None,
+) -> int:
+    decisions = (
+        prior_learning_decisions
+        if isinstance(prior_learning_decisions, list)
+        else active_model.get("learning_decisions") or []
+        if isinstance(active_model, dict)
+        else []
+    )
     count = 0
     for item in reversed(decisions):
         if isinstance(item, dict) and item.get("decision") in {"accepted", "deferred"}:

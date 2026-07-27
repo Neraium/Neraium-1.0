@@ -73,6 +73,7 @@ def evaluate_phase4(
     storage_writes: list[dict[str, Any]] = []
     active_model: dict[str, Any] | None = None
     snapshots: list[dict[str, Any]] = []
+    prior_learning_decisions: list[dict[str, Any]] = []
     store: BehavioralModelStore | None = None
 
     if identity.get("memory_update_allowed"):
@@ -81,6 +82,7 @@ def evaluate_phase4(
             store = configured_store if configured_store is not None else RuntimeBehavioralModelStore()
             active_model = store.load_model(str(identity["model_id"]))
             snapshots = store.list_snapshots(str(identity["model_id"]))
+            prior_learning_decisions = store.list_learning_decisions(str(identity["model_id"]))
             trace["behavioral_model_loaded"] = active_model is not None
             trace["behavioral_model_created"] = active_model is None
         except Exception as exc:
@@ -162,6 +164,7 @@ def evaluate_phase4(
         source_run_id=source_run_id,
         effective_time=observed_at,
         model_version=str(active_model.get("model_version")) if active_model else "v1",
+        prior_learning_decisions=prior_learning_decisions,
         config=phase4_cfg.get("baseline_evolution_config") if isinstance(phase4_cfg.get("baseline_evolution_config"), dict) else None,
     )
     if not identity.get("memory_update_allowed"):
@@ -350,7 +353,11 @@ def evaluate_phase4(
             "snapshot_id": current_snapshot.get("snapshot_id") if current_snapshot else None,
             "previous_snapshot_id": previous_snapshot.get("snapshot_id") if previous_snapshot else None,
             "signals_evaluated": len(numeric_columns),
-            "relationships_evaluated": len((active_model or {}).get("relationship_memory", {})),
+            "relationships_evaluated": len(
+                relationship_graph.get("eligible_edges")
+                if isinstance(relationship_graph.get("eligible_edges"), list)
+                else relationship_graph.get("edges", [])
+            ),
             "expected_models_evaluated": int(expected_behavior.get("models_evaluated") or 0),
             "residuals_generated": len(expected_behavior.get("expected_values", [])),
             "candidate_paths_generated": len(propagation.get("candidate_paths", [])),

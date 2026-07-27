@@ -133,6 +133,17 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
                 self._audit(state, "record_learning_decision", source_run_id, decision_id)
             return stored
 
+    def list_learning_decisions(self, model_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            state = self._state.get(str(model_id))
+            if not state:
+                return []
+            return [
+                deepcopy(state["learning_decisions"][decision_id])
+                for decision_id in state["decision_order"]
+                if decision_id in state["learning_decisions"]
+            ]
+
     def retire_relationship(
         self,
         model_id: str,
@@ -309,6 +320,10 @@ class RuntimeBehavioralModelStore(InMemoryBehavioralModelStore):
     def load_active_baseline(self, model_id: str) -> dict[str, Any] | None:
         self._load_ledger(model_id)
         return super().load_active_baseline(model_id)
+
+    def list_learning_decisions(self, model_id: str) -> list[dict[str, Any]]:
+        self._load_ledger(model_id)
+        return super().list_learning_decisions(model_id)
 
     def _load_ledger(self, model_id: str) -> None:
         model_id = str(model_id)
