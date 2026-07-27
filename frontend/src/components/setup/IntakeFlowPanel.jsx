@@ -1,6 +1,7 @@
 import { Component, useEffect, useRef, useState } from "react";
 
-import { buildIntakeStages, normalizeUploadStatus as normalizeUploadLifecycle } from "../../viewModels/uploadFlow";
+import { normalizeUploadStatus as normalizeUploadLifecycle } from "../../viewModels/uploadFlow";
+import { isSafeBaselineCopy, resolveWorkflowProgress } from "../../viewModels/workflowProgress";
 import { Panel } from "../workspacePrimitives";
 import "../../styles/operational-workflow.css";
 import "../../styles/upload-intelligence.css";
@@ -32,29 +33,30 @@ function normalizeStatusText(value) {
     .toLowerCase();
 }
 
-function primaryJobStatus(uploadJob, uploadState) {
-  return normalizeUploadLifecycle(
-    uploadJob?.processing_state
-      ?? uploadJob?.processingState
-      ?? uploadJob?.status
-      ?? uploadState
-  );
-}
-
 function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) {
   const normalized = normalizeUploadLifecycle(uploadState);
   if (normalized === "completion_error") return "completion_error";
   if (["failed", "error", "validation_error", "cancelled", "timeout"].includes(normalized)) return "failed";
-  if (["save_complete", "complete"].includes(normalized)) return "complete";
-  if (["saving_results", "navigation_pending"].includes(normalized)) return "finalizing";
+  if (["save_complete", "complete", "baseline_ready", "baseline_active"].includes(normalized)) return "complete";
+  if (["saving_results", "navigation_pending", "baseline_review"].includes(normalized)) return "finalizing";
   if (normalized === "uploading") return "uploading";
   if (isUploadProcessing(uploadState)) return "analyzing";
   if (hasSelectedFiles || normalized === "validated") return "fileSelected";
   return "noFile";
 }
 
-function operatorStatusText({ viewState, uploadJob, uploadState, uploadTransfer, latestMessage }) {
+function operatorStatusText({ viewState, uploadJob, uploadState, uploadTransfer, latestMessage, workflowProgress }) {
   const cleanMessage = String(latestMessage || "").trim();
+  if (workflowProgress.kind === "baseline") {
+    if (viewState === "uploading") {
+      return uploadTransfer?.stage === "validating" ? "Validating historical dataset" : "Importing historical dataset";
+    }
+    if (viewState === "complete") return "Candidate baseline ready";
+    if (viewState === "finalizing") return workflowProgress.current?.detail || "Preparing Baseline Suitability Report";
+    if (viewState === "failed") return "Baseline construction failed";
+    if (viewState === "completion_error") return "Candidate baseline saved, report not opened";
+    return workflowProgress.current?.detail || "Preparing baseline construction";
+  }
   if (viewState === "uploading") {
     return uploadTransfer?.stage === "validating" ? "Validating data" : "Uploading dataset";
   }
@@ -63,14 +65,7 @@ function operatorStatusText({ viewState, uploadJob, uploadState, uploadTransfer,
   if (viewState === "failed") return "Dataset import failed";
   if (viewState === "completion_error") return "Analysis saved, results not opened";
   if (/temporarily unavailable/i.test(cleanMessage)) return cleanMessage;
-
-  const normalized = primaryJobStatus(uploadJob, uploadState);
-  if (["writing_state", "cognition_ready", "saving_result", "saving_results"].includes(normalized)) return "Preparing evidence";
-  if (["accepted", "queued", "validating_schema", "parsing"].includes(normalized)) return "Validating data";
-  if (["mapping", "mapping_signals", "detecting_variables"].includes(normalized)) return "Mapping signals";
-  if (["processing", "baseline_modeling", "building_baseline"].includes(normalized)) return "Building baseline";
-  if (["building_fingerprint", "structural_scoring", "running_sii"].includes(normalized)) return "Comparing relationships";
-  return cleanMessage || "Preparing analysis";
+  return workflowProgress.current?.detail || cleanMessage || "Preparing analysis";
 }
 
 function resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent }) {
@@ -190,44 +185,6 @@ function completionSummary({ analysisResult }) {
   ];
 }
 
-const FINGERPRINT_BUILD_STAGES = [
-  {
-    id: "validate",
-    label: "Validating data",
-    description: "Checking the dataset format and required signals.",
-    shortLabel: "Validate",
-    states: ["uploading", "queued", "accepted", "validating_schema", "parsing", "validated"],
-  },
-  {
-    id: "map",
-    label: "Mapping signals",
-    description: "Matching telemetry to supported systems and assets.",
-    shortLabel: "Map",
-    states: ["mapping", "mapping_signals", "detecting_variables"],
-  },
-  {
-    id: "baseline",
-    label: "Building baseline",
-    description: "Learning the expected relationships in the baseline window.",
-    shortLabel: "Baseline",
-    states: ["processing", "baseline_modeling", "building_baseline"],
-  },
-  {
-    id: "compare",
-    label: "Comparing relationships",
-    description: "Checking current behavior against the learned baseline.",
-    shortLabel: "Compare",
-    states: ["running_sii", "structural_scoring", "building_fingerprint"],
-  },
-  {
-    id: "evidence",
-    label: "Preparing evidence",
-    description: "Saving the strongest observations and confidence result.",
-    shortLabel: "Evidence",
-    states: ["writing_state", "cognition_ready", "saving_result", "saving_results", "navigation_pending"],
-  },
-];
-
 const FINGERPRINT_RENDERER_RECOVERY_KEY = "neraium.upload_fingerprint.compatibility_mode";
 const FINGERPRINT_RENDERER_REPORTED_KEY = "neraium.upload_fingerprint.compatibility_reported";
 const FINGERPRINT_RENDERER_MOUNT_KEY = "neraium.upload_fingerprint.mounts";
@@ -278,36 +235,24 @@ function networkProgress({ displayPercent, phase, stageIndex, complete }) {
   return Math.max(12, Math.min(100, Math.round(withinPhase)));
 }
 
-function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState, uploadTransfer }) {
+function resolveBuildVisualStage({ workflowProgress, viewState, uploadTransfer }) {
+  const stages = workflowProgress.stages;
   if (viewState === "complete") {
-    return { id: "complete", label: "Analysis complete", description: "Evidence is ready to review.", index: FINGERPRINT_BUILD_STAGES.length };
+    const stage = stages.at(-1);
+    return { ...stage, description: stage.description, shortLabel: stage.label, index: stages.length - 1 };
   }
-  if (viewState === "finalizing") return { ...FINGERPRINT_BUILD_STAGES[4], index: 4 };
   if (viewState === "uploading") {
-    if (uploadTransfer?.stage === "validating") {
-      return { ...FINGERPRINT_BUILD_STAGES[0], label: "Validating data", index: 0 };
-    }
-    return {
-      ...FINGERPRINT_BUILD_STAGES[0],
-      id: "upload",
-      label: "Uploading dataset",
-      description: "Sending the selected historical dataset securely.",
-      index: 0,
-    };
+    const targetId = uploadTransfer?.stage === "validating" ? "validate" : "import";
+    const index = Math.max(0, stages.findIndex((stage) => stage.id === targetId));
+    const stage = stages[index] ?? stages[0];
+    return { ...stage, shortLabel: stage.label, index };
   }
-
-  const rawStage = String(
-    uploadJob?.processing_state
-      ?? uploadJob?.processingState
-      ?? uploadJob?.status
-      ?? uploadState
-      ?? ""
-  ).trim().toLowerCase();
-  const normalized = primaryJobStatus(uploadJob, uploadState);
-  const rawMatchedIndex = FINGERPRINT_BUILD_STAGES.findIndex((stage) => stage.states.includes(rawStage));
-  const normalizedMatchedIndex = FINGERPRINT_BUILD_STAGES.findIndex((stage) => stage.states.includes(normalized));
-  const index = rawMatchedIndex >= 0 ? rawMatchedIndex : normalizedMatchedIndex >= 0 ? normalizedMatchedIndex : 2;
-  return { ...FINGERPRINT_BUILD_STAGES[index], index };
+  return {
+    ...workflowProgress.current,
+    description: workflowProgress.current?.detail || workflowProgress.current?.description,
+    shortLabel: workflowProgress.current?.label,
+    index: workflowProgress.currentIndex,
+  };
 }
 
 function safeStorage(storageName) {
@@ -405,16 +350,18 @@ function OperationalFingerprintBuild(props) {
   return <FingerprintRendererBoundary {...props} />;
 }
 
-function OperationalFingerprintBuildVisual({ percent, stage, complete = false, forcedTier = "", recoveryReason = "" }) {
+function OperationalFingerprintBuildVisual({ percent, stage, stages = [], kind = "monitoring", complete = false, forcedTier = "", recoveryReason = "" }) {
   const displayPercent = clampPercent(percent);
   const stageIndex = stage?.index ?? 0;
+  const networkStageIndex = Math.round((stageIndex / Math.max(1, stages.length - 1)) * 3);
   const rootRef = useRef(null);
   const [renderProfile, setRenderProfile] = useState(() => forcedTier ? { tier: forcedTier, reason: recoveryReason || "renderer-recovery" } : detectFingerprintRenderTier());
   const renderTier = forcedTier || renderProfile.tier;
   const compatibilityMode = renderTier === "safe";
   const particleCount = FINGERPRINT_RENDERER_PARTICLES[renderTier] ?? 0;
-  const statusTitle = stage?.label || (complete ? "Analysis complete" : "Preparing analysis");
-  const statusDetail = stage?.description || (complete ? "Evidence is ready to review." : "Checking the dataset.");
+  const baselineWorkflow = kind === "baseline";
+  const statusTitle = stage?.label || (complete ? (baselineWorkflow ? "Candidate baseline ready" : "Analysis complete") : (baselineWorkflow ? "Preparing baseline construction" : "Preparing analysis"));
+  const statusDetail = stage?.description || (complete ? (baselineWorkflow ? "The Baseline Suitability Report is ready." : "Observations are ready to review.") : "Checking the dataset.");
 
   useEffect(() => {
     if (forcedTier) return undefined;
@@ -463,8 +410,9 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
       className={`upload-fingerprint-build infrastructure-constellation upload-fingerprint-build--${renderTier}${complete ? " upload-fingerprint-build--complete" : ""}`}
       data-render-tier={renderTier}
       data-render-reason={renderProfile.reason}
-      data-build-stage={stage?.id || "evidence"}
-      aria-label={`Analysis ${displayPercent}% complete`}
+      data-build-stage={stage?.id || (baselineWorkflow ? "import" : "observations")}
+      data-progress-kind={kind}
+      aria-label={`${baselineWorkflow ? "Baseline construction" : "Analysis"} ${displayPercent}% complete`}
       aria-valuemin="0"
       aria-valuemax="100"
       aria-valuenow={displayPercent}
@@ -513,7 +461,7 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
         </g>
         <g className="upload-fingerprint-build__relationship-links">
           {BASELINE_NETWORK_LINKS.map((link, index) => {
-            const fill = networkProgress({ displayPercent, phase: link.phase, stageIndex, complete });
+            const fill = networkProgress({ displayPercent, phase: link.phase, stageIndex: networkStageIndex, complete });
             return <path key={link.path} d={link.path} pathLength="100" style={{ "--network-offset": compatibilityMode ? (fill > 0 ? 0 : 100) : 100 - fill, "--link-index": index }} />;
           })}
         </g>
@@ -532,18 +480,18 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
         </g>
       </svg>
       {complete ? <div className="upload-fingerprint-build__check" aria-hidden="true">✓</div> : null}
-      <ol className="upload-fingerprint-build__nodes" aria-label="Analysis stages">
-        {FINGERPRINT_BUILD_STAGES.map((item, index) => {
+      <ol className="upload-fingerprint-build__nodes" aria-label={baselineWorkflow ? "Baseline construction stages" : "Analysis stages"}>
+        {stages.map((item, index) => {
           const state = complete || index < stageIndex ? "complete" : index === stageIndex ? "active" : "pending";
           return (
             <li
               key={item.id}
-              className={`${state === "complete" ? "is-complete" : state === "active" ? "is-active" : ""}${index === FINGERPRINT_BUILD_STAGES.length - 1 ? " is-final" : ""}`}
-              aria-label={`${item.shortLabel}: ${state === "complete" ? "completed" : state}`}
+              className={`${state === "complete" ? "is-complete" : state === "active" ? "is-active" : ""}${index === stages.length - 1 ? " is-final" : ""}`}
+              aria-label={`${item.label}: ${state === "complete" ? "completed" : state}`}
               aria-current={state === "active" ? "step" : undefined}
             >
               <i aria-hidden="true">{state === "complete" ? "✓" : ""}</i>
-              <b>{item.shortLabel}</b>
+              <b>{item.label}</b>
             </li>
           );
         })}
@@ -553,42 +501,58 @@ function OperationalFingerprintBuildVisual({ percent, stage, complete = false, f
 }
 
 const SUPPORTED_HISTORICAL_SOURCES = ["CSV", "SCADA Export", "Historian Export"];
-const BASELINE_WORKFLOW_STEPS = ["Import", "Learn", "Analyze", "Ready"];
 
-function baselineWorkflowStep({ viewState, uploadJob, uploadState }) {
-  if (["complete", "completion_error"].includes(viewState)) return 3;
-  if (viewState === "finalizing") return 2;
-  if (viewState !== "analyzing") return 0;
-  const normalized = primaryJobStatus(uploadJob, uploadState);
-  if (["processing", "baseline_modeling", "building_baseline"].includes(normalized)) return 1;
-  return 2;
-}
-
-function BaselineWorkflowStepper({ currentStep }) {
+function WorkflowStepper({ progress }) {
+  const baselineWorkflow = progress.kind === "baseline";
   return (
-    <ol className="baseline-import-stepper" aria-label="Baseline analysis progress">
-      {BASELINE_WORKFLOW_STEPS.map((label, index) => {
-        const state = index < currentStep ? "complete" : index === currentStep ? "current" : "upcoming";
-        return (
-          <li key={label} className={`baseline-import-stepper__step baseline-import-stepper__step--${state}`} aria-current={state === "current" ? "step" : undefined}>
-            <span className="baseline-import-stepper__number" aria-hidden="true">{state === "complete" ? "✓" : index + 1}</span>
-            <span className="baseline-import-stepper__label">{label}</span>
-          </li>
-        );
-      })}
-    </ol>
+    <>
+      <ol className="baseline-import-stepper" aria-label={baselineWorkflow ? "Baseline construction progress" : "Monitoring analysis progress"}>
+        {progress.stages.map((stage, index) => {
+          const state = stage.state === "active" ? "current" : stage.state === "complete" ? "complete" : "upcoming";
+          return (
+            <li key={stage.id} className={`baseline-import-stepper__step baseline-import-stepper__step--${state}`} aria-current={state === "current" ? "step" : undefined}>
+              <span className="baseline-import-stepper__number" aria-hidden="true">{state === "complete" ? "✓" : index + 1}</span>
+              <span className="baseline-import-stepper__label">{stage.label}</span>
+            </li>
+          );
+        })}
+      </ol>
+      {baselineWorkflow && progress.current?.id === "learn" ? (
+        <ol className="baseline-learning-steps" aria-label="Baseline learning steps">
+          {progress.learnSteps.map((step) => (
+            <li key={step.id} className={`baseline-learning-steps__step baseline-learning-steps__step--${step.state}`} aria-current={step.state === "active" ? "step" : undefined}>
+              {step.label}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </>
   );
 }
 
-function uploadFingerprintStatusText(viewState, hasSelectedFiles) {
+function uploadFingerprintStatusText(viewState, hasSelectedFiles, workflowProgress, activationState) {
+  if (workflowProgress.kind === "baseline") {
+    if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Baseline Construction in Progress";
+    if (viewState === "complete") return activationState === "active" ? "Baseline Active" : "Candidate Baseline Ready";
+    if (viewState === "failed") return hasSelectedFiles ? "Ready for Baseline" : "Awaiting Baseline";
+    return hasSelectedFiles ? "Ready for Baseline" : "Awaiting Baseline";
+  }
   if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Analysis in Progress";
-  if (viewState === "complete") return "Baseline Active";
-  if (viewState === "failed") return hasSelectedFiles ? "Ready for Baseline" : "Awaiting Baseline";
-  if (hasSelectedFiles) return "Ready for Baseline";
-  return "Awaiting Baseline";
+  if (viewState === "complete") return "Analysis Complete";
+  return hasSelectedFiles ? "Ready for Analysis" : "Awaiting Dataset";
 }
 
-function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
+function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, workflowProgress }) {
+  if (workflowProgress.kind === "baseline") {
+    return [
+      ["Baseline job ID", uploadJob?.job_id ?? uploadJob?.id],
+      ["Baseline stage", workflowProgress.current?.label],
+      ["Elapsed time", uploadJob?.processing_time_seconds ? `${uploadJob.processing_time_seconds}s` : null],
+      ["Transfer", uploadTransfer?.label],
+      ["Candidate model", uploadJob?.result_available ? "Available" : null],
+      ["Current step", workflowProgress.current?.detail],
+    ].filter(([, value]) => String(value ?? "").trim());
+  }
   return [
     ["Analysis ID", uploadJob?.job_id ?? uploadJob?.id],
     ["Analysis stage", uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status],
@@ -601,11 +565,25 @@ function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queued
   ].filter(([, value]) => String(value ?? "").trim());
 }
 
-function buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage }) {
+function buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage, workflowProgress }) {
+  if (workflowProgress.kind === "baseline") {
+    if (viewState === "completion_error") {
+      return [
+        ["What failed", "The candidate baseline was saved, but its report did not open."],
+        ["What still succeeded", "The candidate Behavioral Digital Model was saved."],
+        ["Next action", "Open the Baseline Suitability Report again or refresh."],
+      ];
+    }
+    return [
+      ["What failed", errorMessage || "Baseline construction could not be completed."],
+      ["What still succeeded", hasSelectedFiles ? `${selectedFileLabel} is still selected for retry.` : "No dataset is currently selected."],
+      ["Next action", uploadJob?.job_id ? "Retry baseline construction. If the job expired, choose the dataset again." : "Choose a historical dataset and start baseline construction again."],
+    ];
+  }
   if (viewState === "completion_error") {
     return [
       ["What failed", "The analysis saved, but Portfolio did not open the result."],
-      ["What still succeeded", "The behavior baseline and evidence record were saved."],
+      ["What still succeeded", "The analysis result was saved."],
       ["Next action", "Open the analysis again. If that fails, analyze another dataset or refresh."],
     ];
   }
@@ -643,21 +621,16 @@ function RecoverySummary({ rows }) {
   );
 }
 
-function AdvancedDetails({ latestUploadSnapshot, uploadJob, uploadState, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
-  const rows = buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug });
-  const stages = buildIntakeStages(
-    latestUploadSnapshot?.latest_result ?? null,
-    uploadJob?.processing_state ?? uploadJob?.status ?? uploadState,
-    null,
-    uploadJob,
-  );
-  const compactStages = stages.filter((stage) => ["active", "failed", "complete"].includes(stage.state));
+function AdvancedDetails({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, workflowProgress }) {
+  const rows = buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, workflowProgress });
+  const compactStages = workflowProgress.stages.filter((stage) => ["active", "complete"].includes(stage.state));
+  const baselineWorkflow = workflowProgress.kind === "baseline";
 
   if (!rows.length && !compactStages.length) return null;
 
   return (
     <details className="upload-advanced-details">
-      <summary><span className="upload-advanced-details__summary-label"><i aria-hidden="true" />Analysis Details</span><span className="upload-advanced-details__chevron" aria-hidden="true" /></summary>
+      <summary><span className="upload-advanced-details__summary-label"><i aria-hidden="true" />{baselineWorkflow ? "Baseline Details" : "Analysis Details"}</span><span className="upload-advanced-details__chevron" aria-hidden="true" /></summary>
       {rows.length ? (
         <dl className="upload-advanced-details__grid">
           {rows.map(([label, value]) => (
@@ -669,10 +642,10 @@ function AdvancedDetails({ latestUploadSnapshot, uploadJob, uploadState, uploadT
         </dl>
       ) : null}
       {compactStages.length ? (
-        <ol className="upload-advanced-details__stages" aria-label="Analysis stages">
+        <ol className="upload-advanced-details__stages" aria-label={baselineWorkflow ? "Baseline construction stages" : "Analysis stages"}>
           {compactStages.map((stage) => (
-            <li key={`${stage.title}-${stage.state}`}>
-              <strong>{stage.title}</strong>
+            <li key={`${stage.id}-${stage.state}`}>
+              <strong>{stage.label}</strong>
               <span>{stage.state}</span>
             </li>
           ))}
@@ -713,6 +686,7 @@ export default function IntakeFlowPanel({
 }) {
   void uploadStateMessage;
   void batchResults;
+  void uploadDebug;
   const [isDragActive, setIsDragActive] = useState(false);
 
   const hasSelectedFiles = selectedFiles?.length > 0;
@@ -722,21 +696,24 @@ export default function IntakeFlowPanel({
   const fileKind = String(pendingUploadKind || "csv").toUpperCase();
   const rawViewState = uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing });
   const analysisResult = suppliedAnalysisResult ?? finalAnalysisResult(latestUploadSnapshot, uploadJob);
-  const baselineCompletion = Boolean(baselineResult?.candidate_model);
+  const baselineCompletion = Boolean(baselineResult?.candidate_model || baselineResult?.candidate_behavioral_digital_model);
   const viewState = rawViewState === "complete" && !analysisResult && !baselineCompletion ? "finalizing" : rawViewState;
-  const statusText = operatorStatusText({ viewState, uploadJob, uploadState, uploadTransfer, latestMessage });
+  const workflowProgress = resolveWorkflowProgress({ workflow, payload: uploadJob, clientState: uploadState });
+  const statusText = operatorStatusText({ viewState, uploadJob, uploadState, uploadTransfer, latestMessage, workflowProgress });
   const mainPercent = resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent });
-  const fingerprintBuildStage = resolveFingerprintBuildStage({ viewState, uploadJob, uploadState, uploadTransfer });
-  const errorMessage = String(latestMessage || "Choose another telemetry dataset and try again.").trim();
-  const failureRecoveryRows = buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage });
+  const fingerprintBuildStage = resolveBuildVisualStage({ workflowProgress, viewState, uploadTransfer });
+  const rawErrorMessage = String(latestMessage || "Choose another telemetry dataset and try again.").trim();
+  const errorMessage = workflowProgress.kind === "baseline" && !isSafeBaselineCopy(rawErrorMessage)
+    ? "Baseline construction could not be completed. Choose the historical dataset and try again."
+    : rawErrorMessage;
+  const failureRecoveryRows = buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage, workflowProgress });
   const summary = baselineCompletion
     ? baselineCompletionSummary(baselineResult)
     : analysisResult ? completionSummary({ analysisResult }) : [];
   const completed = analysisResult ? completionResult(analysisResult) : null;
-  const activationState = baselineResult?.activation?.state ?? baselineResult?.candidate_model?.status;
+  const activationState = baselineResult?.activation?.state ?? baselineResult?.candidate_model?.status ?? baselineResult?.candidate_behavioral_digital_model?.status;
   const showProgress = viewState === "uploading" || viewState === "analyzing" || viewState === "finalizing";
-  const fingerprintStatus = uploadFingerprintStatusText(viewState, hasSelectedFiles);
-  const workflowStep = baselineWorkflowStep({ viewState, uploadJob, uploadState });
+  const fingerprintStatus = uploadFingerprintStatusText(viewState, hasSelectedFiles, workflowProgress, activationState);
   const workflowLabel = {
     create_baseline: "Create Baseline",
     analyze_new_data: "Analyze New Data Against Active Baseline",
@@ -767,7 +744,7 @@ export default function IntakeFlowPanel({
         {(["noFile", "fileSelected"].includes(viewState)) ? <p className="intake-flow__subtitle">Choose whether this dataset creates a baseline, is analyzed against the active baseline, or extends it through controlled learning.</p> : null}
         <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose telemetry dataset CSV files" tabIndex={-1} onChange={handleFileSelection} />
 
-        <BaselineWorkflowStepper currentStep={workflowStep} />
+        <WorkflowStepper progress={workflowProgress} />
 
         {(viewState === "noFile" || viewState === "fileSelected") ? (
           <section
@@ -781,7 +758,7 @@ export default function IntakeFlowPanel({
               <div className="upload-baseline-card__header">
                 <div className="upload-analysis-card__copy">
                   <h3>Choose Dataset</h3>
-                  <p>Future operation is compared with what Neraium learns here.</p>
+                  <p>Neraium learns expected operating patterns from this historical dataset.</p>
                 </div>
                 <span className="upload-baseline-status" role="status" aria-live="polite"><i aria-hidden="true" />{fingerprintStatus}</span>
               </div>
@@ -840,12 +817,12 @@ export default function IntakeFlowPanel({
         ) : null}
 
         {showProgress ? (
-          <section className="upload-analysis-card upload-analysis-card--processing upload-analysis-card--compact" aria-live="polite" aria-label={`Analysis progress: ${statusText}`}>
+          <section className="upload-analysis-card upload-analysis-card--processing upload-analysis-card--compact" aria-live="polite" aria-label={`${workflowProgress.kind === "baseline" ? "Baseline construction" : "Analysis"} progress: ${statusText}`}>
             <div className="upload-analysis-card__content">
               <p className="upload-processing-file"><span>Dataset</span><strong>{selectedFileLabel}</strong></p>
               <p className="upload-processing-file"><span>Workflow</span><strong>{workflowLabel}</strong></p>
               <div className="upload-analysis-card__intelligence">
-                <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} />
+                <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} stages={workflowProgress.stages} kind={workflowProgress.kind} />
               </div>
             </div>
           </section>
@@ -854,14 +831,15 @@ export default function IntakeFlowPanel({
         {viewState === "complete" ? (
           <section className="upload-analysis-card upload-simple-card--complete upload-analysis-card--compact" aria-labelledby="analysis-complete-heading" aria-live="polite">
             <div className="upload-analysis-card__visual">
-              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
+              <OperationalFingerprintBuild percent={100} stage={resolveBuildVisualStage({ workflowProgress, viewState: "complete" })} stages={workflowProgress.stages} kind={workflowProgress.kind} complete />
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3 id="analysis-complete-heading">{baselineCompletion ? "Baseline construction complete" : "Analysis complete"}</h3>
+                <h3 id="analysis-complete-heading">{baselineCompletion ? "Baseline Suitability Report" : "Analysis complete"}</h3>
               </div>
               <p className="upload-processing-file"><span>Dataset</span><strong>{selectedFileLabel}</strong></p>
-              <dl className="upload-result-summary" aria-label="Analysis result summary">
+              {baselineCompletion ? <p className="upload-processing-file"><span>Result</span><strong>Candidate Behavioral Digital Model</strong></p> : null}
+              <dl className="upload-result-summary" aria-label={baselineCompletion ? "Baseline Suitability Report summary" : "Analysis result summary"}>
                 {summary.map((item) => (
                   <div key={item.label} className="upload-result-summary__item">
                     <dt>{item.label}</dt>
@@ -888,21 +866,21 @@ export default function IntakeFlowPanel({
         {viewState === "completion_error" ? (
           <section className="upload-analysis-card upload-simple-card--failed" role="alert" aria-live="assertive">
             <div className="upload-analysis-card__visual">
-              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
+              <OperationalFingerprintBuild percent={100} stage={resolveBuildVisualStage({ workflowProgress, viewState: "complete" })} stages={workflowProgress.stages} kind={workflowProgress.kind} complete />
               <div className="upload-analysis-card__status">
                 <span>Status</span>
-                <strong>Behavior Baseline Established</strong>
+                <strong>{workflowProgress.kind === "baseline" ? "Candidate Baseline Ready" : "Analysis Saved"}</strong>
               </div>
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3>Analysis Saved, Results Not Opened</h3>
+                <h3>{workflowProgress.kind === "baseline" ? "Candidate Baseline Saved, Report Not Opened" : "Analysis Saved, Results Not Opened"}</h3>
                 <span>{hasSelectedFiles ? selectedFileLabel : "Results saved"}</span>
               </div>
-              <p className="upload-error-message">{errorMessage || "The analysis was saved, but its results could not be opened. Try opening the analysis again."}</p>
+              <p className="upload-error-message">{errorMessage || (workflowProgress.kind === "baseline" ? "The candidate baseline was saved, but its report could not be opened." : "The analysis was saved, but its results could not be opened. Try opening the analysis again.")}</p>
               <RecoverySummary rows={failureRecoveryRows} />
               <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={onViewResults}>Open Analysis Again</button>
+                <button type="button" className="command-button" onClick={onViewResults}>{workflowProgress.kind === "baseline" ? "Open Baseline Report Again" : "Open Analysis Again"}</button>
                 <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Import Another Dataset</button>
               </div>
             </div>
@@ -913,13 +891,13 @@ export default function IntakeFlowPanel({
           <section className="upload-analysis-card upload-simple-card--failed upload-analysis-card--compact upload-analysis-card--single" role="alert" aria-live="assertive">
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3>Dataset Import Failed</h3>
+                <h3>{workflowProgress.kind === "baseline" ? "Baseline Construction Failed" : "Dataset Import Failed"}</h3>
                 <span>{hasSelectedFiles ? selectedFileLabel : "No file selected"}</span>
               </div>
               <p className="upload-error-message">{errorMessage}</p>
               <RecoverySummary rows={failureRecoveryRows} />
               <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles} title={!hasSelectedFiles ? "Choose the source dataset again before retrying." : "Retry this analysis."}>Retry Analysis</button>
+                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles} title={!hasSelectedFiles ? "Choose the source dataset again before retrying." : (workflowProgress.kind === "baseline" ? "Retry baseline construction." : "Retry this analysis.")}>{workflowProgress.kind === "baseline" ? "Retry Baseline Construction" : "Retry Analysis"}</button>
                 <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose Dataset</button>
               </div>
             </div>
@@ -928,14 +906,12 @@ export default function IntakeFlowPanel({
 
         {["failed", "completion_error"].includes(viewState) ? (
           <AdvancedDetails
-            latestUploadSnapshot={latestUploadSnapshot}
             uploadJob={uploadJob}
-            uploadState={uploadState}
             uploadTransfer={uploadTransfer}
             propagationLabel={propagationLabel}
             queuedWorkerDetail={queuedWorkerDetail}
             latestMessage={normalizeStatusText(latestMessage) === normalizeStatusText(statusText) ? "" : latestMessage}
-            uploadDebug={uploadDebug}
+            workflowProgress={workflowProgress}
           />
         ) : null}
       </form>

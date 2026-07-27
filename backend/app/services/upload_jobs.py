@@ -15,7 +15,11 @@ from app.services.analysis_explanations import build_analysis_explanation
 from app.services.analysis_result_contract import attach_analysis_result, build_normalized_telemetry
 from app.services.condition_corroboration import ConditionCorroborationService
 from app.services.baseline_contracts import (
+    JOB_TYPE_MONITORING_ANALYSIS,
+    MONITORING_PROGRESS_STATE_MACHINE,
     WORKFLOW_LEGACY_ANALYSIS,
+    assert_baseline_progress_contract,
+    baseline_progress_payload,
     is_baseline_workflow,
     normalize_workflow,
 )
@@ -566,7 +570,7 @@ def _start_optional_upload_finalization(**kwargs: Any) -> None:
     thread.start()
 
 
-def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str) -> None:
+def _publish_job_stage(job_id: str, *, stage: str, progress: int, label: str) -> None:
     timings, completed_phase, completed_ms = _advance_job_timing(job_id, stage)
     current = read_job(job_id) or read_upload_status(job_id) or {"job_id": job_id}
     bounded_progress = int(max(0, min(100, progress)))
@@ -588,7 +592,19 @@ def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str
         "stage_changed_at": stage_changed_at,
         "timings": {**dict(current.get("timings") or {}), **timings},
     }
-    payload.update(canonical_stage_payload(legacy_stage=stage, status=payload["status"], progress=progress, label=label))
+    if is_baseline_workflow(current.get("workflow")):
+        for monitoring_key in (
+            "analysis_state", "contract_stage", "contract_progress", "contract_label",
+            "monitoring_stage", "monitoring_step",
+            "propagation_stage", "propagation_progress", "propagation_label",
+        ):
+            payload.pop(monitoring_key, None)
+        payload.update(baseline_progress_payload(stage, progress=bounded_progress))
+        assert_baseline_progress_contract(payload)
+    else:
+        payload["job_type"] = JOB_TYPE_MONITORING_ANALYSIS
+        payload["progress_state_machine"] = MONITORING_PROGRESS_STATE_MACHINE
+        payload.update(canonical_stage_payload(legacy_stage=stage, status=payload["status"], progress=progress, label=label))
     persistence_started = time.perf_counter()
     write_job(payload)
     stage_persist_ms = (time.perf_counter() - persistence_started) * 1000
@@ -655,7 +671,7 @@ def _stream_csv_snapshot(path: Path, *, max_analysis_rows: int | None, job_id: s
         csv_progress_update_every=CSV_PROGRESS_UPDATE_EVERY,
         csv_chunk_size_rows=CSV_CHUNK_SIZE_ROWS,
         job_id=job_id,
-        on_progress=lambda current_job_id, stage, progress, label: _set_propagation_stage(current_job_id, stage=stage, progress=progress, label=label),
+        on_progress=lambda current_job_id, stage, progress, label: _publish_job_stage(current_job_id, stage=stage, progress=progress, label=label),
     )
 
 
@@ -824,7 +840,8 @@ def _build_csv_result(
     initiated_by = job_context.get("initiated_by", "anonymous")
     request_id = job_context.get("request_id")
     upload_session_id = job_context.get("upload_session_id") or job_id
-    _set_propagation_stage(job_id, stage="cleaning_imputing_data", progress=45, label=_progress_label("cleaning_imputing_data"))
+    workflow = normalize_workflow(job_context.get("workflow") or WORKFLOW_LEGACY_ANALYSIS)
+    _publish_job_stage(job_id, stage="cleaning_imputing_data", progress=45, label=_progress_label("cleaning_imputing_data"))
     numeric_columns = _detect_numeric_columns(rows, columns, exclude={timestamp_column})
     matrix_rows_for_profiles = [[str(row.get(column, "")) for column in columns] for row in rows]
     numeric_profiles = []
@@ -839,8 +856,8 @@ def _build_csv_result(
             }
         )
 
-    _set_propagation_stage(job_id, stage="profiling_data_quality", progress=55, label=_progress_label("profiling_data_quality"))
-    workflow = normalize_workflow(job_context.get("workflow") or WORKFLOW_LEGACY_ANALYSIS)
+    if not is_baseline_workflow(workflow):
+        _publish_job_stage(job_id, stage="profiling_data_quality", progress=55, label=_progress_label("profiling_data_quality"))
     if is_baseline_workflow(workflow):
         baseline_result = build_behavioral_baseline(
             job_id=job_id,
@@ -855,7 +872,7 @@ def _build_csv_result(
             workflow=workflow,
             approval_required=bool(job_context.get("approval_required", True)),
             active_model=read_active_behavioral_model(),
-            stage_notifier=_set_propagation_stage,
+            stage_notifier=_publish_job_stage,
         )
         candidate = baseline_result["candidate_model"]
         suitability = baseline_result["baseline_suitability"]
@@ -871,17 +888,12 @@ def _build_csv_result(
             "status_url": f"/api/data/upload-status/{job_id}",
             "baseline_result_url": f"/api/data/baselines/jobs/{job_id}",
             "status": "COMPLETE",
-            "processing_state": "complete",
-            "analysis_state": "completed",
             "workflow": workflow,
             "workflow_state": activation.get("state"),
             "percent": 100,
             "progress": 100,
             "progress_label": "Behavioral baseline candidate ready.",
             "message": "Behavioral baseline candidate ready.",
-            "propagation_stage": "complete",
-            "propagation_progress": 100,
-            "propagation_label": "Behavioral baseline candidate ready.",
             "result_available": True,
             "baseline_result_available": True,
             "baseline_candidate_created": True,
@@ -907,14 +919,8 @@ def _build_csv_result(
             "columns_detected": len(columns),
             "initiated_by": initiated_by,
         }
-        summary.update(
-            canonical_stage_payload(
-                legacy_stage="complete",
-                status="COMPLETE",
-                progress=100,
-                label="Behavioral baseline candidate ready.",
-            )
-        )
+        summary.update(baseline_progress_payload("baseline_ready", progress=100))
+        assert_baseline_progress_contract(summary)
         job_scope = dataset_scope_from_payload(job_context) or current_dataset_scope()
         summary["session_scope"] = build_session_scope(
             job_id,
@@ -1048,7 +1054,12 @@ def _build_csv_result(
         build_replay=_build_replay,
         minimal_replay=_minimal_replay,
         build_upload_engine_result=_build_upload_engine_result,
-        stage_notifier=_set_propagation_stage,
+        stage_notifier=_publish_job_stage,
+        active_baseline_model=(
+            read_active_behavioral_model()
+            if workflow == "analyze_new_data"
+            else None
+        ),
     )
     sii_result = pipeline["sii_result"]
     replay = pipeline["replay"]
@@ -1232,7 +1243,7 @@ def _build_csv_result(
     summary["traceability"] = dict(result["traceability"])
     summary["decision_integrity"] = dict(result["traceability"])
 
-    _set_propagation_stage(job_id, stage="saving_result", progress=95, label=_progress_label("saving_result"))
+    _publish_job_stage(job_id, stage="saving_result", progress=95, label=_progress_label("saving_result"))
     summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label=_progress_label("complete")))
     _finalize_completed_upload(
         job_id=job_id,
@@ -1555,6 +1566,27 @@ def _persist_job_record(job_id: str, payload: dict[str, Any]) -> None:
 
 def write_job(*args) -> None:
     job_id, payload = _normalize_job_write_args(args)
+    if is_baseline_workflow(payload.get("workflow")):
+        baseline_fields = baseline_progress_payload(
+            payload.get("processing_state") or payload.get("propagation_stage") or payload.get("status"),
+            progress=payload.get("percent", payload.get("progress", 0)),
+        )
+        for monitoring_key in (
+            "analysis_state", "contract_stage", "contract_progress", "contract_label",
+            "monitoring_stage", "monitoring_step",
+            "propagation_stage", "propagation_progress", "propagation_label",
+        ):
+            payload.pop(monitoring_key, None)
+        payload.update(baseline_fields)
+        assert_baseline_progress_contract(payload)
+    else:
+        for baseline_key in (
+            "baseline_stage", "baseline_stage_label", "baseline_step", "baseline_step_label",
+            "baseline_stage_order", "baseline_learn_steps", "baseline_learn_step_index",
+        ):
+            payload.pop(baseline_key, None)
+        payload["job_type"] = JOB_TYPE_MONITORING_ANALYSIS
+        payload["progress_state_machine"] = MONITORING_PROGRESS_STATE_MACHINE
     payload, scope = _scope_job_payload(job_id, payload)
     _cache_job_payload(job_id, payload)
     status_text = str(payload.get("status") or "").upper()
@@ -1631,7 +1663,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
     _begin_job_timing(job_id, dict(existing_job.get("timings") or {}))
 
     if job_id:
-        _set_propagation_stage(job_id, stage="reading_csv", progress=10, label=_progress_label("reading_csv"))
+        _publish_job_stage(job_id, stage="reading_csv", progress=10, label=_progress_label("reading_csv"))
 
     try:
         snapshot = _stream_csv_snapshot(
@@ -1643,7 +1675,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
             job_id=job_id,
         )
 
-        _set_propagation_stage(
+        _publish_job_stage(
             job_id,
             stage="detecting_schema_signals",
             progress=35,

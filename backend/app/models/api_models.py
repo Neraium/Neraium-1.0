@@ -10,7 +10,13 @@ from app.contracts import ContractModel, EmailAddress, Identifier, OptionalNote,
 class UploadAcceptedResponse(BaseModel):
     job_id: str
     dataset_id: str | None = None
-    analysis_state: str = "analysis_queued"
+    analysis_state: str | None = None
+    job_type: Literal["baseline_construction", "monitoring_analysis"] = "monitoring_analysis"
+    progress_state_machine: Literal["baseline_construction.v1", "sii_monitoring.v1"] = "sii_monitoring.v1"
+    baseline_stage: str | None = None
+    baseline_stage_label: str | None = None
+    baseline_step: str | None = None
+    baseline_step_label: str | None = None
     status: str
     progress: int
     processing_state: str
@@ -39,7 +45,16 @@ class UploadAcceptedResponse(BaseModel):
 class UploadStatusResponse(BaseModel): 
     job_id: str | None
     dataset_id: str | None = None
-    analysis_state: str = "no_dataset"
+    analysis_state: str | None = None
+    job_type: Literal["baseline_construction", "monitoring_analysis"] = "monitoring_analysis"
+    progress_state_machine: Literal["baseline_construction.v1", "sii_monitoring.v1"] = "sii_monitoring.v1"
+    baseline_stage: str | None = None
+    baseline_stage_label: str | None = None
+    baseline_step: str | None = None
+    baseline_step_label: str | None = None
+    baseline_stage_order: list[str] = Field(default_factory=list)
+    baseline_learn_steps: list[dict[str, Any]] = Field(default_factory=list)
+    baseline_learn_step_index: int | None = None
     status: str
     progress: int
     processing_state: str
@@ -114,11 +129,14 @@ class BehavioralModelResponse(BaseModel):
     relationship_graph: dict[str, Any]
     expected_behavior_models: list[dict[str, Any]]
     suitability: BaselineSuitabilityResponse
+    construction: dict[str, Any]
     activation: dict[str, Any]
 
 
 class BaselineConstructionResultResponse(BaseModel):
     contract_version: Literal["baseline-suitability.v1"]
+    result_type: Literal["baseline_suitability_report"]
+    report_title: Literal["Baseline Suitability Report"]
     job_id: str
     dataset_id: str
     workflow: Literal["create_baseline", "extend_baseline"]
@@ -127,7 +145,9 @@ class BaselineConstructionResultResponse(BaseModel):
     filename: str
     completed_at: str
     candidate_model: BehavioralModelResponse
+    candidate_behavioral_digital_model: BehavioralModelResponse
     baseline_suitability: BaselineSuitabilityResponse
+    baseline_suitability_report: BaselineSuitabilityResponse
     activation: dict[str, Any]
     processing_trace: dict[str, Any]
 

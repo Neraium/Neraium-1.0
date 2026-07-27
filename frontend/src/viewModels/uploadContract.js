@@ -1,3 +1,5 @@
+import { isSafeBaselineCopy } from "./workflowProgress";
+
 export const UPLOAD_STATUSES = Object.freeze({
   IDLE: "idle",
   VALIDATED: "validated",
@@ -6,6 +8,10 @@ export const UPLOAD_STATUSES = Object.freeze({
   QUEUED: "queued",
   PROCESSING: "processing",
   STRUCTURAL_SCORING: "structural_scoring",
+  BASELINE_PROCESSING: "baseline_processing",
+  BASELINE_REVIEW: "baseline_review",
+  BASELINE_READY: "baseline_ready",
+  BASELINE_ACTIVE: "baseline_active",
   SAVING_RESULTS: "saving_results",
   SAVE_COMPLETE: "save_complete",
   NAVIGATION_PENDING: "navigation_pending",
@@ -32,6 +38,8 @@ export const UPLOAD_PROCESSING_STATUSES = Object.freeze([
   "saving_result",
   "saving_results",
   "navigation_pending",
+  "baseline_processing",
+  "baseline_review",
 ]);
 
 export const UPLOAD_STAGE_PROGRESS = Object.freeze({
@@ -48,6 +56,10 @@ export const UPLOAD_STAGE_PROGRESS = Object.freeze({
   structural_scoring: 70,
   running_sii: 70,
   building_fingerprint: 90,
+  baseline_processing: 55,
+  baseline_review: 97,
+  baseline_ready: 100,
+  baseline_active: 100,
   writing_state: 90,
   cognition_ready: 90,
   saving_result: 90,
@@ -74,6 +86,10 @@ export const UPLOAD_STAGE_LABELS = Object.freeze({
   processing: "Reading telemetry...",
   structural_scoring: "Organizing system behavior...",
   building_fingerprint: "Building behavior baseline...",
+  baseline_processing: "Constructing candidate baseline...",
+  baseline_review: "Preparing Baseline Suitability Report...",
+  baseline_ready: "Candidate baseline ready",
+  baseline_active: "Behavioral Baseline active",
   writing_state: "Preparing insights and evidence...",
   cognition_ready: "Behavior baseline ready...",
   saving_result: "Saving analysis...",
@@ -97,6 +113,10 @@ export const UPLOAD_STAGE_INDEX = Object.freeze({
   baseline_modeling: 3,
   structural_scoring: 4,
   building_fingerprint: 5,
+  baseline_processing: 3,
+  baseline_review: 4,
+  baseline_ready: 5,
+  baseline_active: 5,
   writing_state: 6,
   saving_result: 7,
   saving_results: 7,
@@ -135,6 +155,10 @@ export function normalizeUploadStatus(status) {
     structural_scoring: UPLOAD_STATUSES.STRUCTURAL_SCORING,
     scoring_drift_relationships: UPLOAD_STATUSES.STRUCTURAL_SCORING,
     building_fingerprint: "building_fingerprint",
+    baseline_processing: UPLOAD_STATUSES.BASELINE_PROCESSING,
+    baseline_review: UPLOAD_STATUSES.BASELINE_REVIEW,
+    baseline_ready: UPLOAD_STATUSES.BASELINE_READY,
+    baseline_active: UPLOAD_STATUSES.BASELINE_ACTIVE,
     cognition_ready: "cognition_ready",
     generating_replay: "saving_result",
     saving_result: "saving_result",
@@ -207,8 +231,10 @@ export function hasSupportedSiiClaims(payload = {}) {
 
 export function normalizeUploadJob(payload = {}) {
   const jobId = payload.job_id ?? payload.jobId ?? payload.id ?? null;
+  const baselineJob = payload.job_type === "baseline_construction"
+    || ["create_baseline", "extend_baseline"].includes(String(payload.workflow || "").toLowerCase());
   const status = normalizeUploadStatus(
-    payload.contract_stage
+    (baselineJob ? null : payload.contract_stage)
       ?? payload.status
       ?? payload.processing_state
       ?? payload.stage
@@ -218,28 +244,57 @@ export function normalizeUploadJob(payload = {}) {
   const percent = Number.isFinite(Number(percentRaw))
     ? Math.min(100, Math.max(0, Number(percentRaw)))
     : 0;
+  const normalizedPayload = { ...payload };
+  const rawMessage = payload.message ?? payload.progress_label ?? payload.contract_label ?? payload.propagation_label ?? payload.error ?? "";
+  const safeBaselineStepLabel = isSafeBaselineCopy(payload.baseline_step_label)
+    ? payload.baseline_step_label
+    : null;
+  const baselineMessage = isSafeBaselineCopy(rawMessage)
+    ? rawMessage
+    : safeBaselineStepLabel ?? "Baseline construction is in progress.";
+  const rawError = payload.error ?? payload.detail ?? null;
+  const baselineError = rawError && !isSafeBaselineCopy(rawError)
+    ? "Baseline construction could not be completed."
+    : rawError;
+  if (baselineJob) {
+    [
+      "analysis_state", "contract_stage", "contract_progress", "contract_label",
+      "propagation_stage", "propagation_progress", "propagation_label",
+      "monitoring_stage", "monitoring_step",
+    ].forEach((key) => delete normalizedPayload[key]);
+  } else {
+    [
+      "baseline_stage", "baseline_stage_label", "baseline_step", "baseline_step_label",
+      "baseline_stage_order", "baseline_learn_steps", "baseline_learn_step_index",
+    ].forEach((key) => delete normalizedPayload[key]);
+  }
 
   return {
-    ...payload,
+    ...normalizedPayload,
     job_id: jobId,
     jobId,
     status,
     processing_state: payload.processing_state ?? status,
-    contract_stage: payload.contract_stage ?? status,
-    contract_progress: Number.isFinite(Number(payload.contract_progress))
-      ? Math.min(100, Math.max(0, Number(payload.contract_progress)))
-      : percent,
-    contract_label: payload.contract_label ?? payload.progress_label ?? payload.message ?? uploadStageLabel(status),
+    ...(baselineJob ? {
+      job_type: "baseline_construction",
+      progress_state_machine: payload.progress_state_machine ?? "baseline_construction.v1",
+    } : {
+      contract_stage: payload.contract_stage ?? status,
+      contract_progress: Number.isFinite(Number(payload.contract_progress))
+        ? Math.min(100, Math.max(0, Number(payload.contract_progress)))
+        : percent,
+      contract_label: payload.contract_label ?? payload.progress_label ?? payload.message ?? uploadStageLabel(status),
+      propagation_stage: payload.propagation_stage ?? null,
+      propagation_progress: Number.isFinite(Number(payload.propagation_progress))
+        ? Math.min(100, Math.max(0, Number(payload.propagation_progress)))
+        : null,
+      propagation_label: payload.propagation_label ?? null,
+    }),
     percent,
     progress: percent,
-    propagation_stage: payload.propagation_stage ?? null,
-    propagation_progress: Number.isFinite(Number(payload.propagation_progress))
-      ? Math.min(100, Math.max(0, Number(payload.propagation_progress)))
-      : null,
-    propagation_label: payload.propagation_label ?? null,
     filename: payload.filename ?? payload.file_name ?? null,
-    message: payload.message ?? payload.progress_label ?? payload.contract_label ?? payload.propagation_label ?? payload.error ?? "",
-    error: payload.error ?? payload.detail ?? null,
+    message: baselineJob ? baselineMessage : rawMessage,
+    error: baselineJob ? baselineError : rawError,
     result_available: Boolean(payload.result_available),
     replay_ready: Boolean(payload.replay_ready),
     replay_frame_count: Number(payload.replay_frame_count ?? 0) || 0,
@@ -256,5 +311,8 @@ export function normalizeUploadJob(payload = {}) {
 }
 
 export function isUploadProcessingStatus(status) {
-  return UPLOAD_PROCESSING_STATUSES.includes(normalizeUploadStatus(status));
+  const normalized = normalizeUploadStatus(status);
+  if (UPLOAD_PROCESSING_STATUSES.includes(normalized)) return true;
+  return normalized.startsWith("baseline_")
+    && !["baseline_ready", "baseline_active", "baseline_failed", "baseline_cancelled"].includes(normalized);
 }

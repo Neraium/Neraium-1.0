@@ -612,7 +612,7 @@
 /* First-run baseline onboarding */
 .baseline-import-stepper {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
   width: min(100%, 820px);
   margin: 0;
   padding: 2px 4px 0;
@@ -674,6 +674,44 @@
   color: #bce6ff;
 }
 .baseline-import-stepper__step--complete:not(:last-child)::after { background: rgba(var(--blue-glow-rgb), .42); }
+
+.baseline-learning-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, 820px);
+  margin: -2px 0 0;
+  padding: 12px 14px;
+  gap: 7px 18px;
+  border: 1px solid rgba(var(--blue-glow-rgb), .14);
+  border-radius: 10px;
+  background: rgba(6, 15, 25, .5);
+  list-style: none;
+}
+.baseline-learning-steps__step {
+  position: relative;
+  padding-left: 17px;
+  color: #72899b;
+  font-size: .7rem;
+  line-height: 1.35;
+}
+.baseline-learning-steps__step::before {
+  content: "";
+  position: absolute;
+  top: .38em;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(var(--blue-glow-rgb), .32);
+  border-radius: 50%;
+}
+.baseline-learning-steps__step--active { color: #dbeaf4; }
+.baseline-learning-steps__step--active::before {
+  border-color: var(--blue-glow);
+  background: var(--blue-primary);
+  box-shadow: 0 0 9px rgba(var(--blue-glow-rgb), .48);
+}
+.baseline-learning-steps__step--complete { color: #9eb5c5; }
+.baseline-learning-steps__step--complete::before { background: rgba(var(--blue-primary-rgb), .45); }
 
 .upload-ops-panel--command .upload-analysis-card--baseline {
   display: block;
@@ -810,6 +848,7 @@
   }
   .baseline-import-stepper__number { width: 26px; height: 26px; }
   .baseline-import-stepper__label { font-size: .64rem; letter-spacing: .015em; }
+  .baseline-learning-steps { grid-template-columns: minmax(0, 1fr); padding: 10px 12px; }
   .upload-ops-panel--command .intake-flow--noFile .upload-analysis-card--baseline,
   .upload-ops-panel--command .intake-flow--fileSelected .upload-analysis-card--baseline {
     display: block;

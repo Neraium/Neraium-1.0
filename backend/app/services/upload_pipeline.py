@@ -67,6 +67,7 @@ def run_structural_analysis_pipeline(
     minimal_replay: Callable[..., dict[str, Any]],
     build_upload_engine_result: Callable[..., dict[str, Any]],
     stage_notifier: Callable[..., None],
+    active_baseline_model: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     stage_notifier(job_id, stage="building_baseline", progress=60, label="Identifying systems...")
     matrix_rows = matrix_rows_for_profiles
@@ -104,6 +105,9 @@ def run_structural_analysis_pipeline(
         "normalization_layer_ran": True,
         "normalization_window_suppressed": bool(normalization_report.get("window_suppressed")),
         "normalization_source_status": normalization_report.get("status"),
+        "active_baseline_loaded": isinstance(active_baseline_model, dict),
+        "active_baseline_model_id": (active_baseline_model or {}).get("model_id"),
+        "active_baseline_version": (active_baseline_model or {}).get("version"),
     }
 
     def compatibility_context_factory(context: dict[str, Any]) -> dict[str, Any]:
@@ -183,6 +187,8 @@ def run_structural_analysis_pipeline(
             "compatibility_context_factory": compatibility_context_factory,
             "processing_trace": initial_processing_trace,
             "source_run_id": job_id,
+            "active_behavioral_baseline": active_baseline_model,
+            "active_baseline_loaded": isinstance(active_baseline_model, dict),
             "infrastructure_identity": {
                 key: ingestion_report.get(key)
                 for key in (

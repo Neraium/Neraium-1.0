@@ -37,6 +37,33 @@ Candidate activation is controlled by
 required, a suitable candidate remains `awaiting_approval` until an operator
 calls the approval endpoint. An unsuitable candidate cannot be activated.
 
+### Baseline progress contract
+
+Baseline jobs publish `job_type=baseline_construction` and
+`progress_state_machine=baseline_construction.v1`. Their only top-level stages
+are `Import`, `Validate`, `Map`, `Learn`, `Review`, and `Ready`. `Learn` may
+publish these ordered steps:
+
+1. Validating historical coverage
+2. Assessing data quality
+3. Checking sensor suitability
+4. Identifying operating modes
+5. Learning signal behavior
+6. Learning relationships
+7. Building behavioral graph
+8. Estimating empirical thresholds
+9. Fitting expected-behavior models
+10. Creating candidate baseline
+
+Baseline status payloads do not contain the monitoring `analysis_state`,
+`contract_stage`, or propagation-progress fields. The frontend selects this
+state machine from the workflow/job type and rejects monitoring labels on the
+baseline rendering path.
+
+The terminal result has `result_type=baseline_suitability_report`, is titled
+`Baseline Suitability Report`, and contains a
+`candidate_behavioral_digital_model`. It is not an SII analysis result.
+
 ## 2. Analyze New Data Against Active Baseline
 
 Upload with multipart field `workflow=analyze_new_data`.
@@ -45,6 +72,11 @@ This workflow requires an active Behavioral Digital Model. It records the
 model ID and version in `active_baseline_reference`, then follows the SII
 analysis path. Findings, observations, evidence, replay, and operational
 interpretation belong only to this workflow.
+
+Monitoring jobs publish `job_type=monitoring_analysis` and
+`progress_state_machine=sii_monitoring.v1`. Their route is current dataset →
+load active baseline → compare → reason → evidence → observations. These
+states and labels are never reused by baseline construction.
 
 The older upload behavior remains available internally as `legacy_analysis`
 for compatibility with integrations that have not started sending a workflow

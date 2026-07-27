@@ -22,9 +22,12 @@ from app.core.security import _strict_auth_mode, require_api_access, require_ope
 from app.core.path_safety import StoragePathError, ensure_storage_root, resolve_existing_storage_path, safe_upload_suffix, storage_key_for_server_path
 from app.services import upload_jobs
 from app.services.baseline_contracts import (
+    JOB_TYPE_MONITORING_ANALYSIS,
+    MONITORING_PROGRESS_STATE_MACHINE,
     WORKFLOW_ANALYZE_NEW_DATA,
     WORKFLOW_EXTEND_BASELINE,
     WORKFLOW_LEGACY_ANALYSIS,
+    baseline_progress_payload,
     is_baseline_workflow,
     normalize_workflow,
 )
@@ -331,6 +334,33 @@ def _upload_actor(request: Request) -> str:
         or request.headers.get("X-Forwarded-Email")
         or "anonymous"
     )
+
+
+def _workflow_progress_response(payload: dict[str, Any], workflow: str) -> dict[str, Any]:
+    normalized = dict(payload)
+    normalized["workflow"] = workflow
+    if is_baseline_workflow(workflow):
+        for key in (
+            "analysis_state", "contract_stage", "contract_progress", "contract_label",
+            "monitoring_stage", "monitoring_step",
+            "propagation_stage", "propagation_progress", "propagation_label",
+        ):
+            normalized.pop(key, None)
+        normalized.update(
+            baseline_progress_payload(
+                normalized.get("processing_state") or normalized.get("status") or "queued",
+                progress=normalized.get("percent", normalized.get("progress", 0)),
+            )
+        )
+    else:
+        for key in (
+            "baseline_stage", "baseline_stage_label", "baseline_step", "baseline_step_label",
+            "baseline_stage_order", "baseline_learn_steps", "baseline_learn_step_index",
+        ):
+            normalized.pop(key, None)
+        normalized["job_type"] = JOB_TYPE_MONITORING_ANALYSIS
+        normalized["progress_state_machine"] = MONITORING_PROGRESS_STATE_MACHINE
+    return normalized
 
 
 def _large_upload_error(status_code: int, error_type: str, message: str, **extra: Any) -> JSONResponse:
@@ -740,7 +770,7 @@ def complete_large_upload_session(
         worker_dispatch_status=worker_dispatch_status,
         processing_stage="queued",
     )
-    return {
+    return _workflow_progress_response({
         "job_id": upload_session_id,
         "status": "PENDING",
         "processing_state": "queued",
@@ -753,11 +783,10 @@ def complete_large_upload_session(
         "file_size_bytes": received_size,
         "worker_dispatch_status": worker_dispatch_status,
         "upload_transport": "presigned_s3_put",
-        "workflow": workflow,
         "workflow_state": "queued",
         "baseline_result_url": f"/api/data/baselines/jobs/{upload_session_id}" if is_baseline_workflow(workflow) else None,
         "sii_engine_invoked": False if is_baseline_workflow(workflow) else None,
-    }
+    }, workflow)
 
 
 @router.post("/upload", status_code=202, dependencies=[Depends(require_operator_role)])
@@ -1173,7 +1202,7 @@ async def upload_data(
         job_id=summary.get("job_id"),
         **response_timings,
     )
-    return {
+    return _workflow_progress_response({
         "job_id": summary.get("job_id"),
         "status": "PENDING",
         "processing_state": "queued",
@@ -1198,12 +1227,11 @@ async def upload_data(
         "enqueued_at": summary.get("enqueued_at"),
         "stage_changed_at": summary.get("stage_changed_at"),
         "timings": response_timings,
-        "workflow": workflow,
         "workflow_state": "queued",
         "baseline_result_url": f"/api/data/baselines/jobs/{summary.get('job_id')}" if is_baseline_workflow(workflow) else None,
         "sii_completed": False,
         "sii_engine_invoked": False if is_baseline_workflow(workflow) else None,
-    }
+    }, workflow)
 
 
 @router.post("/upload/{job_id}/retry", status_code=202, dependencies=[Depends(require_operator_role)])
@@ -1292,7 +1320,7 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         worker_dispatch_status=worker_dispatch_status,
         processing_stage="queued",
     )
-    return {
+    return _workflow_progress_response({
         "job_id": requested_job_id,
         "status": "PENDING",
         "processing_state": "queued",
@@ -1304,7 +1332,7 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         "worker_state": "starting" if worker_dispatch_status == "thread_dispatched" else "queued",
         "worker_dispatch_status": worker_dispatch_status,
         "worker_last_seen_at": now,
-    }
+    }, normalize_workflow(status_payload.get("workflow") or WORKFLOW_LEGACY_ANALYSIS))
 
 
 @router.get("/upload-status/{job_id}")

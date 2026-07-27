@@ -16,6 +16,7 @@ import {
   uploadStateMessage,
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
+import { isSafeBaselineCopy } from "../viewModels/workflowProgress";
 import { LARGE_UPLOAD_MAX_BYTES, retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
@@ -152,7 +153,14 @@ export function queuedWorkerMessage(uploadJob, now = Date.now()) {
 }
 
 function isActiveUploadProgressState(uploadState) {
-  return ["uploading", "running_sii", "processing", "saving_results", "save_complete", "navigation_pending", "completion_error", "complete"].includes(String(uploadState || "").toLowerCase());
+  return [
+    "uploading", "running_sii", "processing", "saving_results", "save_complete", "navigation_pending",
+    "baseline_processing", "baseline_review", "baseline_ready", "baseline_active", "completion_error", "complete",
+  ].includes(String(uploadState || "").toLowerCase());
+}
+
+function workflowClientState(workflow, monitoringState, baselineState = "baseline_processing") {
+  return isBaselineWorkflow(workflow) ? baselineState : monitoringState;
 }
 
 function uploadFailureDiagnosticsFrom(value = {}) {
@@ -244,6 +252,7 @@ export default function DataConnectionsWorkspace({
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
   const [currentWorkflow, setCurrentWorkflow] = useState("create_baseline");
+  const currentWorkflowRef = useRef("create_baseline");
   const [uploadTransfer, setUploadTransfer] = useState(null);
   const [uploadDebug, setUploadDebug] = useState({
     apiBaseConfig: CONFIGURED_API_BASE_URL || "",
@@ -338,7 +347,7 @@ export default function DataConnectionsWorkspace({
   }, [uploadState]);
 
   useEffect(() => {
-    const active = ["running_sii", "processing", "uploading", "saving_results", "navigation_pending"].includes(String(uploadState || "").toLowerCase());
+    const active = ["running_sii", "processing", "uploading", "saving_results", "navigation_pending", "baseline_processing", "baseline_review"].includes(String(uploadState || "").toLowerCase());
     if (!active || typeof window === "undefined") return undefined;
     const timer = window.setInterval(() => setHeartbeatTick((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
@@ -374,15 +383,18 @@ export default function DataConnectionsWorkspace({
     uploadJobIdRef.current = sessionJobId;
     uploadStatusPathRef.current = normalizeUploadStatusPath(normalizedSessionJob?.status_url, sessionJobId);
     window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, sessionJobId);
+    const hydratedWorkflow = normalizedSessionJob?.workflow ?? "analyze_new_data";
+    currentWorkflowRef.current = hydratedWorkflow;
+    setCurrentWorkflow(hydratedWorkflow);
     setUploadJob(normalizedSessionJob);
     setUploadResult(sessionStore?.latestUploadResult ?? null);
     if (["verified", "restored"].includes(String(sessionStore?.uiState ?? ""))) {
-      setUploadState("complete");
+      setUploadState(workflowClientState(hydratedWorkflow, "complete", "baseline_ready"));
       setUploadProcessingFlag(false);
       return;
     }
     if (["queued", "processing"].includes(String(sessionStore?.uiState ?? ""))) {
-      setUploadState("running_sii");
+      setUploadState(workflowClientState(hydratedWorkflow, "running_sii"));
       setUploadProcessingFlag(true);
       pollUploadStatus(sessionJobId, normalizedSessionJob?.status_url).catch(() => {});
     }
@@ -555,14 +567,18 @@ export default function DataConnectionsWorkspace({
         ...completedPayload,
         baseline_result: baselineResult,
         status: "COMPLETE",
-        processing_state: "save_complete",
+        processing_state: activationState === "active" ? "baseline_active" : "baseline_ready",
+        baseline_stage: "ready",
+        baseline_stage_label: "Ready",
+        baseline_step: "candidate_baseline_ready",
+        baseline_step_label: "Candidate Behavioral Digital Model ready",
         percent: 100,
         progress: 100,
-        progress_label: activationState === "active" ? "Behavioral Baseline Active" : "Baseline Candidate Ready",
-        message: activationState === "active" ? "Behavioral Baseline Active" : "Baseline Candidate Ready",
+        progress_label: activationState === "active" ? "Behavioral Baseline Active" : "Candidate Baseline Ready",
+        message: activationState === "active" ? "Behavioral Baseline Active" : "Candidate Baseline Ready",
       });
       completionNavigationEligibleRef.current = false;
-      setUploadState("save_complete");
+      setUploadState(activationState === "active" ? "baseline_active" : "baseline_ready");
       return completedPayload;
     }
     const savedResult = uploadStateView.resolveCurrentUploadResult(completedPayload) ?? (uploadStateView.hasFullUploadResult(completedPayload) ? completedPayload : null);
@@ -577,8 +593,8 @@ export default function DataConnectionsWorkspace({
       processing_state: "saving_results",
       percent: 100,
       progress: 100,
-      progress_label: "Persisting Behavior Baseline",
-      message: "Persisting Behavior Baseline",
+      progress_label: "Saving observations",
+      message: "Saving observations",
     }));
     setUploadState("saving_results");
     logTelemetryStage("save request started", { jobId });
@@ -604,8 +620,8 @@ export default function DataConnectionsWorkspace({
         processing_state: "save_complete",
         percent: 100,
         progress: 100,
-        progress_label: "Behavior Baseline Established",
-        message: "Behavior Baseline Established",
+        progress_label: "Observations ready",
+        message: "Observations ready",
       }));
       logTelemetryStage("state hydration completed", { jobId });
       completionNavigationEligibleRef.current = true;
@@ -679,15 +695,20 @@ export default function DataConnectionsWorkspace({
             if (response.status === 404 || response.status >= 500) {
               statusEndpointFailureCountRef.current += 1;
               if (isTransientUploadServiceStatus(response.status)) {
-                setUploadState("running_sii");
+                const transientWorkflow = payload?.workflow ?? currentWorkflowRef.current;
+                const transientMessage = isBaselineWorkflow(transientWorkflow)
+                  ? "Baseline status is temporarily unavailable. Retrying."
+                  : SERVICE_UNAVAILABLE_RETRY_MESSAGE;
+                setUploadState(workflowClientState(transientWorkflow, "running_sii"));
                 setUploadJob((current) => ({
                   ...(current ?? {}),
                   ...(payload ?? {}),
                   job_id: requestedJobId,
+                  workflow: transientWorkflow,
                   status: "PROCESSING",
-                  processing_state: "processing",
-                  progress_label: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
-                  message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
+                  processing_state: workflowClientState(transientWorkflow, "processing"),
+                  progress_label: transientMessage,
+                  message: transientMessage,
                   error_type: payload?.error_type ?? "service_unavailable",
                   response_status: response.status,
                   failure_url: payload?.failure_url ?? requestPath,
@@ -725,26 +746,36 @@ export default function DataConnectionsWorkspace({
           const progressPercent = normalizedPayload.percent ?? normalizedPayload.progress ?? fallbackPercentFromStatus(normalizedStatus);
           const terminalSuccess = isTerminalCompletedPayload(normalizedPayload);
           if (terminalSuccess) {
-            logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
+            const terminalWorkflow = normalizedPayload?.workflow ?? currentWorkflowRef.current;
+            const baselineTerminal = isBaselineWorkflow(terminalWorkflow);
+            logTelemetryStageOnce(baselineTerminal ? "baseline construction complete" : "analysis complete", { jobId: requestedJobId });
             const completePayload = {
               ...normalizedPayload,
+              workflow: terminalWorkflow,
               status: "COMPLETE",
-              processing_state: "saving_results",
+              processing_state: baselineTerminal ? "baseline_review" : "saving_results",
+              ...(baselineTerminal ? {
+                baseline_stage: "review",
+                baseline_stage_label: "Review",
+                baseline_step: "preparing_suitability_report",
+                baseline_step_label: "Preparing Baseline Suitability Report",
+              } : {}),
               percent: 100,
               progress: 100,
-              progress_label: "Persisting Behavior Baseline",
-              message: "Persisting Behavior Baseline",
+              progress_label: baselineTerminal ? "Preparing Baseline Suitability Report" : "Saving observations",
+              message: baselineTerminal ? "Preparing Baseline Suitability Report" : "Saving observations",
             };
             setUploadJob(completePayload);
             completionNavigationEligibleRef.current = false;
-            setUploadState("saving_results");
+            setUploadState(baselineTerminal ? "baseline_review" : "saving_results");
             setUploadProcessingFlag(false);
             return completePayload;
           }
           if (isTerminalFailedPayload(normalizedPayload)) {
             throw buildUploadRequestError({ status: 500 }, normalizedPayload, "poll");
           }
-          setUploadState("running_sii");
+          const activeWorkflow = normalizedPayload?.workflow ?? currentWorkflowRef.current;
+          setUploadState(workflowClientState(activeWorkflow, "running_sii"));
           if (typeof progressPercent === "number") {
             setUploadTransfer((current) => ({ ...(current ?? {}), percent: Math.max(current?.percent ?? 0, Math.min(progressPercent, 99)) }));
           }
@@ -757,13 +788,19 @@ export default function DataConnectionsWorkspace({
             name: error?.name ?? null,
             status: error?.status ?? null,
           });
-          setUploadJob((current) => ({
-            ...(current ?? {}),
-            poll_connection_state: "retrying",
-            poll_failure_count: pollFailureCountRef.current,
-            progress_label: "Analysis status connection interrupted. Retrying.",
-            message: "Analysis status connection interrupted. Retrying.",
-          }));
+          setUploadJob((current) => {
+            const retryWorkflow = current?.workflow ?? currentWorkflowRef.current;
+            const retryMessage = isBaselineWorkflow(retryWorkflow)
+              ? "Baseline status connection interrupted. Retrying."
+              : "Analysis status connection interrupted. Retrying.";
+            return {
+              ...(current ?? {}),
+              poll_connection_state: "retrying",
+              poll_failure_count: pollFailureCountRef.current,
+              progress_label: retryMessage,
+              message: retryMessage,
+            };
+          });
           if (pollFailureCountRef.current >= MAX_STATUS_POLL_FAILURES) {
             throw error;
           }
@@ -817,6 +854,7 @@ export default function DataConnectionsWorkspace({
     const file = selectedFiles[0];
     const flowSessionId = flowSessionRef.current;
     const selectedWorkflow = String(workflow || "create_baseline");
+    currentWorkflowRef.current = selectedWorkflow;
     setCurrentWorkflow(selectedWorkflow);
     const validationError = validateTelemetryFile(file, pendingUploadKind);
     if (validationError) {
@@ -881,7 +919,7 @@ export default function DataConnectionsWorkspace({
       logTelemetryStatusProgress(initialPayload.status ?? initialPayload.processing_state, initialPayload);
       setUploadJob(initialPayload);
       setUploadTransfer(null);
-      setUploadState("running_sii");
+      setUploadState(workflowClientState(selectedWorkflow, "running_sii"));
       const completedPayload = await pollUploadStatus(jobId, payload?.status_url);
       if (!completedPayload) {
         throw new Error("Telemetry analysis ended before results were available.");
@@ -924,18 +962,24 @@ export default function DataConnectionsWorkspace({
   const uploadPercent = uploadPercentCandidates.find((value) => Number.isFinite(Number(value))) ?? null;
   const propagationLabel = progressUploadJob?.propagation_label ?? progressUploadJob?.propagationLabel ?? progressUploadJob?.propagation_stage ?? "";
   const statusLabel = progressUploadJob?.progress_label ?? progressUploadJob?.message ?? progressUploadTransfer?.message ?? uploadStateMessage(uploadState);
-  const isProcessingQuiet = ["running_sii", "processing"].includes(String(uploadState || "").toLowerCase())
+  const isProcessingQuiet = ["running_sii", "processing", "baseline_processing"].includes(String(uploadState || "").toLowerCase())
     && normalizeUploadStatus(progressUploadJob?.status ?? progressUploadJob?.processing_state) !== "complete"
     && Date.now() - lastProgressAt > 6000
     && heartbeatTick >= 0;
-  const visibleStatusLabel = isProcessingQuiet ? "Analysis is still progressing..." : statusLabel;
+  const visibleStatusLabel = isProcessingQuiet
+    ? (isBaselineWorkflow(uploadJob?.workflow ?? currentWorkflow) ? "Baseline construction is still progressing..." : "Analysis is still progressing...")
+    : statusLabel;
   const queuedWorkerDetail = queuedWorkerMessage(progressUploadJob);
   const visibleProgressPercent = Number.isFinite(Number(uploadPercent))
     ? Math.max(0, Math.min(100, Math.round(Number(uploadPercent))))
     : null;
-  const latestStatusMessage = completionError || uploadError || visibleStatusLabel || readiness;
+  const rawLatestStatusMessage = completionError || uploadError || visibleStatusLabel || readiness;
+  const baselineWorkflowActive = isBaselineWorkflow(uploadJob?.workflow ?? currentWorkflow);
+  const latestStatusMessage = baselineWorkflowActive && !isSafeBaselineCopy(rawLatestStatusMessage)
+    ? (completionError || uploadError ? "Baseline construction could not be completed." : "Baseline construction is in progress.")
+    : rawLatestStatusMessage;
   const announcedStatusMessage = latestStatusMessage;
-  const baselineResult = uploadResult?.candidate_model ? uploadResult : uploadJob?.baseline_result ?? null;
+  const baselineResult = (uploadResult?.candidate_model || uploadResult?.candidate_behavioral_digital_model) ? uploadResult : uploadJob?.baseline_result ?? null;
 
   function handleFileSelection(event) {
     if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) {
@@ -1022,7 +1066,8 @@ export default function DataConnectionsWorkspace({
     }
     setUploadError("");
     setCompletionError("");
-    setUploadState("running_sii");
+    const retryWorkflow = uploadJob?.workflow ?? currentWorkflowRef.current;
+    setUploadState(workflowClientState(retryWorkflow, "running_sii"));
     setUploadProcessingFlag(true);
     try {
       const retryResponse = await retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode });
@@ -1064,6 +1109,7 @@ export default function DataConnectionsWorkspace({
     const updated = {
       ...candidateResult,
       candidate_model: payload.active_model,
+      candidate_behavioral_digital_model: payload.active_model,
       activation: payload.active_model.activation,
     };
     setCompletionError("");
@@ -1073,9 +1119,12 @@ export default function DataConnectionsWorkspace({
       baseline_result: updated,
       baseline_activation_state: "active",
       workflow_state: "active",
+      processing_state: "baseline_active",
+      baseline_stage: "ready",
       progress_label: "Behavioral Baseline Active",
       message: "Behavioral Baseline Active",
     }));
+    setUploadState("baseline_active");
   }
 
   if (headless) {

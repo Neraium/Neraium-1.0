@@ -878,7 +878,7 @@ summary:focus-visible,
 .upload-fingerprint-build__status small { display:block; max-width:min(360px,86vw); margin:2px auto 0; color:var(--text-secondary); font-size:var(--type-label-xs); line-height:1.35; }
 .upload-fingerprint-build__print { position:relative; z-index:2; height:auto; overflow:visible; }
 .upload-fingerprint-build__relationship-links path { fill:none; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; transition:stroke-dashoffset 900ms cubic-bezier(.2,.76,.22,1); transition-delay:calc(var(--link-index,0)*55ms); }
-.upload-fingerprint-build__nodes { position:relative; z-index:2; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); width:min(100%,480px); margin:0; padding:0; list-style:none; }
+.upload-fingerprint-build__nodes { position:relative; z-index:2; display:grid; grid-template-columns:repeat(auto-fit,minmax(52px,1fr)); width:min(100%,480px); margin:0; padding:0; list-style:none; }
 .upload-fingerprint-build__nodes li { position:relative; display:grid; justify-items:center; gap:7px; min-width:0; color:var(--text-muted); font-size:var(--type-label-xs); font-weight:720; text-align:center; }
 .upload-fingerprint-build__nodes li::before { content:""; position:absolute; top:8px; left:calc(-50% + 10px); right:calc(50% + 10px); height:2px; background:var(--surface-border); }
 .upload-fingerprint-build__nodes li:first-child::before { display:none; }

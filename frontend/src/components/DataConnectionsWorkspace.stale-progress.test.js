@@ -24,8 +24,9 @@ function renderPanel(overrides = {}) {
     selectedFiles: [],
     pendingUploadKind: "csv",
     selectedFileSize: "Awaiting file",
-    isUploadProcessing: (state) => ["uploading", "accepted", "queued", "processing", "running_sii", "structural_scoring", "building_fingerprint", "saving_results", "navigation_pending"].includes(String(state)),
+    isUploadProcessing: (state) => ["uploading", "accepted", "queued", "processing", "running_sii", "structural_scoring", "building_fingerprint", "saving_results", "navigation_pending", "baseline_processing", "baseline_review"].includes(String(state)),
     uploadState: "idle",
+    workflow: "analyze_new_data",
     openFilePicker: vi.fn(),
     uploadJob: null,
     latestMessage: "Choose a CSV to analyze.",
@@ -145,7 +146,7 @@ it("shows a clean service unavailable failure without exposing the raw response"
   renderWorkspace();
 
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("html-503.csv")] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
+  fireEvent.click(screen.getByRole("button", { name: "Analyze New Data" }));
 
   await waitFor(() => {
     expect(screen.getByRole("alert").textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
@@ -192,7 +193,7 @@ it("continues polling after temporary stream and status HTML 503 responses", asy
 
   renderWorkspace({ apiFetch, onUploadComplete });
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("temporary.csv")] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
+  fireEvent.click(screen.getByRole("button", { name: "Analyze New Data" }));
 
   expect(await screen.findByLabelText(`Analysis progress: ${SERVICE_UNAVAILABLE_RETRY_MESSAGE}`)).toBeTruthy();
 
@@ -216,7 +217,7 @@ it("eventually fails persistent polling HTML 503 responses with a clean message"
 
   renderWorkspace({ apiFetch });
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("persistent.csv")] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
+  fireEvent.click(screen.getByRole("button", { name: "Analyze New Data" }));
 
   await act(async () => {
     await vi.advanceTimersByTimeAsync(70000);
@@ -256,19 +257,19 @@ it("mobile upload screen does not render backend milestone cards by default", ()
 
 it("presents the first baseline action without repeated dataset copy", () => {
   const openFilePicker = vi.fn();
-  renderPanel({ openFilePicker });
+  renderPanel({ openFilePicker, workflow: "create_baseline" });
 
   expect(screen.getByRole("heading", { name: "Import Historical Dataset" })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Choose Dataset" })).toBeTruthy();
   expect(screen.getByText("Choose whether this dataset creates a baseline, is analyzed against the active baseline, or extends it through controlled learning.")).toBeTruthy();
-  expect(screen.getByText("Future operation is compared with what Neraium learns here.")).toBeTruthy();
+  expect(screen.getByText("Neraium learns expected operating patterns from this historical dataset.")).toBeTruthy();
   expect(screen.getByText("Awaiting Baseline")).toBeTruthy();
   expect(screen.queryByText("Historical Dataset")).toBeNull();
   expect(screen.queryByText("Choose a Historical Dataset")).toBeNull();
   expect(document.querySelector(".upload-analysis-card--baseline .operational-orb")).toBeNull();
 
   const labels = Array.from(document.querySelectorAll(".baseline-import-stepper__label")).map((node) => node.textContent);
-  expect(labels).toEqual(["Import", "Learn", "Analyze", "Ready"]);
+  expect(labels).toEqual(["Import", "Validate", "Map", "Learn", "Review", "Ready"]);
   expect(screen.getByText("Import").closest("li")?.getAttribute("aria-current")).toBe("step");
 
   const chooseButton = screen.getByRole("button", { name: "Choose Dataset" });
@@ -283,6 +284,7 @@ it("selected file state promotes baseline analysis and keeps replacement seconda
   const openFilePicker = vi.fn();
   renderPanel({
     openFilePicker,
+    workflow: "create_baseline",
     uploadState: "validated",
     selectedFiles: [selectedCsv("operators.csv")],
     selectedFileSize: "15.7 MB",
@@ -303,6 +305,7 @@ it("routes each visible upload action to a distinct workflow", () => {
   const handleUpload = vi.fn((event) => event?.preventDefault?.());
   renderPanel({
     handleUpload,
+    workflow: "create_baseline",
     uploadState: "validated",
     selectedFiles: [selectedCsv("workflow.csv")],
   });
@@ -344,7 +347,7 @@ it("shows approval as a baseline action without rendering analysis findings", ()
     onApproveBaseline,
   });
 
-  expect(screen.getByText("Baseline construction complete")).toBeTruthy();
+  expect(screen.getByText("Baseline Suitability Report")).toBeTruthy();
   expect(screen.queryByText("View Results")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Approve and Activate" }));
   expect(onApproveBaseline).toHaveBeenCalledTimes(1);
@@ -359,7 +362,9 @@ it("hydrates a baseline result separately from the analysis result handoff", asy
       dataset_id: "baseline-job",
       workflow: "create_baseline",
       status: "PENDING",
-      analysis_state: "analysis_queued",
+      job_type: "baseline_construction",
+      progress_state_machine: "baseline_construction.v1",
+      baseline_stage: "import",
       status_url: "/api/data/upload-status/baseline-job",
       baseline_result_url: "/api/data/baselines/jobs/baseline-job",
     },
@@ -379,8 +384,10 @@ it("hydrates a baseline result separately from the analysis result handoff", asy
         dataset_id: "baseline-job",
         workflow: "create_baseline",
         status: "COMPLETE",
-        analysis_state: "completed",
-        processing_state: "complete",
+        job_type: "baseline_construction",
+        progress_state_machine: "baseline_construction.v1",
+        baseline_stage: "ready",
+        processing_state: "baseline_ready",
         baseline_result_url: "/api/data/baselines/jobs/baseline-job",
       });
     }
@@ -393,7 +400,7 @@ it("hydrates a baseline result separately from the analysis result handoff", asy
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("baseline.csv")] } });
   fireEvent.click(screen.getByRole("button", { name: "Create Baseline" }));
 
-  expect(await screen.findByText("Baseline construction complete")).toBeTruthy();
+  expect(await screen.findByText("Baseline Suitability Report")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Approve and Activate" })).toBeTruthy();
   expect(onUploadComplete).not.toHaveBeenCalled();
 });
@@ -413,56 +420,68 @@ it("drag-over and drop use the premium upload card", () => {
   expect(card.classList.contains("upload-analysis-card--drag-active")).toBe(false);
 });
 
-it("processing state uses the behavior baseline as the progress indicator", () => {
-  renderPanel({
-    uploadState: "running_sii",
+it("baseline progress never renders monitoring labels", () => {
+  const { container } = renderPanel({
+    workflow: "create_baseline",
+    uploadState: "baseline_processing",
     selectedFiles: [selectedCsv("progress.csv")],
     selectedFileSize: "1.0 KB",
     uploadJob: {
       job_id: "progress-job",
+      workflow: "create_baseline",
+      job_type: "baseline_construction",
+      progress_state_machine: "baseline_construction.v1",
       status: "PROCESSING",
-      processing_state: "building_fingerprint",
-      percent: 65,
-      progress: 65,
-      progress_label: "Building behavior baseline...",
+      processing_state: "baseline_behavioral_graph",
+      baseline_stage: "learn",
+      baseline_step: "building_behavioral_graph",
+      baseline_step_label: "Building behavioral graph",
+      baseline_learn_step_index: 6,
+      percent: 82,
+      progress: 82,
+      contract_stage: "structural_scoring",
+      progress_label: "Comparing relationships",
       result_available: false,
     },
-    latestMessage: "Building behavior baseline...",
+    latestMessage: "Comparing current behavior and preparing evidence",
   });
 
-  expect(screen.getByText("Comparing relationships")).toBeTruthy();
-  expect(screen.getByText("Analyze").closest("li")?.getAttribute("aria-current")).toBe("step");
-  expect(screen.getByText("Checking current behavior against the learned baseline.")).toBeTruthy();
+  expect(screen.getAllByText("Building behavioral graph").length).toBeGreaterThan(0);
+  expect(screen.getByLabelText("Baseline construction progress").querySelector('[aria-current="step"]')?.textContent).toContain("Learn");
+  expect(screen.getByText("Creating candidate baseline")).toBeTruthy();
   expect(screen.getByText("progress.csv")).toBeTruthy();
-  expect(screen.queryByText("1.0 KB")).toBeNull();
-  expect(screen.getAllByRole("progressbar")).toHaveLength(1);
-  expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
-  expect(screen.queryByText("65% complete")).toBeNull();
+  expect(screen.getByLabelText("Baseline construction 82% complete")).toBeTruthy();
+  expect(container.textContent).not.toMatch(/current behavior|compare|comparing|comparison|anomaly|evidence|finding|drift against baseline/i);
 });
 
 
-it("baseline renderer fallback keeps the active analysis job visible", () => {
+it("baseline renderer fallback keeps the active construction job visible", () => {
   window.localStorage.setItem("neraium.upload_fingerprint.compatibility_mode", "black-screen-recovery");
 
   renderPanel({
-    uploadState: "running_sii",
+    workflow: "create_baseline",
+    uploadState: "baseline_processing",
     selectedFiles: [selectedCsv("fallback.csv")],
     selectedFileSize: "1.0 KB",
     uploadJob: {
       job_id: "active-job",
       status: "PROCESSING",
-      processing_state: "building_fingerprint",
+      workflow: "create_baseline",
+      job_type: "baseline_construction",
+      baseline_stage: "learn",
+      baseline_step_label: "Learning relationships",
+      processing_state: "baseline_relationships",
       percent: 65,
       progress: 65,
       result_available: false,
     },
-    latestMessage: "Building behavior baseline...",
+    latestMessage: "Learning relationships",
   });
 
   expect(screen.queryByText("Using an alternate processing path.")).toBeNull();
-  expect(screen.getByText("Checking current behavior against the learned baseline.")).toBeTruthy();
+  expect(screen.getAllByText("Learning relationships").length).toBeGreaterThan(0);
   expect(screen.getByText("fallback.csv")).toBeTruthy();
-  expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
+  expect(screen.getByLabelText("Baseline construction 65% complete")).toBeTruthy();
   const renderer = document.querySelector(".upload-fingerprint-build");
   expect(renderer?.getAttribute("data-render-tier")).toBe("safe");
   expect(renderer?.querySelector(".upload-fingerprint-build__particles")).toBeNull();
@@ -481,24 +500,29 @@ it("baseline renderer uses enhanced mode on mobile-capable constraints", () => {
   }));
 
   renderPanel({
-    uploadState: "running_sii",
+    workflow: "create_baseline",
+    uploadState: "baseline_processing",
     selectedFiles: [selectedCsv("mobile.csv")],
     selectedFileSize: "1.0 KB",
     uploadJob: {
       job_id: "mobile-job",
       status: "PROCESSING",
-      processing_state: "building_fingerprint",
+      workflow: "create_baseline",
+      job_type: "baseline_construction",
+      baseline_stage: "learn",
+      baseline_step_label: "Learning relationships",
+      processing_state: "baseline_relationships",
       percent: 65,
       progress: 65,
       result_available: false,
     },
-    latestMessage: "Building behavior baseline...",
+    latestMessage: "Learning relationships",
   });
 
   const renderer = document.querySelector(".upload-fingerprint-build");
   expect(renderer?.getAttribute("data-render-tier")).toBe("enhanced");
   expect(renderer?.querySelectorAll(".upload-fingerprint-build__particles span")).toHaveLength(3);
-  expect(screen.getByText("Comparing relationships")).toBeTruthy();
+  expect(screen.getAllByText("Learning relationships").length).toBeGreaterThan(0);
 });
 
 it("maps backend worker states to human-readable operator status copy", () => {
@@ -522,7 +546,7 @@ it("shows queued worker status as one visible processing line", () => {
   });
 
   expect(document.querySelector(".upload-processing-status")).toBeNull();
-  expect(screen.getByText("Validating data")).toBeTruthy();
+  expect(screen.getByText("Loading the selected operational dataset.")).toBeTruthy();
   expect(screen.queryByText("Preparing analysis resources")).toBeNull();
   expect(document.querySelector(".metadata-text")).toBeNull();
 });
@@ -571,18 +595,18 @@ it("complete state shows the behavior baseline completion moment", () => {
   });
 
   expect(screen.getAllByRole("heading", { name: "Analysis complete" })).toHaveLength(1);
-  expect(screen.getByText("Ready").closest("li")?.getAttribute("aria-current")).toBe("step");
+  expect(screen.getByLabelText("Monitoring analysis progress").querySelector('[aria-current="step"]')?.textContent).toContain("Observations");
   expect(screen.queryByText("Behavior baseline established and evidence saved.")).toBeNull();
   const labels = Array.from(document.querySelectorAll(".upload-result-summary__item dt")).map((node) => node.textContent);
   expect(labels).toEqual(["Status", "Findings", "Evidence quality"]);
   expect(screen.getByText("complete.csv")).toBeTruthy();
   expect(screen.queryByText("8.4 MB")).toBeNull();
   const completedStages = document.querySelector(".upload-fingerprint-build__nodes").querySelectorAll("li.is-complete");
-  expect(completedStages).toHaveLength(5);
+  expect(completedStages).toHaveLength(7);
   expect(Array.from(completedStages).map((node) => node.getAttribute("aria-label"))).toEqual([
-    "Validate: completed", "Map: completed", "Baseline: completed", "Compare: completed", "Evidence: completed",
+    "Import: completed", "Validate: completed", "Load Baseline: completed", "Compare: completed", "Reason: completed", "Evidence: completed", "Observations: completed",
   ]);
-  expect(completedStages[4].classList.contains("is-final")).toBe(true);
+  expect(completedStages[6].classList.contains("is-final")).toBe(true);
   const primary = screen.getByRole("button", { name: "View Results" });
   const secondary = screen.getByRole("button", { name: "Import Another Dataset" });
   expect(primary.classList.contains("upload-completion-actions__primary")).toBe(true);
@@ -693,7 +717,7 @@ it("shows finalizing results instead of fake zero counts before AnalysisResult i
   });
 
   expect(screen.getByLabelText("Analysis progress: Preparing results")).toBeTruthy();
-  expect(screen.getByText("Preparing evidence")).toBeTruthy();
+  expect(screen.getByText("Saving observations for operator review.")).toBeTruthy();
   expect(screen.queryByRole("heading", { name: "Analysis complete" })).toBeNull();
   expect(document.querySelector(".upload-result-summary")).toBeNull();
   expect(screen.getByLabelText("Analysis 99% complete")).toBeTruthy();
@@ -792,7 +816,7 @@ it("treats the first complete payload with a saved result as terminal and auto-o
 
   const input = screen.getByTestId("csv-upload-input");
   fireEvent.change(input, { target: { files: [selectedCsv()] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
+  fireEvent.click(screen.getByRole("button", { name: "Analyze New Data" }));
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: false });
@@ -863,7 +887,7 @@ it("continues polling when stream status includes a placeholder analysis result"
 
   const input = screen.getByTestId("csv-upload-input");
   fireEvent.change(input, { target: { files: [selectedCsv()] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
+  fireEvent.click(screen.getByRole("button", { name: "Analyze New Data" }));
 
   await waitFor(() => {
     expect(apiFetch).toHaveBeenCalledWith("/api/data/upload-status/job-stream", { accessCode: "" });
@@ -891,8 +915,8 @@ it("renders intermediate processing progress without jumping to complete", () =>
   });
 
   expect(screen.getAllByRole("progressbar")).toHaveLength(1);
-  expect(screen.getByText("Building baseline")).toBeTruthy();
-  expect(screen.getByText("Learning the expected relationships in the baseline window.")).toBeTruthy();
+  expect(screen.getAllByText("Load Baseline").length).toBeGreaterThan(0);
+  expect(screen.getByText("Loading the active Behavioral Digital Model.")).toBeTruthy();
   expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
   expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
 });
@@ -984,7 +1008,7 @@ it("continues polling when a result is available but backend state is still proc
 
   renderWorkspace({ apiFetch, onUploadComplete });
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("nonterminal.csv")] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
+  fireEvent.click(screen.getByRole("button", { name: "Analyze New Data" }));
 
   await waitFor(() => {
     expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-nonterminal-result", status: "COMPLETE" }), { navigateToGate: false });
@@ -1029,7 +1053,7 @@ it("prevents duplicate upload and polling events from repeated process clicks", 
 
   renderWorkspace({ apiFetch, onUploadComplete });
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("duplicate.csv")] } });
-  const processButton = screen.getByTestId("process-upload-button");
+  const processButton = screen.getByRole("button", { name: "Analyze New Data" });
   fireEvent.click(processButton);
   fireEvent.click(processButton);
 
@@ -1093,11 +1117,11 @@ it("enables a valid current file and handles a rapid mobile-style tap exactly on
 
   expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
   expect(uploadTelemetryFileWithProgress.mock.calls[0][0].file).toBe(file);
-  expect(await screen.findByText("Uploading dataset")).toBeTruthy();
+  expect(await screen.findByLabelText("Baseline construction progress: Importing historical dataset")).toBeTruthy();
   expect(document.querySelector("form.intake-flow")?.getAttribute("aria-busy")).toBe("true");
   expect(screen.queryByRole("button", { name: "Create Baseline" })).toBeNull();
   expect(Array.from(document.querySelectorAll(".upload-fingerprint-build__nodes b")).map((node) => node.textContent)).toEqual([
-    "Validate", "Map", "Baseline", "Compare", "Evidence",
+    "Import", "Validate", "Map", "Learn", "Review", "Ready",
   ]);
 });
 
@@ -1156,7 +1180,7 @@ it("renders a concise network failure with an enabled Retry action", async () =>
 
   const alert = await screen.findByRole("alert");
   expect(alert.textContent).toContain("Upload could not start. Check the connection and try again.");
-  const retry = screen.getByRole("button", { name: "Retry Analysis" });
+  const retry = screen.getByRole("button", { name: "Retry Baseline Construction" });
   expect(retry.disabled).toBe(false);
   fireEvent.click(retry);
   await waitFor(() => expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(2));

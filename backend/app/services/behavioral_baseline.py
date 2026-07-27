@@ -535,7 +535,7 @@ def build_behavioral_baseline(
     ingestion_report = ingestion_report or {}
     matrix_rows = [[str(row.get(column, "")) for column in columns] for row in rows]
 
-    _notify(stage_notifier, job_id, stage="baseline_validating", progress=42, label="Validating and normalizing telemetry...")
+    _notify(stage_notifier, job_id, stage="baseline_historical_coverage", progress=55, label="Validating historical coverage")
     timestamp_profile = profile_timestamps(columns, matrix_rows, timestamp_column)
     telemetry_signal_catalog = build_telemetry_signal_catalog(
         columns,
@@ -550,7 +550,7 @@ def build_behavioral_baseline(
         source_id=filename or job_id,
     )
 
-    _notify(stage_notifier, job_id, stage="baseline_quality_assessment", progress=55, label="Assessing timestamp, data, and sensor quality...")
+    _notify(stage_notifier, job_id, stage="baseline_data_quality", progress=60, label="Assessing data quality")
     stuck_sensor_count = sum(
         1 for profile in numeric_profiles if profile.get("constant_or_stuck")
     )
@@ -582,6 +582,8 @@ def build_behavioral_baseline(
             "normalization_report": normalization_report,
         },
     )
+
+    _notify(stage_notifier, job_id, stage="baseline_sensor_suitability", progress=64, label="Checking sensor suitability")
     sensor_health = assess_sensor_health(
         rows,
         numeric_columns,
@@ -595,7 +597,7 @@ def build_behavioral_baseline(
     )
     data_quality["data_confidence"] = build_data_confidence(data_quality, sensor_health)
 
-    _notify(stage_notifier, job_id, stage="baseline_mode_identification", progress=66, label="Identifying operating modes...")
+    _notify(stage_notifier, job_id, stage="baseline_operating_modes", progress=68, label="Identifying operating modes")
     operating_modes, membership = _identify_modes(
         rows,
         columns,
@@ -603,13 +605,16 @@ def build_behavioral_baseline(
         telemetry_signal_catalog,
     )
 
-    _notify(stage_notifier, job_id, stage="baseline_relationship_learning", progress=78, label="Learning distributions and mode-conditioned relationships...")
+    _notify(stage_notifier, job_id, stage="baseline_signal_behavior", progress=73, label="Learning signal behavior")
     signal_characteristics = _learn_distributions(
         rows,
         numeric_columns,
         operating_modes,
         membership,
     )
+
+    _notify(stage_notifier, job_id, stage="baseline_relationships", progress=78, label="Learning relationships")
+    _notify(stage_notifier, job_id, stage="baseline_behavioral_graph", progress=82, label="Building behavioral graph")
     relationship_graph = _learn_relationship_graph(
         rows,
         numeric_columns,
@@ -617,12 +622,16 @@ def build_behavioral_baseline(
         membership,
     )
 
-    _notify(stage_notifier, job_id, stage="baseline_model_fitting", progress=88, label="Fitting and validating expected behavior...")
+    _notify(stage_notifier, job_id, stage="baseline_empirical_thresholds", progress=86, label="Estimating empirical thresholds")
+    _notify(stage_notifier, job_id, stage="baseline_expected_models", progress=90, label="Fitting expected-behavior models")
     expected_behavior_models = _fit_expected_models(
         rows,
         relationship_graph,
         membership,
     )
+
+    _notify(stage_notifier, job_id, stage="baseline_candidate", progress=94, label="Creating candidate baseline")
+    _notify(stage_notifier, job_id, stage="baseline_review", progress=97, label="Preparing Baseline Suitability Report")
     suitability = _suitability_report(
         row_count=row_count_total,
         numeric_columns=numeric_columns,
@@ -634,7 +643,6 @@ def build_behavioral_baseline(
         expected_models=expected_behavior_models,
     )
 
-    _notify(stage_notifier, job_id, stage="baseline_candidate_persistence", progress=96, label="Saving versioned behavioral model candidate...")
     now = datetime.now(timezone.utc).isoformat()
     version = next_model_version()
     model_id = f"bdm-v{version}-{job_id[:8]}"
@@ -679,6 +687,11 @@ def build_behavioral_baseline(
         "relationship_graph": relationship_graph,
         "expected_behavior_models": expected_behavior_models,
         "suitability": suitability,
+        "construction": {
+            "state": "completed",
+            "completed_at": now,
+            "source_job_id": job_id,
+        },
         "activation": {
             "eligible": eligible,
             "approval_required": bool(approval_required),
@@ -689,6 +702,8 @@ def build_behavioral_baseline(
     }
     result = {
         "contract_version": BASELINE_RESULT_CONTRACT_VERSION,
+        "result_type": "baseline_suitability_report",
+        "report_title": "Baseline Suitability Report",
         "job_id": job_id,
         "dataset_id": job_id,
         "workflow": workflow,
@@ -697,7 +712,9 @@ def build_behavioral_baseline(
         "filename": filename,
         "completed_at": now,
         "candidate_model": model,
+        "candidate_behavioral_digital_model": model,
         "baseline_suitability": suitability,
+        "baseline_suitability_report": suitability,
         "activation": dict(model["activation"]),
         "processing_trace": {
             "baseline_builder_ran": True,
@@ -710,7 +727,9 @@ def build_behavioral_baseline(
     }
     assert_baseline_output_contract(result)
     persisted_model = persist_candidate(model, result, activate=auto_activate)
+    _notify(stage_notifier, job_id, stage="baseline_ready", progress=100, label="Candidate baseline ready")
     if persisted_model.get("status") == "active":
         result["candidate_model"] = persisted_model
+        result["candidate_behavioral_digital_model"] = persisted_model
         result["activation"] = dict(persisted_model.get("activation") or {})
     return result

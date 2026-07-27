@@ -1,17 +1,30 @@
 from __future__ import annotations
 
+import copy
 import time
+
+import pytest
 from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.services import upload_pipeline
+from app.engine.sii_engine import evaluate_sii as real_evaluate_sii
+from app.services import upload_jobs, upload_pipeline
 from app.services.baseline_contracts import (
+    BASELINE_PROGRESS_STAGES,
+    JOB_TYPE_BASELINE_CONSTRUCTION,
+    JOB_TYPE_MONITORING_ANALYSIS,
+    MONITORING_PROGRESS_STATE_MACHINE,
     PROHIBITED_BASELINE_OUTPUT_KEYS,
+    assert_baseline_progress_contract,
+    baseline_copy_is_safe,
+    baseline_progress_payload,
     prohibited_keys_present,
 )
 from app.services.behavioral_model_repository import (
+    activate_candidate,
+    persist_candidate,
     read_active_behavioral_model,
     read_baseline_result,
 )
@@ -57,6 +70,7 @@ def test_create_baseline_never_invokes_sii_or_persists_detection_evidence(monkey
         raise AssertionError("the full SII runner must not be invoked for a baseline upload")
 
     monkeypatch.setattr(upload_pipeline, "evaluate_sii", fail_if_called)
+    monkeypatch.setattr(upload_jobs, "run_structural_analysis_pipeline", fail_if_called)
     client = TestClient(create_app())
 
     accepted = _post(client, "create_baseline")
@@ -75,6 +89,11 @@ def test_create_baseline_never_invokes_sii_or_persists_detection_evidence(monkey
     result_response = client.get(queued["baseline_result_url"])
     assert result_response.status_code == 200
     result = result_response.json()
+    assert result["result_type"] == "baseline_suitability_report"
+    assert result["report_title"] == "Baseline Suitability Report"
+    assert result["candidate_behavioral_digital_model"] == result["candidate_model"]
+    assert result["baseline_suitability_report"] == result["baseline_suitability"]
+    assert "analysis_result" not in result
     assert result["processing_trace"] == {
         **result["processing_trace"],
         "sii_engine_invoked": False,
@@ -166,3 +185,137 @@ def test_controlled_extension_creates_a_child_candidate_without_sii(monkeypatch)
     assert child["lineage"]["parent_model_id"] == parent["model_id"]
     assert child["lineage"]["parent_version"] == parent["version"]
     assert child["version"] == parent["version"] + 1
+
+
+def test_baseline_jobs_emit_only_the_baseline_progress_contract(monkeypatch) -> None:
+    observed: list[dict] = []
+    real_write_job = upload_jobs.write_job
+
+    def capture_write(*args):
+        real_write_job(*args)
+        job_id = str(args[0] if len(args) == 2 else (args[0] or {}).get("job_id") or "")
+        snapshot = upload_jobs.read_job(job_id)
+        if snapshot and snapshot.get("workflow") == "create_baseline":
+            observed.append(copy.deepcopy(snapshot))
+
+    monkeypatch.setattr(upload_jobs, "write_job", capture_write)
+    client = TestClient(create_app())
+    queued = _post(client, "create_baseline").json()
+    terminal = _wait(client, queued["status_url"])
+
+    assert observed
+    assert terminal["baseline_stage"] == "ready"
+    assert terminal["baseline_stage_order"] == list(BASELINE_PROGRESS_STAGES)
+    observed_learn_steps: list[str] = []
+    for payload in observed:
+        step = payload.get("baseline_step")
+        if payload.get("baseline_stage") == "learn" and step != (observed_learn_steps[-1] if observed_learn_steps else None):
+            observed_learn_steps.append(step)
+    assert observed_learn_steps == [
+        "validating_historical_coverage",
+        "assessing_data_quality",
+        "checking_sensor_suitability",
+        "identifying_operating_modes",
+        "learning_signal_behavior",
+        "learning_relationships",
+        "building_behavioral_graph",
+        "estimating_empirical_thresholds",
+        "fitting_expected_behavior_models",
+        "creating_candidate_baseline",
+    ]
+    for payload in [queued, *observed, terminal]:
+        assert_baseline_progress_contract(payload)
+        assert payload["job_type"] == JOB_TYPE_BASELINE_CONSTRUCTION
+        assert payload["baseline_stage"] in {*BASELINE_PROGRESS_STAGES, "failed", "cancelled"}
+        assert not ({
+            "analysis_state", "contract_stage", "contract_progress", "contract_label",
+            "monitoring_stage", "monitoring_step", "propagation_stage",
+            "propagation_progress", "propagation_label",
+        } & set(payload))
+        for key in ("baseline_stage_label", "baseline_step_label", "progress_label", "message"):
+            assert baseline_copy_is_safe(payload.get(key)), (key, payload.get(key))
+
+
+def test_baseline_progress_normalization_is_idempotent() -> None:
+    first = baseline_progress_payload("baseline_data_quality", progress=60)
+    normalized = baseline_progress_payload(first["processing_state"], progress=first["progress"])
+
+    assert normalized["baseline_stage"] == "learn"
+    assert normalized["baseline_step"] == "assessing_data_quality"
+    assert normalized["baseline_step_label"] == "Assessing data quality"
+
+
+def test_monitoring_job_keeps_full_sii_workflow_and_loads_active_baseline(monkeypatch) -> None:
+    client = TestClient(create_app())
+    baseline_job = _post(client, "create_baseline").json()
+    _wait(client, baseline_job["status_url"])
+    baseline_result = client.get(baseline_job["baseline_result_url"]).json()
+    candidate = baseline_result["candidate_model"]
+    approved = client.post(
+        f"/api/data/baselines/candidates/{candidate['model_id']}/approve",
+        json={},
+    )
+    assert approved.status_code == 200
+
+    calls: list[dict] = []
+
+    def counted_evaluate_sii(**kwargs):
+        calls.append(dict(kwargs))
+        return real_evaluate_sii(**kwargs)
+
+    monkeypatch.setattr(upload_pipeline, "evaluate_sii", counted_evaluate_sii)
+    accepted = _post(client, "analyze_new_data", "current.csv")
+    assert accepted.status_code == 202
+    queued = accepted.json()
+    assert queued["job_type"] == JOB_TYPE_MONITORING_ANALYSIS
+    assert queued["progress_state_machine"] == MONITORING_PROGRESS_STATE_MACHINE
+    assert not ({"baseline_stage", "baseline_step", "baseline_learn_steps"} & set(queued))
+
+    terminal = _wait(client, queued["status_url"])
+    assert len(calls) == 1
+    assert calls[0]["config"]["active_baseline_loaded"] is True
+    assert calls[0]["config"]["active_behavioral_baseline"]["model_id"] == candidate["model_id"]
+    assert terminal["status"] == "COMPLETE"
+    assert terminal["sii_completed"] is True
+    assert terminal["analysis_state"] == "completed"
+    assert terminal["job_type"] == JOB_TYPE_MONITORING_ANALYSIS
+    assert terminal["progress_state_machine"] == MONITORING_PROGRESS_STATE_MACHINE
+    assert terminal["evidence_persisted"] is True
+    assert not ({"baseline_stage", "baseline_step", "baseline_learn_steps"} & set(terminal))
+
+
+def test_candidate_cannot_activate_before_completion_or_required_approval() -> None:
+    incomplete_model = {
+        "model_id": "incomplete-candidate",
+        "version": 1,
+        "status": "awaiting_approval",
+        "workflow": "create_baseline",
+        "construction": {"state": "processing"},
+        "source": {"job_id": "incomplete-job"},
+        "activation": {"eligible": True, "approval_required": True},
+    }
+    incomplete_result = {
+        "job_id": "incomplete-job",
+        "status": "PROCESSING",
+        "candidate_model": incomplete_model,
+    }
+    with pytest.raises(ValueError, match="candidate_not_completed"):
+        persist_candidate(incomplete_model, incomplete_result, activate=False)
+    assert read_active_behavioral_model() is None
+
+    client = TestClient(create_app())
+    queued = _post(client, "create_baseline").json()
+    _wait(client, queued["status_url"])
+    candidate = client.get(queued["baseline_result_url"]).json()["candidate_model"]
+    with pytest.raises(ValueError, match="candidate_approval_required"):
+        activate_candidate(candidate["model_id"], approved_by="automatic_policy")
+    with pytest.raises(ValueError, match="candidate_approval_required"):
+        activate_candidate(candidate["model_id"], approved_by="")
+    assert read_active_behavioral_model() is None
+
+    approved = client.post(
+        f"/api/data/baselines/candidates/{candidate['model_id']}/approve",
+        json={},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["active_model"]["status"] == "active"

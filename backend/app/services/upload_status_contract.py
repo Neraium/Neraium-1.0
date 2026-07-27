@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from app.services.baseline_contracts import (
+    JOB_TYPE_MONITORING_ANALYSIS,
+    MONITORING_PROGRESS_STATE_MACHINE,
+    assert_baseline_progress_contract,
+    baseline_progress_payload,
+    is_baseline_workflow,
+)
 from app.services.upload_lifecycle import (
     LEGACY_STAGE_DEFAULTS,
     canonical_stage_for,
     canonical_stage_payload,
     infer_legacy_stage,
 )
-from app.services.baseline_contracts import is_baseline_workflow
-
 
 
 REQUIRED_COMPLETION_ARTIFACTS = (
@@ -56,12 +61,6 @@ _ANALYSIS_STATE_BY_STAGE = {
     "cognition_ready": "evidence_generation",
     "saving_result": "evidence_generation",
     "saving_results": "evidence_generation",
-    "baseline_validating": "validating",
-    "baseline_quality_assessment": "baseline_creation",
-    "baseline_mode_identification": "baseline_creation",
-    "baseline_relationship_learning": "baseline_creation",
-    "baseline_model_fitting": "baseline_creation",
-    "baseline_candidate_persistence": "baseline_creation",
     "complete": "completed",
     "completed": "completed",
     "failed": "failed",
@@ -73,7 +72,7 @@ _ANALYSIS_STATE_BY_STAGE = {
 
 
 def canonical_analysis_state(payload: dict | None) -> str:
-    """Return the backend-owned baseline analysis state for a status payload."""
+    """Return the backend-owned monitoring-analysis state for a status payload."""
     value = payload if isinstance(payload, dict) else {}
     explicit = str(value.get("analysis_state") or "").strip().lower()
     job_state = str(value.get("job_state") or "").strip().lower()
@@ -104,6 +103,7 @@ def with_canonical_analysis_state(payload: dict | None) -> dict:
     normalized["analysis_state"] = canonical_analysis_state(normalized)
     return normalized
 
+
 def _truthy(value):
     return value is True or str(value).strip().lower() in {"true", "1", "yes"}
 
@@ -111,12 +111,12 @@ def _truthy(value):
 def _canonical_job_state(status: str, payload: dict) -> str:
     normalized = str(status or payload.get("status") or "").strip().upper()
     processing_state = str(payload.get("processing_state") or payload.get("contract_stage") or "").strip().lower()
-    if normalized in {"COMPLETE", "COMPLETED", "SUCCESS"} or processing_state == "complete":
+    if normalized in {"COMPLETE", "COMPLETED", "SUCCESS"} or processing_state in {"complete", "baseline_ready"}:
         artifacts = payload.get("sii_completion_artifacts") or (payload.get("result_summary") or {}).get("sii_completion_artifacts") or {}
         return "completed_compatibility" if _truthy(artifacts.get("compatibility_mode")) else "completed"
-    if normalized in {"FAILED", "FAILURE", "ERROR", "TIMEOUT"} or processing_state in {"failed", "error", "timeout"}:
+    if normalized in {"FAILED", "FAILURE", "ERROR", "TIMEOUT"} or processing_state in {"failed", "error", "timeout", "baseline_failed"}:
         return "failed"
-    if normalized == "CANCELLED" or processing_state == "cancelled":
+    if normalized == "CANCELLED" or processing_state in {"cancelled", "baseline_cancelled"}:
         return "cancelled"
     if normalized in {"PENDING", "QUEUED", "QUEUE"} or processing_state in {"queued", "pending"}:
         return "queued"
@@ -132,14 +132,58 @@ def _missing_completion_artifacts(payload: dict) -> list[str]:
     artifacts = _completion_artifacts(payload)
     return [key for key in REQUIRED_COMPLETION_ARTIFACTS if not _truthy(artifacts.get(key))]
 
-def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_status: str) -> dict:
+
+def _bounded_progress(payload: dict, default_progress: int) -> int:
+    backend_progress = payload.get("percent", payload.get("progress", default_progress))
+    try:
+        return int(max(0, min(100, float(backend_progress))))
+    except (TypeError, ValueError):
+        return default_progress
+
+
+def _with_baseline_progress_fields(normalized: dict, raw_payload: dict, normalized_status: str) -> dict:
+    raw_stage = str(
+        raw_payload.get("processing_state")
+        or raw_payload.get("propagation_stage")
+        or normalized_status
+        or "queued"
+    ).strip().lower()
+    if normalized_status == "COMPLETE":
+        raw_stage = "baseline_ready"
+    elif normalized_status in {"FAILED", "FAILURE", "ERROR", "TIMEOUT"}:
+        raw_stage = "failed"
+    elif normalized_status == "CANCELLED":
+        raw_stage = "cancelled"
+    progress = 100 if normalized_status in {"COMPLETE", "FAILED", "CANCELLED", "TIMEOUT"} else _bounded_progress(normalized, 5)
+    for key in (
+        "analysis_state",
+        "contract_stage",
+        "contract_progress",
+        "contract_label",
+        "monitoring_stage",
+        "monitoring_step",
+        "propagation_stage",
+        "propagation_progress",
+        "propagation_label",
+    ):
+        normalized.pop(key, None)
+    normalized.update(baseline_progress_payload(raw_stage, progress=progress))
+    normalized["job_state"] = _canonical_job_state(normalized_status, normalized)
+    normalized["terminal"] = normalized["job_state"] in {"completed", "failed", "cancelled"}
+    normalized.setdefault("dataset_id", normalized.get("job_id"))
+    assert_baseline_progress_contract(normalized)
+    return normalized
+
+
+def _with_monitoring_progress_fields(normalized: dict, raw_payload: dict, normalized_status: str) -> dict:
+    for key in (
+        "baseline_stage", "baseline_stage_label", "baseline_step", "baseline_step_label",
+        "baseline_stage_order", "baseline_learn_steps", "baseline_learn_step_index",
+    ):
+        normalized.pop(key, None)
     stage = infer_legacy_stage(raw_payload, normalized_status)
     default_progress, default_label = LEGACY_STAGE_DEFAULTS.get(stage, (0, "Processing telemetry."))
-    backend_progress = normalized.get("percent", normalized.get("progress", default_progress))
-    try:
-        backend_progress = int(max(0, min(100, float(backend_progress))))
-    except (TypeError, ValueError):
-        backend_progress = default_progress
+    backend_progress = _bounded_progress(normalized, default_progress)
     if normalized_status == "COMPLETE":
         backend_progress = 100
         stage = "complete"
@@ -162,10 +206,18 @@ def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_sta
             label=raw_payload.get("contract_label") or normalized["propagation_label"],
         )
     )
+    normalized["job_type"] = JOB_TYPE_MONITORING_ANALYSIS
+    normalized["progress_state_machine"] = MONITORING_PROGRESS_STATE_MACHINE
     normalized["job_state"] = _canonical_job_state(normalized.get("status"), normalized)
     normalized["terminal"] = normalized["job_state"] in {"completed", "completed_compatibility", "failed", "cancelled"}
     normalized.setdefault("dataset_id", normalized.get("job_id"))
     return with_canonical_analysis_state(normalized)
+
+
+def _with_workflow_progress_fields(normalized: dict, raw_payload: dict, normalized_status: str) -> dict:
+    if is_baseline_workflow(raw_payload.get("workflow") or normalized.get("workflow")):
+        return _with_baseline_progress_fields(normalized, raw_payload, normalized_status)
+    return _with_monitoring_progress_fields(normalized, raw_payload, normalized_status)
 
 
 def normalize_upload_status_payload(payload: dict) -> dict:
@@ -184,10 +236,15 @@ def normalize_upload_status_payload(payload: dict) -> dict:
     normalized.setdefault("percent", int(payload.get("progress", payload.get("percent", 0)) or 0))
     normalized.setdefault("progress", int(payload.get("percent", payload.get("progress", 0)) or 0))
     if status in {"RUNNING_SII", "PROCESSING", "PENDING", "QUEUED"}:
-        normalized.setdefault("message", "Dataset analysis is in progress.")
+        normalized.setdefault(
+            "message",
+            "Baseline construction is in progress."
+            if is_baseline_workflow(payload.get("workflow"))
+            else "Dataset analysis is in progress.",
+        )
     if status in {"TIMEOUT", "CANCELLED"}:
         normalized.setdefault("error", str(normalized.get("message") or status.title()))
-        return _with_propagation_fields(normalized, payload, status)
+        return _with_workflow_progress_fields(normalized, payload, status)
     if status == "COMPLETE":
         if is_baseline_workflow(payload.get("workflow")):
             normalized["sii_completed"] = False
@@ -196,11 +253,7 @@ def normalize_upload_status_payload(payload: dict) -> dict:
             normalized["baseline_result_available"] = True
             normalized.setdefault("workflow_state", payload.get("baseline_activation_state") or "awaiting_approval")
             normalized.setdefault("error", None)
-            if str(normalized.get("progress_label") or "").strip() in {"", "Complete.", "Complete"}:
-                normalized["progress_label"] = "Behavioral baseline candidate ready."
-            if str(normalized.get("message") or "").strip() in {"", "Complete.", "Complete"}:
-                normalized["message"] = "Behavioral baseline candidate ready."
-            return _with_propagation_fields(normalized, payload, status)
+            return _with_baseline_progress_fields(normalized, payload, status)
         artifacts = _completion_artifacts(payload)
         sii_completed = bool(payload.get("sii_completed") or (payload.get("result_summary") or {}).get("sii_completed"))
         requires_contract_enforcement = "result_summary" in payload or "result_available" in payload
@@ -211,7 +264,7 @@ def normalize_upload_status_payload(payload: dict) -> dict:
             normalized["error_type"] = "sii_completion_missing"
             normalized["error"] = "sii_completion_missing"
             normalized["message"] = "Analysis could not save a complete result. Retry the analysis."
-            return _with_propagation_fields(normalized, payload, "FAILED")
+            return _with_monitoring_progress_fields(normalized, payload, "FAILED")
         if str(normalized.get("progress_label") or "").strip() in {"", "Complete.", "Complete", "Telemetry processing complete."}:
             normalized["progress_label"] = "Analysis ready."
         if str(normalized.get("message") or "").strip() in {"", "Complete.", "Complete", "Telemetry processing complete."}:
@@ -227,4 +280,4 @@ def normalize_upload_status_payload(payload: dict) -> dict:
                 "runner_errors": [],
             },
         )
-    return _with_propagation_fields(normalized, payload, normalized.get("status", status))
+    return _with_workflow_progress_fields(normalized, payload, normalized.get("status", status))

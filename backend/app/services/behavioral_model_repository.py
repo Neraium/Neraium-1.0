@@ -81,6 +81,10 @@ def persist_candidate(
 ) -> dict[str, Any]:
     model_id = str(model["model_id"])
     version = int(model["version"])
+    if (model.get("construction") or {}).get("state") != "completed" or result.get("status") != "COMPLETE":
+        raise ValueError("behavioral_model_candidate_not_completed")
+    if activate and (model.get("activation") or {}).get("approval_required") is True:
+        raise ValueError("behavioral_model_candidate_approval_required")
     persisted_model = dict(model)
     persisted_result = dict(result)
     _write(f"models/{model_id}", persisted_model)
@@ -120,6 +124,7 @@ def persist_candidate(
             {
                 **persisted_result,
                 "candidate_model": activated,
+                "candidate_behavioral_digital_model": activated,
                 "activation": dict(activated.get("activation") or {}),
             },
         )
@@ -131,8 +136,25 @@ def activate_candidate(model_id: str, *, approved_by: str) -> dict[str, Any]:
     candidate = read_model(model_id)
     if not isinstance(candidate, dict):
         raise ValueError("behavioral_model_candidate_not_found")
-    if candidate.get("activation", {}).get("eligible") is not True:
+    activation = candidate.get("activation") if isinstance(candidate.get("activation"), dict) else {}
+    if candidate.get("construction", {}).get("state") != "completed":
+        raise ValueError("behavioral_model_candidate_not_completed")
+    source_job_id = str((candidate.get("source") or {}).get("job_id") or "").strip()
+    source_result = read_baseline_result(source_job_id) if source_job_id else None
+    if not isinstance(source_result, dict) or source_result.get("status") != "COMPLETE":
+        raise ValueError("behavioral_model_candidate_not_completed")
+    if activation.get("eligible") is not True:
         raise ValueError("behavioral_model_candidate_not_eligible")
+    if activation.get("approval_required") is True and (
+        not str(approved_by or "").strip() or approved_by == "automatic_policy"
+    ):
+        raise ValueError("behavioral_model_candidate_approval_required")
+    if candidate.get("status") == "active":
+        active_candidate = read_active_behavioral_model()
+        if isinstance(active_candidate, dict) and active_candidate.get("model_id") == model_id:
+            return active_candidate
+    if candidate.get("status") not in {"awaiting_approval", "active"}:
+        raise ValueError("behavioral_model_candidate_not_activatable")
 
     activated_at = datetime.now(timezone.utc).isoformat()
     active = read_active_behavioral_model()
@@ -183,6 +205,7 @@ def activate_candidate(model_id: str, *, approved_by: str) -> dict[str, Any]:
                 {
                     **result,
                     "candidate_model": activated,
+                    "candidate_behavioral_digital_model": activated,
                     "activation": dict(activated.get("activation") or {}),
                 },
             )
