@@ -64,7 +64,7 @@ Implement a generalized Systemic Infrastructure Intelligence (SII) stack where e
 ### Historical Phase 2 target: Information + Entropy + Bayesian Evidence
 - MI and entropy calculators were activated during unified Phase 1 and remain separately traceable temporal evidence.
 - A Bayesian posterior was not activated; current confidence remains deterministic sufficiency/consistency evidence, not probability.
-- Unified Phase 2 instead adds graph-level metrics, like-mode baseline selection, elapsed-time persistence, multiscale windows, and conservative empirical thresholds.
+- Unified Phase 2 instead adds graph-level metrics, like-mode baseline selection, elapsed-time persistence, multiscale windows, and conservative empirical thresholds as non-authoritative supporting evidence.
 
 ### Phase 3: Graph/Spectral/Dynamics/Network Stability
 - Add topology-propagation calculations, spectral indicators, and network stability metrics.

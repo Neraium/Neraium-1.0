@@ -24,6 +24,7 @@ DEFAULT_CONFIG = {
     "minimum_recent_rows": 6,
     "minimum_pair_count": 3,
     "maximum_relationship_columns": 32,
+    "minimum_recent_mode_purity": 0.70,
 }
 
 
@@ -62,6 +63,18 @@ def analyze_mode_conditioned_baseline(
         for feature in dict.fromkeys(recent_descriptor.get("explicit_features", []))
         if recent_descriptor["features"].get(feature) is not None
     }
+    recent_feature_support = _recent_feature_support(
+        recent_rows,
+        signals=signals,
+        references=references,
+        timestamp_column=timestamp_column,
+        target_features=target_features,
+    )
+    minimum_feature_support = min(recent_feature_support.values(), default=0.0)
+    ambiguous_recent_mode = bool(
+        target_features
+        and minimum_feature_support < float(cfg["minimum_recent_mode_purity"])
+    )
     selected_rows: list[dict[str, Any]] = []
     selected_indices: list[int] = []
     match_scores: list[float] = []
@@ -85,10 +98,31 @@ def analyze_mode_conditioned_baseline(
         fallback_reason = "no_explicit_operating_mode_features"
     elif len(recent_rows) < minimum_recent:
         fallback_reason = "insufficient_recent_mode_rows"
+    elif ambiguous_recent_mode:
+        fallback_reason = "ambiguous_recent_operating_mode"
     elif len(selected_rows) < minimum_baseline:
         fallback_reason = "insufficient_like_mode_historical_rows"
     else:
         fallback_reason = None
+
+    selection_confidence = _selection_confidence(
+        target_features=target_features,
+        recent_rows=len(recent_rows),
+        minimum_recent_rows=minimum_recent,
+        minimum_feature_support=minimum_feature_support,
+        fallback_reason=fallback_reason,
+    )
+    selected_operating_mode = {
+        "mode_id": recent_descriptor.get("mode_id"),
+        "mode_label": recent_descriptor.get("mode_label"),
+        "features": target_features,
+        "feature_support": recent_feature_support,
+        "minimum_feature_support": round(minimum_feature_support, 6),
+        "ambiguous": ambiguous_recent_mode,
+        "confidence": round(selection_confidence, 6),
+        "confidence_level": _confidence_level(selection_confidence),
+        "reported_recent_mode": (operating_mode or {}).get("recent_mode"),
+    }
 
     limitations: list[str] = []
     if fallback_reason:
@@ -121,6 +155,9 @@ def analyze_mode_conditioned_baseline(
             "method": "exact_like_mode_historical_selection_v1",
             "used_global_fallback": True,
             "fallback_reason": fallback_reason,
+            "selection_confidence": round(selection_confidence, 6),
+            "selection_confidence_level": _confidence_level(selection_confidence),
+            "selected_operating_mode": selected_operating_mode,
             "global_relationship_model": relationship_model or {},
             "recent_mode": recent_descriptor,
             "target_features": target_features,
@@ -132,6 +169,10 @@ def analyze_mode_conditioned_baseline(
                 "selected_historical_indices": selected_indices,
                 "selected_baseline_rows": len(selected_rows),
                 "recent_rows": len(recent_rows),
+                "minimum_baseline_rows": minimum_baseline,
+                "minimum_recent_rows": minimum_recent,
+                "recent_feature_support": recent_feature_support,
+                "minimum_recent_mode_purity": float(cfg["minimum_recent_mode_purity"]),
             },
             "mode_relationships": {"nodes": [], "edges": []},
             "mode_signal_drift": [],
@@ -207,6 +248,9 @@ def analyze_mode_conditioned_baseline(
         "method": "exact_like_mode_historical_selection_v1",
         "used_global_fallback": False,
         "fallback_reason": None,
+        "selection_confidence": round(selection_confidence, 6),
+        "selection_confidence_level": _confidence_level(selection_confidence),
+        "selected_operating_mode": selected_operating_mode,
         "recent_mode": recent_descriptor,
         "target_features": target_features,
         "selection": {
@@ -219,6 +263,8 @@ def analyze_mode_conditioned_baseline(
             "recent_rows": len(recent_rows),
             "minimum_baseline_rows": minimum_baseline,
             "minimum_recent_rows": minimum_recent,
+            "recent_feature_support": recent_feature_support,
+            "minimum_recent_mode_purity": float(cfg["minimum_recent_mode_purity"]),
         },
         "mode_relationships": {
             "nodes": nodes,
@@ -230,6 +276,53 @@ def analyze_mode_conditioned_baseline(
         },
         "mode_signal_drift": signal_drift,
     }
+
+
+def _recent_feature_support(
+    rows: list[dict[str, Any]],
+    *,
+    signals: list[Any],
+    references: dict[str, tuple[float, float]],
+    timestamp_column: str | None,
+    target_features: dict[str, Any],
+) -> dict[str, float]:
+    if not rows or not target_features:
+        return {}
+    matches = {feature: 0 for feature in target_features}
+    for row in rows:
+        descriptor = describe_mode([row], signals, references, timestamp_column)
+        features = descriptor.get("features", {})
+        for feature, target in target_features.items():
+            if features.get(feature) == target:
+                matches[feature] += 1
+    return {
+        feature: round(count / len(rows), 6)
+        for feature, count in matches.items()
+    }
+
+
+def _selection_confidence(
+    *,
+    target_features: dict[str, Any],
+    recent_rows: int,
+    minimum_recent_rows: int,
+    minimum_feature_support: float,
+    fallback_reason: str | None,
+) -> float:
+    if not target_features or recent_rows <= 0:
+        return 0.0
+    sample_factor = min(1.0, recent_rows / max(1, minimum_recent_rows * 2))
+    feature_factor = min(1.0, 0.70 + 0.15 * len(target_features))
+    confidence = clamp(minimum_feature_support * sample_factor * feature_factor)
+    if fallback_reason == "ambiguous_recent_operating_mode":
+        confidence = min(confidence, 0.25)
+    elif fallback_reason:
+        confidence = min(confidence, 0.35)
+    return confidence
+
+
+def _confidence_level(confidence: float) -> str:
+    return "high" if confidence >= 0.75 else "moderate" if confidence >= 0.45 else "limited"
 
 
 def _source_edges(relationship_model: dict[str, Any] | None) -> list[dict[str, Any]]:

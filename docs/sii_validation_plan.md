@@ -24,10 +24,10 @@ Phase 2 may be reviewed when all of these pass:
 
 1. Phase 1 global signal, Pearson, covariance, temporal, compatibility, and public upload values remain unchanged.
 2. Empirical thresholds fit only pre-split baseline rows, never lower fixed evidence floors, and expose exact fallback reasons.
-3. Like-mode selection uses only strictly earlier rows that exactly match every available explicit recent-mode feature; insufficient samples never masquerade as a conditioned result.
+3. Like-mode selection uses only strictly earlier rows that exactly match every available explicit recent-mode feature; recent feature purity must be at least 70 percent, and sparse or ambiguous modes never masquerade as a confident conditioned result.
 4. Graph metrics use only eligible, confidence- and quality-gated non-causal edges; changed fractions, node disruption, connected components, degree, density, and subsystem concentration have numerical assertions.
-5. Adaptive persistence uses actual positive timestamp intervals, supports irregular cadence without row-to-duration conversion, and exposes fixed row support only as an explicit fallback.
-6. Multiscale active windows are lower-exclusive and upper-inclusive, never overlap their baselines, report exact row counts/durations, and leave unsupported horizons `limited`.
+5. Adaptive persistence uses actual positive timestamp intervals, never lowers observation requirements for poor quality/health or volatility, suppresses isolated spikes, and exposes fixed row support only as an explicit fallback without duration language.
+6. Multiscale active windows are lower-exclusive and upper-inclusive, never overlap their baselines, require 80 percent elapsed-horizon coverage, treat opposing directions as conflicting, use an explicitly row-based fallback only when the timestamp column is absent, and leave unsupported horizons `limited`.
 7. Every Phase 2 module is attempted exactly once by `evaluate_sii`, isolated on failure, and represented in `processing_trace`.
 8. Canonical findings remain empty; graph, mode, persistence, and multiscale language makes no causal, diagnostic, repair, or exact failure-time claim.
 
@@ -69,6 +69,12 @@ Phase ownership keeps Phase 1 behavior frozen, activates only the documented Pha
   - exact multiscale row counts, durations, non-overlap, and agreement;
   - baseline-only threshold fitting and fixed-floor fallback;
   - once-only Phase 2 orchestration and compatibility isolation.
+- `tests/test_sii_phase2_main_audit.py`
+  - stable, isolated, connected, context-only, low-confidence, and unhealthy-sensor graph cases;
+  - normal transition, same-mode drift, sparse-mode, and ambiguous-mode cases;
+  - regular, irregular, absent-timestamp, noisy/stable, spike, sustained-small-change, and unhealthy-sensor persistence cases;
+  - transient, medium, long, conflicting, sparse-coverage, irregular, and no-timestamp multiscale cases;
+  - sufficient/limited canonical output wiring, non-authoritative trace, and evidence-record persistence.
 - `tests/test_sii_engine_v2.py`
   - canonical Phase 1 schema and engine identity;
   - stable system numerical bounds;
@@ -126,8 +132,8 @@ Before each later phase changes production behavior:
 ## Manual review checklist
 
 - Confirm the frontend still resolves baseline, relationships, graph, intelligence, runner state, and processing trace.
-- Confirm evidence records preserve paired sample counts, source rows, evidence windows, data conditions, and timestamps.
-- Confirm `processing_trace.modules_*` matches the actual execution path.
+- Confirm evidence records preserve paired sample counts, source rows, evidence windows, data conditions, timestamps, and the non-authoritative `phase_2_supporting_evidence` snapshot.
+- Confirm `processing_trace.modules_*`, `module_statuses`, and `module_failures` match the actual execution path and declare Phase 2 non-authoritative.
 - Confirm planned sections say `not_active_in_phase_1` rather than returning false success.
 - Confirm legacy `projected_time_to_failure*` aliases display conditional review-window language only; new code uses `review_window*`.
 - Confirm no optional failure aborts an otherwise usable upload.
@@ -140,7 +146,8 @@ Focused unified SII Phase 1 and Phase 2:
 .venv/bin/pytest -q \
   tests/test_sii_engine_phase_2.py \
   tests/test_sii_engine_v2.py \
-  tests/test_sii_pipeline_unification.py
+  tests/test_sii_pipeline_unification.py \
+  tests/test_sii_phase2_main_audit.py
 ```
 
 Preserved analytics and upload integration:

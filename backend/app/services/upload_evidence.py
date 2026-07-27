@@ -38,6 +38,91 @@ def _data_conditions_from_result(result: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(conditions))[:8]
 
 
+def _phase2_supporting_evidence_from_result(result: dict[str, Any]) -> dict[str, Any]:
+    sii = result.get("sii_result") if isinstance(result.get("sii_result"), dict) else {}
+    if not sii:
+        return {}
+    graph = sii.get("relationship_graph") if isinstance(sii.get("relationship_graph"), dict) else {}
+    operating_modes = sii.get("operating_modes") if isinstance(sii.get("operating_modes"), dict) else {}
+    conditioned = (
+        operating_modes.get("mode_conditioned_baseline")
+        if isinstance(operating_modes.get("mode_conditioned_baseline"), dict)
+        else {}
+    )
+    persistence = sii.get("persistence_analysis") if isinstance(sii.get("persistence_analysis"), dict) else {}
+    adaptive = persistence.get("adaptive_persistence") if isinstance(persistence.get("adaptive_persistence"), dict) else {}
+    multiscale = sii.get("multiscale_analysis") if isinstance(sii.get("multiscale_analysis"), dict) else {}
+    data_conditions = sii.get("data_conditions") if isinstance(sii.get("data_conditions"), dict) else {}
+    uncertainty = sii.get("uncertainty") if isinstance(sii.get("uncertainty"), dict) else {}
+    trace = sii.get("processing_trace") if isinstance(sii.get("processing_trace"), dict) else {}
+    return {
+        "authoritative": False,
+        "effect": "supporting_evidence_only",
+        "engine": sii.get("engine"),
+        "status": sii.get("status"),
+        "relationship_graph": {
+            key: graph.get(key)
+            for key in (
+                "status",
+                "reason",
+                "method",
+                "edge_basis",
+                "changed_edge_fraction",
+                "weighted_edge_displacement",
+                "changed_edges",
+                "node_disruption_scores",
+                "connected_changed_components",
+                "weighted_degree_change",
+                "graph_density_change",
+                "subsystem_concentration",
+                "thresholds",
+                "formulas",
+            )
+            if key in graph
+        },
+        "mode_conditioned_baseline": {
+            key: conditioned.get(key)
+            for key in (
+                "status",
+                "reason",
+                "method",
+                "used_global_fallback",
+                "fallback_reason",
+                "selection_confidence",
+                "selection_confidence_level",
+                "selected_operating_mode",
+                "recent_mode",
+                "target_features",
+                "selection",
+                "mode_relationships",
+                "mode_signal_drift",
+                "limitations",
+            )
+            if key in conditioned
+        },
+        "empirical_thresholds": data_conditions.get("empirical_thresholds", {}),
+        "adaptive_persistence": adaptive,
+        "multiscale_analysis": multiscale,
+        "module_failures": list(uncertainty.get("module_failures") or []),
+        "processing_trace": {
+            key: trace.get(key)
+            for key in (
+                "phase_2_authoritative",
+                "phase_2_effect",
+                "module_statuses",
+                "module_failures",
+                "modules_attempted",
+                "modules_completed",
+                "modules_limited",
+                "modules_failed",
+                "operating_modes_used",
+                "scales_used",
+            )
+            if key in trace
+        },
+    }
+
+
 def _deformation_started_at(result: dict[str, Any]) -> str | None:
     replay = result.get("replay_timeline") or ((result.get("sii_intelligence") or {}).get("replay_timeline")) or {}
     timeline = replay.get("timeline") if isinstance(replay, dict) else []
@@ -315,6 +400,7 @@ def build_evidence_record_from_result(
         "subsystem_name": (primary_condition.get("localization") or {}).get("monitored_boundary") if isinstance(primary_condition.get("localization"), dict) else None,
         "potential_impact": primary_condition.get("why_it_matters"),
         "condition": _evidence_condition_record(primary_condition),
+        "phase_2_supporting_evidence": _phase2_supporting_evidence_from_result(result),
         "water_intelligence": water_intelligence,
         "water_prior_versions": water_prior_versions,
     }

@@ -5,7 +5,7 @@ Legacy fields can remain for compatibility, but frontend rendering should prefer
 
 ## Canonical SII Source
 
-Uploaded telemetry is evaluated once through `app.engine.sii_engine.evaluate_sii`. The raw canonical evidence object is available at top-level `sii_result` with engine identity `neraium_sii/v2`. `analysis_result` remains the frontend-oriented presentation and evidence-index contract derived from the canonical compatibility fields. During Phase 1, clients may continue reading legacy top-level fields, but no client should trigger or infer a second analytical pass.
+Uploaded telemetry is evaluated once through `app.engine.sii_engine.evaluate_sii`. The raw canonical evidence object is available at top-level `sii_result` with engine identity `neraium_sii/v2`. `analysis_result` remains the frontend-oriented presentation and evidence-index contract derived from the canonical Phase 1 compatibility fields. Phase 2 graph, exact-mode, adaptive-persistence, and multiscale sections are active supporting evidence but are not authoritative for `analysis_result` findings, state, severity, or confidence. Evidence records may expose them at `phase_2_supporting_evidence`. Clients may continue reading legacy top-level fields, but no client should trigger or infer a second analytical pass.
 
 ## Schema
 

@@ -61,8 +61,8 @@ def test_frontend_polling_uses_bounded_backoff_under_failures() -> None:
     source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
     assert "const cooldownMs = Math.min(15000, STATUS_ENDPOINT_FAILURE_BASE_DELAY_MS * statusEndpointFailureCountRef.current);" in source
     assert "statusEndpointFailureCountRef.current > MAX_STATUS_POLL_FAILURES" in source
-    assert "Math.min(30000, baseDelay * (1.5 ** failureCount))" in source
-    assert "Math.min(Math.max(backoff, 1000), 45000)" in source
+    assert "Math.min(15000, STATUS_POLL_INTERVAL_MS * (1.5 ** failureIndex))" in source
+    assert "Math.max(backoff, STATUS_POLL_INTERVAL_MS)" in source
 
 
 def test_frontend_uses_uploaded_room_summary_for_room_context() -> None:
@@ -111,28 +111,31 @@ def test_object_errors_render_through_normalized_messages() -> None:
 def test_frontend_upload_progress_uses_propagation_fields_with_fallback() -> None:
     source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
     panel = read_frontend(ROOT / "frontend" / "src" / "components" / "setup" / "IntakeFlowPanel.jsx")
+    flow = read_frontend(UPLOAD_FLOW)
 
     assert "uploadJob?.propagation_progress" in source
     assert "propagationPercent" in source
     assert "[uploadTransferPercent, backendPercent, statusFallbackPercent]" in source
     assert "[propagationPercent, backendPercent, statusFallbackPercent]" in source
     assert "propagationLabel" in source
-    assert "Validating dataset" in panel
-    assert "Mapping signals" in panel
-    assert "Building baseline" in panel
-    assert "Comparing relationships" in panel
-    assert "Preparing evidence" in panel
+    assert "Import Dataset" in flow
+    assert "Check Dataset" in flow
+    assert "Prepare Dataset" in flow
+    assert "Learn Relationships" in flow
+    assert "Insights and Evidence" in flow
     assert "Importing Dataset..." not in panel
 
 
 def test_mobile_upload_limit_and_guidance_are_operational_grade() -> None:
     source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
+    upload_api_source = read_frontend(ROOT / "frontend" / "src" / "services" / "api" / "uploadApi.js")
 
-    assert "const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;" in source
+    assert "const MAX_UPLOAD_BYTES = LARGE_UPLOAD_MAX_BYTES;" in source
+    assert "export const LARGE_UPLOAD_MAX_BYTES = 512 * 1024 * 1024;" in upload_api_source
     assert "const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;" in source
     assert "Large telemetry export detected" in source
     assert "Telemetry export validated." in source
-    assert "High-volume export above" in source
+    assert "supported upload limit" in source
     assert "25 MB mobile intake limit" not in source
 
 
@@ -210,7 +213,7 @@ def test_frontend_uses_single_data_connections_workspace_for_uploads() -> None:
     source = read_upload_surface()
     workspaces_source = read_frontend(WORKSPACES_CONFIG)
 
-    assert 'label: "Data Connections"' in workspaces_source
+    assert 'label: "Data"' in workspaces_source
     assert 'id: "data-connections"' in workspaces_source
     assert "DataConnectionsWorkspace" in source
     assert "HistorianSetupWorkspace" not in source
@@ -315,6 +318,6 @@ def test_retry_analysis_targets_current_uploaded_job() -> None:
     assert "/api/data/upload/${encodeURIComponent(cleanJobId)}/retry" in upload_api_source
     assert "retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode })" in workspace_source
     assert "await handleUpload();" in workspace_source
-    assert "Import and Analyze Dataset" in panel_source
+    assert "Start Baseline Analysis" in panel_source
     assert "Choose Dataset" in panel_source
     assert "onClick={() => onRetryFailedUploads?.()}" in panel_source

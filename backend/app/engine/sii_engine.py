@@ -76,6 +76,7 @@ def evaluate_sii(
     limited: list[str] = []
     failed: list[str] = []
     failures: list[dict[str, str]] = []
+    module_statuses: dict[str, dict[str, str]] = {}
 
     def notify(step: str, progress: float) -> None:
         if not progress_callback:
@@ -95,13 +96,19 @@ def evaluate_sii(
             pass
 
     def record(module: str, status: str, reason: str | None = None) -> None:
+        normalized_status = status if status in {"complete", "limited", "failed"} else "failed"
         if module not in attempted:
             attempted.append(module)
-        target = completed if status == "complete" else limited if status == "limited" else failed
+        target = completed if normalized_status == "complete" else limited if normalized_status == "limited" else failed
         if module not in target:
             target.append(module)
-        if status == "failed":
-            failures.append({"module": module, "reason": str(reason or "module_failed")})
+        module_statuses[module] = {"status": normalized_status}
+        if reason:
+            module_statuses[module]["reason"] = str(reason)
+        if normalized_status == "failed":
+            failure = {"module": module, "reason": str(reason or f"invalid_module_status:{status}")}
+            failures.append(failure)
+            module_statuses[module]["reason"] = failure["reason"]
 
     notify("prepare_inputs", 0.02)
 
@@ -352,13 +359,22 @@ def evaluate_sii(
     notify("adaptive_persistence", 0.66)
     try:
         attempted.append("adaptive_persistence")
+        adaptive_config = (
+            dict(cfg.get("adaptive_persistence_config"))
+            if isinstance(cfg.get("adaptive_persistence_config"), dict)
+            else {}
+        )
+        adaptive_config.setdefault("align_to_phase2_active_window", True)
         adaptive_persistence = evaluate_adaptive_persistence(
             rows=dict_rows,
             timestamp_column=timestamp_column,
             baseline_analysis=baseline_analysis,
             fixed_persistence=fixed_persistence,
             empirical_thresholds=empirical_thresholds,
-            config=cfg.get("adaptive_persistence_config") if isinstance(cfg.get("adaptive_persistence_config"), dict) else None,
+            data_quality=data_quality_result,
+            sensor_health=sensor_health_result,
+            operating_mode=operating_mode_result,
+            config=adaptive_config,
         )
         record(
             "adaptive_persistence",
@@ -544,6 +560,10 @@ def evaluate_sii(
         "modules_completed": completed,
         "modules_limited": limited,
         "modules_failed": failed,
+        "module_statuses": module_statuses,
+        "module_failures": failures,
+        "phase_2_authoritative": False,
+        "phase_2_effect": "supporting_evidence_only",
         "rows_received": rows_received,
         "rows_used": len(matrix_rows),
         "columns_used": numeric_columns_used,

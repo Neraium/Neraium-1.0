@@ -53,12 +53,12 @@ A future live adapter should prepare the same arguments and call `evaluate_sii`;
 | Temporal state/variance/entropy/MI/lag/regime evidence | `engine/temporal_math.py` | Newly activated for uploads; formulas unchanged |
 | Covariance, Mahalanobis, motion, and accumulation gates | `services/sii_runner.py` | Wrapped unchanged |
 | Upload intelligence and public analysis contract | `services/sii_intelligence.py`, `services/analysis_result_contract.py` | Retained compatibility/presentation layer |
-| Evidence persistence | `services/upload_evidence.py`, `services/evidence_store.py` | Retained |
-| Baseline-only empirical thresholds | `engine/sii/empirical_thresholds.py` | Active Phase 2; fixed-floor fallback is explicit |
-| Like-mode historical selection | `engine/sii/mode_conditioned_baseline.py` | Active Phase 2; global fallback is explicit |
-| Dynamic relationship-graph metrics | `engine/sii/relationship_graph.py` | Active Phase 2; non-causal |
-| Elapsed-time persistence | `engine/sii/adaptive_persistence.py` | Active Phase 2; row fallback is explicit |
-| Timestamp-horizon comparisons | `engine/sii/multiscale_analysis.py` | Active Phase 2; unsupported horizons remain limited |
+| Evidence persistence | `services/upload_evidence.py`, `services/evidence_store.py` | Retained; compact Phase 2 supporting evidence is additive |
+| Baseline-only empirical thresholds | `engine/sii/empirical_thresholds.py` | Active Phase 2 supporting evidence; fixed-floor fallback is explicit |
+| Like-mode historical selection | `engine/sii/mode_conditioned_baseline.py` | Active Phase 2 supporting evidence; global fallback is explicit |
+| Dynamic relationship-graph metrics | `engine/sii/relationship_graph.py` | Active Phase 2 supporting evidence; non-causal |
+| Elapsed-time persistence | `engine/sii/adaptive_persistence.py` | Active Phase 2 supporting evidence; row fallback is explicit |
+| Timestamp-horizon comparisons | `engine/sii/multiscale_analysis.py` | Active Phase 2 supporting evidence; unsupported horizons remain limited |
 
 `engine/relationships.py` remains a legacy direct engine component but is no longer invoked independently by the upload pipeline. Its formulas were not deleted. The active upload Pearson implementation remains `services/relationship_baselines.py`.
 
@@ -98,9 +98,9 @@ The canonical object is stored at upload-result key `sii_result` and returned di
 
 The overall status is `failed` only when there are no usable rows or every core analytical component failed. An optional component failure produces an overall `limited` result while other evidence is preserved.
 
-### Active Phase 2 sections and later placeholders
+### Active supporting Phase 2 sections and later placeholders
 
-`relationship_graph`, `operating_modes.mode_conditioned_baseline`, `data_conditions.empirical_thresholds`, `persistence_analysis.adaptive_persistence`, and `multiscale_analysis` contain active Phase 2 evidence. A Phase 2 module returns `limited` with an exact fallback reason when its timestamp, mode-feature, history, or pair-count minimum is not met. It never reports fallback evidence as a successful conditioned calculation.
+`relationship_graph`, `operating_modes.mode_conditioned_baseline`, `data_conditions.empirical_thresholds`, `persistence_analysis.adaptive_persistence`, and `multiscale_analysis` contain active Phase 2 supporting evidence. They are non-authoritative: they do not create or suppress compatibility findings, replace runner or temporal state, or alter frontend-visible severity. A Phase 2 module returns `limited` with an exact fallback reason when its timestamp, mode-feature, history, or pair-count minimum is not met. It never reports fallback evidence as a successful conditioned calculation.
 
 `physics_evidence`, `propagation_analysis`, `evidence_fusion`, and `behavioral_model` remain structured later-phase placeholders. Temporal math's existing `topology_propagation` scalar remains available inside `temporal_analysis`; Phase 3 candidate path analysis is not active. Existing runner and temporal composite scores remain separate; Phase 3 fusion is not emulated by averaging them.
 
@@ -130,6 +130,10 @@ Every evaluation records:
 - `modules_completed`
 - `modules_limited`
 - `modules_failed`
+- `module_statuses`
+- `module_failures`
+- `phase_2_authoritative` (currently `false`)
+- `phase_2_effect` (currently `supporting_evidence_only`)
 - `rows_received`
 - `rows_used`
 - `columns_used`
@@ -145,9 +149,9 @@ Each analytical call is isolated. A Phase 2 module failure, temporal failure, un
 
 ## Phase boundaries
 
-- Phase 1: active and preserved:unified entrypoint, original math, temporal integration, schema, compatibility, trace, tests, and documentation.
-- Phase 2: active:graph-level metrics, exact like-mode historical selection, elapsed-time persistence, timestamp-horizon multiscale windows, and baseline-only empirical thresholds.
-- Phase 3: planned:configurable physics priors, candidate propagation paths, transparent evidence fusion.
-- Phase 4: planned:auditable behavioral digital model and calibration tooling.
+- Phase 1: active and preserved: unified entrypoint, original math, temporal integration, schema, compatibility, trace, tests, and documentation.
+- Phase 2: active as supporting evidence, non-authoritative: graph-level metrics, exact like-mode historical selection, elapsed-time persistence, timestamp-horizon multiscale windows, and baseline-only empirical thresholds.
+- Phase 3: planned: configurable physics priors, candidate propagation paths, transparent evidence fusion.
+- Phase 4: planned: auditable behavioral digital model and calibration tooling.
 
-Phase 2 evidence is additive to the canonical result. The legacy upload compatibility payload remains populated only from the preserved Phase 1 calculations, preventing silent frontend or persisted-evidence changes.
+Phase 2 evidence is additive to the canonical result. The legacy upload compatibility payload remains populated only from the preserved Phase 1 calculations, preventing silent frontend changes. Evidence records additionally persist a compact `phase_2_supporting_evidence` snapshot; it is labeled non-authoritative and does not replace existing evidence fields.

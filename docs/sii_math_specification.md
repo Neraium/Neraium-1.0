@@ -29,11 +29,11 @@ All confidence outputs in this document are deterministic heuristic scores or qu
 | Fixed persistence | Active | `engine/analysis.py` | 3 recent rows |
 | Covariance/Mahalanobis | Active | `services/sii_runner.py` | 8 baseline vectors and baseline completeness ≥ 0.65 |
 | Temporal math | Active | `engine/temporal_math.py` | Default 16 usable rows, 1 numeric feature; pair metrics need 2 features |
-| Graph-level relationship metrics | Active Phase 2 | `engine/sii/relationship_graph.py` | 1 eligible edge; promotion has stricter gates |
-| Mode-conditioned baseline | Active Phase 2 | `engine/sii/mode_conditioned_baseline.py` | 12 exact-mode historical rows, 6 recent rows |
-| Adaptive elapsed-time persistence | Active Phase 2 | `engine/sii/adaptive_persistence.py` | 3 recent rows and reliable chronological timestamps |
-| Multiscale analysis | Active Phase 2 | `engine/sii/multiscale_analysis.py` | 12 prior and 6 active rows per supported horizon |
-| Empirical thresholds | Active Phase 2 | `engine/sii/empirical_thresholds.py` | 48 baseline rows; per-signal and pair minimums |
+| Graph-level relationship metrics | Active Phase 2 supporting evidence | `engine/sii/relationship_graph.py` | 1 eligible edge; promotion has stricter gates |
+| Mode-conditioned baseline | Active Phase 2 supporting evidence | `engine/sii/mode_conditioned_baseline.py` | 12 exact-mode historical rows, 6 recent rows |
+| Adaptive elapsed-time persistence | Active Phase 2 supporting evidence | `engine/sii/adaptive_persistence.py` | 3 recent rows and reliable chronological timestamps |
+| Multiscale analysis | Active Phase 2 supporting evidence | `engine/sii/multiscale_analysis.py` | 12 prior and 6 active rows per supported horizon |
+| Empirical thresholds | Active Phase 2 supporting evidence | `engine/sii/empirical_thresholds.py` | 48 baseline rows; per-signal and pair minimums |
 | Physics priors | Planned Phase 3 | : | Not active |
 | Candidate propagation paths | Planned Phase 3 | : | Not active; temporal topology scalar remains active |
 | Evidence fusion | Planned Phase 3 | : | Not active; existing composites remain separate |
@@ -551,7 +551,7 @@ Insufficient history retains the fixed `0.25` threshold with `status=fallback` a
 
 The global 70/30 relationship comparison remains unchanged. The Phase 2 selector summarizes the recent 30 percent window using the existing deterministic context features, then evaluates each strictly earlier row under the same learned numeric-band references. A historical row is selected only when it supplies and exactly matches every explicit recent-mode feature.
 
-A conditioned calculation requires at least 12 selected historical rows and 6 recent rows. Pearson pairs still require 3 pairwise-complete values in each window and use the Phase 1 change classification. If mode features or counts are insufficient, `used_global_fallback=true`; no global edge is labeled as conditioned.
+A conditioned calculation requires at least 12 selected historical rows and 6 recent rows. Every explicit feature must match the selected recent value in at least 70 percent of recent rows; lower purity is `ambiguous_recent_operating_mode`. Pearson pairs still require 3 pairwise-complete values in each window and use the Phase 1 change classification. If mode features, mode purity, or counts are insufficient, `used_global_fallback=true`, confidence is capped at `0.35` (`0.25` for ambiguity), and no global edge is labeled as conditioned.
 
 ### 8.3 Dynamic non-causal relationship graph
 
@@ -593,21 +593,31 @@ A coherent component needs at least 2 promoted edges and coherence `>=0.62`. Wei
 
 When at least 90 percent of recent timestamps parse and valid timestamps are strictly increasing, each observation receives its actual interval to the next valid timestamp; the terminal observation receives one median interval. Irregular intervals are retained as elapsed time and reported as a limitation rather than converted from row counts.
 
-For a non-flat watch/review signal:
+For a non-flat watch/review signal, the upload orchestration aligns the persistence window with the smaller of the Phase 1 recent window and the Phase 2 30 percent active window. Direct component callers retain the Phase 1 recent window unless they enable that alignment. Requirements are conservative:
 
 ```text
 deviation_threshold = max(0.01*|baseline_mean|, 0.01, learned_signal_threshold_if_available)
+base_required_observations = 3
+adjustment = irregular_sampling(0|1)
+           + data_quality(0|1|2)
+           + sensor_health(0|1|2)
+           + operating_mode(0|1|2)
+           + baseline_volatility(0|1|2)
+required_observations = clip(base_required_observations + adjustment, 3, 12)
 support_fraction = supporting_duration / observed_duration
-required_continuous_duration = max(3*median_interval, 0.70*observed_duration)
-persistent = support_fraction >= 0.70
+required_continuous_duration = max(required_observations*median_interval,
+                                   0.70*observed_duration)
+persistent = supporting_observations >= required_observations
+             and longest_supporting_run_observations >= required_observations
+             and support_fraction >= 0.70
              and longest_continuous_support >= required_continuous_duration
 ```
 
-Without adequate chronological timestamps, the module is `limited` and exposes the preserved fixed row-support calculation as an explicit fallback.
+No quality, health, volatility, sampling, or mode adjustment can reduce the base requirement. An isolated spike cannot meet both the observation-count and continuous-duration gates. Without adequate chronological timestamps, the module is `limited` and exposes the preserved fixed row-support calculation as an explicit observation-count fallback. The fallback contains no duration fields or row-to-duration language.
 
 ### 8.5 Multiscale timestamp horizons
 
-Default horizons are 15 minutes, 1 hour, 6 hours, and 24 hours. For horizon `h` ending at the latest timestamp `t`, the active window is lower-exclusive and upper-inclusive: `(t-h,t]`. Its baseline contains only rows at or before `t-h`, so the windows never overlap. Each scale needs at least 12 baseline and 6 active rows.
+Default horizons are 15 minutes, 1 hour, 6 hours, and 24 hours. For horizon `h` ending at the latest timestamp `t`, the active window is lower-exclusive and upper-inclusive: `(t-h,t]`. Its baseline contains only rows at or before `t-h`, so the windows never overlap. Each elapsed scale needs at least 12 baseline rows, 6 active rows, and an active timestamp span covering at least 80 percent of the requested horizon.
 
 For each signal:
 
@@ -621,13 +631,13 @@ signal_score = clip(normalized_change/4,0,1)
 active = normalized_change >= 1
 ```
 
-A signal agrees across scales when it is active in at least `max(2,ceil(0.67*eligible_scales))` horizons. Unsupported horizons remain individually `limited` with exact row counts and reasons. Multi-scale agreement records sustained observational change, not cause or predicted failure time.
+A signal agrees across scales only in the same direction and when it is active in at least `max(2,ceil(0.67*eligible_scales))` horizons. Opposing directions are classified as `conflicting_scales`; a scale-specific change is `transient_or_scale_specific`; a directionally consistent elapsed result is `sustained_across_elapsed_scales`. Unsupported horizons remain individually `limited` with exact row counts, actual coverage, and reasons. With no timestamp column, the module may compare 6-, 12-, and 24-row windows, but labels the result `row_count`, never emits duration fields, and never claims sustained elapsed-time change. Present but unreliable timestamps remain limited rather than being relabeled as row-duration evidence. Runtime is bounded to 8 scales, 64 signal columns, and 16 relationship columns by default. Multiscale agreement records observational change, not cause or predicted failure time.
 
 ## 9. Fusion and findings after Phase 2
 
 There is no cross-module SII fusion formula after Phase 2. Signal, relationship, covariance, temporal, operating-context, health, and persistence outputs remain separately traceable. Existing runner and temporal internal composites are preserved under their own module names.
 
-Canonical `findings` remains empty after Phase 2. Existing frontend condition/finding generation remains in the compatibility presentation contract and retains its current persistence/evidence guards. Phase 3 will add a documented deterministic fusion method before canonical finding generation is activated.
+Canonical `findings` remains empty after Phase 2. `processing_trace.phase_2_authoritative=false` and `phase_2_effect=supporting_evidence_only`. Existing frontend condition/finding generation, instability, alert/urgency, operating/review state, severity, and confidence remain derived from the preserved Phase 1 compatibility/presentation path. Graph, mode-conditioned, adaptive-persistence, and multiscale outputs cannot currently create or suppress a finding, replace runner or temporal state, or change a frontend-visible status. Phase 3 will add a documented deterministic fusion method before canonical finding generation is activated.
 
 ## Limitations common to active components
 
@@ -635,7 +645,7 @@ Canonical `findings` remains empty after Phase 2. Existing frontend condition/fi
 - Pearson detects linear association and is non-causal.
 - Histogram MI depends on binning and sample size.
 - Lag ordering is non-causal and currently limited to the first two temporal features.
-- The global Phase 1 comparison remains unconditioned; Phase 2 exposes like-mode evidence separately and may fall back when explicit features are unavailable.
+- The global Phase 1 comparison, temporal analysis, and covariance analysis remain unconditioned; Phase 2 mode selection precedes their orchestration calls but only the Phase 2 dynamic graph consumes the conditioned relationship edges. It may fall back when explicit features are unavailable, sparse, or ambiguous.
 - Covariance missing values are zero-filled after a completeness gate.
 - Phase 2 empirical thresholds describe within-upload baseline variability; they are not calibrated false-positive probabilities or fleet-level alarm limits.
 - No current component is a physics simulation, digital twin, calibrated probability, root-cause model, repair recommender, or exact failure-time predictor.

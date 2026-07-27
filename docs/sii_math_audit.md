@@ -2,7 +2,7 @@
 
 ## Audit state
 
-Updated for unified SII Phase 2 on branch `agent/unified-sii-engine-phase-2`.
+Audited against unified SII Phase 2 on branch `agent/audit-unified-sii-phase-2`.
 
 The authoritative uploaded-telemetry entrypoint is now:
 
@@ -64,11 +64,11 @@ Direct code and integration tests confirm `upload_pipeline` no longer invokes re
 | Regime detection | temporal math and runner regimes | temporal/covariance sections | Preserved separately |
 | Topology-propagation scalar | temporal math | temporal analysis | Preserved; not claimed causal |
 | Temporal accumulation/confidence/index | temporal math | temporal analysis | Preserved; confidence not probability |
-| Baseline-only thresholds | `engine/sii/empirical_thresholds.py` | `data_conditions.empirical_thresholds` | Active Phase 2; fixed floors retained |
-| Like-mode comparison | `engine/sii/mode_conditioned_baseline.py` | `operating_modes`, `relationship_analysis` | Active Phase 2; separate from global compatibility |
-| Graph-level metrics | `engine/sii/relationship_graph.py` | `relationship_graph` | Active Phase 2; non-causal |
-| Elapsed-time persistence | `engine/sii/adaptive_persistence.py` | `persistence_analysis.adaptive_persistence` | Active Phase 2; explicit row fallback |
-| Multiscale horizons | `engine/sii/multiscale_analysis.py` | `multiscale_analysis` | Active Phase 2; no row-to-duration inference |
+| Baseline-only thresholds | `engine/sii/empirical_thresholds.py` | `data_conditions.empirical_thresholds` | Active Phase 2 supporting evidence; fixed floors retained |
+| Like-mode comparison | `engine/sii/mode_conditioned_baseline.py` | `operating_modes`, `relationship_analysis` | Active Phase 2 supporting evidence; separate from global compatibility |
+| Graph-level metrics | `engine/sii/relationship_graph.py` | `relationship_graph` | Active Phase 2 supporting evidence; non-causal |
+| Elapsed-time persistence | `engine/sii/adaptive_persistence.py` | `persistence_analysis.adaptive_persistence` | Active Phase 2 supporting evidence; explicit row fallback |
+| Multiscale horizons | `engine/sii/multiscale_analysis.py` | `multiscale_analysis` | Active Phase 2 supporting evidence; no row-to-duration inference |
 
 No formula above was deleted, substituted, or fused with a conflicting formula. Where overlapping concepts exist, canonical sections preserve each implementation under its source module.
 
@@ -126,7 +126,7 @@ The audit found these overlapping implementations:
 - Phase 3: physics evidence, candidate propagation paths, evidence fusion.
 - Phase 4: behavioral model.
 
-Canonical findings remain empty after Phase 2. Existing presentation condition/finding generation continues through the compatibility contract and its existing evidence guards.
+Canonical findings remain empty after Phase 2. Existing presentation condition/finding generation continues through the compatibility contract and its existing evidence guards. The Phase 2 graph, conditioned mode, adaptive persistence, and multiscale outputs are supporting evidence only and cannot change current severity or state.
 
 ## Frontend consumers retained
 
@@ -140,7 +140,7 @@ Frontend code currently reads:
 - `sii_runner_result` plus `processing_trace` diagnostics;
 - `analysis_result` systems, conditions, relationships, fingerprint, insights, and evidence index.
 
-Phase 1 preserves these top-level fields. The new canonical object is additive at `sii_result`.
+Phase 1 preserves these top-level fields. The new canonical object is additive at `sii_result`; evidence records also retain a compact, explicitly non-authoritative `phase_2_supporting_evidence` snapshot.
 
 ## Evidence persistence consumers retained
 
@@ -153,11 +153,11 @@ Phase 1 preserves these top-level fields. The new canonical object is additive a
 - source timestamps and replay windows;
 - analysis relationships, conditions, fingerprint, and findings.
 
-Compatibility mapping is populated from the same canonical evaluation, so persistence does not initiate another analytical pass.
+Compatibility mapping is populated from the same canonical evaluation, so persistence does not initiate another analytical pass. `upload_evidence.py` copies selected Phase 2 result sections into `phase_2_supporting_evidence`; it does not reinterpret them or use them to generate the persisted condition.
 
 ## Processing trace audit
 
-The canonical trace records the required engine identity, module outcomes, rows, columns, operating modes, scales, and runtime. Upload-specific normalization/replay/completion fields are merged afterward. An optional module failure appears in both `modules_failed` and `uncertainty.module_failures`.
+The canonical trace records the required engine identity, exact per-module status/reason map, module failures, rows, columns, operating modes, scales, runtime, and `phase_2_authoritative=false`. Upload-specific normalization/replay/completion fields are merged afterward. An optional module failure appears in `modules_failed`, `module_statuses`, `module_failures`, and `uncertainty.module_failures`.
 
 ## Safety-language audit
 
@@ -175,6 +175,6 @@ Phase 1 added:
 - `tests/test_sii_engine_v2.py` for canonical numeric behavior, relationship weakening, spike suppression, sparse history, and failure isolation.
 - `tests/test_sii_pipeline_unification.py` for exactly-once entrypoint invocation and compatibility equality.
 
-Phase 2 adds `tests/test_sii_engine_phase_2.py` for exact graph metrics, coherent components, like-mode row selection, elapsed durations and fallback, multiscale counts/agreement, baseline-only fitting, and once-only orchestration.
+Phase 2 adds `tests/test_sii_engine_phase_2.py` for exact graph metrics, coherent components, like-mode row selection, elapsed durations and fallback, multiscale counts/agreement, baseline-only fitting, and once-only orchestration. The main-branch audit adds `tests/test_sii_phase2_main_audit.py` for ambiguity, conservative adaptive requirements, coverage/direction-safe multiscale interpretation, graph safety cases, canonical output wiring, and evidence persistence.
 
 Existing baseline, relationship, classification, sensor-health, telemetry-integrity, runner, temporal, upload, frontend-contract, and evidence tests remain the regression baseline. The full matrix and later-phase gates are in [sii_validation_plan.md](sii_validation_plan.md).
