@@ -5,7 +5,25 @@ Legacy fields can remain for compatibility, but frontend rendering should prefer
 
 ## Canonical SII Source
 
-Uploaded telemetry is evaluated once through `app.engine.sii_engine.evaluate_sii`. The raw canonical evidence object is available at top-level `sii_result` with engine identity `neraium_sii/v2`. `analysis_result` remains the frontend-oriented presentation and evidence-index contract derived from the canonical Phase 1 compatibility fields. Phase 2 graph, exact-mode, adaptive-persistence, and multiscale sections are active supporting evidence but are not authoritative for `analysis_result` findings, state, severity, or confidence. Evidence records may expose them at `phase_2_supporting_evidence`. Clients may continue reading legacy top-level fields, but no client should trigger or infer a second analytical pass.
+Uploaded telemetry is evaluated once through `app.engine.sii_engine.evaluate_sii`. The raw canonical evidence object is available at top-level `sii_result` with engine identity `neraium_sii/v2`.
+
+`analysis_result` remains the frontend-oriented presentation and evidence-index contract derived from canonical Phase 1 compatibility fields. Phase 2 empirical-threshold, graph, mode-conditioned baseline, adaptive-persistence, multiscale, and temporal sections are active supporting evidence. During the current implementation, they do not independently determine `analysis_result` findings, state, severity, or confidence. Evidence records may expose them at `phase_2_supporting_evidence`.
+
+The canonical `sii_result` may include:
+
+- `data_conditions`
+- `operating_modes`
+- `signal_drift`
+- `relationship_analysis`
+- `relationship_graph`
+- `covariance_analysis`
+- `temporal_analysis`
+- `multiscale_analysis`
+- `persistence_analysis`
+- `uncertainty`
+- `processing_trace`
+
+Clients may continue reading legacy top-level fields for compatibility, but no client should trigger or infer a second analytical pass.
 
 ## Schema
 
@@ -23,6 +41,8 @@ Required top-level fields:
 - `insights[]`: evidence-backed findings only.
 - `recommendations[]`: evidence-backed operator checks only.
 - `evidence_index`: reusable evidence objects keyed by `evidence_id`.
+- `uncertainty`: data limitations, sensor-health limitations, temporal limitations, and module failures that affect interpretation.
+- `processing_trace`: execution metadata including engine version, modules attempted, completed, limited, and failed, rows used, operating modes used, scales used, and runtime.
 - `warnings[]`: safe display warnings.
 - `errors[]`: failed-state errors.
 
@@ -78,7 +98,7 @@ Canonical `relationships[]` contains changed relationship edges derived from tel
 - `time_window`
 - `evidence_refs`
 
-Relationship strength is currently based on baseline/current correlation deltas from uploaded CSV telemetry.
+Relationship evidence is currently derived from baseline and recent telemetry windows using correlation-based relationship changes together with graph-level structural analysis.
 
 ## Fingerprint Model
 
@@ -92,7 +112,7 @@ Relationship strength is currently based on baseline/current correlation deltas 
 - supporting evidence refs
 - plain-language explanation
 
-Fingerprint evidence must include at least the baseline/current window context and any metric or relationship deviations used in the explanation.
+Fingerprint summarizes canonical signal, relationship, persistence, covariance, and temporal evidence used to describe current system behavior. Fingerprint evidence must include at least the baseline/current window context and any metric or relationship deviations used in the explanation.
 
 ## Engineering Finding Context
 
@@ -102,8 +122,10 @@ Finding fields are additive. Current `insights[]` may include:
 - `data_confidence`: qualitative rating, summary, limitations, and affected signals.
 - `sensor_health[]`: per-signal health plus evidence-backed conditions.
 - `operating_mode`: baseline/recent labels, match strength, confidence, recorded differences, and reasons.
-- `persistence`: status, support flag, supporting signals, and summary.
-- `relationship_evidence`: paired sample support and relationship-change measurements.
+- `mode_conditioned_baseline`: selected comparison mode, match confidence, fallback status, baseline-selection explanation, and comparable rows or periods.
+- `persistence`: fixed, adaptive, and temporal persistence status, support flags, supporting signals, elapsed-time or row-count basis, and summary.
+- `multiscale`: eligible scales, agreeing and conflicting signals, cross-scale classification, and interpretation.
+- `relationship_evidence`: paired sample support, relationship-change measurements, graph-level structural metrics, and evidence refs.
 - `investigation_guidance[]`: ordered, frontend-safe checks with `rank`, `check`, evidence-linked `reason`, `category`, and `editable`.
 - `activity_timeline[]`: source-bounded evidence events. Events use source `time`, `start`/`end`, or an explicit `period_label`; consumers must not infer missing dates.
 - `certainty_limit`, `alternative_explanations`, and `data_limitations`.
@@ -120,6 +142,7 @@ Historical canonical payloads may not contain these fields. Frontends must use `
 - Insights render insight explanation plus resolved evidence.
 - Systems render `systems[]` and relationship changes.
 - Fingerprint renders drift explanation, confidence, and resolved evidence.
-- More renders data quality, source file, warnings, errors, and analysis metadata.
+- More renders data quality, source file, uncertainty, processing trace, warnings, errors, and analysis metadata.
+- Phase 2 supporting evidence may be displayed only as supporting context unless and until the finding contract explicitly promotes it to authoritative finding logic.
 - Never render placeholder findings, generic pending-verification text, demo systems, fake recommendations, or stale previous analysis as the current result.
 - If a field is unavailable, hide it instead of showing placeholder copy.
