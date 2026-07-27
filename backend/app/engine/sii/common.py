@@ -131,6 +131,11 @@ def relationship_columns(edge: dict[str, Any]) -> list[str]:
         clean = [str(column) for column in columns if column]
         if len(clean) == 2:
             return clean
+    explicit_columns = edge.get("columns")
+    if isinstance(explicit_columns, list):
+        clean = [str(column) for column in explicit_columns if column]
+        if len(clean) == 2:
+            return clean
     relationship = str(edge.get("relationship") or "")
     if "<->" in relationship:
         return [part.strip() for part in relationship.split("<->", 1) if part.strip()]

@@ -184,3 +184,181 @@ def test_behavioral_graph_reports_competing_structural_views_without_causality()
     assert comparison["coordinated_edge_weakening"] is True
     assert comparison["changed_edge_clusters"][0]["edge_count"] == 2
     assert all(item["causal_claim"] is False for item in comparison["graph_evidence"])
+
+from app.engine.sii.behavioral_model import (
+    behavioral_model_section,
+    build_behavioral_snapshot,
+    build_candidate_model,
+    resolve_infrastructure_identity,
+    validate_model_compatibility,
+)
+
+
+def _identity_config(facility: str, system: str) -> dict:
+    return {
+        "infrastructure_identity": {
+            "organization_id": "org-1",
+            "facility_id": facility,
+            "system_id": system,
+        }
+    }
+
+
+def test_behavioral_identity_is_stable_and_unknown_identity_cannot_learn() -> None:
+    columns = ["timestamp", "flow", "pressure"]
+    first = resolve_infrastructure_identity(columns=columns, telemetry_signal_catalog={}, config=_identity_config("facility-a", "pump-a"))
+    repeated = resolve_infrastructure_identity(columns=columns, telemetry_signal_catalog={}, config=_identity_config("facility-a", "pump-a"))
+    unrelated = resolve_infrastructure_identity(columns=columns, telemetry_signal_catalog={}, config=_identity_config("facility-b", "pump-a"))
+    unknown = resolve_infrastructure_identity(columns=columns, telemetry_signal_catalog={}, config={})
+
+    assert first == repeated
+    assert first["model_id"] != unrelated["model_id"]
+    assert first["identity_status"] == "adequate"
+    assert unknown["identity_status"] == "limited"
+    assert unknown["model_id"] is None
+    assert unknown["memory_update_allowed"] is False
+
+
+def test_conflicting_identity_and_schema_compatibility_remain_visible() -> None:
+    identity = resolve_infrastructure_identity(
+        columns=["timestamp", "flow"],
+        telemetry_signal_catalog={},
+        config={
+            "facility_id": "facility-a",
+            "system_id": "system-a",
+            "infrastructure_identity": {"facility_id": "facility-b", "system_id": "system-a"},
+        },
+    )
+    assert identity["identity_status"] == "conflicting"
+    assert "conflicting_facility_id" in identity["identity_limitations"]
+
+    active = {
+        "model_id": "different",
+        "infrastructure_identity": {"facility_id": "facility-a", "schema_fingerprint": "old"},
+    }
+    compatibility = validate_model_compatibility(active, {**identity, "model_id": "expected"})
+    assert compatibility["compatible"] is False
+    assert compatibility["status"] == "conflicting"
+
+
+def test_candidate_model_persists_inspectable_signal_and_mode_separated_relationship_memory() -> None:
+    identity = resolve_infrastructure_identity(
+        columns=["timestamp", "flow", "pressure"],
+        telemetry_signal_catalog={},
+        config=_identity_config("facility-a", "system-a"),
+    )
+    graph = {
+        "nodes": [
+            {"id": "metric:flow", "type": "metric", "source_column": "flow"},
+            {"id": "metric:pressure", "type": "metric", "source_column": "pressure"},
+        ],
+        "eligible_edges": [
+            {
+                "columns": ["flow", "pressure"],
+                "relationship_type": "linear_correlation",
+                "baseline_strength": 0.99,
+                "current_strength": 0.99,
+                "baseline_sample_count": 50,
+                "current_sample_count": 30,
+            }
+        ],
+    }
+    common = {
+        "identity": identity,
+        "rows": _rows(),
+        "numeric_columns": ["flow", "pressure"],
+        "timestamp_column": "timestamp",
+        "telemetry_signal_catalog": {},
+        "signal_drift": {"column_drift": [{"column": "flow", "direction": "flat"}]},
+        "relationship_graph": graph,
+        "sensor_health": _health(),
+        "data_quality": {"readiness": "ready", "data_confidence": {"rating": "high"}},
+        "temporal_analysis": {"mutual_information_drift": {"score": 0.0}, "lagged_relationships": {"dominant_lag_shift": 0}},
+        "multiscale_analysis": {"status": "complete", "cross_scale_classification": "agreement", "scales_used": ["15_minutes"]},
+        "physics_reasoning": {"applicable_priors": []},
+        "expected_behavior": {"expected_values": []},
+        "trained_expected_models": {},
+        "baseline_record": None,
+        "event_references": [],
+        "source_run_id": "run-1",
+        "observed_at": "2026-01-01T01:19:00+00:00",
+        "allow_learning": True,
+    }
+    running_model, changes = build_candidate_model(
+        active_model=None,
+        operating_mode={"recent_mode": "running", "baseline_mode": "running", "confidence": "high"},
+        **common,
+    )
+    assert changes["signals_added"] == 2
+    assert changes["relationships_added"] == 1
+    assert running_model["behavioral_identity"]["inspectable"] is True
+    assert running_model["behavioral_identity"]["opaque_vector_used"] is False
+    relationship = next(iter(running_model["relationship_memory"].values()))
+    assert relationship["operating_modes_observed"] == ["running"]
+    assert relationship["method_metadata"]["mode_conditioned"] is True
+
+    idle_model, idle_changes = build_candidate_model(
+        active_model=running_model,
+        operating_mode={"recent_mode": "idle", "baseline_mode": "idle", "confidence": "high"},
+        **{**common, "source_run_id": "run-2", "observed_at": "2026-01-02T01:19:00+00:00"},
+    )
+    assert idle_changes["relationships_added"] == 1
+    assert len(idle_model["relationship_memory"]) == 2
+    assert {tuple(item["operating_modes_observed"]) for item in idle_model["relationship_memory"].values()} == {("running",), ("idle",)}
+
+    snapshot = build_behavioral_snapshot(
+        model=idle_model,
+        source_run_id="run-2",
+        created_at="2026-01-02T01:19:00+00:00",
+        previous_snapshot_id=None,
+        changes=idle_changes,
+    )
+    section = behavioral_model_section(
+        model=idle_model,
+        identity=identity,
+        snapshot_id=snapshot["snapshot_id"],
+        baseline_state={},
+        learning_decision={"decision": "accepted"},
+        processing_trace={},
+    )
+    assert section["active"] is True
+    assert section["signal_memory_summary"]["signals_tracked"] == 2
+    assert section["relationship_memory_summary"]["relationships_tracked"] == 2
+    assert section["confidence"]["not_probability"] is True
+
+
+def test_unhealthy_sensor_is_excluded_from_candidate_memory() -> None:
+    identity = resolve_infrastructure_identity(
+        columns=["timestamp", "flow", "pressure"],
+        telemetry_signal_catalog={},
+        config=_identity_config("facility-a", "system-a"),
+    )
+    health = _health()
+    health["signals"][1]["health"] = "review"
+    model, changes = build_candidate_model(
+        active_model=None,
+        identity=identity,
+        rows=_rows(),
+        numeric_columns=["flow", "pressure"],
+        timestamp_column="timestamp",
+        telemetry_signal_catalog={},
+        signal_drift={"column_drift": []},
+        relationship_graph={"eligible_edges": [{"columns": ["flow", "pressure"], "current_strength": 0.9}]},
+        operating_mode={"recent_mode": "running", "baseline_mode": "running"},
+        sensor_health=health,
+        data_quality={"readiness": "ready", "data_confidence": {"rating": "high"}},
+        temporal_analysis={},
+        multiscale_analysis={"status": "complete"},
+        physics_reasoning={},
+        expected_behavior={"expected_values": []},
+        trained_expected_models={},
+        baseline_record=None,
+        event_references=[],
+        source_run_id="run-unhealthy",
+        observed_at="2026-01-01T01:19:00+00:00",
+        allow_learning=True,
+    )
+    assert set(model["signal_memory"]) == {"flow"}
+    assert model["relationship_memory"] == {}
+    assert changes["relationships_added"] == 0
+    assert any("sensor_health_not_acceptable" in item["reason"] for item in changes["learning_exclusions"])
