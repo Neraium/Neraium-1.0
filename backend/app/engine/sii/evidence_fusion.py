@@ -19,6 +19,18 @@ SOURCE_MODULE_ORDER = (
     "uncertainty",
 )
 
+PHASE_4_SOURCE_MODULE_ORDER = (
+    "behavioral_model",
+    "expected_behavior",
+    "behavioral_evolution",
+    "propagation_analysis",
+    "event_memory",
+    "spectral_analysis",
+    "dynamical_stability",
+    "network_stability",
+    "bayesian_evidence",
+)
+
 CLASSIFICATIONS = ("Supporting", "Limiting", "Contradictory", "Neutral")
 
 
@@ -33,18 +45,22 @@ def fuse_evidence(
     evidence = analytical_evidence if isinstance(analytical_evidence, dict) else {}
     physics = physics_reasoning if isinstance(physics_reasoning, dict) else {}
     source_trace = processing_trace if isinstance(processing_trace, dict) else {}
+    module_order = (
+        *SOURCE_MODULE_ORDER,
+        *(module for module in PHASE_4_SOURCE_MODULE_ORDER if module in evidence),
+    )
     source_payloads = {
         module: (
             physics
             if module == "physics_reasoning"
             else evidence.get(module, {})
         )
-        for module in SOURCE_MODULE_ORDER
+        for module in module_order
     }
 
     inventory = [
         _module_evidence_item(module, source_payloads[module], source_trace)
-        for module in SOURCE_MODULE_ORDER
+        for module in module_order
     ]
     physics_items = _physics_evidence_items(physics)
     inventory.extend(physics_items)
@@ -87,11 +103,11 @@ def fuse_evidence(
 
     module_statuses = {
         module: _module_status(source_payloads[module])
-        for module in SOURCE_MODULE_ORDER
+        for module in module_order
     }
     fusion_trace = {
         "method": "transparent_evidence_organization_v1",
-        "module_order": list(SOURCE_MODULE_ORDER),
+        "module_order": list(module_order),
         "module_statuses": module_statuses,
         "evidence_item_ids": [item["evidence_id"] for item in inventory],
         "observation_ids": [item["observation_id"] for item in observations],
@@ -301,7 +317,7 @@ def _module_classification(module: str, payload: Any) -> str:
         if explicit in CLASSIFICATIONS:
             return explicit
         status = str(payload.get("status") or "").lower()
-        if status in {"failed", "limited", "not_ready", "unavailable"}:
+        if status in {"failed", "limited", "not_ready", "unavailable", "deferred"}:
             return "Limiting"
     if module == "uncertainty" and _module_limitations(payload):
         return "Limiting"
@@ -330,7 +346,7 @@ def _module_limitations(payload: Any) -> list[str]:
     ]
     status = str(payload.get("status") or "").lower()
     reason = payload.get("reason")
-    if reason and status in {"failed", "limited", "not_ready", "unavailable"}:
+    if reason and status in {"failed", "limited", "not_ready", "unavailable", "deferred"}:
         limitations.append(str(reason))
     return list(dict.fromkeys(limitations))
 

@@ -182,6 +182,19 @@ def run_structural_analysis_pipeline(
             ],
             "compatibility_context_factory": compatibility_context_factory,
             "processing_trace": initial_processing_trace,
+            "source_run_id": job_id,
+            "infrastructure_identity": {
+                key: ingestion_report.get(key)
+                for key in (
+                    "organization_id",
+                    "facility_id",
+                    "system_id",
+                    "subsystem_id",
+                    "equipment_group_id",
+                    "configured_model_id",
+                )
+                if ingestion_report.get(key)
+            },
         },
     )
     compatibility = sii_result.get("compatibility") or {}

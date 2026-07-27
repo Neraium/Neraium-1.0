@@ -134,13 +134,17 @@ def analyze_propagation(
         limitations.append("Data quality was not sufficient for propagation interpretation.")
         candidate_paths = []
         competing = []
-    cross_scale = str(multiscale_analysis.get("cross_scale_classification") or "").lower()
+    cross_scale = str(
+        multiscale_analysis.get("cross_scale_classification")
+        or (multiscale_analysis.get("cross_scale_interpretation") or {}).get("classification")
+        or ""
+    ).lower()
     factors = {
         "timestamp_coverage": 1.0 if times else 0.0,
         "supported_directional_edges": round(clamp(sum(len(items) for items in adjacency.values()) / max(1, len(relationship_memory))), 6),
         "data_quality": 1.0 if quality_ok else 0.0,
         "sensor_health": round(clamp(sum(1 for value in health.values() if value in {"healthy", "good"}) / max(1, len(health))), 6),
-        "multiscale_agreement": 1.0 if cross_scale in {"agreement", "consistent", "stable"} else 0.5 if multiscale_analysis.get("status") == "complete" else 0.0,
+        "multiscale_agreement": 1.0 if cross_scale in {"agreement", "consistent", "stable", "stable_across_scales"} else 0.5 if multiscale_analysis.get("status") == "complete" else 0.0,
         "alternative_path_visibility": 1.0,
     }
     confidence = {

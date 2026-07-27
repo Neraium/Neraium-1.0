@@ -128,8 +128,17 @@ def evaluate_baseline_evolution(
         "blocked_by_physics_evidence",
         "configured_physics_evidence_contradicts_adaptation",
     )
-    multiscale_classification = str(multiscale_analysis.get("cross_scale_classification") or "").lower()
-    multiscale_ok = multiscale_analysis.get("status") == "complete" and multiscale_classification not in {"conflicting", "instability", "persistent_change"}
+    multiscale_classification = str(
+        multiscale_analysis.get("cross_scale_classification")
+        or (multiscale_analysis.get("cross_scale_interpretation") or {}).get("classification")
+        or ""
+    ).lower()
+    multiscale_ok = multiscale_analysis.get("status") == "complete" and multiscale_classification in {
+        "agreement",
+        "consistent",
+        "stable",
+        "stable_across_scales",
+    }
     check(
         "multiscale_stability",
         multiscale_ok,

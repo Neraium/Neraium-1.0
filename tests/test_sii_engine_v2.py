@@ -67,7 +67,9 @@ def test_evaluate_sii_returns_canonical_phase_1_result_with_preserved_math() -> 
     assert result["physics_evidence"] == result["physics_reasoning"]
     assert result["evidence_fusion"]["active"] is True
     assert result["evidence_fusion"]["observations"] == []
-    assert result["behavioral_model"]["reason"] == "not_active_in_phase_1"
+    assert result["behavioral_model"]["status"] == "limited"
+    assert result["behavioral_model"]["active"] is False
+    assert result["behavioral_model"]["identity"]["identity_status"] == "limited"
     assert result["findings"] == []
 
     trace = result["processing_trace"]

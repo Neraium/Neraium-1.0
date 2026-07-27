@@ -22,8 +22,10 @@ from app.engine.sii import (
     analyze_relationship_graph,
     estimate_empirical_thresholds,
     evaluate_adaptive_persistence,
+    evaluate_phase4,
     evaluate_physics_reasoning,
     fuse_evidence,
+    limited_phase4,
 )
 from app.engine.sii_inputs import build_data_conditions, normalize_rows, numeric_columns
 from app.engine.temporal_math import TemporalMathConfig, evaluate_temporal_math
@@ -627,6 +629,37 @@ def evaluate_sii(
         }
         record("physics_reasoning", "failed", physics_reasoning["reason"])
 
+    notify("behavioral_model", 0.94)
+    try:
+        attempted.append("phase_4")
+        phase_4 = evaluate_phase4(
+            columns=column_names,
+            rows=dict_rows,
+            numeric_columns=numeric_columns_used,
+            timestamp_column=timestamp_column,
+            telemetry_signal_catalog=catalog,
+            data_quality=data_quality_result,
+            sensor_health=sensor_health_result,
+            operating_mode=operating_mode_result,
+            signal_drift=baseline_analysis,
+            relationship_analysis=relationship_model,
+            relationship_graph=canonical_graph,
+            temporal_analysis=temporal_analysis,
+            multiscale_analysis=multiscale_analysis,
+            physics_reasoning=physics_reasoning,
+            covariance_analysis=covariance,
+            config=cfg,
+        )
+        phase_4_status = str((phase_4.get("behavioral_model") or {}).get("status") or "limited")
+        record(
+            "phase_4",
+            phase_4_status,
+            ((phase_4.get("behavioral_model") or {}).get("limitations") or [None])[0],
+        )
+    except Exception as exc:
+        phase_4 = limited_phase4(f"{type(exc).__name__}: {exc}")
+        record("phase_4", "failed", f"{type(exc).__name__}: {exc}")
+
     preliminary_uncertainty = uncertainty_section(
         data_quality=data_quality_result,
         sensor_health=sensor_health_result,
@@ -635,6 +668,15 @@ def evaluate_sii(
     )
     fusion_inputs = {
         **phase_2_evidence,
+        "behavioral_model": phase_4["behavioral_model"],
+        "expected_behavior": phase_4["expected_behavior"],
+        "behavioral_evolution": phase_4["behavioral_evolution"],
+        "propagation_analysis": phase_4["propagation_analysis"],
+        "event_memory": phase_4["event_memory"],
+        "spectral_analysis": phase_4["spectral_analysis"],
+        "dynamical_stability": phase_4["dynamical_stability"],
+        "network_stability": phase_4["network_stability"],
+        "bayesian_evidence": phase_4["bayesian_evidence"],
         "uncertainty": preliminary_uncertainty,
     }
     preliminary_statuses = {
@@ -646,6 +688,20 @@ def evaluate_sii(
             module_statuses.get("data_conditions", {"status": "limited"})
         ),
         "uncertainty": {"status": str(preliminary_uncertainty.get("status") or "limited")},
+        **{
+            module: {"status": str((phase_4.get(module) or {}).get("status") or "limited")}
+            for module in (
+                "behavioral_model",
+                "expected_behavior",
+                "behavioral_evolution",
+                "propagation_analysis",
+                "event_memory",
+                "spectral_analysis",
+                "dynamical_stability",
+                "network_stability",
+                "bayesian_evidence",
+            )
+        },
     }
     preliminary_trace = {
         "sii_engine_called": True,
@@ -660,6 +716,8 @@ def evaluate_sii(
         "phase_2_effect": "supporting_evidence_only",
         "phase_3_active": True,
         "phase_3_effect": "transparent_evidence_enrichment_only",
+        "phase_4_effect": "persistent_behavioral_memory_and_evidence_only",
+        **dict(phase_4.get("processing_trace") or {}),
         "rows_received": rows_received,
         "rows_used": len(matrix_rows),
         "columns_used": list(numeric_columns_used),
@@ -667,7 +725,7 @@ def evaluate_sii(
         "scales_used": list(multiscale_analysis.get("scales_used") or []) if isinstance(multiscale_analysis, dict) else [],
     }
 
-    notify("evidence_fusion", 0.96)
+    notify("evidence_fusion", 0.98)
     try:
         attempted.append("evidence_fusion")
         evidence_fusion = fuse_evidence(
@@ -715,6 +773,20 @@ def evaluate_sii(
             module_statuses.get("data_conditions", {"status": "limited"})
         ),
         "uncertainty": {"status": str(uncertainty.get("status") or "limited")},
+        **{
+            module: {"status": str((phase_4.get(module) or {}).get("status") or "limited")}
+            for module in (
+                "behavioral_model",
+                "expected_behavior",
+                "behavioral_evolution",
+                "propagation_analysis",
+                "event_memory",
+                "spectral_analysis",
+                "dynamical_stability",
+                "network_stability",
+                "bayesian_evidence",
+            )
+        },
     }
     processing_trace = {
         **preliminary_trace,
@@ -771,10 +843,18 @@ def evaluate_sii(
         "multiscale_analysis": multiscale_analysis,
         "physics_reasoning": physics_reasoning,
         "physics_evidence": physics_reasoning,
-        "propagation_analysis": planned_section("phase_3", "candidate_propagation_paths"),
+        "propagation_analysis": phase_4["propagation_analysis"],
         "persistence_analysis": persistence,
         "evidence_fusion": evidence_fusion,
-        "behavioral_model": planned_section("phase_4", "behavioral_digital_model"),
+        "behavioral_model": phase_4["behavioral_model"],
+        "expected_behavior": phase_4["expected_behavior"],
+        "behavioral_evolution": phase_4["behavioral_evolution"],
+        "behavioral_snapshots": phase_4["behavioral_snapshots"],
+        "event_memory": phase_4["event_memory"],
+        "spectral_analysis": phase_4["spectral_analysis"],
+        "dynamical_stability": phase_4["dynamical_stability"],
+        "network_stability": phase_4["network_stability"],
+        "bayesian_evidence": phase_4["bayesian_evidence"],
         "findings": [],
         "uncertainty": uncertainty,
         "processing_trace": processing_trace,

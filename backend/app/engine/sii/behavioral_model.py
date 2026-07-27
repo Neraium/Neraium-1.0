@@ -714,7 +714,8 @@ def _update_signal_memory(
             },
             "multiscale_characteristics": {
                 "source_status": multiscale_analysis.get("status"),
-                "cross_scale_classification": multiscale_analysis.get("cross_scale_classification"),
+                "cross_scale_classification": multiscale_analysis.get("cross_scale_classification")
+                or (multiscale_analysis.get("cross_scale_interpretation") or {}).get("classification"),
                 "scales_used": deepcopy(multiscale_analysis.get("scales_used", [])),
             },
             "expected_response_contexts": _expected_contexts(column, expected_behavior),
@@ -1016,8 +1017,12 @@ def _duration(start: Any, end: Any) -> str | None:
 
 
 def _multiscale_factor(multiscale: dict[str, Any]) -> float:
-    classification = str(multiscale.get("cross_scale_classification") or "").lower()
-    if classification in {"agreement", "consistent", "stable"}:
+    classification = str(
+        multiscale.get("cross_scale_classification")
+        or (multiscale.get("cross_scale_interpretation") or {}).get("classification")
+        or ""
+    ).lower()
+    if classification in {"agreement", "consistent", "stable", "stable_across_scales"}:
         return 1.0
     if classification in {"mixed", "conflicting"}:
         return 0.5
