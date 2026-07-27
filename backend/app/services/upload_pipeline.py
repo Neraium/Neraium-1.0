@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from app.engine.temporal_math import evaluate_temporal_math
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import build_data_quality, profile_timestamps
@@ -40,6 +41,46 @@ def _empty_optional_replay(job_id: str, reason: str) -> dict[str, Any]:
         "meta": {"frame_count": 0, "optional": True, "reason": reason},
         "timeline": [],
     }
+
+
+def _run_temporal_math(
+    *,
+    columns: list[str],
+    matrix_rows: list[list[Any]],
+    numeric_profiles: list[dict[str, Any]],
+    timestamp_column: str | None,
+) -> dict[str, Any]:
+    """Run the temporal engine as a parallel analytical evidence layer.
+
+    The temporal result is persisted with the upload and exposed to downstream
+    consumers, but it does not replace the established SII runner state. This
+    avoids silently changing alert semantics while making the temporal math
+    available for evidence, validation, and later calibrated fusion.
+    """
+    try:
+        normalized_rows = [
+            ["" if value is None else str(value) for value in row]
+            for row in matrix_rows
+        ]
+        result = evaluate_temporal_math(
+            columns=columns,
+            rows=normalized_rows,
+            numeric_profiles=numeric_profiles,
+            timestamp_column=timestamp_column,
+        )
+        if not isinstance(result, dict):
+            return {
+                "engine": {"name": "temporal_math_engine", "version": "v1"},
+                "status": "limited",
+                "reason": "invalid_temporal_math_result",
+            }
+        return result
+    except Exception as exc:
+        return {
+            "engine": {"name": "temporal_math_engine", "version": "v1"},
+            "status": "limited",
+            "reason": f"temporal_math_failed:{exc.__class__.__name__}",
+        }
 
 
 def run_structural_analysis_pipeline(
@@ -122,7 +163,6 @@ def run_structural_analysis_pipeline(
     stage_notifier(job_id, stage="building_fingerprint", progress=84, label="Building fingerprint...")
     frame_count = len(replay.get("timeline", []))
     now = datetime.now(timezone.utc).isoformat()
-    # Dataframe normalization is upload-only work and should not extend API startup.
     from app.services.telemetry_normalization import build_normalization_report
 
     normalization_report = build_normalization_report(
@@ -224,6 +264,13 @@ def run_structural_analysis_pipeline(
             warnings.append(reliability_warning)
         data_quality["warnings"] = list(dict.fromkeys(warnings))
 
+    temporal_math = _run_temporal_math(
+        columns=columns,
+        matrix_rows=matrix_rows,
+        numeric_profiles=numeric_profiles,
+        timestamp_column=timestamp_column,
+    )
+
     room_assessments = {item["room"]: dict(item) for item in room_intelligence if item.get("room")}
     primary_room_assessment = next(
         (item for item in room_intelligence if item.get("room") == (room_names[0] if room_names else "")),
@@ -235,6 +282,7 @@ def run_structural_analysis_pipeline(
         cultivation_mapping=cultivation_mapping,
         overall_urgency=overall_urgency,
     )
+    engine_result["temporal_math"] = temporal_math
     driver_attribution = build_driver_attribution(
         {
             "room": primary_room_assessment.get("room") or (room_names[0] if room_names else "State Group A"),
@@ -291,6 +339,7 @@ def run_structural_analysis_pipeline(
     sii_intelligence["runner_module"] = RUNNER_MODULE
     sii_intelligence["replay_timeline"] = replay
     sii_intelligence["telemetry_integrity"] = normalization_report
+    sii_intelligence["temporal_math"] = temporal_math
     sii_intelligence = apply_telemetry_confidence_adjustment(sii_intelligence, data_quality=data_quality)
     processing_time_seconds = round(max(0.0, time.perf_counter() - (processing_started_at or time.perf_counter())), 6)
     processing_trace = {
@@ -302,6 +351,12 @@ def run_structural_analysis_pipeline(
         "normalization_layer_ran": True,
         "normalization_window_suppressed": bool(normalization_report.get("window_suppressed")),
         "normalization_source_status": normalization_report.get("status"),
+        "temporal_math_ran": temporal_math.get("engine", {}).get("name") == "temporal_math_engine",
+        "temporal_math_status": temporal_math.get("status", "complete"),
+        "temporal_math_reason": temporal_math.get("reason"),
+        "temporal_math_columns_used": list(temporal_math.get("columns_used") or []),
+        "temporal_math_baseline_rows": int(temporal_math.get("baseline_rows") or 0),
+        "temporal_math_active_rows": int(temporal_math.get("active_rows") or 0),
         "sii_confidence_adjusted_for_telemetry": bool(sii_intelligence.get("telemetry_confidence_adjusted")),
         "processing_time_seconds": processing_time_seconds,
         "completed_at": now,
@@ -347,6 +402,7 @@ def run_structural_analysis_pipeline(
         "room_assessments": room_assessments,
         "runner_result": runner_result,
         "sii_intelligence": sii_intelligence,
+        "temporal_math": temporal_math,
         "timestamp_profile": timestamp_profile,
         "normalization_report": normalization_report,
         "chunk_count": chunk_count,
