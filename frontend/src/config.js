@@ -25,7 +25,7 @@ const productionDefaultApiBaseUrl = configuredApiBaseUrl || (isProductionBuild ?
 
 export const API_BASE_URL = productionDefaultApiBaseUrl;
 export const CONFIGURED_API_BASE_URL = configuredApiBaseUrl;
-export const API_ROUTE_MODE = isProductionBuild ? "same-origin" : (configuredApiBaseUrl ? "configured-host" : "local-backend");
+export const API_ROUTE_MODE = isProductionBuild ? (configuredApiBaseUrl ? "configured-host" : "same-origin") : (configuredApiBaseUrl ? "configured-host" : "local-backend");
 
 function isCrossOriginApiTarget(apiBaseUrl = API_BASE_URL) {
   if (typeof window === "undefined" || !apiBaseUrl) {
@@ -134,6 +134,10 @@ function buildUrl(apiBaseUrl, path) {
   return apiBaseUrl ? `${apiBaseUrl}${normalizedPath}` : normalizedPath;
 }
 
+function dedupe(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
 export function buildApiUrl(path) {
   return buildUrl(API_BASE_URL, path);
 }
@@ -150,12 +154,43 @@ export function buildApiDebugState(path) {
 }
 
 export function buildApiCandidateUrls(path) {
-  return [buildApiUrl(path)];
+  const primary = buildApiUrl(path);
+  if (typeof window === "undefined") return [primary];
+
+  const sameOrigin = buildUrl("", path);
+  const crossOriginConfigured = isCrossOriginApiTarget(API_BASE_URL);
+
+  return dedupe([
+    primary,
+    crossOriginConfigured ? sameOrigin : "",
+  ]);
 }
 
 export function buildAccessHeaders(accessCode = "") {
   const explicit = String(accessCode ?? "").trim();
   return explicit ? { "X-Neraium-Access-Code": explicit } : {};
+}
+
+async function fetchCandidate(url, requestInit, timeoutMs, path) {
+  const setTimer = typeof window !== "undefined" ? window.setTimeout.bind(window) : setTimeout;
+  const clearTimer = typeof window !== "undefined" ? window.clearTimeout.bind(window) : clearTimeout;
+  const controller = new AbortController();
+  const timeoutId = setTimer(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...requestInit, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const timeoutError = new Error(timeoutMessage(timeoutMs, path));
+      timeoutError.name = "ApiTimeoutError";
+      timeoutError.timeoutMs = timeoutMs;
+      timeoutError.path = path;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimer(timeoutId);
+  }
 }
 
 export async function apiFetch(path, options = {}) {
@@ -169,54 +204,61 @@ export async function apiFetch(path, options = {}) {
     : ["GET", "HEAD"].includes(normalizedMethod)
       ? API_TIMEOUT_MS
       : WRITE_API_TIMEOUT_MS;
-  const setTimer = typeof window !== "undefined" ? window.setTimeout.bind(window) : setTimeout;
-  const clearTimer = typeof window !== "undefined" ? window.clearTimeout.bind(window) : clearTimeout;
-  const controller = new AbortController();
-  const timeoutId = setTimer(() => controller.abort(), effectiveTimeoutMs);
-  const addNoCacheHeaders = (normalizedMethod === "GET" || normalizedMethod === "HEAD") && !isCrossOriginApiTarget(API_BASE_URL);
   const normalizedPath = normalizeApiPath(path);
   const omitCustomAccessHeaders = ["GET", "HEAD"].includes(normalizedMethod) && isPublicReadonlyPath(normalizedPath);
   const accessHeaders = omitCustomAccessHeaders ? {} : buildAccessHeaders(accessCode);
+  const candidates = buildApiCandidateUrls(path);
+  let lastError = null;
 
-  const apiBaseUrl = API_BASE_URL;
-  try {
-    const response = await fetch(buildUrl(apiBaseUrl, path), {
-      method: normalizedMethod,
-      ...requestOptions,
-      credentials: "include",
-      cache: rest.cache ?? (normalizedMethod === "GET" || normalizedMethod === "HEAD" ? "no-store" : undefined),
-      headers: {
-        "X-Neraium-Workspace-Id": getCurrentWorkspaceId(),
-        ...accessHeaders,
-        ...(addNoCacheHeaders
-          ? { "Cache-Control": "no-cache", Pragma: "no-cache" }
-          : {}),
-        ...(headers ?? {}),
-      },
-      signal: controller.signal,
-    });
-    if (typeof window !== "undefined" && response.status === 401 && !normalizedPath.startsWith("/api/auth/login") && !normalizedPath.startsWith("/api/auth/me")) {
-      window.dispatchEvent(new CustomEvent("neraium:session-expired"));
-    }
-    return response;
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      const timeoutError = new Error(timeoutMessage(effectiveTimeoutMs, path));
-      timeoutError.name = "ApiTimeoutError";
-      timeoutError.timeoutMs = effectiveTimeoutMs;
-      timeoutError.path = path;
-      throw timeoutError;
-    }
+  for (const [index, candidateUrl] of candidates.entries()) {
+    const candidateIsCrossOrigin = typeof window !== "undefined"
+      ? new URL(candidateUrl, window.location.origin).origin !== window.location.origin
+      : false;
+    const addNoCacheHeaders = (normalizedMethod === "GET" || normalizedMethod === "HEAD") && !candidateIsCrossOrigin;
 
-    const networkError = new Error("The analysis service could not be reached. Check service health and retry.");
-    networkError.name = "ApiNetworkError";
-    networkError.path = path;
-    networkError.cause = error;
-    networkError.apiBaseUrl = API_BASE_URL || "same-origin";
-    throw networkError;
-  } finally {
-    clearTimer(timeoutId);
+    try {
+      const response = await fetchCandidate(
+        candidateUrl,
+        {
+          method: normalizedMethod,
+          ...requestOptions,
+          credentials: "include",
+          cache: rest.cache ?? (normalizedMethod === "GET" || normalizedMethod === "HEAD" ? "no-store" : undefined),
+          headers: {
+            "X-Neraium-Workspace-Id": getCurrentWorkspaceId(),
+            ...accessHeaders,
+            ...(addNoCacheHeaders ? { "Cache-Control": "no-cache", Pragma: "no-cache" } : {}),
+            ...(headers ?? {}),
+          },
+        },
+        effectiveTimeoutMs,
+        path,
+      );
+
+      const shouldRetrySameOrigin = index < candidates.length - 1 && response.status >= 500;
+      if (shouldRetrySameOrigin) {
+        lastError = new Error(`API candidate returned ${response.status}`);
+        continue;
+      }
+
+      if (typeof window !== "undefined" && response.status === 401 && !normalizedPath.startsWith("/api/auth/login") && !normalizedPath.startsWith("/api/auth/me")) {
+        window.dispatchEvent(new CustomEvent("neraium:session-expired"));
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (index < candidates.length - 1) continue;
+    }
   }
+
+  if (lastError?.name === "ApiTimeoutError") throw lastError;
+
+  const networkError = new Error("The analysis service could not be reached. Check service health and retry.");
+  networkError.name = "ApiNetworkError";
+  networkError.path = path;
+  networkError.cause = lastError;
+  networkError.apiBaseUrl = API_BASE_URL || "same-origin";
+  throw networkError;
 }
 
 export const API_CONFIG_WARNING = "";
