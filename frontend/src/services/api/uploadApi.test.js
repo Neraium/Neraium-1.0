@@ -52,6 +52,7 @@ function installXhrSequence(responses) {
 
     send(body) {
       this.body = body;
+      this.sentBody = body;
       const response = responses.shift();
       if (!response) throw new Error("Unexpected XHR send");
       this._response = response;
@@ -164,6 +165,27 @@ describe("fetchLatestUploadState", () => {
       expect(timings[2].frontend_request_dispatch_ms).toBeGreaterThanOrEqual(0);
       expect(timings[2].upload_transfer_ms).toBeGreaterThanOrEqual(0);
       expect(timings[2].backend_confirmation_ms).toBeGreaterThanOrEqual(0);
+    } finally {
+      xhr.restore();
+    }
+  });
+
+  it("sends the selected telemetry workflow as upload routing metadata", async () => {
+    const xhr = installXhrSequence([{
+      status: 202,
+      body: JSON.stringify({ job_id: "workflow-job", status: "PENDING" }),
+      headers: { "content-type": "application/json" },
+    }]);
+
+    try {
+      await uploadTelemetryFileWithProgress({
+        file: new File(["timestamp,value\n2026-06-22,1\n"], "extension.csv", { type: "text/csv" }),
+        workflow: "extend_baseline",
+        approvalRequired: true,
+        accessCode: "",
+      });
+      expect(xhr.instances[0].sentBody.get("workflow")).toBe("extend_baseline");
+      expect(xhr.instances[0].sentBody.get("approval_required")).toBe("true");
     } finally {
       xhr.restore();
     }
@@ -332,6 +354,8 @@ describe("large telemetry upload transport", () => {
     try {
       const response = await uploadTelemetryFileWithProgress({
         file,
+        workflow: "create_baseline",
+        approvalRequired: true,
         apiFetch,
         accessCode: "",
         onProgress: (event) => progress.push(event),
@@ -343,6 +367,8 @@ describe("large telemetry upload transport", () => {
         filename: "ChillerPlant.csv",
         size_bytes: file.size,
         content_type: "text/csv",
+        workflow: "create_baseline",
+        approval_required: true,
       });
       expect(apiFetch.mock.calls[1][0]).toBe("/api/data/upload-session/large-session-4095/complete");
       expect(JSON.parse(apiFetch.mock.calls[1][1].body)).toEqual({ etag: "etag-4095" });

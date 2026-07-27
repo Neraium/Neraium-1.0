@@ -260,7 +260,7 @@ it("presents the first baseline action without repeated dataset copy", () => {
 
   expect(screen.getByRole("heading", { name: "Import Historical Dataset" })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Choose Dataset" })).toBeTruthy();
-  expect(screen.getByText("Import historical telemetry so Neraium can learn how your system normally behaves.")).toBeTruthy();
+  expect(screen.getByText("Choose whether this dataset creates a baseline, is analyzed against the active baseline, or extends it through controlled learning.")).toBeTruthy();
   expect(screen.getByText("Future operation is compared with what Neraium learns here.")).toBeTruthy();
   expect(screen.getByText("Awaiting Baseline")).toBeTruthy();
   expect(screen.queryByText("Historical Dataset")).toBeNull();
@@ -273,7 +273,7 @@ it("presents the first baseline action without repeated dataset copy", () => {
 
   const chooseButton = screen.getByRole("button", { name: "Choose Dataset" });
   const formatsLink = screen.getByText("View supported formats");
-  expect(screen.queryByRole("button", { name: "Start Baseline Analysis" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Create Baseline" })).toBeNull();
   expect(chooseButton.compareDocumentPosition(formatsLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(chooseButton);
   expect(openFilePicker).toHaveBeenCalledWith("csv");
@@ -290,11 +290,112 @@ it("selected file state promotes baseline analysis and keeps replacement seconda
 
   expect(screen.getByText("operators.csv")).toBeTruthy();
   expect(screen.getByLabelText("operators.csv, 15.7 MB, Ready")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Start Baseline Analysis" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Create Baseline" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Analyze New Data" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Extend Baseline" })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Choose Dataset" })).toBeNull();
   expect(screen.getByText("Ready for Baseline")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Replace file" }));
   expect(openFilePicker).toHaveBeenCalledWith("csv");
+});
+
+it("routes each visible upload action to a distinct workflow", () => {
+  const handleUpload = vi.fn((event) => event?.preventDefault?.());
+  renderPanel({
+    handleUpload,
+    uploadState: "validated",
+    selectedFiles: [selectedCsv("workflow.csv")],
+  });
+
+  fireEvent.click(screen.getByRole("button", { name: "Create Baseline" }));
+  fireEvent.click(screen.getByRole("button", { name: "Analyze New Data" }));
+  fireEvent.click(screen.getByRole("button", { name: "Extend Baseline" }));
+
+  expect(handleUpload.mock.calls.map((call) => call[1])).toEqual([
+    "create_baseline",
+    "analyze_new_data",
+    "extend_baseline",
+  ]);
+});
+
+it("shows approval as a baseline action without rendering analysis findings", () => {
+  const onApproveBaseline = vi.fn();
+  renderPanel({
+    uploadState: "complete",
+    analysisState: "completed",
+    completionReady: true,
+    selectedFiles: [selectedCsv("baseline.csv")],
+    analysisResult: null,
+    baselineResult: {
+      candidate_model: {
+        model_id: "bdm-v1-candidate",
+        version: 1,
+        status: "awaiting_approval",
+      },
+      baseline_suitability: {
+        decision: "suitable",
+        score: 88,
+      },
+      activation: {
+        state: "awaiting_approval",
+      },
+    },
+    workflow: "create_baseline",
+    onApproveBaseline,
+  });
+
+  expect(screen.getByText("Baseline construction complete")).toBeTruthy();
+  expect(screen.queryByText("View Results")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Approve and Activate" }));
+  expect(onApproveBaseline).toHaveBeenCalledTimes(1);
+});
+
+it("hydrates a baseline result separately from the analysis result handoff", async () => {
+  uploadTelemetryFileWithProgress.mockResolvedValue({
+    ok: true,
+    status: 202,
+    payload: {
+      job_id: "baseline-job",
+      dataset_id: "baseline-job",
+      workflow: "create_baseline",
+      status: "PENDING",
+      analysis_state: "analysis_queued",
+      status_url: "/api/data/upload-status/baseline-job",
+      baseline_result_url: "/api/data/baselines/jobs/baseline-job",
+    },
+  });
+  const baselineResult = {
+    job_id: "baseline-job",
+    dataset_id: "baseline-job",
+    workflow: "create_baseline",
+    candidate_model: { model_id: "bdm-v1-baseline", version: 1, status: "awaiting_approval" },
+    baseline_suitability: { decision: "suitable", score: 91 },
+    activation: { state: "awaiting_approval" },
+  };
+  const apiFetch = vi.fn(async (path) => {
+    if (String(path).includes("/upload-status/")) {
+      return jsonResponse({
+        job_id: "baseline-job",
+        dataset_id: "baseline-job",
+        workflow: "create_baseline",
+        status: "COMPLETE",
+        analysis_state: "completed",
+        processing_state: "complete",
+        baseline_result_url: "/api/data/baselines/jobs/baseline-job",
+      });
+    }
+    if (String(path).includes("/baselines/jobs/")) return jsonResponse(baselineResult);
+    return jsonResponse({});
+  });
+  const onUploadComplete = vi.fn();
+  renderWorkspace({ apiFetch, onUploadComplete });
+
+  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("baseline.csv")] } });
+  fireEvent.click(screen.getByRole("button", { name: "Create Baseline" }));
+
+  expect(await screen.findByText("Baseline construction complete")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Approve and Activate" })).toBeTruthy();
+  expect(onUploadComplete).not.toHaveBeenCalled();
 });
 
 it("drag-over and drop use the premium upload card", () => {
@@ -622,7 +723,7 @@ it("selecting a file clears stale complete progress", async () => {
     expect(screen.getByText("fresh.csv")).toBeTruthy();
   });
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-  expect(screen.getByRole("button", { name: "Start Baseline Analysis" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Create Baseline" })).toBeTruthy();
 });
 
 it("analyze another CSV resets the completed workspace", async () => {
@@ -980,7 +1081,7 @@ it("enables a valid current file and handles a rapid mobile-style tap exactly on
   const file = selectedCsv("mobile-current.csv");
 
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [file] } });
-  const button = screen.getByRole("button", { name: "Start Baseline Analysis" });
+  const button = screen.getByRole("button", { name: "Create Baseline" });
   expect(button.disabled).toBe(false);
   expect(button.getAttribute("aria-disabled")).toBe("false");
   expect(screen.getByLabelText("mobile-current.csv, 1.0 KB, Ready")).toBeTruthy();
@@ -994,7 +1095,7 @@ it("enables a valid current file and handles a rapid mobile-style tap exactly on
   expect(uploadTelemetryFileWithProgress.mock.calls[0][0].file).toBe(file);
   expect(await screen.findByText("Uploading dataset")).toBeTruthy();
   expect(document.querySelector("form.intake-flow")?.getAttribute("aria-busy")).toBe("true");
-  expect(screen.queryByRole("button", { name: "Start Baseline Analysis" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Create Baseline" })).toBeNull();
   expect(Array.from(document.querySelectorAll(".upload-fingerprint-build__nodes b")).map((node) => node.textContent)).toEqual([
     "Validate", "Map", "Baseline", "Compare", "Evidence",
   ]);
@@ -1010,7 +1111,7 @@ it("uses the current replacement file and clears the prior analysis state", asyn
   expect(screen.getByText("replacement.csv")).toBeTruthy();
   expect(screen.queryByText("old.csv")).toBeNull();
   expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-  fireEvent.click(screen.getByRole("button", { name: "Start Baseline Analysis" }));
+  fireEvent.click(screen.getByRole("button", { name: "Create Baseline" }));
 
   expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
   expect(uploadTelemetryFileWithProgress.mock.calls[0][0].file.name).toBe("replacement.csv");
@@ -1023,7 +1124,7 @@ it("accepts a synthetic 409.5 MiB CSV identity for the large-file service path",
   renderWorkspace();
 
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [file] } });
-  const button = screen.getByRole("button", { name: "Start Baseline Analysis" });
+  const button = screen.getByRole("button", { name: "Create Baseline" });
   expect(button.disabled).toBe(false);
   expect(screen.getByLabelText("ChillerPlant.csv, 409.5 MB, Ready")).toBeTruthy();
   fireEvent.click(button);
@@ -1041,7 +1142,7 @@ it("rejects a CSV above the supported 512 MiB limit before submission", () => {
 
   expect(screen.getByRole("alert").textContent).toBe("File is larger than the supported upload limit of 512.0 MB.");
   expect(screen.getByLabelText("too-large.csv, 512.0 MB, Unsupported")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Start Baseline Analysis" }).disabled).toBe(true);
+  expect(screen.getByRole("button", { name: "Create Baseline" }).disabled).toBe(true);
   expect(uploadTelemetryFileWithProgress).not.toHaveBeenCalled();
 });
 
@@ -1051,7 +1152,7 @@ it("renders a concise network failure with an enabled Retry action", async () =>
   renderWorkspace();
 
   fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("retry.csv")] } });
-  fireEvent.click(screen.getByRole("button", { name: "Start Baseline Analysis" }));
+  fireEvent.click(screen.getByRole("button", { name: "Create Baseline" }));
 
   const alert = await screen.findByRole("alert");
   expect(alert.textContent).toContain("Upload could not start. Check the connection and try again.");

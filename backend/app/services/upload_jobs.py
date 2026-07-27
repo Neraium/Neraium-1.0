@@ -14,7 +14,17 @@ from app.core.path_safety import safe_upload_suffix
 from app.services.analysis_explanations import build_analysis_explanation
 from app.services.analysis_result_contract import attach_analysis_result, build_normalized_telemetry
 from app.services.condition_corroboration import ConditionCorroborationService
+from app.services.baseline_contracts import (
+    WORKFLOW_LEGACY_ANALYSIS,
+    is_baseline_workflow,
+    normalize_workflow,
+)
 from app.services.baseline_analysis import build_baseline_analysis
+from app.services.behavioral_baseline import build_behavioral_baseline
+from app.services.behavioral_model_repository import (
+    read_active_behavioral_model,
+    read_baseline_result,
+)
 from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import build_data_quality, detect_timestamp_column, parse_numeric_value, parse_timestamp, profile_numeric_columns, profile_timestamps
 from app.services.driver_attribution import build_driver_attribution
@@ -830,6 +840,96 @@ def _build_csv_result(
         )
 
     _set_propagation_stage(job_id, stage="profiling_data_quality", progress=55, label=_progress_label("profiling_data_quality"))
+    workflow = normalize_workflow(job_context.get("workflow") or WORKFLOW_LEGACY_ANALYSIS)
+    if is_baseline_workflow(workflow):
+        baseline_result = build_behavioral_baseline(
+            job_id=job_id,
+            filename=filename,
+            columns=columns,
+            rows=rows,
+            numeric_columns=numeric_columns,
+            timestamp_column=timestamp_column,
+            row_count_total=row_count_total,
+            numeric_profiles=numeric_profiles,
+            ingestion_report=ingestion_report,
+            workflow=workflow,
+            approval_required=bool(job_context.get("approval_required", True)),
+            active_model=read_active_behavioral_model(),
+            stage_notifier=_set_propagation_stage,
+        )
+        candidate = baseline_result["candidate_model"]
+        suitability = baseline_result["baseline_suitability"]
+        activation = baseline_result["activation"]
+        now = baseline_result["completed_at"]
+        summary = {
+            "job_id": job_id,
+            "run_id": job_id,
+            "upload_id": job_id,
+            "dataset_id": job_id,
+            "upload_session_id": upload_session_id,
+            "request_id": request_id,
+            "status_url": f"/api/data/upload-status/{job_id}",
+            "baseline_result_url": f"/api/data/baselines/jobs/{job_id}",
+            "status": "COMPLETE",
+            "processing_state": "complete",
+            "analysis_state": "completed",
+            "workflow": workflow,
+            "workflow_state": activation.get("state"),
+            "percent": 100,
+            "progress": 100,
+            "progress_label": "Behavioral baseline candidate ready.",
+            "message": "Behavioral baseline candidate ready.",
+            "propagation_stage": "complete",
+            "propagation_progress": 100,
+            "propagation_label": "Behavioral baseline candidate ready.",
+            "result_available": True,
+            "baseline_result_available": True,
+            "baseline_candidate_created": True,
+            "baseline_model_id": candidate.get("model_id"),
+            "baseline_model_version": candidate.get("version"),
+            "baseline_activation_state": activation.get("state"),
+            "baseline_suitability": {
+                "decision": suitability.get("decision"),
+                "score": suitability.get("score"),
+                "eligible_for_activation": suitability.get("eligible_for_activation"),
+            },
+            "sii_completed": False,
+            "sii_engine_invoked": False,
+            "runner_used": False,
+            "replay_ready": False,
+            "replay_frame_count": 0,
+            "evidence_persisted": False,
+            "last_processed_at": now,
+            "completed_at": now,
+            "filename": filename,
+            "row_count": row_count_total,
+            "rows_processed": row_count_total,
+            "columns_detected": len(columns),
+            "initiated_by": initiated_by,
+        }
+        summary.update(
+            canonical_stage_payload(
+                legacy_stage="complete",
+                status="COMPLETE",
+                progress=100,
+                label="Behavioral baseline candidate ready.",
+            )
+        )
+        job_scope = dataset_scope_from_payload(job_context) or current_dataset_scope()
+        summary["session_scope"] = build_session_scope(
+            job_id,
+            filename=filename,
+            status="complete",
+            dataset_scope=job_scope,
+        )
+        summary = attach_dataset_scope(summary, scope=job_scope, dataset_id=job_id)
+        write_job(summary)
+        try:
+            complete_upload_queue_job(job_id, "completed")
+        except Exception:
+            pass
+        _finish_job_timing(job_id)
+        return summary
 
     room_column = next((col for col in columns if col.lower().strip() in {"room", "zone", "location", "area", "group", "system", "asset"}), None)
     room_counts: dict[str, int] = {}
@@ -1046,6 +1146,15 @@ def _build_csv_result(
         "completed_at": now,
         "request_id": request_id,
         "upload_session_id": upload_session_id,
+        "workflow": workflow,
+        "active_baseline_reference": (
+            {
+                "model_id": job_context.get("active_baseline_model_id"),
+                "version": job_context.get("active_baseline_version"),
+            }
+            if workflow != WORKFLOW_LEGACY_ANALYSIS
+            else None
+        ),
     }
     job_scope = dataset_scope_from_payload(job_context) or current_dataset_scope()
     result["initiated_by"] = initiated_by
@@ -1116,6 +1225,8 @@ def _build_csv_result(
     summary = {"job_id": job_id, "run_id": job_id, "upload_id": job_id, "upload_session_id": upload_session_id, "request_id": request_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Analysis ready.", "message": "Analysis ready.", "progress_label": "Analysis ready.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": bool(baseline_reliable), "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}, "evidence_persisted": False, "report_finalization": dict(result["report_finalization"]) }
     summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label="Analysis ready."))
     summary["initiated_by"] = initiated_by
+    summary["workflow"] = workflow
+    summary["active_baseline_reference"] = result.get("active_baseline_reference")
     summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active", dataset_scope=job_scope)
     summary = attach_dataset_scope(summary, scope=job_scope, dataset_id=job_id)
     summary["traceability"] = dict(result["traceability"])
@@ -1448,7 +1559,11 @@ def write_job(*args) -> None:
     _cache_job_payload(job_id, payload)
     status_text = str(payload.get("status") or "").upper()
     processing_state = str(payload.get("processing_state") or "").lower()
-    if _job_updates_latest(status_text, processing_state):
+    if is_baseline_workflow(payload.get("workflow")):
+        # Baseline construction has its own latest-candidate/active-model state.
+        # Its progress must never replace the latest SII analysis snapshot.
+        write_upload_status(job_id, payload)
+    elif _job_updates_latest(status_text, processing_state):
         latest_summary = _latest_job_summary(job_id, payload, scope, status_text, processing_state)
         repository_write_upload_status_progress(job_id, payload, latest_summary=latest_summary, keep_result=False)
         cache_latest_upload_payload("summary", latest_summary)
@@ -1497,6 +1612,8 @@ def process_csv_content(content: str | bytes, filename: str = "upload.csv", **kw
     if isinstance(content, str):
         content = content.encode("utf-8")
     summary = process_upload_bytes(filename, content, job_id=kwargs.get("job_id"))
+    if is_baseline_workflow(summary.get("workflow")):
+        return read_baseline_result(summary["job_id"]) or {}
     return read_upload_result_by_job_id(summary["job_id"]) or read_current_upload_result() or {}
 
 
@@ -1565,6 +1682,8 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
             processing_started_at,
         )
 
+        if is_baseline_workflow(summary.get("workflow")):
+            return read_baseline_result(summary["job_id"]) or {}
         return read_upload_result_by_job_id(summary["job_id"]) or read_current_upload_result() or {}
 
     except Exception as exc:

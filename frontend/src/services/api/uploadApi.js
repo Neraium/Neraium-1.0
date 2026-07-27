@@ -167,7 +167,7 @@ function getUploadResponseTimeoutMs(fileSizeBytes, baseTimeoutMs) {
   return Math.min(Math.max(base || largeFileMinimumMs, largeFileMinimumMs), 30 * 60 * 1000);
 }
 
-function uploadTelemetryFileDirectWithProgress({ file, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, onTiming, requestStartedAt, accessCode } = {}) {
+function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analysis", approvalRequired, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, onTiming, requestStartedAt, accessCode } = {}) {
   return new Promise((resolve, reject) => {
     if (!file) {
       reject(new Error("Choose a CSV or JSON telemetry file to upload."));
@@ -227,6 +227,10 @@ function uploadTelemetryFileDirectWithProgress({ file, timeoutMs = 4 * 60 * 60 *
         }
       };
       formData.append("file", file);
+      formData.append("workflow", String(workflow || "legacy_analysis"));
+      if (typeof approvalRequired === "boolean") {
+        formData.append("approval_required", approvalRequired ? "true" : "false");
+      }
       xhr.open("POST", uploadUrl, true);
       xhr.withCredentials = true;
       xhr.timeout = timeoutMs;
@@ -460,7 +464,7 @@ function largeUploadRequestError(response, payload, phase, fallback) {
   return Object.assign(new Error(requestError.detail || fallback), requestError);
 }
 
-async function requestLargeUploadSession({ file, apiFetch, accessCode }) {
+async function requestLargeUploadSession({ file, workflow = "legacy_analysis", approvalRequired, apiFetch, accessCode }) {
   const path = "/api/data/upload-session";
   let response;
   try {
@@ -472,6 +476,8 @@ async function requestLargeUploadSession({ file, apiFetch, accessCode }) {
         filename: file.name,
         size_bytes: file.size,
         content_type: file.type || "text/csv",
+        workflow: String(workflow || "legacy_analysis"),
+        ...(typeof approvalRequired === "boolean" ? { approval_required: approvalRequired } : {}),
       }),
     });
   } catch (error) {
@@ -617,7 +623,7 @@ async function completeLargeUploadSession({ session, etag, file, apiFetch, acces
   return { ok: true, status: response.status, payload: normalized };
 }
 
-async function uploadLargeTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, accessCode, apiFetch }) {
+async function uploadLargeTelemetryFileWithProgress({ file, workflow = "legacy_analysis", approvalRequired, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, accessCode, apiFetch }) {
   if (typeof apiFetch !== "function") {
     throw new Error("Upload could not start. Check the connection and try again.");
   }
@@ -638,7 +644,7 @@ async function uploadLargeTelemetryFileWithProgress({ file, timeoutMs = 4 * 60 *
   });
   let completedTransfer = completedLargeTransfers.get(file);
   if (!completedTransfer) {
-    const session = await requestLargeUploadSession({ file, apiFetch, accessCode });
+    const session = await requestLargeUploadSession({ file, workflow, approvalRequired, apiFetch, accessCode });
     const transferred = await putFileToObjectStorage({ file, session, timeoutMs, onProgress });
     completedTransfer = { session, etag: transferred.etag };
     completedLargeTransfers.set(file, completedTransfer);

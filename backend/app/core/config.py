@@ -68,6 +68,7 @@ class Settings:
     infrastructure_monitor_enabled: bool = False
     infrastructure_monitor_interval_seconds: float = 60.0
     worker_heartbeat_timeout_seconds: float = 180.0
+    baseline_approval_required: bool = True
 
 
 def get_settings() -> Settings:
@@ -142,6 +143,11 @@ def get_settings() -> Settings:
             os.getenv("NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS"),
             180.0,
             name="NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS",
+        ),
+        baseline_approval_required=parse_bool(
+            os.getenv("NERAIUM_BASELINE_APPROVAL_REQUIRED"),
+            True,
+            name="NERAIUM_BASELINE_APPROVAL_REQUIRED",
         ),
     )
     validate_settings(settings)

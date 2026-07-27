@@ -1,10 +1,16 @@
 # Active Analysis Path
 
+Baseline construction is intentionally outside this path. Upload routing sends
+`create_baseline` and `extend_baseline` to
+`build_behavioral_baseline(...)`; only `analyze_new_data` (and the temporary
+`legacy_analysis` compatibility value) enters the SII analysis orchestration.
+See [Behavioral baseline workflows](BEHAVIORAL_BASELINE_WORKFLOWS.md).
+
 This note records the active Neraium SII path after the legacy cleanup. The current product flow is:
 
 1. Telemetry enters through `POST /api/data/upload` in `backend/app/routers/data.py`, or through the data connection poller in `backend/app/services/data_connections.py`.
-2. Uploads are recorded as queued evidence runs and queue jobs through `backend/app/services/runtime_db.py`, `backend/app/services/upload_jobs.py`, and `backend/app/services/evidence_store.py`.
-3. Upload processing runs through `backend/app/services/upload_jobs.py` into `backend/app/services/upload_pipeline.py`.
+2. Analysis uploads are recorded as queued evidence runs and queue jobs through `backend/app/services/runtime_db.py`, `backend/app/services/upload_jobs.py`, and `backend/app/services/evidence_store.py`. Baseline uploads create queue jobs but never evidence runs.
+3. Analysis upload processing runs through `backend/app/services/upload_jobs.py` into `backend/app/services/upload_pipeline.py`; baseline uploads run through the dedicated `backend/app/services/behavioral_baseline.py` orchestration instead.
 4. `upload_pipeline.py` performs upload-only normalization and calls `backend/app/engine/sii_engine.py::evaluate_sii` exactly once.
 5. `evaluate_sii` orchestrates telemetry classification, signal drift, relationship baselines, operating context, data conditions, sensor health, empirical thresholds, mode-conditioned baselines, dynamic relationship-graph analysis, fixed persistence, adaptive elapsed-time persistence, temporal analysis, multiscale analysis, and covariance/runner analysis. After all Phase 2 analysis completes, it evaluates externally configured engineering priors through `physics_reasoning.py`. Phase 4 then resolves infrastructure identity, loads the storage-neutral Behavioral Digital Model, evaluates expected behavior, persistent-graph changes, longitudinal evolution, propagation context, and assumption-gated advanced mathematics, makes a controlled learning decision, and only then creates versioned model/baseline/snapshot/event records. `evidence_fusion.py` finally preserves Phase 1–4 source evidence without weighted scoring. The engine identity remains canonical `neraium_sii` v2. No phase diagnoses, predicts failure, recommends work, or controls infrastructure. `sii_runner.py` persists `latest_sii_state` through runtime DB/latest-payload storage as the wrapped covariance component.
 6. Upload completion writes canonical result, summary, latest-upload state, replay, and evidence through `backend/app/services/upload_state_repository.py` and `backend/app/services/upload_evidence.py`; evidence records may include a bounded, explicitly non-authoritative `phase_2_supporting_evidence` snapshot.

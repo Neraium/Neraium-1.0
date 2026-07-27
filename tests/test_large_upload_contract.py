@@ -122,6 +122,47 @@ def test_409_5_mib_csv_creates_presigned_session_and_exact_analysis_job(monkeypa
     assert enqueued == [session_id]
 
 
+def test_large_baseline_upload_preserves_workflow_without_creating_evidence(monkeypatch, tmp_path):
+    monkeypatch.setenv("NERAIUM_API_TOKEN", AUTH_HEADERS["X-Neraium-Access-Code"])
+    sessions, jobs, enqueued, _presigned = install_large_upload_fakes(monkeypatch)
+
+    def fail_if_evidence_is_created(_payload):
+        raise AssertionError("baseline construction must not create an SII evidence run")
+
+    monkeypatch.setattr(data_router, "upsert_evidence_run", fail_if_evidence_is_created)
+    client = TestClient(create_app(production_settings(tmp_path)))
+    session_response = client.post(
+        "/api/data/upload-session",
+        headers=AUTH_HEADERS,
+        json={
+            "filename": "HistoricalPlant.csv",
+            "size_bytes": LARGE_FILE_SIZE,
+            "content_type": "text/csv",
+            "workflow": "create_baseline",
+            "approval_required": True,
+        },
+    )
+
+    assert session_response.status_code == 201
+    session_id = session_response.json()["upload_session_id"]
+    assert sessions[session_id]["workflow"] == "create_baseline"
+    assert sessions[session_id]["approval_required"] is True
+
+    complete_response = client.post(
+        f"/api/data/upload-session/{session_id}/complete",
+        headers=AUTH_HEADERS,
+        json={"etag": "large-etag"},
+    )
+
+    assert complete_response.status_code == 202
+    assert complete_response.json()["workflow"] == "create_baseline"
+    assert complete_response.json()["sii_engine_invoked"] is False
+    assert jobs[session_id]["workflow"] == "create_baseline"
+    assert jobs[session_id]["runner_used"] is False
+    assert jobs[session_id]["sii_engine_invoked"] is False
+    assert enqueued == [session_id]
+
+
 def test_large_upload_session_rejects_file_above_supported_limit(monkeypatch, tmp_path):
     monkeypatch.setenv("NERAIUM_API_TOKEN", AUTH_HEADERS["X-Neraium-Access-Code"])
     _sessions, _jobs, _enqueued, presigned = install_large_upload_fakes(monkeypatch)

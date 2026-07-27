@@ -318,6 +318,6 @@ def test_retry_analysis_targets_current_uploaded_job() -> None:
     assert "/api/data/upload/${encodeURIComponent(cleanJobId)}/retry" in upload_api_source
     assert "retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode })" in workspace_source
     assert "await handleUpload();" in workspace_source
-    assert "Start Baseline Analysis" in panel_source
+    assert "Create Baseline" in panel_source
     assert "Choose Dataset" in panel_source
     assert "onClick={() => onRetryFailedUploads?.()}" in panel_source

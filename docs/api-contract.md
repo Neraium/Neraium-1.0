@@ -1,6 +1,16 @@
 # API contract policy
 
-All 106 documented HTTP operations are inventoried by `tests/test_api_contracts.py`. Request models reject undeclared top-level fields and trim declared strings. Dynamic connector configuration remains an explicitly open nested object because each connector owns its configuration schema; its serialized size and key count are bounded.
+## Telemetry workflow routing
+
+`POST /api/data/upload` accepts a multipart `workflow` field. Canonical values
+are `create_baseline`, `analyze_new_data`, and `extend_baseline`.
+
+Baseline construction returns a dedicated `baseline-suitability.v1` result and
+a versioned `behavioral-digital-model.v1` candidate through
+`GET /api/data/baselines/jobs/{job_id}`. It never returns the canonical SII
+analysis contract. See [Behavioral baseline workflows](BEHAVIORAL_BASELINE_WORKFLOWS.md).
+
+All 113 documented HTTP operations are inventoried by `tests/test_api_contracts.py`. Request models reject undeclared top-level fields and trim declared strings. Dynamic connector configuration remains an explicitly open nested object because each connector owns its configuration schema; its serialized size and key count are bounded.
 
 Non-upload request bodies are capped at 1 MiB. Historical telemetry uploads use the configured `max_upload_size_bytes` limit, and connector CSV uploads use the 16 MiB connector limit. Relevant identity headers, filenames, paths, strings, URLs, enums, timestamps, pagination, and numeric controls have explicit bounds. Unknown query parameters are rejected. Replay times require timezone-aware ISO 8601 values.
 

@@ -169,6 +169,18 @@ function completionResult(analysisResult) {
   return { status, findings, evidenceQuality };
 }
 
+function baselineCompletionSummary(result) {
+  const candidate = result?.candidate_model ?? {};
+  const suitability = result?.baseline_suitability ?? candidate?.suitability ?? {};
+  const activation = result?.activation ?? candidate?.activation ?? {};
+  return [
+    { label: "Candidate", value: candidate?.version ? `Behavioral Digital Model v${candidate.version}` : "Created" },
+    { label: "Suitability", value: String(suitability?.decision || "not reported").replaceAll("_", " ") },
+    { label: "Suitability score", value: Number.isFinite(Number(suitability?.score)) ? `${suitability.score}/100` : "Not reported" },
+    { label: "Activation", value: String(activation?.state || candidate?.status || "candidate").replaceAll("_", " ") },
+  ];
+}
+
 function completionSummary({ analysisResult }) {
   const completed = completionResult(analysisResult);
   return [
@@ -676,6 +688,9 @@ export default function IntakeFlowPanel({
   handleFileSelection,
   selectedFiles,
   latestUploadSnapshot,
+  analysisResult: suppliedAnalysisResult = null,
+  baselineResult = null,
+  workflow = "create_baseline",
   pendingUploadKind,
   selectedFileSize,
   fileValidationError = "",
@@ -694,6 +709,7 @@ export default function IntakeFlowPanel({
   onRetryFailedUploads,
   onResetWorkspace,
   onViewResults,
+  onApproveBaseline,
 }) {
   void uploadStateMessage;
   void batchResults;
@@ -705,18 +721,27 @@ export default function IntakeFlowPanel({
     : "No file selected";
   const fileKind = String(pendingUploadKind || "csv").toUpperCase();
   const rawViewState = uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing });
-  const analysisResult = finalAnalysisResult(latestUploadSnapshot, uploadJob);
-  const viewState = rawViewState === "complete" && !analysisResult ? "finalizing" : rawViewState;
+  const analysisResult = suppliedAnalysisResult ?? finalAnalysisResult(latestUploadSnapshot, uploadJob);
+  const baselineCompletion = Boolean(baselineResult?.candidate_model);
+  const viewState = rawViewState === "complete" && !analysisResult && !baselineCompletion ? "finalizing" : rawViewState;
   const statusText = operatorStatusText({ viewState, uploadJob, uploadState, uploadTransfer, latestMessage });
   const mainPercent = resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent });
   const fingerprintBuildStage = resolveFingerprintBuildStage({ viewState, uploadJob, uploadState, uploadTransfer });
   const errorMessage = String(latestMessage || "Choose another telemetry dataset and try again.").trim();
   const failureRecoveryRows = buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage });
-  const summary = analysisResult ? completionSummary({ analysisResult }) : [];
+  const summary = baselineCompletion
+    ? baselineCompletionSummary(baselineResult)
+    : analysisResult ? completionSummary({ analysisResult }) : [];
   const completed = analysisResult ? completionResult(analysisResult) : null;
+  const activationState = baselineResult?.activation?.state ?? baselineResult?.candidate_model?.status;
   const showProgress = viewState === "uploading" || viewState === "analyzing" || viewState === "finalizing";
   const fingerprintStatus = uploadFingerprintStatusText(viewState, hasSelectedFiles);
   const workflowStep = baselineWorkflowStep({ viewState, uploadJob, uploadState });
+  const workflowLabel = {
+    create_baseline: "Create Baseline",
+    analyze_new_data: "Analyze New Data Against Active Baseline",
+    extend_baseline: "Extend Baseline Through Controlled Learning",
+  }[workflow] || "Telemetry Analysis";
   const dragClassName = isDragActive ? " upload-analysis-card--drag-active" : "";
 
   function handleUploadDragOver(event) {
@@ -738,8 +763,8 @@ export default function IntakeFlowPanel({
 
   return (
     <Panel title="Import Historical Dataset" className="span-7 upload-ops-panel upload-ops-panel--command">
-      <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={handleUpload} aria-busy={showProgress}>
-        {(["noFile", "fileSelected"].includes(viewState)) ? <p className="intake-flow__subtitle">Import historical telemetry so Neraium can learn how your system normally behaves.</p> : null}
+      <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={(event) => handleUpload(event, "create_baseline")} aria-busy={showProgress}>
+        {(["noFile", "fileSelected"].includes(viewState)) ? <p className="intake-flow__subtitle">Choose whether this dataset creates a baseline, is analyzed against the active baseline, or extends it through controlled learning.</p> : null}
         <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose telemetry dataset CSV files" tabIndex={-1} onChange={handleFileSelection} />
 
         <BaselineWorkflowStepper currentStep={workflowStep} />
@@ -781,13 +806,21 @@ export default function IntakeFlowPanel({
                   <>
                     <button
                       data-testid="process-upload-button"
+                      name="workflow"
+                      value="create_baseline"
                       className="command-button upload-baseline-card__primary"
                       type="submit"
                       disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)}
                       aria-disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)}
-                      title={fileValidationError || (isUploadProcessing(uploadState) ? "Analysis is already in progress." : "Start baseline analysis.")}
+                      title={fileValidationError || (isUploadProcessing(uploadState) ? "A telemetry workflow is already in progress." : "Create a Behavioral Digital Model candidate.")}
                     >
-                      Start Baseline Analysis
+                      Create Baseline
+                    </button>
+                    <button type="button" className="secondary-command-button" disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)} onClick={(event) => handleUpload(event, "analyze_new_data")}>
+                      Analyze New Data
+                    </button>
+                    <button type="button" className="secondary-command-button" disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)} onClick={(event) => handleUpload(event, "extend_baseline")}>
+                      Extend Baseline
                     </button>
                     <button type="button" className="baseline-file-replace" onClick={() => openFilePicker("csv")}>Replace file</button>
                   </>
@@ -810,6 +843,7 @@ export default function IntakeFlowPanel({
           <section className="upload-analysis-card upload-analysis-card--processing upload-analysis-card--compact" aria-live="polite" aria-label={`Analysis progress: ${statusText}`}>
             <div className="upload-analysis-card__content">
               <p className="upload-processing-file"><span>Dataset</span><strong>{selectedFileLabel}</strong></p>
+              <p className="upload-processing-file"><span>Workflow</span><strong>{workflowLabel}</strong></p>
               <div className="upload-analysis-card__intelligence">
                 <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} />
               </div>
@@ -824,7 +858,7 @@ export default function IntakeFlowPanel({
             </div>
             <div className="upload-analysis-card__content">
               <div className="upload-complete-header">
-                <h3 id="analysis-complete-heading">Analysis complete</h3>
+                <h3 id="analysis-complete-heading">{baselineCompletion ? "Baseline construction complete" : "Analysis complete"}</h3>
               </div>
               <p className="upload-processing-file"><span>Dataset</span><strong>{selectedFileLabel}</strong></p>
               <dl className="upload-result-summary" aria-label="Analysis result summary">
@@ -836,7 +870,15 @@ export default function IntakeFlowPanel({
                 ))}
               </dl>
               <div className="upload-simple-actions upload-completion-actions">
-                <button type="button" className="command-button upload-completion-actions__primary" onClick={onViewResults}>{completed?.status === "Evidence insufficient" ? "Review Evidence" : "View Results"}</button>
+                {baselineCompletion ? (
+                  activationState === "awaiting_approval" ? (
+                    <button type="button" className="command-button upload-completion-actions__primary" onClick={onApproveBaseline}>Approve and Activate</button>
+                  ) : (
+                    <button type="button" className="command-button upload-completion-actions__primary" disabled>{activationState === "active" ? "Baseline Active" : "Candidate Not Eligible"}</button>
+                  )
+                ) : (
+                  <button type="button" className="command-button upload-completion-actions__primary" onClick={onViewResults}>{completed?.status === "Evidence insufficient" ? "Review Evidence" : "View Results"}</button>
+                )}
                 <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onResetWorkspace}>Import Another Dataset</button>
               </div>
             </div>
