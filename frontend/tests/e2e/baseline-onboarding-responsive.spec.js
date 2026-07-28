@@ -23,37 +23,43 @@ async function chooseSampleDataset(page) {
 }
 
 test.describe("Initial baseline learning experience", () => {
-  test("makes Neraium's learning philosophy and one primary action immediately clear", async ({ page }) => {
+  test("makes the compact upload workflow and primary action immediately clear", async ({ page }) => {
     await openBaselineImport(page);
 
-    await expect(page.getByText("Upload historical operating data so Neraium can establish its initial understanding of how your infrastructure behaves.")).toBeVisible();
-    await expect(page.getByText("This dataset becomes Neraium's first learned operating model.")).toBeVisible();
-    await expect(page.getByText(/discovers persistent relationships between signals instead of memorizing static thresholds/i)).toBeVisible();
-    await expect(page.getByText(/normal only evolves when new operating behavior is persistent and verified/i)).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Teach Neraium from normal operation", level: 3 })).toBeVisible();
+    await expect(page.getByText("Upload representative historical operating data so Neraium can learn how the system normally behaves.")).toBeVisible();
+    await expect(page.getByText("SOURCE OPERATING HISTORY")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Upload historical data", level: 3 })).toBeVisible();
+    await expect(page.getByText("CSV, SCADA export, or historian export")).toBeVisible();
+    await expect(page.getByText("This dataset becomes Neraium's first learned operating model.")).toHaveCount(0);
+    await expect(page.getByText(/discovers persistent relationships between signals/i)).toHaveCount(0);
+    await expect(page.getByText(/normal only evolves when new operating behavior/i)).toHaveCount(0);
 
     const steps = page.getByRole("list", { name: "How Neraium establishes its initial baseline" }).getByRole("listitem");
     await expect(steps).toHaveCount(5);
     await expect(steps).toHaveText([
-      "1Historical Dataset",
-      "2Validate Data Integrity",
-      "3Learn Operating Relationships",
-      "4Establish Initial Baseline",
-      "5Continuous Learning Begins",
+      "1Upload Data",
+      "2Validate Signals",
+      "3Learn Relationships",
+      "4Establish Baseline",
+      "5Begin Learning",
     ]);
 
     const choose = page.getByRole("button", { name: /choose historical dataset/i });
+    const continueAction = page.getByRole("button", { name: "Continue" });
     await expect(choose).toBeVisible();
-    await expect(page.getByRole("button", { name: "Establish Initial Baseline" })).toHaveCount(0);
-    await expect(page.getByText("Supported data sources")).toBeVisible();
+    await expect(continueAction).toBeVisible();
+    await expect(page.getByText("Supported data sources")).toHaveCount(0);
+    await expect(page.getByText("Choose a telemetry file.")).toHaveCount(0);
+    await continueAction.click();
+    await expect(page.locator(".upload-analysis-card--baseline .upload-error-message")).toHaveText("Choose a telemetry file.");
     await expect(page.getByText("Compare", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Evidence", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Findings", { exact: true })).toHaveCount(0);
 
     await chooseSampleDataset(page);
-    const establish = page.getByRole("button", { name: "Establish Initial Baseline" });
     const replace = page.getByRole("button", { name: "Replace file" });
-    await expect(establish).toBeVisible();
+    await expect(continueAction).toBeVisible();
+    await expect(continueAction).toBeEnabled();
     await expect(replace).toBeVisible();
     await expect(page.getByText("central-plant-history.csv")).toBeVisible();
     await expect(page.getByRole("button", { name: "Analyze New Data" })).toHaveCount(0);
@@ -91,7 +97,7 @@ test.describe("Initial baseline learning experience", () => {
           };
         });
         return {
-          viewportWidth: innerWidth,
+          viewportWidth: window.innerWidth,
           rootWidth: document.documentElement.scrollWidth,
           bodyWidth: document.body.scrollWidth,
           controls,
@@ -123,7 +129,7 @@ test.describe("Initial baseline learning experience", () => {
       mimeType: "text/csv",
       buffer: Buffer.from("timestamp,value\n2026-07-01T00:00:00Z,1\n", "utf8"),
     });
-    await expect(page.getByRole("button", { name: "Establish Initial Baseline" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .include(".upload-ops-panel--command")

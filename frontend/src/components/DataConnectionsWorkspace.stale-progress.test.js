@@ -129,24 +129,38 @@ afterEach(() => {
 });
 
 describe("initial baseline experience", () => {
-  it("leads with Neraium's learning model instead of a generic upload wizard", () => {
+  it("leads with a compact initial-baseline upload workflow", () => {
     const { container } = renderPanel();
 
     expect(screen.getByRole("heading", { name: "Establish Initial Baseline" })).toBeTruthy();
-    expect(screen.getByText("Upload historical operating data so Neraium can establish its initial understanding of how your infrastructure behaves.")).toBeTruthy();
-    expect(screen.getByText("This dataset becomes Neraium's first learned operating model.")).toBeTruthy();
-    expect(screen.getByText(/discovers persistent relationships between signals instead of memorizing static thresholds/i)).toBeTruthy();
-    expect(screen.getByText(/normal only evolves when new operating behavior is persistent and verified/i)).toBeTruthy();
+    expect(screen.getByText("Upload representative historical operating data so Neraium can learn how the system normally behaves.")).toBeTruthy();
+    expect(screen.getByText("SOURCE OPERATING HISTORY")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Upload historical data" })).toBeTruthy();
+    expect(screen.getByText("CSV, SCADA export, or historian export")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
+
+    expect(screen.queryByText("This dataset becomes Neraium's first learned operating model.")).toBeNull();
+    expect(screen.queryByText(/discovers persistent relationships between signals/i)).toBeNull();
+    expect(screen.queryByText(/normal only evolves when new operating behavior/i)).toBeNull();
+    expect(screen.queryByText("Supported data sources")).toBeNull();
 
     const workflow = Array.from(container.querySelectorAll(".baseline-learning-path strong")).map((node) => node.textContent);
     expect(workflow).toEqual([
-      "Historical Dataset",
-      "Validate Data Integrity",
-      "Learn Operating Relationships",
-      "Establish Initial Baseline",
-      "Continuous Learning Begins",
+      "Upload Data",
+      "Validate Signals",
+      "Learn Relationships",
+      "Establish Baseline",
+      "Begin Learning",
     ]);
     expect(container.textContent).not.toMatch(/\bEvidence\b|\bFindings\b|\bAlerts\b|\bInvestigation\b|Drift Detection|Anomaly summaries/i);
+  });
+
+  it("waits for an empty Continue attempt before showing file validation", () => {
+    renderWorkspace();
+
+    expect(screen.queryByText("Choose a telemetry file.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByRole("alert").textContent).toBe("Choose a telemetry file.");
   });
 
   it("uses one focused baseline action after a dataset is selected", () => {
@@ -163,7 +177,7 @@ describe("initial baseline experience", () => {
     expect(screen.getByLabelText("operators.csv, 15.7 MB, Ready")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Analyze New Data" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Extend Baseline" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Establish Initial Baseline" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(handleUpload).toHaveBeenCalledWith(expect.anything(), "create_baseline");
     fireEvent.click(screen.getByRole("button", { name: "Replace file" }));
     expect(openFilePicker).toHaveBeenCalledWith("csv");
@@ -374,7 +388,7 @@ describe("upload and polling behavior", () => {
     renderWorkspace({ apiFetch, onUploadComplete });
 
     fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
-    fireEvent.click(screen.getByRole("button", { name: "Establish Initial Baseline" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
     await new Promise((resolve) => window.setTimeout(resolve, 30));
@@ -499,7 +513,7 @@ describe("upload and polling behavior", () => {
     renderWorkspace();
 
     fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("unavailable.csv")] } });
-    fireEvent.click(screen.getByRole("button", { name: "Establish Initial Baseline" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
@@ -515,7 +529,7 @@ describe("upload and polling behavior", () => {
     fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [tooLarge] } });
 
     expect(screen.getByRole("alert").textContent).toBe("File is larger than the supported upload limit of 512.0 MB.");
-    expect(screen.getByRole("button", { name: "Establish Initial Baseline" }).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Continue" }).disabled).toBe(true);
     expect(uploadTelemetryFileWithProgress).not.toHaveBeenCalled();
   });
 });

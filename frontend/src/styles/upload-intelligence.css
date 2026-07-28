@@ -67,38 +67,6 @@
   line-height: 1.55;
 }
 
-/* Product meaning before mechanics. */
-.baseline-purpose {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid var(--baseline-line);
-  border-left: 2px solid var(--baseline-blue);
-  border-radius: 9px;
-  background: var(--baseline-surface);
-}
-
-.baseline-purpose p {
-  margin: 0;
-  padding: 14px 16px;
-  color: var(--baseline-text-muted);
-  font-size: .82rem;
-  line-height: 1.5;
-}
-
-.baseline-purpose p + p {
-  border-left: 1px solid var(--baseline-line);
-}
-
-.baseline-purpose strong {
-  display: block;
-  margin-bottom: 3px;
-  color: var(--baseline-text);
-  font-size: .9rem;
-  font-weight: 690;
-}
-
 /* Conceptual lifecycle. This is intentionally hidden while processing to avoid duplicate progress. */
 .baseline-learning-path {
   display: grid;
@@ -201,7 +169,7 @@
   line-height: 1.16;
 }
 
-.upload-analysis-card--baseline .upload-analysis-card__copy p:last-child {
+.upload-analysis-card--baseline .upload-analysis-card__description {
   max-width: 72ch;
   margin: 0;
   color: var(--baseline-text-muted);
@@ -383,7 +351,7 @@
 
   .upload-analysis-card--baseline .upload-analysis-card__copy {
     grid-column: 1;
-    grid-row: 1 / 6;
+    grid-row: 1 / 4;
     align-content: start;
     padding: 2px 0;
   }
@@ -1066,26 +1034,6 @@
     line-height: 1.45;
   }
 
-  .baseline-purpose {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .baseline-purpose p {
-    padding: 10px 11px;
-    font-size: .72rem;
-    line-height: 1.4;
-  }
-
-  .baseline-purpose p + p {
-    border-top: 1px solid var(--baseline-line);
-    border-left: 0;
-  }
-
-  .baseline-purpose strong {
-    margin-bottom: 2px;
-    font-size: .79rem;
-  }
-
   .baseline-learning-path {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     padding-top: 1px;
@@ -1129,7 +1077,7 @@
     font-size: 1.12rem;
   }
 
-  .upload-analysis-card--baseline .upload-analysis-card__copy p:last-child {
+  .upload-analysis-card--baseline .upload-analysis-card__description {
     font-size: .74rem;
     line-height: 1.4;
   }
