@@ -89,7 +89,7 @@ function isLargeOperationalUpload(file) {
 }
 
 function uploadReadinessMessage(file) {
-  if (!file) return "Choose a telemetry file.";
+  if (!file) return "";
   if (isLargeOperationalUpload(file)) {
     return "Large telemetry export detected. Processing continues in the background.";
   }
@@ -911,7 +911,9 @@ export default function DataConnectionsWorkspace({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStartInitialFiles, selectedFiles, uploadState]);
 
-  const selectedFileValidationError = validateTelemetryFile(selectedFiles[0], pendingUploadKind);
+  const selectedFileValidationError = selectedFiles.length
+    ? validateTelemetryFile(selectedFiles[0], pendingUploadKind)
+    : uploadError;
   const readiness = selectedFileValidationError || uploadReadinessMessage(selectedFiles[0]);
   const hasActiveProgress = isActiveUploadProgressState(uploadState);
   const progressUploadJob = hasActiveProgress ? uploadJob : null;

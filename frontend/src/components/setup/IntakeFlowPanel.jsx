@@ -18,11 +18,11 @@ const hiddenFileInputStyle = {
 };
 
 const INITIAL_BASELINE_WORKFLOW = [
-  "Historical Dataset",
-  "Validate Data Integrity",
-  "Learn Operating Relationships",
-  "Establish Initial Baseline",
-  "Continuous Learning Begins",
+  "Upload Data",
+  "Validate Signals",
+  "Learn Relationships",
+  "Establish Baseline",
+  "Begin Learning",
 ];
 
 export const INITIAL_BASELINE_STAGES = [
@@ -673,8 +673,6 @@ function SuccessState({
   );
 }
 
-const SUPPORTED_HISTORICAL_SOURCES = ["CSV", "SCADA export", "Historian export"];
-
 export default function IntakeFlowPanel({
   handleUpload,
   uploadInputRef,
@@ -735,7 +733,7 @@ export default function IntakeFlowPanel({
   const title = comparison ? "Import Comparison Dataset" : "Establish Initial Baseline";
   const subtitle = comparison
     ? "Upload verified operating history to evaluate it against Neraium's active learned model. This workflow does not automatically redefine normal."
-    : "Upload historical operating data so Neraium can establish its initial understanding of how your infrastructure behaves.";
+    : "Upload representative historical operating data so Neraium can learn how the system normally behaves.";
 
   function handleUploadDragOver(event) {
     event.preventDefault();
@@ -776,20 +774,7 @@ export default function IntakeFlowPanel({
           onChange={handleFileSelection}
         />
 
-        {!comparison && ["noFile", "fileSelected"].includes(viewState) ? (
-          <>
-            <section className="baseline-purpose" aria-label="How Neraium learns">
-              <p>
-                <strong>This dataset becomes Neraium's first learned operating model.</strong>
-                Neraium discovers persistent relationships between signals instead of memorizing static thresholds.
-              </p>
-              <p>
-                Continuous learning begins here, but normal only evolves when new operating behavior is persistent and verified.
-              </p>
-            </section>
-            <BaselineWorkflow />
-          </>
-        ) : null}
+        {!comparison && ["noFile", "fileSelected"].includes(viewState) ? <BaselineWorkflow /> : null}
 
         {["noFile", "fileSelected"].includes(viewState) ? (
           <section
@@ -801,13 +786,13 @@ export default function IntakeFlowPanel({
           >
             <div className="upload-analysis-card__content">
               <div className="upload-analysis-card__copy">
-                <p className="upload-analysis-card__eyebrow">{comparison ? "Verified later history" : "Source operating history"}</p>
-                <h3>{comparison ? "Choose a comparison dataset" : "Teach Neraium from normal operation"}</h3>
-                <p>
-                  {comparison
-                    ? "Neraium will evaluate this history against the active model without treating temporary conditions as a new normal."
-                    : "Use representative historical data that captures the infrastructure's normal operating range, modes, and signal behavior."}
-                </p>
+                <p className="upload-analysis-card__eyebrow">{comparison ? "Verified later history" : "SOURCE OPERATING HISTORY"}</p>
+                <h3>{comparison ? "Choose a comparison dataset" : "Upload historical data"}</h3>
+                {comparison ? (
+                  <p className="upload-analysis-card__description">
+                    Neraium will evaluate this history against the active model without treating temporary conditions as a new normal.
+                  </p>
+                ) : null}
               </div>
 
               {hasSelectedFiles ? (
@@ -817,14 +802,14 @@ export default function IntakeFlowPanel({
                   <span className="baseline-file-dropzone__icon" aria-hidden="true" />
                   <span>
                     <strong>Choose historical dataset</strong>
-                    <small>or drop a CSV, SCADA export, or historian export here</small>
+                    <small>CSV, SCADA export, or historian export</small>
                   </span>
                 </button>
               )}
 
               {fileValidationError ? <p className="upload-error-message" role="alert">{fileValidationError}</p> : null}
 
-              {hasSelectedFiles ? (
+              {hasSelectedFiles || !comparison ? (
                 <div className="upload-simple-actions upload-analysis-card__actions upload-baseline-card__actions">
                   <button
                     data-testid="process-upload-button"
@@ -836,18 +821,11 @@ export default function IntakeFlowPanel({
                     aria-disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)}
                     title={fileValidationError || (isUploadProcessing(uploadState) ? "A dataset workflow is already in progress." : undefined)}
                   >
-                    {comparison ? "Evaluate Against Baseline" : "Establish Initial Baseline"}
+                    {comparison ? "Evaluate Against Baseline" : "Continue"}
                   </button>
-                  <button type="button" className="baseline-file-replace" onClick={() => openFilePicker("csv")}>Replace file</button>
+                  {hasSelectedFiles ? <button type="button" className="baseline-file-replace" onClick={() => openFilePicker("csv")}>Replace file</button> : null}
                 </div>
               ) : null}
-
-              <details className="upload-analysis-card__sources">
-                <summary>Supported data sources</summary>
-                <ul>
-                  {SUPPORTED_HISTORICAL_SOURCES.map((source) => <li key={source}>{source}</li>)}
-                </ul>
-              </details>
             </div>
           </section>
         ) : null}
