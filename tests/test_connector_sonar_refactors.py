@@ -103,8 +103,10 @@ def test_csv_normalization_preserves_empty_and_missing_timestamp_errors(
     rows: list[dict[str, str]],
     message: str,
 ) -> None:
+    connector = CSVConnector()
+
     with pytest.raises(ValueError, match=f"^{message}$"):
-        CSVConnector().normalize(rows)
+        connector.normalize(rows)
 
 
 def test_csv_invalid_delimiter_preserves_validation_error() -> None:
@@ -115,14 +117,13 @@ def test_csv_invalid_delimiter_preserves_validation_error() -> None:
         }
     )
 
-    assert connector.fetch_historical() == [
-        {"timestamp;temperature": "2026-05-01T08:00:00Z;74"}
-    ]
+    rows = connector.fetch_historical()
+    assert rows == [{"timestamp;temperature": "2026-05-01T08:00:00Z;74"}]
     with pytest.raises(
         ValueError,
         match="^No valid telemetry records were found after validation. Check timestamps, units, and sensor values.$",
     ):
-        connector.normalize(connector.fetch_historical())
+        connector.normalize(rows)
 
 
 def test_csv_duplicate_columns_keep_dict_reader_last_value() -> None:
@@ -334,11 +335,12 @@ def test_rest_record_extraction_preserves_invalid_shape_errors_and_fallback_orde
 
     with pytest.raises(ValueError, match="^REST API response list must contain objects.$"):
         connector._extract_records([{"timestamp": "2026-05-01"}, "invalid"])
+    nested_connector = RESTConnector({"records_path": "payload.readings"})
     with pytest.raises(
         ValueError,
         match="^REST API response did not include records_path payload.readings.$",
     ):
-        RESTConnector({"records_path": "payload.readings"})._extract_records({"payload": {}})
+        nested_connector._extract_records({"payload": {}})
 
     assert connector._extract_records(
         {

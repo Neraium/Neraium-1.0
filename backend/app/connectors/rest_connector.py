@@ -6,7 +6,12 @@ from typing import Any, Literal, cast
 import httpx
 
 from app.connectors.base import ConnectorBase
-from app.connectors.csv_connector import CONTEXT_COLUMNS, infer_unit, slugify
+from app.connectors.csv_connector import (
+    CONTEXT_COLUMNS,
+    _normalize_wide_sensor_record,
+    infer_unit,
+    slugify,
+)
 from app.connectors.limits import (
     MAX_CONNECTOR_RESPONSE_BYTES,
     enforce_normalization_budget,
@@ -274,7 +279,7 @@ class RESTConnector(ConnectorBase):
         for column_name, raw_value in row.items():
             if not RESTConnector._is_wide_sensor_value(column_name, raw_value, timestamp_column):
                 continue
-            record = RESTConnector._normalize_wide_sensor_value(
+            record = _normalize_wide_sensor_record(
                 row,
                 column_name=column_name,
                 raw_value=raw_value,
@@ -283,61 +288,12 @@ class RESTConnector(ConnectorBase):
                 source_id=source_id,
                 system_id=system_id,
                 row_quality=row_quality,
-                context=context,
+                metadata={"row_number": row_index, **context},
                 errors=errors,
             )
             if record is not None:
                 records.append(record)
         return records
-
-    @staticmethod
-    def _normalize_wide_sensor_value(
-        row: dict[str, Any],
-        *,
-        column_name: str,
-        raw_value: Any,
-        row_index: int,
-        normalized_timestamp: str,
-        source_id: str,
-        system_id: str,
-        row_quality: str,
-        context: dict[str, Any],
-        errors: list[ValidationIssue],
-    ) -> NormalizedTelemetryRecord | None:
-        numeric_value = validate_numeric_value(raw_value)
-        if numeric_value is None:
-            if raw_value not in (None, ""):
-                errors.append(
-                    ValidationIssue(
-                        row_number=row_index,
-                        field=column_name,
-                        message=f"Sensor value for {column_name} must be numeric.",
-                    )
-                )
-            return None
-
-        unit = normalize_unit(row.get(f"{column_name}_unit") or row.get("unit") or infer_unit(column_name))
-        if not validate_unit(unit):
-            errors.append(
-                ValidationIssue(
-                    row_number=row_index,
-                    field=column_name,
-                    message=f"Unit {unit or '[blank]'} is not supported for {column_name}.",
-                )
-            )
-            return None
-
-        return NormalizedTelemetryRecord(
-            source_id=source_id,
-            system_id=system_id,
-            sensor_id=slugify(f"{system_id}-{column_name}"),
-            sensor_name=column_name,
-            value=numeric_value,
-            unit=unit,
-            timestamp=normalized_timestamp,
-            quality_status=row_quality,
-            metadata={"row_number": row_index, **context},
-        )
 
     def _build_normalized_batch(
         self,
