@@ -228,9 +228,25 @@ def test_job_creation_failure_is_visible_and_retry_reuses_the_same_upload(monkey
     )
 
     assert failed.status_code == 503
-    assert failed.json()["error_type"] == "upload_enqueue_failed"
-    assert failed.json()["message"] == "Upload completed, but analysis could not be started."
+    failure_payload = failed.json()
+    assert failure_payload["error_type"] == "upload_enqueue_failed"
+    assert failure_payload["error_code"] == "dataset_record_creation_failed"
+    assert failure_payload["failed_stage"] == "dataset_creation"
+    assert failure_payload["retryable"] is True
+    assert failure_payload["transfer_succeeded"] is True
+    assert failure_payload["file_stored"] is True
+    assert failure_payload["job_id"] == session_id
+    assert failure_payload["upload_session_id"] == session_id
+    assert failure_payload["retry_url"] == f"/api/data/upload-session/{session_id}/complete"
+    assert failure_payload["message"] == "The file was transferred successfully, but Neraium could not begin processing it."
+    assert failure_payload["error_details"] == {
+        "code": "dataset_record_creation_failed",
+        "message": "The file was transferred successfully, but Neraium could not begin processing it.",
+        "failed_stage": "dataset_creation",
+        "retryable": True,
+    }
     assert jobs[session_id]["status"] == "FAILED"
+    assert jobs[session_id]["shared_upload_source_key"].endswith(f"/{session_id}.csv")
     assert sessions[session_id]["state"] == "awaiting_upload"
 
     monkeypatch.setattr(data_router, "enqueue_upload_job", lambda job_id: enqueued.append(job_id))
@@ -258,6 +274,9 @@ def test_large_upload_endpoints_require_authentication_in_production(monkeypatch
 
     assert response.status_code == 401
     assert response.json()["error_type"] == "auth"
+    assert response.json()["error_code"] == "auth_session_expired"
+    assert response.json()["failed_stage"] == "authentication"
+    assert response.json()["retryable"] is False
 
 
 def test_presigned_target_signs_required_headers_without_reading_file_content(monkeypatch):

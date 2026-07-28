@@ -58,6 +58,26 @@ function installXhrSequence(responses) {
       this._response = response;
       this.status = response.status;
       this.responseText = response.body;
+      if (response.networkError) {
+        this.upload.onloadstart?.();
+        this.upload.onprogress?.({
+          loaded: response.progress?.loaded || 0,
+          total: response.progress?.total || body?.size || 0,
+          lengthComputable: true,
+        });
+        this.onerror?.();
+        return;
+      }
+      if (response.timeout) {
+        this.upload.onloadstart?.();
+        this.upload.onprogress?.({
+          loaded: response.progress?.loaded || 0,
+          total: response.progress?.total || body?.size || 0,
+          lengthComputable: true,
+        });
+        this.ontimeout?.();
+        return;
+      }
       if (response.uploaded) {
         this.upload.onprogress?.({ loaded: response.uploaded, total: response.uploaded, lengthComputable: true });
         this.upload.onload?.();
@@ -321,6 +341,67 @@ describe("file ingestion failure handling", () => {
 
 
 describe("large telemetry upload transport", () => {
+  it("uses stored object transport for a production-sized small CSV", async () => {
+    const file = new File(["timestamp,value\n2026-06-22,1\n"], "mobile.csv", { type: "text/csv" });
+    const apiFetch = vi.fn()
+      .mockResolvedValueOnce(createResponse({
+        upload_session_id: "mobile-session",
+        upload_url: "https://upload.example.test/mobile",
+        upload_headers: { "Content-Type": "text/csv" },
+      }, { status: 201 }))
+      .mockResolvedValueOnce(createResponse({
+        job_id: "mobile-session",
+        status: "PENDING",
+        status_url: "/api/data/upload-status/mobile-session",
+      }, { status: 202 }));
+    const xhr = installXhrSequence([{
+      status: 200,
+      body: "",
+      headers: { etag: '"mobile-etag"' },
+      progress: { loaded: file.size, total: file.size },
+    }]);
+
+    try {
+      const result = await uploadTelemetryFileWithProgress({ file, apiFetch, preferStoredUpload: true });
+
+      expect(result.payload.job_id).toBe("mobile-session");
+      expect(apiFetch.mock.calls.map(([path]) => path)).toEqual([
+        "/api/data/upload-session",
+        "/api/data/upload-session/mobile-session/complete",
+      ]);
+      expect(xhr.instances).toHaveLength(1);
+      expect(xhr.instances[0].method).toBe("PUT");
+    } finally {
+      xhr.restore();
+    }
+  });
+
+  it("reports a genuine network failure during object transfer as an upload transfer failure", async () => {
+    const file = new File(["timestamp,value\n2026-06-22,1\n"], "offline.csv", { type: "text/csv" });
+    const apiFetch = vi.fn().mockResolvedValueOnce(createResponse({
+      upload_session_id: "offline-session",
+      upload_url: "https://upload.example.test/offline",
+      upload_headers: { "Content-Type": "text/csv" },
+    }, { status: 201 }));
+    const xhr = installXhrSequence([{
+      status: 0,
+      body: "",
+      networkError: true,
+      progress: { loaded: 0, total: file.size },
+    }]);
+
+    try {
+      await expect(uploadTelemetryFileWithProgress({ file, apiFetch, preferStoredUpload: true })).rejects.toMatchObject({
+        name: "ApiNetworkError",
+        failedStage: "upload_transfer",
+        transferSucceeded: false,
+      });
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      xhr.restore();
+    }
+  });
+
   it("routes a synthetic 409.5 MiB CSV directly to object storage and creates the exact job", async () => {
     const file = new File(["timestamp,value\n2026-06-22,1\n"], "ChillerPlant.csv", { type: "text/csv" });
     Object.defineProperty(file, "size", { configurable: true, value: Math.round(409.5 * 1024 * 1024) });
@@ -382,7 +463,7 @@ describe("large telemetry upload transport", () => {
         "If-None-Match": "*",
       });
       expect(progress.some((event) => event.stage === "uploading" || event.stage === "upload_transferred")).toBe(true);
-      expect(progress.at(-1)).toMatchObject({ stage: "validating", message: "Validating data" });
+      expect(progress.at(-1)).toMatchObject({ stage: "validating", message: "Transfer complete. Creating dataset record." });
       expect(response.payload).toMatchObject({
         job_id: "large-session-4095",
         filename: "ChillerPlant.csv",
@@ -447,8 +528,11 @@ describe("large telemetry upload transport", () => {
     try {
       await expect(uploadTelemetryFileWithProgress({ file, apiFetch })).rejects.toMatchObject({
         name: "UploadRequestError",
-        errorType: "missing_job_id",
-        detail: "Upload completed, but analysis could not be started.",
+        errorType: "dataset_record_creation_failed",
+        detail: "The file was transferred successfully, but Neraium could not begin processing it.",
+        failedStage: "dataset_creation",
+        transferSucceeded: true,
+        fileStored: true,
       });
     } finally {
       xhr.restore();

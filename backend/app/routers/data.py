@@ -63,6 +63,7 @@ from app.services.upload_state_repository import (
 from app.services.rate_limiter import consume_rate_limit
 from app.services.latest_upload_state import resolve_latest_upload_payload
 from app.services.upload_session_service import resolve_upload_status
+from app.services.upload_errors import build_upload_error_payload, canonical_upload_error_code
 
 router = APIRouter(prefix="/data", tags=["data"], dependencies=[Depends(require_api_access)])
 logger = logging.getLogger(__name__)
@@ -131,11 +132,13 @@ def _rate_limit_response(retry_after: int, *, error_type: str, message: str) -> 
     return JSONResponse(
         status_code=429,
         headers={"retry-after": str(retry_after)},
-        content={
-            "status": "FAILED",
-            "error_type": error_type,
-            "message": message,
-        },
+        content=build_upload_error_payload(
+            "server_unavailable",
+            message=message,
+            failed_stage="dataset_creation",
+            retryable=True,
+            legacy_error_type=error_type,
+        ),
     )
 
 
@@ -208,13 +211,15 @@ def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
             now = datetime.now(timezone.utc).isoformat()
             failed = upload_jobs.read_upload_status(worker_job_id) or {"job_id": worker_job_id}
             failed.update({
-                "job_id": worker_job_id,
-                "status": "FAILED",
-                "processing_state": "failed",
-                "error_type": "worker_start_failed",
-                "error": str(exc),
-                "message": "Telemetry processing failed.",
-                "progress_label": "Telemetry processing failed.",
+                **build_upload_error_payload(
+                    "server_unavailable",
+                    message="The import service could not start baseline processing. Retry shortly.",
+                    failed_stage="baseline_job_creation",
+                    retryable=True,
+                    legacy_error_type="worker_start_failed",
+                    job_id=worker_job_id,
+                ),
+                "progress_label": "Baseline processing could not start.",
                 "worker_state": "stalled",
                 "worker_last_seen_at": now,
                 "result_available": False,
@@ -334,15 +339,21 @@ def _upload_actor(request: Request) -> str:
 
 
 def _large_upload_error(status_code: int, error_type: str, message: str, **extra: Any) -> JSONResponse:
+    job_id = extra.pop("job_id", None)
+    error_code = extra.pop("error_code", canonical_upload_error_code(error_type))
+    failed_stage = extra.pop("failed_stage", None)
+    retryable = extra.pop("retryable", None)
     return JSONResponse(
         status_code=status_code,
-        content={
-            "status": "FAILED",
-            "processing_state": "failed",
-            "error_type": error_type,
-            "message": message,
+        content=build_upload_error_payload(
+            error_code,
+            message=message,
+            failed_stage=failed_stage,
+            retryable=retryable,
+            legacy_error_type=error_type,
+            job_id=job_id,
             **extra,
-        },
+        ),
     )
 
 
@@ -406,7 +417,9 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
         return _large_upload_error(
             503,
             "large_upload_storage_unavailable",
-            "Large-file upload is not configured. Try again later or use a smaller dataset.",
+            "Secure file storage is temporarily unavailable. Retry shortly.",
+            failed_stage="file_storage",
+            retryable=True,
         )
 
     upload_session_id = uuid.uuid4().hex
@@ -425,7 +438,9 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
         return _large_upload_error(
             503,
             "large_upload_storage_unavailable",
-            "Upload could not start. Check the connection and try again.",
+            "Secure file storage is temporarily unavailable. Retry shortly.",
+            failed_stage="file_storage",
+            retryable=True,
         )
 
     now = datetime.now(timezone.utc)
@@ -454,7 +469,10 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
         return _large_upload_error(
             503,
             "large_upload_storage_unavailable",
-            "Upload could not start. Check the connection and try again.",
+            "The upload session could not be created. Retry the import.",
+            error_code="dataset_record_creation_failed",
+            failed_stage="dataset_creation",
+            retryable=True,
         )
     request.state.upload_session_id = upload_session_id
     _log_upload_event(
@@ -486,7 +504,15 @@ def complete_large_upload_session(
     request_id = getattr(request.state, "request_id", None)
     session = read_large_upload_session(upload_session_id)
     if not session:
-        return _large_upload_error(404, "upload_session_missing", "Upload session expired or was not found.")
+        return _large_upload_error(
+            404,
+            "upload_session_missing",
+            "The stored upload session expired or was not found.",
+            job_id=upload_session_id,
+            upload_session_id=upload_session_id,
+            failed_stage="dataset_creation",
+            retryable=False,
+        )
 
     existing_job = upload_jobs.read_upload_status(upload_session_id)
     if existing_job and str(existing_job.get("status") or "").upper() in {"PENDING", "QUEUED", "PROCESSING", "RUNNING_SII", "COMPLETE"}:
@@ -502,7 +528,15 @@ def complete_large_upload_session(
     except ValueError:
         expired = True
     if expired:
-        return _large_upload_error(410, "upload_session_missing", "Upload session expired or was not found.")
+        return _large_upload_error(
+            410,
+            "upload_session_missing",
+            "The stored upload session expired or was not found.",
+            job_id=upload_session_id,
+            upload_session_id=upload_session_id,
+            failed_stage="dataset_creation",
+            retryable=False,
+        )
 
     expected_size = int(session.get("size_bytes") or 0)
     max_size_bytes = int(getattr(request.app.state.settings, "max_large_upload_size_bytes", 512 * 1024 * 1024))
@@ -527,7 +561,12 @@ def complete_large_upload_session(
         return _large_upload_error(
             409,
             "upload_not_complete",
-            "Upload could not be confirmed. Check the connection and try again.",
+            "The file transfer could not be confirmed. Retry the transfer.",
+            job_id=upload_session_id,
+            upload_session_id=upload_session_id,
+            failed_stage="upload_transfer",
+            retryable=True,
+            transfer_succeeded=False,
         )
 
     received_size = int(uploaded.get("content_length") or 0)
@@ -544,21 +583,50 @@ def complete_large_upload_session(
         return _large_upload_error(
             409,
             "upload_size_mismatch",
-            "Upload is incomplete. Check the connection and try again.",
+            "The file transfer was incomplete. Retry the transfer.",
+            job_id=upload_session_id,
+            upload_session_id=upload_session_id,
+            failed_stage="upload_transfer",
+            retryable=True,
+            transfer_succeeded=False,
             expected_size_bytes=expected_size,
             received_size_bytes=received_size,
         )
     submitted_etag = str(payload.etag or "").strip().strip('"')
     uploaded_etag = str(uploaded.get("etag") or "").strip().strip('"')
     if submitted_etag and uploaded_etag and submitted_etag != uploaded_etag:
-        return _large_upload_error(409, "upload_etag_mismatch", "Upload could not be verified. Try again.")
+        return _large_upload_error(
+            409,
+            "upload_etag_mismatch",
+            "The file transfer could not be verified. Retry the transfer.",
+            job_id=upload_session_id,
+            upload_session_id=upload_session_id,
+            failed_stage="upload_transfer",
+            retryable=True,
+            transfer_succeeded=False,
+        )
+
+    stored_upload_fields = {
+        "job_id": upload_session_id,
+        "upload_session_id": upload_session_id,
+        "file_stored": True,
+        "transfer_succeeded": True,
+        "retry_url": f"/api/data/upload-session/{upload_session_id}/complete",
+    }
 
     metrics = queue_metrics()
     if int(metrics.get("pending", 0)) >= int(getattr(request.app.state.settings, "max_pending_upload_jobs", 3)):
         return JSONResponse(
             status_code=503,
             headers={"retry-after": "30"},
-            content={"status": "FAILED", "error_type": "upload_queue_saturated", "message": "Upload queue is saturated. Retry shortly."},
+            content=build_upload_error_payload(
+                "server_unavailable",
+                message="The file was transferred, but the import service is busy. Retry shortly.",
+                failed_stage="dataset_creation",
+                retryable=True,
+                legacy_error_type="upload_queue_saturated",
+                **stored_upload_fields,
+            ),
         )
 
     filename = str(session.get("filename") or "upload.csv")
@@ -628,7 +696,11 @@ def complete_large_upload_session(
         return _large_upload_error(
             503,
             "upload_enqueue_failed",
-            "Upload completed, but analysis could not be started.",
+            "The file was transferred, but the dataset record could not be created.",
+            error_code="dataset_record_creation_failed",
+            failed_stage="dataset_creation",
+            retryable=True,
+            **stored_upload_fields,
         )
 
     if not is_baseline_workflow(workflow):
@@ -677,10 +749,14 @@ def complete_large_upload_session(
             upload_jobs.write_job(
                 {
                     **summary,
-                    "status": "FAILED",
-                    "processing_state": "failed",
-                    "error_type": "upload_enqueue_failed",
-                    "message": "Upload completed, but analysis could not be started.",
+                    **build_upload_error_payload(
+                        "dataset_record_creation_failed",
+                        message="The file was transferred successfully, but Neraium could not begin processing it.",
+                        failed_stage="dataset_creation",
+                        retryable=True,
+                        legacy_error_type="upload_enqueue_failed",
+                        **stored_upload_fields,
+                    ),
                 }
             )
         except Exception:
@@ -699,7 +775,11 @@ def complete_large_upload_session(
         return _large_upload_error(
             503,
             "upload_enqueue_failed",
-            "Upload completed, but analysis could not be started.",
+            "The file was transferred successfully, but Neraium could not begin processing it.",
+            error_code="dataset_record_creation_failed",
+            failed_stage="dataset_creation",
+            retryable=True,
+            **stored_upload_fields,
         )
 
     try:
@@ -780,24 +860,22 @@ async def upload_data(
     try:
         workflow = normalize_workflow(workflow)
     except ValueError as exc:
-        return JSONResponse(
-            status_code=422,
-            content={
-                "status": "FAILED",
-                "error_type": "invalid_workflow",
-                "message": str(exc),
-            },
+        return _large_upload_error(
+            422,
+            "invalid_workflow",
+            str(exc),
+            failed_stage="validation",
+            retryable=False,
         )
     active_baseline = read_active_behavioral_model()
     if workflow in {WORKFLOW_ANALYZE_NEW_DATA, WORKFLOW_EXTEND_BASELINE} and not active_baseline:
-        return JSONResponse(
-            status_code=409,
-            content={
-                "status": "FAILED",
-                "workflow": workflow,
-                "error_type": "active_behavioral_baseline_required",
-                "message": "Activate a suitable Behavioral Digital Model before starting this workflow.",
-            },
+        return _large_upload_error(
+            409,
+            "active_behavioral_baseline_required",
+            "Activate a suitable Behavioral Digital Model before starting this workflow.",
+            failed_stage="validation",
+            retryable=False,
+            workflow=workflow,
         )
     resolved_approval_required = (
         bool(getattr(settings, "baseline_approval_required", True))
@@ -813,21 +891,22 @@ async def upload_data(
     request_id = getattr(request.state, "request_id", None)
     filename = file.filename or "upload.csv"
     if len(filename) > 255:
-        return JSONResponse(
-            status_code=400,
-            content={"status": "FAILED", "error_type": "invalid_filename", "message": "Filename must not exceed 255 characters."},
+        return _large_upload_error(
+            400,
+            "invalid_filename",
+            "Filename must not exceed 255 characters.",
+            failed_stage="validation",
+            retryable=False,
         )
     lowered = filename.lower()
     if not (lowered.endswith(".csv") or lowered.endswith(".json") or lowered.endswith(".txt")):
         _log_upload_event("request_rejected", request_id=request_id, endpoint="/api/data/upload", filename=filename, processing_stage="validate_file_type", failure_reason="unsupported_file_type")
-        return JSONResponse(
-            status_code=400,
-            content={
-                "status": "FAILED",
-                "processing_state": "failed",
-                "error_type": "unsupported_file_type",
-                "message": "Only .csv, .txt, and .json telemetry files are supported.",
-            },
+        return _large_upload_error(
+            400,
+            "unsupported_file_type",
+            "Only .csv, .txt, and .json telemetry files are supported.",
+            failed_stage="validation",
+            retryable=False,
         )
 
     max_size_bytes = int(getattr(settings, "max_upload_size_bytes", 10 * 1024 * 1024 * 1024))
@@ -837,11 +916,13 @@ async def upload_data(
         return JSONResponse(
             status_code=503,
             headers={"retry-after": "30"},
-            content={
-                "status": "FAILED",
-                "error_type": "upload_queue_saturated",
-                "message": "Upload queue is saturated. Retry shortly.",
-            },
+            content=build_upload_error_payload(
+                "server_unavailable",
+                message="The import service is busy. Retry shortly.",
+                failed_stage="dataset_creation",
+                retryable=True,
+                legacy_error_type="upload_queue_saturated",
+            ),
         )
 
     content_type = (file.content_type or "").lower()
@@ -863,11 +944,13 @@ async def upload_data(
         or "anonymous"
     )
     file_size_bytes = 0
+    transfer_succeeded = False
     csv_has_non_whitespace = False
     job_id = uuid.uuid4().hex
     temp_path = ""
     upload_storage_key: str | None = None
     summary: dict[str, Any] = {}
+    failure_stage = "file_storage"
     try:
         spool_started_at = time.perf_counter()
         spool_dir = _upload_storage_root(settings.runtime_dir)
@@ -888,19 +971,19 @@ async def upload_data(
                         Path(temp_path).unlink(missing_ok=True)
                     except OSError:
                         pass
-                    return JSONResponse(
-                        status_code=413,
-                        content={
-                            "status": "FAILED",
-                            "error_type": "upload_too_large",
-                            "message": f"File too large. Maximum supported size is {format_upload_capacity(max_size_bytes)}.",
-                            "max_upload_size_bytes": max_size_bytes,
-                            "received_size_bytes": file_size_bytes,
-                        },
+                    return _large_upload_error(
+                        413,
+                        "upload_too_large",
+                        f"File too large. Maximum supported size is {format_upload_capacity(max_size_bytes)}.",
+                        failed_stage="validation",
+                        retryable=False,
+                        max_upload_size_bytes=max_size_bytes,
+                        received_size_bytes=file_size_bytes,
                     )
                 if lowered.endswith(".csv") and not csv_has_non_whitespace and chunk.strip():
                     csv_has_non_whitespace = True
                 temp.write(chunk)
+        transfer_succeeded = True
 
         if lowered.endswith(".csv") and (file_size_bytes == 0 or not csv_has_non_whitespace):
             _log_upload_event("request_rejected", request_id=request_id, endpoint="/api/data/upload", filename=filename, file_size_bytes=file_size_bytes, processing_stage="validate_csv", failure_reason="csv_empty")
@@ -908,14 +991,13 @@ async def upload_data(
                 Path(temp_path).unlink(missing_ok=True)
             except OSError:
                 pass
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "status": "FAILED",
-                    "processing_state": "failed",
-                    "error_type": "csv_parse_error",
-                    "message": "CSV file is empty.",
-                },
+            return _large_upload_error(
+                400,
+                "csv_parse_error",
+                "CSV file is empty.",
+                error_code="csv_parsing_failed",
+                failed_stage="csv_parsing",
+                retryable=False,
             )
 
         backend_spool_ms = max(0.0, (time.perf_counter() - spool_started_at) * 1000)
@@ -935,6 +1017,7 @@ async def upload_data(
 
         request.state.upload_session_id = job_id
         shared_upload_source_key = None
+        failure_stage = "file_storage"
         if shared_state_configured():
             shared_upload_source_key = persist_upload_source(
                 job_id,
@@ -943,6 +1026,7 @@ async def upload_data(
                 content_type=content_type or None,
             )
         worker_dispatch_status = "thread_dispatched" if _should_dispatch_upload_worker(settings) else "external_worker_queue"
+        failure_stage = "dataset_creation"
         job_creation_started_at = time.perf_counter()
         job_created_at = datetime.now(timezone.utc).isoformat()
         enqueued_at = job_created_at
@@ -1050,6 +1134,7 @@ async def upload_data(
                     "deformation_started_at": None,
                 }
             )
+        failure_stage = "baseline_job_creation"
         enqueue_upload_job(job_id)
         job_creation_ms = max(0.0, (time.perf_counter() - job_creation_started_at) * 1000)
         if processing_file_path is None:
@@ -1078,10 +1163,45 @@ async def upload_data(
                 Path(temp_path).unlink(missing_ok=True)
         except Exception:
             pass
-        failed_job_id = str(summary.get("job_id") or uuid.uuid4().hex)
+        failed_job_id = str(summary.get("job_id") or job_id)
         failed_at = datetime.now(timezone.utc).isoformat()
-        error_message = str(exc) or exc.__class__.__name__
-        error_type = "shared_upload_queue_not_configured" if "shared_upload_queue_not_configured" in error_message else "upload_enqueue_failed"
+        internal_error = str(exc) or exc.__class__.__name__
+        shared_queue_missing = "shared_upload_queue_not_configured" in internal_error
+        if failure_stage == "file_storage":
+            if transfer_succeeded:
+                error_code = "file_storage_failed"
+                error_type = "large_upload_storage_unavailable"
+                safe_message = "The transfer completed, but the file could not be saved to secure storage."
+            else:
+                error_code = "upload_transfer_failed"
+                error_type = "object_storage_upload_failed"
+                failure_stage = "upload_transfer"
+                safe_message = "The file transfer could not complete. Check the connection and try again."
+        elif failure_stage == "dataset_creation":
+            error_code = "dataset_record_creation_failed"
+            error_type = "upload_enqueue_failed"
+            safe_message = "The file was transferred, but the dataset record could not be created."
+        else:
+            error_code = "server_unavailable" if shared_queue_missing else "dataset_record_creation_failed"
+            error_type = "shared_upload_queue_not_configured" if shared_queue_missing else "upload_enqueue_failed"
+            safe_message = (
+                "The import service is temporarily unavailable. Retry shortly."
+                if shared_queue_missing
+                else "The file was transferred successfully, but Neraium could not begin processing it."
+            )
+        retryable = True
+        failure_payload = build_upload_error_payload(
+            error_code,
+            message=safe_message,
+            failed_stage=failure_stage,
+            retryable=retryable,
+            legacy_error_type=error_type,
+            job_id=failed_job_id,
+            filename=filename,
+            status_url=f"/api/data/upload-status/{failed_job_id}",
+            transfer_succeeded=transfer_succeeded,
+            file_stored=bool(locals().get("shared_upload_source_key")),
+        )
         _log_upload_event(
             "request_failed",
             request_id=request_id,
@@ -1093,24 +1213,29 @@ async def upload_data(
             elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
             failure_reason=error_type,
         )
-        logger.exception("upload_request_enqueue_failed request_id=%s job_id=%s filename=%s size_bytes=%s", request_id, failed_job_id, filename, file_size_bytes)
-        upload_jobs.write_job(
-            {
-                **summary,
-                "job_id": failed_job_id,
-                "filename": filename,
-                "status": "FAILED",
-                "processing_state": "failed",
-                "error_type": error_type,
-                "error": error_message,
-                "message": "Telemetry processing failed." if error_type != "shared_upload_queue_not_configured" else "Shared upload queue is not configured for split-role production.",
-                "progress_label": "Telemetry processing failed.",
-                "result_available": False,
-                "propagation_stage": "failed",
-                "propagation_progress": 0,
-                "propagation_label": "Failed.",
-            }
+        logger.exception(
+            "upload_request_failed request_id=%s job_id=%s filename=%s size_bytes=%s failed_stage=%s error_code=%s",
+            request_id,
+            failed_job_id,
+            filename,
+            file_size_bytes,
+            failure_stage,
+            error_code,
         )
+        try:
+            upload_jobs.write_job(
+                {
+                    **summary,
+                    **failure_payload,
+                    "progress_label": safe_message,
+                    "result_available": False,
+                    "propagation_stage": "failed",
+                    "propagation_progress": 0,
+                    "propagation_label": "Failed.",
+                }
+            )
+        except Exception:
+            logger.exception("upload_failure_state_write_failed request_id=%s job_id=%s", request_id, failed_job_id)
         if not is_baseline_workflow(workflow):
             upsert_evidence_run(
                 {
@@ -1128,7 +1253,7 @@ async def upload_data(
                 "operating_state": "error",
                 "drift_status": "error",
                 "warnings": [],
-                "errors": [error_message],
+                "errors": [internal_error],
                 "primary_drivers": [],
                 "evidence_summary": [],
                 "structural_archetypes": [],
@@ -1139,23 +1264,15 @@ async def upload_data(
                 "observation_status": "failed",
                 "variables": [],
                 "drift_metrics": {},
-                "data_conditions": [error_message],
+                "data_conditions": [internal_error],
                 "regime_label": None,
                 "structural_state": "Error",
                 "deformation_started_at": None,
                 }
             )
         return JSONResponse(
-            status_code=503 if error_type == "shared_upload_queue_not_configured" else 500,
-            content={
-                "job_id": failed_job_id,
-                "status": "FAILED",
-                "filename": filename,
-                "message": "Shared upload queue is not configured for split-role production." if error_type == "shared_upload_queue_not_configured" else "Telemetry processing failed.",
-                "error_type": error_type,
-                "error": error_message,
-                "status_url": f"/api/data/upload-status/{failed_job_id}",
-            },
+            status_code=503 if retryable or shared_queue_missing else 500,
+            content=failure_payload,
         )
     response_finished_at = time.perf_counter()
     response_timings = {
@@ -1212,13 +1329,13 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
     request_id = getattr(request.state, "request_id", None)
     requested_job_id = str(job_id or "").strip()
     if not UPLOAD_JOB_ID_PATTERN.match(requested_job_id):
-        return JSONResponse(
-            status_code=400,
-            content={
-                "status": "FAILED",
-                "error_type": "invalid_upload_job",
-                "message": "Upload job id is invalid.",
-            },
+        return _large_upload_error(
+            400,
+            "invalid_upload_job",
+            "The stored import identifier is invalid.",
+            error_code="validation_failed",
+            failed_stage="validation",
+            retryable=False,
         )
 
     status_payload = upload_jobs.read_upload_status(requested_job_id) or {}
@@ -1231,10 +1348,15 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
             status_code=409,
             content={
                 **status_payload,
-                "job_id": requested_job_id,
-                "error_type": "upload_job_already_active",
-                "message": "This analysis job is already queued or running.",
-                "status_url": f"/api/data/upload-status/{requested_job_id}",
+                **build_upload_error_payload(
+                    "validation_failed",
+                    message="This import is already queued or running.",
+                    failed_stage="baseline_job_creation",
+                    retryable=False,
+                    legacy_error_type="upload_job_already_active",
+                    job_id=requested_job_id,
+                    status_url=f"/api/data/upload-status/{requested_job_id}",
+                ),
             },
         )
 
@@ -1242,15 +1364,15 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
     shared_upload_source_key = str(status_payload.get("shared_upload_source_key") or "").strip()
     has_local_file = _resolve_upload_source_path(settings.runtime_dir, file_path) is not None
     if not status_payload or (not has_local_file and not shared_upload_source_key):
-        return JSONResponse(
-            status_code=404,
-            content={
-                "job_id": requested_job_id,
-                "status": "FAILED",
-                "error_type": "upload_source_missing",
-                "message": "The uploaded source file is no longer available. Select the CSV again.",
-                "status_url": f"/api/data/upload-status/{requested_job_id}",
-            },
+        return _large_upload_error(
+            404,
+            "upload_source_missing",
+            "The stored file is no longer available. Choose another file.",
+            error_code="file_storage_failed",
+            failed_stage="file_storage",
+            retryable=False,
+            job_id=requested_job_id,
+            status_url=f"/api/data/upload-status/{requested_job_id}",
         )
 
     now = datetime.now(timezone.utc).isoformat()
@@ -1266,6 +1388,10 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         "message": "Retry queued.",
         "error": None,
         "error_type": None,
+        "error_code": None,
+        "error_details": None,
+        "failed_stage": None,
+        "retryable": None,
         "result_available": False,
         "first_usable_available": False,
         "sii_completed": False,
@@ -1278,8 +1404,27 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         "worker_dispatch_status": worker_dispatch_status,
         "worker_last_seen_at": now,
     }
-    upload_jobs.write_job(retried)
-    enqueue_upload_job(requested_job_id)
+    try:
+        upload_jobs.write_job(retried)
+        enqueue_upload_job(requested_job_id)
+    except Exception:
+        logger.exception("upload_retry_enqueue_failed request_id=%s job_id=%s", request_id, requested_job_id)
+        failure = build_upload_error_payload(
+            "server_unavailable",
+            message="The stored file is available, but the import could not be queued. Retry shortly.",
+            failed_stage="baseline_job_creation",
+            retryable=True,
+            legacy_error_type="upload_enqueue_failed",
+            job_id=requested_job_id,
+            file_stored=True,
+            retry_url=f"/api/data/upload/{requested_job_id}/retry",
+            status_url=f"/api/data/upload-status/{requested_job_id}",
+        )
+        try:
+            upload_jobs.write_job({**retried, **failure})
+        except Exception:
+            logger.exception("upload_retry_failure_state_write_failed job_id=%s", requested_job_id)
+        return JSONResponse(status_code=503, content=failure)
     if worker_dispatch_status == "thread_dispatched":
         _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
     _log_upload_event(

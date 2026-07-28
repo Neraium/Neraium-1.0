@@ -34,6 +34,7 @@ from app.services.sii_runner import build_runner_status, configure_runtime_dir a
 from app.services.upload_jobs import configure_runtime_dir as configure_upload_jobs_dir
 from app.services.upload_state_repository import shared_state_configured, upload_state_backend, warm_latest_upload_cache
 from app.services.upload_worker import start_upload_worker, stop_upload_worker
+from app.services.upload_errors import build_upload_error_payload
 
 logger = logging.getLogger(__name__)
 
@@ -348,6 +349,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             sanitized = {key: value for key, value in error.items() if key not in {"input", "ctx"}}
             sanitized["loc"] = list(error.get("loc") or [])
             errors.append(sanitized)
+        if is_upload_analysis_path(request.url.path):
+            payload = build_upload_error_payload(
+                "validation_failed",
+                message="The import request did not pass validation.",
+                failed_stage="validation",
+                retryable=False,
+                legacy_error_type="validation_error",
+                errors=errors,
+            )
+            payload["detail"] = payload["message"]
+            return JSONResponse(status_code=422, content=payload)
         return JSONResponse(
             status_code=422,
             content={
@@ -471,6 +483,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 UPLOAD_SERVICE_UNAVAILABLE_MESSAGE = "Analysis service temporarily unavailable. Please retry."
 UPLOAD_SERVICE_UNAVAILABLE_STATUSES = {502, 503, 504}
 UPLOAD_SPECIFIC_TRANSIENT_ERRORS = {
+    "dataset_record_creation_failed",
+    "file_storage_failed",
+    "server_timeout",
+    "server_unavailable",
+    "unexpected_server_error",
     "shared_upload_queue_not_configured",
     "upload_queue_saturated",
     "upload_rate_limited",
@@ -528,30 +545,32 @@ def upload_error_payload(detail: Any, status_code: int) -> dict[str, Any]:
         error_type = "service_unavailable"
         message = UPLOAD_SERVICE_UNAVAILABLE_MESSAGE
 
-    return {
-        "detail": message,
-        "job_id": None,
-        "status": "FAILED",
-        "progress": 0,
-        "processing_state": "failed",
-        "message": message,
-        "error_type": error_type,
-        "error": message,
-    }
+    payload = build_upload_error_payload(
+        error_type,
+        message=message,
+        retryable=status_code in {408, 409, 425, 429} or status_code >= 500,
+        legacy_error_type=error_type,
+        progress=0,
+    )
+    payload["detail"] = message
+    return payload
 
 
 def auth_error_payload(detail: Any | None = None) -> dict[str, Any]:
-    message = "Your analysis session could not be verified. Sign in again, then retry the analysis."
-    payload = {
+    message = "Your session has expired. Sign in again, then retry the import."
+    payload = build_upload_error_payload(
+        "auth_session_expired",
+        message=message,
+        failed_stage="authentication",
+        retryable=False,
+        legacy_error_type="auth",
+        progress=0,
+    )
+    payload.update({
         "detail": message,
-        "job_id": None,
         "status": "unauthorized",
-        "progress": 0,
         "processing_state": "unauthorized",
-        "message": message,
-        "error_type": "auth",
-        "error": message,
-    }
+    })
     if isinstance(detail, dict) and isinstance(detail.get("auth_diagnostic"), dict):
         payload["auth_diagnostic"] = detail["auth_diagnostic"]
     return payload

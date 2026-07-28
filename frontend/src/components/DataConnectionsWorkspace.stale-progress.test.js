@@ -1,9 +1,9 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DataConnectionsWorkspace, { formatAnalysisUpdateTime, frontendPollingTiming, queuedWorkerMessage } from "./DataConnectionsWorkspace";
-import IntakeFlowPanel, { baselineCompletionSummary, resolveBaselineProcessingStage } from "./setup/IntakeFlowPanel";
+import IntakeFlowPanel, { baselineCompletionSummary, failedImportStageRows, resolveBaselineProcessingStage } from "./setup/IntakeFlowPanel";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
 
@@ -334,12 +334,66 @@ describe("completion and recovery", () => {
       onRetryFailedUploads,
     });
 
-    expect(screen.getByRole("heading", { name: "Baseline Could Not Be Established" })).toBeTruthy();
-    expect(screen.getByText("What happened")).toBeTruthy();
-    expect(screen.getByText("What is preserved")).toBeTruthy();
-    expect(screen.getByText("Next action")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Retry Establishing Baseline" }));
+    expect(screen.getByRole("heading", { name: "Unexpected server error" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry Import" }));
     expect(onRetryFailedUploads).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a completed transfer with only Import Dataset failed", () => {
+    const onRetryFailedUploads = vi.fn();
+    renderPanel({
+      uploadState: "error",
+      selectedFiles: [selectedCsv("mobile-production.csv")],
+      selectedFileSize: "369.7 KB",
+      latestMessage: "The file was transferred successfully, but Neraium could not begin processing it.",
+      uploadTransfer: {
+        stage: "upload_transferred",
+        loaded: 378573,
+        total: 378573,
+        percent: 100,
+        label: "Transfer complete · 369.7 KB of 369.7 KB",
+      },
+      uploadJob: {
+        job_id: "stored-mobile-upload",
+        processing_state: "failed",
+        error_code: "dataset_record_creation_failed",
+        failed_stage: "dataset_creation",
+        transfer_succeeded: true,
+        file_stored: true,
+        retryable: true,
+      },
+      onRetryFailedUploads,
+    });
+
+    expect(screen.getByRole("heading", { name: "Dataset import failed" })).toBeTruthy();
+    expect(screen.getAllByText("The file was transferred successfully, but Neraium could not begin processing it.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Transfer complete · 369.7 KB of 369.7 KB").length).toBeGreaterThan(0);
+    const workflowStatus = within(screen.getByRole("list", { name: "Import workflow status" }));
+    expect(workflowStatus.getByText("Import Dataset").closest("li").textContent).toContain("Failed");
+    for (const label of ["Validate Signals", "Learn Relationships", "Establish Baseline", "Begin Learning"]) {
+      expect(workflowStatus.getByText(label).closest("li").textContent).toContain("Not started");
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Retry Import" }));
+    expect(onRetryFailedUploads).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
+  });
+
+  it("marks only the failed stage and leaves downstream work not started", () => {
+    expect(failedImportStageRows({ failed_stage: "dataset_creation" }).map(({ label, status }) => [label, status])).toEqual([
+      ["Import Dataset", "Failed"],
+      ["Validate Signals", "Not started"],
+      ["Learn Relationships", "Not started"],
+      ["Establish Baseline", "Not started"],
+      ["Begin Learning", "Not started"],
+    ]);
+    expect(failedImportStageRows({ failed_stage: "csv_parsing" }).map(({ status }) => status)).toEqual([
+      "Complete",
+      "Failed",
+      "Not started",
+      "Not started",
+      "Not started",
+    ]);
   });
 
   it("does not leak stale complete progress into a new idle selection", () => {
@@ -518,7 +572,7 @@ describe("upload and polling behavior", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
     expect(alert.textContent).not.toContain("<html>");
-    expect(screen.getByRole("button", { name: "Retry Establishing Baseline" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry Import" })).toBeTruthy();
   });
 
   it("rejects a CSV above the supported upload limit before submission", () => {

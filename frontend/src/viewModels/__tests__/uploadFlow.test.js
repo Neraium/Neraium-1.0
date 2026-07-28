@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { SERVICE_UNAVAILABLE_UPLOAD_MESSAGE, buildUploadRequestError, classifyUploadError, operatorUploadMessage, readJsonPayload } from "../uploadFlow";
+import {
+  SERVICE_UNAVAILABLE_UPLOAD_MESSAGE,
+  buildUploadRequestError,
+  classifyUploadError,
+  operatorUploadMessage,
+  readJsonPayload,
+  uploadErrorPresentation,
+} from "../uploadFlow";
 
 
 describe("uploadFlow poll error classification", () => {
@@ -36,7 +43,7 @@ describe("uploadFlow poll error classification", () => {
     const backendDetail = "token=do-not-render internal auth middleware failed";
 
     expect(operatorUploadMessage({ status: 401, errorType: "auth", detail: backendDetail, phase: "upload" }))
-      .toBe("Your analysis session could not be verified. Sign in again, then retry the analysis.");
+      .toBe("Your session has expired. Sign in again, then retry the import.");
     expect(operatorUploadMessage({ status: 404, errorType: "upload_session_missing", detail: backendDetail, phase: "upload" }))
       .toBe("Analysis status is unavailable. Refresh and retry.");
   });
@@ -84,9 +91,9 @@ describe("uploadFlow poll error classification", () => {
 
     expect(classifyUploadError(error, "upload")).toMatchObject({
       state: "error",
-      retryable: false,
+      retryable: true,
       errorType: "network",
-      message: "Upload could not start. Check the connection and try again.",
+      message: "The file transfer failed. Check the connection and try again.",
     });
   });
 
@@ -129,9 +136,56 @@ describe("uploadFlow poll error classification", () => {
 
     expect(classifyUploadError(error, "upload")).toMatchObject({
       state: "error",
-      retryable: false,
+      retryable: true,
       errorType: "timeout",
-      message: "Dataset import timed out. Retry the analysis.",
+      message: "The file transfer timed out. Check the connection and try again.",
+    });
+  });
+
+  it.each([
+    ["auth_session_expired", "authentication", "Authentication expired"],
+    ["dataset_record_creation_failed", "dataset_creation", "Dataset record creation failed"],
+    ["file_storage_failed", "file_storage", "File storage failed"],
+    ["csv_parsing_failed", "csv_parsing", "CSV parsing failed"],
+    ["validation_failed", "validation", "Validation failed"],
+    ["baseline_processing_failed", "baseline_processing", "Baseline processing failed"],
+    ["server_timeout", "baseline_processing", "Server timeout"],
+    ["server_unavailable", "server", "Server unavailable"],
+    ["unexpected_server_error", "unexpected", "Unexpected server error"],
+  ])("presents %s as a specific safe state", (errorCode, failedStage, title) => {
+    expect(uploadErrorPresentation({
+      error_code: errorCode,
+      failed_stage: failedStage,
+      retryable: true,
+    })).toMatchObject({ errorCode, failedStage, title });
+  });
+
+  it("preserves a structured stored-upload failure instead of replacing it with a connection error", () => {
+    const response = { status: 503, url: "/api/data/upload-session/stored/complete" };
+    const payload = {
+      error_code: "dataset_record_creation_failed",
+      error_type: "upload_enqueue_failed",
+      message: "The file was transferred successfully, but Neraium could not begin processing it.",
+      failed_stage: "dataset_creation",
+      retryable: true,
+      transfer_succeeded: true,
+      file_stored: true,
+      job_id: "stored",
+    };
+
+    const error = buildUploadRequestError(response, payload, "job_creation");
+    expect(error).toMatchObject({
+      errorType: "dataset_record_creation_failed",
+      failedStage: "dataset_creation",
+      retryable: true,
+      transferSucceeded: true,
+      fileStored: true,
+      jobId: "stored",
+    });
+    expect(classifyUploadError(error, "job_creation")).toMatchObject({
+      errorType: "dataset_record_creation_failed",
+      retryable: true,
+      message: "The file was transferred successfully, but Neraium could not begin processing it.",
     });
   });
 

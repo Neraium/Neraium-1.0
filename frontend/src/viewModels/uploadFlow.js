@@ -84,6 +84,11 @@ export function buildUploadServiceUnavailablePayload({
 
 function hasSpecificTransientPayload(errorType) {
   return [
+    "dataset_record_creation_failed",
+    "file_storage_failed",
+    "server_timeout",
+    "server_unavailable",
+    "unexpected_server_error",
     "upload_queue_saturated",
     "upload_rate_limited",
     "upload_status_rate_limited",
@@ -144,13 +149,26 @@ export function buildIntakeStages(result, uploadState, roomContext, job = null) 
     if (job || [...["failed", "cancelled", "timeout"], ...["uploading", "accepted", "queued", "validating_schema", "parsing", "baseline_modeling", "processing", "structural_scoring", "building_fingerprint", "writing_state", "cognition_ready", "saving_result", "saving_results", "navigation_pending"]].includes(normalizeUploadStatus(uploadState))) {
       const normalizedStatus = normalizeUploadStatus(uploadState);
       const terminalFailure = ["failed", "cancelled", "timeout"].includes(normalizedStatus);
+      const failedStage = String(job?.failed_stage ?? job?.failedStage ?? "").trim().toLowerCase();
+      const failedIndex = {
+        upload_transfer: 0,
+        authentication: 0,
+        dataset_creation: 0,
+        file_storage: 0,
+        baseline_job_creation: 0,
+        csv_parsing: 1,
+        validation: 1,
+        baseline_processing: 3,
+        server: Math.max(0, activeIndex),
+        unexpected: Math.max(0, activeIndex),
+      }[failedStage] ?? Math.max(0, activeIndex);
       return {
         title: stage,
         detail: uploadStageDetail(stage, index, job, roomContext),
         state: terminalFailure
-          ? index <= activeIndex ? "failed" : "queued"
+          ? index < failedIndex ? "complete" : index === failedIndex ? "failed" : "queued"
           : index < activeIndex ? "complete" : index === activeIndex ? "active" : "queued",
-        tone: terminalFailure && index <= activeIndex ? "unstable" : index <= activeIndex ? "info" : "review",
+        tone: terminalFailure && index === failedIndex ? "unstable" : index <= activeIndex ? "info" : "review",
       };
     }
 
@@ -240,7 +258,15 @@ export function buildUploadRequestError(response, payload, phase) {
   const payloadStatus = String(payload?.status ?? "").toUpperCase();
   const fallbackErrorType = ["NOT_FOUND", "MISSING"].includes(payloadStatus) ? "upload_session_missing" : null;
   const responseStatus = Number(response?.status ?? payload?.response_status ?? 0) || null;
-  const rawErrorType = payload?.error_type ?? payload?.detail?.error_type ?? fallbackErrorType;
+  const errorDetails = payload?.error_details && typeof payload.error_details === "object"
+    ? payload.error_details
+    : {};
+  const rawErrorType = payload?.error_code
+    ?? errorDetails.code
+    ?? payload?.error_type
+    ?? payload?.detail?.error_code
+    ?? payload?.detail?.error_type
+    ?? fallbackErrorType;
   const serviceUnavailable = payload?.html_response === true
     || rawErrorType === "service_unavailable"
     || (isTransientUploadServiceStatus(responseStatus) && !hasSpecificTransientPayload(rawErrorType));
@@ -258,18 +284,31 @@ export function buildUploadRequestError(response, payload, phase) {
     errorType,
     detail: serviceUnavailable
       ? SERVICE_UNAVAILABLE_UPLOAD_MESSAGE
-      : normalizeErrorMessage(payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? ""),
+      : normalizeErrorMessage(payload?.message ?? errorDetails.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? ""),
     payload,
     rawResponseBody: payload?.raw_response_body ?? "",
     failureUrl: payload?.failure_url ?? response?.url ?? null,
     failurePhase: payload?.failure_phase ?? phase,
-    retryable: responseStatus === 408 || responseStatus === 409 || responseStatus === 425 || responseStatus === 429 || responseStatus >= 500 || (phase === "poll" && (responseStatus === 401 || responseStatus === 403)) || isMissingStatusDuringPoll,
+    jobId: payload?.job_id ?? payload?.dataset_id ?? null,
+    uploadSessionId: payload?.upload_session_id ?? null,
+    failedStage: payload?.failed_stage ?? errorDetails.failed_stage ?? phase,
+    transferSucceeded: payload?.transfer_succeeded === true,
+    fileStored: payload?.file_stored === true,
+    retryUrl: payload?.retry_url ?? null,
+    retryable: typeof payload?.retryable === "boolean"
+      ? payload.retryable
+      : responseStatus === 408 || responseStatus === 409 || responseStatus === 425 || responseStatus === 429 || responseStatus >= 500 || (phase === "poll" && (responseStatus === 401 || responseStatus === 403)) || isMissingStatusDuringPoll,
   };
 }
 
 export function classifyUploadError(error, phase) {
   if (error?.name === "UploadRequestError") {
-    const payloadErrorType = error?.payload?.error_type ?? error?.payload?.detail?.error_type ?? null;
+    const payloadErrorType = error?.payload?.error_code
+      ?? error?.payload?.error_details?.code
+      ?? error?.payload?.error_type
+      ?? error?.payload?.detail?.error_code
+      ?? error?.payload?.detail?.error_type
+      ?? null;
     const payloadDetail = error?.payload?.message ?? error?.payload?.detail?.message ?? error?.payload?.detail ?? error?.payload?.error ?? null;
     const requestErrorType = error.errorType ?? payloadErrorType;
     const requestDetail = error.detail ?? payloadDetail ?? error.message;
@@ -277,13 +316,19 @@ export function classifyUploadError(error, phase) {
     const isMissingStatusDuringPoll = phase === "poll" && error.status === 404 && requestErrorType === "upload_session_missing";
     return {
       state: isAuthDuringPolling || isMissingStatusDuringPoll || (phase === "poll" && error.retryable) ? "running_sii" : "error",
-      retryable: phase === "poll" && error.retryable,
+      retryable: Boolean(error.retryable),
       status: error.status,
       errorType: requestErrorType,
       failureUrl: error.failureUrl ?? error.uploadUrl ?? error.path ?? error.payload?.failure_url ?? null,
       failurePhase: error.failurePhase ?? error.phase ?? phase,
       rawResponseBody: error.rawResponseBody ?? error.responseText ?? error.payload?.raw_response_body ?? "",
       responseStatus: error.status ?? error.payload?.response_status ?? null,
+      jobId: error.jobId ?? error.payload?.job_id ?? error.payload?.dataset_id ?? null,
+      uploadSessionId: error.uploadSessionId ?? error.payload?.upload_session_id ?? null,
+      failedStage: error.failedStage ?? error.payload?.failed_stage ?? error.failurePhase ?? phase,
+      transferSucceeded: error.transferSucceeded === true || error.payload?.transfer_succeeded === true,
+      fileStored: error.fileStored === true || error.payload?.file_stored === true,
+      retryUrl: error.retryUrl ?? error.payload?.retry_url ?? null,
       finalMessage: isMissingStatusDuringPoll
         ? "Analysis status is temporarily unavailable. Processing may still be active."
         : null,
@@ -292,43 +337,61 @@ export function classifyUploadError(error, phase) {
         errorType: requestErrorType,
         detail: requestDetail,
         phase,
+        transferSucceeded: error.transferSucceeded === true || error.payload?.transfer_succeeded === true,
       }),
     };
   }
   if (error?.name === "ApiTimeoutError" || error?.name === "ApiNetworkError") {
+    const transferSucceeded = error?.transferSucceeded === true;
     return {
       state: phase === "poll" ? "running_sii" : "error",
-      retryable: phase === "poll",
+      retryable: true,
       status: error?.name === "ApiTimeoutError" ? Number(error?.status ?? 408) || 408 : null,
       errorType: error?.name === "ApiTimeoutError" ? "timeout" : "network",
       failureUrl: error.uploadUrl ?? error.path ?? null,
       failurePhase: phase,
       rawResponseBody: error.responseText ?? "",
       responseStatus: error?.status ?? null,
+      jobId: error?.jobId ?? null,
+      uploadSessionId: error?.uploadSessionId ?? null,
+      failedStage: error?.failedStage ?? phase,
+      transferSucceeded,
+      fileStored: error?.fileStored === true,
+      retryUrl: error?.retryUrl ?? null,
       message: phase === "poll"
         ? "Dataset analysis is in progress. Large datasets may require additional processing time."
         : error?.name === "ApiTimeoutError"
-          ? "Dataset import timed out. Retry the analysis."
+          ? transferSucceeded
+            ? "The file was transferred successfully, but the server timed out before processing could begin."
+            : "The file transfer timed out. Check the connection and try again."
           : phase === "job_creation"
-            ? "Upload completed, but analysis could not be started."
-            : "Upload could not start. Check the connection and try again.",
+            ? "The file was transferred successfully, but Neraium could not begin processing it."
+            : transferSucceeded
+              ? "The file was transferred, but the server response was interrupted before processing could begin."
+              : "The file transfer failed. Check the connection and try again.",
     };
   }
   if (error instanceof TypeError) {
     return {
       state: phase === "poll" ? "running_sii" : "error",
-      retryable: phase === "poll",
+      retryable: true,
       status: null,
       errorType: "network",
       failureUrl: error.path ?? null,
       failurePhase: phase,
       rawResponseBody: "",
       responseStatus: null,
+      jobId: error?.jobId ?? null,
+      uploadSessionId: error?.uploadSessionId ?? null,
+      failedStage: error?.failedStage ?? phase,
+      transferSucceeded: error?.transferSucceeded === true,
+      fileStored: error?.fileStored === true,
+      retryUrl: error?.retryUrl ?? null,
       message: phase === "poll"
         ? "Dataset analysis is in progress. Large datasets may require additional processing time."
-        : phase === "job_creation"
+          : phase === "job_creation"
             ? "Upload completed, but analysis could not be started."
-            : "Upload could not start. Check the connection and try again.",
+            : "The file transfer failed. Check the connection and try again.",
     };
   }
   return {
@@ -340,27 +403,65 @@ export function classifyUploadError(error, phase) {
     failurePhase: phase,
     rawResponseBody: error?.responseText ?? "",
     responseStatus: null,
+    jobId: error?.jobId ?? null,
+    uploadSessionId: error?.uploadSessionId ?? null,
+    failedStage: error?.failedStage ?? phase,
+    transferSucceeded: error?.transferSucceeded === true,
+    fileStored: error?.fileStored === true,
+    retryUrl: error?.retryUrl ?? null,
     message: operatorUploadMessage({
       status: null,
       errorType: null,
       detail: error?.message,
       phase,
+      transferSucceeded: error?.transferSucceeded === true,
     }),
   };
 }
 
-export function operatorUploadMessage({ status, errorType, detail, phase }) {
+export function operatorUploadMessage({ status, errorType, detail, phase, transferSucceeded = false }) {
   if (errorType === "auth" || errorType === "auth_session_expired" || status === 401 || status === 403) {
     return phase === "poll"
       ? "Dataset analysis is in progress. Large datasets may require additional processing time."
-      : "Your analysis session could not be verified. Sign in again, then retry the analysis.";
+      : "Your session has expired. Sign in again, then retry the import.";
+  }
+  if (errorType === "dataset_record_creation_failed") {
+    return transferSucceeded
+      ? "The file was transferred successfully, but Neraium could not begin processing it."
+      : normalizeErrorMessage(detail || "The dataset record could not be created. Retry the import.");
+  }
+  if (errorType === "file_storage_failed") {
+    return transferSucceeded
+      ? "The transfer completed, but the file could not be saved to secure storage."
+      : normalizeErrorMessage(detail || "The file could not be saved to secure storage.");
+  }
+  if (errorType === "upload_transfer_failed") {
+    return "The file transfer failed. Check the connection and try again.";
+  }
+  if (errorType === "csv_parsing_failed") {
+    return "The CSV could not be parsed. Check its format and try again.";
+  }
+  if (errorType === "validation_failed") {
+    return "The dataset did not pass validation. Check the file and try again.";
+  }
+  if (errorType === "baseline_processing_failed") {
+    return "The dataset was imported, but baseline processing could not complete.";
+  }
+  if (errorType === "server_timeout") {
+    return "The server timed out while processing the dataset. Retry the import.";
+  }
+  if (errorType === "server_unavailable") {
+    return "The import service is temporarily unavailable. Retry shortly.";
+  }
+  if (errorType === "unexpected_server_error") {
+    return "The server could not complete the import. Retry the import.";
   }
   if (errorType === "upload_session_missing") {
     if (phase === "poll") {
       return "Dataset analysis is in progress. Waiting for analysis status to become available.";
     }
     if (phase === "job_creation") return "Upload completed, but analysis could not be started.";
-    if (phase === "upload_session") return "Upload could not start. Check the connection and try again.";
+    if (phase === "upload_session") return "The upload session could not be created. Retry the import.";
     return "Analysis status is unavailable. Refresh and retry.";
   }
   if (errorType === "shared_upload_queue_not_configured") {
@@ -370,12 +471,12 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
     return "Analysis service is busy. Retry shortly.";
   }
   if (errorType === "large_upload_storage_unavailable") {
-    return "Upload could not start. Check the connection and try again.";
+    return "Secure file storage is temporarily unavailable. Retry shortly.";
   }
   if (["object_storage_upload_failed", "upload_not_complete", "upload_size_mismatch", "upload_etag_mismatch"].includes(errorType)) {
     return typeof detail === "string" && detail.trim()
       ? normalizeErrorMessage(detail)
-      : "Upload could not be completed. Check the connection and try again.";
+      : "The file transfer failed. Check the connection and try again.";
   }
   if (errorType === "missing_job_id") {
     return "Upload completed, but analysis could not be started.";
@@ -403,8 +504,11 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
       ? "Dataset analysis is in progress. Large datasets may require additional processing time."
       : "Dataset import timed out. Retry the analysis.";
   }
-  if (errorType === "csv_parse_error" || errorType === "processing_error") {
+  if (errorType === "csv_parse_error") {
     return detail ? `CSV could not be parsed: ${normalizeErrorMessage(detail)}` : "CSV could not be parsed.";
+  }
+  if (errorType === "processing_error") {
+    return "The dataset was imported, but baseline processing could not complete.";
   }
   if (status === 404 || status === 405) {
     return phase === "upload" ? "Telemetry intake unavailable." : "Analysis status unavailable.";
@@ -428,6 +532,60 @@ export function operatorUploadMessage({ status, errorType, detail, phase }) {
   return typeof detail === "string" && detail.trim()
     ? detail
     : "Telemetry analysis interrupted.";
+}
+
+const UPLOAD_ERROR_TITLES = Object.freeze({
+  upload_transfer_failed: "Upload transfer failed",
+  network: "Upload transfer failed",
+  aborted: "Upload transfer failed",
+  auth: "Authentication expired",
+  auth_session_expired: "Authentication expired",
+  dataset_record_creation_failed: "Dataset record creation failed",
+  missing_job_id: "Dataset record creation failed",
+  upload_enqueue_failed: "Dataset record creation failed",
+  file_storage_failed: "File storage failed",
+  large_upload_storage_unavailable: "File storage failed",
+  object_storage_upload_failed: "File storage failed",
+  csv_parsing_failed: "CSV parsing failed",
+  csv_parse_error: "CSV parsing failed",
+  validation_failed: "Validation failed",
+  validation_error: "Validation failed",
+  baseline_processing_failed: "Baseline processing failed",
+  processing_error: "Baseline processing failed",
+  server_timeout: "Server timeout",
+  timeout: "Server timeout",
+  upload_response_timeout: "Server timeout",
+  server_unavailable: "Server unavailable",
+  service_unavailable: "Server unavailable",
+  unexpected_server_error: "Unexpected server error",
+});
+
+export function uploadErrorPresentation(value = {}) {
+  const errorCode = String(value?.error_code ?? value?.errorCode ?? value?.error_type ?? value?.errorType ?? "").trim();
+  const failedStage = String(value?.failed_stage ?? value?.failedStage ?? "").trim();
+  const transferSucceeded = value?.transfer_succeeded === true || value?.transferSucceeded === true;
+  const title = UPLOAD_ERROR_TITLES[errorCode] ?? (
+    failedStage === "upload_transfer" ? "Upload transfer failed" : "Unexpected server error"
+  );
+  const message = transferSucceeded && ["dataset_creation", "baseline_job_creation"].includes(failedStage)
+    ? "The file was transferred successfully, but Neraium could not begin processing it."
+    : operatorUploadMessage({
+      status: value?.response_status ?? value?.responseStatus ?? value?.status ?? null,
+      errorType: errorCode,
+      detail: value?.message ?? value?.error,
+      phase: value?.failure_phase ?? value?.failurePhase ?? failedStage,
+      transferSucceeded,
+    });
+  return {
+    errorCode: errorCode || "unexpected_server_error",
+    failedStage: failedStage || "unexpected",
+    title,
+    heading: title === "Dataset record creation failed" ? "Dataset import failed" : title,
+    message,
+    retryable: value?.retryable !== false,
+    transferSucceeded,
+    fileStored: value?.file_stored === true || value?.fileStored === true,
+  };
 }
 
 export function uploadStateMessage(uploadState) {

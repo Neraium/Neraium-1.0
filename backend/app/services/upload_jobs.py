@@ -1628,6 +1628,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
     snapshot: dict[str, Any] | None = None
     processing_started_at = time.perf_counter()
     existing_job = read_job(job_id) or {}
+    baseline_workflow = is_baseline_workflow(existing_job.get("workflow"))
     _begin_job_timing(job_id, dict(existing_job.get("timings") or {}))
 
     if job_id:
@@ -1701,7 +1702,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
             failed_timings.get("persistence_ms"),
         )
 
-        if snapshot:
+        if snapshot and not baseline_workflow:
             summary = _complete_with_partial_result(
                 job_id=job_id,
                 filename=filename,

@@ -303,7 +303,10 @@ def test_retry_upload_analysis_requires_existing_source_file(tmp_path) -> None:
     assert response.status_code == 404
     payload = response.json()
     assert payload["error_type"] == "upload_source_missing"
-    assert "Select the CSV again" in payload["message"]
+    assert payload["error_code"] == "file_storage_failed"
+    assert payload["failed_stage"] == "file_storage"
+    assert payload["retryable"] is False
+    assert payload["message"] == "The stored file is no longer available. Choose another file."
 
 def test_create_upload_job_enforces_streaming_size_limit() -> None:
     class FakeUploadFile:
@@ -2637,7 +2640,11 @@ def test_worker_exception_before_processing_marks_failed_not_starting(monkeypatc
     payload = upload_jobs.read_upload_status(job_id) or {}
     assert payload.get("status") == "FAILED"
     assert payload.get("error_type") == "worker_start_failed"
-    assert "worker exploded" in str(payload.get("error") or "")
+    assert payload.get("error_code") == "server_unavailable"
+    assert payload.get("failed_stage") == "baseline_job_creation"
+    assert payload.get("retryable") is True
+    assert payload.get("error") == "The import service could not start baseline processing. Retry shortly."
+    assert "worker exploded" not in str(payload)
     assert payload.get("worker_state") == "stalled"
 
 
@@ -2672,10 +2679,50 @@ def test_worker_processing_exception_marks_job_failed_instead_of_leaving_pending
     assert payload.get("status") == "FAILED"
     assert payload.get("processing_state") == "failed"
     assert payload.get("error_type") == "processing_error"
-    assert payload.get("error") == "Analysis could not complete."
-    assert payload.get("message") == "Analysis could not complete. Retry the analysis. If it happens again, contact an administrator."
+    assert payload.get("error_code") == "csv_parsing_failed"
+    assert payload.get("failed_stage") == "csv_parsing"
+    assert payload.get("retryable") is False
+    assert payload.get("error") == "The CSV could not be parsed. Check its format and try again."
+    assert payload.get("message") == "The CSV could not be parsed. Check its format and try again."
     assert "structural scoring exploded" not in str(payload)
     assert queue_entry.get("status") == "failed"
+
+
+def test_worker_timeout_returns_structured_retryable_import_error(monkeypatch, tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
+    create_app(settings)
+
+    upload_path = tmp_path / "uploads" / "timeout.csv"
+    upload_path.parent.mkdir(parents=True, exist_ok=True)
+    upload_path.write_text("timestamp,temperature\n2026-05-01T08:00:00Z,75\n", encoding="utf-8")
+    job_id = "worker-timeout-job"
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "filename": "timeout.csv",
+        "file_path": upload_path.name,
+        "status": "PENDING",
+        "processing_state": "queued",
+        "propagation_stage": "queued",
+        "propagation_progress": 10,
+        "propagation_label": "Queued.",
+        "workflow": "create_baseline",
+    })
+    upload_jobs.enqueue_upload_job(job_id)
+
+    def timeout(*args, **kwargs):
+        raise TimeoutError("internal worker deadline exceeded")
+
+    monkeypatch.setattr("app.services.upload_jobs.process_csv_file", timeout)
+    data_router._run_upload_worker_for_runtime(tmp_path)
+
+    payload = upload_jobs.read_upload_status(job_id) or {}
+    assert payload["status"] == "TIMEOUT"
+    assert payload["processing_state"] == "timeout"
+    assert payload["error_code"] == "server_timeout"
+    assert payload["failed_stage"] == "baseline_processing"
+    assert payload["retryable"] is True
+    assert payload["message"] == "The server timed out while processing the dataset. Retry the import."
+    assert "internal worker deadline exceeded" not in str(payload)
 
 
 def test_upload_status_reports_running_when_worker_heartbeat_written(monkeypatch, tmp_path) -> None:

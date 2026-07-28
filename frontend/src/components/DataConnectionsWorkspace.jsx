@@ -73,6 +73,9 @@ function formatTransferSpeed(bytesPerSecond) {
 function formatUploadTransferLabel(progress) {
   const loaded = formatFileSize(progress?.loaded ?? 0);
   const total = formatFileSize(progress?.total ?? 0);
+  const transferComplete = Number(progress?.percent) >= 100
+    || ["upload_transferred", "validating", "backend_starting"].includes(String(progress?.stage || ""));
+  if (transferComplete) return `Transfer complete · ${loaded} of ${total}`;
   const speed = formatTransferSpeed(progress?.speedBytesPerSecond ?? progress?.bytesPerSecond);
   return speed ? `Sending telemetry ${loaded} of ${total} at ${speed}` : `Sending telemetry ${loaded} of ${total}`;
 }
@@ -162,6 +165,13 @@ function uploadFailureDiagnosticsFrom(value = {}) {
     rawResponseBody: value.rawResponseBody ?? value.raw_response_body ?? "",
     responseStatus: value.responseStatus ?? value.response_status ?? value.status ?? null,
     responseContentType: value.responseContentType ?? value.response_content_type ?? null,
+    jobId: value.jobId ?? value.job_id ?? null,
+    uploadSessionId: value.uploadSessionId ?? value.upload_session_id ?? null,
+    failedStage: value.failedStage ?? value.failed_stage ?? null,
+    transferSucceeded: value.transferSucceeded === true || value.transfer_succeeded === true,
+    fileStored: value.fileStored === true || value.file_stored === true,
+    retryUrl: value.retryUrl ?? value.retry_url ?? null,
+    retryable: value.retryable !== false,
   };
 }
 
@@ -173,6 +183,9 @@ function logUploadFailureDiagnostics(value = {}) {
     status: diagnostics.responseStatus,
     errorType: value.errorType ?? value.error_type ?? null,
   });
+  if (import.meta.env.DEV && diagnostics.rawResponseBody) {
+    console.warn("[neraium] upload development response", diagnostics.rawResponseBody);
+  }
 }
 
 function isFinalAnalysisResult(value) {
@@ -509,18 +522,26 @@ export default function DataConnectionsWorkspace({
     stopUploadPolling("upload_failed");
     const safeMessage = normalizeErrorMessage(message || "Telemetry analysis failed.");
     const failureDiagnostics = uploadFailureDiagnosticsFrom(diagnostics ?? {});
+    const resolvedJobId = jobId ?? failureDiagnostics.jobId ?? failureDiagnostics.uploadSessionId ?? null;
     setUploadError(safeMessage);
     setCompletionError("");
     setUploadState("error");
     setUploadJob((current) => ({
       ...(current ?? {}),
-      job_id: jobId ?? current?.job_id ?? null,
+      job_id: resolvedJobId ?? current?.job_id ?? null,
+      upload_session_id: failureDiagnostics.uploadSessionId ?? current?.upload_session_id ?? null,
       status: "FAILED",
       processing_state: "failed",
       progress_label: safeMessage,
       message: safeMessage,
       error: safeMessage,
       error_type: errorType,
+      error_code: errorType,
+      failed_stage: failureDiagnostics.failedStage ?? current?.failed_stage ?? "unexpected",
+      retryable: failureDiagnostics.retryable,
+      transfer_succeeded: failureDiagnostics.transferSucceeded,
+      file_stored: failureDiagnostics.fileStored,
+      retry_url: failureDiagnostics.retryUrl ?? current?.retry_url ?? null,
       response_status: failureDiagnostics.responseStatus ?? current?.response_status ?? null,
       failure_url: failureDiagnostics.failureUrl ?? current?.failure_url ?? null,
       failure_phase: failureDiagnostics.failurePhase ?? current?.failure_phase ?? null,
@@ -537,7 +558,12 @@ export default function DataConnectionsWorkspace({
         responseContentType: failureDiagnostics.responseContentType ?? current.responseContentType ?? null,
       }));
     }
-    if (!keepStoredJobId) clearStoredUploadJobId();
+    if (resolvedJobId && (keepStoredJobId || failureDiagnostics.fileStored)) {
+      uploadJobIdRef.current = resolvedJobId;
+      if (typeof window !== "undefined") window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, resolvedJobId);
+    } else if (!keepStoredJobId) {
+      clearStoredUploadJobId();
+    }
   }
 
   async function completeUploadHandoff(completedPayload, requestedJobId) {
@@ -725,7 +751,6 @@ export default function DataConnectionsWorkspace({
           setUploadJob(normalizedPayload);
           const normalizedStatus = normalizeUploadStatus(normalizedPayload.status ?? normalizedPayload.processing_state ?? normalizedPayload.worker_state);
           logTelemetryStatusProgress(normalizedStatus, normalizedPayload);
-          const progressPercent = normalizedPayload.percent ?? normalizedPayload.progress ?? fallbackPercentFromStatus(normalizedStatus);
           const terminalSuccess = isTerminalCompletedPayload(normalizedPayload);
           if (terminalSuccess) {
             logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
@@ -748,9 +773,6 @@ export default function DataConnectionsWorkspace({
             throw buildUploadRequestError({ status: 500 }, normalizedPayload, "poll");
           }
           setUploadState("running_sii");
-          if (typeof progressPercent === "number") {
-            setUploadTransfer((current) => ({ ...(current ?? {}), percent: Math.max(current?.percent ?? 0, Math.min(progressPercent, 99)) }));
-          }
           await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, STATUS_POLL_INTERVAL_MS); });
         } catch (error) {
           pollFailureCountRef.current += 1;
@@ -785,7 +807,13 @@ export default function DataConnectionsWorkspace({
         const classified = classifyUploadError(error, "poll");
         logUploadFailureDiagnostics(classified);
         logTelemetryStage("error", { jobId: requestedJobId, message: classified.message || error?.message || "Telemetry analysis failed." });
-        markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, jobId: requestedJobId, keepStoredJobId: false, diagnostics: classified });
+        markUploadFailed({
+          message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."),
+          errorType: classified.errorType,
+          jobId: requestedJobId,
+          keepStoredJobId: true,
+          diagnostics: { ...classified, fileStored: classified.fileStored || classified.errorType !== "file_storage_failed" },
+        });
         throw error;
       })
       .finally(() => {
@@ -832,7 +860,7 @@ export default function DataConnectionsWorkspace({
     console.info("[neraium] baseline submission initiated", {
       filename: file.name,
       size: file.size,
-      transport: file.size > 250 * 1024 * 1024 ? "presigned_s3_put" : "direct_multipart",
+      transport: import.meta.env.PROD || file.size > 250 * 1024 * 1024 ? "presigned_s3_put" : "direct_multipart",
     });
     setUploadState("uploading");
     setUploadProcessingFlag(true);
@@ -843,6 +871,7 @@ export default function DataConnectionsWorkspace({
         file,
         workflow: selectedWorkflow,
         apiFetch,
+        preferStoredUpload: import.meta.env.PROD,
         requestStartedAt: uploadInteractionStartedAt,
         accessCode,
         timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,
@@ -876,14 +905,34 @@ export default function DataConnectionsWorkspace({
         status: normalizeUploadStatus(payload?.status ?? payload?.processing_state ?? payload?.worker_state),
       });
       if (!jobId) {
-        markUploadFailed({ message: "Telemetry was accepted but no analysis job was returned. Try again.", errorType: "missing_job_id" });
+        markUploadFailed({
+          message: "The file was transferred successfully, but Neraium could not begin processing it.",
+          errorType: "dataset_record_creation_failed",
+          jobId: payload?.upload_session_id ?? null,
+          keepStoredJobId: payload?.file_stored === true,
+          diagnostics: {
+            failedStage: "dataset_creation",
+            transferSucceeded: payload?.transfer_succeeded === true,
+            fileStored: payload?.file_stored === true,
+            retryable: true,
+          },
+        });
         return;
       }
       logTelemetryStageOnce("parsing started", { filename: file.name, jobId });
       const initialPayload = normalizeStatusPayload(payload, jobId);
       logTelemetryStatusProgress(initialPayload.status ?? initialPayload.processing_state, initialPayload);
       setUploadJob(initialPayload);
-      setUploadTransfer(null);
+      setUploadTransfer((current) => ({
+        ...(current ?? {}),
+        stage: "upload_transferred",
+        loaded: file.size,
+        total: file.size,
+        percent: 100,
+        speedBytesPerSecond: 0,
+        label: `Transfer complete · ${formatFileSize(file.size)} of ${formatFileSize(file.size)}`,
+        message: "File transferred successfully.",
+      }));
       setUploadState("running_sii");
       const completedPayload = await pollUploadStatus(jobId, payload?.status_url);
       if (!completedPayload) {
@@ -894,7 +943,13 @@ export default function DataConnectionsWorkspace({
       const classified = classifyUploadError(error, error?.phase || "upload");
       logUploadFailureDiagnostics(classified);
       logTelemetryStage("error", { message: classified.message || error?.message || "Telemetry analysis failed." });
-      markUploadFailed({ message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."), errorType: classified.errorType, diagnostics: classified });
+      markUploadFailed({
+        message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."),
+        errorType: classified.errorType,
+        jobId: classified.jobId ?? classified.uploadSessionId ?? null,
+        keepStoredJobId: classified.fileStored || classified.transferSucceeded,
+        diagnostics: classified,
+      });
     } finally {
       if (flowSessionRef.current === flowSessionId) {
         uploadInFlightRef.current = false;
@@ -1127,12 +1182,12 @@ export default function DataConnectionsWorkspace({
         isUploadProcessing={isUploadProcessing}
         uploadState={uploadState}
         openFilePicker={openFilePicker}
-        uploadJob={progressUploadJob}
+        uploadJob={uploadJob}
         latestMessage={announcedStatusMessage}
         visibleProgressPercent={visibleProgressPercent}
         propagationLabel={propagationLabel}
         queuedWorkerDetail={queuedWorkerDetail}
-        uploadTransfer={progressUploadTransfer}
+        uploadTransfer={uploadTransfer}
         uploadDebug={uploadDebug}
         uploadStateMessage={uploadStateMessage}
         batchResults={batchResults}

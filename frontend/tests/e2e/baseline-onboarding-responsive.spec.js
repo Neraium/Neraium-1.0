@@ -116,6 +116,75 @@ test.describe("Initial baseline learning experience", () => {
     }
   });
 
+  test("keeps a stored mobile transfer complete when dataset creation fails", async ({ page }) => {
+    let objectPuts = 0;
+    let retryCalls = 0;
+    const failure = {
+      job_id: "mobile-stored-session",
+      upload_session_id: "mobile-stored-session",
+      status: "FAILED",
+      processing_state: "failed",
+      error_type: "upload_enqueue_failed",
+      error_code: "dataset_record_creation_failed",
+      message: "The file was transferred successfully, but Neraium could not begin processing it.",
+      failed_stage: "dataset_creation",
+      retryable: true,
+      transfer_succeeded: true,
+      file_stored: true,
+      retry_url: "/api/data/upload/mobile-stored-session/retry",
+    };
+
+    await page.route("**/api/data/upload-session", (route) => route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        upload_session_id: "mobile-stored-session",
+        upload_url: "https://upload.example.test/mobile-stored-session",
+        upload_headers: { "Content-Type": "text/csv" },
+      }),
+    }));
+    await page.route("https://upload.example.test/mobile-stored-session", (route) => {
+      objectPuts += 1;
+      return route.fulfill({ status: 200, headers: { etag: '"mobile-etag"' }, body: "" });
+    });
+    await page.route("**/api/data/upload-session/mobile-stored-session/complete", (route) => route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify(failure),
+    }));
+    await page.route("**/api/data/upload/mobile-stored-session/retry", (route) => {
+      retryCalls += 1;
+      return route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify(failure),
+      });
+    });
+
+    await openBaselineImport(page, { width: 390, height: 844 });
+    await chooseSampleDataset(page);
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    await expect(page.getByRole("heading", { name: "Dataset import failed" })).toBeVisible();
+    await expect(page.getByText("The file was transferred successfully, but Neraium could not begin processing it.", { exact: true }).first()).toBeVisible();
+    const workflowStatus = page.getByRole("list", { name: "Import workflow status" });
+    await expect(workflowStatus.getByRole("listitem")).toHaveText([
+      "!Import DatasetFailed",
+      "–Validate SignalsNot started",
+      "–Learn RelationshipsNot started",
+      "–Establish BaselineNot started",
+      "–Begin LearningNot started",
+    ]);
+    await expect(page.getByRole("button", { name: "Retry Import" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Choose Another File" })).toBeVisible();
+    expect(objectPuts).toBe(1);
+
+    await page.getByRole("button", { name: "Retry Import" }).click();
+    await expect.poll(() => retryCalls).toBe(1);
+    await expect(page.getByRole("heading", { name: "Dataset import failed" })).toBeVisible();
+    expect(objectPuts).toBe(1);
+  });
+
   test("supports keyboard file selection and passes the changed-component accessibility audit", async ({ page }) => {
     await openBaselineImport(page);
     const choose = page.getByRole("button", { name: /choose historical dataset/i });

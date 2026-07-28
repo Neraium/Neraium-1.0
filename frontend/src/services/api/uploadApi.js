@@ -353,7 +353,10 @@ function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analys
           scheduleTimer(() => uploadAttempt(retryCount + 1), uploadRetryDelayMs(retryCount));
           return;
         }
-        reject(buildUploadXhrError(xhr, payload, uploadUrl, "upload"));
+        const uploadError = buildUploadXhrError(xhr, payload, uploadUrl, "upload");
+        uploadError.transferSucceeded = uploadError.transferSucceeded === true || (file.size > 0 && attemptLoaded >= file.size);
+        uploadError.failedStage = uploadError.failedStage || (uploadError.transferSucceeded ? "dataset_creation" : "upload_transfer");
+        reject(uploadError);
       };
 
       xhr.onerror = () => {
@@ -394,6 +397,8 @@ function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analys
         error.status = xhr.status;
         error.responseText = xhr.responseText;
         error.uploadUrl = uploadUrl;
+        error.transferSucceeded = file.size > 0 && attemptLoaded >= file.size;
+        error.failedStage = error.transferSucceeded ? "dataset_creation" : "upload_transfer";
         reject(error);
       };
 
@@ -434,6 +439,8 @@ function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analys
         error.status = xhr.status;
         error.responseText = xhr.responseText;
         error.uploadUrl = uploadUrl;
+        error.transferSucceeded = file.size > 0 && attemptLoaded >= file.size;
+        error.failedStage = error.transferSucceeded ? "dataset_creation" : "upload_transfer";
         reject(error);
       };
 
@@ -486,16 +493,18 @@ async function requestLargeUploadSession({ file, workflow = "legacy_analysis", a
   }
   const payload = await readJsonPayload(response, { route: path, phase: "upload_session" });
   if (!response.ok) {
-    throw largeUploadRequestError(response, payload, "upload_session", "Upload could not start. Check the connection and try again.");
+    throw largeUploadRequestError(response, payload, "upload_session", "The upload session could not be created. Retry the import.");
   }
   const sessionId = String(payload?.upload_session_id || "").trim();
   const uploadUrl = String(payload?.upload_url || "").trim();
   if (!sessionId || !uploadUrl) {
-    throw Object.assign(new Error("Upload could not start. Check the connection and try again."), {
+    throw Object.assign(new Error("The upload session could not be created. Retry the import."), {
       name: "UploadRequestError",
       phase: "upload_session",
-      errorType: "invalid_upload_session",
-      detail: "Upload could not start. Check the connection and try again.",
+      errorType: "dataset_record_creation_failed",
+      detail: "The upload session could not be created. Retry the import.",
+      failedStage: "dataset_creation",
+      retryable: true,
     });
   }
   console.info("[neraium] upload session created", { uploadSessionId: sessionId, filename: file.name, size: file.size });
@@ -524,7 +533,7 @@ function putFileToObjectStorage({ file, session, timeoutMs, onProgress }) {
         total,
         percent,
         speedBytesPerSecond: loaded / elapsedSeconds,
-        message: percent === 100 ? "Upload completed. Validating data." : "Uploading dataset.",
+        message: percent === 100 ? "File transferred successfully." : "Uploading dataset.",
         transport: "presigned_s3_put",
       });
     };
@@ -537,27 +546,32 @@ function putFileToObjectStorage({ file, session, timeoutMs, onProgress }) {
         resolve({ etag: xhrHeader(xhr, "etag") });
         return;
       }
-      reject(Object.assign(new Error("Upload could not be completed. Check the connection and try again."), {
+      reject(Object.assign(new Error("The file could not be saved to secure storage."), {
         name: "UploadRequestError",
         status: xhr.status || null,
         phase: "upload",
-        errorType: "object_storage_upload_failed",
-        detail: "Upload could not be completed. Check the connection and try again.",
+        errorType: "file_storage_failed",
+        detail: "The file could not be saved to secure storage.",
+        failedStage: "file_storage",
         retryable: true,
       }));
     };
-    xhr.onerror = () => reject(Object.assign(new Error("Upload could not be completed. Check the connection and try again."), {
+    xhr.onerror = () => reject(Object.assign(new Error("The file transfer failed. Check the connection and try again."), {
       name: "ApiNetworkError",
       phase: "upload",
       errorType: "network",
       status: xhr.status || null,
+      failedStage: "upload_transfer",
+      transferSucceeded: false,
     }));
-    xhr.ontimeout = () => reject(Object.assign(new Error("Upload timed out. Check the connection and try again."), {
+    xhr.ontimeout = () => reject(Object.assign(new Error("The file transfer timed out. Check the connection and try again."), {
       name: "ApiTimeoutError",
       phase: "upload",
       errorType: "timeout",
       status: xhr.status || 408,
       timeoutMs,
+      failedStage: "upload_transfer",
+      transferSucceeded: false,
     }));
     xhr.onabort = () => reject(Object.assign(new Error("Upload was interrupted. Try again."), {
       name: "ApiNetworkError",
@@ -583,7 +597,7 @@ async function completeLargeUploadSession({ session, etag, file, apiFetch, acces
     total: file.size,
     percent: 100,
     speedBytesPerSecond: 0,
-    message: "Validating data",
+    message: "Transfer complete. Creating dataset record.",
     transport: "presigned_s3_put",
   });
   let response;
@@ -596,22 +610,47 @@ async function completeLargeUploadSession({ session, etag, file, apiFetch, acces
     });
   } catch (error) {
     error.phase = error.phase || "job_creation";
+    error.uploadSessionId = error.uploadSessionId || session.upload_session_id;
+    error.jobId = error.jobId || session.upload_session_id;
+    error.failedStage = error.failedStage || "dataset_creation";
+    error.transferSucceeded = true;
+    error.fileStored = true;
+    error.retryable = error.retryable !== false;
+    error.retryUrl = error.retryUrl || path;
     throw error;
   }
   const payload = await readJsonPayload(response, { route: path, phase: "job_creation" });
   if (!response.ok) {
     const fallback = response.status >= 500
-      ? "Upload completed, but analysis could not be started."
-      : "Upload could not be verified. Check the connection and try again.";
-    throw largeUploadRequestError(response, payload, "job_creation", fallback);
+      ? "The file was transferred successfully, but Neraium could not begin processing it."
+      : "The stored file could not be verified.";
+    throw Object.assign(
+      largeUploadRequestError(response, payload, "job_creation", fallback),
+      {
+        uploadSessionId: payload?.upload_session_id || session.upload_session_id,
+        jobId: payload?.job_id || session.upload_session_id,
+        failedStage: payload?.failed_stage || "dataset_creation",
+        transferSucceeded: true,
+        fileStored: payload?.file_stored !== false,
+        retryable: payload?.retryable !== false,
+        retryUrl: payload?.retry_url || path,
+      },
+    );
   }
   const normalized = normalizeUploadJob(payload);
   if (!normalized?.job_id) {
-    throw Object.assign(new Error("Upload completed, but analysis could not be started."), {
+    throw Object.assign(new Error("The file was transferred successfully, but Neraium could not begin processing it."), {
       name: "UploadRequestError",
       phase: "job_creation",
-      errorType: "missing_job_id",
-      detail: "Upload completed, but analysis could not be started.",
+      errorType: "dataset_record_creation_failed",
+      detail: "The file was transferred successfully, but Neraium could not begin processing it.",
+      uploadSessionId: session.upload_session_id,
+      jobId: session.upload_session_id,
+      failedStage: "dataset_creation",
+      transferSucceeded: true,
+      fileStored: true,
+      retryable: true,
+      retryUrl: path,
     });
   }
   console.info("[neraium] analysis job created", {
@@ -625,7 +664,7 @@ async function completeLargeUploadSession({ session, etag, file, apiFetch, acces
 
 async function uploadLargeTelemetryFileWithProgress({ file, workflow = "legacy_analysis", approvalRequired, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, accessCode, apiFetch }) {
   if (typeof apiFetch !== "function") {
-    throw new Error("Upload could not start. Check the connection and try again.");
+    throw new Error("The upload session could not be created. Retry the import.");
   }
   onProgress?.({
     stage: "upload_started",
@@ -672,9 +711,13 @@ async function uploadLargeTelemetryFileWithProgress({ file, workflow = "legacy_a
   return result;
 }
 
+export function shouldUseStoredUploadTransport(fileSize, { preferStoredUpload = false } = {}) {
+  return preferStoredUpload || Number(fileSize || 0) > DIRECT_UPLOAD_MAX_BYTES;
+}
+
 export function uploadTelemetryFileWithProgress(options = {}) {
   const fileSize = Number(options?.file?.size || 0);
-  if (fileSize > DIRECT_UPLOAD_MAX_BYTES) {
+  if (shouldUseStoredUploadTransport(fileSize, options)) {
     return uploadLargeTelemetryFileWithProgress(options);
   }
   return uploadTelemetryFileDirectWithProgress(options);

@@ -18,6 +18,7 @@ from app.services.runtime_db import (
     touch_upload_queue_job,
 )
 from app.services.upload_runtime_state import UploadRuntimeState
+from app.services.upload_errors import build_upload_error_payload
 
 
 def _parse_iso_timestamp(value: Any) -> datetime | None:
@@ -210,12 +211,14 @@ class UploadQueueLifecycleService:
             self.write_job(
                 {
                     **metadata,
-                    "job_id": job_id,
-                    "status": "FAILED",
-                    "processing_state": "failed",
-                    "error_type": "missing_upload_file",
-                    "error": "missing_upload_file",
-                    "message": "Upload file could not be found for processing.",
+                    **build_upload_error_payload(
+                        "file_storage_failed",
+                        message="The stored file could not be found for processing.",
+                        failed_stage="file_storage",
+                        retryable=False,
+                        legacy_error_type="missing_upload_file",
+                        job_id=job_id,
+                    ),
                 }
             )
             _log_queue_event(
@@ -366,13 +369,17 @@ class UploadQueueLifecycleService:
             self.write_job(
                 {
                     **metadata,
-                    "job_id": job_id,
+                    **build_upload_error_payload(
+                        "server_timeout",
+                        message="The server timed out while processing the dataset. Retry the import.",
+                        failed_stage="baseline_processing",
+                        retryable=True,
+                        legacy_error_type="processing_timeout",
+                        job_id=job_id,
+                    ),
                     "status": "TIMEOUT",
                     "processing_state": "timeout",
-                    "error_type": "processing_timeout",
-                    "error": "Analysis timed out before a result could be saved.",
-                    "message": "Analysis timed out before a result could be saved. Retry the analysis.",
-                    "progress_label": "Analysis timed out.",
+                    "progress_label": "Dataset processing timed out.",
                     "result_available": False,
                     "first_usable_available": False,
                     "replay_ready": False,
@@ -386,6 +393,32 @@ class UploadQueueLifecycleService:
             self.logger.exception("upload_queue_job_failed job_id=%s filename=%s", job_id, filename)
             current = self.read_upload_status(job_id) or {}
             error_message = str(exc) or exc.__class__.__name__
+            current_stage = str(
+                current.get("processing_state")
+                or current.get("propagation_stage")
+                or metadata.get("processing_state")
+                or ""
+            ).strip().lower()
+            if current_stage in {"reading_csv", "parsing", "parsing_telemetry"}:
+                error_code = "csv_parsing_failed"
+                failed_stage = "csv_parsing"
+                safe_message = "The CSV could not be parsed. Check its format and try again."
+                retryable = False
+            elif current_stage in {
+                "detecting_schema_signals",
+                "validating_schema",
+                "baseline_validating",
+                "baseline_quality_assessment",
+            }:
+                error_code = "validation_failed"
+                failed_stage = "validation"
+                safe_message = "The dataset did not pass validation. Check the file and try again."
+                retryable = False
+            else:
+                error_code = "baseline_processing_failed"
+                failed_stage = "baseline_processing"
+                safe_message = "The dataset was imported, but baseline processing could not complete."
+                retryable = True
             _log_queue_event(
                 self.logger,
                 "job_failed",
@@ -402,13 +435,15 @@ class UploadQueueLifecycleService:
             failed_payload = {
                 **metadata,
                 **current,
-                "job_id": job_id,
-                "status": "FAILED",
-                "processing_state": "failed",
-                "error_type": "processing_error",
-                "error": "Analysis could not complete.",
-                "message": "Analysis could not complete. Retry the analysis. If it happens again, contact an administrator.",
-                "progress_label": "Analysis failed.",
+                **build_upload_error_payload(
+                    error_code,
+                    message=safe_message,
+                    failed_stage=failed_stage,
+                    retryable=retryable,
+                    legacy_error_type="processing_error",
+                    job_id=job_id,
+                ),
+                "progress_label": safe_message,
                 "result_available": False,
                 "first_usable_available": False,
                 "replay_ready": False,

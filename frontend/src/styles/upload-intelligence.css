@@ -950,6 +950,83 @@
   line-height: 1.45;
 }
 
+.upload-transfer-complete {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 14px;
+  align-items: center;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(104, 182, 152, .26);
+  border-radius: 8px;
+  background: rgba(35, 116, 82, .08);
+  color: #a8c9b9;
+  font-size: .74rem;
+}
+
+.upload-transfer-complete strong {
+  color: #bfe1cf;
+}
+
+.failed-import-stages {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--baseline-line);
+  border-radius: 8px;
+  background: var(--baseline-line);
+  list-style: none;
+}
+
+.failed-import-stages__item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 42px;
+  padding: 9px 12px;
+  background: #060e18;
+}
+
+.failed-import-stages__item > span {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid rgba(125, 148, 166, .25);
+  border-radius: 50%;
+  color: #728696;
+  font-size: .65rem;
+  font-weight: 800;
+}
+
+.failed-import-stages__item strong {
+  color: #bac6ce;
+  font-size: .76rem;
+}
+
+.failed-import-stages__item small {
+  color: #758897;
+  font-size: .66rem;
+}
+
+.failed-import-stages__item--failed > span {
+  border-color: rgba(221, 132, 132, .48);
+  color: #efaaaa;
+}
+
+.failed-import-stages__item--failed strong,
+.failed-import-stages__item--failed small {
+  color: #dda4a4;
+}
+
+.failed-import-stages__item--complete > span {
+  border-color: rgba(104, 182, 152, .42);
+  color: #a9d5bf;
+}
+
 .baseline-failure .upload-simple-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1309,6 +1386,16 @@
 
   .baseline-failure .upload-recovery-summary {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .upload-transfer-complete {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+
+  .failed-import-stages__item {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    padding-inline: 10px;
   }
 
   .baseline-failure .upload-simple-actions {

@@ -1,6 +1,10 @@
 import { useState } from "react";
 
-import { buildIntakeStages, normalizeUploadStatus as normalizeUploadLifecycle } from "../../viewModels/uploadFlow";
+import {
+  buildIntakeStages,
+  normalizeUploadStatus as normalizeUploadLifecycle,
+  uploadErrorPresentation,
+} from "../../viewModels/uploadFlow";
 import { Panel } from "../workspacePrimitives";
 import "../../styles/operational-workflow.css";
 import "../../styles/upload-intelligence.css";
@@ -69,6 +73,14 @@ const COMPARISON_STAGES = [
     label: "Results Ready",
     description: "The comparison dataset is ready for engineering review.",
   },
+];
+
+const FAILED_IMPORT_STAGES = [
+  { id: "import", label: "Import Dataset" },
+  { id: "validate", label: "Validate Signals" },
+  { id: "learn", label: "Learn Relationships" },
+  { id: "baseline", label: "Establish Baseline" },
+  { id: "monitor", label: "Begin Learning" },
 ];
 
 const UPLOAD_STATES = new Set([
@@ -611,6 +623,27 @@ function RecoverySummary({ viewState, hasSelectedFiles, selectedFileLabel, uploa
   );
 }
 
+export function failedImportStageRows(uploadJob = {}) {
+  const failedStage = String(uploadJob?.failed_stage ?? uploadJob?.failedStage ?? "").trim().toLowerCase();
+  const failedIndex = {
+    upload_transfer: 0,
+    authentication: 0,
+    dataset_creation: 0,
+    file_storage: 0,
+    baseline_job_creation: 0,
+    csv_parsing: 1,
+    validation: 1,
+    baseline_processing: 2,
+    server: 0,
+    unexpected: 0,
+  }[failedStage] ?? 0;
+  return FAILED_IMPORT_STAGES.map((stage, index) => ({
+    ...stage,
+    state: index < failedIndex ? "complete" : index === failedIndex ? "failed" : "not-started",
+    status: index < failedIndex ? "Complete" : index === failedIndex ? "Failed" : "Not started",
+  }));
+}
+
 function SuccessState({
   comparison,
   summary,
@@ -722,7 +755,16 @@ export default function IntakeFlowPanel({
     uploadTransfer,
     comparison,
   });
-  const errorMessage = String(latestMessage || "Check the source dataset and try again.").trim();
+  const failurePresentation = uploadErrorPresentation({
+    ...(uploadJob ?? {}),
+    message: latestMessage || uploadJob?.message || uploadJob?.error,
+  });
+  const errorMessage = String(
+    viewState === "failed"
+      ? failurePresentation.message
+      : latestMessage || "Check the source dataset and try again.",
+  ).trim();
+  const failedStages = failedImportStageRows(uploadJob);
   const summary = baselineCompletionSummary({
     result: baselineResult,
     analysisResult,
@@ -880,15 +922,29 @@ export default function IntakeFlowPanel({
             <header>
               <span aria-hidden="true">!</span>
               <div>
-                <p>Initial learning stopped</p>
-                <h3>Baseline Could Not Be Established</h3>
+                <p>{failurePresentation.title}</p>
+                <h3>{failurePresentation.heading}</h3>
               </div>
             </header>
             <p className="upload-error-message">{errorMessage}</p>
-            <RecoverySummary viewState={viewState} hasSelectedFiles={hasSelectedFiles} selectedFileLabel={selectedFileLabel} uploadJob={uploadJob} errorMessage={errorMessage} />
+            {failurePresentation.transferSucceeded ? (
+              <p className="upload-transfer-complete">
+                <strong>File transfer complete</strong>
+                <span>{uploadTransfer?.label || `${selectedFileLabel} was transferred successfully.`}</span>
+              </p>
+            ) : null}
+            <ol className="failed-import-stages" aria-label="Import workflow status">
+              {failedStages.map((stage) => (
+                <li key={stage.id} className={`failed-import-stages__item failed-import-stages__item--${stage.state}`}>
+                  <span aria-hidden="true">{stage.state === "complete" ? "✓" : stage.state === "failed" ? "!" : "–"}</span>
+                  <strong>{stage.label}</strong>
+                  <small>{stage.status}</small>
+                </li>
+              ))}
+            </ol>
             <div className="upload-simple-actions">
-              <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles}>Retry Establishing Baseline</button>
-              <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose Different Dataset</button>
+              <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles && !uploadJob?.job_id}>Retry Import</button>
+              <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose Another File</button>
             </div>
             <AdvancedDetails
               latestUploadSnapshot={latestUploadSnapshot}
