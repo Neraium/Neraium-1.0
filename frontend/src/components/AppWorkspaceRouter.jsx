@@ -142,6 +142,7 @@ export default function AppWorkspaceRouter({
             hasRealSiiOutput={hasRealSiiOutput}
             roomContext={roomContext}
             onUploadComplete={handleGateUploadComplete}
+            onOpenBaseline={() => setActiveWorkspace("system-body")}
             sessionStore={liveOps.session}
             onResetDemo={handleResetDemo}
             formatClockTime={formatClockTime}

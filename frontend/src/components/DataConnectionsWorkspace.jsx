@@ -228,12 +228,12 @@ export default function DataConnectionsWorkspace({
   hasResumedSession = false,
   sessionStore,
   onUploadComplete,
-  onResetDemo,
   initialSelectedFiles = [],
   onInitialSelectedFilesConsumed,
   autoStartInitialFiles = false,
   headless = false,
   currentUser = null,
+  onOpenBaseline,
 }) {
   const seededSelectedFiles = useMemo(() => (Array.isArray(initialSelectedFiles) ? initialSelectedFiles : []), [initialSelectedFiles]);
   const [selectedFiles, setSelectedFiles] = useState(() => seededSelectedFiles);
@@ -461,7 +461,7 @@ export default function DataConnectionsWorkspace({
     if (typeof window !== "undefined") window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
   }
 
-  async function clearUploadClientState() {
+  function resetLocalUploadClientState(nextWorkflow = "create_baseline") {
     stopUploadPolling("reset_upload_client_state");
     uploadJobIdRef.current = null;
     uploadStatusPathRef.current = null;
@@ -473,6 +473,7 @@ export default function DataConnectionsWorkspace({
     setUploadError("");
     setCompletionError("");
     setUploadState("idle");
+    setCurrentWorkflow(nextWorkflow);
     setBatchResults([]);
     completionNavigationEligibleRef.current = false;
     clearCompletionNavigationTimer();
@@ -482,9 +483,11 @@ export default function DataConnectionsWorkspace({
       window.__NERAIUM_UPLOAD_COMPLETE__ = false;
       window.__NERAIUM_UPLOAD_IN_PROGRESS__ = false;
     }
-    if (typeof onResetDemo === "function") {
-      await onResetDemo();
-    }
+  }
+
+  function beginComparisonDataset() {
+    resetLocalUploadClientState("analyze_new_data");
+    uploadInputRef.current?.click();
   }
 
   function shouldContinuePolling(jobId) {
@@ -1047,7 +1050,7 @@ export default function DataConnectionsWorkspace({
     const modelId = String(candidateResult?.candidate_model?.model_id ?? "").trim();
     if (!modelId) {
       setCompletionError("The baseline candidate identifier is unavailable.");
-      return;
+      return false;
     }
     const path = `/api/data/baselines/candidates/${encodeURIComponent(modelId)}/approve`;
     const response = await apiFetch(path, {
@@ -1059,7 +1062,7 @@ export default function DataConnectionsWorkspace({
     const payload = await readJsonPayload(response, { route: path, phase: "baseline_approval" });
     if (!response.ok || !payload?.active_model) {
       setCompletionError(normalizeErrorMessage(payload?.message || "The baseline candidate could not be activated."));
-      return;
+      return false;
     }
     const updated = {
       ...candidateResult,
@@ -1076,6 +1079,23 @@ export default function DataConnectionsWorkspace({
       progress_label: "Behavioral Baseline Active",
       message: "Behavioral Baseline Active",
     }));
+    return true;
+  }
+
+  async function openCompletedBaseline() {
+    const candidateResult = uploadResult?.candidate_model ? uploadResult : uploadJob?.baseline_result;
+    if (!candidateResult?.candidate_model) {
+      await viewCompletedResults();
+      return;
+    }
+    const activationState = candidateResult?.activation?.state ?? candidateResult?.candidate_model?.status;
+    if (activationState === "awaiting_approval") {
+      const approved = await approveBaselineCandidate();
+      if (!approved) return;
+    }
+    if (typeof onOpenBaseline === "function") {
+      await onOpenBaseline(candidateResult);
+    }
   }
 
   if (headless) {
@@ -1116,9 +1136,10 @@ export default function DataConnectionsWorkspace({
         batchResults={batchResults}
         onRetryFailedUploads={() => { void retryCurrentBatch(); }}
         onReprocessCurrentBatch={() => { void retryCurrentBatch(); }}
-        onResetWorkspace={() => { void clearUploadClientState(); }}
+        onResetWorkspace={() => { resetLocalUploadClientState(currentWorkflow === "analyze_new_data" ? "analyze_new_data" : "create_baseline"); }}
         onViewResults={() => { void viewCompletedResults(); }}
-        onApproveBaseline={() => { void approveBaselineCandidate(); }}
+        onOpenBaseline={() => { void openCompletedBaseline(); }}
+        onImportComparisonDataset={beginComparisonDataset}
       />
     </div>
   );
