@@ -1,11 +1,11 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import DataConnectionsWorkspace, { formatAnalysisUpdateTime, frontendPollingTiming, queuedWorkerMessage } from "./DataConnectionsWorkspace";
-import IntakeFlowPanel from "./setup/IntakeFlowPanel";
+import IntakeFlowPanel, { baselineCompletionSummary, resolveBaselineProcessingStage } from "./setup/IntakeFlowPanel";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
-import { SERVICE_UNAVAILABLE_RETRY_MESSAGE, SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
+import { SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
 
 const h = React.createElement;
 
@@ -16,6 +16,57 @@ vi.mock("../services/api/uploadApi", () => ({
   retryUploadAnalysisJob: vi.fn(),
 }));
 
+function selectedCsv(name = "plant-history.csv") {
+  return new File(["timestamp,flow,power\n2026-06-22,1,2\n"], name, { type: "text/csv" });
+}
+
+function jsonResponse(payload, { ok = true, status = 200 } = {}) {
+  return {
+    ok,
+    status,
+    headers: { get: () => "application/json" },
+    json: async () => payload,
+    text: async () => JSON.stringify(payload),
+  };
+}
+
+function learnedBaseline(overrides = {}) {
+  return {
+    job_id: "baseline-job",
+    dataset_id: "baseline-job",
+    workflow: "create_baseline",
+    filename: "plant-history.csv",
+    status: "COMPLETE",
+    processing_state: "complete",
+    candidate_model: {
+      model_id: "bdm-v1-baseline",
+      version: 1,
+      status: "awaiting_approval",
+      source: { filename: "plant-history.csv", row_count: 2400 },
+      telemetry_schema: {
+        numeric_columns: ["flow", "power", "pressure", "temperature"],
+      },
+      timestamp_quality: {
+        first_timestamp: "2026-06-01T00:00:00Z",
+        last_timestamp: "2026-06-30T23:55:00Z",
+      },
+      data_quality: {
+        reliability_rating: "strong",
+        reliability_score: 94,
+      },
+      relationship_graph: {
+        nodes: [{ signal: "flow" }, { signal: "power" }],
+        edges: [{ edge_id: "flow:power" }, { edge_id: "pressure:flow" }, { edge_id: "temperature:power" }],
+      },
+      suitability: { decision: "suitable", score: 91 },
+      activation: { state: "awaiting_approval" },
+    },
+    baseline_suitability: { decision: "suitable", score: 91, eligible_for_activation: true },
+    activation: { state: "awaiting_approval" },
+    ...overrides,
+  };
+}
+
 function renderPanel(overrides = {}) {
   return render(h(IntakeFlowPanel, {
     handleUpload: vi.fn((event) => event?.preventDefault?.()),
@@ -23,1141 +74,468 @@ function renderPanel(overrides = {}) {
     handleFileSelection: vi.fn(),
     selectedFiles: [],
     pendingUploadKind: "csv",
-    selectedFileSize: "Awaiting file",
-    isUploadProcessing: (state) => ["uploading", "accepted", "queued", "processing", "running_sii", "structural_scoring", "building_fingerprint", "saving_results", "navigation_pending"].includes(String(state)),
+    selectedFileSize: "No file",
+    isUploadProcessing: (state) => [
+      "uploading",
+      "accepted",
+      "queued",
+      "processing",
+      "running_sii",
+      "structural_scoring",
+      "building_fingerprint",
+      "saving_results",
+      "navigation_pending",
+    ].includes(String(state)),
     uploadState: "idle",
     openFilePicker: vi.fn(),
     uploadJob: null,
-    latestMessage: "Choose a CSV to analyze.",
+    latestMessage: "",
     visibleProgressPercent: null,
     propagationLabel: "",
     queuedWorkerDetail: "",
     uploadTransfer: null,
-    uploadStateMessage: (state) => state === "idle" ? "Choose a CSV to analyze." : "CSV ready.",
-    batchResults: [],
+    uploadStateMessage: vi.fn(),
     onRetryFailedUploads: vi.fn(),
-    onReprocessCurrentBatch: vi.fn(),
     onResetWorkspace: vi.fn(),
     onViewResults: vi.fn(),
+    onOpenBaseline: vi.fn(),
+    onImportComparisonDataset: vi.fn(),
     ...overrides,
   }));
-}
-
-function completedSessionStore() {
-  return {
-    jobId: "completed-job-1",
-    uiState: "verified",
-    latestUploadSnapshot: {
-      status: "complete",
-      processing_state: "complete",
-      percent: 100,
-      progress: 100,
-      progress_label: "Analysis ready.",
-    },
-    latestUploadResult: {
-      job_id: "completed-job-1",
-      filename: "old.csv",
-      analysis_result: {
-        systems: [{ name: "Recovered system" }],
-        insights: [{ title: "Recovered insight" }],
-        fingerprint: { status: "Established" },
-      },
-    },
-  };
 }
 
 function renderWorkspace(props = {}) {
   return render(h(DataConnectionsWorkspace, {
     accessCode: "",
-    apiFetch: vi.fn(async () => ({ ok: true, json: async () => ({}) })),
+    apiFetch: vi.fn(async () => jsonResponse({})),
     latestUploadSnapshot: { status: "empty" },
     latestUploadResult: null,
     hasActiveSession: false,
     hasResumedSession: false,
     sessionStore: null,
     onUploadComplete: vi.fn(),
-    onResetDemo: vi.fn(async () => ({})),
+    onOpenBaseline: vi.fn(),
+    currentUser: { id: "engineer-1" },
     ...props,
   }));
 }
-
-function selectedCsv(name = "fresh.csv") {
-  return new File(["timestamp,value\n2026-06-22,1\n"], name, { type: "text/csv" });
-}
-
-
-const HTML_503 = "<html><head><title>503 Service Temporarily Unavailable</title></head><body>nginx</body></html>";
-
-function htmlResponse(status = 503) {
-  return {
-    ok: false,
-    status,
-    headers: { get: () => "text/html" },
-    text: async () => HTML_503,
-  };
-}
-
-function jsonResponse(payload, { ok = true, status = 200 } = {}) {
-  return {
-    ok,
-    status,
-    json: async () => payload,
-  };
-}
-
-function uploadHtml503Error() {
-  const error = new Error(HTML_503);
-  error.name = "UploadRequestError";
-  error.status = 503;
-  error.phase = "upload";
-  error.errorType = "service_unavailable";
-  error.detail = HTML_503;
-  error.payload = {
-    status: "FAILED",
-    processing_state: "failed",
-    error_type: "service_unavailable",
-    message: HTML_503,
-    failure_url: "/api/data/upload",
-    failure_phase: "upload",
-    response_status: 503,
-    raw_response_body: HTML_503,
-    html_response: true,
-  };
-  error.responseText = HTML_503;
-  error.uploadUrl = "/api/data/upload";
-  return error;
-}
-
 
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
   window.sessionStorage.clear();
-  vi.unstubAllGlobals();
   vi.clearAllMocks();
   vi.useRealTimers();
 });
 
+describe("initial baseline experience", () => {
+  it("leads with Neraium's learning model instead of a generic upload wizard", () => {
+    const { container } = renderPanel();
 
-it("shows a clean service unavailable failure without exposing the raw response", async () => {
-  uploadTelemetryFileWithProgress.mockRejectedValue(uploadHtml503Error());
+    expect(screen.getByRole("heading", { name: "Establish Initial Baseline" })).toBeTruthy();
+    expect(screen.getByText("Upload historical operating data so Neraium can establish its initial understanding of how your infrastructure behaves.")).toBeTruthy();
+    expect(screen.getByText("This dataset becomes Neraium's first learned operating model.")).toBeTruthy();
+    expect(screen.getByText(/discovers persistent relationships between signals instead of memorizing static thresholds/i)).toBeTruthy();
+    expect(screen.getByText(/normal only evolves when new operating behavior is persistent and verified/i)).toBeTruthy();
 
-  renderWorkspace();
-
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("html-503.csv")] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
-
-  await waitFor(() => {
-    expect(screen.getByRole("alert").textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
+    const workflow = Array.from(container.querySelectorAll(".baseline-learning-path strong")).map((node) => node.textContent);
+    expect(workflow).toEqual([
+      "Historical Dataset",
+      "Validate Data Integrity",
+      "Learn Operating Relationships",
+      "Establish Initial Baseline",
+      "Continuous Learning Begins",
+    ]);
+    expect(container.textContent).not.toMatch(/\bEvidence\b|\bFindings\b|\bAlerts\b|\bInvestigation\b|Drift Detection|Anomaly summaries/i);
   });
-  const alert = screen.getByRole("alert");
-  expect(alert.textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
-  expect(alert.textContent).not.toContain("<html>");
 
-  const details = screen.getByText("Analysis Details").closest("details");
-  expect(details.textContent).not.toContain("/api/data/upload");
-  expect(details.textContent).not.toContain(HTML_503);
+  it("uses one focused baseline action after a dataset is selected", () => {
+    const handleUpload = vi.fn((event) => event?.preventDefault?.());
+    const openFilePicker = vi.fn();
+    renderPanel({
+      handleUpload,
+      openFilePicker,
+      uploadState: "validated",
+      selectedFiles: [selectedCsv("operators.csv")],
+      selectedFileSize: "15.7 MB",
+    });
+
+    expect(screen.getByLabelText("operators.csv, 15.7 MB, Ready")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Analyze New Data" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Extend Baseline" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Establish Initial Baseline" }));
+    expect(handleUpload).toHaveBeenCalledWith(expect.anything(), "create_baseline");
+    fireEvent.click(screen.getByRole("button", { name: "Replace file" }));
+    expect(openFilePicker).toHaveBeenCalledWith("csv");
+  });
+
+  it("opens the file picker from the compact drop zone", () => {
+    const openFilePicker = vi.fn();
+    renderPanel({ openFilePicker });
+
+    fireEvent.click(screen.getByRole("button", { name: /choose historical dataset/i }));
+    expect(openFilePicker).toHaveBeenCalledWith("csv");
+  });
+
+  it("keeps comparison datasets in an explicitly separate workflow", () => {
+    const handleUpload = vi.fn((event) => event?.preventDefault?.());
+    renderPanel({
+      workflow: "analyze_new_data",
+      handleUpload,
+      uploadState: "validated",
+      selectedFiles: [selectedCsv("comparison.csv")],
+      selectedFileSize: "1.2 MB",
+    });
+
+    expect(screen.getByRole("heading", { name: "Import Comparison Dataset" })).toBeTruthy();
+    expect(screen.getByText(/does not automatically redefine normal/i)).toBeTruthy();
+    expect(screen.queryByText("How Neraium learns")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate Against Baseline" }));
+    expect(handleUpload).toHaveBeenCalledWith(expect.anything(), "analyze_new_data");
+  });
 });
 
-it("continues polling after temporary stream and status HTML 503 responses", async () => {
-  uploadTelemetryFileWithProgress.mockResolvedValue({
-    ok: true,
-    status: 202,
-    payload: { job_id: "job-temporary-503", status_url: "/api/data/upload-status/job-temporary-503", status: "queued", message: "Upload accepted." },
-  });
-  let statusCalls = 0;
-  const apiFetch = vi.fn(async (path) => {
-    if (String(path).includes("/api/data/upload-stream/job-temporary-503")) return htmlResponse(503);
-    if (String(path).includes("/api/data/upload-status/job-temporary-503")) {
-      statusCalls += 1;
-      if (statusCalls === 1) return htmlResponse(503);
-      return jsonResponse({
-        job_id: "job-temporary-503",
-        status: "COMPLETE",
-        processing_state: "complete",
-        result_available: true,
-        first_usable_available: true,
-        progress_label: "Analysis ready.",
-        message: "Analysis ready.",
-        analysis_result: {
-          systems: [{ name: "Recovered system" }],
-          insights: [{ title: "Recovered insight" }],
-          fingerprint: { status: "Established" },
-        },
-      });
-    }
-    return jsonResponse({});
-  });
-  const onUploadComplete = vi.fn(async () => {});
-
-  renderWorkspace({ apiFetch, onUploadComplete });
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("temporary.csv")] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
-
-  expect(await screen.findByLabelText(`Analysis progress: ${SERVICE_UNAVAILABLE_RETRY_MESSAGE}`)).toBeTruthy();
-
-  await waitFor(() => {
-    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-temporary-503" }), { navigateToGate: false });
-  }, { timeout: 3500 });
-});
-
-it("eventually fails persistent polling HTML 503 responses with a clean message", async () => {
-  vi.useFakeTimers();
-  uploadTelemetryFileWithProgress.mockResolvedValue({
-    ok: true,
-    status: 202,
-    payload: { job_id: "job-persistent-503", status_url: "/api/data/upload-status/job-persistent-503", status: "queued", message: "Upload accepted." },
-  });
-  const apiFetch = vi.fn(async (path) => {
-    if (String(path).includes("/api/data/upload-stream/job-persistent-503")) return htmlResponse(503);
-    if (String(path).includes("/api/data/upload-status/job-persistent-503")) return htmlResponse(503);
-    return jsonResponse({});
+describe("backend state presentation", () => {
+  it.each([
+    ["queued", "Upload"],
+    ["uploading", "Upload"],
+    ["validating_schema", "Validate"],
+    ["checking_signal_quality", "Validate"],
+    ["mapping_signals", "Validate"],
+    ["baseline_relationship_learning", "Learn"],
+    ["baseline_model_fitting", "Learn"],
+    ["baseline_candidate_persistence", "Learn"],
+  ])("maps %s into %s without changing the backend state", (processingState, label) => {
+    const stage = resolveBaselineProcessingStage({
+      viewState: processingState === "uploading" ? "uploading" : "processing",
+      uploadJob: { processing_state: processingState },
+      uploadState: processingState,
+      uploadTransfer: null,
+    });
+    expect(stage.label).toBe(label);
   });
 
-  renderWorkspace({ apiFetch });
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("persistent.csv")] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
-
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(70000);
-  });
-  vi.useRealTimers();
-
-  await waitFor(() => {
-    expect(screen.getByRole("alert").textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
-  });
-  const alert = screen.getByRole("alert");
-  expect(alert.textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
-  expect(alert.textContent).not.toContain("<html>");
-});
-
-it("measures backend-stage-to-frontend polling latency", () => {
-  const receivedAt = Date.parse("2026-07-26T10:00:02.000Z");
-  const timing = frontendPollingTiming({
-    stage_changed_at: "2026-07-26T10:00:00.800Z",
-    status_server_sent_at: "2026-07-26T10:00:01.950Z",
-  }, receivedAt - 180, receivedAt);
-
-  expect(timing.poll_request_ms).toBe(180);
-  expect(timing.frontend_polling_latency_ms).toBe(1200);
-  expect(timing.status_transport_latency_ms).toBe(50);
-});
-
-it("mobile upload screen does not render backend milestone cards by default", () => {
-  window.innerWidth = 390;
-  renderPanel();
-
-  expect(screen.getAllByRole("heading", { name: "Import Historical Dataset" }).length).toBeGreaterThan(0);
-  expect(screen.queryByLabelText("Backend milestones")).toBeNull();
-  expect(screen.queryByText("Backend milestones")).toBeNull();
-  expect(screen.queryByText("What this run returns")).toBeNull();
-  expect(screen.queryByText("Current run at a glance")).toBeNull();
-});
-
-it("presents the first baseline action without repeated dataset copy", () => {
-  const openFilePicker = vi.fn();
-  renderPanel({ openFilePicker });
-
-  expect(screen.getByRole("heading", { name: "Import Historical Dataset" })).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "Choose Dataset" })).toBeTruthy();
-  expect(screen.getByText("Choose whether this dataset creates a baseline, is analyzed against the active baseline, or extends it through controlled learning.")).toBeTruthy();
-  expect(screen.getByText("Future operation is compared with what Neraium learns here.")).toBeTruthy();
-  expect(screen.getByText("Awaiting Baseline")).toBeTruthy();
-  expect(screen.queryByText("Historical Dataset")).toBeNull();
-  expect(screen.queryByText("Choose a Historical Dataset")).toBeNull();
-  expect(document.querySelector(".upload-analysis-card--baseline .operational-orb")).toBeNull();
-
-  const labels = Array.from(document.querySelectorAll(".baseline-import-stepper__label")).map((node) => node.textContent);
-  expect(labels).toEqual(["Import", "Learn", "Analyze", "Ready"]);
-  expect(screen.getByText("Import").closest("li")?.getAttribute("aria-current")).toBe("step");
-
-  const chooseButton = screen.getByRole("button", { name: "Choose Dataset" });
-  const formatsLink = screen.getByText("View supported formats");
-  expect(screen.queryByRole("button", { name: "Create Baseline" })).toBeNull();
-  expect(chooseButton.compareDocumentPosition(formatsLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  fireEvent.click(chooseButton);
-  expect(openFilePicker).toHaveBeenCalledWith("csv");
-});
-
-it("selected file state promotes baseline analysis and keeps replacement secondary", () => {
-  const openFilePicker = vi.fn();
-  renderPanel({
-    openFilePicker,
-    uploadState: "validated",
-    selectedFiles: [selectedCsv("operators.csv")],
-    selectedFileSize: "15.7 MB",
-  });
-
-  expect(screen.getByText("operators.csv")).toBeTruthy();
-  expect(screen.getByLabelText("operators.csv, 15.7 MB, Ready")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Create Baseline" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Analyze New Data" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Extend Baseline" })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Choose Dataset" })).toBeNull();
-  expect(screen.getByText("Ready for Baseline")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Replace file" }));
-  expect(openFilePicker).toHaveBeenCalledWith("csv");
-});
-
-it("routes each visible upload action to a distinct workflow", () => {
-  const handleUpload = vi.fn((event) => event?.preventDefault?.());
-  renderPanel({
-    handleUpload,
-    uploadState: "validated",
-    selectedFiles: [selectedCsv("workflow.csv")],
-  });
-
-  fireEvent.click(screen.getByRole("button", { name: "Create Baseline" }));
-  fireEvent.click(screen.getByRole("button", { name: "Analyze New Data" }));
-  fireEvent.click(screen.getByRole("button", { name: "Extend Baseline" }));
-
-  expect(handleUpload.mock.calls.map((call) => call[1])).toEqual([
-    "create_baseline",
-    "analyze_new_data",
-    "extend_baseline",
-  ]);
-});
-
-it("shows approval as a baseline action without rendering analysis findings", () => {
-  const onApproveBaseline = vi.fn();
-  renderPanel({
-    uploadState: "complete",
-    analysisState: "completed",
-    completionReady: true,
-    selectedFiles: [selectedCsv("baseline.csv")],
-    analysisResult: null,
-    baselineResult: {
-      candidate_model: {
-        model_id: "bdm-v1-candidate",
-        version: 1,
-        status: "awaiting_approval",
+  it("shows the four concise stages as a single progress indicator", () => {
+    const { container } = renderPanel({
+      uploadState: "running_sii",
+      selectedFiles: [selectedCsv("learning.csv")],
+      uploadJob: {
+        job_id: "learning-job",
+        status: "PROCESSING",
+        processing_state: "baseline_relationship_learning",
+        propagation_stage: "baseline_relationship_learning",
+        percent: 78,
       },
-      baseline_suitability: {
-        decision: "suitable",
-        score: 88,
-      },
-      activation: {
-        state: "awaiting_approval",
-      },
-    },
-    workflow: "create_baseline",
-    onApproveBaseline,
+    });
+
+    expect(screen.getByLabelText("Initial baseline processing: Learn")).toBeTruthy();
+    expect(screen.getByRole("progressbar", { name: "Learn, stage 3 of 4" })).toBeTruthy();
+    expect(screen.getByText("Securely transferring historical operating data.")).toBeTruthy();
+    expect(screen.getByText("Verifying dataset integrity, timestamps, signal consistency, and data quality.")).toBeTruthy();
+    expect(screen.getAllByText(/identifying persistent operating relationships across the dataset/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Initial operating model successfully established.")).toBeTruthy();
+    expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+    expect(container.querySelector(".baseline-learning-path")).toBeNull();
+    expect(container.querySelector(".baseline-learning-visual")).toBeTruthy();
   });
 
-  expect(screen.getByText("Baseline construction complete")).toBeTruthy();
-  expect(screen.queryByText("View Results")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Approve and Activate" }));
-  expect(onApproveBaseline).toHaveBeenCalledTimes(1);
+  it("keeps final persistence in Learn until the backend reports completion", () => {
+    renderPanel({
+      uploadState: "saving_results",
+      selectedFiles: [selectedCsv("saving.csv")],
+      uploadJob: { processing_state: "saving_result", percent: 100 },
+    });
+
+    expect(screen.getByLabelText("Initial baseline processing: Learn")).toBeTruthy();
+    expect(screen.queryByText("Initial Baseline Established")).toBeNull();
+  });
+
+  it("shows queued work as Upload", () => {
+    renderPanel({
+      uploadState: "queued",
+      selectedFiles: [selectedCsv("queued.csv")],
+      uploadJob: { status: "QUEUED", worker_state: "starting" },
+    });
+
+    expect(screen.getByLabelText("Initial baseline processing: Upload")).toBeTruthy();
+  });
 });
 
-it("hydrates a baseline result separately from the analysis result handoff", async () => {
-  uploadTelemetryFileWithProgress.mockResolvedValue({
-    ok: true,
-    status: 202,
-    payload: {
-      job_id: "baseline-job",
-      dataset_id: "baseline-job",
-      workflow: "create_baseline",
-      status: "PENDING",
-      analysis_state: "analysis_queued",
-      status_url: "/api/data/upload-status/baseline-job",
-      baseline_result_url: "/api/data/baselines/jobs/baseline-job",
-    },
+describe("completion and recovery", () => {
+  it("replaces processing with a stable initial-baseline success experience", () => {
+    const onOpenBaseline = vi.fn();
+    const onImportComparisonDataset = vi.fn();
+    const result = learnedBaseline();
+    const { container } = renderPanel({
+      uploadState: "complete",
+      selectedFiles: [selectedCsv()],
+      selectedFileSize: "8.4 MB",
+      baselineResult: result,
+      uploadJob: { job_id: "baseline-job", status: "COMPLETE", workflow: "create_baseline" },
+      onOpenBaseline,
+      onImportComparisonDataset,
+    });
+
+    expect(screen.getByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(screen.getByText("Jun 1, 2026, 12:00 AM – Jun 30, 2026, 11:55 PM UTC")).toBeTruthy();
+    expect(screen.getByText("Signals analyzed").closest("div").textContent).toContain("4");
+    expect(screen.getByText("Relationships learned").closest("div").textContent).toContain("3");
+    expect(screen.getByText("Data quality").closest("div").textContent).toContain("Strong · 94/100");
+    expect(screen.getByText("Learning confidence").closest("div").textContent).toContain("91/100");
+    expect(screen.getByText(/foundation for continuous learning/i)).toBeTruthy();
+    expect(screen.getByText(/preserving enough historical context/i)).toBeTruthy();
+    expect(container.querySelector(".baseline-learning-visual.is-complete")).toBeTruthy();
+    expect(container.querySelector('[role="progressbar"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Baseline" }));
+    fireEvent.click(screen.getByRole("button", { name: "Import Comparison Dataset" }));
+    expect(onOpenBaseline).toHaveBeenCalledTimes(1);
+    expect(onImportComparisonDataset).toHaveBeenCalledTimes(1);
   });
-  const baselineResult = {
-    job_id: "baseline-job",
-    dataset_id: "baseline-job",
-    workflow: "create_baseline",
-    candidate_model: { model_id: "bdm-v1-baseline", version: 1, status: "awaiting_approval" },
-    baseline_suitability: { decision: "suitable", score: 91 },
-    activation: { state: "awaiting_approval" },
-  };
-  const apiFetch = vi.fn(async (path) => {
-    if (String(path).includes("/upload-status/")) {
-      return jsonResponse({
+
+  it("derives the requested baseline summary from the real candidate contract", () => {
+    const rows = baselineCompletionSummary({
+      result: learnedBaseline(),
+      analysisResult: null,
+      uploadJob: null,
+      selectedFileLabel: "fallback.csv",
+    });
+    expect(Object.fromEntries(rows.map((row) => [row.label, row.value]))).toMatchObject({
+      Dataset: "plant-history.csv",
+      "Signals analyzed": "4",
+      "Relationships learned": "3",
+      "Data quality": "Strong · 94/100",
+      "Learning confidence": "91/100",
+    });
+  });
+
+  it("provides actionable recovery without exposing raw service responses", () => {
+    const onRetryFailedUploads = vi.fn();
+    renderPanel({
+      uploadState: "error",
+      selectedFiles: [selectedCsv("bad.csv")],
+      selectedFileSize: "3.2 MB",
+      latestMessage: "The timestamp column could not be parsed.",
+      uploadJob: { job_id: "failed-job", processing_state: "failed" },
+      onRetryFailedUploads,
+    });
+
+    expect(screen.getByRole("heading", { name: "Baseline Could Not Be Established" })).toBeTruthy();
+    expect(screen.getByText("What happened")).toBeTruthy();
+    expect(screen.getByText("What is preserved")).toBeTruthy();
+    expect(screen.getByText("Next action")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry Establishing Baseline" }));
+    expect(onRetryFailedUploads).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not leak stale complete progress into a new idle selection", () => {
+    const { container } = renderPanel({
+      uploadState: "idle",
+      selectedFiles: [],
+      uploadJob: { job_id: "old-job", status: "complete", percent: 100, processing_state: "complete" },
+    });
+    expect(container.querySelector('[role="progressbar"]')).toBeNull();
+    expect(screen.queryByText("Initial Baseline Established")).toBeNull();
+  });
+});
+
+describe("upload and polling behavior", () => {
+  it("hydrates a baseline result and stops polling after the terminal state", async () => {
+    uploadTelemetryFileWithProgress.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: {
         job_id: "baseline-job",
         dataset_id: "baseline-job",
         workflow: "create_baseline",
-        status: "COMPLETE",
-        analysis_state: "completed",
-        processing_state: "complete",
+        status: "PENDING",
+        status_url: "/api/data/upload-status/baseline-job",
         baseline_result_url: "/api/data/baselines/jobs/baseline-job",
-      });
-    }
-    if (String(path).includes("/baselines/jobs/")) return jsonResponse(baselineResult);
-    return jsonResponse({});
-  });
-  const onUploadComplete = vi.fn();
-  renderWorkspace({ apiFetch, onUploadComplete });
+      },
+    });
+    let statusCalls = 0;
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).includes("/upload-status/")) {
+        statusCalls += 1;
+        return jsonResponse({
+          job_id: "baseline-job",
+          dataset_id: "baseline-job",
+          workflow: "create_baseline",
+          job_state: "completed",
+          status: "COMPLETE",
+          processing_state: "complete",
+          baseline_result_url: "/api/data/baselines/jobs/baseline-job",
+        });
+      }
+      if (String(path).includes("/baselines/jobs/")) return jsonResponse(learnedBaseline());
+      return jsonResponse({});
+    });
+    const onUploadComplete = vi.fn();
+    renderWorkspace({ apiFetch, onUploadComplete });
 
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("baseline.csv")] } });
-  fireEvent.click(screen.getByRole("button", { name: "Create Baseline" }));
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
+    fireEvent.click(screen.getByRole("button", { name: "Establish Initial Baseline" }));
 
-  expect(await screen.findByText("Baseline construction complete")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Approve and Activate" })).toBeTruthy();
-  expect(onUploadComplete).not.toHaveBeenCalled();
-});
-
-it("drag-over and drop use the premium upload card", () => {
-  const handleFileSelection = vi.fn();
-  renderPanel({ handleFileSelection });
-
-  const card = screen.getByLabelText("Historical dataset import");
-  fireEvent.dragOver(card, { dataTransfer: { dropEffect: "" } });
-  expect(card.classList.contains("upload-analysis-card--drag-active")).toBe(true);
-
-  const file = selectedCsv("dropped.csv");
-  fireEvent.drop(card, { dataTransfer: { files: [file] } });
-  expect(handleFileSelection).toHaveBeenCalledTimes(1);
-  expect(handleFileSelection.mock.calls[0][0].dataTransfer.files[0]).toBe(file);
-  expect(card.classList.contains("upload-analysis-card--drag-active")).toBe(false);
-});
-
-it("processing state uses the behavior baseline as the progress indicator", () => {
-  renderPanel({
-    uploadState: "running_sii",
-    selectedFiles: [selectedCsv("progress.csv")],
-    selectedFileSize: "1.0 KB",
-    uploadJob: {
-      job_id: "progress-job",
-      status: "PROCESSING",
-      processing_state: "building_fingerprint",
-      percent: 65,
-      progress: 65,
-      progress_label: "Building behavior baseline...",
-      result_available: false,
-    },
-    latestMessage: "Building behavior baseline...",
+    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    await new Promise((resolve) => window.setTimeout(resolve, 30));
+    expect(statusCalls).toBe(1);
+    expect(onUploadComplete).not.toHaveBeenCalled();
   });
 
-  expect(screen.getByText("Comparing relationships")).toBeTruthy();
-  expect(screen.getByText("Analyze").closest("li")?.getAttribute("aria-current")).toBe("step");
-  expect(screen.getByText("Checking current behavior against the learned baseline.")).toBeTruthy();
-  expect(screen.getByText("progress.csv")).toBeTruthy();
-  expect(screen.queryByText("1.0 KB")).toBeNull();
-  expect(screen.getAllByRole("progressbar")).toHaveLength(1);
-  expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
-  expect(screen.queryByText("65% complete")).toBeNull();
-});
+  it("resumes an existing processing job after reload", async () => {
+    let statusCalls = 0;
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).includes("/upload-status/resume-job")) {
+        statusCalls += 1;
+        return jsonResponse({
+          job_id: "resume-job",
+          dataset_id: "resume-job",
+          workflow: "create_baseline",
+          job_state: "completed",
+          status: "COMPLETE",
+          processing_state: "complete",
+          baseline_result_url: "/api/data/baselines/jobs/resume-job",
+        });
+      }
+      if (String(path).includes("/baselines/jobs/resume-job")) {
+        return jsonResponse(learnedBaseline({ job_id: "resume-job", dataset_id: "resume-job" }));
+      }
+      return jsonResponse({});
+    });
 
+    renderWorkspace({
+      apiFetch,
+      hasActiveSession: true,
+      hasResumedSession: true,
+      sessionStore: {
+        jobId: "resume-job",
+        uiState: "processing",
+        latestUploadSnapshot: {
+          job_id: "resume-job",
+          workflow: "create_baseline",
+          status: "PROCESSING",
+          processing_state: "baseline_relationship_learning",
+          status_url: "/api/data/upload-status/resume-job",
+        },
+        latestUploadResult: null,
+      },
+    });
 
-it("baseline renderer fallback keeps the active analysis job visible", () => {
-  window.localStorage.setItem("neraium.upload_fingerprint.compatibility_mode", "black-screen-recovery");
-
-  renderPanel({
-    uploadState: "running_sii",
-    selectedFiles: [selectedCsv("fallback.csv")],
-    selectedFileSize: "1.0 KB",
-    uploadJob: {
-      job_id: "active-job",
-      status: "PROCESSING",
-      processing_state: "building_fingerprint",
-      percent: 65,
-      progress: 65,
-      result_available: false,
-    },
-    latestMessage: "Building behavior baseline...",
+    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(statusCalls).toBe(1);
   });
 
-  expect(screen.queryByText("Using an alternate processing path.")).toBeNull();
-  expect(screen.getByText("Checking current behavior against the learned baseline.")).toBeTruthy();
-  expect(screen.getByText("fallback.csv")).toBeTruthy();
-  expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
-  const renderer = document.querySelector(".upload-fingerprint-build");
-  expect(renderer?.getAttribute("data-render-tier")).toBe("safe");
-  expect(renderer?.querySelector(".upload-fingerprint-build__particles")).toBeNull();
-});
+  it("approves a controlled baseline before opening it", async () => {
+    const result = learnedBaseline();
+    const onOpenBaseline = vi.fn();
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).includes("/approve")) {
+        return jsonResponse({
+          active_model: {
+            ...result.candidate_model,
+            status: "active",
+            activation: { state: "active", activated_at: "2026-07-28T00:00:00Z" },
+          },
+        });
+      }
+      return jsonResponse({});
+    });
+    renderWorkspace({
+      apiFetch,
+      onOpenBaseline,
+      hasActiveSession: true,
+      hasResumedSession: true,
+      latestUploadResult: result,
+      sessionStore: {
+        jobId: "baseline-job",
+        uiState: "verified",
+        latestUploadSnapshot: result,
+        latestUploadResult: result,
+      },
+    });
 
-it("baseline renderer uses enhanced mode on mobile-capable constraints", () => {
-  vi.stubGlobal("matchMedia", (query) => ({
-    matches: /max-width: 760px|hover: none/.test(query),
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  }));
-
-  renderPanel({
-    uploadState: "running_sii",
-    selectedFiles: [selectedCsv("mobile.csv")],
-    selectedFileSize: "1.0 KB",
-    uploadJob: {
-      job_id: "mobile-job",
-      status: "PROCESSING",
-      processing_state: "building_fingerprint",
-      percent: 65,
-      progress: 65,
-      result_available: false,
-    },
-    latestMessage: "Building behavior baseline...",
+    fireEvent.click(await screen.findByRole("button", { name: "Open Baseline" }));
+    await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledTimes(1));
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/api/data/baselines/candidates/bdm-v1-baseline/approve",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
-  const renderer = document.querySelector(".upload-fingerprint-build");
-  expect(renderer?.getAttribute("data-render-tier")).toBe("enhanced");
-  expect(renderer?.querySelectorAll(".upload-fingerprint-build__particles span")).toHaveLength(3);
-  expect(screen.getByText("Comparing relationships")).toBeTruthy();
-});
+  it("moves the completed page into a separate comparison workflow without resetting the baseline", async () => {
+    const result = learnedBaseline();
+    renderWorkspace({
+      hasActiveSession: true,
+      hasResumedSession: true,
+      latestUploadResult: result,
+      sessionStore: {
+        jobId: "baseline-job",
+        uiState: "verified",
+        latestUploadSnapshot: result,
+        latestUploadResult: result,
+      },
+    });
 
-it("maps backend worker states to human-readable operator status copy", () => {
-  const now = Date.parse("2026-07-22T21:30:01.070Z");
-  expect(queuedWorkerMessage({ worker_state: "starting" }, now)).toBe("Preparing analysis resources");
-  expect(queuedWorkerMessage({ worker_state: "active", worker_last_update_at: "2026-07-22T21:28:01.070289+00:00" }, now)).toBe("Analysis active · updated 2 minutes ago");
-  expect(queuedWorkerMessage({ worker_state: "running", updated_at: "2026-07-22T21:29:50Z" }, now)).toBe("Analysis active · updated just now");
-  expect(formatAnalysisUpdateTime("2026-07-22T19:30:01Z", now)).toBe("2 hours ago");
-  expect(queuedWorkerMessage({ worker_state: "queued" }, now)).toBe("Preparing analysis resources");
-  expect(queuedWorkerMessage({ worker_state: "stalled" }, now)).toBe("No recent progress update; analysis may still be continuing.");
-});
-
-
-it("shows queued worker status as one visible processing line", () => {
-  renderPanel({
-    uploadState: "queued",
-    selectedFiles: [selectedCsv("queued.csv")],
-    selectedFileSize: "1.0 KB",
-    uploadJob: { job_id: "queued-job", status: "QUEUED", worker_state: "starting" },
-    queuedWorkerDetail: "Preparing analysis resources",
+    fireEvent.click(await screen.findByRole("button", { name: "Import Comparison Dataset" }));
+    expect(screen.getByRole("heading", { name: "Import Comparison Dataset" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Initial Baseline Established" })).toBeNull();
   });
 
-  expect(document.querySelector(".upload-processing-status")).toBeNull();
-  expect(screen.getByText("Validating data")).toBeTruthy();
-  expect(screen.queryByText("Preparing analysis resources")).toBeNull();
-  expect(document.querySelector(".metadata-text")).toBeNull();
-});
-
-
-it("failed state shows retry and choose another file", () => {
-  const onRetryFailedUploads = vi.fn();
-  renderPanel({
-    onRetryFailedUploads,
-    uploadState: "error",
-    selectedFiles: [selectedCsv("bad.csv")],
-    selectedFileSize: "3.2 MB",
-    latestMessage: "CSV could not be parsed.",
-    uploadJob: {
-      job_id: "failed-job",
+  it("shows a clean service failure and keeps retry available", async () => {
+    const error = new Error("<html>503</html>");
+    error.name = "UploadRequestError";
+    error.status = 503;
+    error.phase = "upload";
+    error.errorType = "service_unavailable";
+    error.payload = {
       status: "FAILED",
       processing_state: "failed",
-      error: "CSV could not be parsed.",
-    },
+      error_type: "service_unavailable",
+      message: "<html>503</html>",
+      response_status: 503,
+      html_response: true,
+    };
+    uploadTelemetryFileWithProgress.mockRejectedValue(error);
+    renderWorkspace();
+
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("unavailable.csv")] } });
+    fireEvent.click(screen.getByRole("button", { name: "Establish Initial Baseline" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
+    expect(alert.textContent).not.toContain("<html>");
+    expect(screen.getByRole("button", { name: "Retry Establishing Baseline" })).toBeTruthy();
   });
 
-  expect(screen.getByRole("heading", { name: "Dataset Import Failed" })).toBeTruthy();
-  expect(screen.getAllByText("CSV could not be parsed.").length).toBeGreaterThan(0);
-  const retryButton = screen.getByRole("button", { name: "Retry Analysis" });
-  expect(retryButton).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Choose Dataset" })).toBeTruthy();
-  fireEvent.click(retryButton);
-  expect(onRetryFailedUploads).toHaveBeenCalledTimes(1);
-});
+  it("rejects a CSV above the supported upload limit before submission", () => {
+    renderWorkspace();
+    const tooLarge = selectedCsv("too-large.csv");
+    Object.defineProperty(tooLarge, "size", { value: 512 * 1024 * 1024 + 1 });
 
-it("complete state shows the behavior baseline completion moment", () => {
-  renderPanel({
-    uploadState: "complete",
-    selectedFiles: [selectedCsv("complete.csv")],
-    selectedFileSize: "8.4 MB",
-    latestUploadSnapshot: {
-      latest_result: {
-        analysis_result: {
-          systems: [{ name: "Pumping" }, { name: "Storage" }],
-          insights: [{ title: "Pump cycling changed." }],
-          fingerprint: { status: "Established" },
-        },
-      },
-    },
-    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
-  });
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [tooLarge] } });
 
-  expect(screen.getAllByRole("heading", { name: "Analysis complete" })).toHaveLength(1);
-  expect(screen.getByText("Ready").closest("li")?.getAttribute("aria-current")).toBe("step");
-  expect(screen.queryByText("Behavior baseline established and evidence saved.")).toBeNull();
-  const labels = Array.from(document.querySelectorAll(".upload-result-summary__item dt")).map((node) => node.textContent);
-  expect(labels).toEqual(["Status", "Findings", "Evidence quality"]);
-  expect(screen.getByText("complete.csv")).toBeTruthy();
-  expect(screen.queryByText("8.4 MB")).toBeNull();
-  const completedStages = document.querySelector(".upload-fingerprint-build__nodes").querySelectorAll("li.is-complete");
-  expect(completedStages).toHaveLength(5);
-  expect(Array.from(completedStages).map((node) => node.getAttribute("aria-label"))).toEqual([
-    "Validate: completed", "Map: completed", "Baseline: completed", "Compare: completed", "Evidence: completed",
-  ]);
-  expect(completedStages[4].classList.contains("is-final")).toBe(true);
-  const primary = screen.getByRole("button", { name: "View Results" });
-  const secondary = screen.getByRole("button", { name: "Import Another Dataset" });
-  expect(primary.classList.contains("upload-completion-actions__primary")).toBe(true);
-  expect(secondary.classList.contains("upload-completion-actions__secondary")).toBe(true);
-  expect(screen.queryByText("Analysis Details")).toBeNull();
-});
-
-
-it("completed upload screen omits system metrics", () => {
-  renderPanel({
-    uploadState: "complete",
-    selectedFiles: [selectedCsv("systems-count.csv")],
-    selectedFileSize: "8.4 MB",
-    latestUploadSnapshot: {
-      latest_result: {
-        identified_systems: [{ name: "Legacy single system" }],
-        analysis_result: {
-          systems: [
-            { name: "Chilled Water" },
-            { name: "Condenser Water" },
-            { name: "Pumps" },
-          ],
-          insights: [],
-          fingerprint: { status: "Established" },
-        },
-      },
-    },
-    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
-  });
-
-  expect(screen.queryByText("Systems analyzed")).toBeNull();
-  expect(screen.getByText("Normal")).toBeTruthy();
-});
-
-it("completed upload screen count matches AnalysisResult insights length", () => {
-  renderPanel({
-    uploadState: "complete",
-    selectedFiles: [selectedCsv("insights-count.csv")],
-    selectedFileSize: "8.4 MB",
-    latestUploadSnapshot: {
-      latest_result: {
-        insights: [{ title: "Legacy finding" }],
-        analysis_result: {
-          systems: [],
-          insights: [
-            { title: "Pump vibration increased sharply" },
-            { title: "Thermal response behavior changed" },
-            { title: "Pump power increased" },
-            { title: "Flow behavior changed" },
-          ],
-          fingerprint: { status: "changed" },
-        },
-      },
-    },
-    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
-  });
-
-  const item = screen.getByText("Findings").closest(".upload-result-summary__item");
-  expect(item.textContent).toContain("4");
-
-  const statusItem = screen.getByText("Status").closest(".upload-result-summary__item");
-  expect(statusItem.textContent).toContain("Change detected");
-});
-
-it("uses the analysis result for not-detected relationship wording", () => {
-  renderPanel({
-    uploadState: "complete",
-    selectedFiles: [selectedCsv("stable.csv")],
-    selectedFileSize: "4.2 MB",
-    latestUploadSnapshot: {
-      latest_result: {
-        analysis_result: {
-          systems: [{ name: "Stable loop" }],
-          insights: [{ id: "baseline-stable", severity: "low", title: "Operating fingerprint remains stable" }],
-          relationships: [],
-          fingerprint: { drift_status: "stable" },
-        },
-      },
-    },
-    uploadJob: { job_id: "stable-job", status: "COMPLETE", result_available: true },
-  });
-
-  const statusItem = screen.getByText("Status").closest(".upload-result-summary__item");
-  expect(statusItem.textContent).toContain("Normal");
-});
-
-it("keeps telemetry connector setup out of the dataset workflow", () => {
-  renderWorkspace({ currentUser: { role: "admin" } });
-  expect(screen.queryByRole("heading", { name: "Telemetry Connector Setup" })).toBeNull();
-  const workspace = screen.getByTestId("upload-workspace");
-  expect(workspace.children).toHaveLength(1);
-  expect(workspace.querySelector(".connector-setup")).toBeNull();
-});
-
-it("shows finalizing results instead of fake zero counts before AnalysisResult is available", () => {
-  renderPanel({
-    uploadState: "complete",
-    selectedFiles: [selectedCsv("finalizing.csv")],
-    selectedFileSize: "8.4 MB",
-    latestUploadSnapshot: {
-      latest_result: {
-        identified_systems: [],
-        insights: [],
-        fingerprint_status: "Pending",
-      },
-    },
-    uploadJob: { job_id: "complete-job", status: "COMPLETE", result_available: true },
-  });
-
-  expect(screen.getByLabelText("Analysis progress: Preparing results")).toBeTruthy();
-  expect(screen.getByText("Preparing evidence")).toBeTruthy();
-  expect(screen.queryByRole("heading", { name: "Analysis complete" })).toBeNull();
-  expect(document.querySelector(".upload-result-summary")).toBeNull();
-  expect(screen.getByLabelText("Analysis 99% complete")).toBeTruthy();
-});
-
-it("idle no-file state does not render stale complete progress", () => {
-  renderPanel({
-    uploadState: "idle",
-    selectedFiles: [],
-    uploadJob: { job_id: "old-job", status: "complete", percent: 100, processing_state: "complete" },
-  });
-
-  expect(screen.getAllByText("No file selected").length).toBeGreaterThan(0);
-  expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-});
-
-it("selecting a file clears stale complete progress", async () => {
-  renderWorkspace({
-    hasActiveSession: true,
-    sessionStore: completedSessionStore(),
-  });
-
-  const input = screen.getByTestId("csv-upload-input");
-  fireEvent.change(input, { target: { files: [selectedCsv()] } });
-
-  await waitFor(() => {
-    expect(screen.getByText("fresh.csv")).toBeTruthy();
-  });
-  expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-  expect(screen.getByRole("button", { name: "Create Baseline" })).toBeTruthy();
-});
-
-it("analyze another CSV resets the completed workspace", async () => {
-  const onResetDemo = vi.fn(async () => ({}));
-  renderWorkspace({
-    hasResumedSession: true,
-    sessionStore: completedSessionStore(),
-    onResetDemo,
-  });
-
-  await waitFor(() => {
-    expect(screen.getByRole("button", { name: "Import Another Dataset" })).toBeTruthy();
-  });
-
-  fireEvent.click(screen.getByRole("button", { name: "Import Another Dataset" }));
-
-  await waitFor(() => {
-    expect(onResetDemo).toHaveBeenCalledTimes(1);
-  });
-  expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-});
-
-it("previous completed upload does not leak progress into new idle upload screen", () => {
-  renderWorkspace({
-    hasActiveSession: false,
-    hasResumedSession: false,
-    sessionStore: completedSessionStore(),
-  });
-
-  expect(screen.getAllByText("No file selected").length).toBeGreaterThan(0);
-  expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-});
-
-it("treats the first complete payload with a saved result as terminal and auto-opens Portfolio after the fallback is visible", async () => {
-  uploadTelemetryFileWithProgress.mockResolvedValue({
-    ok: true,
-    status: 202,
-    payload: { job_id: "job-complete", status_url: "/api/data/upload-status/job-complete", status: "queued", message: "Upload accepted." },
-  });
-
-  const apiFetch = vi.fn(async (path) => {
-    if (String(path).includes("/api/data/upload-status/job-complete")) {
-      return {
-        ok: true,
-        json: async () => ({
-          job_id: "job-complete",
-          status: "COMPLETE",
-          processing_state: "complete",
-          result_available: true,
-          replay_ready: false,
-          progress_label: "Analysis ready.",
-          message: "Analysis ready.",
-          analysis_result: {
-            systems: [{ name: "Completed system" }],
-            insights: [{ title: "Completed insight" }],
-            fingerprint: { status: "Established" },
-          },
-        }),
-      };
-    }
-    return { ok: true, json: async () => ({}) };
-  });
-  const onUploadComplete = vi.fn(async () => {});
-
-  renderWorkspace({ apiFetch, onUploadComplete });
-
-  const input = screen.getByTestId("csv-upload-input");
-  fireEvent.change(input, { target: { files: [selectedCsv()] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
-
-  await waitFor(() => {
-    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: false });
-  });
-
-  expect(await screen.findByRole("button", { name: "View Results" })).toBeTruthy();
-  expect(screen.queryByText("Behavior baseline established and evidence saved.")).toBeNull();
-
-  await waitFor(() => {
-    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-complete" }), { navigateToGate: true });
-  }, { timeout: 4000 });
-});
-
-it("continues polling when stream status includes a placeholder analysis result", async () => {
-  uploadTelemetryFileWithProgress.mockResolvedValue({
-    ok: true,
-    status: 202,
-    payload: { job_id: "job-stream", status_url: "/api/data/upload-status/job-stream", status: "queued", message: "Upload accepted." },
-  });
-
-  const streamPayload = {
-    job_id: "job-stream",
-    status: "PENDING",
-    processing_state: "queued",
-    result_available: false,
-    first_usable_available: false,
-    analysis_result: { status: "queued", systems: [], insights: [], fingerprint: {} },
-  };
-  const apiFetch = vi.fn(async (path) => {
-    if (String(path).includes("/api/data/upload-stream/job-stream")) {
-      const encoder = new TextEncoder();
-      return {
-        ok: true,
-        body: new ReadableStream({
-          start(controller) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(streamPayload)}\n\n`));
-            controller.close();
-          },
-        }),
-      };
-    }
-    if (String(path).includes("/api/data/upload-status/job-stream")) {
-      return {
-        ok: true,
-        json: async () => ({
-          job_id: "job-stream",
-          status: "COMPLETE",
-          processing_state: "complete",
-          result_available: true,
-          first_usable_available: true,
-          replay_ready: false,
-          progress_label: "Analysis ready.",
-          message: "Analysis ready.",
-          analysis_result: {
-            status: "complete",
-            systems: [{ name: "Completed system" }],
-            insights: [{ title: "Completed insight" }],
-            fingerprint: { status: "Established" },
-          },
-        }),
-      };
-    }
-    return { ok: true, json: async () => ({}) };
-  });
-  const onUploadComplete = vi.fn(async () => {});
-
-  renderWorkspace({ apiFetch, onUploadComplete });
-
-  const input = screen.getByTestId("csv-upload-input");
-  fireEvent.change(input, { target: { files: [selectedCsv()] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
-
-  await waitFor(() => {
-    expect(apiFetch).toHaveBeenCalledWith("/api/data/upload-status/job-stream", { accessCode: "" });
-  });
-  await waitFor(() => {
-    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-stream", status: "COMPLETE" }), { navigateToGate: false });
+    expect(screen.getByRole("alert").textContent).toBe("File is larger than the supported upload limit of 512.0 MB.");
+    expect(screen.getByRole("button", { name: "Establish Initial Baseline" }).disabled).toBe(true);
+    expect(uploadTelemetryFileWithProgress).not.toHaveBeenCalled();
   });
 });
 
-it("renders intermediate processing progress without jumping to complete", () => {
-  renderPanel({
-    uploadState: "running_sii",
-    selectedFiles: [selectedCsv("progress.csv")],
-    selectedFileSize: "1.0 KB",
-    uploadJob: {
-      job_id: "progress-job",
-      status: "PROCESSING",
-      processing_state: "building_baseline",
-      percent: 65,
-      progress: 65,
-      progress_label: "Identifying systems...",
-      result_available: false,
-    },
-    latestMessage: "Identifying systems...",
+describe("status utilities", () => {
+  it("measures backend-stage-to-frontend polling latency", () => {
+    const receivedAt = Date.parse("2026-07-26T10:00:02.000Z");
+    const timing = frontendPollingTiming({
+      stage_changed_at: "2026-07-26T10:00:00.800Z",
+      status_server_sent_at: "2026-07-26T10:00:01.950Z",
+    }, receivedAt - 180, receivedAt);
+    expect(timing.poll_request_ms).toBe(180);
+    expect(timing.frontend_polling_latency_ms).toBe(1200);
+    expect(timing.status_transport_latency_ms).toBe(50);
   });
 
-  expect(screen.getAllByRole("progressbar")).toHaveLength(1);
-  expect(screen.getByText("Building baseline")).toBeTruthy();
-  expect(screen.getByText("Learning the expected relationships in the baseline window.")).toBeTruthy();
-  expect(screen.getByLabelText("Analysis 65% complete")).toBeTruthy();
-  expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
-});
-
-it("does not show processing 100 until status is complete", () => {
-  renderPanel({
-    uploadState: "running_sii",
-    selectedFiles: [selectedCsv("not-complete.csv")],
-    selectedFileSize: "1.0 KB",
-    uploadJob: {
-      job_id: "not-complete-job",
-      status: "PROCESSING",
-      processing_state: "saving_result",
-      percent: 100,
-      progress: 100,
-      progress_label: "Saving result...",
-      result_available: true,
-      replay_ready: false,
-    },
-    latestMessage: "Saving result...",
+  it("keeps worker diagnostics available as secondary detail", () => {
+    const now = Date.parse("2026-07-22T21:30:01.070Z");
+    expect(queuedWorkerMessage({ worker_state: "starting" }, now)).toBe("Preparing analysis resources");
+    expect(queuedWorkerMessage({ worker_state: "active", worker_last_update_at: "2026-07-22T21:28:01.070289+00:00" }, now)).toBe("Analysis active · updated 2 minutes ago");
+    expect(formatAnalysisUpdateTime("2026-07-22T19:30:01Z", now)).toBe("2 hours ago");
   });
-
-  expect(screen.getByLabelText("Analysis 99% complete")).toBeTruthy();
-  expect(screen.queryByLabelText("Analysis 100% complete")).toBeNull();
-  expect(screen.queryByText(/replay/i)).toBeNull();
-  expect(screen.queryByText("Replay status")).toBeNull();
-});
-
-
-it("continues polling when a result is available but backend state is still processing", async () => {
-  uploadTelemetryFileWithProgress.mockResolvedValue({
-    ok: true,
-    status: 202,
-    payload: { job_id: "job-nonterminal-result", status_url: "/api/data/upload-status/job-nonterminal-result", status: "queued", message: "Upload accepted." },
-  });
-
-  const events = [];
-  const streamPayload = {
-    job_id: "job-nonterminal-result",
-    status: "PROCESSING",
-    job_state: "processing",
-    processing_state: "saving_result",
-    result_available: true,
-    first_usable_available: true,
-    progress_label: "Saving result...",
-    message: "Saving result...",
-    analysis_result: {
-      systems: [{ name: "Premature system" }],
-      insights: [{ title: "Premature insight" }],
-      fingerprint: { status: "Established" },
-    },
-  };
-  const apiFetch = vi.fn(async (path) => {
-    if (String(path).includes("/api/data/upload-stream/job-nonterminal-result")) {
-      events.push("stream");
-      const encoder = new TextEncoder();
-      return {
-        ok: true,
-        body: new ReadableStream({
-          start(controller) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(streamPayload)}\n\n`));
-            controller.close();
-          },
-        }),
-      };
-    }
-    if (String(path).includes("/api/data/upload-status/job-nonterminal-result")) {
-      events.push("status");
-      return jsonResponse({
-        job_id: "job-nonterminal-result",
-        status: "COMPLETE",
-        job_state: "completed",
-        terminal: true,
-        processing_state: "complete",
-        result_available: true,
-        first_usable_available: true,
-        progress_label: "Analysis ready.",
-        message: "Analysis ready.",
-        analysis_result: {
-          systems: [{ name: "Completed system" }],
-          insights: [{ title: "Completed insight" }],
-          fingerprint: { status: "Established" },
-        },
-      });
-    }
-    return jsonResponse({});
-  });
-  const onUploadComplete = vi.fn(async () => { events.push("complete"); });
-
-  renderWorkspace({ apiFetch, onUploadComplete });
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("nonterminal.csv")] } });
-  fireEvent.click(screen.getByTestId("process-upload-button"));
-
-  await waitFor(() => {
-    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-nonterminal-result", status: "COMPLETE" }), { navigateToGate: false });
-  });
-  expect(events.indexOf("status")).toBeGreaterThan(events.indexOf("stream"));
-  expect(events.indexOf("complete")).toBeGreaterThan(events.indexOf("status"));
-});
-
-it("prevents duplicate upload and polling events from repeated process clicks", async () => {
-  let releaseUpload;
-  uploadTelemetryFileWithProgress.mockImplementation(() => new Promise((resolve) => {
-    releaseUpload = () => resolve({
-      ok: true,
-      status: 202,
-      payload: { job_id: "job-duplicate-click", status_url: "/api/data/upload-status/job-duplicate-click", status: "queued", message: "Upload accepted." },
-    });
-  }));
-
-  const apiFetch = vi.fn(async (path) => {
-    if (String(path).includes("/api/data/upload-stream/job-duplicate-click")) return jsonResponse({}, { ok: false, status: 404 });
-    if (String(path).includes("/api/data/upload-status/job-duplicate-click")) {
-      return jsonResponse({
-        job_id: "job-duplicate-click",
-        status: "COMPLETE",
-        job_state: "completed",
-        terminal: true,
-        processing_state: "complete",
-        result_available: true,
-        first_usable_available: true,
-        progress_label: "Analysis ready.",
-        message: "Analysis ready.",
-        analysis_result: {
-          systems: [{ name: "Completed system" }],
-          insights: [{ title: "Completed insight" }],
-          fingerprint: { status: "Established" },
-        },
-      });
-    }
-    return jsonResponse({});
-  });
-  const onUploadComplete = vi.fn(async () => {});
-
-  renderWorkspace({ apiFetch, onUploadComplete });
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("duplicate.csv")] } });
-  const processButton = screen.getByTestId("process-upload-button");
-  fireEvent.click(processButton);
-  fireEvent.click(processButton);
-
-  expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
-
-  await act(async () => {
-    releaseUpload();
-  });
-
-  await waitFor(() => {
-    expect(onUploadComplete).toHaveBeenCalledWith(expect.objectContaining({ job_id: "job-duplicate-click" }), { navigateToGate: false });
-  });
-  expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
-  expect(apiFetch.mock.calls.filter(([path]) => String(path).includes("/api/data/upload-status/job-duplicate-click"))).toHaveLength(1);
-});
-
-
-it("uses the evidence-insufficient completion state when baseline gating fails", () => {
-  renderPanel({
-    uploadState: "complete",
-    selectedFiles: [selectedCsv("insufficient.csv")],
-    selectedFileSize: "2.1 MB",
-    latestUploadSnapshot: {
-      latest_result: {
-        analysis_result: {
-          systems: [{ name: "Cooling" }],
-          insights: [{ title: "Relationship change detected", confidence_tier: "Qualified" }],
-          baseline_sufficient: false,
-          fingerprint: { status: "Insufficient" },
-        },
-      },
-    },
-    uploadJob: { job_id: "insufficient-job", status: "COMPLETE", result_available: true },
-  });
-
-  const status = screen.getByText("Status").closest(".upload-result-summary__item");
-  expect(status.textContent).toContain("Evidence insufficient");
-  const quality = screen.getByText("Evidence quality").closest(".upload-result-summary__item");
-  expect(quality.textContent).toContain("Deferred");
-  expect(screen.getByRole("button", { name: "Review Evidence" })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "View Results" })).toBeNull();
-  expect(screen.queryByText("Analysis Details")).toBeNull();
-});
-
-
-it("enables a valid current file and handles a rapid mobile-style tap exactly once", async () => {
-  uploadTelemetryFileWithProgress.mockImplementation(() => new Promise(() => {}));
-  renderWorkspace();
-  const file = selectedCsv("mobile-current.csv");
-
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [file] } });
-  const button = screen.getByRole("button", { name: "Create Baseline" });
-  expect(button.disabled).toBe(false);
-  expect(button.getAttribute("aria-disabled")).toBe("false");
-  expect(screen.getByLabelText("mobile-current.csv, 1.0 KB, Ready")).toBeTruthy();
-
-  fireEvent.touchStart(button);
-  fireEvent.touchEnd(button);
-  fireEvent.click(button);
-  fireEvent.click(button);
-
-  expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
-  expect(uploadTelemetryFileWithProgress.mock.calls[0][0].file).toBe(file);
-  expect(await screen.findByText("Uploading dataset")).toBeTruthy();
-  expect(document.querySelector("form.intake-flow")?.getAttribute("aria-busy")).toBe("true");
-  expect(screen.queryByRole("button", { name: "Create Baseline" })).toBeNull();
-  expect(Array.from(document.querySelectorAll(".upload-fingerprint-build__nodes b")).map((node) => node.textContent)).toEqual([
-    "Validate", "Map", "Baseline", "Compare", "Evidence",
-  ]);
-});
-
-it("uses the current replacement file and clears the prior analysis state", async () => {
-  uploadTelemetryFileWithProgress.mockImplementation(() => new Promise(() => {}));
-  renderWorkspace({ hasActiveSession: true, sessionStore: completedSessionStore() });
-
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("first.csv")] } });
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("replacement.csv")] } });
-
-  expect(screen.getByText("replacement.csv")).toBeTruthy();
-  expect(screen.queryByText("old.csv")).toBeNull();
-  expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
-  fireEvent.click(screen.getByRole("button", { name: "Create Baseline" }));
-
-  expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
-  expect(uploadTelemetryFileWithProgress.mock.calls[0][0].file.name).toBe("replacement.csv");
-});
-
-it("accepts a synthetic 409.5 MiB CSV identity for the large-file service path", () => {
-  uploadTelemetryFileWithProgress.mockImplementation(() => new Promise(() => {}));
-  const file = selectedCsv("ChillerPlant.csv");
-  Object.defineProperty(file, "size", { configurable: true, value: Math.round(409.5 * 1024 * 1024) });
-  renderWorkspace();
-
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [file] } });
-  const button = screen.getByRole("button", { name: "Create Baseline" });
-  expect(button.disabled).toBe(false);
-  expect(screen.getByLabelText("ChillerPlant.csv, 409.5 MB, Ready")).toBeTruthy();
-  fireEvent.click(button);
-
-  expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
-  expect(uploadTelemetryFileWithProgress.mock.calls[0][0].file).toBe(file);
-});
-
-it("rejects a CSV above the supported 512 MiB limit before submission", () => {
-  const file = selectedCsv("too-large.csv");
-  Object.defineProperty(file, "size", { configurable: true, value: (512 * 1024 * 1024) + 1 });
-  renderWorkspace();
-
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [file] } });
-
-  expect(screen.getByRole("alert").textContent).toBe("File is larger than the supported upload limit of 512.0 MB.");
-  expect(screen.getByLabelText("too-large.csv, 512.0 MB, Unsupported")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Create Baseline" }).disabled).toBe(true);
-  expect(uploadTelemetryFileWithProgress).not.toHaveBeenCalled();
-});
-
-it("renders a concise network failure with an enabled Retry action", async () => {
-  const error = Object.assign(new Error("network disconnected"), { name: "ApiNetworkError", phase: "upload" });
-  uploadTelemetryFileWithProgress.mockRejectedValue(error);
-  renderWorkspace();
-
-  fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("retry.csv")] } });
-  fireEvent.click(screen.getByRole("button", { name: "Create Baseline" }));
-
-  const alert = await screen.findByRole("alert");
-  expect(alert.textContent).toContain("Upload could not start. Check the connection and try again.");
-  const retry = screen.getByRole("button", { name: "Retry Analysis" });
-  expect(retry.disabled).toBe(false);
-  fireEvent.click(retry);
-  await waitFor(() => expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(2));
 });

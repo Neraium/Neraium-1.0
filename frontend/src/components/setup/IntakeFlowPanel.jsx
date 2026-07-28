@@ -1,4 +1,4 @@
-import { Component, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import { buildIntakeStages, normalizeUploadStatus as normalizeUploadLifecycle } from "../../viewModels/uploadFlow";
 import { Panel } from "../workspacePrimitives";
@@ -17,6 +17,84 @@ const hiddenFileInputStyle = {
   border: 0,
 };
 
+const INITIAL_BASELINE_WORKFLOW = [
+  "Historical Dataset",
+  "Validate Data Integrity",
+  "Learn Operating Relationships",
+  "Establish Initial Baseline",
+  "Continuous Learning Begins",
+];
+
+export const INITIAL_BASELINE_STAGES = [
+  {
+    id: "upload",
+    label: "Upload",
+    description: "Securely transferring historical operating data.",
+  },
+  {
+    id: "validate",
+    label: "Validate",
+    description: "Verifying dataset integrity, timestamps, signal consistency, and data quality.",
+  },
+  {
+    id: "learn",
+    label: "Learn",
+    description: "Learning how the infrastructure normally behaves by identifying persistent operating relationships across the dataset.",
+  },
+  {
+    id: "ready",
+    label: "Baseline Ready",
+    description: "Initial operating model successfully established.",
+  },
+];
+
+const COMPARISON_STAGES = [
+  {
+    id: "upload",
+    label: "Upload",
+    description: "Securely transferring the comparison dataset.",
+  },
+  {
+    id: "validate",
+    label: "Validate",
+    description: "Verifying timestamps, signal consistency, and data quality.",
+  },
+  {
+    id: "evaluate",
+    label: "Evaluate",
+    description: "Evaluating recorded operation against the active learned model.",
+  },
+  {
+    id: "ready",
+    label: "Results Ready",
+    description: "The comparison dataset is ready for engineering review.",
+  },
+];
+
+const UPLOAD_STATES = new Set([
+  "accepted",
+  "pending",
+  "queued",
+  "uploading",
+]);
+
+const VALIDATE_STATES = new Set([
+  "validated",
+  "validating",
+  "validating_schema",
+  "checking_structure",
+  "checking_signal_quality",
+  "mapping",
+  "mapping_signals",
+  "detecting_variables",
+  "detecting_schema_signals",
+  "parsing",
+  "cleaning_imputing_data",
+  "profiling_data_quality",
+  "baseline_validating",
+  "baseline_quality_assessment",
+]);
+
 function clampPercent(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
@@ -32,9 +110,29 @@ function normalizeStatusText(value) {
     .toLowerCase();
 }
 
+function normalizeStageText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
 function primaryJobStatus(uploadJob, uploadState) {
   return normalizeUploadLifecycle(
     uploadJob?.processing_state
+      ?? uploadJob?.processingState
+      ?? uploadJob?.propagation_stage
+      ?? uploadJob?.propagationStage
+      ?? uploadJob?.status
+      ?? uploadState
+  );
+}
+
+function rawJobStatus(uploadJob, uploadState) {
+  return normalizeStageText(
+    uploadJob?.propagation_stage
+      ?? uploadJob?.propagationStage
+      ?? uploadJob?.processing_state
       ?? uploadJob?.processingState
       ?? uploadJob?.status
       ?? uploadState
@@ -48,68 +146,9 @@ function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) 
   if (["save_complete", "complete"].includes(normalized)) return "complete";
   if (["saving_results", "navigation_pending"].includes(normalized)) return "finalizing";
   if (normalized === "uploading") return "uploading";
-  if (isUploadProcessing(uploadState)) return "analyzing";
+  if (isUploadProcessing(uploadState)) return "processing";
   if (hasSelectedFiles || normalized === "validated") return "fileSelected";
   return "noFile";
-}
-
-function operatorStatusText({ viewState, uploadJob, uploadState, uploadTransfer, latestMessage }) {
-  const cleanMessage = String(latestMessage || "").trim();
-  if (viewState === "uploading") {
-    return uploadTransfer?.stage === "validating" ? "Validating data" : "Uploading dataset";
-  }
-  if (viewState === "complete") return "Analysis complete";
-  if (viewState === "finalizing") return "Preparing results";
-  if (viewState === "failed") return "Dataset import failed";
-  if (viewState === "completion_error") return "Analysis saved, results not opened";
-  if (/temporarily unavailable/i.test(cleanMessage)) return cleanMessage;
-
-  const normalized = primaryJobStatus(uploadJob, uploadState);
-  if (["writing_state", "cognition_ready", "saving_result", "saving_results"].includes(normalized)) return "Preparing evidence";
-  if (["accepted", "queued", "validating_schema", "parsing"].includes(normalized)) return "Validating data";
-  if (["mapping", "mapping_signals", "detecting_variables"].includes(normalized)) return "Mapping signals";
-  if (["processing", "baseline_modeling", "building_baseline"].includes(normalized)) return "Building baseline";
-  if (["building_fingerprint", "structural_scoring", "running_sii"].includes(normalized)) return "Comparing relationships";
-  return cleanMessage || "Preparing analysis";
-}
-
-function resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent }) {
-  if (viewState === "complete") return 100;
-  if (viewState === "finalizing") return 99;
-  if (viewState === "uploading") {
-    return clampPercent(uploadTransfer?.percent ?? visibleProgressPercent ?? 0);
-  }
-  if (viewState === "analyzing") {
-    const jobPercent = uploadJob?.propagation_progress
-      ?? uploadJob?.propagationProgress
-      ?? uploadJob?.percent
-      ?? uploadJob?.progress;
-    const fallback = jobPercent ?? visibleProgressPercent ?? 0;
-    return Math.min(99, clampPercent(fallback));
-  }
-  if (["failed", "error", "validation_error", "cancelled", "timeout", "completion_error"].includes(normalizeUploadLifecycle(uploadState))) return 100;
-  return 0;
-}
-
-function relationshipChangeDetected(analysisResult) {
-  const explicit = analysisResult?.relationship_change_detected
-    ?? analysisResult?.relationshipChangeDetected
-    ?? analysisResult?.fingerprint?.relationship_change_detected
-    ?? analysisResult?.fingerprint?.change_detected;
-  if (typeof explicit === "boolean") return explicit;
-
-  const fingerprintStatus = String(
-    analysisResult?.fingerprint?.status
-      ?? analysisResult?.fingerprint?.drift_status
-      ?? analysisResult?.fingerprint?.label
-      ?? ""
-  ).trim().toLowerCase();
-  if (["changed", "drifting", "review", "unstable", "detected", "elevated", "alert", "watch"].includes(fingerprintStatus)) return true;
-  if (["stable", "established", "unchanged", "not detected", "nominal"].includes(fingerprintStatus)) return false;
-  if (Array.isArray(analysisResult?.relationships) && analysisResult.relationships.length > 0) return true;
-
-  const primaryInsight = analysisResult?.insights?.find((insight) => insight && insight.id !== "baseline-stable");
-  return Boolean(primaryInsight && String(primaryInsight.severity || "").toLowerCase() !== "low");
 }
 
 function isFinalAnalysisResult(value) {
@@ -134,486 +173,270 @@ function finalAnalysisResult(latestUploadSnapshot, uploadJob) {
   return candidates.find(isFinalAnalysisResult) ?? null;
 }
 
-function normalizeEvidenceTier(value, analysisResult) {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === "confirmed") return "Confirmed";
-  if (["qualified", "high", "moderate"].includes(normalized)) return "Qualified";
-  if (["narrowed", "low", "weak"].includes(normalized)) return "Narrowed";
-  if (["deferred", "pending", "incomplete"].includes(normalized)) return "Deferred";
-  if (["withheld", "insufficient", "unreliable"].includes(normalized)) return "Withheld";
-  const baselineStatus = String(analysisResult?.fingerprint?.status ?? analysisResult?.fingerprint?.drift_status ?? "").toLowerCase();
-  return /established|stable|changed|complete/.test(baselineStatus) ? "Qualified" : "Deferred";
-}
-
-function activeFindingCount(analysisResult) {
-  return analysisResult.insights.filter((insight) => {
-    const id = String(insight?.id || "").toLowerCase();
-    const status = String(insight?.status || insight?.state || "").toLowerCase();
-    return id !== "baseline-stable" && !["normal", "stable", "resolved", "closed"].includes(status);
-  }).length;
-}
-
-function completionResult(analysisResult) {
-  const findings = activeFindingCount(analysisResult);
-  let evidenceQuality = normalizeEvidenceTier(
-    analysisResult?.evidence_quality
-      ?? analysisResult?.confidence_tier
-      ?? analysisResult?.insights?.[0]?.confidence_tier
-      ?? analysisResult?.insights?.[0]?.confidence,
-    analysisResult,
-  );
-  if (analysisResult?.reliable === false) evidenceQuality = "Withheld";
-  else if (analysisResult?.baseline_sufficient === false && evidenceQuality !== "Withheld") evidenceQuality = "Deferred";
-  const insufficient = ["Deferred", "Withheld"].includes(evidenceQuality);
-  const status = insufficient ? "Evidence insufficient" : findings || relationshipChangeDetected(analysisResult) ? "Change detected" : "Normal";
-  return { status, findings, evidenceQuality };
-}
-
-function baselineCompletionSummary(result) {
-  const candidate = result?.candidate_model ?? {};
-  const suitability = result?.baseline_suitability ?? candidate?.suitability ?? {};
-  const activation = result?.activation ?? candidate?.activation ?? {};
-  return [
-    { label: "Candidate", value: candidate?.version ? `Behavioral Digital Model v${candidate.version}` : "Created" },
-    { label: "Suitability", value: String(suitability?.decision || "not reported").replaceAll("_", " ") },
-    { label: "Suitability score", value: Number.isFinite(Number(suitability?.score)) ? `${suitability.score}/100` : "Not reported" },
-    { label: "Activation", value: String(activation?.state || candidate?.status || "candidate").replaceAll("_", " ") },
-  ];
-}
-
-function completionSummary({ analysisResult }) {
-  const completed = completionResult(analysisResult);
-  return [
-    { label: "Status", value: completed.status },
-    { label: "Findings", value: String(completed.findings) },
-    { label: "Evidence quality", value: completed.evidenceQuality },
-  ];
-}
-
-const FINGERPRINT_BUILD_STAGES = [
-  {
-    id: "validate",
-    label: "Validating data",
-    description: "Checking the dataset format and required signals.",
-    shortLabel: "Validate",
-    states: ["uploading", "queued", "accepted", "validating_schema", "parsing", "validated"],
-  },
-  {
-    id: "map",
-    label: "Mapping signals",
-    description: "Matching telemetry to supported systems and assets.",
-    shortLabel: "Map",
-    states: ["mapping", "mapping_signals", "detecting_variables"],
-  },
-  {
-    id: "baseline",
-    label: "Building baseline",
-    description: "Learning the expected relationships in the baseline window.",
-    shortLabel: "Baseline",
-    states: ["processing", "baseline_modeling", "building_baseline"],
-  },
-  {
-    id: "compare",
-    label: "Comparing relationships",
-    description: "Checking current behavior against the learned baseline.",
-    shortLabel: "Compare",
-    states: ["running_sii", "structural_scoring", "building_fingerprint"],
-  },
-  {
-    id: "evidence",
-    label: "Preparing evidence",
-    description: "Saving the strongest observations and confidence result.",
-    shortLabel: "Evidence",
-    states: ["writing_state", "cognition_ready", "saving_result", "saving_results", "navigation_pending"],
-  },
-];
-
-const FINGERPRINT_RENDERER_RECOVERY_KEY = "neraium.upload_fingerprint.compatibility_mode";
-const FINGERPRINT_RENDERER_REPORTED_KEY = "neraium.upload_fingerprint.compatibility_reported";
-const FINGERPRINT_RENDERER_MOUNT_KEY = "neraium.upload_fingerprint.mounts";
-const FINGERPRINT_RENDERER_PARTICLES = {
-  premium: 8,
-  enhanced: 3,
-  safe: 0,
-};
-
-const BASELINE_NETWORK_NODES = [
-  { x: 90, y: 70, r: 5.2, role: "core" },
-  { x: 52, y: 48, r: 3.4, role: "system" },
-  { x: 124, y: 38, r: 3.6, role: "system" },
-  { x: 146, y: 76, r: 3.2, role: "system" },
-  { x: 108, y: 108, r: 3.5, role: "system" },
-  { x: 38, y: 94, r: 2.6, role: "signal" },
-  { x: 77, y: 25, r: 2.5, role: "signal" },
-  { x: 158, y: 43, r: 2.4, role: "signal" },
-  { x: 62, y: 116, r: 2.5, role: "signal" },
-  { x: 19, y: 65, r: 1.9, role: "signal" },
-  { x: 164, y: 111, r: 2.1, role: "signal" },
-];
-
-const BASELINE_NETWORK_LINKS = [
-  { phase: 0, path: "M19 65L52 48L77 25" },
-  { phase: 0, path: "M77 25L124 38L158 43" },
-  { phase: 1, path: "M52 48Q70 53 90 70" },
-  { phase: 1, path: "M124 38Q108 50 90 70" },
-  { phase: 1, path: "M90 70Q120 62 146 76" },
-  { phase: 2, path: "M90 70Q101 88 108 108" },
-  { phase: 2, path: "M108 108L164 111" },
-  { phase: 2, path: "M146 76Q137 96 108 108" },
-  { phase: 3, path: "M38 94L62 116L108 108" },
-  { phase: 3, path: "M38 94Q56 76 90 70" },
-];
-
-const CONSTELLATION_SIGNAL_PATHS = [
-  "M19 65L52 48L77 25L124 38L158 43",
-  "M38 94Q56 76 90 70Q120 62 146 76Q137 96 108 108L164 111",
-];
-
-function networkProgress({ displayPercent, phase, stageIndex, complete }) {
-  if (complete || stageIndex > phase) return 100;
-  if (stageIndex < phase) return 0;
-  const phaseStartPercent = [0, 35, 62, 84][phase] ?? 0;
-  const phaseEndPercent = [35, 62, 84, 99][phase] ?? 100;
-  const withinPhase = ((displayPercent - phaseStartPercent) / Math.max(1, phaseEndPercent - phaseStartPercent)) * 100;
-  return Math.max(12, Math.min(100, Math.round(withinPhase)));
-}
-
-function resolveFingerprintBuildStage({ viewState, uploadJob, uploadState, uploadTransfer }) {
-  if (viewState === "complete") {
-    return { id: "complete", label: "Analysis complete", description: "Evidence is ready to review.", index: FINGERPRINT_BUILD_STAGES.length };
-  }
-  if (viewState === "finalizing") return { ...FINGERPRINT_BUILD_STAGES[4], index: 4 };
+function resolveMainPercent({ viewState, uploadJob, uploadTransfer, visibleProgressPercent }) {
+  if (viewState === "complete") return 100;
+  if (viewState === "finalizing") return 99;
   if (viewState === "uploading") {
-    if (uploadTransfer?.stage === "validating") {
-      return { ...FINGERPRINT_BUILD_STAGES[0], label: "Validating data", index: 0 };
-    }
-    return {
-      ...FINGERPRINT_BUILD_STAGES[0],
-      id: "upload",
-      label: "Uploading dataset",
-      description: "Sending the selected historical dataset securely.",
-      index: 0,
-    };
+    return clampPercent(uploadTransfer?.percent ?? visibleProgressPercent ?? 0);
+  }
+  if (viewState === "processing") {
+    const backendPercent = uploadJob?.propagation_progress
+      ?? uploadJob?.propagationProgress
+      ?? uploadJob?.percent
+      ?? uploadJob?.progress
+      ?? visibleProgressPercent
+      ?? 0;
+    return Math.min(99, clampPercent(backendPercent));
+  }
+  return 0;
+}
+
+export function resolveBaselineProcessingStage({
+  viewState,
+  uploadJob,
+  uploadState,
+  uploadTransfer,
+  comparison = false,
+}) {
+  const stages = comparison ? COMPARISON_STAGES : INITIAL_BASELINE_STAGES;
+  if (viewState === "complete") return { ...stages[3], index: 3 };
+  if (viewState === "finalizing") return { ...stages[2], index: 2 };
+  if (viewState === "uploading") {
+    return uploadTransfer?.stage === "validating"
+      ? { ...stages[1], index: 1 }
+      : { ...stages[0], index: 0 };
   }
 
-  const rawStage = String(
-    uploadJob?.processing_state
-      ?? uploadJob?.processingState
-      ?? uploadJob?.status
-      ?? uploadState
-      ?? ""
-  ).trim().toLowerCase();
-  const normalized = primaryJobStatus(uploadJob, uploadState);
-  const rawMatchedIndex = FINGERPRINT_BUILD_STAGES.findIndex((stage) => stage.states.includes(rawStage));
-  const normalizedMatchedIndex = FINGERPRINT_BUILD_STAGES.findIndex((stage) => stage.states.includes(normalized));
-  const index = rawMatchedIndex >= 0 ? rawMatchedIndex : normalizedMatchedIndex >= 0 ? normalizedMatchedIndex : 2;
-  return { ...FINGERPRINT_BUILD_STAGES[index], index };
+  const raw = rawJobStatus(uploadJob, uploadState);
+  const normalized = normalizeStageText(primaryJobStatus(uploadJob, uploadState));
+  if (UPLOAD_STATES.has(raw) || UPLOAD_STATES.has(normalized)) return { ...stages[0], index: 0 };
+  if (VALIDATE_STATES.has(raw) || VALIDATE_STATES.has(normalized)) return { ...stages[1], index: 1 };
+  return { ...stages[2], index: 2 };
 }
 
-function safeStorage(storageName) {
-  if (typeof window === "undefined") return null;
-  try {
-    return window[storageName] ?? null;
-  } catch {
-    return null;
+function firstDefined(...values) {
+  return values.find((value) => value !== null && value !== undefined && value !== "");
+}
+
+function titleCase(value) {
+  const text = String(value || "").trim().replaceAll("_", " ").replaceAll("-", " ");
+  if (!text) return "";
+  return text.replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatUtcTimestamp(value) {
+  const date = new Date(String(value || ""));
+  if (!Number.isFinite(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function formatTimeRange(start, end) {
+  const formattedStart = formatUtcTimestamp(start);
+  const formattedEnd = formatUtcTimestamp(end);
+  if (!formattedStart && !formattedEnd) return "Not reported";
+  if (!formattedStart) return `Through ${formattedEnd} UTC`;
+  if (!formattedEnd) return `From ${formattedStart} UTC`;
+  return `${formattedStart} – ${formattedEnd} UTC`;
+}
+
+function countCollection(value) {
+  if (Array.isArray(value)) return value.length;
+  if (value && typeof value === "object") return Object.keys(value).length;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function dataQualityLabel(dataQuality, suitability) {
+  const rating = titleCase(firstDefined(
+    dataQuality?.reliability_rating,
+    dataQuality?.rating,
+    dataQuality?.readiness,
+    dataQuality?.analysis_gate_state,
+  ));
+  const score = Number(firstDefined(dataQuality?.reliability_score, dataQuality?.score));
+  const base = rating || (Number.isFinite(score) ? "Assessed" : titleCase(suitability?.decision));
+  if (base && Number.isFinite(score)) return `${base} · ${Math.round(score)}/100`;
+  return base || "Not reported";
+}
+
+function learningConfidenceLabel(candidate, suitability, dataQuality) {
+  const explicit = firstDefined(
+    candidate?.learning_confidence,
+    candidate?.confidence,
+    dataQuality?.data_confidence?.score,
+    dataQuality?.data_confidence?.confidence,
+    suitability?.score,
+  );
+  const numeric = Number(explicit);
+  if (Number.isFinite(numeric)) {
+    const normalized = numeric > 0 && numeric <= 1 ? Math.round(numeric * 100) : Math.round(numeric);
+    return `${Math.max(0, Math.min(100, normalized))}/100`;
   }
+  return titleCase(explicit);
 }
 
-function readStorageValue(storageName, key) {
-  try {
-    return safeStorage(storageName)?.getItem(key) ?? "";
-  } catch {
-    return "";
-  }
+export function baselineCompletionSummary({
+  result,
+  analysisResult,
+  uploadJob,
+  selectedFileLabel,
+}) {
+  const candidate = result?.candidate_model ?? {};
+  const source = candidate?.source ?? result?.source ?? {};
+  const telemetrySchema = candidate?.telemetry_schema ?? result?.telemetry_schema ?? {};
+  const timestampProfile = candidate?.timestamp_quality
+    ?? result?.timestamp_quality
+    ?? analysisResult?.timestamp_profile
+    ?? uploadJob?.timestamp_profile
+    ?? {};
+  const dataQuality = candidate?.data_quality
+    ?? result?.data_quality
+    ?? analysisResult?.data_quality
+    ?? uploadJob?.data_quality
+    ?? {};
+  const relationshipGraph = candidate?.relationship_graph
+    ?? result?.relationship_graph
+    ?? analysisResult?.relationship_graph
+    ?? {};
+  const suitability = result?.baseline_suitability ?? candidate?.suitability ?? {};
+  const sourceRange = analysisResult?.source_time_ranges?.[0] ?? {};
+  const signalCount = firstDefined(
+    countCollection(telemetrySchema?.numeric_columns),
+    countCollection(telemetrySchema?.signal_catalog),
+    countCollection(candidate?.signal_characteristics),
+    dataQuality?.numeric_column_count,
+    analysisResult?.telemetry_signal_count,
+    analysisResult?.signals_analyzed,
+  );
+  const relationshipCount = firstDefined(
+    countCollection(relationshipGraph?.edges),
+    countCollection(analysisResult?.relationships),
+    analysisResult?.relationships_learned,
+  );
+  const confidence = learningConfidenceLabel(candidate, suitability, dataQuality);
+  const rows = [
+    {
+      label: "Dataset",
+      value: firstDefined(result?.filename, source?.filename, uploadJob?.filename, selectedFileLabel, "Not reported"),
+    },
+    {
+      label: "Time range",
+      value: formatTimeRange(
+        firstDefined(timestampProfile?.first_timestamp, sourceRange?.baseline_start, sourceRange?.current_start),
+        firstDefined(timestampProfile?.last_timestamp, sourceRange?.baseline_end, sourceRange?.current_end),
+      ),
+    },
+    {
+      label: "Signals analyzed",
+      value: signalCount === null || signalCount === undefined ? "Not reported" : String(signalCount),
+    },
+    {
+      label: "Relationships learned",
+      value: relationshipCount === null || relationshipCount === undefined ? "Not reported" : String(relationshipCount),
+    },
+    {
+      label: "Data quality",
+      value: dataQualityLabel(dataQuality, suitability),
+    },
+  ];
+  if (confidence) rows.push({ label: "Learning confidence", value: confidence });
+  return rows;
 }
 
-function writeStorageValue(storageName, key, value) {
-  try {
-    safeStorage(storageName)?.setItem(key, value);
-  } catch {
-    // Storage may be disabled in private or constrained browser contexts.
-  }
+function edgeProgress({ percent, stageIndex, edgeIndex, complete }) {
+  if (complete) return 0;
+  if (stageIndex < 1) return 100;
+  if (stageIndex === 1) return edgeIndex < 3 ? 0 : 100;
+  const learnedEdges = Math.max(4, Math.ceil((clampPercent(percent) / 100) * NETWORK_EDGES.length));
+  return edgeIndex < learnedEdges ? 0 : 100;
 }
 
-function mediaMatches(query) {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  try {
-    return window.matchMedia(query).matches;
-  } catch {
-    return false;
-  }
-}
+const NETWORK_NODES = [
+  { x: 34, y: 68, r: 4, stage: 0 },
+  { x: 79, y: 30, r: 5, stage: 0 },
+  { x: 88, y: 97, r: 4, stage: 0 },
+  { x: 145, y: 64, r: 7, stage: 1 },
+  { x: 202, y: 29, r: 4, stage: 1 },
+  { x: 212, y: 98, r: 5, stage: 1 },
+  { x: 277, y: 63, r: 4, stage: 2 },
+  { x: 256, y: 111, r: 3, stage: 2 },
+  { x: 266, y: 18, r: 3, stage: 2 },
+];
 
-function markFingerprintRendererRecovery(reason) {
-  writeStorageValue("localStorage", FINGERPRINT_RENDERER_RECOVERY_KEY, reason || "renderer-recovery");
-}
+const NETWORK_EDGES = [
+  "M34 68L79 30",
+  "M34 68L88 97",
+  "M79 30L145 64",
+  "M88 97L145 64",
+  "M79 30L202 29",
+  "M145 64L202 29",
+  "M145 64L212 98",
+  "M88 97L212 98",
+  "M202 29L277 63",
+  "M212 98L277 63",
+  "M202 29L266 18",
+  "M212 98L256 111",
+];
 
-function detectFingerprintRenderTier() {
-  if (typeof window === "undefined") return { tier: "safe", reason: "server-render" };
-  const recoveryReason = readStorageValue("localStorage", FINGERPRINT_RENDERER_RECOVERY_KEY);
-  if (recoveryReason) return { tier: "safe", reason: recoveryReason };
-
-  const navigatorInfo = window.navigator ?? {};
-  const memory = Number(navigatorInfo.deviceMemory);
-  const cores = Number(navigatorInfo.hardwareConcurrency);
-  const reducedMotion = mediaMatches("(prefers-reduced-motion: reduce)");
-  const constrainedMemory = Number.isFinite(memory) && memory > 0 && memory <= 2;
-  const limitedMemory = Number.isFinite(memory) && memory > 0 && memory <= 4;
-  const constrainedCpu = Number.isFinite(cores) && cores > 0 && cores <= 2;
-  const mobileLike = mediaMatches("(max-width: 760px)") || mediaMatches("(hover: none) and (pointer: coarse)");
-  const svgPathSupported = !window.CSS || typeof window.CSS.supports !== "function" || window.CSS.supports("stroke-dashoffset", "1");
-
-  if (reducedMotion) return { tier: "safe", reason: "reduced-motion" };
-  if (constrainedMemory || !svgPathSupported) return { tier: "safe", reason: constrainedMemory ? "low-memory" : "svg-path-support" };
-  if (mobileLike || limitedMemory || constrainedCpu) return { tier: "enhanced", reason: mobileLike ? "mobile-capability" : "limited-capability" };
-  return { tier: "premium", reason: "capable-device" };
-}
-
-function registerFingerprintRendererMount() {
-  if (typeof window === "undefined") return false;
-  const now = window.performance?.now?.() ?? Date.now();
-  const raw = readStorageValue("sessionStorage", FINGERPRINT_RENDERER_MOUNT_KEY);
-  const previous = raw ? raw.split(",").map(Number).filter((value) => Number.isFinite(value)) : [];
-  const recent = [...previous.filter((value) => now - value < 5000), now].slice(-5);
-  writeStorageValue("sessionStorage", FINGERPRINT_RENDERER_MOUNT_KEY, recent.join(","));
-  return recent.length >= 4;
-}
-
-class FingerprintRendererBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { failed: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  componentDidCatch() {
-    markFingerprintRendererRecovery("renderer-error");
-  }
-
-  render() {
-    if (this.state.failed) {
-      return <OperationalFingerprintBuildVisual {...this.props} forcedTier="safe" recoveryReason="renderer-error" />;
-    }
-    return <OperationalFingerprintBuildVisual {...this.props} />;
-  }
-}
-
-function OperationalFingerprintBuild(props) {
-  return <FingerprintRendererBoundary {...props} />;
-}
-
-function OperationalFingerprintBuildVisual({ percent, stage, complete = false, forcedTier = "", recoveryReason = "" }) {
-  const displayPercent = clampPercent(percent);
+function RelationshipLearningVisual({ percent, stage, complete = false }) {
   const stageIndex = stage?.index ?? 0;
-  const rootRef = useRef(null);
-  const [renderProfile, setRenderProfile] = useState(() => forcedTier ? { tier: forcedTier, reason: recoveryReason || "renderer-recovery" } : detectFingerprintRenderTier());
-  const renderTier = forcedTier || renderProfile.tier;
-  const compatibilityMode = renderTier === "safe";
-  const particleCount = FINGERPRINT_RENDERER_PARTICLES[renderTier] ?? 0;
-  const statusTitle = stage?.label || (complete ? "Analysis complete" : "Preparing analysis");
-  const statusDetail = stage?.description || (complete ? "Evidence is ready to review." : "Checking the dataset.");
-
-  useEffect(() => {
-    if (forcedTier) return undefined;
-    if (registerFingerprintRendererMount()) {
-      markFingerprintRendererRecovery("repeated-remounts");
-      setRenderProfile({ tier: "safe", reason: "repeated-remounts" });
-      return undefined;
-    }
-
-    let active = true;
-    const recover = (reason) => {
-      if (!active) return;
-      markFingerprintRendererRecovery(reason);
-      setRenderProfile({ tier: "safe", reason });
-    };
-    const handleRendererError = () => recover("renderer-error");
-    const handleCompatibilityRecovery = () => recover("black-screen-recovery");
-
-    window.addEventListener("error", handleRendererError);
-    window.addEventListener("unhandledrejection", handleRendererError);
-    window.addEventListener("neraium:fingerprint-renderer-failed", handleCompatibilityRecovery);
-
-    const frame = window.requestAnimationFrame?.(() => {
-      const box = rootRef.current?.getBoundingClientRect?.();
-      if (box && box.width > 0 && box.height > 0 && (box.width < 24 || box.height < 24)) recover("black-screen-recovery");
-    });
-
-    return () => {
-      active = false;
-      window.removeEventListener("error", handleRendererError);
-      window.removeEventListener("unhandledrejection", handleRendererError);
-      window.removeEventListener("neraium:fingerprint-renderer-failed", handleCompatibilityRecovery);
-      if (frame && window.cancelAnimationFrame) window.cancelAnimationFrame(frame);
-    };
-  }, [forcedTier]);
-
-  useEffect(() => {
-    if (!compatibilityMode || complete) return;
-    if (readStorageValue("sessionStorage", FINGERPRINT_RENDERER_REPORTED_KEY)) return;
-    writeStorageValue("sessionStorage", FINGERPRINT_RENDERER_REPORTED_KEY, "1");
-  }, [compatibilityMode, complete]);
-
   return (
-    <div
-      ref={rootRef}
-      className={`upload-fingerprint-build infrastructure-constellation upload-fingerprint-build--${renderTier}${complete ? " upload-fingerprint-build--complete" : ""}`}
-      data-render-tier={renderTier}
-      data-render-reason={renderProfile.reason}
-      data-build-stage={stage?.id || "evidence"}
-      aria-label={`Analysis ${displayPercent}% complete`}
-      aria-valuemin="0"
-      aria-valuemax="100"
-      aria-valuenow={displayPercent}
-      role="progressbar"
-    >
-      <div className="upload-fingerprint-build__halo" aria-hidden="true" />
-      {particleCount > 0 ? (
-        <div className="upload-fingerprint-build__particles" aria-hidden="true">
-          {Array.from({ length: particleCount }, (_, index) => <span key={index} style={{ "--particle-index": index }} />)}
-        </div>
-      ) : null}
-      <div className="upload-fingerprint-build__status">
-        <strong>{statusTitle}</strong>
-        <span className="upload-fingerprint-build__stage-readout"><i aria-hidden="true" />{statusDetail}</span>
+    <div className={`baseline-learning-visual${complete ? " is-complete" : ""}`} aria-hidden="true">
+      <div className="baseline-learning-visual__label">
+        <span>Signals</span>
+        <span>Learned operating model</span>
       </div>
-      <svg className="upload-fingerprint-build__print upload-fingerprint-build__constellation" viewBox="0 0 180 140" aria-hidden="true" focusable="false">
+      <svg viewBox="0 0 310 132" focusable="false">
         <defs>
-          <linearGradient id="upload-baseline-link" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="var(--blue-primary)" stopOpacity="0.22" />
-            <stop offset="0.52" stopColor="var(--blue-glow)" stopOpacity="0.96" />
-            <stop offset="1" stopColor="var(--blue-primary)" stopOpacity="0.38" />
-          </linearGradient>
-          <radialGradient id="upload-intelligence-field" cx="50%" cy="48%" r="64%">
-            <stop offset="0" stopColor="var(--blue-primary)" stopOpacity="0.1" />
-            <stop offset="0.68" stopColor="var(--blue-deep)" stopOpacity="0.035" />
-            <stop offset="1" stopColor="var(--blue-deep)" stopOpacity="0" />
-          </radialGradient>
-          <pattern id="upload-intelligence-grid" width="12" height="12" patternUnits="userSpaceOnUse">
-            <path d="M12 0H0V12" fill="none" stroke="var(--blue-glow)" strokeOpacity="0.075" strokeWidth="0.35" />
-          </pattern>
-          <filter id="upload-baseline-node-glow" x="-200%" y="-200%" width="500%" height="500%">
-            <feGaussianBlur stdDeviation="1.8" result="blur" />
+          <filter id="baseline-node-glow" x="-200%" y="-200%" width="500%" height="500%">
+            <feGaussianBlur stdDeviation="2.4" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
         </defs>
-        <rect className="upload-fingerprint-build__field" x="2" y="2" width="176" height="136" rx="18" />
-        <rect className="upload-fingerprint-build__field-light" x="2" y="2" width="176" height="136" rx="18" fill="url(#upload-intelligence-field)" />
-        <rect className="upload-fingerprint-build__grid" x="10" y="10" width="160" height="120" rx="12" fill="url(#upload-intelligence-grid)" />
-        <g className="upload-fingerprint-build__coordinates">
-          <path d="M90 12V25M90 115V128M14 70H28M152 70H166" />
-          <circle cx="90" cy="70" r="50" />
-          <circle cx="90" cy="70" r="28" />
+        <g className="baseline-learning-visual__ghosts">
+          {NETWORK_EDGES.map((path) => <path key={`ghost-${path}`} d={path} />)}
         </g>
-        <g className="upload-fingerprint-build__relationship-ghosts">
-          {BASELINE_NETWORK_LINKS.map((link) => <path key={`ghost-${link.path}`} d={link.path} />)}
+        <g className="baseline-learning-visual__edges">
+          {NETWORK_EDGES.map((path, index) => (
+            <path
+              key={path}
+              d={path}
+              pathLength="100"
+              style={{ "--edge-offset": edgeProgress({ percent, stageIndex, edgeIndex: index, complete }) }}
+            />
+          ))}
         </g>
-        <g className="upload-fingerprint-build__relationship-links">
-          {BASELINE_NETWORK_LINKS.map((link, index) => {
-            const fill = networkProgress({ displayPercent, phase: link.phase, stageIndex, complete });
-            return <path key={link.path} d={link.path} pathLength="100" style={{ "--network-offset": compatibilityMode ? (fill > 0 ? 0 : 100) : 100 - fill, "--link-index": index }} />;
+        <g className="baseline-learning-visual__nodes" filter="url(#baseline-node-glow)">
+          {NETWORK_NODES.map((node, index) => {
+            const visible = complete || stageIndex >= node.stage;
+            return (
+              <g key={`${node.x}-${node.y}`} className={visible ? "is-visible" : ""} style={{ "--node-index": index }}>
+                <circle className="baseline-learning-visual__node-ring" cx={node.x} cy={node.y} r={node.r + 5} />
+                <circle className="baseline-learning-visual__node" cx={node.x} cy={node.y} r={node.r} />
+              </g>
+            );
           })}
         </g>
-        <g className="upload-fingerprint-build__signals" aria-hidden="true">
-          {CONSTELLATION_SIGNAL_PATHS.map((path, index) => (
-            <circle key={path} className="upload-fingerprint-build__signal" r="1.8" style={{ offsetPath: `path('${path}')`, animationDelay: `${index * -1.8}s` }} />
-          ))}
-        </g>
-        <g className="upload-fingerprint-build__evidence-points" filter="url(#upload-baseline-node-glow)">
-          {BASELINE_NETWORK_NODES.map((node, index) => (
-            <g key={`${node.x}-${node.y}`} className={`upload-fingerprint-build__network-node upload-fingerprint-build__network-node--${node.role}`} style={{ "--point-index": index }}>
-              <circle className="upload-fingerprint-build__node-orbit" cx={node.x} cy={node.y} r={node.r + 4.5} />
-              <circle className="upload-fingerprint-build__node-core" cx={node.x} cy={node.y} r={node.r} />
-            </g>
-          ))}
-        </g>
       </svg>
-      {complete ? <div className="upload-fingerprint-build__check" aria-hidden="true">✓</div> : null}
-      <ol className="upload-fingerprint-build__nodes" aria-label="Analysis stages">
-        {FINGERPRINT_BUILD_STAGES.map((item, index) => {
-          const state = complete || index < stageIndex ? "complete" : index === stageIndex ? "active" : "pending";
-          return (
-            <li
-              key={item.id}
-              className={`${state === "complete" ? "is-complete" : state === "active" ? "is-active" : ""}${index === FINGERPRINT_BUILD_STAGES.length - 1 ? " is-final" : ""}`}
-              aria-label={`${item.shortLabel}: ${state === "complete" ? "completed" : state}`}
-              aria-current={state === "active" ? "step" : undefined}
-            >
-              <i aria-hidden="true">{state === "complete" ? "✓" : ""}</i>
-              <b>{item.shortLabel}</b>
-            </li>
-          );
-        })}
-      </ol>
     </div>
   );
 }
 
-const SUPPORTED_HISTORICAL_SOURCES = ["CSV", "SCADA Export", "Historian Export"];
-const BASELINE_WORKFLOW_STEPS = ["Import", "Learn", "Analyze", "Ready"];
-
-function baselineWorkflowStep({ viewState, uploadJob, uploadState }) {
-  if (["complete", "completion_error"].includes(viewState)) return 3;
-  if (viewState === "finalizing") return 2;
-  if (viewState !== "analyzing") return 0;
-  const normalized = primaryJobStatus(uploadJob, uploadState);
-  if (["processing", "baseline_modeling", "building_baseline"].includes(normalized)) return 1;
-  return 2;
-}
-
-function BaselineWorkflowStepper({ currentStep }) {
+function BaselineWorkflow() {
   return (
-    <ol className="baseline-import-stepper" aria-label="Baseline analysis progress">
-      {BASELINE_WORKFLOW_STEPS.map((label, index) => {
-        const state = index < currentStep ? "complete" : index === currentStep ? "current" : "upcoming";
-        return (
-          <li key={label} className={`baseline-import-stepper__step baseline-import-stepper__step--${state}`} aria-current={state === "current" ? "step" : undefined}>
-            <span className="baseline-import-stepper__number" aria-hidden="true">{state === "complete" ? "✓" : index + 1}</span>
-            <span className="baseline-import-stepper__label">{label}</span>
-          </li>
-        );
-      })}
+    <ol className="baseline-learning-path" aria-label="How Neraium establishes its initial baseline">
+      {INITIAL_BASELINE_WORKFLOW.map((label, index) => (
+        <li key={label}>
+          <span aria-hidden="true">{index + 1}</span>
+          <strong>{label}</strong>
+        </li>
+      ))}
     </ol>
   );
-}
-
-function uploadFingerprintStatusText(viewState, hasSelectedFiles) {
-  if (["uploading", "analyzing", "finalizing"].includes(viewState)) return "Analysis in Progress";
-  if (viewState === "complete") return "Baseline Active";
-  if (viewState === "failed") return hasSelectedFiles ? "Ready for Baseline" : "Awaiting Baseline";
-  if (hasSelectedFiles) return "Ready for Baseline";
-  return "Awaiting Baseline";
-}
-
-function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
-  return [
-    ["Analysis ID", uploadJob?.job_id ?? uploadJob?.id],
-    ["Analysis stage", uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status],
-    ["Elapsed time", uploadJob?.processing_time_seconds ? `${uploadJob.processing_time_seconds}s` : null],
-    ["Transfer", uploadTransfer?.label],
-    ["Analysis result", uploadJob?.result_available ? "Available" : uploadJob?.first_usable_available ? "Preliminary result available" : null],
-    ["Analysis status", queuedWorkerDetail],
-    ["Current step", propagationLabel],
-    ["Operator message", latestMessage],
-  ].filter(([, value]) => String(value ?? "").trim());
-}
-
-function buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage }) {
-  if (viewState === "completion_error") {
-    return [
-      ["What failed", "The analysis saved, but Portfolio did not open the result."],
-      ["What still succeeded", "The behavior baseline and evidence record were saved."],
-      ["Next action", "Open the analysis again. If that fails, analyze another dataset or refresh."],
-    ];
-  }
-  return [
-    ["What failed", errorMessage || "The dataset could not finish import or processing."],
-    ["What still succeeded", hasSelectedFiles ? `${selectedFileLabel} is still selected for retry.` : "No dataset is currently selected."],
-    ["Next action", uploadJob?.job_id ? "Retry the analysis. If the job expired, choose the dataset again." : "Choose a dataset and start the analysis again."],
-  ];
 }
 
 function DatasetFileRow({ filename, size, status }) {
@@ -630,7 +453,152 @@ function DatasetFileRow({ filename, size, status }) {
   );
 }
 
-function RecoverySummary({ rows }) {
+function ProcessingPanel({
+  comparison,
+  dataset,
+  percent,
+  stage,
+  uploadJob,
+  uploadState,
+  uploadTransfer,
+  propagationLabel,
+  queuedWorkerDetail,
+  latestMessage,
+  latestUploadSnapshot,
+}) {
+  const stages = comparison ? COMPARISON_STAGES : INITIAL_BASELINE_STAGES;
+  return (
+    <section
+      className="baseline-processing-panel"
+      aria-live="polite"
+      aria-label={`${comparison ? "Comparison dataset" : "Initial baseline"} processing: ${stage.label}`}
+    >
+      <header className="baseline-processing-panel__header">
+        <div>
+          <span className="baseline-processing-panel__eyebrow">{comparison ? "Comparison workflow" : "Initial learning"}</span>
+          <h3>{stage.label}</h3>
+          <p>{stage.description}</p>
+        </div>
+        <p className="baseline-processing-panel__dataset"><span>Dataset</span><strong>{dataset}</strong></p>
+      </header>
+      <div className="baseline-processing-panel__body">
+        <div
+          className="baseline-stage-track"
+          role="progressbar"
+          aria-label={`${stage.label}, stage ${stage.index + 1} of ${stages.length}`}
+          aria-valuemin="1"
+          aria-valuemax={stages.length}
+          aria-valuenow={stage.index + 1}
+          aria-valuetext={stage.label}
+        >
+          <ol>
+            {stages.map((item, index) => {
+              const state = index < stage.index ? "complete" : index === stage.index ? "active" : "pending";
+              return (
+                <li key={item.id} className={`baseline-stage-track__item baseline-stage-track__item--${state}`} aria-current={state === "active" ? "step" : undefined}>
+                  <span className="baseline-stage-track__marker" aria-hidden="true">{state === "complete" ? "✓" : index + 1}</span>
+                  <div>
+                    <strong>{item.label}</strong>
+                    <p>{item.description}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        <RelationshipLearningVisual percent={percent} stage={stage} />
+      </div>
+      {!comparison ? (
+        <p className="baseline-processing-panel__policy">
+          Continuous learning starts from this model. Temporary abnormalities never redefine normal without persistent, verified operating history.
+        </p>
+      ) : null}
+      <AdvancedDetails
+        latestUploadSnapshot={latestUploadSnapshot}
+        uploadJob={uploadJob}
+        uploadState={uploadState}
+        uploadTransfer={uploadTransfer}
+        propagationLabel={propagationLabel}
+        queuedWorkerDetail={queuedWorkerDetail}
+        latestMessage={latestMessage}
+      />
+    </section>
+  );
+}
+
+function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage }) {
+  return [
+    ["Job ID", uploadJob?.job_id ?? uploadJob?.id],
+    ["Backend state", uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status],
+    ["Elapsed time", uploadJob?.processing_time_seconds ? `${uploadJob.processing_time_seconds}s` : null],
+    ["Transfer", uploadTransfer?.label],
+    ["Worker", queuedWorkerDetail],
+    ["Current operation", propagationLabel],
+    ["System message", latestMessage],
+  ].filter(([, value]) => String(value ?? "").trim());
+}
+
+function AdvancedDetails({
+  latestUploadSnapshot,
+  uploadJob,
+  uploadState,
+  uploadTransfer,
+  propagationLabel,
+  queuedWorkerDetail,
+  latestMessage,
+}) {
+  const rows = buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage });
+  const stages = buildIntakeStages(
+    latestUploadSnapshot?.latest_result ?? null,
+    uploadJob?.processing_state ?? uploadJob?.status ?? uploadState,
+    null,
+    uploadJob,
+  );
+  const compactStages = stages.filter((stage) => ["active", "failed", "complete"].includes(stage.state));
+  if (!rows.length && !compactStages.length) return null;
+
+  return (
+    <details className="upload-advanced-details">
+      <summary>
+        <span className="upload-advanced-details__summary-label"><i aria-hidden="true" />Processing details</span>
+        <span className="upload-advanced-details__chevron" aria-hidden="true" />
+      </summary>
+      {rows.length ? (
+        <dl className="upload-advanced-details__grid">
+          {rows.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{String(value)}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {compactStages.length ? (
+        <ol className="upload-advanced-details__stages" aria-label="Backend processing stages">
+          {compactStages.map((item) => (
+            <li key={`${item.title}-${item.state}`}>
+              <strong>{item.title}</strong>
+              <span>{item.state}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </details>
+  );
+}
+
+function RecoverySummary({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage }) {
+  const rows = viewState === "completion_error"
+    ? [
+      ["What happened", "The baseline was saved, but the operating workspace did not open."],
+      ["What is preserved", "The learned model remains stored and can be opened again."],
+      ["Next action", "Open the baseline again. If the workspace remains unavailable, refresh and retry."],
+    ]
+    : [
+      ["What happened", errorMessage || "Neraium could not finish establishing the initial baseline."],
+      ["What is preserved", hasSelectedFiles ? `${selectedFileLabel} remains selected for retry.` : "No dataset is currently selected."],
+      ["Next action", uploadJob?.job_id ? "Retry this job. If it has expired, choose the source dataset again." : "Check the source file and choose the dataset again."],
+    ];
   return (
     <dl className="upload-recovery-summary">
       {rows.map(([label, value]) => (
@@ -643,44 +611,69 @@ function RecoverySummary({ rows }) {
   );
 }
 
-function AdvancedDetails({ latestUploadSnapshot, uploadJob, uploadState, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug }) {
-  const rows = buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage, uploadDebug });
-  const stages = buildIntakeStages(
-    latestUploadSnapshot?.latest_result ?? null,
-    uploadJob?.processing_state ?? uploadJob?.status ?? uploadState,
-    null,
-    uploadJob,
-  );
-  const compactStages = stages.filter((stage) => ["active", "failed", "complete"].includes(stage.state));
-
-  if (!rows.length && !compactStages.length) return null;
+function SuccessState({
+  comparison,
+  summary,
+  onOpenBaseline,
+  onImportComparisonDataset,
+  onViewResults,
+  onResetWorkspace,
+}) {
+  if (comparison) {
+    return (
+      <section className="baseline-success" aria-labelledby="comparison-ready-heading" aria-live="polite">
+        <header className="baseline-success__header">
+          <span className="baseline-success__check" aria-hidden="true">✓</span>
+          <div>
+            <p className="baseline-success__eyebrow">Comparison workflow complete</p>
+            <h3 id="comparison-ready-heading">Comparison Dataset Ready</h3>
+          </div>
+        </header>
+        <dl className="baseline-success__summary">
+          {summary.map((item) => <div key={item.label}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}
+        </dl>
+        <div className="upload-simple-actions upload-completion-actions">
+          <button type="button" className="command-button upload-completion-actions__primary" onClick={onViewResults}>Open Results</button>
+          <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onResetWorkspace}>Import Another Dataset</button>
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <details className="upload-advanced-details">
-      <summary><span className="upload-advanced-details__summary-label"><i aria-hidden="true" />Analysis Details</span><span className="upload-advanced-details__chevron" aria-hidden="true" /></summary>
-      {rows.length ? (
-        <dl className="upload-advanced-details__grid">
-          {rows.map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>{String(value)}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-      {compactStages.length ? (
-        <ol className="upload-advanced-details__stages" aria-label="Analysis stages">
-          {compactStages.map((stage) => (
-            <li key={`${stage.title}-${stage.state}`}>
-              <strong>{stage.title}</strong>
-              <span>{stage.state}</span>
-            </li>
-          ))}
-        </ol>
-      ) : null}
-    </details>
+    <section className="baseline-success" aria-labelledby="baseline-ready-heading" aria-live="polite">
+      <header className="baseline-success__header baseline-success__header--with-model">
+        <span className="baseline-success__check" aria-hidden="true">✓</span>
+        <div>
+          <p className="baseline-success__eyebrow">Initial learning complete</p>
+          <h3 id="baseline-ready-heading">Initial Baseline Established</h3>
+        </div>
+        <div className="baseline-success__model" role="img" aria-label="Stable learned relationship network">
+          <RelationshipLearningVisual percent={100} stage={{ index: 3 }} complete />
+        </div>
+      </header>
+      <dl className="baseline-success__summary" aria-label="Initial baseline summary">
+        {summary.map((item) => (
+          <div key={item.label}>
+            <dt>{item.label}</dt>
+            <dd>{item.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="baseline-success__explanation">
+        <p>Neraium has established its initial understanding of how this infrastructure normally behaves.</p>
+        <p>This learned operating model becomes the foundation for continuous learning. Future historical datasets and live telemetry will be evaluated against this understanding.</p>
+        <p>As verified operating history grows, Neraium continuously refines its understanding of normal while preserving enough historical context to detect meaningful and persistent changes in system behavior.</p>
+      </div>
+      <div className="upload-simple-actions upload-completion-actions">
+        <button type="button" className="command-button upload-completion-actions__primary" onClick={onOpenBaseline}>Open Baseline</button>
+        <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onImportComparisonDataset}>Import Comparison Dataset</button>
+      </div>
+    </section>
   );
 }
+
+const SUPPORTED_HISTORICAL_SOURCES = ["CSV", "SCADA export", "Historian export"];
 
 export default function IntakeFlowPanel({
   handleUpload,
@@ -691,7 +684,6 @@ export default function IntakeFlowPanel({
   analysisResult: suppliedAnalysisResult = null,
   baselineResult = null,
   workflow = "create_baseline",
-  pendingUploadKind,
   selectedFileSize,
   fileValidationError = "",
   isUploadProcessing,
@@ -703,46 +695,47 @@ export default function IntakeFlowPanel({
   propagationLabel,
   queuedWorkerDetail = "",
   uploadTransfer,
-  uploadDebug = null,
   uploadStateMessage,
   batchResults = [],
   onRetryFailedUploads,
   onResetWorkspace,
   onViewResults,
-  onApproveBaseline,
+  onOpenBaseline,
+  onImportComparisonDataset,
 }) {
   void uploadStateMessage;
   void batchResults;
   const [isDragActive, setIsDragActive] = useState(false);
-
+  const comparison = workflow === "analyze_new_data";
   const hasSelectedFiles = selectedFiles?.length > 0;
   const selectedFileLabel = hasSelectedFiles
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
     : "No file selected";
-  const fileKind = String(pendingUploadKind || "csv").toUpperCase();
   const rawViewState = uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing });
   const analysisResult = suppliedAnalysisResult ?? finalAnalysisResult(latestUploadSnapshot, uploadJob);
   const baselineCompletion = Boolean(baselineResult?.candidate_model);
   const viewState = rawViewState === "complete" && !analysisResult && !baselineCompletion ? "finalizing" : rawViewState;
-  const statusText = operatorStatusText({ viewState, uploadJob, uploadState, uploadTransfer, latestMessage });
-  const mainPercent = resolveMainPercent({ viewState, uploadState, uploadJob, uploadTransfer, visibleProgressPercent });
-  const fingerprintBuildStage = resolveFingerprintBuildStage({ viewState, uploadJob, uploadState, uploadTransfer });
-  const errorMessage = String(latestMessage || "Choose another telemetry dataset and try again.").trim();
-  const failureRecoveryRows = buildFailureRecoveryRows({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage });
-  const summary = baselineCompletion
-    ? baselineCompletionSummary(baselineResult)
-    : analysisResult ? completionSummary({ analysisResult }) : [];
-  const completed = analysisResult ? completionResult(analysisResult) : null;
-  const activationState = baselineResult?.activation?.state ?? baselineResult?.candidate_model?.status;
-  const showProgress = viewState === "uploading" || viewState === "analyzing" || viewState === "finalizing";
-  const fingerprintStatus = uploadFingerprintStatusText(viewState, hasSelectedFiles);
-  const workflowStep = baselineWorkflowStep({ viewState, uploadJob, uploadState });
-  const workflowLabel = {
-    create_baseline: "Create Baseline",
-    analyze_new_data: "Analyze New Data Against Active Baseline",
-    extend_baseline: "Extend Baseline Through Controlled Learning",
-  }[workflow] || "Telemetry Analysis";
-  const dragClassName = isDragActive ? " upload-analysis-card--drag-active" : "";
+  const showProgress = ["uploading", "processing", "finalizing"].includes(viewState);
+  const mainPercent = resolveMainPercent({ viewState, uploadJob, uploadTransfer, visibleProgressPercent });
+  const processingStage = resolveBaselineProcessingStage({
+    viewState,
+    uploadJob,
+    uploadState,
+    uploadTransfer,
+    comparison,
+  });
+  const errorMessage = String(latestMessage || "Check the source dataset and try again.").trim();
+  const summary = baselineCompletionSummary({
+    result: baselineResult,
+    analysisResult,
+    uploadJob,
+    selectedFileLabel,
+  });
+  const submitWorkflow = comparison ? "analyze_new_data" : "create_baseline";
+  const title = comparison ? "Import Comparison Dataset" : "Establish Initial Baseline";
+  const subtitle = comparison
+    ? "Upload verified operating history to evaluate it against Neraium's active learned model. This workflow does not automatically redefine normal."
+    : "Upload historical operating data so Neraium can establish its initial understanding of how your infrastructure behaves.";
 
   function handleUploadDragOver(event) {
     event.preventDefault();
@@ -762,75 +755,95 @@ export default function IntakeFlowPanel({
   }
 
   return (
-    <Panel title="Import Historical Dataset" className="span-7 upload-ops-panel upload-ops-panel--command">
-      <form className={`intake-flow intake-flow--simple intake-flow--${viewState}`} onSubmit={(event) => handleUpload(event, "create_baseline")} aria-busy={showProgress}>
-        {(["noFile", "fileSelected"].includes(viewState)) ? <p className="intake-flow__subtitle">Choose whether this dataset creates a baseline, is analyzed against the active baseline, or extends it through controlled learning.</p> : null}
-        <input data-testid="csv-upload-input" ref={uploadInputRef} accept=".csv,text/csv" id="csv-upload" type="file" multiple className="intake-flow__input" style={hiddenFileInputStyle} aria-label="Choose telemetry dataset CSV files" tabIndex={-1} onChange={handleFileSelection} />
+    <Panel title={title} className="span-7 upload-ops-panel upload-ops-panel--command">
+      <form
+        className={`intake-flow intake-flow--simple intake-flow--${viewState}${comparison ? " intake-flow--comparison" : ""}`}
+        onSubmit={(event) => handleUpload(event, submitWorkflow)}
+        aria-busy={showProgress}
+      >
+        <p className="intake-flow__subtitle">{subtitle}</p>
+        <input
+          data-testid="csv-upload-input"
+          ref={uploadInputRef}
+          accept=".csv,text/csv"
+          id="csv-upload"
+          type="file"
+          multiple
+          className="intake-flow__input"
+          style={hiddenFileInputStyle}
+          aria-label="Choose historical operating dataset CSV files"
+          tabIndex={-1}
+          onChange={handleFileSelection}
+        />
 
-        <BaselineWorkflowStepper currentStep={workflowStep} />
+        {!comparison && ["noFile", "fileSelected"].includes(viewState) ? (
+          <>
+            <section className="baseline-purpose" aria-label="How Neraium learns">
+              <p>
+                <strong>This dataset becomes Neraium's first learned operating model.</strong>
+                Neraium discovers persistent relationships between signals instead of memorizing static thresholds.
+              </p>
+              <p>
+                Continuous learning begins here, but normal only evolves when new operating behavior is persistent and verified.
+              </p>
+            </section>
+            <BaselineWorkflow />
+          </>
+        ) : null}
 
-        {(viewState === "noFile" || viewState === "fileSelected") ? (
+        {["noFile", "fileSelected"].includes(viewState) ? (
           <section
-            className={`upload-analysis-card upload-analysis-card--baseline${dragClassName}`}
-            aria-label="Historical dataset import"
+            className={`upload-analysis-card upload-analysis-card--baseline${isDragActive ? " upload-analysis-card--drag-active" : ""}`}
+            aria-label={comparison ? "Comparison dataset import" : "Historical dataset for initial baseline"}
             onDragOver={handleUploadDragOver}
             onDragLeave={handleUploadDragLeave}
             onDrop={handleUploadDrop}
           >
             <div className="upload-analysis-card__content">
-              <div className="upload-baseline-card__header">
-                <div className="upload-analysis-card__copy">
-                  <h3>Choose Dataset</h3>
-                  <p>Future operation is compared with what Neraium learns here.</p>
-                </div>
-                <span className="upload-baseline-status" role="status" aria-live="polite"><i aria-hidden="true" />{fingerprintStatus}</span>
+              <div className="upload-analysis-card__copy">
+                <p className="upload-analysis-card__eyebrow">{comparison ? "Verified later history" : "Source operating history"}</p>
+                <h3>{comparison ? "Choose a comparison dataset" : "Teach Neraium from normal operation"}</h3>
+                <p>
+                  {comparison
+                    ? "Neraium will evaluate this history against the active model without treating temporary conditions as a new normal."
+                    : "Use representative historical data that captures the infrastructure's normal operating range, modes, and signal behavior."}
+                </p>
               </div>
 
               {hasSelectedFiles ? (
                 <DatasetFileRow filename={selectedFileLabel} size={selectedFileSize} status={fileValidationError ? "Unsupported" : "Ready"} />
               ) : (
-                <div className="upload-analysis-card__file">
-                  <i className="upload-analysis-card__file-icon" aria-hidden="true" />
-                  <span className="upload-analysis-card__file-copy">
-                    <span>No file selected</span>
-                    <strong>{fileKind} telemetry</strong>
+                <button type="button" className="baseline-file-dropzone" onClick={() => openFilePicker("csv")}>
+                  <span className="baseline-file-dropzone__icon" aria-hidden="true" />
+                  <span>
+                    <strong>Choose historical dataset</strong>
+                    <small>or drop a CSV, SCADA export, or historian export here</small>
                   </span>
-                  <i className="upload-analysis-card__file-state" aria-hidden="true" />
-                </div>
+                </button>
               )}
 
               {fileValidationError ? <p className="upload-error-message" role="alert">{fileValidationError}</p> : null}
 
-              <div className="upload-simple-actions upload-analysis-card__actions upload-baseline-card__actions">
-                {hasSelectedFiles ? (
-                  <>
-                    <button
-                      data-testid="process-upload-button"
-                      name="workflow"
-                      value="create_baseline"
-                      className="command-button upload-baseline-card__primary"
-                      type="submit"
-                      disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)}
-                      aria-disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)}
-                      title={fileValidationError || (isUploadProcessing(uploadState) ? "A telemetry workflow is already in progress." : "Create a Behavioral Digital Model candidate.")}
-                    >
-                      Create Baseline
-                    </button>
-                    <button type="button" className="secondary-command-button" disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)} onClick={(event) => handleUpload(event, "analyze_new_data")}>
-                      Analyze New Data
-                    </button>
-                    <button type="button" className="secondary-command-button" disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)} onClick={(event) => handleUpload(event, "extend_baseline")}>
-                      Extend Baseline
-                    </button>
-                    <button type="button" className="baseline-file-replace" onClick={() => openFilePicker("csv")}>Replace file</button>
-                  </>
-                ) : (
-                  <button type="button" className="command-button upload-baseline-card__primary" onClick={() => openFilePicker("csv")}>Choose Dataset</button>
-                )}
-              </div>
+              {hasSelectedFiles ? (
+                <div className="upload-simple-actions upload-analysis-card__actions upload-baseline-card__actions">
+                  <button
+                    data-testid="process-upload-button"
+                    name="workflow"
+                    value={submitWorkflow}
+                    className="command-button upload-baseline-card__primary"
+                    type="submit"
+                    disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)}
+                    aria-disabled={Boolean(fileValidationError) || isUploadProcessing(uploadState)}
+                    title={fileValidationError || (isUploadProcessing(uploadState) ? "A dataset workflow is already in progress." : undefined)}
+                  >
+                    {comparison ? "Evaluate Against Baseline" : "Establish Initial Baseline"}
+                  </button>
+                  <button type="button" className="baseline-file-replace" onClick={() => openFilePicker("csv")}>Replace file</button>
+                </div>
+              ) : null}
 
               <details className="upload-analysis-card__sources">
-                <summary>View supported formats</summary>
+                <summary>Supported data sources</summary>
                 <ul>
                   {SUPPORTED_HISTORICAL_SOURCES.map((source) => <li key={source}>{source}</li>)}
                 </ul>
@@ -840,103 +853,75 @@ export default function IntakeFlowPanel({
         ) : null}
 
         {showProgress ? (
-          <section className="upload-analysis-card upload-analysis-card--processing upload-analysis-card--compact" aria-live="polite" aria-label={`Analysis progress: ${statusText}`}>
-            <div className="upload-analysis-card__content">
-              <p className="upload-processing-file"><span>Dataset</span><strong>{selectedFileLabel}</strong></p>
-              <p className="upload-processing-file"><span>Workflow</span><strong>{workflowLabel}</strong></p>
-              <div className="upload-analysis-card__intelligence">
-                <OperationalFingerprintBuild percent={mainPercent} stage={fingerprintBuildStage} />
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {viewState === "complete" ? (
-          <section className="upload-analysis-card upload-simple-card--complete upload-analysis-card--compact" aria-labelledby="analysis-complete-heading" aria-live="polite">
-            <div className="upload-analysis-card__visual">
-              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
-            </div>
-            <div className="upload-analysis-card__content">
-              <div className="upload-complete-header">
-                <h3 id="analysis-complete-heading">{baselineCompletion ? "Baseline construction complete" : "Analysis complete"}</h3>
-              </div>
-              <p className="upload-processing-file"><span>Dataset</span><strong>{selectedFileLabel}</strong></p>
-              <dl className="upload-result-summary" aria-label="Analysis result summary">
-                {summary.map((item) => (
-                  <div key={item.label} className="upload-result-summary__item">
-                    <dt>{item.label}</dt>
-                    <dd>{item.value}</dd>
-                  </div>
-                ))}
-              </dl>
-              <div className="upload-simple-actions upload-completion-actions">
-                {baselineCompletion ? (
-                  activationState === "awaiting_approval" ? (
-                    <button type="button" className="command-button upload-completion-actions__primary" onClick={onApproveBaseline}>Approve and Activate</button>
-                  ) : (
-                    <button type="button" className="command-button upload-completion-actions__primary" disabled>{activationState === "active" ? "Baseline Active" : "Candidate Not Eligible"}</button>
-                  )
-                ) : (
-                  <button type="button" className="command-button upload-completion-actions__primary" onClick={onViewResults}>{completed?.status === "Evidence insufficient" ? "Review Evidence" : "View Results"}</button>
-                )}
-                <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onResetWorkspace}>Import Another Dataset</button>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {viewState === "completion_error" ? (
-          <section className="upload-analysis-card upload-simple-card--failed" role="alert" aria-live="assertive">
-            <div className="upload-analysis-card__visual">
-              <OperationalFingerprintBuild percent={100} stage={resolveFingerprintBuildStage({ viewState: "complete", uploadJob, uploadState })} complete />
-              <div className="upload-analysis-card__status">
-                <span>Status</span>
-                <strong>Behavior Baseline Established</strong>
-              </div>
-            </div>
-            <div className="upload-analysis-card__content">
-              <div className="upload-complete-header">
-                <h3>Analysis Saved, Results Not Opened</h3>
-                <span>{hasSelectedFiles ? selectedFileLabel : "Results saved"}</span>
-              </div>
-              <p className="upload-error-message">{errorMessage || "The analysis was saved, but its results could not be opened. Try opening the analysis again."}</p>
-              <RecoverySummary rows={failureRecoveryRows} />
-              <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={onViewResults}>Open Analysis Again</button>
-                <button type="button" className="secondary-command-button" onClick={onResetWorkspace}>Import Another Dataset</button>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {viewState === "failed" ? (
-          <section className="upload-analysis-card upload-simple-card--failed upload-analysis-card--compact upload-analysis-card--single" role="alert" aria-live="assertive">
-            <div className="upload-analysis-card__content">
-              <div className="upload-complete-header">
-                <h3>Dataset Import Failed</h3>
-                <span>{hasSelectedFiles ? selectedFileLabel : "No file selected"}</span>
-              </div>
-              <p className="upload-error-message">{errorMessage}</p>
-              <RecoverySummary rows={failureRecoveryRows} />
-              <div className="upload-simple-actions">
-                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles} title={!hasSelectedFiles ? "Choose the source dataset again before retrying." : "Retry this analysis."}>Retry Analysis</button>
-                <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose Dataset</button>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        {["failed", "completion_error"].includes(viewState) ? (
-          <AdvancedDetails
-            latestUploadSnapshot={latestUploadSnapshot}
+          <ProcessingPanel
+            comparison={comparison}
+            dataset={selectedFileLabel}
+            percent={mainPercent}
+            stage={processingStage}
             uploadJob={uploadJob}
             uploadState={uploadState}
             uploadTransfer={uploadTransfer}
             propagationLabel={propagationLabel}
             queuedWorkerDetail={queuedWorkerDetail}
-            latestMessage={normalizeStatusText(latestMessage) === normalizeStatusText(statusText) ? "" : latestMessage}
-            uploadDebug={uploadDebug}
+            latestMessage={normalizeStatusText(latestMessage) === normalizeStatusText(processingStage.description) ? "" : latestMessage}
+            latestUploadSnapshot={latestUploadSnapshot}
           />
+        ) : null}
+
+        {viewState === "complete" ? (
+          <SuccessState
+            comparison={comparison}
+            summary={summary}
+            onOpenBaseline={onOpenBaseline ?? onViewResults}
+            onImportComparisonDataset={onImportComparisonDataset ?? onResetWorkspace}
+            onViewResults={onViewResults}
+            onResetWorkspace={onResetWorkspace}
+          />
+        ) : null}
+
+        {viewState === "completion_error" ? (
+          <section className="baseline-failure" role="alert" aria-live="assertive">
+            <header>
+              <span aria-hidden="true">!</span>
+              <div>
+                <p>Recovery required</p>
+                <h3>Baseline Saved, Workspace Not Opened</h3>
+              </div>
+            </header>
+            <p className="upload-error-message">{errorMessage}</p>
+            <RecoverySummary viewState={viewState} hasSelectedFiles={hasSelectedFiles} selectedFileLabel={selectedFileLabel} uploadJob={uploadJob} errorMessage={errorMessage} />
+            <div className="upload-simple-actions">
+              <button type="button" className="command-button" onClick={onOpenBaseline ?? onViewResults}>Open Baseline Again</button>
+              <button type="button" className="secondary-command-button" onClick={onImportComparisonDataset ?? onResetWorkspace}>Import Comparison Dataset</button>
+            </div>
+          </section>
+        ) : null}
+
+        {viewState === "failed" ? (
+          <section className="baseline-failure" role="alert" aria-live="assertive">
+            <header>
+              <span aria-hidden="true">!</span>
+              <div>
+                <p>Initial learning stopped</p>
+                <h3>Baseline Could Not Be Established</h3>
+              </div>
+            </header>
+            <p className="upload-error-message">{errorMessage}</p>
+            <RecoverySummary viewState={viewState} hasSelectedFiles={hasSelectedFiles} selectedFileLabel={selectedFileLabel} uploadJob={uploadJob} errorMessage={errorMessage} />
+            <div className="upload-simple-actions">
+              <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles}>Retry Establishing Baseline</button>
+              <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose Different Dataset</button>
+            </div>
+            <AdvancedDetails
+              latestUploadSnapshot={latestUploadSnapshot}
+              uploadJob={uploadJob}
+              uploadState={uploadState}
+              uploadTransfer={uploadTransfer}
+              propagationLabel={propagationLabel}
+              queuedWorkerDetail={queuedWorkerDetail}
+              latestMessage={latestMessage}
+            />
+          </section>
         ) : null}
       </form>
     </Panel>
