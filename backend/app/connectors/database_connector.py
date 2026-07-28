@@ -13,6 +13,8 @@ import psycopg
 from app.connectors.models import ConnectorHealthStatus, NormalizedConnectorBatch
 from app.connectors.rest_connector import RESTConnector
 
+SQLITE_URI_PREFIX = "sqlite:///"
+
 
 class DatabaseConnector(RESTConnector):
     """Read-only relational database telemetry connector.
@@ -117,7 +119,7 @@ class DatabaseConnector(RESTConnector):
         parameters = self.config.get("parameters") or ()
         bounded_query = self._bounded_query(clean_query, limit)
 
-        if database_url.startswith("sqlite:///"):
+        if database_url.startswith(SQLITE_URI_PREFIX):
             return self._execute_sqlite(database_url, bounded_query, parameters, limit, timeout_seconds)
         if database_url.startswith(("postgresql://", "postgres://")):
             return self._execute_postgres(database_url, bounded_query, parameters, limit, timeout_seconds)
@@ -131,7 +133,7 @@ class DatabaseConnector(RESTConnector):
         limit: int,
         timeout_seconds: int,
     ) -> list[dict[str, Any]]:
-        raw_path = unquote(database_url.removeprefix("sqlite:///"))
+        raw_path = unquote(database_url.removeprefix(SQLITE_URI_PREFIX))
         if not raw_path or raw_path == ":memory:":
             raise ValueError("SQLite connector requires an existing database file.")
         if re.match(r"^/[A-Za-z]:/", raw_path):
@@ -270,8 +272,8 @@ class DatabaseConnector(RESTConnector):
         database_url = str(self.config.get("database_url") or "")
         if not database_url:
             return {"driver": "not_configured"}
-        if database_url.startswith("sqlite:///"):
-            raw_path = unquote(database_url.removeprefix("sqlite:///"))
+        if database_url.startswith(SQLITE_URI_PREFIX):
+            raw_path = unquote(database_url.removeprefix(SQLITE_URI_PREFIX))
             return {"driver": "sqlite", "database": Path(raw_path).name or "configured"}
         parsed = urlsplit(database_url)
         try:

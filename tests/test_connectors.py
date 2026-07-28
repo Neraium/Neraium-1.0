@@ -74,6 +74,21 @@ def test_csv_connector_upload_normalizes_records_and_updates_health(tmp_path) ->
     assert csv_status["records_ingested"] == 4
 
 
+def test_csv_connector_rejects_missing_or_non_csv_file(tmp_path) -> None:
+    client = build_client(tmp_path)
+
+    missing_response = client.post("/api/connectors/csv/upload")
+    invalid_response = client.post(
+        "/api/connectors/csv/upload",
+        files={"file": ("telemetry.txt", "timestamp,temperature\n", "text/plain")},
+    )
+
+    assert missing_response.status_code == 422
+    assert missing_response.json()["error_type"] == "validation_error"
+    assert invalid_response.status_code == 400
+    assert invalid_response.json()["detail"] == "Only CSV files are supported for the CSV connector."
+
+
 def test_csv_connector_reports_invalid_rows_without_stack_trace(tmp_path) -> None:
     client = build_client(tmp_path)
     csv_content = (
