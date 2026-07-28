@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
+from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
@@ -14,7 +15,7 @@ from app.connectors.models import (
     RestConnectorRequest,
 )
 from app.connectors.registry import CONNECTOR_CLASSES, build_connector_descriptors, get_connector
-from app.connectors.store import read_health_state, upsert_health_status
+from app.connectors.store import ConnectorHealthStore
 from app.core.security import require_admin_role, require_api_access
 
 router = APIRouter(tags=["connectors"], dependencies=[Depends(require_api_access), Depends(require_admin_role)])
@@ -59,9 +60,7 @@ async def upload_csv_connector(
     source_id: str = Form("customer-csv", min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$"),
     system_id: str = Form("facility-csv", min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$"),
 ) -> dict[str, Any]:
-    filename = file.filename or "telemetry.csv"
-    if len(filename) > 255:
-        raise HTTPException(status_code=400, detail="Filename must not exceed 255 characters.")
+    filename = validate_csv_upload_filename(file.filename)
     if Path(filename).suffix.lower() != ".csv":
         raise HTTPException(status_code=400, detail="Only CSV files are supported for the CSV connector.")
 
@@ -194,7 +193,7 @@ def ingest_database_connector(request: Request, payload: DatabaseConnectorReques
 
 @router.get("/connectors/health")
 def read_connectors_health(request: Request) -> dict[str, Any]:
-    stored = read_health_state(runtime_dir_from_request(request)).get("connectors", {})
+    stored = connector_health_store_from_request(request).read().get("connectors", {})
     statuses: list[dict[str, Any]] = []
     for descriptor in build_connector_descriptors():
         connector = build_connector_instance(descriptor.connector_type, {})
@@ -246,9 +245,36 @@ def build_action_response(batch: Any, health: ConnectorHealthStatus, message: st
     ).model_dump()
 
 
-def runtime_dir_from_request(request: Request) -> Path:
-    return request.app.state.settings.runtime_dir
+def connector_health_store_from_request(request: Request) -> ConnectorHealthStore:
+    store = request.app.state.connector_health_store
+    if not isinstance(store, ConnectorHealthStore):
+        raise RuntimeError("Connector health store is not configured.")
+    return store
 
 
 def update_runtime_health(request: Request, health: ConnectorHealthStatus) -> None:
-    upsert_health_status(runtime_dir_from_request(request), health)
+    connector_health_store_from_request(request).upsert(health)
+
+
+def validate_csv_upload_filename(filename: str | None) -> str:
+    value = filename or "telemetry.csv"
+    decoded = value
+    for _ in range(3):
+        next_value = unquote(decoded)
+        if next_value == decoded:
+            break
+        decoded = next_value
+
+    if len(value) > 255 or len(decoded) > 255:
+        raise HTTPException(status_code=400, detail="Filename must not exceed 255 characters.")
+    if (
+        not decoded
+        or decoded in {".", ".."}
+        or "\x00" in decoded
+        or any(ord(character) < 32 for character in decoded)
+        or "/" in decoded
+        or "\\" in decoded
+        or bool(PureWindowsPath(decoded).drive)
+    ):
+        raise HTTPException(status_code=400, detail="Filename must be a plain file name.")
+    return value

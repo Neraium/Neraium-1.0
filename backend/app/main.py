@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers
 
+from app.connectors.store import ConnectorHealthStore
 from app.contracts import ErrorResponse, enforce_query_contract, validate_contract_headers
 from app.core.config import Settings, get_settings
 from app.core.logging_config import bind_log_context, configure_logging, reset_log_context
@@ -220,6 +221,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         },
     )
     app.state.settings = settings
+    app.state.connector_health_store = ConnectorHealthStore(settings.runtime_dir)
 
     app.include_router(health.router, prefix="/api")
     app.include_router(app_info.router, prefix="/api")
