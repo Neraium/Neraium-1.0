@@ -55,13 +55,20 @@ test.describe("Initial baseline upload regression", () => {
     });
 
     await expect(page.getByRole("heading", { name: "Initial Baseline Established", level: 3 })).toBeVisible({ timeout: 30000 });
-    await expect(page.getByRole("button", { name: "Open Baseline" })).toBeVisible();
+    const openBaseline = page.getByRole("button", { name: "Open Baseline" });
+    await expect(openBaseline).toBeVisible();
+    await expect(page).toHaveURL(/\/workspace\/data-sources$/);
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
     expect(calls.sessions).toBe(1);
     expect(calls.objectPuts).toBe(1);
     expect(calls.completions).toBe(1);
     expect(calls.statusPolls).toBeGreaterThanOrEqual(1);
     expect(calls.baselineResults).toBe(1);
+    expect(calls.exactBaselineResults).toBe(0);
+
+    await openBaseline.click();
+    await expect(page).toHaveURL(/\/portfolio\/default\/baselines\/stored-baseline-model$/);
+    await expect(page.getByRole("heading", { name: "stored-baseline-model", level: 3 })).toBeVisible();
     expect(calls.exactBaselineResults).toBeGreaterThanOrEqual(1);
   });
 });
