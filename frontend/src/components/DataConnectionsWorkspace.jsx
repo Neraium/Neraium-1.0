@@ -1440,6 +1440,8 @@ export default function DataConnectionsWorkspace({
     try {
       const navigated = await onOpenBaseline(identity);
       if (navigated !== true) throw new Error("The application router rejected the baseline route.");
+      baselineNavigationPendingRef.current = false;
+      setBaselineNavigationPending(false);
       logBaselineNavigation("navigation success", identity, targetRoute);
     } catch {
       baselineNavigationPendingRef.current = false;

@@ -75,6 +75,7 @@ test.describe("Open Baseline navigation", () => {
     await page.goBack();
     await expect(page).toHaveURL(/\/workspace\/data-sources$/);
     await expect(page.getByRole("heading", { name: "Initial Baseline Established", level: 3 })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open Baseline" })).toBeEnabled();
     expect(errors).toEqual([]);
   });
 

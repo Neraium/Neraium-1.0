@@ -717,6 +717,7 @@ describe("upload and polling behavior", () => {
     await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("button", { name: "Opening Baseline…" }).disabled).toBe(true);
     finishNavigation(true);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Open Baseline" }).disabled).toBe(false));
   });
 
   it("shows a visible error when the router rejects navigation", async () => {
