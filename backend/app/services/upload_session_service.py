@@ -24,6 +24,7 @@ from app.services.upload_state import (
     has_active_session_artifact,
 )
 from app.services.upload_state_repository import (
+    read_latest_upload_record,
     read_latest_upload_result,
     read_latest_upload_summary,
     read_upload_result_by_job_id,
@@ -277,14 +278,21 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
     # result cannot be loaded into the API process merely by refreshing.
     summary = read_latest_upload_summary() if use_persisted else None
     summary = summary if isinstance(summary, dict) else {}
-    canonical = build_latest_upload_record(summary=summary, result=None)
+    canonical = read_latest_upload_record() if summary.get("transport_result_available") is True else None
+    if not isinstance(canonical, dict):
+        canonical = build_latest_upload_record(summary=summary, result=None)
     canonical_job_id = str(summary.get("job_id") or canonical.get("job_id") or "").strip() or None
     if not canonical_job_id:
         return _empty_response(include_persisted=use_persisted, request_id=request_id)
 
     memory_summary = read_upload_status(canonical_job_id) if canonical_job_id else None
     raw_memory_result = None
-    raw_persisted_result = read_latest_upload_result() if summary.get("transport_result_available") is True else None
+    raw_persisted_result = canonical.get("result") if isinstance(canonical.get("result"), dict) else None
+    if summary.get("transport_result_available") is True:
+        latest_transport_result = read_latest_upload_result()
+        latest_job_id = str((latest_transport_result or {}).get("job_id") or "").strip()
+        if isinstance(latest_transport_result, dict) and latest_job_id == canonical_job_id:
+            raw_persisted_result = latest_transport_result
     raw_active_result = (
         raw_memory_result
         if has_active_session_artifact(raw_memory_result, job_id=canonical_job_id)
@@ -533,7 +541,7 @@ def _missing_upload_status(requested_id: str, *, request_id: str | None) -> dict
         "error_code": "not_found",
         "error_type": "upload_session_missing",
         "error": "upload_session_missing",
-        "message": "Upload session, dataset, or stored object was not found.",
+        "message": "Upload session expired or was not found.",
         "failed_stage": "dataset_creation",
         "retryable": False,
         "state_backend": upload_state_backend(),
@@ -541,7 +549,7 @@ def _missing_upload_status(requested_id: str, *, request_id: str | None) -> dict
             analysis_id=requested_id or None,
             upload_id=requested_id or None,
             status="missing",
-            message="Upload session, dataset, or stored object was not found.",
+            message="Upload session expired or was not found.",
             errors=["upload_session_missing"],
         ),
         "session_state": SESSION_STATE_EMPTY,

@@ -754,10 +754,16 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
     if payload.get("job_id") and "status_url" not in payload:
         payload["status_url"] = f"/api/data/upload-status/{payload['job_id']}"
 
+    result = None
+    if payload.get("job_id"):
+        raw_result = read_upload_result_by_job_id(str(payload["job_id"]))
+        result = project_result_for_transport(raw_result)
+        if isinstance(result, dict):
+            payload["transport_result_available"] = True
     write_latest_upload_summary_payload(payload)
     if payload.get("job_id"):
         write_upload_status(str(payload["job_id"]), payload)
-        persist_latest_upload_state(summary=payload, result=None, keep_result=True)
+        persist_latest_upload_state(summary=payload, result=result, keep_result=True)
     else:
         persist_latest_upload_state(summary=payload, result=None, keep_result=True)
 

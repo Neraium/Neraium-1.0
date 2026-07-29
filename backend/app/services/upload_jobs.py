@@ -349,7 +349,7 @@ def _complete_with_partial_result(
     repository_write_upload_completion(job_id, result=result, summary=summary)
     UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
     cache_latest_upload_payload("result", project_result_for_transport(result) or result)
-    cache_latest_upload_payload("summary", summary)
+    cache_latest_upload_payload("summary", {**summary, "transport_result_available": True})
 
     try:
         upsert_upload_job(summary)
@@ -370,7 +370,7 @@ def _persist_completed_upload(job_id: str, *, result: dict[str, Any], summary: d
         pass
     UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
     cache_latest_upload_payload("result", project_result_for_transport(result) or result)
-    cache_latest_upload_payload("summary", summary)
+    cache_latest_upload_payload("summary", {**summary, "transport_result_available": True})
 
 
 
@@ -1552,6 +1552,8 @@ def _latest_job_summary(job_id: str, payload: dict[str, Any], scope: Any, status
     latest_summary.setdefault("progress", latest_summary.get("percent", 0))
     latest_summary.setdefault("result_available", status_text == "COMPLETE")
     latest_summary.setdefault("sii_completed", status_text == "COMPLETE")
+    if status_text == "COMPLETE":
+        latest_summary["transport_result_available"] = True
     latest_summary.setdefault("replay_ready", False)
     latest_summary.setdefault("replay_frame_count", 0)
     latest_summary.setdefault("latest_replay_frames", latest_summary.get("replay_frame_count", 0))
@@ -1590,7 +1592,12 @@ def write_job(*args) -> None:
         write_upload_status(job_id, payload)
     elif _job_updates_latest(status_text, processing_state):
         latest_summary = _latest_job_summary(job_id, payload, scope, status_text, processing_state)
-        repository_write_upload_status_progress(job_id, payload, latest_summary=latest_summary, keep_result=False)
+        repository_write_upload_status_progress(
+            job_id,
+            payload,
+            latest_summary=latest_summary,
+            keep_result=status_text == "COMPLETE",
+        )
         cache_latest_upload_payload("summary", latest_summary)
     else:
         write_upload_status(job_id, payload)
