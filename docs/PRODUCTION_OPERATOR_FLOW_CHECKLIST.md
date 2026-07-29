@@ -1,123 +1,79 @@
 # Production Operator Flow Checklist
 
-Use this checklist before commercial water-system pilot walkthroughs and operator acceptance sessions. Production outputs must come from backend SII analysis. If output is unavailable, the UI should show "Awaiting SII analysis" instead of a fabricated state.
+Use this checklist before pilot walkthroughs and operator acceptance sessions. Neraium is read-only: it learns normal operating behavior from representative historical data and presents evidence for engineer review. It does not autonomously control equipment, guarantee predictions, or replace engineers.
 
-## Mobile Checklist
+## Responsive workspace
 
-- First screen shows current infrastructure health without horizontal scroll.
-- Urgency, suspected location, operational runway, evidence quality, and latest update are readable within 3 to 5 seconds.
-- Upload, Test Connection, Poll Once, Start Polling, Evidence Trail, Historical Replay, and Export Evidence controls are touch-friendly.
-- Sample mode is explicitly labeled when enabled and never appears as live production SII output.
-- Error messages are readable, actionable, and do not expose stack traces or secrets.
-- Capture screenshots for System Health, Data Connections, Evidence Trail, Historical Replay, and Export Evidence.
+- Operations Brief, Systems, Findings, Investigations, and Data use their current navigation labels.
+- Primary actions, stage status, and error recovery remain readable without horizontal overflow on supported mobile, tablet, and desktop widths.
+- Keyboard focus is visible and every interactive control has an accessible name.
+- Long site, system, signal, and file names wrap or truncate without hiding the action or expanding the viewport.
+- Sample or demonstration data is explicitly labeled and never presented as production evidence.
 
-## Tablet Checklist
+## Required baseline flow
 
-- Layout uses balanced panels and does not stretch a phone layout across the full width.
-- System Health remains above raw chart detail.
-- Workflow controls remain visible and grouped in the intended order.
-- Evidence Trail cards, replay controls, and export actions do not overflow.
-- Capture portrait and landscape screenshots for the full operator flow.
+1. Open `Data` or select `Import Historical Dataset`.
+2. Confirm the `Establish Initial Baseline` heading.
+3. Choose representative historical CSV data.
+4. Select `Continue`.
+5. Observe Upload Data, Validate Signals, Learn Relationships, Establish Baseline, and Begin Learning.
+6. Open the established baseline or return to Operations Brief.
 
-## Desktop Checklist
+## Upload and processing semantics
 
-- Command surface feels calm, premium, and operator-focused.
-- Evidence and operational meaning are prioritized over raw telemetry density.
-- Backend health, readiness, and intake state are visible without debug clutter.
-- Keyboard focus states are visible for primary operator controls.
-- Capture screenshots for operator review and deployment records.
+- A completed file transfer remains complete if a later import stage fails.
+- Only the stage that actually failed is labeled `Failed`.
+- Later stages that did not run are labeled `Not started`.
+- `Retry Import` retries processing of the stored file without another object upload.
+- `Choose Another File` starts a new upload.
+- Status polling reaches a terminal complete or failed state and survives refresh.
+- Empty and oversized files return structured, actionable errors.
+- Server-unavailable messages distinguish a temporary service problem from a file or transfer problem.
+- Processing details disclose useful status without exposing stack traces, secrets, or raw private payloads.
 
-## Required Operator Flow
+## Learning claims
 
-1. Upload commercial water-system CSV.
-2. Configure API connection credentials and URL.
-3. Test Connection.
-4. Poll Once.
-5. Start Polling.
-6. Open Evidence Trail.
-7. Open Historical Replay.
-8. Export Evidence.
+- Copy states that Neraium learns normal operating behavior from representative historical data.
+- Temporary abnormalities do not redefine normal without persistent, verified operating history.
+- Findings remain evidence-linked and state limitations when evidence is insufficient.
+- The UI does not claim autonomous control, guaranteed prediction, a root-cause diagnosis, or replacement of engineers.
 
-## Upload Flow
+## Connector flow
 
-- Accepts valid CSV telemetry and returns a queued upload state.
-- Empty files return a structured error.
-- Oversize files return HTTP 413 with `upload_too_large`.
-- Upload progress reaches terminal `COMPLETE` or `FAILED` state.
-- Completed upload writes SII state and evidence trail metadata.
+- Connection configuration validates the endpoint and keeps secrets out of browser storage and logs.
+- Test Connection reports loading, confirmed success, timeout, authentication, network, and invalid-response states accurately.
+- Poll Once uses backend ingestion and does not fabricate findings when analysis output is unavailable.
+- Start Polling prevents duplicate starts, exposes a stop control, and recovers from backend unavailability.
 
-## API Config Flow
+## Screenshot requirements
 
-- URL validation catches missing or malformed endpoints.
-- Secrets are masked in UI and logs.
-- No secret is stored in localStorage.
-- Connection errors explain whether the issue is auth, network, timeout, or invalid response.
+- Mobile: Operations Brief, Data, baseline import, processing, success, and processing failure.
+- Tablet: portrait and landscape Operations Brief and baseline import.
+- Desktop: Operations Brief, Findings or Investigations, Data, and smoke endpoint output.
+- Include sample-mode screenshots only when the sample state is visibly labeled.
 
-## Test Connection
+## Pass criteria
 
-- Shows loading state while request is active.
-- Times out safely.
-- Shows success state only when backend confirms the connection.
-- Shows actionable failure copy without stack traces.
-
-## Poll Once
-
-- Runs through backend ingestion and SII processing.
-- Does not fabricate dashboard values when SII output is unavailable.
-- Evidence and latest state update only after backend result is received.
-
-## Start Polling
-
-- Prevents duplicate polling starts.
-- Shows active polling state and stop control.
-- Recovers cleanly from backend unavailability.
-- Logs polling start, stop, success, and failure with request correlation where available.
-
-## Evidence Trail
-
-- Shows what changed, when it changed, and which evidence supports the conclusion.
-- Failed runs remain audit-visible with safe error detail.
-- Latest run and historical runs are distinguishable.
-
-## Historical Replay
-
-- Replay controls are visible and usable on mobile, tablet, and desktop.
-- Empty state explains that SII history is not available yet.
-- Replay does not invent events when evidence is missing.
-
-## Export Evidence
-
-- Export includes run ID, timestamps, source metadata, and evidence summary.
-- Export does not include credentials, tokens, or raw secrets.
-- Export errors are structured and operator-readable.
-
-## Screenshot Requirements
-
-- Mobile: System Health first screen, Data Connections, Evidence Trail, Replay, Export.
-- Tablet: portrait and landscape System Health, workflow controls, Evidence Trail.
-- Desktop: command surface, Data Connections, Evidence Trail, smoke endpoint output.
-- Include sample mode screenshots only if clearly labeled as sample mode.
-
-## Pass Criteria
-
-- Required workflow completes without browser console errors.
+- The required workflow completes without browser console errors.
 - `/api/health` and `/api/ready` pass smoke checks.
-- 413 guardrail is confirmed for oversize uploads.
-- 503 guardrail is confirmed or documented as safely untestable in production.
+- Upload-session creation, object transfer, completion, status polling, retry, and refresh hydration meet their API contracts.
+- The 413 guardrail is confirmed for oversized uploads.
+- A 503 path is confirmed in staging/local or explicitly documented when unsafe to induce in production.
 - No production view silently falls back to sample data.
-- All operational conclusions are evidence-linked or show uncertainty.
+- All operational conclusions are evidence-linked or state their uncertainty.
 
-## Fail Criteria
+## Fail criteria
 
-- Production UI shows fabricated state instead of "Awaiting SII analysis".
-- Any secret appears in UI, logs, metrics, or exported evidence.
-- Mobile layout overflows or hides primary operator controls.
-- Upload, polling, Evidence Trail, Replay, or Export flow is blocked.
-- Backend returns HTML error pages for production API endpoints.
+- A completed transfer is described as an upload failure.
+- More than the actual failed stage is labeled `Failed`.
+- Retry Import uploads the file again or Choose Another File reuses the prior upload.
+- Production UI fabricates evidence or strengthens an unsupported claim.
+- Any secret appears in UI, logs, metrics, or an exported artifact.
+- Mobile layout overflows or hides a primary action.
 
-## Logging Guidance
+## Logging guidance
 
 - Preserve request IDs and correlation IDs in backend logs.
-- Log upload acceptance, upload rejection, SII processing success, SII processing failure, polling events, replay access, and export events.
+- Log upload-session creation, transfer completion, processing success/failure, retry, polling, and guardrail rejection.
 - Keep logs structured and concise.
-- Never log credentials, bearer tokens, full connection secrets, or raw private payloads unless explicitly approved for a local debugging session.
+- Never log credentials, bearer tokens, full connection secrets, or raw private payloads unless explicitly approved for local debugging.

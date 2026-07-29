@@ -108,7 +108,7 @@ Validated during refactor:
 - `cd /home/ubuntu/Neraium-1.0 && PYTHONPATH=./backend ./.venv/bin/pytest -q tests/test_data_upload.py -k 'latest_upload or canonical_identity or suppresses_prior or no_active_session'`
 - `cd /home/ubuntu/Neraium-1.0 && PYTHONPATH=./backend ./.venv/bin/pytest -q tests/test_replay_api.py`
 - `cd /home/ubuntu/Neraium-1.0 && PYTHONPATH=./backend ./.venv/bin/pytest -q tests/test_data_upload.py tests/test_replay_api.py tests/test_data_replay.py tests/test_messy_upload_reliability.py`
-- `cd /home/ubuntu/Neraium-1.0/frontend && npm test -- --run src/viewModels/__tests__/currentSession.test.js src/components/replay/ReplayWorkspace.test.js src/components/OnboardingWorkspace.upload.test.js src/App.test.js`
+- `cd /home/ubuntu/Neraium-1.0/frontend && npm test -- --run src/viewModels/__tests__/currentSession.test.js src/components/replay/ReplayWorkspace.test.js src/components/DataConnectionsWorkspace.stale-progress.test.js src/App.test.js`
 - `cd /home/ubuntu/Neraium-1.0/frontend && npm run build`
 
 Final exact command results are recorded from the terminal run in the completion report.

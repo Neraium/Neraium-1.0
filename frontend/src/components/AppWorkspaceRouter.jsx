@@ -124,7 +124,7 @@ export default function AppWorkspaceRouter({
         errorBoundaryResetKey={errorBoundaryResetKey}
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
-        contextLabel="Data Connections"
+        contextLabel="Data"
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}

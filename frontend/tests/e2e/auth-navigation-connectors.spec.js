@@ -53,7 +53,7 @@ async function signIn(page, email = "e2e-admin@neraium.test", password = "e2e-pa
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
 }
 
 test.describe("Authentication, navigation, connectors, and permissions", () => {
@@ -95,8 +95,8 @@ test.describe("Authentication, navigation, connectors, and permissions", () => {
 
   test("an expired server session returns the user to sign in", async ({ page, context }) => {
     await page.goto("/workspace");
-    await expect(page.getByRole("main", { name: "Neraium platform workspace" })).toBeVisible();
-    const administrationButton = page.getByRole("button", { name: "Governance / Administration" });
+    await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
+    const administrationButton = page.getByRole("button", { name: "Administration" });
     await expect(administrationButton).toBeVisible();
     await page.route("**/api/observability/evp-governance*", (route) => route.fulfill({
       status: 401,

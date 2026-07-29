@@ -21,7 +21,7 @@ test.describe("Accessibility audit", () => {
     const connections = page.getByRole("button", { name: "Data", exact: true });
     await connections.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Establish Initial Baseline", level: 2 })).toBeVisible();
   });
 
   test("portfolio passes automated serious and critical WCAG rules", async ({ page }) => {

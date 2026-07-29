@@ -232,9 +232,9 @@ The six reproduced failures and their traced causes were:
 | `...::test_frontend_upload_progress_uses_propagation_fields_with_fallback` | expected old stage copy in the rendering panel | Stage contract moved to `viewModels/uploadFlow.js` (`Import`, `Check`, `Prepare`, `Learn`, evidence). Updated the assertion source and current labels. |
 | `...::test_mobile_upload_limit_and_guidance_are_operational_grade` | expected inline 250 MiB constant and obsolete copy | Current workspace imports the shared 512 MiB limit from `uploadApi.js`. Updated the assertion to the shared contract and current guidance. |
 | `...::test_frontend_uses_single_data_connections_workspace_for_uploads` | expected navigation label `Data Connections` | Stable workspace ID remains `data-connections`; current product label is `Data`. Updated only the stale label assertion. |
-| `...::test_retry_analysis_targets_current_uploaded_job` | expected obsolete initial CTA copy | Retry still targets the current job and renders `Retry Analysis`; current initial CTA is `Start Baseline Analysis`. Updated only the stale copy assertion. |
+| `...::test_retry_analysis_targets_current_uploaded_job` | expected obsolete initial CTA copy | Retry still targets the current job and renders `Retry Analysis`; the later initial-baseline redesign replaced that CTA with `Continue`. This cross-language source assertion was removed in the subsequent UI audit cleanup. |
 
-All six assertions already failed at the pre-Phase-2 recovery SHA or were introduced by commits that are ancestors of it. The Phase 2 commit changes no router, frontend source, `test_api_contracts.py`, or `test_frontend_upload_auth.py` file. No payload, ordering, compatibility, or frontend status change from Phase 2 caused them.
+All six assertions already failed at the pre-Phase-2 recovery SHA or were introduced by commits that are ancestors of it. The Phase 2 commit changes no router, frontend source, or `test_api_contracts.py` file. No payload, ordering, compatibility, or frontend status change from Phase 2 caused them.
 
 ## Component status and known limitations
 

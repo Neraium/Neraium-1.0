@@ -657,6 +657,7 @@
   border: 1px solid rgba(137, 163, 184, .12);
   border-radius: 8px;
   background: #050c14;
+  opacity: 1;
 }
 
 .upload-ops-panel--command .upload-advanced-details summary {

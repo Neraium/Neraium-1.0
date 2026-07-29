@@ -88,7 +88,7 @@ export default function HelpChangelogWorkspace({
 
         <Panel title="Service diagnostics" className="span-12 observation-center__panel">
           {rows.length === 0 ? (
-            <EmptyState title="Service diagnostics unavailable" body="Refresh the Command Center to run another health check. If diagnostics remain unavailable, contact an administrator." compact />
+            <EmptyState title="Service diagnostics unavailable" body="Refresh this page to run another health check. If diagnostics remain unavailable, contact an administrator." compact />
           ) : (
             <>
               <ul className="compact-list" data-testid="production-diagnostics">

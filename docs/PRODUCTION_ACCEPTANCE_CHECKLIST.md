@@ -12,18 +12,18 @@ Use this as the final go or no-go checklist for commercial water-system CSV uplo
 
 ## Operator Flow
 
-- [ ] Upload CSV passes.
-- [ ] Upload JSON or TXT telemetry path passes where supported.
-- [ ] API config flow passes.
+- [ ] `Import Historical Dataset` opens `Establish Initial Baseline`.
+- [ ] CSV upload passes through Upload Data, Validate Signals, Learn Relationships, Establish Baseline, and Begin Learning.
+- [ ] API connector configuration passes where enabled.
 - [ ] Test Connection passes.
 - [ ] Poll Once passes.
 - [ ] Start Polling passes and duplicate polling is prevented.
 - [ ] Stop Polling works cleanly.
-- [ ] Evidence Trail opens and explains what changed.
-- [ ] Historical Replay opens and shows available evidence history.
-- [ ] Export Evidence succeeds and contains traceable metadata.
+- [ ] Operations Brief, Findings, Investigations, Systems, and Data open with their current labels.
 - [ ] Empty states never display fake conclusions.
-- [ ] Loading states clearly distinguish waiting, processing, complete, failed, and unavailable.
+- [ ] A completed transfer is not described as an upload failure when later processing fails.
+- [ ] `Retry Import` retries the stored file; `Choose Another File` starts a new upload.
+- [ ] Only a failed stage is labeled `Failed`; later stages that did not run are labeled `Not started`.
 
 ## Guardrails
 
@@ -73,15 +73,14 @@ Use this as the final go or no-go checklist for commercial water-system CSV uplo
 ## Screenshots And Workflow Assets
 
 - [ ] README includes at least one current screenshot or short workflow GIF.
-- [ ] Mobile System Health captured.
-- [ ] Mobile Data Connections captured.
-- [ ] Mobile Evidence Trail captured.
-- [ ] Mobile Historical Replay captured.
-- [ ] Mobile Export Evidence captured.
+- [ ] Mobile Operations Brief captured.
+- [ ] Mobile Data captured.
+- [ ] Mobile Findings and Investigations captured.
+- [ ] Mobile baseline import captured.
 - [ ] Tablet portrait captured.
 - [ ] Tablet landscape captured.
-- [ ] Desktop command surface captured.
-- [ ] Upload success state captured.
+- [ ] Desktop Operations Brief captured.
+- [ ] Stored-transfer success and processing-failure states captured.
 - [ ] Upload failure state captured.
 - [ ] Smoke output captured.
 - [ ] Screenshots are current with the deployed UI.

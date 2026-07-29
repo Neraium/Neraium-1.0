@@ -30,8 +30,9 @@ test.describe("Large evidence payload containment", () => {
       expect(metrics.preCount).toBe(0);
       expect(metrics.bodyLength).toBeLessThan(30000);
       expect(metrics.width).toBeLessThanOrEqual(metrics.viewport + 1);
-      await expect(page.getByText("Technical details")).toBeVisible();
-      await expect(page.getByText("Scores, identifiers, and processing metadata")).toBeVisible();
+      await expect(page.getByTestId("operations-brief")).toBeVisible();
+      await expect(page.getByText("Technical details")).toHaveCount(0);
+      await expect(page.getByText("Scores, identifiers, and processing metadata")).toHaveCount(0);
     });
   }
 });

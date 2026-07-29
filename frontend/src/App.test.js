@@ -46,7 +46,7 @@ function suppressExpectedGateRenderWindowError() {
 }
 
 async function launchWorkspace() {
-  const launchButtons = screen.queryAllByRole("button", { name: /Open Portfolio|Open Command Center/ });
+  const launchButtons = screen.queryAllByRole("button", { name: /Open Portfolio/ });
   if (launchButtons.length) {
     fireEvent.click(launchButtons[0]);
   }
@@ -334,7 +334,7 @@ it("opens the operational workspace only for direct workspace route entry", asyn
   expect(screen.queryByTestId("home-page")).toBeNull();
 });
 
-it("routes Command Center CSV selections into the visible auto-start upload workflow", async () => {
+it("routes Operations Brief CSV selections into the visible auto-start upload workflow", async () => {
   render(h(App));
   await launchWorkspace();
 
@@ -431,7 +431,7 @@ describe("App telemetry completion navigation", () => {
     expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: false });
   });
 
-  it("does not leave Data Connections when an existing analysis is restored", async () => {
+  it("does not leave the Data workspace when an existing analysis is restored", async () => {
     render(h(App));
     await launchWorkspace();
 
@@ -556,7 +556,7 @@ describe("App telemetry completion navigation", () => {
     }
   });
 
-  it("passes the same canonical insight to Command Center and Insights", async () => {
+  it("passes the same canonical insight to Operations Brief and Insights", async () => {
     runtimeState.latestUploadResult = {
       job_id: "finding-job-9",
       observation_type: "trajectory_drift",

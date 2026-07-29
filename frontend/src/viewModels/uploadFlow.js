@@ -652,7 +652,7 @@ function uploadStageDetail(stage, index, job, roomContext) {
   }
   if (jobStatus === "complete") {
     return index === 7
-      ? "The Command Center is using the established behavior baseline."
+      ? "The workspace is using the established behavior baseline."
       : "Step complete.";
   }
   const details = [
@@ -663,8 +663,8 @@ function uploadStageDetail(stage, index, job, roomContext) {
     jobStatus === "structural_scoring" ? job.progress_label : "Relationship changes are being organized into subsystem behavior.",
     jobStatus === "building_fingerprint" ? job.progress_label : "The behavior baseline is being established from normalized telemetry.",
     jobStatus === "writing_state" ? job.progress_label : "Insights and supporting evidence are being prepared from observed behavior.",
-    ["cognition_ready", "saving_result"].includes(jobStatus) ? job.progress_label : "The behavior baseline is being persisted for Command Center review.",
-    "Completion will open the Command Center with the learned baseline.",
+    ["cognition_ready", "saving_result"].includes(jobStatus) ? job.progress_label : "The behavior baseline is being persisted for workspace review.",
+    "Completion will make the learned baseline available in the workspace.",
   ];
   return details[index] ?? stage;
 }

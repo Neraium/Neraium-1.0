@@ -362,14 +362,19 @@ def test_create_upload_job_enforces_streaming_size_limit() -> None:
 
         def __init__(self) -> None:
             self._chunks = [b"timestamp,value\n", b"2026-05-01,75\n"]
+            self.read_sizes: list[int] = []
 
-        async def read(self, _size: int) -> bytes:
+        async def read(self, size: int) -> bytes:
+            self.read_sizes.append(size)
             if self._chunks:
                 return self._chunks.pop(0)
             return b""
 
+    upload = FakeUploadFile()
     with pytest.raises(UploadTooLargeError):
-        asyncio.run(create_upload_job(FakeUploadFile(), max_size_bytes=16))
+        asyncio.run(create_upload_job(upload, max_size_bytes=16))
+
+    assert upload.read_sizes == [1024 * 1024, 1024 * 1024]
 
 
 def test_upload_returns_job_id_immediately_without_waiting_for_worker(monkeypatch) -> None:
@@ -2598,11 +2603,6 @@ def test_upload_status_marks_stalled_when_queued_without_heartbeat() -> None:
     assert payload["worker_state"] in {"stalled", "starting"}
     assert payload.get("queued_seconds") is None or payload["queued_seconds"] >= 0
 
-
-def test_upload_endpoint_streams_file_chunks_instead_of_full_read() -> None:
-    source = Path("backend/app/routers/data.py").read_text(encoding="utf-8")
-    assert "await file.read()" not in source
-    assert "await file.read(1024 * 1024)" in source
 
 
 def test_relationship_baseline_reports_sampling_metadata() -> None:

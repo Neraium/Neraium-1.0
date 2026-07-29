@@ -67,11 +67,13 @@ The active upload/analyze/dashboard path depends on these backend areas:
 
 The active frontend consumption path is:
 
+- `frontend/src/App.jsx`
+- `frontend/src/components/AppWorkspaceRouter.jsx`
+- `frontend/src/components/EngineeringReasoningWorkspace.jsx`
+- `frontend/src/components/DataConnectionsWorkspace.jsx`
 - `frontend/src/hooks/useFacilityRuntime.js`
 - `frontend/src/services/api/uploadApi.js`
 - `frontend/src/services/api/systemApi.js`
-- `frontend/src/components/workspaces/SystemBody/SystemBodyWorkspace.jsx`
-- `frontend/src/components/OperationalWorkflowWorkspace.jsx`
 
 ## Dependency Audit Result
 

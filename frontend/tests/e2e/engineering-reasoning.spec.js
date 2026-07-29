@@ -52,7 +52,7 @@ test.describe("Daily engineering workflows", () => {
   test("moves from Operations Brief to finding, investigation, evidence, and trace", async ({ page }) => {
     await openSite(page, { width: 1440, height: 900 });
     await expect(page.getByTestId("operations-brief")).toBeVisible();
-    await expect(page.getByText("1 new unexplained change.")).toBeVisible();
+    await expect(page.getByText("No new unexplained changes.")).toBeVisible();
     const card = page.locator(".operational-finding");
     await expect(card).toHaveCount(1);
     await expect(card.getByRole("heading", { name: "Pump demand no longer matches flow" })).toBeVisible();

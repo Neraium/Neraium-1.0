@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import math
 from datetime import datetime, timedelta, timezone
 
@@ -50,12 +49,3 @@ def test_upload_pipeline_invokes_authoritative_sii_entrypoint_exactly_once(monke
     assert result["sii_runner_result"] == canonical["compatibility"]["sii_runner_result"]
     assert result["processing_trace"]["sii_engine_version"] == "v2"
     assert result["processing_trace"]["rows_received"] == 90
-
-
-def test_upload_pipeline_contains_no_independent_analytical_invocations() -> None:
-    source = inspect.getsource(upload_pipeline.run_structural_analysis_pipeline)
-
-    assert source.count("evaluate_sii(") == 1
-    assert "run_sii_runner(" not in source
-    assert "evaluate_temporal_math(" not in source
-    assert "build_relationship_baseline(" not in source

@@ -1,78 +1,66 @@
 import { expect, test } from "./fixtures.js";
+import { installStoredBaselineUpload } from "./stored-upload-mock.js";
 
-async function openCommandCenter(page) {
-  await page.addInitScript(() => {
-    window.localStorage.setItem(
-      "neraium.local_auth.users",
-      JSON.stringify([
-        {
-          email: "operator@facility.com",
-          name: "Operator",
-          created_at: "2026-05-21T00:00:00.000Z",
-        },
-      ]),
-    );
-    window.localStorage.setItem("neraium.local_auth.session", "operator@facility.com");
-  });
+async function openBaselineImport(page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
   await expect(page.getByRole("main", { name: "Neraium operational workspace" })).toBeVisible();
+  await page.getByRole("button", { name: "Data", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Establish Initial Baseline", level: 2 })).toBeVisible();
 }
 
-async function startCommandCenterUpload(page, { name, csv }) {
-  await openCommandCenter(page);
-  await page.getByRole("button", { name: "Data", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
-  const uploadAcceptedPromise = page.waitForResponse(
-    (response) => response.url().includes("/api/data/upload") && response.request().method() === "POST",
-    { timeout: 30000 },
-  );
+async function startStoredBaselineImport(page, { name, csv, jobId, completeWhenPolled = false }) {
+  const calls = await installStoredBaselineUpload(page, { jobId, completeWhenPolled });
+  await openBaselineImport(page);
   await page.getByTestId("csv-upload-input").setInputFiles({
     name,
     mimeType: "text/csv",
     buffer: Buffer.from(csv, "utf8"),
   });
-  await page.getByRole("button", { name: "Start Baseline Analysis" }).click();
-  await expect(page.getByTestId("upload-workspace")).toBeVisible({ timeout: 30000 });
-  const uploadAccepted = await uploadAcceptedPromise;
-  expect(uploadAccepted.ok()).toBeTruthy();
+  await page.getByRole("button", { name: "Continue" }).click();
+  return calls;
 }
 
-test.describe("Setup + Upload regression", () => {
-  test("opens command-center upload entry without the setup wizard", async ({ page }) => {
-    await openCommandCenter(page);
+test.describe("Initial baseline upload regression", () => {
+  test("opens the baseline import without the retired setup wizard", async ({ page }) => {
+    await openBaselineImport(page);
     await expect(page.getByTestId("onboarding-root")).toHaveCount(0);
-    await page.getByRole("button", { name: "Data", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
     await expect(page.getByTestId("csv-upload-input")).toBeAttached();
+    await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
   });
 
-  test("command-center file selection opens the upload workspace", async ({ page }) => {
-    await startCommandCenterUpload(page, {
+  test("file submission enters the current initial-learning workflow", async ({ page }) => {
+    const calls = await startStoredBaselineImport(page, {
+      jobId: "e2e-sample",
       name: "e2e-sample.csv",
       csv: "timestamp,temperature,humidity\n2026-05-01T08:00:00Z,75.2,58\n",
     });
 
-    await expect(page.getByTestId("upload-workspace")).toBeVisible();
+    await expect(page.locator(".baseline-processing-panel")).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("progressbar", { name: "Validate, stage 2 of 4" })).toBeVisible();
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
+    expect(calls.sessions).toBe(1);
+    expect(calls.objectPuts).toBe(1);
+    expect(calls.completions).toBe(1);
   });
 
-  test("large CSV upload moves progress and completes analysis", async ({ page }) => {
+  test("stored CSV transfer completes the canonical baseline workflow", async ({ page }) => {
     const row = "2026-05-01T08:00:00Z,Chilled Water Plant,42.1,58.2,71.4,1.2\n";
-    const targetBytes = 16 * 1024 * 1024;
-    const repeats = Math.ceil(targetBytes / row.length);
-    const csv = `timestamp,room,supply_temp,return_temp,pump_speed,flow_rate\n${row.repeat(repeats)}`;
-
-    await startCommandCenterUpload(page, {
+    const csv = `timestamp,room,supply_temp,return_temp,pump_speed,flow_rate\n${row.repeat(256)}`;
+    const calls = await startStoredBaselineImport(page, {
+      jobId: "stored-baseline",
       name: "chilled_water_system_data.csv",
       csv,
+      completeWhenPolled: true,
     });
 
-    await expect(page.getByRole("progressbar", { name: /Telemetry transfer|Analysis/i })).toHaveAttribute("aria-valuenow", /[1-9][0-9]*|100/, { timeout: 30000 });
-    await expect(page.getByRole("region", { name: "Analysis complete" })).toBeVisible({ timeout: 120000 });
-    const viewResults = page.getByRole("button", { name: /View Results|Review Evidence|Open Portfolio/i });
-    await expect(viewResults.first()).toBeVisible();
-    await viewResults.first().click();
-    await expect(page.getByTestId("engineering-reasoning-platform")).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: "Initial Baseline Established", level: 3 })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("button", { name: "Open Baseline" })).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("We hit a workspace error");
+    expect(calls.sessions).toBe(1);
+    expect(calls.objectPuts).toBe(1);
+    expect(calls.completions).toBe(1);
+    expect(calls.statusPolls).toBeGreaterThanOrEqual(1);
+    expect(calls.baselineResults).toBe(1);
   });
 });

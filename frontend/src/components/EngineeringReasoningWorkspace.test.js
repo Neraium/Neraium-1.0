@@ -58,7 +58,7 @@ function analysisResult(overrides = {}) {
   return {
     facility_name: "North Plant",
     job_id: "run-42",
-    processed_at: "2026-07-26T05:00:00Z",
+    processed_at: new Date().toISOString(),
     sii_completed: true,
     sii_reliable_enough_to_show: true,
     data_quality: { coverage_percent: 82, warnings: ["Historian X was unavailable.", "3 dropped rows."] },

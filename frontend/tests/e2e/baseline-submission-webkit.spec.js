@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures.js";
+import { installStoredBaselineUpload } from "./stored-upload-mock.js";
 
 test.describe("mobile Safari baseline submission", () => {
   test.use({
@@ -7,21 +8,13 @@ test.describe("mobile Safari baseline submission", () => {
     hasTouch: true,
   });
 
-  test("the baseline button is the topmost tap target and immediately starts the current upload", async ({ page }) => {
-    let uploadRequests = 0;
-    page.on("request", (request) => {
-      const url = new URL(request.url());
-      if (url.pathname === "/api/data/upload" && request.method() === "POST") uploadRequests += 1;
-    });
-    await page.route("**/api/data/upload", async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 750));
-      await route.continue();
-    });
+  test("the baseline button is the topmost tap target and immediately starts the stored upload", async ({ page }) => {
+    const calls = await installStoredBaselineUpload(page, { jobId: "mobile-safari", objectDelayMs: 750 });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
     await page.getByRole("button", { name: "Import Historical Dataset", exact: true }).tap();
-    await expect(page.getByRole("heading", { name: "Import Historical Dataset", level: 2 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Establish Initial Baseline", level: 2 })).toBeVisible();
 
     await page.getByTestId("csv-upload-input").setInputFiles({
       name: "mobile-safari.csv",
@@ -32,7 +25,7 @@ test.describe("mobile Safari baseline submission", () => {
       ),
     });
 
-    const button = page.getByRole("button", { name: "Start Baseline Analysis" });
+    const button = page.getByRole("button", { name: "Continue" });
     await expect(button).toBeEnabled();
     const isTopmostTapTarget = await button.evaluate((element) => {
       const rect = element.getBoundingClientRect();
@@ -41,22 +34,20 @@ test.describe("mobile Safari baseline submission", () => {
     });
     expect(isTopmostTapTarget).toBe(true);
 
-    const accepted = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return url.pathname === "/api/data/upload" && response.request().method() === "POST";
-    });
     await button.tap();
-
-    await expect(page.getByText("Uploading dataset", { exact: true })).toBeVisible();
+    const progress = page.getByRole("progressbar", { name: /Upload, stage 1 of 4/ });
+    await expect(progress).toBeVisible();
     await expect(page.locator("form.intake-flow")).toHaveAttribute("aria-busy", "true");
-    await expect(page.locator(".upload-fingerprint-build__nodes b")).toHaveText([
-      "Validate", "Map", "Baseline", "Compare", "Evidence",
+    await expect(progress.getByRole("listitem")).toHaveText([
+      "1UploadSecurely transferring historical operating data.",
+      "2ValidateVerifying dataset integrity, timestamps, signal consistency, and data quality.",
+      "3LearnLearning how the infrastructure normally behaves by identifying persistent operating relationships across the dataset.",
+      "4Baseline ReadyInitial operating model successfully established.",
     ]);
-    await expect(page.getByRole("button", { name: "Start Baseline Analysis" })).toHaveCount(0);
-
-    const response = await accepted;
-    expect(response.ok()).toBe(true);
-    expect(uploadRequests).toBe(1);
+    await expect(page.getByRole("button", { name: "Continue" })).toHaveCount(0);
+    await expect.poll(() => calls.completions).toBe(1);
+    expect(calls.sessions).toBe(1);
+    expect(calls.objectPuts).toBe(1);
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
   });
 });

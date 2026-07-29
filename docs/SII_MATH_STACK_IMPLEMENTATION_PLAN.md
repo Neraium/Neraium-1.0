@@ -136,7 +136,7 @@ Initial expected behavior uses deterministic Theil–Sen-style pairwise median s
 
 Signal distribution memory uses per-run medians, MAD-derived robust scales, and empirical quantiles. Historical summaries evolve by documented observation-count weighting because raw telemetry is not duplicated into the behavioral model. Relationship volatility is MAD-derived over stored strength history. These methods do not assume Gaussian data.
 
-Compatibility summaries use an explicitly documented unweighted arithmetic mean of named, normalized evidence factors. Every factor is returned. The result is evidence compatibility—not a probability, likelihood, risk, diagnosis, or hidden score.
+Compatibility summaries use an explicitly documented unweighted arithmetic mean of named, normalized evidence factors. Every factor is returned. The result is evidence compatibility, not a probability, likelihood, risk, diagnosis, or hidden score.
 
 ### Phase 4 Acceptance Coverage
 
