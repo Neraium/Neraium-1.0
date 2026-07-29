@@ -671,6 +671,7 @@ function SuccessState({
   propagationLabel,
   queuedWorkerDetail,
   latestMessage,
+  baselineNavigationPending = false,
 }) {
   if (comparison) {
     return (
@@ -719,7 +720,15 @@ function SuccessState({
         <p>As verified operating history grows, Neraium continuously refines its understanding of normal while preserving enough historical context to detect meaningful and persistent changes in system behavior.</p>
       </div>
       <div className="upload-simple-actions upload-completion-actions">
-        <button type="button" className="command-button upload-completion-actions__primary" onClick={onOpenBaseline}>Open Baseline</button>
+        <button
+          type="button"
+          className="command-button upload-completion-actions__primary"
+          onClick={onOpenBaseline}
+          disabled={baselineNavigationPending}
+          aria-disabled={baselineNavigationPending}
+        >
+          {baselineNavigationPending ? "Opening Baseline…" : "Open Baseline"}
+        </button>
         <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onImportComparisonDataset}>Import Comparison Dataset</button>
       </div>
       <AdvancedDetails
@@ -761,6 +770,7 @@ export default function IntakeFlowPanel({
   onResetWorkspace,
   onViewResults,
   onOpenBaseline,
+  baselineNavigationPending = false,
   onImportComparisonDataset,
 }) {
   void uploadStateMessage;
@@ -922,6 +932,7 @@ export default function IntakeFlowPanel({
             comparison={comparison}
             summary={summary}
             onOpenBaseline={onOpenBaseline ?? onViewResults}
+            baselineNavigationPending={baselineNavigationPending}
             onImportComparisonDataset={onImportComparisonDataset ?? onResetWorkspace}
             onViewResults={onViewResults}
             onResetWorkspace={onResetWorkspace}
@@ -947,7 +958,7 @@ export default function IntakeFlowPanel({
             <p className="upload-error-message">{errorMessage}</p>
             <RecoverySummary viewState={viewState} hasSelectedFiles={hasSelectedFiles} selectedFileLabel={selectedFileLabel} uploadJob={uploadJob} errorMessage={errorMessage} />
             <div className="upload-simple-actions">
-              <button type="button" className="command-button" onClick={onOpenBaseline ?? onViewResults}>Open Baseline Again</button>
+              <button type="button" className="command-button" onClick={onOpenBaseline ?? onViewResults} disabled={baselineNavigationPending} aria-disabled={baselineNavigationPending}>{baselineNavigationPending ? "Opening Baseline…" : "Open Baseline Again"}</button>
               <button type="button" className="secondary-command-button" onClick={onImportComparisonDataset ?? onResetWorkspace}>Import Comparison Dataset</button>
             </div>
           </section>

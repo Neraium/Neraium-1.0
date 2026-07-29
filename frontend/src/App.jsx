@@ -68,11 +68,18 @@ function App() {
   const handleBaselineSelected = useCallback((identity, { replace = false } = {}) => {
     const nextPath = baselineRoutePath(identity?.portfolioId, identity?.baselineId);
     if (!nextPath) return false;
+    if (typeof window !== "undefined") {
+      try {
+        if (window.location.pathname !== nextPath) {
+          window.history[replace ? "replaceState" : "pushState"]({}, "", nextPath);
+        }
+        if (window.location.pathname !== nextPath) return false;
+      } catch {
+        return false;
+      }
+    }
     setSelectedBaselineIdentity(identity);
     setActiveWorkspaceState("data-connections");
-    if (typeof window !== "undefined" && window.location.pathname !== nextPath) {
-      window.history[replace ? "replaceState" : "pushState"]({}, "", nextPath);
-    }
     return true;
   }, []);
 

@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL, API_ROUTE_MODE, CONFIGURED_API_BASE_URL } from "../config";
 import {
   normalizeUploadJob,
@@ -18,7 +18,8 @@ import {
 import * as uploadStateView from "../viewModels/uploadState";
 import { LARGE_UPLOAD_MAX_BYTES, retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { clearBaselineResultCache, fetchBaselineResultById } from "../services/api/baselineApi";
-import { baselineIdentityFromResult, persistBaselineSelection, readPersistedBaselineSelection } from "../viewModels/baselineSelection";
+import { baselineIdentityFromResult, baselineRoutePath, persistBaselineSelection, readPersistedBaselineSelection } from "../viewModels/baselineSelection";
+import { getCurrentWorkspaceId } from "../services/datasetSessionCache";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
 const MAX_UPLOAD_BYTES = LARGE_UPLOAD_MAX_BYTES;
@@ -236,6 +237,76 @@ function isTerminalFailedPayload(payload = {}) {
   return state === "failed" || state === "cancelled";
 }
 
+function normalizedBaselineStateSource(value, fallback = "hydration") {
+  const normalized = String(value ?? "").trim().toLowerCase().replaceAll(" ", "_");
+  return ["completion_response", "hydration", "cache", "active_baseline_fetch"].includes(normalized)
+    ? normalized
+    : fallback;
+}
+
+export function resolveOpenBaselineIdentity({
+  selectedBaselineIdentity = null,
+  uploadJob = null,
+  uploadResult = null,
+  latestUploadResult = null,
+  latestUploadSnapshot = null,
+} = {}) {
+  const candidates = [
+    uploadJob?.baseline_result,
+    uploadResult,
+    latestUploadResult,
+    latestUploadSnapshot?.baseline_result,
+    latestUploadSnapshot,
+  ].filter(Boolean);
+  const selectedBaselineId = String(
+    uploadJob?.selected_baseline_id
+      ?? uploadResult?.selected_baseline_id
+      ?? latestUploadResult?.selected_baseline_id
+      ?? selectedBaselineIdentity?.baselineId
+      ?? "",
+  ).trim();
+  const portfolioHint = String(
+    uploadJob?.portfolio_id
+      ?? uploadJob?.system_id
+      ?? uploadResult?.portfolio_id
+      ?? latestUploadResult?.portfolio_id
+      ?? selectedBaselineIdentity?.portfolioId
+      ?? getCurrentWorkspaceId(),
+  ).trim();
+  const persisted = portfolioHint
+    ? readPersistedBaselineSelection(portfolioHint, selectedBaselineId || null)
+    : null;
+  const stateSource = normalizedBaselineStateSource(
+    uploadJob?.state_source ?? selectedBaselineIdentity?.stateSource ?? persisted?.stateSource,
+    persisted ? "cache" : "hydration",
+  );
+  const fallback = {
+    ...persisted,
+    ...selectedBaselineIdentity,
+    ...(selectedBaselineId ? { baselineId: selectedBaselineId } : {}),
+    ...(portfolioHint ? { portfolioId: portfolioHint, systemId: selectedBaselineIdentity?.systemId ?? portfolioHint } : {}),
+  };
+
+  for (const candidate of candidates) {
+    const identity = baselineIdentityFromResult(candidate, fallback, stateSource);
+    if (identity && (!selectedBaselineId || identity.baselineId === selectedBaselineId)) return identity;
+  }
+  return baselineIdentityFromResult({}, fallback, stateSource);
+}
+
+function logBaselineNavigation(event, identity, targetRoute, reason = null) {
+  const details = {
+    event,
+    baselineId: String(identity?.baselineId ?? "").trim() || null,
+    targetRoute: String(targetRoute ?? "").trim() || null,
+  };
+  if (reason) details.reason = reason;
+  if (event === "navigation failure") console.warn("[neraium] baseline navigation", details);
+  else console.info("[neraium] baseline navigation", details);
+}
+
+const BaselineDetailView = lazy(() => import("./BaselineDetailView"));
+
 export default function DataConnectionsWorkspace({
   accessCode,
   apiFetch,
@@ -252,7 +323,6 @@ export default function DataConnectionsWorkspace({
   currentUser = null,
   onOpenBaseline,
   selectedBaselineIdentity = null,
-  onBaselineSelected = () => false,
 }) {
   const seededSelectedFiles = useMemo(() => (Array.isArray(initialSelectedFiles) ? initialSelectedFiles : []), [initialSelectedFiles]);
   const [selectedFiles, setSelectedFiles] = useState(() => seededSelectedFiles);
@@ -275,6 +345,14 @@ export default function DataConnectionsWorkspace({
   const [batchResults, setBatchResults] = useState([]);
   const [heartbeatTick, setHeartbeatTick] = useState(0);
   const [lastProgressAt, setLastProgressAt] = useState(() => Date.now());
+  const [baselineNavigationPending, setBaselineNavigationPending] = useState(false);
+  const [baselineDetailReloadKey, setBaselineDetailReloadKey] = useState(0);
+  const [baselineDetailState, setBaselineDetailState] = useState(() => ({
+    status: selectedBaselineIdentity?.baselineId ? "loading" : "idle",
+    result: null,
+    identity: null,
+    message: "",
+  }));
   void uploadResult;
   const uploadJobIdRef = useRef(null);
   const pollTimerRef = useRef(null);
@@ -295,12 +373,12 @@ export default function DataConnectionsWorkspace({
   const storedJobRestoreRef = useRef(false);
   const completionNavigationTimerRef = useRef(null);
   const completionNavigationEligibleRef = useRef(false);
+  const baselineNavigationPendingRef = useRef(false);
   const flowOwnerRef = useRef(String(currentUser?.email ?? currentUser?.id ?? ""));
   const flowSessionRef = useRef(0);
   const selectedBaselineIdRef = useRef(String(selectedBaselineIdentity?.baselineId ?? "").trim() || null);
   const exactBaselineRequestVersionRef = useRef(0);
   const exactBaselineAbortRef = useRef(null);
-  const displayedBaselineIdRef = useRef(null);
 
   const setUploadProcessingFlag = (active) => {
     if (typeof window !== "undefined") {
@@ -395,11 +473,24 @@ export default function DataConnectionsWorkspace({
       latest_result: sessionStore?.latestUploadResult ?? null,
       job_id: sessionJobId,
     });
+    const sessionResult = sessionStore?.latestUploadResult ?? null;
+    const hydrationSource = String(sessionStore?.uiState ?? "") === "restored" ? "cache" : "hydration";
+    const hydratedIdentity = baselineIdentityFromResult(sessionResult ?? normalizedSessionJob, {}, hydrationSource);
+    if (hydratedIdentity) persistBaselineSelection(hydratedIdentity);
     uploadJobIdRef.current = sessionJobId;
     uploadStatusPathRef.current = normalizeUploadStatusPath(normalizedSessionJob?.status_url, sessionJobId);
     window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, sessionJobId);
-    setUploadJob(normalizedSessionJob);
-    setUploadResult(sessionStore?.latestUploadResult ?? null);
+    setUploadJob({
+      ...normalizedSessionJob,
+      ...(hydratedIdentity ? {
+        selected_baseline_id: hydratedIdentity.baselineId,
+        established_baseline_id: hydratedIdentity.baselineId,
+        portfolio_id: hydratedIdentity.portfolioId,
+        system_id: hydratedIdentity.systemId,
+        state_source: hydratedIdentity.stateSource,
+      } : {}),
+    });
+    setUploadResult(sessionResult);
     if (["verified", "restored"].includes(String(sessionStore?.uiState ?? ""))) {
       setUploadState("complete");
       setUploadProcessingFlag(false);
@@ -435,7 +526,7 @@ export default function DataConnectionsWorkspace({
       const state = normalizeUploadStatus(normalized?.processing_state ?? normalized?.status);
       if (state === "complete") {
         setUploadState("complete");
-        await completeUploadHandoff(normalized, storedJobId);
+        await completeUploadHandoff(normalized, storedJobId, "cache");
       } else if (["failed", "error", "timeout", "cancelled"].includes(state)) {
         markUploadFailed({
           message: normalized?.message ?? normalized?.error ?? "Dataset import failed.",
@@ -519,68 +610,58 @@ export default function DataConnectionsWorkspace({
       exactBaselineRequestVersionRef.current += 1;
       exactBaselineAbortRef.current?.abort();
       selectedBaselineIdRef.current = null;
-      displayedBaselineIdRef.current = null;
+      setBaselineDetailState({ status: "idle", result: null, identity: null, message: "", notFound: false });
       return undefined;
     }
+
     selectedBaselineIdRef.current = routeBaselineId;
-    if (displayedBaselineIdRef.current && displayedBaselineIdRef.current !== routeBaselineId) {
-      setUploadResult(null);
-      setUploadJob(null);
-      setUploadState("idle");
-    }
     const persisted = readPersistedBaselineSelection(routePortfolioId, routeBaselineId);
-    const requestedIdentity = { ...persisted, ...selectedBaselineIdentity, baselineId: routeBaselineId, portfolioId: routePortfolioId };
+    const requestedIdentity = {
+      ...persisted,
+      ...selectedBaselineIdentity,
+      baselineId: routeBaselineId,
+      portfolioId: routePortfolioId,
+    };
     exactBaselineRequestVersionRef.current += 1;
     const requestVersion = exactBaselineRequestVersionRef.current;
     exactBaselineAbortRef.current?.abort();
     const controller = new AbortController();
     exactBaselineAbortRef.current = controller;
+    setBaselineDetailState({ status: "loading", result: null, identity: requestedIdentity, message: "", notFound: false });
 
     fetchBaselineResultById({
       apiFetch,
       accessCode,
       portfolioId: routePortfolioId,
       baselineId: routeBaselineId,
+      forceRefresh: baselineDetailReloadKey > 0,
       signal: controller.signal,
     }).then(({ result, source }) => {
       if (controller.signal.aborted || exactBaselineRequestVersionRef.current !== requestVersion) return;
       if (selectedBaselineIdRef.current !== routeBaselineId) return;
       const identity = baselineIdentityFromResult(result, requestedIdentity, source);
-      if (!identity || identity.baselineId !== routeBaselineId || identity.portfolioId !== routePortfolioId) return;
+      if (!identity || identity.baselineId !== routeBaselineId || identity.portfolioId !== routePortfolioId) {
+        throw new Error("The baseline response did not match the selected route.");
+      }
       persistBaselineSelection(identity);
-      displayedBaselineIdRef.current = identity.baselineId;
-      uploadJobIdRef.current = identity.jobId;
-      setUploadResult(result);
-      setUploadJob({
-        ...result,
-        job_id: identity.jobId,
-        upload_id: identity.uploadId,
-        dataset_id: identity.datasetId,
-        baseline_candidate_id: identity.candidateId,
-        established_baseline_id: identity.baselineId,
-        selected_baseline_id: identity.baselineId,
-        portfolio_id: identity.portfolioId,
-        system_id: identity.systemId,
-        state_source: identity.stateSource,
-        baseline_result: result,
-        status: "COMPLETE",
-        processing_state: "save_complete",
-        percent: 100,
-        progress: 100,
-      });
-      setCurrentWorkflow(result?.workflow ?? "create_baseline");
-      setUploadError("");
-      setCompletionError("");
-      setUploadState("save_complete");
+      setBaselineDetailState({ status: "ready", result, identity, message: "", notFound: false });
     }).catch((error) => {
       if (controller.signal.aborted || error?.name === "AbortError") return;
       if (exactBaselineRequestVersionRef.current !== requestVersion || selectedBaselineIdRef.current !== routeBaselineId) return;
-      setCompletionError("The selected baseline could not be loaded. Refresh and retry.");
-      setUploadState("completion_error");
+      const notFound = Number(error?.status ?? 0) === 404;
+      setBaselineDetailState({
+        status: "error",
+        result: null,
+        identity: requestedIdentity,
+        notFound,
+        message: notFound
+          ? `Baseline ${routeBaselineId} was not found in portfolio ${routePortfolioId}.`
+          : `Baseline ${routeBaselineId} could not be loaded. Check the connection and retry.`,
+      });
     });
 
     return () => controller.abort();
-  }, [accessCode, apiFetch, selectedBaselineIdentity]);
+  }, [accessCode, apiFetch, baselineDetailReloadKey, selectedBaselineIdentity]);
 
   useEffect(() => {
     if (headless || uploadState !== "save_complete" || typeof onUploadComplete !== "function") return undefined;
@@ -705,7 +786,7 @@ export default function DataConnectionsWorkspace({
     }
   }
 
-  async function completeUploadHandoff(completedPayload, requestedJobId) {
+  async function completeUploadHandoff(completedPayload, requestedJobId, identitySource = "completion_response") {
     const jobId = completedPayload?.dataset_id ?? completedPayload?.job_id ?? requestedJobId ?? uploadJobIdRef.current ?? null;
     const completedWorkflow = completedPayload?.workflow ?? "legacy_analysis";
     if (isBaselineWorkflow(completedWorkflow)) {
@@ -723,14 +804,11 @@ export default function DataConnectionsWorkspace({
         jobId,
         uploadId: completedPayload?.upload_id ?? jobId,
         datasetId: completedPayload?.dataset_id ?? jobId,
-      }, "completion_response");
+      }, identitySource);
       if (!identity) throw new Error("The completed baseline identifiers were unavailable.");
-      selectedBaselineIdRef.current = identity.baselineId;
       uploadJobIdRef.current = identity.jobId ?? jobId;
       clearBaselineResultCache({ portfolioId: identity.portfolioId, baselineId: identity.baselineId });
       persistBaselineSelection(identity);
-      displayedBaselineIdRef.current = identity.baselineId;
-      onBaselineSelected(identity, { replace: true });
 
       const activationState = baselineResult?.activation?.state ?? baselineResult?.candidate_model?.status;
       setUploadProcessingFlag(false);
@@ -1168,8 +1246,8 @@ export default function DataConnectionsWorkspace({
       ?? uploadJob?.baseline_result?.candidate_model?.model_id
       ?? "",
   ).trim();
-  const routeBaselineId = String(selectedBaselineIdentity?.baselineId ?? selectedBaselineIdRef.current ?? "").trim();
-  const baselineResult = routeBaselineId && resultBaselineId && routeBaselineId !== resultBaselineId
+  const selectedCompletionBaselineId = String(uploadJob?.selected_baseline_id ?? "").trim();
+  const baselineResult = selectedCompletionBaselineId && resultBaselineId && selectedCompletionBaselineId !== resultBaselineId
     ? null
     : uploadResult?.candidate_model ? uploadResult : uploadJob?.baseline_result ?? null;
 
@@ -1318,19 +1396,60 @@ export default function DataConnectionsWorkspace({
   }
 
   async function openCompletedBaseline() {
-    const candidateResult = uploadResult?.candidate_model ? uploadResult : uploadJob?.baseline_result;
-    if (!candidateResult?.candidate_model) {
-      await viewCompletedResults();
-      return;
-    }
-    const activationState = candidateResult?.activation?.state ?? candidateResult?.candidate_model?.status;
-    let selectedResult = candidateResult;
-    if (activationState === "awaiting_approval") {
+    if (baselineNavigationPendingRef.current) return;
+
+    let selectedResult = uploadResult?.candidate_model ? uploadResult : uploadJob?.baseline_result ?? null;
+    const activationState = selectedResult?.activation?.state ?? selectedResult?.candidate_model?.status;
+    if (selectedResult?.candidate_model && activationState === "awaiting_approval") {
       selectedResult = await approveBaselineCandidate();
       if (!selectedResult) return;
     }
-    const identity = baselineIdentityFromResult(selectedResult, selectedBaselineIdentity ?? {}, "completion_response");
-    if (identity && typeof onOpenBaseline === "function") await onOpenBaseline(identity);
+
+    const identity = resolveOpenBaselineIdentity({
+      selectedBaselineIdentity,
+      uploadJob,
+      uploadResult: selectedResult ?? uploadResult,
+      latestUploadResult,
+      latestUploadSnapshot,
+    });
+    const targetRoute = baselineRoutePath(identity?.portfolioId, identity?.baselineId);
+    logBaselineNavigation("button activated", identity, targetRoute);
+    logBaselineNavigation("selected baseline ID", identity, targetRoute);
+    logBaselineNavigation("generated target route", identity, targetRoute);
+
+    if (!identity?.baselineId || !targetRoute) {
+      const message = "The selected baseline cannot be opened because its baseline ID is unavailable.";
+      setCompletionError(message);
+      setUploadError("");
+      setUploadState("completion_error");
+      logBaselineNavigation("navigation failure", identity, targetRoute, "missing_baseline_identity");
+      return;
+    }
+    if (typeof onOpenBaseline !== "function") {
+      const message = `Baseline ${identity.baselineId} could not be opened because navigation is unavailable.`;
+      setCompletionError(message);
+      setUploadError("");
+      setUploadState("completion_error");
+      logBaselineNavigation("navigation failure", identity, targetRoute, "navigation_unavailable");
+      return;
+    }
+
+    baselineNavigationPendingRef.current = true;
+    setBaselineNavigationPending(true);
+    setCompletionError("");
+    try {
+      const navigated = await onOpenBaseline(identity);
+      if (navigated !== true) throw new Error("The application router rejected the baseline route.");
+      logBaselineNavigation("navigation success", identity, targetRoute);
+    } catch {
+      baselineNavigationPendingRef.current = false;
+      setBaselineNavigationPending(false);
+      const message = `Baseline ${identity.baselineId} could not be opened. Please retry.`;
+      setCompletionError(message);
+      setUploadError("");
+      setUploadState("completion_error");
+      logBaselineNavigation("navigation failure", identity, targetRoute, "router_rejected");
+    }
   }
 
   if (headless) {
@@ -1338,6 +1457,18 @@ export default function DataConnectionsWorkspace({
       <div className="data-connections-workspace data-connections-workspace--headless" data-testid="headless-upload-workspace" aria-live="polite">
         <span className="sr-only">{latestStatusMessage}</span>
       </div>
+    );
+  }
+
+  if (selectedBaselineIdentity?.baselineId && selectedBaselineIdentity?.portfolioId) {
+    return (
+      <Suspense fallback={<div className="baseline-detail-route" role="status" aria-live="polite">Opening selected baseline…</div>}>
+        <BaselineDetailView
+          routeIdentity={selectedBaselineIdentity}
+          detailState={baselineDetailState}
+          onRetry={() => setBaselineDetailReloadKey((value) => value + 1)}
+        />
+      </Suspense>
     );
   }
 
@@ -1374,6 +1505,7 @@ export default function DataConnectionsWorkspace({
         onResetWorkspace={() => { resetLocalUploadClientState(currentWorkflow === "analyze_new_data" ? "analyze_new_data" : "create_baseline"); }}
         onViewResults={() => { void viewCompletedResults(); }}
         onOpenBaseline={() => { void openCompletedBaseline(); }}
+        baselineNavigationPending={baselineNavigationPending}
         onImportComparisonDataset={beginComparisonDataset}
       />
     </div>

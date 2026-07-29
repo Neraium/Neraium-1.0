@@ -39,7 +39,8 @@ export function baselineIdentityFromResult(result, fallback = {}, stateSource = 
       ?? fallback.candidateId,
   );
   const baselineId = identifier(
-    result?.established_baseline_id
+    result?.selected_baseline_id
+      ?? result?.established_baseline_id
       ?? result?.baseline_id
       ?? candidate?.baseline_id
       ?? candidate?.model_id

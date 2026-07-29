@@ -878,6 +878,22 @@
   color: #bac7d0;
 }
 
+/* Route-driven baseline detail. Completion actions remain above decorative layers on touch devices. */
+.baseline-success .upload-completion-actions {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+  pointer-events: auto;
+}
+
+.baseline-success .upload-completion-actions button {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(58, 156, 255, .28);
+}
+
 /* Actionable failure and recovery. */
 .baseline-failure {
   display: grid;

@@ -2,10 +2,11 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import DataConnectionsWorkspace, { formatAnalysisUpdateTime, frontendPollingTiming, queuedWorkerMessage } from "./DataConnectionsWorkspace";
+import DataConnectionsWorkspace, { formatAnalysisUpdateTime, frontendPollingTiming, queuedWorkerMessage, resolveOpenBaselineIdentity } from "./DataConnectionsWorkspace";
 import IntakeFlowPanel, { baselineCompletionSummary, failedImportStageRows, resolveBaselineProcessingStage } from "./setup/IntakeFlowPanel";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { clearBaselineResultCache } from "../services/api/baselineApi";
+import { persistBaselineSelection } from "../viewModels/baselineSelection";
 import { SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
 
 const h = React.createElement;
@@ -144,11 +145,14 @@ function namedBaseline({ id, jobId, filename, portfolioId = "default", signalCou
     portfolio_id: portfolioId,
     system_id: portfolioId,
     filename,
+    activation: { state: "active", activated_at: "2026-07-29T00:00:00Z" },
     candidate_model: {
       ...base.candidate_model,
       model_id: id,
       baseline_id: id,
       baseline_candidate_id: id,
+      status: "active",
+      activation: { state: "active", activated_at: "2026-07-29T00:00:00Z" },
       source: { ...base.candidate_model.source, job_id: jobId, upload_id: jobId, dataset_id: jobId, portfolio_id: portfolioId, system_id: portfolioId, filename },
       telemetry_schema: { numeric_columns: Array.from({ length: signalCount }, (_, index) => `signal-${index}`) },
       relationship_graph: { edges: Array.from({ length: relationshipCount }, (_, index) => ({ edge_id: `edge-${index}` })) },
@@ -445,6 +449,27 @@ describe("completion and recovery", () => {
 });
 
 describe("exact baseline selection regression", () => {
+  it("opens the selected baseline from cache without a completed job object", () => {
+    persistBaselineSelection({ baselineId: "bdm-v4-04f9195e", portfolioId: "default", stateSource: "completion_response" });
+    const identity = resolveOpenBaselineIdentity({ uploadJob: null, uploadResult: null, latestUploadResult: null, latestUploadSnapshot: null });
+
+    expect(identity).toEqual(expect.objectContaining({
+      baselineId: "bdm-v4-04f9195e",
+      portfolioId: "default",
+      stateSource: "cache",
+    }));
+    expect(identity.jobId).toBeNull();
+    expect(identity.datasetId).toBeNull();
+  });
+
+  it("shows a route-specific not-found error", async () => {
+    const apiFetch = vi.fn(async () => jsonResponse({ detail: "Baseline was not found." }, { ok: false, status: 404 }));
+    renderWorkspace({ apiFetch, selectedBaselineIdentity: { portfolioId: "default", baselineId: "missing-baseline" } });
+
+    expect(await screen.findByRole("heading", { name: "Baseline Not Found" })).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("Baseline missing-baseline was not found in portfolio default.");
+  });
+
   it("keeps completed baseline A authoritative when a stale baseline B hydration arrives", async () => {
     const baselineA = namedBaseline({ id: "baseline-a", jobId: "job-a", filename: "resort chw baseline.csv", signalCount: 27, relationshipCount: 200 });
     const baselineB = namedBaseline({ id: "baseline-b", jobId: "job-b", filename: "commercial water system.csv", signalCount: 31, relationshipCount: 169 });
@@ -459,8 +484,8 @@ describe("exact baseline selection regression", () => {
       if (String(path).includes("/baselines/baseline-a")) return jsonResponse(baselineA);
       return jsonResponse({});
     });
-    const onBaselineSelected = vi.fn();
-    const props = { apiFetch, latestUploadResult: baselineB, onBaselineSelected };
+    const onOpenBaseline = vi.fn(() => true);
+    const props = { apiFetch, latestUploadResult: baselineB, onOpenBaseline };
     const { rerender } = renderWorkspace(props);
 
     fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("resort chw baseline.csv")] } });
@@ -473,7 +498,9 @@ describe("exact baseline selection regression", () => {
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     expect(screen.getByText("resort chw baseline.csv")).toBeTruthy();
     expect(screen.queryByText("commercial water system.csv")).toBeNull();
-    expect(onBaselineSelected).toHaveBeenCalledWith(expect.objectContaining({ jobId: "job-a", datasetId: "job-a", baselineId: "baseline-a", portfolioId: "default" }), { replace: true });
+    expect(onOpenBaseline).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Open Baseline" }));
+    expect(onOpenBaseline).toHaveBeenCalledWith(expect.objectContaining({ jobId: "job-a", datasetId: "job-a", baselineId: "baseline-a", portfolioId: "default" }));
 
     fireEvent.click(screen.getByText("Processing details"));
     expect(screen.getByText("Selected baseline ID")).toBeTruthy();
@@ -663,6 +690,79 @@ describe("upload and polling behavior", () => {
       "/api/data/baselines/candidates/bdm-v1-baseline/approve",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  it("prevents duplicate baseline navigation from rapid activation", async () => {
+    const result = learnedBaseline();
+    result.activation = { state: "active" };
+    result.candidate_model = { ...result.candidate_model, status: "active", activation: { state: "active" } };
+    let finishNavigation;
+    const onOpenBaseline = vi.fn(() => new Promise((resolve) => { finishNavigation = resolve; }));
+    renderWorkspace({
+      onOpenBaseline,
+      hasActiveSession: true,
+      hasResumedSession: true,
+      latestUploadResult: result,
+      sessionStore: {
+        jobId: "baseline-job",
+        uiState: "verified",
+        latestUploadSnapshot: result,
+        latestUploadResult: result,
+      },
+    });
+
+    const button = await screen.findByRole("button", { name: "Open Baseline" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Opening Baseline…" }).disabled).toBe(true);
+    finishNavigation(true);
+  });
+
+  it("shows a visible error when the router rejects navigation", async () => {
+    const result = learnedBaseline();
+    result.activation = { state: "active" };
+    result.candidate_model = { ...result.candidate_model, status: "active", activation: { state: "active" } };
+    renderWorkspace({
+      onOpenBaseline: vi.fn(() => false),
+      hasActiveSession: true,
+      hasResumedSession: true,
+      latestUploadResult: result,
+      sessionStore: {
+        jobId: "baseline-job",
+        uiState: "verified",
+        latestUploadSnapshot: result,
+        latestUploadResult: result,
+      },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open Baseline" }));
+    expect(await screen.findByRole("heading", { name: "Baseline Saved, Workspace Not Opened" })).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("Baseline bdm-v1-baseline could not be opened. Please retry.");
+  });
+
+  it("does not substitute a job or dataset ID when the baseline ID is missing", async () => {
+    const result = learnedBaseline();
+    delete result.established_baseline_id;
+    delete result.baseline_candidate_id;
+    result.activation = { state: "active" };
+    result.candidate_model = { ...result.candidate_model, model_id: null, baseline_id: null, baseline_candidate_id: null, status: "active", activation: { state: "active" } };
+    renderWorkspace({
+      onOpenBaseline: vi.fn(() => true),
+      hasActiveSession: true,
+      hasResumedSession: true,
+      latestUploadResult: result,
+      sessionStore: {
+        jobId: "baseline-job",
+        uiState: "verified",
+        latestUploadSnapshot: result,
+        latestUploadResult: result,
+      },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open Baseline" }));
+    expect(await screen.findByRole("heading", { name: "Baseline Saved, Workspace Not Opened" })).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("baseline ID is unavailable");
   });
 
   it("moves the completed page into a separate comparison workflow without resetting the baseline", async () => {

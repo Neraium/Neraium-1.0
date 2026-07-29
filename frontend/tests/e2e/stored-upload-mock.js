@@ -2,9 +2,12 @@ export async function installStoredBaselineUpload(page, {
   jobId = "e2e-baseline-job",
   completeWhenPolled = false,
   objectDelayMs = 0,
+  modelId = `${jobId}-model`,
+  portfolioId = "default",
+  filename = `${jobId}.csv`,
 } = {}) {
-  const calls = { sessions: 0, objectPuts: 0, completions: 0, statusPolls: 0, baselineResults: 0, exactBaselineResults: 0 };
-  const modelId = `${jobId}-model`;
+  const calls = { sessions: 0, objectPuts: 0, completions: 0, statusPolls: 0, baselineResults: 0, exactBaselineResults: 0, latestUploads: 0 };
+  let completionAvailable = false;
   const statusUrl = `/api/data/upload-status/${jobId}`;
   const baselineResultUrl = `/api/data/baselines/jobs/${jobId}`;
   const exactBaselineResultUrl = `/api/data/baselines/${modelId}`;
@@ -37,8 +40,9 @@ export async function installStoredBaselineUpload(page, {
     dataset_id: jobId,
     baseline_candidate_id: modelId,
     established_baseline_id: modelId,
-    portfolio_id: "default",
-    system_id: "default",
+    portfolio_id: portfolioId,
+    system_id: portfolioId,
+    filename,
     workflow: "create_baseline",
     candidate_model: {
       model_id: modelId,
@@ -71,15 +75,34 @@ export async function installStoredBaselineUpload(page, {
   await page.route(uploadUrl, async (route) => {
     calls.objectPuts += 1;
     if (objectDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, objectDelayMs));
-    return route.fulfill({ status: 200, headers: { etag: `"${jobId}-etag"` }, body: "" });
+    return route.fulfill({ status: 200, headers: { etag: `"${jobId}-etag"`, "access-control-allow-origin": "*", "access-control-expose-headers": "etag" }, body: "" });
   });
   await page.route(`**/api/data/upload-session/${jobId}/complete`, (route) => {
     calls.completions += 1;
+    completionAvailable = true;
     return route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify(processing) });
   });
   await page.route(`**${statusUrl}`, (route) => {
     calls.statusPolls += 1;
+    if (completeWhenPolled) completionAvailable = true;
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(completeWhenPolled ? complete : processing) });
+  });
+  await page.route("**/api/data/latest-upload?*", (route) => {
+    calls.latestUploads += 1;
+    if (!completionAvailable) {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "empty", session_state: "empty", history: [] }) });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...complete,
+        session_state: "restored",
+        latest_result: baselineResult,
+        current_upload: { job_id: jobId, upload_id: jobId, dataset_id: jobId, status: "COMPLETE", result: baselineResult },
+        history: [],
+      }),
+    });
   });
   await page.route(`**${baselineResultUrl}`, (route) => {
     calls.baselineResults += 1;

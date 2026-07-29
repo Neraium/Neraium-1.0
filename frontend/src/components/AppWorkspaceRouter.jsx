@@ -146,7 +146,6 @@ export default function AppWorkspaceRouter({
             onUploadComplete={handleGateUploadComplete}
             onOpenBaseline={(identity) => onBaselineSelected(identity, { replace: false })}
             selectedBaselineIdentity={selectedBaselineIdentity}
-            onBaselineSelected={onBaselineSelected}
             sessionStore={liveOps.session}
             onResetDemo={handleResetDemo}
             formatClockTime={formatClockTime}
