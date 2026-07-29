@@ -62,5 +62,6 @@ test.describe("Initial baseline upload regression", () => {
     expect(calls.completions).toBe(1);
     expect(calls.statusPolls).toBeGreaterThanOrEqual(1);
     expect(calls.baselineResults).toBe(1);
+    expect(calls.exactBaselineResults).toBeGreaterThanOrEqual(1);
   });
 });

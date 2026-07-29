@@ -3,9 +3,11 @@ export async function installStoredBaselineUpload(page, {
   completeWhenPolled = false,
   objectDelayMs = 0,
 } = {}) {
-  const calls = { sessions: 0, objectPuts: 0, completions: 0, statusPolls: 0, baselineResults: 0 };
+  const calls = { sessions: 0, objectPuts: 0, completions: 0, statusPolls: 0, baselineResults: 0, exactBaselineResults: 0 };
+  const modelId = `${jobId}-model`;
   const statusUrl = `/api/data/upload-status/${jobId}`;
   const baselineResultUrl = `/api/data/baselines/jobs/${jobId}`;
+  const exactBaselineResultUrl = `/api/data/baselines/${modelId}`;
   const processing = {
     job_id: jobId,
     upload_session_id: jobId,
@@ -31,10 +33,16 @@ export async function installStoredBaselineUpload(page, {
   };
   const baselineResult = {
     job_id: jobId,
+    upload_id: jobId,
     dataset_id: jobId,
+    baseline_candidate_id: modelId,
+    established_baseline_id: modelId,
+    portfolio_id: "default",
+    system_id: "default",
     workflow: "create_baseline",
     candidate_model: {
-      model_id: `${jobId}-model`,
+      model_id: modelId,
+      baseline_id: modelId,
       version: 1,
       status: "active",
       activation: { state: "active", activated_at: "2026-07-29T00:00:00Z" },
@@ -75,6 +83,10 @@ export async function installStoredBaselineUpload(page, {
   });
   await page.route(`**${baselineResultUrl}`, (route) => {
     calls.baselineResults += 1;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(baselineResult) });
+  });
+  await page.route(`**${exactBaselineResultUrl}`, (route) => {
+    calls.exactBaselineResults += 1;
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(baselineResult) });
   });
 
