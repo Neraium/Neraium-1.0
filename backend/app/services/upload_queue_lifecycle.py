@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 from app.core.path_safety import StoragePathError, resolve_existing_storage_path, storage_key_for_server_path
 from app.services.baseline_contracts import is_baseline_workflow
-from app.services.dataset_scope import dataset_scope_from_payload, set_current_dataset_scope
+from app.services.dataset_scope import current_dataset_scope, dataset_scope_from_payload, set_current_dataset_scope
 from app.services.runtime_db import (
     claim_next_upload_job,
     complete_upload_queue_job,
@@ -32,7 +32,17 @@ def _parse_iso_timestamp(value: Any) -> datetime | None:
 
 
 def _log_queue_event(logger: logging.Logger, event: str, **fields: Any) -> None:
-    normalized = {"event": event, **fields}
+    job_id = str(fields.get("job_id") or "").strip() or None
+    scope = current_dataset_scope()
+    normalized = {
+        "event": event,
+        "correlation_id": fields.get("correlation_id") or job_id,
+        "dataset_id": fields.get("dataset_id") or job_id,
+        "upload_id": fields.get("upload_id") or job_id,
+        "user_id": fields.get("user_id") or scope.user_id,
+        "organization_id": fields.get("organization_id") or scope.tenant_id,
+        **fields,
+    }
     parts = []
     for key, value in normalized.items():
         if value is None:
@@ -241,7 +251,25 @@ class UploadQueueLifecycleService:
                 pass
             _log_queue_event(
                 self.logger,
-                "job_processing_started",
+                "storage_object_resolved",
+                job_id=job_id,
+                request_id=request_id,
+                source_filename=filename,
+                file_size_bytes=file_size_bytes,
+                processing_stage="file_storage",
+            )
+            _log_queue_event(
+                self.logger,
+                "csv_opened",
+                job_id=job_id,
+                request_id=request_id,
+                source_filename=filename,
+                file_size_bytes=file_size_bytes,
+                processing_stage="csv_parsing",
+            )
+            _log_queue_event(
+                self.logger,
+                "job_started",
                 job_id=job_id,
                 request_id=request_id,
                 filename=filename,

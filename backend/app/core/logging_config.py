@@ -180,9 +180,12 @@ class NeraiumJsonFormatter(logging.Formatter):
             or parsed_upload_session_id
             or current_upload_session_id()
         )
+        explicit_correlation_id = getattr(record, "correlation_id", None) or payload.get("correlation_id")
         if request_id:
             payload["request_id"] = redact_text(request_id)
-            payload["correlation_id"] = redact_text(request_id)
+        correlation_id = explicit_correlation_id or request_id
+        if correlation_id:
+            payload["correlation_id"] = redact_text(correlation_id)
         if upload_session_id:
             payload["upload_session_id"] = redact_text(upload_session_id)
 

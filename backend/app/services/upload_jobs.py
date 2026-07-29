@@ -37,6 +37,7 @@ from app.services.upload_completion import build_partial_upload_artifacts
 from app.services.upload_evidence import build_evidence_record_from_result, build_traceability_packet
 from app.services.upload_parser import json_payload_to_csv_text
 from app.services.upload_pipeline import run_structural_analysis_pipeline
+from app.services.upload_persistence import project_result_for_transport
 from app.services.upload_persistence import read_upload_history as read_upload_history_from_runtime
 from app.services.upload_persistence import summarize_result as summarize_result_payload
 from app.services.upload_queue_lifecycle import UploadQueueLifecycleService
@@ -96,6 +97,30 @@ MAX_INGESTION_ANALYSIS_ROWS = 100_000
 CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "5000"))
 CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "5000"))
 logger = logging.getLogger(__name__)
+
+
+def _log_processing_event(event: str, job_id: str, *, filename: str | None = None, **fields: Any) -> None:
+    scope = current_dataset_scope()
+    normalized = {
+        "event": event,
+        "correlation_id": job_id,
+        "dataset_id": job_id,
+        "upload_id": job_id,
+        "user_id": scope.user_id,
+        "organization_id": scope.tenant_id,
+        "job_id": job_id,
+        "source_filename": filename,
+        **fields,
+    }
+    logger.info(
+        "upload_processing_event %s",
+        " ".join(
+            f"{key}={str(value).replace(chr(10), ' ').replace(chr(13), ' ')[:500]}"
+            for key, value in normalized.items()
+            if value is not None
+        ),
+    )
+
 
 _STAGE_TIMING_PHASES = {
     "reading_csv": "validation",
@@ -323,7 +348,7 @@ def _complete_with_partial_result(
     )
     repository_write_upload_completion(job_id, result=result, summary=summary)
     UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
-    cache_latest_upload_payload("result", result)
+    cache_latest_upload_payload("result", project_result_for_transport(result) or result)
     cache_latest_upload_payload("summary", summary)
 
     try:
@@ -344,7 +369,7 @@ def _persist_completed_upload(job_id: str, *, result: dict[str, Any], summary: d
     except Exception:
         pass
     UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
-    cache_latest_upload_payload("result", result)
+    cache_latest_upload_payload("result", project_result_for_transport(result) or result)
     cache_latest_upload_payload("summary", summary)
 
 
@@ -1635,6 +1660,8 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
         _set_propagation_stage(job_id, stage="reading_csv", progress=10, label=_progress_label("reading_csv"))
 
     try:
+        _log_processing_event("parsing_started", job_id, filename=filename, processing_stage="csv_parsing")
+        _log_processing_event("validation_started", job_id, filename=filename, processing_stage="validation")
         snapshot = _stream_csv_snapshot(
             p,
             max_analysis_rows=parse_positive_int_env(
@@ -1642,6 +1669,23 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
                 MAX_INGESTION_ANALYSIS_ROWS,
             ),
             job_id=job_id,
+        )
+
+        _log_processing_event(
+            "parsing_completed",
+            job_id,
+            filename=filename,
+            processing_stage="csv_parsing",
+            row_count=snapshot.get("row_count"),
+            column_count=len(snapshot.get("columns") or []),
+        )
+        _log_processing_event(
+            "validation_completed",
+            job_id,
+            filename=filename,
+            processing_stage="validation",
+            row_count=snapshot.get("row_count"),
+            column_count=len(snapshot.get("columns") or []),
         )
 
         _set_propagation_stage(

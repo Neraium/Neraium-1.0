@@ -284,6 +284,54 @@ def test_retry_upload_analysis_requeues_current_uploaded_dataset(tmp_path) -> No
     assert status_payload["result_available"] is True
 
 
+def test_retry_upload_analysis_returns_existing_active_job_without_duplicate_enqueue(monkeypatch, tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8010, cors_origins=["*"], runtime_dir=tmp_path, process_role="api")
+    client = TestClient(create_app(settings))
+    monkeypatch.setattr(data_router, "_dispatch_upload_worker_for_runtime", lambda _runtime_dir: None)
+    job_id = "c" * 32
+    write_job({
+        "job_id": job_id,
+        "filename": "active.csv",
+        "status": "PROCESSING",
+        "processing_state": "processing",
+        "progress": 50,
+    })
+    enqueued = []
+    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda value: enqueued.append(value))
+
+    response = client.post(f"/api/data/upload/{job_id}/retry")
+
+    assert response.status_code == 202
+    assert response.json()["job_id"] == job_id
+    assert response.json()["retry_reused_existing_job"] is True
+    assert enqueued == []
+
+
+def test_retry_upload_analysis_recovers_deterministic_stored_object(monkeypatch, tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8010, cors_origins=["*"], runtime_dir=tmp_path, process_role="api")
+    client = TestClient(create_app(settings))
+    monkeypatch.setattr(data_router, "_dispatch_upload_worker_for_runtime", lambda _runtime_dir: None)
+    job_id = "d" * 32
+    write_job({
+        "job_id": job_id,
+        "filename": "stored.csv",
+        "status": "FAILED",
+        "processing_state": "failed",
+    })
+    recovered_key = f"upload-state/scopes/test/upload-sources/{job_id}.csv"
+    monkeypatch.setattr(data_router, "resolve_existing_upload_source_key", lambda value, filename: recovered_key)
+    enqueued = []
+    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda value: enqueued.append(value))
+
+    response = client.post(f"/api/data/upload/{job_id}/retry")
+
+    assert response.status_code == 202
+    assert response.json()["job_id"] == job_id
+    assert response.json()["shared_upload_source_key"] == recovered_key
+    assert response.json()["file_stored"] is True
+    assert enqueued == [job_id]
+
+
 def test_retry_upload_analysis_requires_existing_source_file(tmp_path) -> None:
     settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8010, cors_origins=["*"], runtime_dir=tmp_path)
     client = TestClient(create_app(settings))
@@ -303,10 +351,10 @@ def test_retry_upload_analysis_requires_existing_source_file(tmp_path) -> None:
     assert response.status_code == 404
     payload = response.json()
     assert payload["error_type"] == "upload_source_missing"
-    assert payload["error_code"] == "file_storage_failed"
+    assert payload["error_code"] == "not_found"
     assert payload["failed_stage"] == "file_storage"
     assert payload["retryable"] is False
-    assert payload["message"] == "The stored file is no longer available. Choose another file."
+    assert payload["message"] == "The stored uploaded object was not found."
 
 def test_create_upload_job_enforces_streaming_size_limit() -> None:
     class FakeUploadFile:

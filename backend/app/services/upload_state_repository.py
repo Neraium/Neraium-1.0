@@ -21,7 +21,7 @@ from app.services.runtime_db import (
     upsert_latest_payload,
 )
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE, UploadRuntimeState
-from app.services.upload_persistence import summarize_result as summarize_result_payload
+from app.services.upload_persistence import project_result_for_transport, summarize_result as summarize_result_payload
 from app.services.upload_state import (
     build_empty_latest_upload_record,
     build_latest_upload_record,
@@ -192,6 +192,16 @@ def inspect_upload_source(source_key: str) -> dict[str, Any]:
         "content_type": str(response.get("ContentType") or ""),
         "etag": str(response.get("ETag") or "").strip('"'),
     }
+
+
+def resolve_existing_upload_source_key(job_id: str, filename: str | None = None) -> str | None:
+    """Resolve a retry source without trusting a client-provided object key."""
+    source_key = _upload_source_object_key(str(job_id), filename)
+    try:
+        inspect_upload_source(source_key)
+    except Exception:
+        return None
+    return source_key
 
 
 def _large_upload_session_name(session_id: str, *, scope: DatasetScope | None = None) -> str:
@@ -451,11 +461,13 @@ def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dic
         status=str(normalized_summary.get("processing_state") or normalized_summary.get("status") or "active").lower(),
         dataset_scope=scope,
     )
+    normalized_summary["transport_result_available"] = True
     write_upload_result(job_id, normalized_result)
     write_upload_status(job_id, normalized_summary)
-    write_latest_upload_result_payload(normalized_result)
+    transport_result = project_result_for_transport(normalized_result) or normalized_result
+    write_latest_upload_result_payload(transport_result)
     write_latest_upload_summary_payload(normalized_summary)
-    persist_latest_upload_state(summary=normalized_summary, result=normalized_result)
+    persist_latest_upload_state(summary=normalized_summary, result=transport_result)
 
 
 def write_latest_upload_record(record: dict[str, Any] | None) -> dict[str, Any]:
@@ -705,13 +717,15 @@ def write_latest_upload_result(*args) -> None:
 
     if payload.get("job_id"):
         write_upload_result(str(payload["job_id"]), payload)
-    write_latest_upload_result_payload(payload)
+    transport_payload = project_result_for_transport(payload) or payload
+    write_latest_upload_result_payload(transport_payload)
 
     if payload.get("job_id"):
         latest_summary = summarize_result_payload(payload)
+        latest_summary["transport_result_available"] = True
         write_latest_upload_summary_payload(latest_summary)
         write_upload_status(str(payload["job_id"]), latest_summary)
-        persist_latest_upload_state(summary=latest_summary, result=payload)
+        persist_latest_upload_state(summary=latest_summary, result=transport_payload)
     else:
         _invalidate_router_latest_cache()
 
@@ -743,11 +757,7 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
     write_latest_upload_summary_payload(payload)
     if payload.get("job_id"):
         write_upload_status(str(payload["job_id"]), payload)
-        persist_latest_upload_state(
-            summary=payload,
-            result=read_upload_result_by_job_id(str(payload["job_id"])),
-            keep_result=True,
-        )
+        persist_latest_upload_state(summary=payload, result=None, keep_result=True)
     else:
         persist_latest_upload_state(summary=payload, result=None, keep_result=True)
 

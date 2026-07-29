@@ -21,6 +21,7 @@ export const SERVICE_UNAVAILABLE_UPLOAD_MESSAGE = "Analysis service is temporari
 export const SERVICE_UNAVAILABLE_RETRY_MESSAGE = "Analysis service is temporarily unavailable. Retrying the analysis...";
 
 const TRANSIENT_UPLOAD_SERVICE_STATUSES = new Set([408, 429, 502, 503, 504]);
+const SERVICE_UNAVAILABLE_HTTP_STATUSES = new Set([502, 503]);
 
 export function isTransientUploadServiceStatus(status) {
   return TRANSIENT_UPLOAD_SERVICE_STATUSES.has(Number(status));
@@ -58,18 +59,36 @@ export function buildUploadServiceUnavailablePayload({
   route = "",
   phase = "",
   contentType = "",
+  requestId = "",
   fallbackErrorType = "invalid_response",
 } = {}) {
   const numericStatus = Number(status || 0) || null;
   const html = isLikelyHtmlResponse(rawBody, contentType);
-  const serviceUnavailable = html || isTransientUploadServiceStatus(numericStatus);
-  const message = serviceUnavailable
-    ? SERVICE_UNAVAILABLE_UPLOAD_MESSAGE
-    : "Analysis service response was unavailable.";
+  const serviceUnavailable = SERVICE_UNAVAILABLE_HTTP_STATUSES.has(numericStatus) || (html && numericStatus === null);
+  const statusErrorType = ({
+    401: "auth_session_expired",
+    403: "auth_session_expired",
+    404: "not_found",
+    408: "server_timeout",
+    413: "file_too_large",
+    422: "validation_failed",
+    429: "rate_limited",
+    500: "internal_processing_failure",
+    502: "service_unavailable",
+    503: "service_unavailable",
+    504: "server_timeout",
+  })[numericStatus] ?? fallbackErrorType;
+  const errorType = serviceUnavailable ? "service_unavailable" : statusErrorType;
+  const message = operatorUploadMessage({
+    status: numericStatus,
+    errorType,
+    detail: "",
+    phase,
+  });
   return {
     status: "FAILED",
     processing_state: "failed",
-    error_type: serviceUnavailable ? "service_unavailable" : fallbackErrorType,
+    error_type: errorType,
     message,
     error: message,
     response_status: numericStatus,
@@ -79,6 +98,8 @@ export function buildUploadServiceUnavailablePayload({
     response_content_type: contentType || null,
     non_json_response: true,
     html_response: html,
+    request_id: requestId || null,
+    diagnostic_timestamp: new Date().toISOString(),
   };
 }
 
@@ -97,13 +118,13 @@ function hasSpecificTransientPayload(errorType) {
   ].includes(String(errorType || ""));
 }
 
-function withResponseDiagnostics(payload, { status = null, rawBody = "", route = "", phase = "", contentType = "" } = {}) {
+function withResponseDiagnostics(payload, { status = null, rawBody = "", route = "", phase = "", contentType = "", requestId = "" } = {}) {
   const candidateErrorType = payload?.error_type ?? payload?.detail?.error_type ?? null;
   const rawMessage = payload?.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? "";
   const html = isLikelyHtmlResponse(rawMessage, contentType) || isLikelyHtmlResponse(rawBody, contentType);
   const serviceUnavailable = html
     || (
-      isTransientUploadServiceStatus(status)
+      SERVICE_UNAVAILABLE_HTTP_STATUSES.has(Number(status))
       && !hasSpecificTransientPayload(candidateErrorType)
       && !String(rawMessage || "").trim()
     );
@@ -126,6 +147,8 @@ function withResponseDiagnostics(payload, { status = null, rawBody = "", route =
     raw_response_body: payload?.raw_response_body ?? compactRawResponse(rawBody),
     response_content_type: payload?.response_content_type ?? contentType ?? null,
     html_response: payload?.html_response ?? html,
+    request_id: payload?.request_id ?? requestId ?? null,
+    diagnostic_timestamp: payload?.diagnostic_timestamp ?? new Date().toISOString(),
   };
 }
 
@@ -219,11 +242,12 @@ export function isUploadProcessing(status) {
 
 export async function readJsonPayload(response, { route = null, phase = "" } = {}) {
   const contentType = responseHeader(response, "content-type");
+  const requestId = responseHeader(response, "x-request-id");
   const responseRoute = route ?? response?.url ?? "";
   if (typeof response?.text === "function") {
     const rawText = await response.text();
     if (!rawText) {
-      return withResponseDiagnostics({}, { status: response?.status, route: responseRoute, phase, contentType });
+      return withResponseDiagnostics({}, { status: response?.status, route: responseRoute, phase, contentType, requestId });
     }
     try {
       return withResponseDiagnostics(JSON.parse(rawText), {
@@ -232,6 +256,7 @@ export async function readJsonPayload(response, { route = null, phase = "" } = {
         route: responseRoute,
         phase,
         contentType,
+        requestId,
       });
     } catch {
       return buildUploadServiceUnavailablePayload({
@@ -240,13 +265,14 @@ export async function readJsonPayload(response, { route = null, phase = "" } = {
         route: responseRoute,
         phase,
         contentType,
+        requestId,
       });
     }
   }
   try {
-    return withResponseDiagnostics(await response.json(), { status: response?.status, route: responseRoute, phase, contentType });
+    return withResponseDiagnostics(await response.json(), { status: response?.status, route: responseRoute, phase, contentType, requestId });
   } catch {
-    return buildUploadServiceUnavailablePayload({ status: response?.status, route: responseRoute, phase, contentType });
+    return buildUploadServiceUnavailablePayload({ status: response?.status, route: responseRoute, phase, contentType, requestId });
   }
 }
 
@@ -269,7 +295,7 @@ export function buildUploadRequestError(response, payload, phase) {
     ?? fallbackErrorType;
   const serviceUnavailable = payload?.html_response === true
     || rawErrorType === "service_unavailable"
-    || (isTransientUploadServiceStatus(responseStatus) && !hasSpecificTransientPayload(rawErrorType));
+    || (SERVICE_UNAVAILABLE_HTTP_STATUSES.has(responseStatus) && !hasSpecificTransientPayload(rawErrorType));
   const errorType = serviceUnavailable ? "service_unavailable" : rawErrorType;
   const isMissingStatusDuringPoll =
     phase === "poll"
@@ -295,6 +321,8 @@ export function buildUploadRequestError(response, payload, phase) {
     transferSucceeded: payload?.transfer_succeeded === true,
     fileStored: payload?.file_stored === true,
     retryUrl: payload?.retry_url ?? null,
+    requestId: payload?.request_id ?? responseHeader(response, "x-request-id") ?? null,
+    diagnosticTimestamp: payload?.diagnostic_timestamp ?? new Date().toISOString(),
     retryable: typeof payload?.retryable === "boolean"
       ? payload.retryable
       : responseStatus === 408 || responseStatus === 409 || responseStatus === 425 || responseStatus === 429 || responseStatus >= 500 || (phase === "poll" && (responseStatus === 401 || responseStatus === 403)) || isMissingStatusDuringPoll,
@@ -329,6 +357,8 @@ export function classifyUploadError(error, phase) {
       transferSucceeded: error.transferSucceeded === true || error.payload?.transfer_succeeded === true,
       fileStored: error.fileStored === true || error.payload?.file_stored === true,
       retryUrl: error.retryUrl ?? error.payload?.retry_url ?? null,
+      requestId: error.requestId ?? error.payload?.request_id ?? null,
+      diagnosticTimestamp: error.diagnosticTimestamp ?? error.payload?.diagnostic_timestamp ?? new Date().toISOString(),
       finalMessage: isMissingStatusDuringPoll
         ? "Analysis status is temporarily unavailable. Processing may still be active."
         : null,
@@ -425,6 +455,20 @@ export function operatorUploadMessage({ status, errorType, detail, phase, transf
       ? "Dataset analysis is in progress. Large datasets may require additional processing time."
       : "Your session has expired. Sign in again, then retry the import.";
   }
+  if (errorType === "not_found" || status === 404) {
+    return "The requested endpoint, dataset, or uploaded object was not found.";
+  }
+  if (errorType === "file_too_large" || errorType === "upload_too_large" || status === 413) {
+    return typeof detail === "string" && detail.trim()
+      ? normalizeErrorMessage(detail)
+      : "File is larger than the supported upload limit.";
+  }
+  if (errorType === "rate_limited" || status === 429) {
+    return "Analysis service is busy or rate limited. Retry shortly.";
+  }
+  if (errorType === "internal_processing_failure" || status === 500) {
+    return "The server could not complete dataset processing.";
+  }
   if (errorType === "dataset_record_creation_failed") {
     return transferSucceeded
       ? "The file was transferred successfully, but Neraium could not begin processing it."
@@ -491,7 +535,7 @@ export function operatorUploadMessage({ status, errorType, detail, phase, transf
       ? normalizeErrorMessage(detail)
       : "Analysis status remained unavailable after repeated retries.";
   }
-  if (errorType === "service_unavailable" || [502, 503, 504].includes(Number(status))) {
+  if (errorType === "service_unavailable" || [502, 503].includes(Number(status))) {
     return SERVICE_UNAVAILABLE_UPLOAD_MESSAGE;
   }
   if (errorType === "upload_too_large" || status === 413) {
@@ -499,7 +543,7 @@ export function operatorUploadMessage({ status, errorType, detail, phase, transf
       ? normalizeErrorMessage(detail)
       : "File is larger than the supported upload limit.";
   }
-  if (errorType === "upload_response_timeout" || errorType === "timeout" || status === 408) {
+  if (errorType === "upload_response_timeout" || errorType === "timeout" || status === 408 || status === 504) {
     return phase === "poll"
       ? "Dataset analysis is in progress. Large datasets may require additional processing time."
       : "Dataset import timed out. Retry the analysis.";
@@ -552,6 +596,10 @@ const UPLOAD_ERROR_TITLES = Object.freeze({
   validation_error: "Validation failed",
   baseline_processing_failed: "Baseline processing failed",
   processing_error: "Baseline processing failed",
+  not_found: "Not found",
+  file_too_large: "File too large",
+  rate_limited: "Service busy",
+  internal_processing_failure: "Processing failed",
   server_timeout: "Server timeout",
   timeout: "Server timeout",
   upload_response_timeout: "Server timeout",

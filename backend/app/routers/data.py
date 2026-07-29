@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Path as ApiPa
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from app.services.evidence_store import upsert_evidence_run
-from app.services.dataset_scope import payload_matches_dataset_scope
+from app.services.dataset_scope import current_dataset_scope, payload_matches_dataset_scope
 from app.services.analysis_result_contract import ensure_analysis_result
 from app.core.security import _strict_auth_mode, require_api_access, require_operator_role
 from app.core.path_safety import StoragePathError, ensure_storage_root, resolve_existing_storage_path, safe_upload_suffix, storage_key_for_server_path
@@ -56,6 +56,7 @@ from app.services.upload_state_repository import (
     read_replay_payload,
     read_upload_result_by_job_id,
     reset_upload_state,
+    resolve_existing_upload_source_key,
     resolve_upload_artifacts,
     shared_state_configured,
     write_large_upload_session,
@@ -133,7 +134,7 @@ def _rate_limit_response(retry_after: int, *, error_type: str, message: str) -> 
         status_code=429,
         headers={"retry-after": str(retry_after)},
         content=build_upload_error_payload(
-            "server_unavailable",
+            "rate_limited",
             message=message,
             failed_stage="dataset_creation",
             retryable=True,
@@ -151,7 +152,17 @@ def invalidate_latest_upload_cache() -> None:
 
 
 def _log_upload_event(event: str, **fields: Any) -> None:
-    normalized = {"event": event, **fields}
+    correlation_id = fields.get("correlation_id") or fields.get("upload_id") or fields.get("upload_session_id") or fields.get("job_id")
+    scope = current_dataset_scope()
+    normalized = {
+        "event": event,
+        "correlation_id": correlation_id,
+        "dataset_id": fields.get("dataset_id") or correlation_id,
+        "upload_id": fields.get("upload_id") or correlation_id,
+        "user_id": fields.get("user_id") or scope.user_id,
+        "organization_id": fields.get("organization_id") or scope.tenant_id,
+        **fields,
+    }
     parts = []
     for key, value in normalized.items():
         if value is None:
@@ -378,6 +389,14 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
     size_bytes = int(payload.size_bytes)
     max_size_bytes = int(getattr(settings, "max_large_upload_size_bytes", 512 * 1024 * 1024))
     request_id = getattr(request.state, "request_id", None)
+    _log_upload_event(
+        "import_request_received",
+        request_id=request_id,
+        endpoint="/api/data/upload-session",
+        source_filename=filename,
+        file_size_bytes=size_bytes,
+        http_method=request.method,
+    )
     try:
         workflow = normalize_workflow(payload.workflow)
     except ValueError as exc:
@@ -570,6 +589,24 @@ def complete_large_upload_session(
         )
 
     received_size = int(uploaded.get("content_length") or 0)
+    _log_upload_event(
+        "upload_completed",
+        correlation_id=upload_session_id,
+        request_id=request_id,
+        upload_session_id=upload_session_id,
+        source_filename=session.get("filename"),
+        file_size_bytes=received_size,
+        processing_stage="upload_transfer",
+    )
+    _log_upload_event(
+        "storage_object_resolved",
+        correlation_id=upload_session_id,
+        request_id=request_id,
+        upload_session_id=upload_session_id,
+        source_filename=session.get("filename"),
+        file_size_bytes=received_size,
+        processing_stage="file_storage",
+    )
     if received_size != expected_size:
         _log_upload_event(
             "large_upload_completion_rejected",
@@ -691,6 +728,25 @@ def complete_large_upload_session(
         )
     try:
         upload_jobs.write_job(summary)
+        _log_upload_event(
+            "dataset_record_created",
+            correlation_id=upload_session_id,
+            request_id=request_id,
+            upload_session_id=upload_session_id,
+            dataset_id=upload_session_id,
+            source_filename=filename,
+            processing_stage="dataset_creation",
+        )
+        if is_baseline_workflow(workflow):
+            _log_upload_event(
+                "baseline_job_created",
+                correlation_id=upload_session_id,
+                request_id=request_id,
+                upload_session_id=upload_session_id,
+                dataset_id=upload_session_id,
+                source_filename=filename,
+                processing_stage="baseline_job_creation",
+            )
     except Exception:
         logger.exception("large_upload_job_state_write_failed request_id=%s upload_session_id=%s", request_id, upload_session_id)
         return _large_upload_error(
@@ -743,6 +799,16 @@ def complete_large_upload_session(
 
     try:
         enqueue_upload_job(upload_session_id)
+        _log_upload_event(
+            "job_queued",
+            correlation_id=upload_session_id,
+            request_id=request_id,
+            upload_session_id=upload_session_id,
+            dataset_id=upload_session_id,
+            source_filename=filename,
+            queue_status="pending",
+            processing_stage="queued",
+        )
     except Exception:
         logger.exception("large_upload_job_enqueue_failed request_id=%s upload_session_id=%s", request_id, upload_session_id)
         try:
@@ -1343,36 +1409,40 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         status_payload = {}
     active_status = str(status_payload.get("status") or "").strip().upper()
     active_processing_state = str(status_payload.get("processing_state") or "").strip().lower()
-    if active_status in {"PENDING", "QUEUED", "PROCESSING", "RUNNING_SII"} or active_processing_state in {"queued", "pending", "processing", "running_sii"}:
-        return JSONResponse(
-            status_code=409,
-            content={
-                **status_payload,
-                **build_upload_error_payload(
-                    "validation_failed",
-                    message="This import is already queued or running.",
-                    failed_stage="baseline_job_creation",
-                    retryable=False,
-                    legacy_error_type="upload_job_already_active",
-                    job_id=requested_job_id,
-                    status_url=f"/api/data/upload-status/{requested_job_id}",
-                ),
-            },
-        )
+    status_url = f"/api/data/upload-status/{requested_job_id}"
 
+    # Retry is idempotent: an existing active or completed job is the answer.
+    if active_status in {"PENDING", "QUEUED", "PROCESSING", "RUNNING_SII", "COMPLETE"} or active_processing_state in {
+        "queued", "pending", "processing", "running_sii", "complete", "completed"
+    }:
+        return {
+            **status_payload,
+            "job_id": requested_job_id,
+            "status_url": status_payload.get("status_url") or status_url,
+            "retry_reused_existing_job": True,
+        }
+
+    filename = str(status_payload.get("filename") or "upload.csv")
     file_path = status_payload.get("file_path")
     shared_upload_source_key = str(status_payload.get("shared_upload_source_key") or "").strip()
     has_local_file = _resolve_upload_source_path(settings.runtime_dir, file_path) is not None
+    if shared_upload_source_key:
+        try:
+            inspect_upload_source(shared_upload_source_key)
+        except Exception:
+            shared_upload_source_key = ""
+    if not shared_upload_source_key:
+        shared_upload_source_key = resolve_existing_upload_source_key(requested_job_id, filename) or ""
     if not status_payload or (not has_local_file and not shared_upload_source_key):
         return _large_upload_error(
             404,
             "upload_source_missing",
-            "The stored file is no longer available. Choose another file.",
-            error_code="file_storage_failed",
+            "The stored uploaded object was not found.",
+            error_code="not_found",
             failed_stage="file_storage",
             retryable=False,
             job_id=requested_job_id,
-            status_url=f"/api/data/upload-status/{requested_job_id}",
+            status_url=status_url,
         )
 
     now = datetime.now(timezone.utc).isoformat()
@@ -1380,6 +1450,10 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
     retried = {
         **status_payload,
         "job_id": requested_job_id,
+        "dataset_id": status_payload.get("dataset_id") or requested_job_id,
+        "upload_id": status_payload.get("upload_id") or status_payload.get("upload_session_id") or requested_job_id,
+        "upload_session_id": status_payload.get("upload_session_id") or requested_job_id,
+        "status_url": status_url,
         "status": "PENDING",
         "processing_state": "queued",
         "percent": 5,
@@ -1400,6 +1474,10 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         "propagation_progress": 5,
         "propagation_label": "Retry queued.",
         "retry_requested_at": now,
+        "file_stored": True,
+        "transfer_succeeded": True,
+        "shared_upload_source_key": shared_upload_source_key or None,
+        "retry_url": f"/api/data/upload/{requested_job_id}/retry",
         "worker_state": "starting" if worker_dispatch_status == "thread_dispatched" else "queued",
         "worker_dispatch_status": worker_dispatch_status,
         "worker_last_seen_at": now,
@@ -1418,7 +1496,7 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
             job_id=requested_job_id,
             file_stored=True,
             retry_url=f"/api/data/upload/{requested_job_id}/retry",
-            status_url=f"/api/data/upload-status/{requested_job_id}",
+            status_url=status_url,
         )
         try:
             upload_jobs.write_job({**retried, **failure})
@@ -1428,27 +1506,23 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
     if worker_dispatch_status == "thread_dispatched":
         _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
     _log_upload_event(
-        "retry_queued",
+        "job_queued",
+        correlation_id=requested_job_id,
         request_id=request_id,
+        upload_id=retried["upload_id"],
+        dataset_id=retried["dataset_id"],
+        user_id=retried.get("initiated_by"),
         endpoint=f"/api/data/upload/{requested_job_id}/retry",
-        filename=status_payload.get("filename"),
+        source_filename=filename,
         job_id=requested_job_id,
         queue_status="pending",
         worker_dispatch_status=worker_dispatch_status,
         processing_stage="queued",
+        retry=True,
     )
     return {
-        "job_id": requested_job_id,
-        "status": "PENDING",
-        "processing_state": "queued",
-        "percent": 5,
-        "progress": 5,
-        "progress_label": "Retry queued.",
-        "message": "Retry queued.",
-        "status_url": f"/api/data/upload-status/{requested_job_id}",
-        "worker_state": "starting" if worker_dispatch_status == "thread_dispatched" else "queued",
-        "worker_dispatch_status": worker_dispatch_status,
-        "worker_last_seen_at": now,
+        **retried,
+        "retry_reused_existing_job": False,
     }
 
 

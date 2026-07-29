@@ -493,6 +493,33 @@ describe("upload and polling behavior", () => {
     expect(statusCalls).toBe(1);
   });
 
+  it("restores a processing job from local storage when server hydration is not ready", async () => {
+    window.localStorage.setItem("neraium.last_upload_job_id", "stored-resume-job");
+    let statusCalls = 0;
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).includes("/upload-status/stored-resume-job")) {
+        statusCalls += 1;
+        return jsonResponse({
+          job_id: "stored-resume-job",
+          dataset_id: "stored-resume-job",
+          workflow: "create_baseline",
+          status: "COMPLETE",
+          processing_state: "complete",
+          baseline_result_url: "/api/data/baselines/jobs/stored-resume-job",
+        });
+      }
+      if (String(path).includes("/baselines/jobs/stored-resume-job")) {
+        return jsonResponse(learnedBaseline({ job_id: "stored-resume-job", dataset_id: "stored-resume-job" }));
+      }
+      return jsonResponse({});
+    });
+
+    renderWorkspace({ apiFetch });
+
+    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(statusCalls).toBe(1);
+  });
+
   it("approves a controlled baseline before opening it", async () => {
     const result = learnedBaseline();
     const onOpenBaseline = vi.fn();

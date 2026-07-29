@@ -15,7 +15,7 @@ from app.services.runtime_db import (
 )
 from app.services.system_interpretation import build_system_interpretation
 from app.services.upload_lifecycle import COMPLETE_STATES, PROCESSING_STATES
-from app.services.upload_persistence import read_upload_history
+from app.services.upload_persistence import project_result_for_transport, read_upload_history
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
 from app.services.upload_state import (
     build_empty_latest_upload_record,
@@ -24,10 +24,10 @@ from app.services.upload_state import (
     has_active_session_artifact,
 )
 from app.services.upload_state_repository import (
-    read_latest_upload_record,
+    read_latest_upload_result,
+    read_latest_upload_summary,
     read_upload_result_by_job_id,
     read_upload_status,
-    resolve_upload_artifacts,
     reset_block_persisted_active,
     upload_state_backend,
 )
@@ -84,6 +84,8 @@ def _resolve_session_state(*, status: str, result: dict[str, Any] | None, source
         return SESSION_STATE_PROCESSING
     if normalized in VISIBLE_ERROR_STATUSES or (summary or {}).get("error") or (result or {}).get("error"):
         return SESSION_STATE_ERROR
+    if normalized in COMPLETE_STATES or normalized in {"complete", "completed", "ready"}:
+        return SESSION_STATE_RESTORED if source == SESSION_SOURCE_PERSISTED else SESSION_STATE_VERIFIED
     if source == SESSION_SOURCE_PERSISTED:
         return SESSION_STATE_RESTORED
     if isinstance(result, dict):
@@ -270,20 +272,29 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
     if reset_block_persisted_active():
         return _empty_response(include_persisted=use_persisted, request_id=request_id)
 
-    canonical = read_latest_upload_record() if use_persisted else build_empty_latest_upload_record()
-    if not isinstance(canonical, dict):
-        canonical = build_empty_latest_upload_record()
-
-    summary = canonical.get("summary") if isinstance(canonical.get("summary"), dict) else {}
-    canonical_job_id = str(canonical.get("job_id") or summary.get("job_id") or "").strip() or None
+    # The canonical record historically embedded the entire analysis result.
+    # Resolve workspace hydration from the compact summary so a prior 90+ MiB
+    # result cannot be loaded into the API process merely by refreshing.
+    summary = read_latest_upload_summary() if use_persisted else None
+    summary = summary if isinstance(summary, dict) else {}
+    canonical = build_latest_upload_record(summary=summary, result=None)
+    canonical_job_id = str(summary.get("job_id") or canonical.get("job_id") or "").strip() or None
     if not canonical_job_id:
         return _empty_response(include_persisted=use_persisted, request_id=request_id)
 
     memory_summary = read_upload_status(canonical_job_id) if canonical_job_id else None
-    memory_result = read_upload_result_by_job_id(canonical_job_id) if canonical_job_id else None
-    persisted_result = canonical.get("result") if isinstance(canonical.get("result"), dict) else None
-    artifacts = resolve_upload_artifacts(canonical_job_id) if canonical_job_id else {}
-    active_result = artifacts.get("active_result") if isinstance(artifacts.get("active_result"), dict) else None
+    raw_memory_result = None
+    raw_persisted_result = read_latest_upload_result() if summary.get("transport_result_available") is True else None
+    raw_active_result = (
+        raw_memory_result
+        if has_active_session_artifact(raw_memory_result, job_id=canonical_job_id)
+        else raw_persisted_result
+        if has_active_session_artifact(raw_persisted_result, job_id=canonical_job_id)
+        else None
+    )
+    memory_result = project_result_for_transport(raw_memory_result)
+    persisted_result = project_result_for_transport(raw_persisted_result)
+    active_result = project_result_for_transport(raw_active_result)
     history = _build_history(use_persisted, active_result or persisted_result or memory_result)
 
     source = SESSION_SOURCE_EMPTY
@@ -420,66 +431,33 @@ def resolve_latest_upload_session(*, include_persisted: int | bool = True, reque
 def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict[str, Any]:
     requested_id = str(job_id or "").strip()
     if not requested_id:
-        payload = {
-            "job_id": None,
-            "status": "NOT_FOUND",
-            "processing_state": "missing",
-            "session_state": SESSION_STATE_EMPTY,
-            "session_source": SESSION_SOURCE_EMPTY,
-            "upload_session_id": None,
-            "request_id": request_id,
-            "message": "Upload session expired or was not found.",
-            "state_backend": upload_state_backend(),
-            "analysis_result": empty_analysis_result(
-                analysis_id=requested_id or None,
-                upload_id=requested_id or None,
-                status="missing",
-                message="Upload session expired or was not found.",
-                errors=["upload_session_missing"],
-            ),
-        }
-        return payload
+        return _missing_upload_status(requested_id, request_id=request_id)
 
-    current = resolve_latest_upload_session(include_persisted=True, request_id=request_id)
-    current_job_id = str(current.get("upload_session_id") or "").strip()
-    current_snapshot = current.get("snapshot") if isinstance(current.get("snapshot"), dict) else {}
+    # Polling is intentionally status-only. Loading the previous full analysis
+    # result here turned every one-second poll into a 90+ MiB S3 read and could
+    # exhaust the API task before the new worker reported progress.
     status_payload = read_upload_status(requested_id) or upload_jobs.read_upload_status(requested_id)
-    result_payload = read_upload_result_by_job_id(requested_id)
     if isinstance(status_payload, dict) and not payload_matches_dataset_scope(status_payload):
         status_payload = None
-    if isinstance(result_payload, dict) and not payload_matches_dataset_scope(result_payload):
-        result_payload = None
-    if not isinstance(status_payload, dict) and requested_id == current_job_id and isinstance(current_snapshot, dict) and current_snapshot:
-        status_payload = dict(current_snapshot)
 
     if isinstance(status_payload, dict):
         normalized = normalize_upload_status_payload(status_payload)
-        if isinstance(result_payload, dict):
-            normalized = _merge_completed_result_fields(normalized, result_payload)
-        elif str(normalized.get("status") or "").upper() == "FAILED":
-            normalized["analysis_result"] = empty_analysis_result(
-                analysis_id=requested_id,
-                upload_id=requested_id,
-                source_file=normalized.get("filename"),
-                status="failed",
-                message=normalized.get("message"),
-                errors=[str(normalized.get("error") or normalized.get("error_type") or "analysis failed")],
-            )
-        else:
-            normalized["analysis_result"] = empty_analysis_result(
-                analysis_id=requested_id,
-                upload_id=requested_id,
-                source_file=normalized.get("filename"),
-                status=str(normalized.get("processing_state") or normalized.get("status") or "processing").lower(),
-            )
-        session_scope = normalized.get("session_scope") if isinstance(normalized.get("session_scope"), dict) else {}
         normalized_status = str(normalized.get("processing_state") or normalized.get("status") or "").lower()
-        terminal_status = normalized_status in {"complete", "completed", "failed", "cancelled", "timeout"}
-        is_active_session = requested_id == current_job_id or (session_scope.get("active") is True and not terminal_status)
-        session_source = SESSION_SOURCE_MEMORY if is_active_session else SESSION_SOURCE_HISTORY
+        failed = normalized_status in {"failed", "error", "validation_error", "timeout", "cancelled"}
+        normalized["analysis_result"] = empty_analysis_result(
+            analysis_id=requested_id,
+            upload_id=requested_id,
+            source_file=normalized.get("filename"),
+            status="failed" if failed else normalized_status or "processing",
+            message=normalized.get("message") if failed else None,
+            errors=[str(normalized.get("error") or normalized.get("error_type") or "analysis failed")] if failed else None,
+        )
+        session_scope = normalized.get("session_scope") if isinstance(normalized.get("session_scope"), dict) else {}
+        terminal = normalized_status in {"complete", "completed", "failed", "error", "validation_error", "timeout", "cancelled"}
+        session_source = SESSION_SOURCE_HISTORY if terminal else SESSION_SOURCE_MEMORY
         state = _resolve_session_state(
-            status=str(normalized.get("processing_state") or normalized.get("status") or ""),
-            result=result_payload if isinstance(result_payload, dict) else None,
+            status=normalized_status,
+            result=None,
             source=session_source,
             summary=normalized,
         )
@@ -490,14 +468,20 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
                 "upload_session_id": requested_id,
                 "request_id": request_id,
                 "state_backend": upload_state_backend(),
+                "dataset_id": normalized.get("dataset_id") or session_scope.get("dataset_id") or requested_id,
+                "upload_id": normalized.get("upload_id") or session_scope.get("upload_id") or requested_id,
             }
         )
         return _with_worker_visibility(normalized, requested_id)
 
-    if isinstance(result_payload, dict):
+    raw_result = read_upload_result_by_job_id(requested_id)
+    if isinstance(raw_result, dict) and payload_matches_dataset_scope(raw_result):
+        result_payload = project_result_for_transport(raw_result) or {}
         replay = build_replay_payload_from_result(result_payload, job_id=requested_id)
         payload = {
             "job_id": requested_id,
+            "dataset_id": result_payload.get("dataset_id") or requested_id,
+            "upload_id": result_payload.get("upload_id") or requested_id,
             "status_url": f"/api/data/upload-status/{requested_id}",
             "status": "COMPLETE",
             "processing_state": "complete",
@@ -524,15 +508,21 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
             "error": None,
             "state_backend": upload_state_backend(),
             "analysis_result": ensure_analysis_result(result_payload),
-            "session_state": SESSION_STATE_VERIFIED if requested_id == current_job_id else SESSION_STATE_STALE,
-            "session_source": SESSION_SOURCE_MEMORY if requested_id == current_job_id else SESSION_SOURCE_HISTORY,
+            "session_state": SESSION_STATE_STALE,
+            "session_source": SESSION_SOURCE_HISTORY,
             "upload_session_id": requested_id,
             "request_id": request_id,
         }
         return _with_worker_visibility(payload, requested_id)
 
+    return _missing_upload_status(requested_id, request_id=request_id)
+
+
+def _missing_upload_status(requested_id: str, *, request_id: str | None) -> dict[str, Any]:
     payload = {
-        "job_id": requested_id,
+        "job_id": requested_id or None,
+        "dataset_id": requested_id or None,
+        "upload_id": requested_id or None,
         "status": "NOT_FOUND",
         "processing_state": "missing",
         "percent": 0,
@@ -540,23 +530,26 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
         "replay_ready": False,
         "replay_frame_count": 0,
         "result_available": False,
+        "error_code": "not_found",
         "error_type": "upload_session_missing",
         "error": "upload_session_missing",
-        "message": "Upload session expired or was not found.",
+        "message": "Upload session, dataset, or stored object was not found.",
+        "failed_stage": "dataset_creation",
+        "retryable": False,
         "state_backend": upload_state_backend(),
         "analysis_result": empty_analysis_result(
             analysis_id=requested_id or None,
             upload_id=requested_id or None,
             status="missing",
-            message="Upload session expired or was not found.",
+            message="Upload session, dataset, or stored object was not found.",
             errors=["upload_session_missing"],
         ),
         "session_state": SESSION_STATE_EMPTY,
         "session_source": SESSION_SOURCE_EMPTY,
-        "upload_session_id": requested_id,
+        "upload_session_id": requested_id or None,
         "request_id": request_id,
     }
-    return _with_worker_visibility(payload, requested_id)
+    return _with_worker_visibility(payload, requested_id or None)
 
 
 def session_metrics_snapshot(*, current_state: str | None = None) -> dict[str, Any]:

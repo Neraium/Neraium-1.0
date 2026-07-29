@@ -539,6 +539,9 @@ function ProcessingPanel({
 }
 
 function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queuedWorkerDetail, latestMessage }) {
+  const failed = ["failed", "error", "timeout", "cancelled"].includes(
+    String(uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status ?? "").toLowerCase(),
+  );
   return [
     ["Job ID", uploadJob?.job_id ?? uploadJob?.id],
     ["Backend state", uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status],
@@ -547,6 +550,12 @@ function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queued
     ["Worker", queuedWorkerDetail],
     ["Current operation", propagationLabel],
     ["System message", latestMessage],
+    ...(failed ? [
+      ["Error code", uploadJob?.error_code ?? uploadJob?.error_type],
+      ["HTTP status", uploadJob?.response_status],
+      ["Request ID", uploadJob?.request_id],
+      ["Timestamp", uploadJob?.diagnostic_timestamp],
+    ] : []),
   ].filter(([, value]) => String(value ?? "").trim());
 }
 

@@ -121,9 +121,17 @@ function xhrHeader(xhr, key) {
 function readJsonResponse(xhr, { route = "", phase = "" } = {}) {
   const rawBody = String(xhr.responseText || "");
   const contentType = xhrHeader(xhr, "content-type");
-  if (!rawBody) return {};
+  const requestId = xhrHeader(xhr, "x-request-id");
+  const diagnostic_timestamp = new Date().toISOString();
+  if (!rawBody) return { request_id: requestId || null, diagnostic_timestamp };
   try {
-    return JSON.parse(rawBody);
+    const payload = JSON.parse(rawBody);
+    return {
+      ...payload,
+      request_id: payload?.request_id ?? requestId ?? null,
+      diagnostic_timestamp: payload?.diagnostic_timestamp ?? diagnostic_timestamp,
+      response_status: Number(xhr.status || 0) || payload?.response_status || null,
+    };
   } catch {
     return buildUploadServiceUnavailablePayload({
       status: xhr.status,
@@ -131,6 +139,7 @@ function readJsonResponse(xhr, { route = "", phase = "" } = {}) {
       route,
       phase,
       contentType,
+      requestId,
     });
   }
 }

@@ -8,6 +8,40 @@ from app.services.dataset_scope import payload_matches_dataset_scope
 from app.services.upload_state import build_session_scope
 
 
+_TRANSPORT_OMITTED_RESULT_KEYS = {
+    # These internal engine artifacts are persisted for audit/replay, but are
+    # too large and duplicative for the workspace hydration response.
+    "sii_result",
+    "analysis",
+    "analysis_explanation",
+    "relationship_model",
+    "normalized_telemetry",
+    "conditions",
+}
+
+
+def project_result_for_transport(result: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(result, dict):
+        return None
+    projected = {
+        key: value
+        for key, value in result.items()
+        if key not in _TRANSPORT_OMITTED_RESULT_KEYS
+    }
+    baseline = projected.get("baseline_analysis")
+    if isinstance(baseline, dict) and "relationship_graph" in baseline:
+        projected["baseline_analysis"] = {
+            key: value
+            for key, value in baseline.items()
+            if key != "relationship_graph"
+        }
+    projected["transport_projection"] = {
+        "version": 1,
+        "omitted_internal_artifacts": sorted(_TRANSPORT_OMITTED_RESULT_KEYS),
+    }
+    return projected
+
+
 def summarize_result(result: dict[str, Any], *, build_scope: Callable[..., dict[str, Any]] = build_session_scope) -> dict[str, Any]:
     replay = (
         result.get("replay_timeline")

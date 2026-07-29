@@ -86,15 +86,19 @@ def _correlation(left: list[float], right: list[float]) -> float | None:
         return None
     left_mean = _mean(left)
     right_mean = _mean(right)
-    left_centered = [value - left_mean for value in left]
-    right_centered = [value - right_mean for value in right]
-    denominator = math.sqrt(
-        sum(value * value for value in left_centered)
-        * sum(value * value for value in right_centered)
-    )
+    covariance = 0.0
+    left_variance = 0.0
+    right_variance = 0.0
+    for left_value, right_value in zip(left, right):
+        left_delta = left_value - left_mean
+        right_delta = right_value - right_mean
+        covariance += left_delta * right_delta
+        left_variance += left_delta * left_delta
+        right_variance += right_delta * right_delta
+    denominator = math.sqrt(left_variance * right_variance)
     if denominator <= 1e-12:
         return None
-    return sum(a * b for a, b in zip(left_centered, right_centered)) / denominator
+    return covariance / denominator
 
 
 def _paired_series(
@@ -219,11 +223,22 @@ def _signal_characteristics(values: list[float]) -> dict[str, Any]:
             "persistence": {},
             "lag_behavior": {},
         }
+    ordered = sorted(values)
+
+    def quantile(fraction: float) -> float:
+        position = max(0.0, min(1.0, fraction)) * (len(ordered) - 1)
+        lower = int(math.floor(position))
+        upper = int(math.ceil(position))
+        if lower == upper:
+            return ordered[lower]
+        weight = position - lower
+        return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
     average = _mean(values)
     spread = _std(values)
     differences = [current - previous for previous, current in zip(values, values[1:])]
-    median_value = _quantile(values, 0.5)
-    mad = _quantile([abs(value - float(median_value)) for value in values], 0.5)
+    median_value = quantile(0.5)
+    mad = _quantile([abs(value - median_value) for value in values], 0.5)
     lag_one = _correlation(values[:-1], values[1:]) if len(values) >= 4 else None
     lag_scores = []
     for lag in range(1, min(12, len(values) // 3) + 1):
@@ -231,10 +246,9 @@ def _signal_characteristics(values: list[float]) -> dict[str, Any]:
         if correlation is not None:
             lag_scores.append((lag, correlation))
     strongest_lag = max(lag_scores, key=lambda item: abs(item[1])) if lag_scores else None
-    within_iqr = [
-        float(_quantile(values, 0.25)) <= value <= float(_quantile(values, 0.75))
-        for value in values
-    ]
+    iqr_low = quantile(0.25)
+    iqr_high = quantile(0.75)
+    within_iqr = [iqr_low <= value <= iqr_high for value in values]
     longest_run = current_run = 0
     for inside in within_iqr:
         current_run = current_run + 1 if inside else 0
@@ -243,22 +257,22 @@ def _signal_characteristics(values: list[float]) -> dict[str, Any]:
         "samples": len(values),
         "distribution": {
             "minimum": round(min(values), 8),
-            "p01": round(float(_quantile(values, 0.01)), 8),
-            "p05": round(float(_quantile(values, 0.05)), 8),
-            "p25": round(float(_quantile(values, 0.25)), 8),
+            "p01": round(quantile(0.01), 8),
+            "p05": round(quantile(0.05), 8),
+            "p25": round(iqr_low, 8),
             "median": round(float(median_value), 8),
             "mean": round(average, 8),
-            "p75": round(float(_quantile(values, 0.75)), 8),
-            "p95": round(float(_quantile(values, 0.95)), 8),
-            "p99": round(float(_quantile(values, 0.99)), 8),
+            "p75": round(iqr_high, 8),
+            "p95": round(quantile(0.95), 8),
+            "p99": round(quantile(0.99), 8),
             "maximum": round(max(values), 8),
             "standard_deviation": round(spread, 8),
         },
         "empirical_thresholds": {
-            "expected_lower": round(float(_quantile(values, 0.01)), 8),
-            "expected_upper": round(float(_quantile(values, 0.99)), 8),
-            "central_lower": round(float(_quantile(values, 0.05)), 8),
-            "central_upper": round(float(_quantile(values, 0.95)), 8),
+            "expected_lower": round(quantile(0.01), 8),
+            "expected_upper": round(quantile(0.99), 8),
+            "central_lower": round(quantile(0.05), 8),
+            "central_upper": round(quantile(0.95), 8),
             "method": "empirical_quantiles_v1",
         },
         "volatility": {
@@ -313,7 +327,13 @@ def _relationship_edge(
         return None
     lag_candidates = []
     for lag in range(-6, 7):
-        lag_left, lag_right = _paired_series(rows, left, right, lag=lag)
+        if lag > 0:
+            lag_left, lag_right = left_values[:-lag], right_values[lag:]
+        elif lag < 0:
+            offset = abs(lag)
+            lag_left, lag_right = left_values[offset:], right_values[:-offset]
+        else:
+            lag_left, lag_right = left_values, right_values
         lag_correlation = _correlation(lag_left, lag_right)
         if lag_correlation is not None:
             lag_candidates.append((lag, lag_correlation, len(lag_left)))

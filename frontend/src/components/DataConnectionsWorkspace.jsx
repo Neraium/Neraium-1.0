@@ -165,6 +165,8 @@ function uploadFailureDiagnosticsFrom(value = {}) {
     rawResponseBody: value.rawResponseBody ?? value.raw_response_body ?? "",
     responseStatus: value.responseStatus ?? value.response_status ?? value.status ?? null,
     responseContentType: value.responseContentType ?? value.response_content_type ?? null,
+    requestId: value.requestId ?? value.request_id ?? null,
+    diagnosticTimestamp: value.diagnosticTimestamp ?? value.diagnostic_timestamp ?? null,
     jobId: value.jobId ?? value.job_id ?? null,
     uploadSessionId: value.uploadSessionId ?? value.upload_session_id ?? null,
     failedStage: value.failedStage ?? value.failed_stage ?? null,
@@ -286,6 +288,7 @@ export default function DataConnectionsWorkspace({
   const uploadInFlightRef = useRef(false);
   const telemetryStageLogRef = useRef(new Set());
   const autoStartedSignatureRef = useRef("");
+  const storedJobRestoreRef = useRef(false);
   const completionNavigationTimerRef = useRef(null);
   const completionNavigationEligibleRef = useRef(false);
   const flowOwnerRef = useRef(String(currentUser?.email ?? currentUser?.id ?? ""));
@@ -403,7 +406,58 @@ export default function DataConnectionsWorkspace({
   }, [hasActiveSession, hasResumedSession, sessionStore?.jobId, sessionStore?.uiState, sessionStore?.latestUploadSnapshot, sessionStore?.latestUploadResult]);
 
   useEffect(() => {
-    if (selectedFiles.length > 0 || hasResumedSession) return;
+    if (typeof window === "undefined" || storedJobRestoreRef.current) return;
+    if (String(sessionStore?.jobId ?? "").trim()) return;
+    const storedJobId = String(window.localStorage.getItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY) ?? "").trim();
+    if (!storedJobId) return;
+    storedJobRestoreRef.current = true;
+    const restoreStoredJob = async () => {
+      const path = `/api/data/upload-status/${encodeURIComponent(storedJobId)}`;
+      const response = await apiFetch(path, { accessCode });
+      const payload = await readJsonPayload(response, { route: path, phase: "poll" });
+      if (response.status === 404) {
+        window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
+        return;
+      }
+      if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
+      const normalized = normalizeStatusPayload(payload, storedJobId);
+      uploadJobIdRef.current = storedJobId;
+      uploadStatusPathRef.current = normalizeUploadStatusPath(normalized?.status_url, storedJobId);
+      setUploadJob(normalized);
+      const state = normalizeUploadStatus(normalized?.processing_state ?? normalized?.status);
+      if (state === "complete") {
+        setUploadState("complete");
+        await completeUploadHandoff(normalized, storedJobId);
+      } else if (["failed", "error", "timeout", "cancelled"].includes(state)) {
+        markUploadFailed({
+          message: normalized?.message ?? normalized?.error ?? "Dataset import failed.",
+          errorType: normalized?.error_code ?? normalized?.error_type ?? null,
+          jobId: storedJobId,
+          keepStoredJobId: true,
+          diagnostics: normalized,
+        });
+      } else {
+        setUploadState("running_sii");
+        setUploadProcessingFlag(true);
+        await pollUploadStatus(storedJobId, normalized?.status_url);
+      }
+    };
+    restoreStoredJob().catch((error) => {
+      const classified = classifyUploadError(error, "poll");
+      markUploadFailed({
+        message: classified.message,
+        errorType: classified.errorType,
+        jobId: storedJobId,
+        keepStoredJobId: true,
+        diagnostics: classified,
+      });
+    });
+  // Restore is deliberately one-shot; pollUploadStatus owns subsequent state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessCode, apiFetch, sessionStore?.jobId]);
+
+  useEffect(() => {
+    if (selectedFiles.length > 0 || hasResumedSession || uploadJobIdRef.current) return;
     setUploadTransfer(null);
     setUploadJob(null);
     if (uploadStateRef.current === "validated") {
@@ -547,6 +601,8 @@ export default function DataConnectionsWorkspace({
       failure_phase: failureDiagnostics.failurePhase ?? current?.failure_phase ?? null,
       raw_response_body: failureDiagnostics.rawResponseBody || current?.raw_response_body || "",
       response_content_type: failureDiagnostics.responseContentType ?? current?.response_content_type ?? null,
+      request_id: failureDiagnostics.requestId ?? current?.request_id ?? null,
+      diagnostic_timestamp: failureDiagnostics.diagnosticTimestamp ?? current?.diagnostic_timestamp ?? new Date().toISOString(),
     }));
     if (failureDiagnostics.failureUrl || failureDiagnostics.responseStatus) {
       setUploadDebug((current) => ({

@@ -45,7 +45,7 @@ describe("uploadFlow poll error classification", () => {
     expect(operatorUploadMessage({ status: 401, errorType: "auth", detail: backendDetail, phase: "upload" }))
       .toBe("Your session has expired. Sign in again, then retry the import.");
     expect(operatorUploadMessage({ status: 404, errorType: "upload_session_missing", detail: backendDetail, phase: "upload" }))
-      .toBe("Analysis status is unavailable. Refresh and retry.");
+      .toBe("The requested endpoint, dataset, or uploaded object was not found.");
   });
 
   it("keeps upload job-not-found errors distinct from endpoint misses", () => {
@@ -125,8 +125,17 @@ describe("uploadFlow poll error classification", () => {
       state: "error",
       retryable: false,
       status: 404,
-      message: "Telemetry intake unavailable.",
+      message: "The requested endpoint, dataset, or uploaded object was not found.",
     });
+  });
+
+  it.each([
+    [504, "server_timeout", "The server timed out while processing the dataset. Retry the import."],
+    [429, "rate_limited", "Analysis service is busy or rate limited. Retry shortly."],
+    [500, "internal_processing_failure", "The server could not complete dataset processing."],
+    [503, "service_unavailable", SERVICE_UNAVAILABLE_UPLOAD_MESSAGE],
+  ])("preserves HTTP %s as %s", (status, errorType, expectedMessage) => {
+    expect(operatorUploadMessage({ status, errorType, phase: "job_creation" })).toBe(expectedMessage);
   });
 
   it("reports upload timeouts specifically", () => {
