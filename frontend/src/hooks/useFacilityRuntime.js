@@ -7,7 +7,8 @@ import {
   fetchEngineIdentity,
   fetchFacilitySystems as fetchSystemFacility,
 } from "../services/api/systemApi";
-import { fetchLatestUploadState } from "../services/api/uploadApi";
+import { clearLatestUploadStateCache, fetchLatestUploadState } from "../services/api/uploadApi";
+import { getCurrentWorkspaceId } from "../services/datasetSessionCache";
 import * as uploadStateView from "../viewModels/uploadState";
 import { buildEmptySessionStore, buildSessionStore } from "../viewModels/sessionState";
 import { normalizeErrorMessage } from "../viewModels/uploadFlow";
@@ -63,8 +64,12 @@ export default function useFacilityRuntime({
   const healthRequestInFlightRef = useRef(false);
   const systemsRequestInFlightRef = useRef(false);
   const latestUploadRequestInFlightRef = useRef(false);
+  const latestUploadRequestVersionRef = useRef(0);
 
   const clearUploadSessionState = useCallback(() => {
+    latestUploadRequestVersionRef.current += 1;
+    latestUploadRequestInFlightRef.current = false;
+    clearLatestUploadStateCache();
     setLatestUploadResult(null);
     setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
     setSessionStore(buildEmptySessionStore());
@@ -178,6 +183,9 @@ export default function useFacilityRuntime({
     if (!hasAccess) return latestReturn(false);
     if (latestUploadRequestInFlightRef.current) return latestReturn(Boolean(latestUploadResultRef.current));
     latestUploadRequestInFlightRef.current = true;
+    const requestVersion = latestUploadRequestVersionRef.current + 1;
+    latestUploadRequestVersionRef.current = requestVersion;
+    const requestedPortfolioId = getCurrentWorkspaceId();
     if (isUploadInProgress() || isUploadJobLocked()) {
       latestUploadRequestInFlightRef.current = false;
       return latestReturn(Boolean(latestUploadResultRef.current));
@@ -185,6 +193,9 @@ export default function useFacilityRuntime({
     const shouldIncludePersisted = typeof includePersisted === "boolean" ? includePersisted : allowPersistedLatest;
     try {
       const payload = await fetchLatestUploadState({ apiFetch, accessCode, includePersisted: shouldIncludePersisted, forceRefresh });
+      if (latestUploadRequestVersionRef.current !== requestVersion || getCurrentWorkspaceId() !== requestedPortfolioId) {
+        return latestReturn(Boolean(latestUploadResultRef.current));
+      }
       const boundaryMeta = payload.snapshot?._neraiumTelemetryBoundary ?? {};
       if (boundaryMeta.renderable === false && lastKnownGoodTelemetryRef.current?.snapshot) {
         console.warn("[neraium] latest telemetry rejected by workspace boundary", {
@@ -251,7 +262,7 @@ export default function useFacilityRuntime({
         latestResult: lastGood?.latestResult ?? latestUploadResultRef.current,
       });
     } finally {
-      latestUploadRequestInFlightRef.current = false;
+      if (latestUploadRequestVersionRef.current === requestVersion) latestUploadRequestInFlightRef.current = false;
     }
   }, [accessCode, allowPersistedLatest, clearUploadSessionState, hasAccess, latestUploadSnapshot]);
 

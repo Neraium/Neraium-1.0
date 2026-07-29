@@ -395,6 +395,40 @@ def write_shared_state(name: str, payload: dict[str, Any], *, scope: DatasetScop
                 logger.error("shared_state_write_failed backend=s3")
 
 
+def write_shared_state_strict(name: str, payload: dict[str, Any], *, scope: DatasetScope | None = None) -> None:
+    """Write activation-critical state and surface production persistence failures."""
+    normalized = dict(payload or {})
+    storage_name = _state_name(name, scope=scope, payload=normalized)
+    runtime_written = False
+    try:
+        upsert_latest_payload(_shared_key(storage_name), normalized)
+        runtime_written = True
+    except Exception:
+        logger.error("shared_state_write_failed backend=runtime_db")
+
+    bucket = _upload_state_bucket()
+    if bucket:
+        client = _get_s3_client()
+        if client is None:
+            raise RuntimeError("shared_state_client_unavailable")
+        try:
+            client.put_object(
+                Bucket=bucket,
+                Key=_s3_object_key(storage_name),
+                Body=json.dumps(normalized, indent=2, default=str).encode("utf-8"),
+                ContentType="application/json",
+            )
+        except Exception as exc:
+            logger.error("shared_state_write_failed backend=s3")
+            raise RuntimeError("shared_state_write_failed") from exc
+        return
+
+    # Tests and single-process development intentionally use local JSON even
+    # when the optional runtime latest-payload database is disabled.
+    if _runtime_db_latest_enabled() and not runtime_written:
+        raise RuntimeError("shared_state_write_failed")
+
+
 def write_upload_result(job_id: str, payload: dict[str, Any]) -> None:
     normalized = attach_dataset_scope(dict(payload or {}), dataset_id=job_id)
     write_local_json(f"upload_result_{job_id}.json", normalized)

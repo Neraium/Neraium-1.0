@@ -99,6 +99,8 @@ export default function AppWorkspaceRouter({
   signOutPending = false,
   currentUser = null,
   setActiveWorkspace,
+  selectedBaselineIdentity = null,
+  onBaselineSelected = () => false,
   pendingUploadFiles = [],
   setPendingUploadFiles = () => {},
   resultsNavigationKey = 0,
@@ -142,7 +144,9 @@ export default function AppWorkspaceRouter({
             hasRealSiiOutput={hasRealSiiOutput}
             roomContext={roomContext}
             onUploadComplete={handleGateUploadComplete}
-            onOpenBaseline={() => setActiveWorkspace("system-body")}
+            onOpenBaseline={(identity) => onBaselineSelected(identity, { replace: false })}
+            selectedBaselineIdentity={selectedBaselineIdentity}
+            onBaselineSelected={onBaselineSelected}
             sessionStore={liveOps.session}
             onResetDemo={handleResetDemo}
             formatClockTime={formatClockTime}

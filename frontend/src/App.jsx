@@ -11,9 +11,11 @@ import {
   activateDatasetCacheScope,
   clearDatasetSessionCache,
   getCurrentWorkspaceId,
+  setCurrentWorkspaceId,
 } from "./services/datasetSessionCache";
 import { resolveSessionStore } from "./viewModels/sessionState";
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
+import { baselineRoutePath, parseBaselineRoute } from "./viewModels/baselineSelection";
 
 const AppWorkspaceRouter = lazy(() => import("./components/AppWorkspaceRouter"));
 const AuthScreen = lazy(() => import("./components/AuthScreen"));
@@ -34,6 +36,7 @@ function readInitialWorkspaceRoute() {
   if (typeof window === "undefined") return "system-body";
   const pathname = window.location.pathname.replace(/\/+$/, "") || HOME_PATH;
   if (pathname === HOME_PATH || pathname === "/signin") return "system-body";
+  if (parseBaselineRoute(pathname)) return "data-connections";
   if (["/portfolio", "/workspace"].includes(pathname) || pathname.startsWith("/sites/") || pathname.startsWith("/systems") || pathname.startsWith("/findings") || pathname.startsWith("/investigations") || pathname.startsWith("/evidence") || pathname.startsWith("/trace")) return "system-body";
   return PATH_WORKSPACES[pathname] ?? "system-body";
 }
@@ -41,6 +44,7 @@ function readInitialWorkspaceRoute() {
 function App() {
   const accessCode = String(import.meta.env.VITE_NERAIUM_API_TOKEN ?? "").trim();
   const [activeWorkspace, setActiveWorkspaceState] = useState(() => readInitialWorkspaceRoute());
+  const [selectedBaselineIdentity, setSelectedBaselineIdentity] = useState(() => parseBaselineRoute());
   const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
   const [resultsNavigationKey, setResultsNavigationKey] = useState(0);
   const [appReady, setAppReady] = useState(false);
@@ -54,12 +58,22 @@ function App() {
   const setActiveWorkspace = useCallback((workspaceId) => {
     const nextWorkspace = workspaceId === "home" ? "home" : workspaceId;
     setActiveWorkspaceState(nextWorkspace);
+    setSelectedBaselineIdentity(null);
 
     if (typeof window === "undefined") return;
     const nextPath = WORKSPACE_PATHS[nextWorkspace] ?? WORKSPACE_PATHS["system-body"];
-    if (window.location.pathname !== nextPath) {
-      window.history.pushState({}, "", nextPath);
+    if (window.location.pathname !== nextPath) window.history.pushState({}, "", nextPath);
+  }, []);
+
+  const handleBaselineSelected = useCallback((identity, { replace = false } = {}) => {
+    const nextPath = baselineRoutePath(identity?.portfolioId, identity?.baselineId);
+    if (!nextPath) return false;
+    setSelectedBaselineIdentity(identity);
+    setActiveWorkspaceState("data-connections");
+    if (typeof window !== "undefined" && window.location.pathname !== nextPath) {
+      window.history[replace ? "replaceState" : "pushState"]({}, "", nextPath);
     }
+    return true;
   }, []);
 
   const {
@@ -268,7 +282,9 @@ function App() {
   const handleAuthenticated = useCallback((user) => {
     setAuthState({ status: "authenticated", user, notice: "", errorKind: null });
     try {
-      const scope = activateDatasetCacheScope(user);
+      const baselineRoute = parseBaselineRoute();
+      if (baselineRoute?.portfolioId) setCurrentWorkspaceId(baselineRoute.portfolioId);
+      const scope = activateDatasetCacheScope(user, baselineRoute?.portfolioId ?? getCurrentWorkspaceId());
       setDatasetScopeKey(scope.scopeKey);
     } catch (error) {
       setDatasetScopeKey("authenticated");
@@ -382,6 +398,7 @@ function App() {
     if (typeof window === "undefined") return undefined;
 
     const handlePopState = () => {
+      setSelectedBaselineIdentity(parseBaselineRoute());
       setActiveWorkspaceState(readInitialWorkspaceRoute());
     };
 
@@ -456,6 +473,8 @@ function App() {
         signOutPending={signOutPending}
         currentUser={authState.user}
         setActiveWorkspace={setActiveWorkspace}
+        selectedBaselineIdentity={selectedBaselineIdentity}
+        onBaselineSelected={handleBaselineSelected}
         pendingUploadFiles={pendingUploadFiles}
         setPendingUploadFiles={setPendingUploadFiles}
         resultsNavigationKey={resultsNavigationKey}

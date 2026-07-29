@@ -99,6 +99,8 @@ class BaselineSuitabilityResponse(BaseModel):
 class BehavioralModelResponse(BaseModel):
     contract_version: Literal["behavioral-digital-model.v1"]
     model_id: str
+    baseline_id: str | None = None
+    baseline_candidate_id: str | None = None
     version: int = Field(ge=1)
     status: Literal["awaiting_approval", "active", "unsuitable", "superseded"]
     workflow: Literal["create_baseline", "extend_baseline"]
@@ -120,7 +122,13 @@ class BehavioralModelResponse(BaseModel):
 class BaselineConstructionResultResponse(BaseModel):
     contract_version: Literal["baseline-suitability.v1"]
     job_id: str
+    upload_id: str
     dataset_id: str
+    baseline_candidate_id: str
+    established_baseline_id: str
+    portfolio_id: str
+    system_id: str
+    dataset_scope: dict[str, Any]
     workflow: Literal["create_baseline", "extend_baseline"]
     status: Literal["COMPLETE"]
     processing_state: Literal["complete"]

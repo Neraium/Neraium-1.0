@@ -19,6 +19,7 @@ from app.services.behavioral_model_repository import (
     read_active_behavioral_model,
 )
 from app.services.data_quality import build_data_quality, profile_timestamps
+from app.services.dataset_scope import current_dataset_scope
 from app.services.sensor_health import assess_sensor_health, build_data_confidence
 from app.services.telemetry_classification import build_telemetry_signal_catalog
 from app.services.telemetry_normalization import build_normalization_report
@@ -660,22 +661,25 @@ def build_behavioral_baseline(
     model_id = f"bdm-v{version}-{job_id[:8]}"
     eligible = bool(suitability["eligible_for_activation"])
     auto_activate = eligible and not approval_required
-    status = (
-        "unsuitable"
-        if not eligible
-        else "active"
-        if auto_activate
-        else "awaiting_approval"
-    )
+    # Eligible models remain candidates until the repository commits the active
+    # pointer. Automatic policy promotes them inside the same activation lock.
+    status = "unsuitable" if not eligible else "awaiting_approval"
+    scope = current_dataset_scope()
     model = {
         "contract_version": BEHAVIORAL_MODEL_CONTRACT_VERSION,
         "model_id": model_id,
+        "baseline_id": model_id,
+        "baseline_candidate_id": model_id,
         "version": version,
         "status": status,
         "workflow": workflow,
         "created_at": now,
         "source": {
             "job_id": job_id,
+            "upload_id": job_id,
+            "dataset_id": job_id,
+            "portfolio_id": scope.workspace_id,
+            "system_id": scope.workspace_id,
             "filename": filename,
             "row_count": row_count_total,
             "column_count": len(columns),
@@ -710,7 +714,13 @@ def build_behavioral_baseline(
     result = {
         "contract_version": BASELINE_RESULT_CONTRACT_VERSION,
         "job_id": job_id,
+        "upload_id": job_id,
         "dataset_id": job_id,
+        "baseline_candidate_id": model_id,
+        "established_baseline_id": model_id,
+        "portfolio_id": scope.workspace_id,
+        "system_id": scope.workspace_id,
+        "dataset_scope": scope.as_dict(),
         "workflow": workflow,
         "status": "COMPLETE",
         "processing_state": "complete",

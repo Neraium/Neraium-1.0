@@ -10,6 +10,7 @@ const LOCAL_DATASET_CACHE_KEYS = [
 const SESSION_DATASET_CACHE_KEYS = [
   "neraium.session_intent",
 ];
+const BASELINE_SELECTION_STORAGE_PREFIX = "neraium.baseline_selection.";
 const WORKSPACE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 function normalizeWorkspaceId(value) {
@@ -59,6 +60,10 @@ export function datasetCacheScopeKey(user, workspaceId = getCurrentWorkspaceId()
 export function clearDatasetSessionCache({ clearScopeOwner = true, clearWorkspace = true } = {}) {
   if (typeof window === "undefined") return;
   LOCAL_DATASET_CACHE_KEYS.forEach((key) => removeStorageItem(window.localStorage, key));
+  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.localStorage.key(index);
+    if (key?.startsWith(BASELINE_SELECTION_STORAGE_PREFIX)) removeStorageItem(window.localStorage, key);
+  }
   SESSION_DATASET_CACHE_KEYS.forEach((key) => removeStorageItem(window.sessionStorage, key));
   if (clearScopeOwner) removeStorageItem(window.localStorage, DATASET_CACHE_SCOPE_STORAGE_KEY);
   if (clearWorkspace) removeStorageItem(window.localStorage, CURRENT_WORKSPACE_STORAGE_KEY);

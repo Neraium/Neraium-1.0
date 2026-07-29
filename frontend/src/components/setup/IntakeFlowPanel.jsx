@@ -543,7 +543,11 @@ function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queued
     String(uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status ?? "").toLowerCase(),
   );
   return [
-    ["Job ID", uploadJob?.job_id ?? uploadJob?.id],
+    ["Selected baseline ID", uploadJob?.selected_baseline_id ?? uploadJob?.established_baseline_id],
+    ["Completed job ID", uploadJob?.job_id ?? uploadJob?.id],
+    ["Dataset ID", uploadJob?.dataset_id],
+    ["Portfolio ID", uploadJob?.portfolio_id ?? uploadJob?.system_id],
+    ["State source", uploadJob?.state_source ? String(uploadJob.state_source).replaceAll("_", " ") : null],
     ["Backend state", uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status],
     ["Elapsed time", uploadJob?.processing_time_seconds ? `${uploadJob.processing_time_seconds}s` : null],
     ["Transfer", uploadTransfer?.label],
@@ -660,6 +664,13 @@ function SuccessState({
   onImportComparisonDataset,
   onViewResults,
   onResetWorkspace,
+  latestUploadSnapshot,
+  uploadJob,
+  uploadState,
+  uploadTransfer,
+  propagationLabel,
+  queuedWorkerDetail,
+  latestMessage,
 }) {
   if (comparison) {
     return (
@@ -711,6 +722,15 @@ function SuccessState({
         <button type="button" className="command-button upload-completion-actions__primary" onClick={onOpenBaseline}>Open Baseline</button>
         <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onImportComparisonDataset}>Import Comparison Dataset</button>
       </div>
+      <AdvancedDetails
+        latestUploadSnapshot={latestUploadSnapshot}
+        uploadJob={uploadJob}
+        uploadState={uploadState}
+        uploadTransfer={uploadTransfer}
+        propagationLabel={propagationLabel}
+        queuedWorkerDetail={queuedWorkerDetail}
+        latestMessage={latestMessage}
+      />
     </section>
   );
 }
@@ -905,6 +925,13 @@ export default function IntakeFlowPanel({
             onImportComparisonDataset={onImportComparisonDataset ?? onResetWorkspace}
             onViewResults={onViewResults}
             onResetWorkspace={onResetWorkspace}
+            latestUploadSnapshot={latestUploadSnapshot}
+            uploadJob={uploadJob}
+            uploadState={uploadState}
+            uploadTransfer={uploadTransfer}
+            propagationLabel={propagationLabel}
+            queuedWorkerDetail={queuedWorkerDetail}
+            latestMessage={latestMessage}
           />
         ) : null}
 

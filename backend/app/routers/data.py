@@ -32,6 +32,7 @@ from app.services.behavioral_model_repository import (
     activate_candidate,
     read_active_behavioral_model,
     read_baseline_result,
+    read_baseline_result_by_model_id,
     read_latest_candidate,
     read_model,
     read_model_index,
@@ -1625,8 +1626,13 @@ async def intake_result(job_id: UploadJobPath):
 
 @router.get("/baselines")
 async def behavioral_baseline_state():
+    active_model = read_active_behavioral_model()
+    scope = current_dataset_scope()
     return {
-        "active_model": read_active_behavioral_model(),
+        "active_model": active_model,
+        "active_baseline_id": (active_model or {}).get("model_id"),
+        "portfolio_id": scope.workspace_id,
+        "system_id": scope.workspace_id,
         "latest_candidate": read_latest_candidate(),
         "model_index": read_model_index(),
         "workflows": {
@@ -1651,6 +1657,17 @@ async def behavioral_model_candidate(model_id: UploadJobPath):
     if not isinstance(model, dict) or not payload_matches_dataset_scope(model):
         raise HTTPException(status_code=404, detail="Behavioral model candidate was not found.")
     return model
+
+
+@router.get("/baselines/{model_id}")
+async def behavioral_baseline_by_id(model_id: UploadJobPath):
+    result = read_baseline_result_by_model_id(model_id)
+    if not isinstance(result, dict) or not payload_matches_dataset_scope(result):
+        raise HTTPException(status_code=404, detail="Baseline was not found.")
+    returned_model_id = str((result.get("candidate_model") or {}).get("model_id") or "").strip()
+    if returned_model_id != model_id:
+        raise HTTPException(status_code=404, detail="Baseline was not found.")
+    return result
 
 
 @router.post(
@@ -1706,9 +1723,14 @@ async def approve_behavioral_model_candidate(
         request_id=auth_context.get("request_id"),
         detail={"version": activated.get("version"), "source_job_id": source_job_id},
     )
+    scope = current_dataset_scope()
     return {
         "status": "active",
         "message": "Behavioral Digital Model activated.",
+        "active_baseline_id": activated.get("model_id"),
+        "established_baseline_id": activated.get("model_id"),
+        "portfolio_id": scope.workspace_id,
+        "system_id": scope.workspace_id,
         "active_model": activated,
     }
 

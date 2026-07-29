@@ -89,9 +89,26 @@ Baseline endpoints:
 
 - `GET /api/data/baselines`
 - `GET /api/data/baselines/jobs/{job_id}`
+- `GET /api/data/baselines/{baseline_id}`
 - `GET /api/data/baselines/candidates/{model_id}`
 - `POST /api/data/baselines/candidates/{model_id}/approve`
 
 Every baseline status and result publishes `sii_engine_invoked: false`.
 Automated tests monkeypatch the SII runner to fail if either baseline workflow
 reaches it.
+
+
+## Exact selection and activation consistency
+
+A completed baseline result carries `job_id`, `upload_id`, `dataset_id`,
+`baseline_candidate_id`, `established_baseline_id`, `portfolio_id`, and
+`system_id`. The completion response is the selection authority. Clients
+persist these identifiers and hydrate the completion view only through
+`GET /api/data/baselines/{baseline_id}` in the matching workspace; the
+portfolio-level state endpoint is not a substitute for an exact selection.
+
+Activation uses an activation-critical persistence barrier. The new model and
+active pointer are durably written before a terminal automatic-activation
+result is published, and the previous model is superseded only after the new
+pointer exists. A shared-state write failure fails the workflow rather than
+reporting completion with the previous model still active.

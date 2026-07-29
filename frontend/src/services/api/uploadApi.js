@@ -7,6 +7,7 @@ import {
   buildApiUrl,
 } from "../../config";
 import * as uploadStateView from "../../viewModels/uploadState";
+import { getCurrentWorkspaceId } from "../datasetSessionCache";
 import { normalizeUploadJob } from "../../viewModels/uploadContract";
 import {
   SERVICE_UNAVAILABLE_RETRY_MESSAGE,
@@ -37,34 +38,48 @@ function isTransientLatestUploadError(error) {
 }
 const latestUploadInflight = new Map();
 const latestUploadCache = new Map();
+const latestUploadRequestVersion = new Map();
 
-export function clearLatestUploadStateCache() {
-  latestUploadInflight.clear();
-  latestUploadCache.clear();
+export function clearLatestUploadStateCache({ portfolioId = null } = {}) {
+  const prefix = portfolioId ? `latest:${portfolioId}:` : null;
+  for (const [key, entry] of latestUploadInflight.entries()) {
+    if (!prefix || key.startsWith(prefix)) {
+      entry.controller?.abort();
+      latestUploadInflight.delete(key);
+      latestUploadRequestVersion.set(key, (latestUploadRequestVersion.get(key) ?? 0) + 1);
+    }
+  }
+  for (const key of latestUploadCache.keys()) {
+    if (!prefix || key.startsWith(prefix)) latestUploadCache.delete(key);
+  }
 }
 
 export async function fetchLatestUploadState({ apiFetch, accessCode, includePersisted = false, forceRefresh = false } = {}) {
-  const key = `latest:${includePersisted ? 1 : 0}`;
+  const portfolioId = getCurrentWorkspaceId();
+  const key = `latest:${portfolioId}:${includePersisted ? 1 : 0}`;
   const now = Date.now();
-  if (forceRefresh) {
-    latestUploadInflight.delete(key);
-    latestUploadCache.delete(key);
-  } else {
+  if (forceRefresh) clearLatestUploadStateCache({ portfolioId });
+  else {
     const cached = latestUploadCache.get(key);
-    if (cached && cached.expiresAt > now) {
-      return cached.value;
-    }
+    if (cached && cached.expiresAt > now) return cached.value;
     const inFlight = latestUploadInflight.get(key);
-    if (inFlight) return inFlight;
+    if (inFlight) return inFlight.promise;
   }
 
+  const requestVersion = (latestUploadRequestVersion.get(key) ?? 0) + 1;
+  latestUploadRequestVersion.set(key, requestVersion);
+  const controller = new AbortController();
   const request = (async () => {
     const path = `/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`;
     let lastError = null;
 
     for (let attempt = 0; attempt <= LATEST_UPLOAD_MAX_RETRIES; attempt += 1) {
       try {
-        const response = await apiFetch(path, { accessCode });
+        const response = await apiFetch(path, {
+          accessCode,
+          signal: controller.signal,
+          headers: { "X-Neraium-Workspace-Id": portfolioId },
+        });
         const rawPayload = await readJsonPayload(response, { route: path, phase: "result" });
         if (!response.ok) {
           const requestError = buildUploadRequestError(response, rawPayload, "result");
@@ -74,15 +89,14 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
         const normalizedSnapshot = uploadStateView.normalizeLatestUploadPayload(rawPayload);
         const latestResult = uploadStateView.resolveCurrentUploadResult(normalizedSnapshot);
         const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null;
-        const value = {
-          snapshot: normalizedSnapshot,
-          latestResult: normalizedLatestResult,
-        };
-        latestUploadCache.set(key, { expiresAt: Date.now() + LATEST_UPLOAD_DEDUPE_TTL_MS, value });
+        const value = { snapshot: normalizedSnapshot, latestResult: normalizedLatestResult };
+        if (latestUploadRequestVersion.get(key) === requestVersion && getCurrentWorkspaceId() === portfolioId) {
+          latestUploadCache.set(key, { expiresAt: Date.now() + LATEST_UPLOAD_DEDUPE_TTL_MS, value });
+        }
         return value;
       } catch (error) {
         lastError = error;
-        if (attempt >= LATEST_UPLOAD_MAX_RETRIES || !isTransientLatestUploadError(error)) break;
+        if (error?.name === "AbortError" || attempt >= LATEST_UPLOAD_MAX_RETRIES || !isTransientLatestUploadError(error)) break;
         console.info("[neraium] latest telemetry retry scheduled", { attempt: attempt + 1, status: error?.status ?? null });
         await sleep(latestUploadRetryDelayMs(attempt));
       }
@@ -91,11 +105,11 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
     throw lastError;
   })();
 
-  latestUploadInflight.set(key, request);
+  latestUploadInflight.set(key, { promise: request, controller, requestVersion });
   try {
     return await request;
   } finally {
-    latestUploadInflight.delete(key);
+    if (latestUploadInflight.get(key)?.requestVersion === requestVersion) latestUploadInflight.delete(key);
   }
 }
 

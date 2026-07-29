@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import DataConnectionsWorkspace, { formatAnalysisUpdateTime, frontendPollingTiming, queuedWorkerMessage } from "./DataConnectionsWorkspace";
 import IntakeFlowPanel, { baselineCompletionSummary, failedImportStageRows, resolveBaselineProcessingStage } from "./setup/IntakeFlowPanel";
 import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
+import { clearBaselineResultCache } from "../services/api/baselineApi";
 import { SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
 
 const h = React.createElement;
@@ -33,16 +34,23 @@ function jsonResponse(payload, { ok = true, status = 200 } = {}) {
 function learnedBaseline(overrides = {}) {
   return {
     job_id: "baseline-job",
+    upload_id: "baseline-job",
     dataset_id: "baseline-job",
+    baseline_candidate_id: "bdm-v1-baseline",
+    established_baseline_id: "bdm-v1-baseline",
+    portfolio_id: "default",
+    system_id: "default",
     workflow: "create_baseline",
     filename: "plant-history.csv",
     status: "COMPLETE",
     processing_state: "complete",
     candidate_model: {
       model_id: "bdm-v1-baseline",
+      baseline_id: "bdm-v1-baseline",
+      baseline_candidate_id: "bdm-v1-baseline",
       version: 1,
       status: "awaiting_approval",
-      source: { filename: "plant-history.csv", row_count: 2400 },
+      source: { job_id: "baseline-job", upload_id: "baseline-job", dataset_id: "baseline-job", portfolio_id: "default", system_id: "default", filename: "plant-history.csv", row_count: 2400 },
       telemetry_schema: {
         numeric_columns: ["flow", "power", "pressure", "temperature"],
       },
@@ -104,8 +112,8 @@ function renderPanel(overrides = {}) {
   }));
 }
 
-function renderWorkspace(props = {}) {
-  return render(h(DataConnectionsWorkspace, {
+function workspaceElement(props = {}) {
+  return h(DataConnectionsWorkspace, {
     accessCode: "",
     apiFetch: vi.fn(async () => jsonResponse({})),
     latestUploadSnapshot: { status: "empty" },
@@ -115,9 +123,37 @@ function renderWorkspace(props = {}) {
     sessionStore: null,
     onUploadComplete: vi.fn(),
     onOpenBaseline: vi.fn(),
+    onBaselineSelected: vi.fn(),
     currentUser: { id: "engineer-1" },
     ...props,
-  }));
+  });
+}
+
+function renderWorkspace(props = {}) {
+  return render(workspaceElement(props));
+}
+
+function namedBaseline({ id, jobId, filename, portfolioId = "default", signalCount = 4, relationshipCount = 3 }) {
+  const base = learnedBaseline();
+  return learnedBaseline({
+    job_id: jobId,
+    upload_id: jobId,
+    dataset_id: jobId,
+    baseline_candidate_id: id,
+    established_baseline_id: id,
+    portfolio_id: portfolioId,
+    system_id: portfolioId,
+    filename,
+    candidate_model: {
+      ...base.candidate_model,
+      model_id: id,
+      baseline_id: id,
+      baseline_candidate_id: id,
+      source: { ...base.candidate_model.source, job_id: jobId, upload_id: jobId, dataset_id: jobId, portfolio_id: portfolioId, system_id: portfolioId, filename },
+      telemetry_schema: { numeric_columns: Array.from({ length: signalCount }, (_, index) => `signal-${index}`) },
+      relationship_graph: { edges: Array.from({ length: relationshipCount }, (_, index) => ({ edge_id: `edge-${index}` })) },
+    },
+  });
 }
 
 afterEach(() => {
@@ -125,6 +161,7 @@ afterEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
   vi.clearAllMocks();
+  clearBaselineResultCache();
   vi.useRealTimers();
 });
 
@@ -404,6 +441,77 @@ describe("completion and recovery", () => {
     });
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
     expect(screen.queryByText("Initial Baseline Established")).toBeNull();
+  });
+});
+
+describe("exact baseline selection regression", () => {
+  it("keeps completed baseline A authoritative when a stale baseline B hydration arrives", async () => {
+    const baselineA = namedBaseline({ id: "baseline-a", jobId: "job-a", filename: "resort chw baseline.csv", signalCount: 27, relationshipCount: 200 });
+    const baselineB = namedBaseline({ id: "baseline-b", jobId: "job-b", filename: "commercial water system.csv", signalCount: 31, relationshipCount: 169 });
+    uploadTelemetryFileWithProgress.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: { job_id: "job-a", dataset_id: "job-a", upload_id: "job-a", workflow: "create_baseline", status: "PENDING", status_url: "/api/data/upload-status/job-a", baseline_result_url: "/api/data/baselines/jobs/job-a" },
+    });
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).includes("/upload-status/")) return jsonResponse({ job_id: "job-a", dataset_id: "job-a", upload_id: "job-a", workflow: "create_baseline", job_state: "completed", status: "COMPLETE", processing_state: "complete", baseline_result_url: "/api/data/baselines/jobs/job-a" });
+      if (String(path).includes("/baselines/jobs/job-a")) return jsonResponse(baselineA);
+      if (String(path).includes("/baselines/baseline-a")) return jsonResponse(baselineA);
+      return jsonResponse({});
+    });
+    const onBaselineSelected = vi.fn();
+    const props = { apiFetch, latestUploadResult: baselineB, onBaselineSelected };
+    const { rerender } = renderWorkspace(props);
+
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("resort chw baseline.csv")] } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("resort chw baseline.csv")).toBeTruthy();
+    expect(screen.getByText("27")).toBeTruthy();
+    expect(screen.getByText("200")).toBeTruthy();
+    rerender(workspaceElement({ ...props, latestUploadResult: baselineB }));
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(screen.getByText("resort chw baseline.csv")).toBeTruthy();
+    expect(screen.queryByText("commercial water system.csv")).toBeNull();
+    expect(onBaselineSelected).toHaveBeenCalledWith(expect.objectContaining({ jobId: "job-a", datasetId: "job-a", baselineId: "baseline-a", portfolioId: "default" }), { replace: true });
+
+    fireEvent.click(screen.getByText("Processing details"));
+    expect(screen.getByText("Selected baseline ID")).toBeTruthy();
+    expect(screen.getByText("baseline-a")).toBeTruthy();
+    expect(screen.getByText("completion response")).toBeTruthy();
+  });
+
+  it("restores the exact baseline route and scopes the request by portfolio", async () => {
+    const baselineA = namedBaseline({ id: "baseline-a", jobId: "job-a", filename: "resort chw baseline.csv", portfolioId: "resort-portfolio" });
+    const apiFetch = vi.fn(async (path) => String(path).endsWith("/baselines/baseline-a") ? jsonResponse(baselineA) : jsonResponse({}));
+    renderWorkspace({ apiFetch, selectedBaselineIdentity: { portfolioId: "resort-portfolio", baselineId: "baseline-a" } });
+
+    expect(await screen.findByText("resort chw baseline.csv")).toBeTruthy();
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/api/data/baselines/baseline-a",
+      expect.objectContaining({ headers: { "X-Neraium-Workspace-Id": "resort-portfolio" } }),
+    );
+  });
+
+  it("ignores an older exact hydration response after baseline B is selected", async () => {
+    const baselineA = namedBaseline({ id: "baseline-a", jobId: "job-a", filename: "baseline A.csv" });
+    const baselineB = namedBaseline({ id: "baseline-b", jobId: "job-b", filename: "baseline B.csv" });
+    let resolveA;
+    const delayedA = new Promise((resolve) => { resolveA = () => resolve(jsonResponse(baselineA)); });
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).endsWith("/baselines/baseline-a")) return delayedA;
+      if (String(path).endsWith("/baselines/baseline-b")) return jsonResponse(baselineB);
+      return jsonResponse({});
+    });
+    const common = { apiFetch };
+    const { rerender } = renderWorkspace({ ...common, selectedBaselineIdentity: { portfolioId: "default", baselineId: "baseline-a" } });
+    rerender(workspaceElement({ ...common, selectedBaselineIdentity: { portfolioId: "default", baselineId: "baseline-b" } }));
+
+    expect(await screen.findByText("baseline B.csv")).toBeTruthy();
+    resolveA();
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(screen.getByText("baseline B.csv")).toBeTruthy();
+    expect(screen.queryByText("baseline A.csv")).toBeNull();
   });
 });
 
