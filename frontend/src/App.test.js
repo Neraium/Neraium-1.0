@@ -78,7 +78,6 @@ vi.mock("./hooks/useFacilityRuntime", () => ({
       latestUploadSnapshot: runtimeState.latestUploadSnapshot,
       domainDetection: null,
       allowPersistedLatest: true,
-      telemetryTick: 0,
       domainMode: "aquatic",
       ...runtimeMocks,
     };

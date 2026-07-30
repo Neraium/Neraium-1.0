@@ -11,8 +11,9 @@ export async function fetchFacilitySystems({ apiFetch, accessCode, scopeKey = "a
   const key = `systems:${encodeURIComponent(scopeKey)}:${encodeURIComponent(portfolioId)}:${encodeURIComponent(String(domainMode ?? ""))}`;
   const now = Date.now();
   if (forceRefresh) {
-    facilitySystemsInflight.delete(key);
     facilitySystemsCache.delete(key);
+    const inFlight = facilitySystemsInflight.get(key);
+    if (inFlight) return inFlight;
   } else {
     const cached = facilitySystemsCache.get(key);
     if (cached && cached.expiresAt > now) {

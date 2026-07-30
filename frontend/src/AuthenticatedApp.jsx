@@ -149,7 +149,6 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
     allowPersistedLatest,
     setAllowPersistedLatest,
     clearUploadSessionState,
-    telemetryTick,
     domainMode,
   } = useFacilityRuntime({
     hasAccess,
@@ -300,9 +299,8 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
       systems,
       systemsState,
       intelligenceStatus,
-      telemetryTick,
     };
-  }, [analysisHistory, apiStatus.state, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, persistedLatestUpload, previousUploadHistory, resolvedSessionStore, roomContext.primary, systems, systemsState, telemetrySession, telemetryTick]);
+  }, [analysisHistory, apiStatus.state, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, hasRealSiiOutput, intelligenceStatus, persistedLatestUpload, previousUploadHistory, resolvedSessionStore, roomContext.primary, systems, systemsState, telemetrySession]);
 
   const logSessionDiagnostic = useCallback((event, error = null) => {
     if (!import.meta.env.DEV) return;

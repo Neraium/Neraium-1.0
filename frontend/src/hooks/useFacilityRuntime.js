@@ -13,7 +13,6 @@ import * as uploadStateView from "../viewModels/uploadState";
 import { buildEmptySessionStore, buildSessionStore } from "../viewModels/sessionState";
 import { normalizeErrorMessage } from "../viewModels/uploadFlow";
 
-const OPERATIONAL_CADENCE_MS = 45000;
 const LIVE_REFRESH_INTERVAL_MS = 45000;
 const DATA_PROMOTION_STREAK_REQUIRED = 2;
 const EMPTY_DEMOTION_STREAK_REQUIRED = 3;
@@ -34,7 +33,6 @@ export default function useFacilityRuntime({
 }) {
   const isUploadInProgress = () => (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_IN_PROGRESS__ === true);
   const isUploadJobLocked = () => false;
-  const [telemetryTick, setTelemetryTick] = useState(0);
   const [apiStatus, setApiStatus] = useState({
     state: "checking",
     label: "Sync pending",
@@ -57,6 +55,7 @@ export default function useFacilityRuntime({
   const [demoScenario, setDemoScenario] = useState("drift");
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [domainMode, setDomainModeState] = useState(null);
+  const [domainModeResolved, setDomainModeResolved] = useState(false);
   const [domainDetection, setDomainDetection] = useState({ mode: null, source: "default", confidence: 0, evidence: [] });
   const healthCheckAttemptsRef = useRef(0);
   const latestStabilityRef = useRef({ hasData: false, dataStreak: 0, emptyStreak: 0 });
@@ -305,9 +304,14 @@ export default function useFacilityRuntime({
   }, [checkApiHealth, hasAccess]);
 
   useEffect(() => {
-    if (!hasAccess) return;
+    if (!hasAccess) {
+      setDomainModeResolved(false);
+      return undefined;
+    }
+    let cancelled = false;
     fetchDomainMode({ apiFetch, accessCode })
       .then((payload) => {
+        if (cancelled) return;
         const rawDomainMode = payload.mode ?? null;
         setDomainDetection({
           mode: displayDomainMode(rawDomainMode),
@@ -317,15 +321,21 @@ export default function useFacilityRuntime({
         });
         setDomainModeState(payload.source === "upload_shape" ? rawDomainMode : null);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setDomainModeResolved(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [accessCode, hasAccess]);
 
   useEffect(() => {
-    if (!hasAccess) return;
+    if (!hasAccess || !domainModeResolved) return;
     if (isUploadInProgress() || isUploadJobLocked()) return;
     loadLatestUploadState({ includePersisted: true });
     loadFacilitySystems();
-  }, [domainMode, hasAccess, loadFacilitySystems, loadLatestUploadState]);
+  }, [domainMode, domainModeResolved, hasAccess, loadFacilitySystems, loadLatestUploadState]);
 
   useEffect(() => {
     if (!hasAccess) return;
@@ -333,21 +343,15 @@ export default function useFacilityRuntime({
   }, [accessCode, hasAccess]);
 
   useStableInterval(() => {
-    checkApiHealth("interval");
-  }, 45000, hasAccess);
-
-  useStableInterval(() => {
-    setTelemetryTick((current) => current + 1);
-  }, OPERATIONAL_CADENCE_MS, hasAccess);
-
-  useStableInterval(() => {
+    void checkApiHealth("interval");
     if (isUploadInProgress() || isUploadJobLocked()) return;
-    loadLatestUploadState({ includePersisted: true });
-    loadFacilitySystems();
+    void Promise.all([
+      loadLatestUploadState({ includePersisted: true }),
+      loadFacilitySystems(),
+    ]);
   }, LIVE_REFRESH_INTERVAL_MS, hasAccess);
 
   return {
-    telemetryTick,
     apiStatus,
     systems,
     systemsState,
