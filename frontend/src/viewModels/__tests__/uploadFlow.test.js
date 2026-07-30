@@ -191,6 +191,10 @@ describe("uploadFlow poll error classification", () => {
       fileStored: true,
       jobId: "stored",
     });
+    expect(uploadErrorPresentation(payload)).toMatchObject({
+      heading: "Dataset import failed",
+      retryLabel: "Retry Import",
+    });
     expect(classifyUploadError(error, "job_creation")).toMatchObject({
       errorType: "dataset_record_creation_failed",
       retryable: true,

@@ -13,6 +13,7 @@ const runtimeMocks = vi.hoisted(() => ({
   setAllowPersistedLatest: vi.fn(),
   setIsDemoMode: vi.fn(),
   clearUploadSessionState: vi.fn(),
+  useFacilityRuntime: vi.fn(),
 }));
 const runtimeState = vi.hoisted(() => ({
   latestUploadResult: null,
@@ -66,19 +67,22 @@ vi.mock("./services/api/authApi", () => ({
 }));
 
 vi.mock("./hooks/useFacilityRuntime", () => ({
-  default: () => ({
-    apiStatus: { state: "online" },
-    systems: [],
-    systemsState: "ready",
-    intelligenceStatus: {},
-    latestUploadResult: runtimeState.latestUploadResult,
-    latestUploadSnapshot: runtimeState.latestUploadSnapshot,
-    domainDetection: null,
-    allowPersistedLatest: true,
-    telemetryTick: 0,
-    domainMode: "aquatic",
-    ...runtimeMocks,
-  }),
+  default: () => {
+    runtimeMocks.useFacilityRuntime();
+    return {
+      apiStatus: { state: "online" },
+      systems: [],
+      systemsState: "ready",
+      intelligenceStatus: {},
+      latestUploadResult: runtimeState.latestUploadResult,
+      latestUploadSnapshot: runtimeState.latestUploadSnapshot,
+      domainDetection: null,
+      allowPersistedLatest: true,
+      telemetryTick: 0,
+      domainMode: "aquatic",
+      ...runtimeMocks,
+    };
+  },
 }));
 
 vi.mock("./components/EngineeringReasoningWorkspace", () => ({
@@ -197,6 +201,7 @@ describe("App session initialization", () => {
     expect(await screen.findByTestId("auth-screen")).toBeTruthy();
     expect(screen.queryByTestId("workspace-loading-state")).toBeNull();
     expect(fetchCurrentUser).toHaveBeenCalledTimes(1);
+    expect(runtimeMocks.useFacilityRuntime).not.toHaveBeenCalled();
   });
 
   it.each([

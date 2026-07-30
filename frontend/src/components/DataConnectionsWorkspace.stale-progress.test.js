@@ -407,7 +407,7 @@ describe("completion and recovery", () => {
       onRetryFailedUploads,
     });
 
-    expect(screen.getByRole("heading", { name: "Processing failed during: Import" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Dataset import failed" })).toBeTruthy();
     expect(screen.getAllByText("The file was transferred successfully, but Neraium could not begin processing it.").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Transfer complete · 369.7 KB of 369.7 KB").length).toBeGreaterThan(0);
     const workflowStatus = within(screen.getByRole("list", { name: "Import workflow status" }));
@@ -415,7 +415,7 @@ describe("completion and recovery", () => {
     for (const label of ["Validate Signals", "Learn Relationships", "Establish Baseline", "Begin Learning"]) {
       expect(workflowStatus.getByText(label).closest("li").textContent).toContain("Not started");
     }
-    fireEvent.click(screen.getByRole("button", { name: "Retry Processing" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry Import" }));
     expect(onRetryFailedUploads).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
   });

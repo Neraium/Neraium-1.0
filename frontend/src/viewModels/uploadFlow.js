@@ -644,7 +644,8 @@ export function uploadErrorPresentation(value = {}) {
     baseline_creation: "Baseline creation",
   })[failedStage] ?? "Processing";
   const title = fileStored || transferSucceeded ? "File uploaded" : (UPLOAD_ERROR_TITLES[errorCode] ?? "Processing failed");
-  const message = transferSucceeded && ["dataset_creation", "baseline_job_creation", "import"].includes(failedStage)
+  const importCreationFailure = transferSucceeded && ["dataset_creation", "baseline_job_creation", "import"].includes(failedStage);
+  const message = importCreationFailure
     ? "The file was transferred successfully, but Neraium could not begin processing it."
     : operatorUploadMessage({
       status: value?.response_status ?? value?.responseStatus ?? value?.status ?? null,
@@ -658,7 +659,8 @@ export function uploadErrorPresentation(value = {}) {
     failedStage: failedStage || "import",
     stageLabel,
     title,
-    heading: `Processing failed during: ${stageLabel}`,
+    heading: importCreationFailure ? "Dataset import failed" : `Processing failed during: ${stageLabel}`,
+    retryLabel: importCreationFailure ? "Retry Import" : "Retry Processing",
     message,
     technicalMessage: value?.technicalMessage ?? value?.technical_message ?? null,
     retryable: value?.retryable !== false,

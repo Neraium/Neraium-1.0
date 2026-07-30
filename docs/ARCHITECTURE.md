@@ -26,6 +26,8 @@ Major API workflows include authentication and session management, system discov
 
 CSV imports are validated and processed through a bounded analysis workflow. Source files are deleted after processing; analysis metadata, results, evidence, and the latest SII state are retained in the configured runtime directory. SII compares behavior windows and system relationships. It does not claim root cause, predict failure, or control equipment.
 
+Behavioral baseline index entries persist their canonical model, dataset, and job references together. Dataset-to-baseline recovery therefore resolves the newest matching result directly from the index; model-record scanning remains only as a compatibility path for indexes created by older releases.
+
 ### Engineering finding certainty
 
 The SII engine remains unchanged and supplies relationship, persistence, and corroboration evidence. The upload and explanation services add four inspectable certainty layers:
@@ -42,7 +44,9 @@ Older saved analyses remain readable. Missing certainty fields are normalized to
 
 ## Frontend
 
-The frontend lives in `frontend`. The operator workspace is organized around distinct product objects:
+The frontend lives in `frontend`. Startup is split into a small authentication gateway and a deferred authenticated runtime. Signed-out and session-checking views do not load telemetry, analysis, or workspace state modules. Authenticated workspaces remain route-level lazy chunks, and the production performance budget verifies both the startup size and the deferred-runtime boundary.
+
+The operator workspace is organized around distinct product objects:
 
 - **Systems** are operational equipment or processes discovered from telemetry behavior.
 - **Datasets** are bounded telemetry collections imported for analysis.

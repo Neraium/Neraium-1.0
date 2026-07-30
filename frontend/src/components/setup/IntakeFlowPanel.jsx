@@ -999,7 +999,7 @@ export default function IntakeFlowPanel({
             </ol>
             <div className="upload-simple-actions">
               {failurePresentation.retryable ? (
-                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles && !uploadJob?.job_id}>Retry Processing</button>
+                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles && !uploadJob?.job_id}>{failurePresentation.retryLabel}</button>
               ) : null}
               <button type="button" className="secondary-command-button" onClick={onChooseAnotherFile ?? (() => openFilePicker("csv"))}>Choose Another File</button>
             </div>

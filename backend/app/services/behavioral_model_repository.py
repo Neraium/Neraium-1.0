@@ -62,14 +62,19 @@ def read_baseline_result(job_id: str) -> dict[str, Any] | None:
     return _read(f"results/{job_id}")
 
 
-def read_baseline_result_by_model_id(model_id: str) -> dict[str, Any] | None:
-    model = read_model(model_id)
-    job_id = str(((model or {}).get("source") or {}).get("job_id") or "").strip()
-    if not job_id:
+def _read_result_reference(job_id: str, model_id: str) -> dict[str, Any] | None:
+    if not job_id or not model_id:
         return None
     result = read_baseline_result(job_id)
     returned_model_id = str(((result or {}).get("candidate_model") or {}).get("model_id") or "").strip()
-    return result if isinstance(result, dict) and returned_model_id == str(model_id) else None
+    return result if isinstance(result, dict) and returned_model_id == model_id else None
+
+
+def read_baseline_result_by_model_id(model_id: str) -> dict[str, Any] | None:
+    requested_model_id = str(model_id or "").strip()
+    model = read_model(requested_model_id)
+    job_id = str(((model or {}).get("source") or {}).get("job_id") or "").strip()
+    return _read_result_reference(job_id, requested_model_id)
 
 
 def read_baseline_result_by_dataset_id(dataset_id: str) -> dict[str, Any] | None:
@@ -80,11 +85,22 @@ def read_baseline_result_by_dataset_id(dataset_id: str) -> dict[str, Any] | None
         if not isinstance(entry, dict):
             continue
         model_id = str(entry.get("model_id") or "").strip()
+        indexed_dataset_id = str(entry.get("dataset_id") or "").strip()
+        indexed_job_id = str(entry.get("job_id") or "").strip()
+        if indexed_dataset_id:
+            if indexed_dataset_id != requested:
+                continue
+            indexed_result = _read_result_reference(indexed_job_id, model_id)
+            if isinstance(indexed_result, dict):
+                return indexed_result
+
+        # Compatibility path for model indexes written before dataset/job
+        # references were included in each entry.
         model = read_model(model_id) if model_id else None
         source = model.get("source") if isinstance(model, dict) and isinstance(model.get("source"), dict) else {}
         if str(source.get("dataset_id") or "").strip() != requested:
             continue
-        result = read_baseline_result_by_model_id(model_id)
+        result = _read_result_reference(str(source.get("job_id") or "").strip(), model_id)
         if isinstance(result, dict):
             return result
     return None
@@ -157,12 +173,15 @@ def persist_candidate(
             for item in index.get("models", [])
             if isinstance(item, dict) and item.get("model_id") != model_id
         ]
+        source = persisted_model.get("source") if isinstance(persisted_model.get("source"), dict) else {}
         entries.append(
             {
                 "model_id": model_id,
                 "version": version,
                 "status": persisted_model.get("status"),
                 "workflow": persisted_model.get("workflow"),
+                "dataset_id": source.get("dataset_id"),
+                "job_id": source.get("job_id"),
                 "created_at": persisted_model.get("created_at"),
             }
         )

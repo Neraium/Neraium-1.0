@@ -16,6 +16,12 @@ function routeKey(filename) {
   return Object.keys(manifest).find((key) => key.endsWith(filename));
 }
 
+const authenticatedRuntimeKey = routeKey("AuthenticatedApp.jsx");
+if (!authenticatedRuntimeKey) throw new Error("Vite manifest did not include the deferred authenticated runtime.");
+if (!(manifest[entryKey].dynamicImports || []).includes(authenticatedRuntimeKey)) {
+  throw new Error("Authenticated runtime must remain deferred from the startup entry.");
+}
+
 function collectFiles(keys) {
   const files = new Set();
   const visited = new Set();
@@ -50,7 +56,7 @@ const routes = {
   dataSources: [entryKey, routeKey("DataConnectionsWorkspace.jsx")],
 };
 const budgets = {
-  core: { rawBytes: 380 * 1024, gzipBytes: 100 * 1024 },
+  core: { rawBytes: 320 * 1024, gzipBytes: 82 * 1024 },
   engineeringWorkspace: { rawBytes: 575 * 1024, gzipBytes: 155 * 1024 },
   issues: { rawBytes: 415 * 1024, gzipBytes: 112 * 1024 },
   dataSources: { rawBytes: 530 * 1024, gzipBytes: 134 * 1024 },
@@ -69,7 +75,8 @@ for (const [name, keys] of Object.entries(routes)) {
   }
 }
 
-process.stdout.write(`${JSON.stringify({ budgets, results }, null, 2)}\n`);
+const authenticatedRuntime = measure(collectFiles([authenticatedRuntimeKey]));
+process.stdout.write(`${JSON.stringify({ budgets, results, authenticatedRuntime }, null, 2)}\n`);
 if (failures.length) {
   throw new Error(`Performance budget exceeded: ${failures.join("; ")}`);
 }

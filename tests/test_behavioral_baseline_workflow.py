@@ -137,6 +137,29 @@ def test_completed_baseline_contract_propagates_id_and_supports_recovery_lookups
     assert detail.json()["baseline_id"] == baseline_id
 
 
+def test_dataset_baseline_lookup_uses_index_references_without_model_scan(monkeypatch) -> None:
+    client = TestClient(create_app())
+    accepted = _post(client, "create_baseline").json()
+    terminal = _wait(client, accepted["status_url"])
+
+    index_entry = next(
+        entry
+        for entry in behavioral_model_repository.read_model_index()["models"]
+        if entry["model_id"] == terminal["baselineId"]
+    )
+    assert index_entry["dataset_id"] == terminal["datasetId"]
+    assert index_entry["job_id"] == terminal["jobId"]
+
+    def reject_model_scan(_model_id: str):
+        raise AssertionError("indexed dataset lookup should not scan model records")
+
+    monkeypatch.setattr(behavioral_model_repository, "read_model", reject_model_scan)
+    result = behavioral_model_repository.read_baseline_result_by_dataset_id(terminal["datasetId"])
+
+    assert result["baselineId"] == terminal["baselineId"]
+    assert result["jobId"] == terminal["jobId"]
+
+
 def test_completed_baseline_status_is_rejected_without_baseline_id() -> None:
     normalized = normalize_upload_status_payload({
         "status": "COMPLETE",
