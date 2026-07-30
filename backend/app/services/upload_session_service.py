@@ -473,8 +473,9 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
             {
                 "session_state": state,
                 "session_source": session_source,
-                "upload_session_id": requested_id,
-                "request_id": request_id,
+                "upload_session_id": normalized.get("upload_session_id") or requested_id,
+                "request_id": normalized.get("request_id") or request_id,
+                "poll_request_id": request_id,
                 "state_backend": upload_state_backend(),
                 "dataset_id": normalized.get("dataset_id") or session_scope.get("dataset_id") or requested_id,
                 "upload_id": normalized.get("upload_id") or session_scope.get("upload_id") or requested_id,
@@ -518,8 +519,9 @@ def resolve_upload_status(job_id: str, *, request_id: str | None = None) -> dict
             "analysis_result": ensure_analysis_result(result_payload),
             "session_state": SESSION_STATE_STALE,
             "session_source": SESSION_SOURCE_HISTORY,
-            "upload_session_id": requested_id,
-            "request_id": request_id,
+            "upload_session_id": result_payload.get("upload_session_id") or requested_id,
+            "request_id": result_payload.get("request_id") or request_id,
+            "poll_request_id": request_id,
         }
         return _with_worker_visibility(payload, requested_id)
 

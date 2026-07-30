@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.services import behavioral_model_repository, upload_pipeline
+from app.services import behavioral_baseline, behavioral_model_repository, upload_jobs, upload_pipeline
 from app.services.baseline_contracts import (
     PROHIBITED_BASELINE_OUTPUT_KEYS,
     prohibited_keys_present,
@@ -261,3 +261,134 @@ def test_activation_failure_cannot_replace_the_previous_active_pointer(monkeypat
     persisted_second = behavioral_model_repository.read_baseline_result(second["job_id"])
     assert persisted_second["candidate_model"]["status"] == "awaiting_approval"
     assert persisted_second["activation"]["state"] == "awaiting_approval"
+
+
+def test_upload_creates_distinct_dataset_and_processing_job_ids() -> None:
+    client = TestClient(create_app())
+
+    accepted = _post(client, "create_baseline")
+
+    assert accepted.status_code == 202
+    payload = accepted.json()
+    assert payload["job_id"]
+    assert payload["dataset_id"]
+    assert payload["job_id"] != payload["dataset_id"]
+    terminal = _wait(client, payload["status_url"])
+    result = client.get(payload["baseline_result_url"]).json()
+    assert terminal["job_id"] == payload["job_id"]
+    assert terminal["dataset_id"] == payload["dataset_id"]
+    assert result["job_id"] == payload["job_id"]
+    assert result["dataset_id"] == payload["dataset_id"]
+
+
+def test_validation_exception_returns_structured_failure_with_original_exception(monkeypatch, caplog) -> None:
+    def fail_quality(*args, **kwargs):
+        raise RuntimeError("quality profiler exploded")
+
+    monkeypatch.setattr(behavioral_baseline, "build_data_quality", fail_quality)
+    client = TestClient(create_app())
+    accepted = _post(client, "create_baseline").json()
+
+    with caplog.at_level("ERROR"):
+        terminal = _wait(client, accepted["status_url"])
+
+    assert terminal["status"] == "FAILED"
+    assert terminal["stage"] == "validation"
+    assert terminal["errorCode"] == "validation_failed"
+    assert terminal["userMessage"] == "The dataset did not pass validation. Check the file and try again."
+    assert terminal["technicalMessage"] == "RuntimeError: quality profiler exploded"
+    assert terminal["retryable"] is False
+    assert terminal["datasetId"] == accepted["dataset_id"]
+    assert terminal["jobId"] == accepted["job_id"]
+    assert terminal["requestId"]
+    record = next(record for record in caplog.records if "upload_queue_job_failed" in record.getMessage())
+    assert record.exc_info is not None
+    assert f"dataset_id={accepted['dataset_id']}" in record.getMessage()
+    assert f"job_id={accepted['job_id']}" in record.getMessage()
+    assert "stage=validation" in record.getMessage()
+    assert "exception_type=RuntimeError" in record.getMessage()
+
+
+def test_relationship_learning_exception_reports_actual_stage_and_is_retryable(monkeypatch) -> None:
+    def fail_relationships(*args, **kwargs):
+        raise ArithmeticError("singular relationship matrix")
+
+    monkeypatch.setattr(behavioral_baseline, "_learn_relationship_graph", fail_relationships)
+    client = TestClient(create_app())
+    accepted = _post(client, "create_baseline").json()
+
+    terminal = _wait(client, accepted["status_url"])
+
+    assert terminal["status"] == "FAILED"
+    assert terminal["stage"] == "relationship_learning"
+    assert terminal["errorCode"] == "relationship_learning_failed"
+    assert terminal["technicalMessage"] == "ArithmeticError: singular relationship matrix"
+    assert terminal["retryable"] is True
+    assert terminal["file_stored"] is True
+    assert terminal["transfer_succeeded"] is True
+
+
+def test_worker_waits_for_a_delayed_baseline_result_record(monkeypatch) -> None:
+    original_read = upload_jobs.read_baseline_result
+    reads = {"count": 0}
+
+    def delayed_read(job_id: str):
+        reads["count"] += 1
+        if reads["count"] <= 2:
+            return None
+        return original_read(job_id)
+
+    monkeypatch.setattr(upload_jobs, "read_baseline_result", delayed_read)
+    client = TestClient(create_app())
+    accepted = _post(client, "create_baseline").json()
+
+    terminal = _wait(client, accepted["status_url"])
+
+    assert terminal["status"] == "COMPLETE"
+    assert terminal["result_available"] is True
+    assert reads["count"] >= 3
+    assert client.get(accepted["baseline_result_url"]).status_code == 200
+
+
+def test_terminal_success_is_rejected_when_result_cannot_be_retrieved(monkeypatch) -> None:
+    monkeypatch.setattr(upload_jobs, "read_baseline_result", lambda _job_id: None)
+    client = TestClient(create_app())
+    accepted = _post(client, "create_baseline").json()
+
+    terminal = _wait(client, accepted["status_url"])
+
+    assert terminal["status"] == "FAILED"
+    assert terminal["job_state"] == "failed"
+    assert terminal["stage"] == "baseline_creation"
+    assert terminal["errorCode"] == "result_persistence_failed"
+    assert terminal["result_available"] is False
+    assert terminal["technicalMessage"].startswith("ResultPersistenceError:")
+
+
+def test_retry_processing_reuses_the_uploaded_dataset(monkeypatch) -> None:
+    original_learn = behavioral_baseline._learn_relationship_graph
+    attempts = {"count": 0}
+
+    def fail_once(*args, **kwargs):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("temporary relationship learner outage")
+        return original_learn(*args, **kwargs)
+
+    monkeypatch.setattr(behavioral_baseline, "_learn_relationship_graph", fail_once)
+    client = TestClient(create_app())
+    accepted = _post(client, "create_baseline").json()
+    failed = _wait(client, accepted["status_url"])
+    assert failed["status"] == "FAILED"
+
+    retried_response = client.post(f"/api/data/upload/{accepted['job_id']}/retry")
+
+    assert retried_response.status_code == 202
+    retried = retried_response.json()
+    assert retried["job_id"] == accepted["job_id"]
+    assert retried["dataset_id"] == accepted["dataset_id"]
+    assert retried["file_stored"] is True
+    terminal = _wait(client, retried["status_url"])
+    assert terminal["status"] == "COMPLETE"
+    assert terminal["dataset_id"] == accepted["dataset_id"]
+    assert attempts["count"] == 2

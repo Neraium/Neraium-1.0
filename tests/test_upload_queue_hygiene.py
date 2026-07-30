@@ -1,7 +1,7 @@
 from app.main import create_app
 from app.services.runtime_db import claim_next_upload_job, clear_stale_processing_queue_jobs, db_connection, enqueue_upload_job, init_runtime_db, queue_metrics, read_upload_queue_job
 from app.services.upload_jobs import UPLOAD_QUEUE_LIFECYCLE, process_next_queued_upload_job, read_job, reset_latest_upload_state, write_job
-from app.services.upload_state_repository import persist_upload_source
+from app.services.upload_state_repository import persist_upload_source, write_upload_result
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
 from fastapi.testclient import TestClient
 from pathlib import Path
@@ -215,15 +215,16 @@ def test_shared_upload_queue_worker_restores_shared_upload_source(monkeypatch, t
     def fake_process_csv_file(path, **kwargs):
         captured["path"] = str(path)
         captured["exists"] = Path(path).exists()
+        result = {"job_id": kwargs["job_id"], "filename": kwargs.get("filename") or Path(path).name}
+        write_upload_result(kwargs["job_id"], result)
         write_job({
-            "job_id": kwargs["job_id"],
-            "filename": kwargs.get("filename") or Path(path).name,
+            **result,
             "status": "COMPLETE",
             "processing_state": "complete",
             "message": "Telemetry processing complete.",
             "progress_label": "Telemetry processing complete.",
         })
-        return {"job_id": kwargs["job_id"]}
+        return result
 
     monkeypatch.setattr("app.services.upload_jobs.process_csv_file", fake_process_csv_file)
 

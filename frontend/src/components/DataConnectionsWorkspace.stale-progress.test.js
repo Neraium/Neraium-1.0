@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DataConnectionsWorkspace, { formatAnalysisUpdateTime, frontendPollingTiming, queuedWorkerMessage, resolveOpenBaselineIdentity } from "./DataConnectionsWorkspace";
 import IntakeFlowPanel, { baselineCompletionSummary, failedImportStageRows, resolveBaselineProcessingStage } from "./setup/IntakeFlowPanel";
-import { uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
+import { retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { clearBaselineResultCache } from "../services/api/baselineApi";
 import { persistBaselineSelection } from "../viewModels/baselineSelection";
 import { SERVICE_UNAVAILABLE_UPLOAD_MESSAGE } from "../viewModels/uploadFlow";
@@ -36,7 +36,7 @@ function learnedBaseline(overrides = {}) {
   return {
     job_id: "baseline-job",
     upload_id: "baseline-job",
-    dataset_id: "baseline-job",
+    dataset_id: "baseline-dataset",
     baseline_candidate_id: "bdm-v1-baseline",
     established_baseline_id: "bdm-v1-baseline",
     portfolio_id: "default",
@@ -51,7 +51,7 @@ function learnedBaseline(overrides = {}) {
       baseline_candidate_id: "bdm-v1-baseline",
       version: 1,
       status: "awaiting_approval",
-      source: { job_id: "baseline-job", upload_id: "baseline-job", dataset_id: "baseline-job", portfolio_id: "default", system_id: "default", filename: "plant-history.csv", row_count: 2400 },
+      source: { job_id: "baseline-job", upload_id: "baseline-job", dataset_id: "baseline-dataset", portfolio_id: "default", system_id: "default", filename: "plant-history.csv", row_count: 2400 },
       telemetry_schema: {
         numeric_columns: ["flow", "power", "pressure", "temperature"],
       },
@@ -139,7 +139,7 @@ function namedBaseline({ id, jobId, filename, portfolioId = "default", signalCou
   return learnedBaseline({
     job_id: jobId,
     upload_id: jobId,
-    dataset_id: jobId,
+    dataset_id: `${jobId}-dataset`,
     baseline_candidate_id: id,
     established_baseline_id: id,
     portfolio_id: portfolioId,
@@ -153,7 +153,7 @@ function namedBaseline({ id, jobId, filename, portfolioId = "default", signalCou
       baseline_candidate_id: id,
       status: "active",
       activation: { state: "active", activated_at: "2026-07-29T00:00:00Z" },
-      source: { ...base.candidate_model.source, job_id: jobId, upload_id: jobId, dataset_id: jobId, portfolio_id: portfolioId, system_id: portfolioId, filename },
+      source: { ...base.candidate_model.source, job_id: jobId, upload_id: jobId, dataset_id: `${jobId}-dataset`, portfolio_id: portfolioId, system_id: portfolioId, filename },
       telemetry_schema: { numeric_columns: Array.from({ length: signalCount }, (_, index) => `signal-${index}`) },
       relationship_graph: { edges: Array.from({ length: relationshipCount }, (_, index) => ({ edge_id: `edge-${index}` })) },
     },
@@ -375,9 +375,9 @@ describe("completion and recovery", () => {
       onRetryFailedUploads,
     });
 
-    expect(screen.getByRole("heading", { name: "Unexpected server error" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Processing failed during: Processing" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Retry Import" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry Processing" }));
     expect(onRetryFailedUploads).toHaveBeenCalledTimes(1);
   });
 
@@ -407,7 +407,7 @@ describe("completion and recovery", () => {
       onRetryFailedUploads,
     });
 
-    expect(screen.getByRole("heading", { name: "Dataset import failed" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Processing failed during: Import" })).toBeTruthy();
     expect(screen.getAllByText("The file was transferred successfully, but Neraium could not begin processing it.").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Transfer complete · 369.7 KB of 369.7 KB").length).toBeGreaterThan(0);
     const workflowStatus = within(screen.getByRole("list", { name: "Import workflow status" }));
@@ -415,7 +415,7 @@ describe("completion and recovery", () => {
     for (const label of ["Validate Signals", "Learn Relationships", "Establish Baseline", "Begin Learning"]) {
       expect(workflowStatus.getByText(label).closest("li").textContent).toContain("Not started");
     }
-    fireEvent.click(screen.getByRole("button", { name: "Retry Import" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry Processing" }));
     expect(onRetryFailedUploads).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
   });
@@ -476,10 +476,10 @@ describe("exact baseline selection regression", () => {
     uploadTelemetryFileWithProgress.mockResolvedValue({
       ok: true,
       status: 202,
-      payload: { job_id: "job-a", dataset_id: "job-a", upload_id: "job-a", workflow: "create_baseline", status: "PENDING", status_url: "/api/data/upload-status/job-a", baseline_result_url: "/api/data/baselines/jobs/job-a" },
+      payload: { job_id: "job-a", dataset_id: "job-a-dataset", upload_id: "job-a", workflow: "create_baseline", status: "PENDING", status_url: "/api/data/upload-status/job-a", baseline_result_url: "/api/data/baselines/jobs/job-a" },
     });
     const apiFetch = vi.fn(async (path) => {
-      if (String(path).includes("/upload-status/")) return jsonResponse({ job_id: "job-a", dataset_id: "job-a", upload_id: "job-a", workflow: "create_baseline", job_state: "completed", status: "COMPLETE", processing_state: "complete", baseline_result_url: "/api/data/baselines/jobs/job-a" });
+      if (String(path).includes("/upload-status/")) return jsonResponse({ job_id: "job-a", dataset_id: "job-a-dataset", upload_id: "job-a", workflow: "create_baseline", job_state: "completed", status: "COMPLETE", processing_state: "complete", result_available: true, baseline_result_available: true, baseline_result_url: "/api/data/baselines/jobs/job-a" });
       if (String(path).includes("/baselines/jobs/job-a")) return jsonResponse(baselineA);
       if (String(path).includes("/baselines/baseline-a")) return jsonResponse(baselineA);
       return jsonResponse({});
@@ -500,7 +500,7 @@ describe("exact baseline selection regression", () => {
     expect(screen.queryByText("commercial water system.csv")).toBeNull();
     expect(onOpenBaseline).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Open Baseline" }));
-    expect(onOpenBaseline).toHaveBeenCalledWith(expect.objectContaining({ jobId: "job-a", datasetId: "job-a", baselineId: "baseline-a", portfolioId: "default" }));
+    expect(onOpenBaseline).toHaveBeenCalledWith(expect.objectContaining({ jobId: "job-a", datasetId: "job-a-dataset", baselineId: "baseline-a", portfolioId: "default" }));
 
     fireEvent.click(screen.getByText("Processing details"));
     expect(screen.getByText("Selected baseline ID")).toBeTruthy();
@@ -549,7 +549,7 @@ describe("upload and polling behavior", () => {
       status: 202,
       payload: {
         job_id: "baseline-job",
-        dataset_id: "baseline-job",
+        dataset_id: "baseline-dataset",
         workflow: "create_baseline",
         status: "PENDING",
         status_url: "/api/data/upload-status/baseline-job",
@@ -562,11 +562,13 @@ describe("upload and polling behavior", () => {
         statusCalls += 1;
         return jsonResponse({
           job_id: "baseline-job",
-          dataset_id: "baseline-job",
+          dataset_id: "baseline-dataset",
           workflow: "create_baseline",
           job_state: "completed",
           status: "COMPLETE",
           processing_state: "complete",
+          result_available: true,
+          baseline_result_available: true,
           baseline_result_url: "/api/data/baselines/jobs/baseline-job",
         });
       }
@@ -592,16 +594,18 @@ describe("upload and polling behavior", () => {
         statusCalls += 1;
         return jsonResponse({
           job_id: "resume-job",
-          dataset_id: "resume-job",
+          dataset_id: "resume-dataset",
           workflow: "create_baseline",
           job_state: "completed",
           status: "COMPLETE",
           processing_state: "complete",
+          result_available: true,
+          baseline_result_available: true,
           baseline_result_url: "/api/data/baselines/jobs/resume-job",
         });
       }
       if (String(path).includes("/baselines/jobs/resume-job")) {
-        return jsonResponse(learnedBaseline({ job_id: "resume-job", dataset_id: "resume-job" }));
+        return jsonResponse(learnedBaseline({ job_id: "resume-job", dataset_id: "resume-dataset" }));
       }
       return jsonResponse({});
     });
@@ -636,15 +640,17 @@ describe("upload and polling behavior", () => {
         statusCalls += 1;
         return jsonResponse({
           job_id: "stored-resume-job",
-          dataset_id: "stored-resume-job",
+          dataset_id: "stored-resume-dataset",
           workflow: "create_baseline",
           status: "COMPLETE",
           processing_state: "complete",
+          result_available: true,
+          baseline_result_available: true,
           baseline_result_url: "/api/data/baselines/jobs/stored-resume-job",
         });
       }
       if (String(path).includes("/baselines/jobs/stored-resume-job")) {
-        return jsonResponse(learnedBaseline({ job_id: "stored-resume-job", dataset_id: "stored-resume-job" }));
+        return jsonResponse(learnedBaseline({ job_id: "stored-resume-job", dataset_id: "stored-resume-dataset" }));
       }
       return jsonResponse({});
     });
@@ -808,7 +814,292 @@ describe("upload and polling behavior", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain(SERVICE_UNAVAILABLE_UPLOAD_MESSAGE);
     expect(alert.textContent).not.toContain("<html>");
-    expect(screen.getByRole("button", { name: "Retry Import" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry Processing" })).toBeTruthy();
+  });
+
+
+
+  it("polls the processing job id when the dataset id is different", async () => {
+    const result = learnedBaseline({ job_id: "poll-job", dataset_id: "stored-dataset" });
+    uploadTelemetryFileWithProgress.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: {
+        job_id: "poll-job",
+        dataset_id: "stored-dataset",
+        workflow: "create_baseline",
+        status: "PENDING",
+        status_url: "/api/data/upload-status/poll-job",
+        baseline_result_url: "/api/data/baselines/jobs/poll-job",
+      },
+    });
+    const apiFetch = vi.fn(async (path) => {
+      if (path === "/api/data/upload-status/poll-job") return jsonResponse({
+        job_id: "poll-job",
+        dataset_id: "stored-dataset",
+        workflow: "create_baseline",
+        job_state: "completed",
+        status: "COMPLETE",
+        processing_state: "complete",
+        result_available: true,
+        baseline_result_available: true,
+        baseline_result_url: "/api/data/baselines/jobs/poll-job",
+      });
+      if (path === "/api/data/baselines/jobs/poll-job") return jsonResponse(result);
+      return jsonResponse({}, { ok: false, status: 404 });
+    });
+    renderWorkspace({ apiFetch });
+
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(apiFetch).toHaveBeenCalledWith("/api/data/upload-status/poll-job", expect.any(Object));
+    expect(apiFetch.mock.calls.some(([path]) => String(path).includes("upload-status/stored-dataset"))).toBe(false);
+    fireEvent.click(screen.getByText("Processing details"));
+    expect(screen.getByText("poll-job")).toBeTruthy();
+    expect(screen.getByText("stored-dataset")).toBeTruthy();
+  });
+
+  it("continues polling when terminal status temporarily has no result", async () => {
+    uploadTelemetryFileWithProgress.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: { job_id: "eventual-job", dataset_id: "eventual-dataset", workflow: "create_baseline", status: "PENDING" },
+    });
+    let statusCalls = 0;
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).includes("/upload-status/eventual-job")) {
+        statusCalls += 1;
+        return jsonResponse({
+          job_id: "eventual-job",
+          dataset_id: "eventual-dataset",
+          workflow: "create_baseline",
+          job_state: "completed",
+          status: "COMPLETE",
+          processing_state: "complete",
+          result_available: statusCalls > 1,
+          baseline_result_available: statusCalls > 1,
+          baseline_result_url: "/api/data/baselines/jobs/eventual-job",
+        });
+      }
+      if (String(path).includes("/baselines/jobs/eventual-job")) {
+        return jsonResponse(learnedBaseline({ job_id: "eventual-job", dataset_id: "eventual-dataset" }));
+      }
+      return jsonResponse({});
+    });
+    renderWorkspace({ apiFetch });
+
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" }, { timeout: 3500 })).toBeTruthy();
+    expect(statusCalls).toBe(2);
+  });
+
+  it("retries a temporarily missing committed result before failing", async () => {
+    uploadTelemetryFileWithProgress.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: { job_id: "delayed-result-job", dataset_id: "delayed-result-dataset", workflow: "create_baseline", status: "PENDING" },
+    });
+    let resultCalls = 0;
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).includes("/upload-status/delayed-result-job")) return jsonResponse({
+        job_id: "delayed-result-job",
+        dataset_id: "delayed-result-dataset",
+        workflow: "create_baseline",
+        job_state: "completed",
+        status: "COMPLETE",
+        processing_state: "complete",
+        result_available: true,
+        baseline_result_available: true,
+        baseline_result_url: "/api/data/baselines/jobs/delayed-result-job",
+      });
+      if (String(path).includes("/baselines/jobs/delayed-result-job")) {
+        resultCalls += 1;
+        return resultCalls === 1
+          ? jsonResponse({ detail: "not visible yet" }, { ok: false, status: 404 })
+          : jsonResponse(learnedBaseline({ job_id: "delayed-result-job", dataset_id: "delayed-result-dataset" }));
+      }
+      return jsonResponse({});
+    });
+    renderWorkspace({ apiFetch });
+
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(resultCalls).toBe(2);
+  });
+
+  it("treats an HTTP 200 failed job as terminal and shows its processing stage", async () => {
+    uploadTelemetryFileWithProgress.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: { job_id: "failed-job-200", dataset_id: "stored-dataset-200", workflow: "create_baseline", status: "PENDING" },
+    });
+    const apiFetch = vi.fn(async (path) => String(path).includes("/upload-status/")
+      ? jsonResponse({
+        status: "FAILED",
+        job_state: "failed",
+        processing_state: "failed",
+        stage: "relationship_learning",
+        errorCode: "relationship_learning_failed",
+        userMessage: "The uploaded telemetry did not contain stable learnable relationships.",
+        technicalMessage: "ArithmeticError: singular relationship matrix",
+        retryable: true,
+        datasetId: "stored-dataset-200",
+        dataset_id: "stored-dataset-200",
+        jobId: "failed-job-200",
+        job_id: "failed-job-200",
+        requestId: "request-200",
+        request_id: "request-200",
+        file_stored: true,
+        transfer_succeeded: true,
+      })
+      : jsonResponse({}));
+    renderWorkspace({ apiFetch });
+
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByRole("heading", { name: "Processing failed during: Relationship learning" })).toBeTruthy();
+    expect(screen.getAllByText("File uploaded").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("The uploaded telemetry did not contain stable learnable relationships.").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Retry Processing" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
+    const processingDetails = screen.getByText("Processing details").closest("details");
+    expect(processingDetails?.hasAttribute("open")).toBe(false);
+    fireEvent.click(screen.getByText("Processing details"));
+    expect(processingDetails?.hasAttribute("open")).toBe(true);
+    expect(screen.getByText("ArithmeticError: singular relationship matrix")).toBeTruthy();
+  });
+
+  it("retry processing reuses the stored dataset and does not upload again", async () => {
+    uploadTelemetryFileWithProgress.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: { job_id: "retry-job", dataset_id: "retry-dataset", workflow: "create_baseline", status: "PENDING" },
+    });
+    let statusCalls = 0;
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).includes("/upload-status/retry-job")) {
+        statusCalls += 1;
+        if (statusCalls === 1) return jsonResponse({
+          job_id: "retry-job",
+          dataset_id: "retry-dataset",
+          workflow: "create_baseline",
+          status: "FAILED",
+          job_state: "failed",
+          processing_state: "failed",
+          stage: "relationship_learning",
+          errorCode: "relationship_learning_failed",
+          userMessage: "Relationship learning was interrupted.",
+          technicalMessage: "RuntimeError: worker restarted",
+          retryable: true,
+          file_stored: true,
+          transfer_succeeded: true,
+        });
+        return jsonResponse({
+          job_id: "retry-job",
+          dataset_id: "retry-dataset",
+          workflow: "create_baseline",
+          status: "COMPLETE",
+          job_state: "completed",
+          processing_state: "complete",
+          result_available: true,
+          baseline_result_available: true,
+          baseline_result_url: "/api/data/baselines/jobs/retry-job",
+        });
+      }
+      if (String(path).includes("/baselines/jobs/retry-job")) {
+        return jsonResponse(learnedBaseline({ job_id: "retry-job", dataset_id: "retry-dataset" }));
+      }
+      return jsonResponse({});
+    });
+    retryUploadAnalysisJob.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: { job_id: "retry-job", dataset_id: "retry-dataset", workflow: "create_baseline", status: "PENDING" },
+    });
+    renderWorkspace({ apiFetch });
+
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Retry Processing" }));
+
+    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(retryUploadAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({ jobId: "retry-job" }));
+    expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not create a duplicate upload when stored-job retry is unavailable", async () => {
+    uploadTelemetryFileWithProgress.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: { job_id: "missing-retry-job", dataset_id: "preserved-dataset", workflow: "create_baseline", status: "PENDING" },
+    });
+    const apiFetch = vi.fn(async (path) => String(path).includes("/upload-status/")
+      ? jsonResponse({
+        job_id: "missing-retry-job",
+        dataset_id: "preserved-dataset",
+        workflow: "create_baseline",
+        status: "FAILED",
+        processing_state: "failed",
+        stage: "validation",
+        errorCode: "validation_failed",
+        userMessage: "A required telemetry signal is missing.",
+        retryable: true,
+        file_stored: true,
+        transfer_succeeded: true,
+      })
+      : jsonResponse({}));
+    const retryError = Object.assign(new Error("Stored processing job was not found."), {
+      name: "UploadRequestError",
+      status: 404,
+      phase: "retry",
+      errorType: "not_found",
+      jobId: "missing-retry-job",
+      datasetId: "preserved-dataset",
+      fileStored: true,
+      transferSucceeded: true,
+      retryable: false,
+    });
+    retryUploadAnalysisJob.mockRejectedValue(retryError);
+    renderWorkspace({ apiFetch });
+
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Retry Processing" }));
+
+    await waitFor(() => expect(retryUploadAnalysisJob).toHaveBeenCalledTimes(1));
+    expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it("choose another file clears failed workflow and polling identity", async () => {
+    const error = Object.assign(new Error("Relationship learning failed."), {
+      name: "UploadRequestError",
+      status: 200,
+      phase: "poll",
+      errorType: "relationship_learning_failed",
+      jobId: "abandoned-job",
+      datasetId: "abandoned-dataset",
+      failedStage: "relationship_learning",
+      fileStored: true,
+      transferSucceeded: true,
+      retryable: true,
+    });
+    uploadTelemetryFileWithProgress.mockRejectedValue(error);
+    renderWorkspace();
+
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Another File" }));
+
+    expect(screen.queryByRole("heading", { name: /Processing failed during:/ })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Upload historical data" })).toBeTruthy();
+    expect(window.localStorage.getItem("neraium.last_upload_job_id")).toBeNull();
   });
 
   it("rejects a CSV above the supported upload limit before submission", () => {

@@ -287,7 +287,8 @@ export function buildUploadRequestError(response, payload, phase) {
   const errorDetails = payload?.error_details && typeof payload.error_details === "object"
     ? payload.error_details
     : {};
-  const rawErrorType = payload?.error_code
+  const rawErrorType = payload?.errorCode
+    ?? payload?.error_code
     ?? errorDetails.code
     ?? payload?.error_type
     ?? payload?.detail?.error_code
@@ -310,18 +311,20 @@ export function buildUploadRequestError(response, payload, phase) {
     errorType,
     detail: serviceUnavailable
       ? SERVICE_UNAVAILABLE_UPLOAD_MESSAGE
-      : normalizeErrorMessage(payload?.message ?? errorDetails.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? ""),
+      : normalizeErrorMessage(payload?.userMessage ?? payload?.message ?? errorDetails.message ?? payload?.detail?.message ?? payload?.detail ?? payload?.error ?? ""),
     payload,
     rawResponseBody: payload?.raw_response_body ?? "",
     failureUrl: payload?.failure_url ?? response?.url ?? null,
     failurePhase: payload?.failure_phase ?? phase,
-    jobId: payload?.job_id ?? payload?.dataset_id ?? null,
-    uploadSessionId: payload?.upload_session_id ?? null,
-    failedStage: payload?.failed_stage ?? errorDetails.failed_stage ?? phase,
-    transferSucceeded: payload?.transfer_succeeded === true,
-    fileStored: payload?.file_stored === true,
-    retryUrl: payload?.retry_url ?? null,
-    requestId: payload?.request_id ?? responseHeader(response, "x-request-id") ?? null,
+    jobId: payload?.job_id ?? payload?.jobId ?? null,
+    datasetId: payload?.dataset_id ?? payload?.datasetId ?? null,
+    uploadSessionId: payload?.uploadSessionId ?? payload?.upload_session_id ?? null,
+    failedStage: payload?.stage ?? payload?.failedStage ?? payload?.failed_stage ?? errorDetails.stage ?? errorDetails.failed_stage ?? phase,
+    technicalMessage: payload?.technicalMessage ?? payload?.technical_message ?? null,
+    transferSucceeded: payload?.transferSucceeded === true || payload?.transfer_succeeded === true,
+    fileStored: payload?.fileStored === true || payload?.file_stored === true,
+    retryUrl: payload?.retryUrl ?? payload?.retry_url ?? null,
+    requestId: payload?.requestId ?? payload?.request_id ?? responseHeader(response, "x-request-id") ?? null,
     diagnosticTimestamp: payload?.diagnostic_timestamp ?? new Date().toISOString(),
     retryable: typeof payload?.retryable === "boolean"
       ? payload.retryable
@@ -331,33 +334,44 @@ export function buildUploadRequestError(response, payload, phase) {
 
 export function classifyUploadError(error, phase) {
   if (error?.name === "UploadRequestError") {
-    const payloadErrorType = error?.payload?.error_code
+    const payloadErrorType = error?.payload?.errorCode
+      ?? error?.payload?.error_code
       ?? error?.payload?.error_details?.code
       ?? error?.payload?.error_type
       ?? error?.payload?.detail?.error_code
       ?? error?.payload?.detail?.error_type
       ?? null;
-    const payloadDetail = error?.payload?.message ?? error?.payload?.detail?.message ?? error?.payload?.detail ?? error?.payload?.error ?? null;
+    const payloadDetail = error?.payload?.userMessage ?? error?.payload?.message ?? error?.payload?.detail?.message ?? error?.payload?.detail ?? error?.payload?.error ?? null;
     const requestErrorType = error.errorType ?? payloadErrorType;
     const requestDetail = error.detail ?? payloadDetail ?? error.message;
     const isAuthDuringPolling = phase === "poll" && (error.status === 401 || error.status === 403);
     const isMissingStatusDuringPoll = phase === "poll" && error.status === 404 && requestErrorType === "upload_session_missing";
     return {
       state: isAuthDuringPolling || isMissingStatusDuringPoll || (phase === "poll" && error.retryable) ? "running_sii" : "error",
-      retryable: Boolean(error.retryable),
+      retryable: error.retryable !== false && (
+        error.retryable === true
+        || error.status === 408
+        || error.status === 409
+        || error.status === 425
+        || error.status === 429
+        || Number(error.status || 0) >= 500
+        || isMissingStatusDuringPoll
+      ),
       status: error.status,
       errorType: requestErrorType,
       failureUrl: error.failureUrl ?? error.uploadUrl ?? error.path ?? error.payload?.failure_url ?? null,
       failurePhase: error.failurePhase ?? error.phase ?? phase,
       rawResponseBody: error.rawResponseBody ?? error.responseText ?? error.payload?.raw_response_body ?? "",
       responseStatus: error.status ?? error.payload?.response_status ?? null,
-      jobId: error.jobId ?? error.payload?.job_id ?? error.payload?.dataset_id ?? null,
+      jobId: error.jobId ?? error.payload?.job_id ?? error.payload?.jobId ?? null,
+      datasetId: error.datasetId ?? error.payload?.dataset_id ?? error.payload?.datasetId ?? null,
       uploadSessionId: error.uploadSessionId ?? error.payload?.upload_session_id ?? null,
-      failedStage: error.failedStage ?? error.payload?.failed_stage ?? error.failurePhase ?? phase,
+      failedStage: error.failedStage ?? error.payload?.stage ?? error.payload?.failed_stage ?? error.failurePhase ?? phase,
+      technicalMessage: error.technicalMessage ?? error.payload?.technicalMessage ?? error.payload?.technical_message ?? null,
       transferSucceeded: error.transferSucceeded === true || error.payload?.transfer_succeeded === true,
       fileStored: error.fileStored === true || error.payload?.file_stored === true,
       retryUrl: error.retryUrl ?? error.payload?.retry_url ?? null,
-      requestId: error.requestId ?? error.payload?.request_id ?? null,
+      requestId: error.requestId ?? error.payload?.requestId ?? error.payload?.request_id ?? null,
       diagnosticTimestamp: error.diagnosticTimestamp ?? error.payload?.diagnostic_timestamp ?? new Date().toISOString(),
       finalMessage: isMissingStatusDuringPoll
         ? "Analysis status is temporarily unavailable. Processing may still be active."
@@ -571,7 +585,9 @@ export function operatorUploadMessage({ status, errorType, detail, phase, transf
         : "Analysis processing is unavailable right now.");
   }
   if (phase === "poll") {
-    return "Dataset analysis is in progress. Large datasets may require additional processing time.";
+    return typeof detail === "string" && detail.trim()
+      ? normalizeErrorMessage(detail)
+      : "Dataset analysis is in progress. Large datasets may require additional processing time.";
   }
   return typeof detail === "string" && detail.trim()
     ? detail
@@ -609,30 +625,45 @@ const UPLOAD_ERROR_TITLES = Object.freeze({
 });
 
 export function uploadErrorPresentation(value = {}) {
-  const errorCode = String(value?.error_code ?? value?.errorCode ?? value?.error_type ?? value?.errorType ?? "").trim();
-  const failedStage = String(value?.failed_stage ?? value?.failedStage ?? "").trim();
+  const errorCode = String(value?.errorCode ?? value?.error_code ?? value?.error_type ?? value?.errorType ?? "").trim();
+  const failedStage = String(value?.stage ?? value?.failed_stage ?? value?.failedStage ?? "").trim().toLowerCase();
   const transferSucceeded = value?.transfer_succeeded === true || value?.transferSucceeded === true;
-  const title = UPLOAD_ERROR_TITLES[errorCode] ?? (
-    failedStage === "upload_transfer" ? "Upload transfer failed" : "Unexpected server error"
-  );
-  const message = transferSucceeded && ["dataset_creation", "baseline_job_creation"].includes(failedStage)
+  const fileStored = value?.file_stored === true || value?.fileStored === true;
+  const stageLabel = ({
+    import: "Import",
+    upload_transfer: "Import",
+    authentication: "Import",
+    dataset_creation: "Import",
+    file_storage: "Import",
+    baseline_job_creation: "Import",
+    csv_parsing: "Validation",
+    validation: "Validation",
+    relationship_learning: "Relationship learning",
+    baseline_relationship_learning: "Relationship learning",
+    baseline_processing: "Baseline creation",
+    baseline_creation: "Baseline creation",
+  })[failedStage] ?? "Processing";
+  const title = fileStored || transferSucceeded ? "File uploaded" : (UPLOAD_ERROR_TITLES[errorCode] ?? "Processing failed");
+  const message = transferSucceeded && ["dataset_creation", "baseline_job_creation", "import"].includes(failedStage)
     ? "The file was transferred successfully, but Neraium could not begin processing it."
     : operatorUploadMessage({
       status: value?.response_status ?? value?.responseStatus ?? value?.status ?? null,
       errorType: errorCode,
-      detail: value?.message ?? value?.error,
+      detail: value?.userMessage ?? value?.message ?? value?.error,
       phase: value?.failure_phase ?? value?.failurePhase ?? failedStage,
       transferSucceeded,
     });
   return {
     errorCode: errorCode || "unexpected_server_error",
-    failedStage: failedStage || "unexpected",
+    failedStage: failedStage || "import",
+    stageLabel,
     title,
-    heading: title === "Dataset record creation failed" ? "Dataset import failed" : title,
+    heading: `Processing failed during: ${stageLabel}`,
     message,
+    technicalMessage: value?.technicalMessage ?? value?.technical_message ?? null,
     retryable: value?.retryable !== false,
     transferSucceeded,
-    fileStored: value?.file_stored === true || value?.fileStored === true,
+    fileStored,
   };
 }
 

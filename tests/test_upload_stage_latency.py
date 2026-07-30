@@ -125,15 +125,17 @@ def test_worker_records_queue_pickup_delay(monkeypatch) -> None:
     def complete_without_analysis(path, **kwargs):
         current = upload_jobs.read_upload_status(kwargs["job_id"]) or {}
         observed.update(current)
+        result = {"job_id": kwargs["job_id"], "filename": source.name}
+        upload_jobs.write_upload_result(kwargs["job_id"], result)
         upload_jobs.write_job({
             **current,
-            "job_id": kwargs["job_id"],
+            **result,
             "status": "COMPLETE",
             "processing_state": "complete",
             "result_available": True,
             "sii_completed": True,
         })
-        return {"job_id": kwargs["job_id"]}
+        return result
 
     monkeypatch.setattr(upload_jobs, "process_csv_file", complete_without_analysis)
 

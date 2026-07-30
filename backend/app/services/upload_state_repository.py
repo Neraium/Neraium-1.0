@@ -430,13 +430,13 @@ def write_shared_state_strict(name: str, payload: dict[str, Any], *, scope: Data
 
 
 def write_upload_result(job_id: str, payload: dict[str, Any]) -> None:
-    normalized = attach_dataset_scope(dict(payload or {}), dataset_id=job_id)
+    normalized = attach_dataset_scope(dict(payload or {}), dataset_id=payload.get("dataset_id") or job_id)
     write_local_json(f"upload_result_{job_id}.json", normalized)
     write_shared_state(f"upload_result_{job_id}", normalized)
 
 
 def write_upload_status(job_id: str, payload: dict[str, Any]) -> None:
-    normalized = attach_dataset_scope(dict(payload or {}), dataset_id=job_id)
+    normalized = attach_dataset_scope(dict(payload or {}), dataset_id=payload.get("dataset_id") or job_id)
     write_local_json(f"upload_status_{job_id}.json", normalized)
     write_shared_state(f"upload_status_{job_id}", normalized)
 
@@ -475,8 +475,9 @@ def write_latest_upload_summary_payload(payload: dict[str, Any]) -> None:
 
 def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dict[str, Any]) -> None:
     scope = _state_scope(payload=result or summary)
-    normalized_result = attach_dataset_scope(dict(result or {}) if isinstance(result, dict) else {}, scope=scope, dataset_id=job_id)
-    normalized_summary = attach_dataset_scope(dict(summary or {}) if isinstance(summary, dict) else {}, scope=scope, dataset_id=job_id)
+    dataset_id = (result or {}).get("dataset_id") or (summary or {}).get("dataset_id") or job_id
+    normalized_result = attach_dataset_scope(dict(result or {}) if isinstance(result, dict) else {}, scope=scope, dataset_id=dataset_id)
+    normalized_summary = attach_dataset_scope(dict(summary or {}) if isinstance(summary, dict) else {}, scope=scope, dataset_id=dataset_id)
     normalized_result.setdefault("job_id", str(job_id))
     normalized_result.setdefault("run_id", str(job_id))
     normalized_result.setdefault("upload_id", str(job_id))
@@ -485,6 +486,7 @@ def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dic
         filename=normalized_result.get("filename"),
         status="active",
         dataset_scope=scope,
+        dataset_id=dataset_id,
     )
     normalized_summary.setdefault("job_id", str(job_id))
     normalized_summary.setdefault("run_id", str(job_id))
@@ -494,6 +496,7 @@ def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dic
         filename=normalized_summary.get("filename") or normalized_result.get("filename"),
         status=str(normalized_summary.get("processing_state") or normalized_summary.get("status") or "active").lower(),
         dataset_scope=scope,
+        dataset_id=dataset_id,
     )
     normalized_summary["transport_result_available"] = True
     write_upload_result(job_id, normalized_result)
@@ -745,8 +748,9 @@ def write_latest_upload_result(*args) -> None:
         filename=payload.get("filename"),
         status="active",
         dataset_scope=scope,
+        dataset_id=payload.get("dataset_id"),
     )
-    payload = attach_dataset_scope(payload, scope=scope, dataset_id=payload.get("job_id"))
+    payload = attach_dataset_scope(payload, scope=scope, dataset_id=payload.get("dataset_id") or payload.get("job_id"))
     payload = _attach_traceability(payload)
 
     if payload.get("job_id"):
@@ -783,8 +787,9 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
         filename=payload.get("filename"),
         status="active",
         dataset_scope=scope,
+        dataset_id=payload.get("dataset_id"),
     )
-    payload = attach_dataset_scope(payload, scope=scope, dataset_id=payload.get("job_id"))
+    payload = attach_dataset_scope(payload, scope=scope, dataset_id=payload.get("dataset_id") or payload.get("job_id"))
     if payload.get("job_id") and "status_url" not in payload:
         payload["status_url"] = f"/api/data/upload-status/{payload['job_id']}"
 

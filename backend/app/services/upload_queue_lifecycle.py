@@ -62,6 +62,7 @@ class UploadQueueLifecycleService:
         logger: logging.Logger,
         read_job: Callable[[str], dict[str, Any] | None],
         read_upload_result_by_job_id: Callable[[str], dict[str, Any] | None],
+        read_baseline_result: Callable[[str], dict[str, Any] | None],
         read_upload_status: Callable[[str], dict[str, Any] | None],
         write_job: Callable[[dict[str, Any]], None],
         process_json_payload: Callable[..., dict[str, Any]],
@@ -73,6 +74,7 @@ class UploadQueueLifecycleService:
         self.logger = logger
         self.read_job = read_job
         self.read_upload_result_by_job_id = read_upload_result_by_job_id
+        self.read_baseline_result = read_baseline_result
         self.read_upload_status = read_upload_status
         self.write_job = write_job
         self.process_json_payload = process_json_payload
@@ -139,10 +141,12 @@ class UploadQueueLifecycleService:
         set_current_dataset_scope(dataset_scope)
         filename = metadata.get("filename")
         request_id = metadata.get("request_id")
+        dataset_id = str(metadata.get("dataset_id") or job_id)
         _log_queue_event(
             self.logger,
             "job_claimed",
             job_id=job_id,
+            dataset_id=dataset_id,
             request_id=request_id,
             filename=filename,
             queue_status="processing",
@@ -154,11 +158,20 @@ class UploadQueueLifecycleService:
         try:
             path = self._resolve_processing_path(job_id, metadata)
         except Exception as exc:
-            self.logger.exception("upload_source_restore_failed job_id=%s filename=%s", job_id, filename)
+            technical_message = f"{exc.__class__.__name__}: {str(exc) or 'upload source restore failed'}"
+            self.logger.exception(
+                "upload_source_restore_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=%s filename=%s",
+                dataset_id,
+                job_id,
+                request_id,
+                exc.__class__.__name__,
+                filename,
+            )
             _log_queue_event(
                 self.logger,
                 "job_failed",
                 job_id=job_id,
+                dataset_id=dataset_id,
                 request_id=request_id,
                 filename=filename,
                 queue_status="failed",
@@ -166,7 +179,28 @@ class UploadQueueLifecycleService:
                 elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
                 failure_reason=str(exc) or exc.__class__.__name__,
             )
-            path = None
+            mark_queue_job_failed(job_id, technical_message)
+            complete_upload_queue_job(job_id, "failed", technical_message)
+            self.write_job({
+                **metadata,
+                **build_upload_error_payload(
+                    "file_storage_failed",
+                    message="The uploaded file is stored, but it could not be opened for processing.",
+                    failed_stage="import",
+                    retryable=True,
+                    legacy_error_type="upload_source_restore_failed",
+                    job_id=job_id,
+                    dataset_id=dataset_id,
+                    request_id=request_id,
+                    technical_message=technical_message,
+                    exception_type=exc.__class__.__name__,
+                    file_stored=True,
+                    transfer_succeeded=True,
+                    retry_url=f"/api/data/upload/{job_id}/retry",
+                ),
+                "result_available": False,
+            })
+            return False
         if path is None or not path.exists():
             existing_result = self.read_upload_result_by_job_id(job_id)
             existing_status = self.read_upload_status(job_id) or {}
@@ -210,6 +244,7 @@ class UploadQueueLifecycleService:
                     self.logger,
                     "job_completed",
                     job_id=job_id,
+                    dataset_id=dataset_id,
                     request_id=request_id,
                     filename=filename,
                     queue_status="completed",
@@ -228,6 +263,8 @@ class UploadQueueLifecycleService:
                         retryable=False,
                         legacy_error_type="missing_upload_file",
                         job_id=job_id,
+                        dataset_id=metadata.get("dataset_id") or job_id,
+                        request_id=request_id,
                     ),
                 }
             )
@@ -235,6 +272,7 @@ class UploadQueueLifecycleService:
                 self.logger,
                 "job_failed",
                 job_id=job_id,
+                dataset_id=dataset_id,
                 request_id=request_id,
                 filename=filename,
                 queue_status="failed",
@@ -253,6 +291,7 @@ class UploadQueueLifecycleService:
                 self.logger,
                 "storage_object_resolved",
                 job_id=job_id,
+                dataset_id=dataset_id,
                 request_id=request_id,
                 source_filename=filename,
                 file_size_bytes=file_size_bytes,
@@ -262,6 +301,7 @@ class UploadQueueLifecycleService:
                 self.logger,
                 "csv_opened",
                 job_id=job_id,
+                dataset_id=dataset_id,
                 request_id=request_id,
                 source_filename=filename,
                 file_size_bytes=file_size_bytes,
@@ -271,6 +311,7 @@ class UploadQueueLifecycleService:
                 self.logger,
                 "job_started",
                 job_id=job_id,
+                dataset_id=dataset_id,
                 request_id=request_id,
                 filename=filename,
                 file_size_bytes=file_size_bytes,
@@ -310,9 +351,11 @@ class UploadQueueLifecycleService:
                 result = self.process_csv_file(path, filename=metadata.get("filename") or path.name, job_id=job_id)
             completed = self.read_upload_status(job_id) or {}
             completed["job_id"] = job_id
-            completed_status = str(completed.get("status") or "").upper()
+            baseline_workflow = is_baseline_workflow(metadata.get("workflow"))
+            terminal_candidate = result if baseline_workflow and isinstance(result, dict) else completed
+            completed_status = str(terminal_candidate.get("status") or completed.get("status") or "").upper()
             if completed_status in {"FAILED", "TIMEOUT", "CANCELLED"}:
-                error_message = str(completed.get("error") or completed.get("message") or completed_status.lower())
+                error_message = str(terminal_candidate.get("error") or completed.get("error") or terminal_candidate.get("message") or completed.get("message") or completed_status.lower())
                 mark_queue_job_failed(job_id, error_message)
                 complete_upload_queue_job(job_id, "failed", error_message)
                 self.write_job({
@@ -333,6 +376,7 @@ class UploadQueueLifecycleService:
                     self.logger,
                     "job_failed",
                     job_id=job_id,
+                    dataset_id=dataset_id,
                     request_id=request_id,
                     filename=filename,
                     queue_status="failed",
@@ -362,11 +406,59 @@ class UploadQueueLifecycleService:
                     "propagation_label": "Failed.",
                 })
                 return False
+            result_reader = self.read_baseline_result if baseline_workflow else self.read_upload_result_by_job_id
+            result_deadline = time.monotonic() + 2.0
+            persisted_result = result_reader(job_id)
+            while not isinstance(persisted_result, dict) and time.monotonic() < result_deadline:
+                time.sleep(0.05)
+                persisted_result = result_reader(job_id)
+            if not isinstance(persisted_result, dict) or str(persisted_result.get("job_id") or job_id) != job_id:
+                technical_message = "ResultPersistenceError: terminal status was produced without a retrievable result"
+                failure = build_upload_error_payload(
+                    "result_persistence_failed",
+                    message="Processing finished, but the baseline result could not be made available.",
+                    failed_stage="baseline_creation",
+                    retryable=True,
+                    legacy_error_type="result_persistence_failed",
+                    job_id=job_id,
+                    dataset_id=metadata.get("dataset_id") or job_id,
+                    request_id=request_id,
+                    technical_message=technical_message,
+                    exception_type="ResultPersistenceError",
+                    file_stored=True,
+                    transfer_succeeded=True,
+                    retry_url=f"/api/data/upload/{job_id}/retry",
+                )
+                mark_queue_job_failed(job_id, technical_message)
+                complete_upload_queue_job(job_id, "failed", technical_message)
+                self.write_job({**metadata, **completed, **failure, "result_available": False})
+                self.logger.error(
+                    "upload_result_persistence_failed dataset_id=%s job_id=%s request_id=%s stage=baseline_creation exception_type=ResultPersistenceError",
+                    metadata.get("dataset_id") or job_id,
+                    job_id,
+                    request_id,
+                )
+                return False
+            if baseline_workflow:
+                self.write_job({
+                    **completed,
+                    **terminal_candidate,
+                    "job_id": job_id,
+                    "status": "COMPLETE",
+                    "processing_state": "complete",
+                    "analysis_state": "completed",
+                    "job_state": "completed",
+                    "terminal": True,
+                    "result_available": True,
+                    "baseline_result_available": True,
+                })
+                completed = self.read_upload_status(job_id) or terminal_candidate
             complete_upload_queue_job(job_id, "completed")
             _log_queue_event(
                 self.logger,
                 "job_completed",
                 job_id=job_id,
+                dataset_id=dataset_id,
                 request_id=request_id,
                 filename=filename,
                 queue_status="completed",
@@ -380,11 +472,19 @@ class UploadQueueLifecycleService:
             self.delete_upload_source(metadata.get("shared_upload_source_key"))
             return bool(result)
         except TimeoutError as exc:
-            self.logger.exception("upload_queue_job_timed_out job_id=%s filename=%s", job_id, filename)
+            self.logger.exception(
+                "upload_queue_job_timed_out dataset_id=%s job_id=%s request_id=%s stage=baseline_creation exception_type=%s filename=%s",
+                metadata.get("dataset_id") or job_id,
+                job_id,
+                request_id,
+                exc.__class__.__name__,
+                filename,
+            )
             _log_queue_event(
                 self.logger,
                 "job_failed",
                 job_id=job_id,
+                dataset_id=dataset_id,
                 request_id=request_id,
                 filename=filename,
                 queue_status="failed",
@@ -404,6 +504,10 @@ class UploadQueueLifecycleService:
                         retryable=True,
                         legacy_error_type="processing_timeout",
                         job_id=job_id,
+                        dataset_id=metadata.get("dataset_id") or job_id,
+                        request_id=request_id,
+                        technical_message=f"{exc.__class__.__name__}: {str(exc) or 'processing timeout'}",
+                        exception_type=exc.__class__.__name__,
                     ),
                     "status": "TIMEOUT",
                     "processing_state": "timeout",
@@ -418,7 +522,6 @@ class UploadQueueLifecycleService:
             )
             return False
         except Exception as exc:
-            self.logger.exception("upload_queue_job_failed job_id=%s filename=%s", job_id, filename)
             current = self.read_upload_status(job_id) or {}
             error_message = str(exc) or exc.__class__.__name__
             current_stage = str(
@@ -442,15 +545,31 @@ class UploadQueueLifecycleService:
                 failed_stage = "validation"
                 safe_message = "The dataset did not pass validation. Check the file and try again."
                 retryable = False
+            elif current_stage == "baseline_relationship_learning":
+                error_code = "relationship_learning_failed"
+                failed_stage = "relationship_learning"
+                safe_message = "The file was uploaded, but expected signal relationships could not be learned."
+                retryable = True
             else:
                 error_code = "baseline_processing_failed"
-                failed_stage = "baseline_processing"
+                failed_stage = "baseline_creation"
                 safe_message = "The dataset was imported, but baseline processing could not complete."
                 retryable = True
+            dataset_id = str(current.get("dataset_id") or metadata.get("dataset_id") or job_id)
+            self.logger.exception(
+                "upload_queue_job_failed dataset_id=%s job_id=%s request_id=%s stage=%s exception_type=%s filename=%s",
+                dataset_id,
+                job_id,
+                request_id,
+                failed_stage,
+                exc.__class__.__name__,
+                filename,
+            )
             _log_queue_event(
                 self.logger,
                 "job_failed",
                 job_id=job_id,
+                dataset_id=dataset_id,
                 request_id=request_id,
                 filename=filename,
                 queue_status="failed",
@@ -470,6 +589,13 @@ class UploadQueueLifecycleService:
                     retryable=retryable,
                     legacy_error_type="processing_error",
                     job_id=job_id,
+                    dataset_id=dataset_id,
+                    request_id=request_id,
+                    technical_message=f"{exc.__class__.__name__}: {error_message}",
+                    exception_type=exc.__class__.__name__,
+                    file_stored=True,
+                    transfer_succeeded=True,
+                    retry_url=f"/api/data/upload/{job_id}/retry",
                 ),
                 "progress_label": safe_message,
                 "result_available": False,

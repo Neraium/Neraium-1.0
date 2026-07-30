@@ -103,13 +103,17 @@ def test_409_5_mib_csv_creates_presigned_session_and_exact_analysis_job(monkeypa
 
     assert complete_response.status_code == 202
     complete_payload = complete_response.json()
-    assert complete_payload["job_id"] == session_id
-    assert complete_payload["status_url"] == f"/api/data/upload-status/{session_id}"
+    job_id = complete_payload["job_id"]
+    assert job_id != session_id
+    assert complete_payload["dataset_id"] == session_id
+    assert complete_payload["upload_session_id"] == session_id
+    assert complete_payload["status_url"] == f"/api/data/upload-status/{job_id}"
     assert complete_payload["filename"] == "ChillerPlant.csv"
     assert complete_payload["upload_transport"] == "presigned_s3_put"
-    assert enqueued == [session_id]
-    assert jobs[session_id]["shared_upload_source_key"].endswith(f"/{session_id}.csv")
-    assert jobs[session_id]["file_path"] is None
+    assert enqueued == [job_id]
+    assert jobs[job_id]["dataset_id"] == session_id
+    assert jobs[job_id]["shared_upload_source_key"].endswith(f"/{session_id}.csv")
+    assert jobs[job_id]["file_path"] is None
     assert sessions[session_id]["state"] == "job_created"
 
     idempotent_response = client.post(
@@ -118,8 +122,9 @@ def test_409_5_mib_csv_creates_presigned_session_and_exact_analysis_job(monkeypa
         json={"etag": "large-etag"},
     )
     assert idempotent_response.status_code == 202
-    assert idempotent_response.json()["job_id"] == session_id
-    assert enqueued == [session_id]
+    assert idempotent_response.json()["job_id"] == job_id
+    assert idempotent_response.json()["dataset_id"] == session_id
+    assert enqueued == [job_id]
 
 
 def test_large_baseline_upload_preserves_workflow_without_creating_evidence(monkeypatch, tmp_path):
@@ -155,12 +160,17 @@ def test_large_baseline_upload_preserves_workflow_without_creating_evidence(monk
     )
 
     assert complete_response.status_code == 202
-    assert complete_response.json()["workflow"] == "create_baseline"
-    assert complete_response.json()["sii_engine_invoked"] is False
-    assert jobs[session_id]["workflow"] == "create_baseline"
-    assert jobs[session_id]["runner_used"] is False
-    assert jobs[session_id]["sii_engine_invoked"] is False
-    assert enqueued == [session_id]
+    complete_payload = complete_response.json()
+    job_id = complete_payload["job_id"]
+    assert job_id != session_id
+    assert complete_payload["dataset_id"] == session_id
+    assert complete_payload["workflow"] == "create_baseline"
+    assert complete_payload["sii_engine_invoked"] is False
+    assert jobs[job_id]["workflow"] == "create_baseline"
+    assert jobs[job_id]["dataset_id"] == session_id
+    assert jobs[job_id]["runner_used"] is False
+    assert jobs[job_id]["sii_engine_invoked"] is False
+    assert enqueued == [job_id]
 
 
 def test_large_upload_session_rejects_file_above_supported_limit(monkeypatch, tmp_path):
@@ -235,7 +245,11 @@ def test_job_creation_failure_is_visible_and_retry_reuses_the_same_upload(monkey
     assert failure_payload["retryable"] is True
     assert failure_payload["transfer_succeeded"] is True
     assert failure_payload["file_stored"] is True
-    assert failure_payload["job_id"] == session_id
+    failed_job_id = failure_payload["job_id"]
+    assert failed_job_id != session_id
+    assert failure_payload["dataset_id"] == session_id
+    assert failure_payload["datasetId"] == session_id
+    assert failure_payload["jobId"] == failed_job_id
     assert failure_payload["upload_session_id"] == session_id
     assert failure_payload["retry_url"] == f"/api/data/upload-session/{session_id}/complete"
     assert failure_payload["message"] == "The file was transferred successfully, but Neraium could not begin processing it."
@@ -243,11 +257,14 @@ def test_job_creation_failure_is_visible_and_retry_reuses_the_same_upload(monkey
         "code": "dataset_record_creation_failed",
         "message": "The file was transferred successfully, but Neraium could not begin processing it.",
         "failed_stage": "dataset_creation",
+        "stage": "import",
         "retryable": True,
     }
-    assert jobs[session_id]["status"] == "FAILED"
-    assert jobs[session_id]["shared_upload_source_key"].endswith(f"/{session_id}.csv")
-    assert sessions[session_id]["state"] == "awaiting_upload"
+    assert jobs[failed_job_id]["status"] == "FAILED"
+    assert jobs[failed_job_id]["dataset_id"] == session_id
+    assert jobs[failed_job_id]["shared_upload_source_key"].endswith(f"/{session_id}.csv")
+    assert sessions[session_id]["state"] == "job_pending"
+    assert sessions[session_id]["job_id"] == failed_job_id
 
     monkeypatch.setattr(data_router, "enqueue_upload_job", lambda job_id: enqueued.append(job_id))
     retried = client.post(
@@ -257,8 +274,9 @@ def test_job_creation_failure_is_visible_and_retry_reuses_the_same_upload(monkey
     )
 
     assert retried.status_code == 202
-    assert retried.json()["job_id"] == session_id
-    assert enqueued == [session_id]
+    assert retried.json()["job_id"] == failed_job_id
+    assert retried.json()["dataset_id"] == session_id
+    assert enqueued == [failed_job_id]
     assert sessions[session_id]["state"] == "job_created"
 
 

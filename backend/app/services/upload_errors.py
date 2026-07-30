@@ -39,6 +39,16 @@ UPLOAD_ERROR_DEFAULTS: dict[str, tuple[str, str, bool]] = {
         "baseline_processing",
         True,
     ),
+    "relationship_learning_failed": (
+        "The file was uploaded, but expected signal relationships could not be learned.",
+        "relationship_learning",
+        True,
+    ),
+    "result_persistence_failed": (
+        "Processing finished, but the baseline result could not be made available.",
+        "baseline_creation",
+        True,
+    ),
     "server_timeout": (
         "The server timed out while processing the dataset. Retry the import.",
         "server",
@@ -112,6 +122,29 @@ LEGACY_UPLOAD_ERROR_CODES = {
 }
 
 
+PROCESSING_FAILURE_STAGES = {"import", "validation", "relationship_learning", "baseline_creation"}
+
+
+def canonical_processing_failure_stage(stage: Any) -> str:
+    normalized = str(stage or "").strip().lower()
+    if normalized in PROCESSING_FAILURE_STAGES:
+        return normalized
+    if normalized in {
+        "validation", "csv_parsing", "validating_schema", "baseline_validating",
+        "baseline_quality_assessment", "parsing", "parsing_telemetry",
+    }:
+        return "validation"
+    if normalized in {"relationship_learning", "baseline_relationship_learning"}:
+        return "relationship_learning"
+    if normalized in {
+        "baseline_creation", "baseline_processing", "baseline_mode_identification",
+        "baseline_model_fitting", "baseline_candidate_persistence", "processing_timeout",
+        "saving_result", "persistence", "server",
+    }:
+        return "baseline_creation"
+    return "import"
+
+
 def canonical_upload_error_code(error_code: Any) -> str:
     normalized = str(error_code or "").strip().lower()
     if normalized in UPLOAD_ERROR_DEFAULTS:
@@ -127,29 +160,50 @@ def build_upload_error_payload(
     retryable: bool | None = None,
     legacy_error_type: str | None = None,
     job_id: str | None = None,
+    dataset_id: str | None = None,
+    request_id: str | None = None,
+    technical_message: str | None = None,
+    exception_type: str | None = None,
     **extra: Any,
 ) -> dict[str, Any]:
     code = canonical_upload_error_code(error_code)
     default_message, default_stage, default_retryable = UPLOAD_ERROR_DEFAULTS[code]
     safe_message = str(message or default_message).strip() or default_message
-    stage = str(failed_stage or default_stage).strip() or default_stage
+    legacy_stage = str(failed_stage or default_stage).strip() or default_stage
+    stage = canonical_processing_failure_stage(legacy_stage)
     can_retry = default_retryable if retryable is None else bool(retryable)
     error_type = str(legacy_error_type or error_code or code).strip() or code
+    technical = str(technical_message or error_type).strip() or error_type
+    normalized_job_id = str(job_id or "").strip() or None
+    normalized_dataset_id = str(dataset_id or "").strip() or None
+    normalized_request_id = str(request_id or "").strip() or None
     details = {
         "code": code,
         "message": safe_message,
-        "failed_stage": stage,
+        "failed_stage": legacy_stage,
+        "stage": stage,
         "retryable": can_retry,
     }
     return {
-        "job_id": job_id,
+        "job_id": normalized_job_id,
+        "jobId": normalized_job_id,
+        "dataset_id": normalized_dataset_id,
+        "datasetId": normalized_dataset_id,
+        "request_id": normalized_request_id,
+        "requestId": normalized_request_id,
         "status": "FAILED",
+        "job_state": "failed",
         "processing_state": "failed",
         "message": safe_message,
         "error": safe_message,
         "error_type": error_type,
         "error_code": code,
-        "failed_stage": stage,
+        "errorCode": code,
+        "failed_stage": legacy_stage,
+        "stage": stage,
+        "userMessage": safe_message,
+        "technicalMessage": technical,
+        "exception_type": exception_type,
         "retryable": can_retry,
         "error_details": details,
         **extra,

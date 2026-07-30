@@ -104,8 +104,8 @@ def _log_processing_event(event: str, job_id: str, *, filename: str | None = Non
     normalized = {
         "event": event,
         "correlation_id": job_id,
-        "dataset_id": job_id,
-        "upload_id": job_id,
+        "dataset_id": fields.get("dataset_id") or job_id,
+        "upload_id": fields.get("upload_id") or job_id,
         "user_id": scope.user_id,
         "organization_id": scope.tenant_id,
         "job_id": job_id,
@@ -319,8 +319,15 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
         "message": message,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    payload["session_scope"] = build_session_scope(job_id, filename=payload.get("filename"), status=str(status).lower(), dataset_scope=scope)
-    payload = attach_dataset_scope(payload, scope=scope, dataset_id=job_id)
+    dataset_id = existing.get("dataset_id") or job_id
+    payload["session_scope"] = build_session_scope(
+        job_id,
+        filename=payload.get("filename"),
+        status=str(status).lower(),
+        dataset_scope=scope,
+        dataset_id=dataset_id,
+    )
+    payload = attach_dataset_scope(payload, scope=scope, dataset_id=dataset_id)
     UPLOAD_RUNTIME_STATE.cache_job(job_id, payload)
     JOB_RUNTIME_DIRS[job_id] = RUNTIME_DIR
     while len(JOB_RUNTIME_DIRS) > UPLOAD_RUNTIME_STATE.max_cached_jobs:
@@ -618,8 +625,10 @@ def _set_propagation_stage(job_id: str, *, stage: str, progress: int, label: str
     write_job(payload)
     stage_persist_ms = (time.perf_counter() - persistence_started) * 1000
     logger.info(
-        "upload_stage_timing event=stage_entered job_id=%s stage=%s phase=%s previous_phase=%s previous_phase_ms=%s stage_persist_ms=%.3f total_job_ms=%s",
+        "upload_stage_timing event=stage_entered dataset_id=%s job_id=%s request_id=%s stage=%s phase=%s previous_phase=%s previous_phase_ms=%s stage_persist_ms=%.3f total_job_ms=%s",
+        current.get("dataset_id") or job_id,
         job_id,
+        current.get("request_id"),
         stage,
         _STAGE_TIMING_PHASES.get(stage, stage),
         completed_phase,
@@ -881,6 +890,7 @@ def _build_csv_result(
             approval_required=bool(job_context.get("approval_required", True)),
             active_model=read_active_behavioral_model(),
             stage_notifier=_set_propagation_stage,
+            dataset_id=job_context.get("dataset_id") or job_id,
         )
         candidate = baseline_result["candidate_model"]
         suitability = baseline_result["baseline_suitability"]
@@ -890,7 +900,7 @@ def _build_csv_result(
             "job_id": job_id,
             "run_id": job_id,
             "upload_id": job_id,
-            "dataset_id": job_id,
+            "dataset_id": job_context.get("dataset_id") or job_id,
             "upload_session_id": upload_session_id,
             "request_id": request_id,
             "status_url": f"/api/data/upload-status/{job_id}",
@@ -946,13 +956,26 @@ def _build_csv_result(
             filename=filename,
             status="complete",
             dataset_scope=job_scope,
+            dataset_id=job_context.get("dataset_id") or job_id,
         )
-        summary = attach_dataset_scope(summary, scope=job_scope, dataset_id=job_id)
-        write_job(summary)
-        try:
-            complete_upload_queue_job(job_id, "completed")
-        except Exception:
-            pass
+        summary = attach_dataset_scope(summary, scope=job_scope, dataset_id=job_context.get("dataset_id") or job_id)
+        # Persist a non-terminal visibility state. The queue lifecycle reads
+        # the committed result, then publishes this terminal summary atomically.
+        write_job({
+            **summary,
+            "status": "PROCESSING",
+            "processing_state": "saving_result",
+            "analysis_state": "baseline_creation",
+            "job_state": "processing",
+            "terminal": False,
+            "result_available": False,
+            "baseline_result_available": False,
+            "progress_label": "Verifying committed baseline result...",
+            "message": "Verifying committed baseline result...",
+            "propagation_stage": "saving_result",
+            "propagation_progress": 99,
+            "propagation_label": "Verifying committed baseline result...",
+        })
         _finish_job_timing(job_id)
         return summary
 
@@ -1183,8 +1206,14 @@ def _build_csv_result(
     }
     job_scope = dataset_scope_from_payload(job_context) or current_dataset_scope()
     result["initiated_by"] = initiated_by
-    result["session_scope"] = build_session_scope(job_id, filename=filename, status="active", dataset_scope=job_scope)
-    result = attach_dataset_scope(result, scope=job_scope, dataset_id=job_id)
+    result["session_scope"] = build_session_scope(
+        job_id,
+        filename=filename,
+        status="active",
+        dataset_scope=job_scope,
+        dataset_id=job_context.get("dataset_id") or job_id,
+    )
+    result = attach_dataset_scope(result, scope=job_scope, dataset_id=job_context.get("dataset_id") or job_id)
     result["traceability"] = build_traceability_packet(job_id=job_id, filename=filename, result=result)
     result["decision_integrity"] = dict(result["traceability"])
     if isinstance(latest_runner_state, dict):
@@ -1252,8 +1281,14 @@ def _build_csv_result(
     summary["initiated_by"] = initiated_by
     summary["workflow"] = workflow
     summary["active_baseline_reference"] = result.get("active_baseline_reference")
-    summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active", dataset_scope=job_scope)
-    summary = attach_dataset_scope(summary, scope=job_scope, dataset_id=job_id)
+    summary["session_scope"] = build_session_scope(
+        job_id,
+        filename=filename,
+        status="active",
+        dataset_scope=job_scope,
+        dataset_id=job_context.get("dataset_id") or job_id,
+    )
+    summary = attach_dataset_scope(summary, scope=job_scope, dataset_id=job_context.get("dataset_id") or job_id)
     summary["traceability"] = dict(result["traceability"])
     summary["decision_integrity"] = dict(result["traceability"])
 
@@ -1472,6 +1507,7 @@ def read_upload_history(limit: int = 100) -> list[dict[str, Any]]:
 def _refresh_queue_lifecycle_callbacks() -> UploadQueueLifecycleService:
     UPLOAD_QUEUE_LIFECYCLE.read_job = read_job
     UPLOAD_QUEUE_LIFECYCLE.read_upload_result_by_job_id = read_upload_result_by_job_id
+    UPLOAD_QUEUE_LIFECYCLE.read_baseline_result = read_baseline_result
     UPLOAD_QUEUE_LIFECYCLE.read_upload_status = read_upload_status
     UPLOAD_QUEUE_LIFECYCLE.write_job = write_job
     UPLOAD_QUEUE_LIFECYCLE.process_json_payload = process_json_payload
@@ -1514,13 +1550,15 @@ def _scope_job_payload(job_id: str, payload: dict[str, Any]) -> tuple[dict[str, 
     payload["upload_id"] = job_id
     payload.setdefault("upload_session_id", job_id)
     lifecycle_status = str(payload.get("processing_state") or payload.get("status") or "active").lower()
+    dataset_id = str(payload.get("dataset_id") or existing.get("dataset_id") or job_id)
     payload["session_scope"] = build_session_scope(
         job_id,
         filename=payload.get("filename"),
         status=lifecycle_status,
         dataset_scope=scope,
+        dataset_id=dataset_id,
     )
-    return attach_dataset_scope(payload, scope=scope, dataset_id=job_id), scope
+    return attach_dataset_scope(payload, scope=scope, dataset_id=dataset_id), scope
 
 
 def _cache_job_payload(job_id: str, payload: dict[str, Any]) -> None:
@@ -1545,6 +1583,7 @@ def _latest_job_summary(job_id: str, payload: dict[str, Any], scope: Any, status
             filename=latest_summary.get("filename"),
             status=lifecycle_status,
             dataset_scope=scope,
+            dataset_id=latest_summary.get("dataset_id"),
         ),
     )
     latest_summary.setdefault("status_url", f"/api/data/upload-status/{job_id}")
@@ -1667,8 +1706,12 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
         _set_propagation_stage(job_id, stage="reading_csv", progress=10, label=_progress_label("reading_csv"))
 
     try:
-        _log_processing_event("parsing_started", job_id, filename=filename, processing_stage="csv_parsing")
-        _log_processing_event("validation_started", job_id, filename=filename, processing_stage="validation")
+        trace_fields = {
+            "dataset_id": existing_job.get("dataset_id") or job_id,
+            "request_id": existing_job.get("request_id"),
+        }
+        _log_processing_event("parsing_started", job_id, filename=filename, processing_stage="csv_parsing", **trace_fields)
+        _log_processing_event("validation_started", job_id, filename=filename, processing_stage="validation", **trace_fields)
         snapshot = _stream_csv_snapshot(
             p,
             max_analysis_rows=parse_positive_int_env(
@@ -1683,6 +1726,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
             job_id,
             filename=filename,
             processing_stage="csv_parsing",
+            **trace_fields,
             row_count=snapshot.get("row_count"),
             column_count=len(snapshot.get("columns") or []),
         )
@@ -1691,6 +1735,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
             job_id,
             filename=filename,
             processing_stage="validation",
+            **trace_fields,
             row_count=snapshot.get("row_count"),
             column_count=len(snapshot.get("columns") or []),
         )
@@ -1735,11 +1780,19 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
         )
 
         if is_baseline_workflow(summary.get("workflow")):
-            return read_baseline_result(summary["job_id"]) or {}
+            return summary
         return read_upload_result_by_job_id(summary["job_id"]) or read_current_upload_result() or {}
 
     except Exception as exc:
-        logger.exception("CSV upload processing failed job_id=%s filename=%s", job_id, filename)
+        logger.exception(
+            "CSV upload processing failed dataset_id=%s job_id=%s request_id=%s stage=%s exception_type=%s filename=%s",
+            existing_job.get("dataset_id") or job_id,
+            job_id,
+            existing_job.get("request_id"),
+            (read_upload_status(job_id) or {}).get("processing_state") or "import",
+            exc.__class__.__name__,
+            filename,
+        )
         failed_timings = _finish_job_timing(job_id)
         logger.info(
             "upload_stage_timing event=job_failed job_id=%s total_job_ms=%s validation_ms=%s baseline_creation_ms=%s mapping_ms=%s comparison_ms=%s evidence_generation_ms=%s persistence_ms=%s",
@@ -1775,6 +1828,7 @@ UPLOAD_QUEUE_LIFECYCLE = UploadQueueLifecycleService(
     logger=logger,
     read_job=read_job,
     read_upload_result_by_job_id=read_upload_result_by_job_id,
+    read_baseline_result=read_baseline_result,
     read_upload_status=read_upload_status,
     write_job=write_job,
     process_json_payload=process_json_payload,
