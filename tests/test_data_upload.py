@@ -251,7 +251,9 @@ def test_upload_in_split_role_production_uses_external_worker_queue(monkeypatch,
     assert enqueued_jobs == [payload["job_id"]]
     assert dispatched_workers == []
     status_payload = upload_jobs.read_upload_status(payload["job_id"])
-    assert status_payload["shared_upload_source_key"] == f"upload-state/upload-sources/{payload['job_id']}.csv"
+    assert payload["dataset_id"] != payload["job_id"]
+    assert status_payload["dataset_id"] == payload["dataset_id"]
+    assert status_payload["shared_upload_source_key"] == f"upload-state/upload-sources/{payload['dataset_id']}.csv"
     assert status_payload["file_path"] is None
     assert list((tmp_path / "uploads").iterdir()) == []
 
@@ -2692,7 +2694,8 @@ def test_worker_exception_before_processing_marks_failed_not_starting(monkeypatc
     assert payload.get("failed_stage") == "baseline_job_creation"
     assert payload.get("retryable") is True
     assert payload.get("error") == "The import service could not start baseline processing. Retry shortly."
-    assert "worker exploded" not in str(payload)
+    assert payload["technicalMessage"] == "RuntimeError: worker exploded"
+    assert payload["exception_type"] == "RuntimeError"
     assert payload.get("worker_state") == "stalled"
 
 
@@ -2732,7 +2735,8 @@ def test_worker_processing_exception_marks_job_failed_instead_of_leaving_pending
     assert payload.get("retryable") is False
     assert payload.get("error") == "The CSV could not be parsed. Check its format and try again."
     assert payload.get("message") == "The CSV could not be parsed. Check its format and try again."
-    assert "structural scoring exploded" not in str(payload)
+    assert payload["technicalMessage"] == "RuntimeError: structural scoring exploded"
+    assert payload["stage"] == "validation"
     assert queue_entry.get("status") == "failed"
 
 
@@ -2770,7 +2774,8 @@ def test_worker_timeout_returns_structured_retryable_import_error(monkeypatch, t
     assert payload["failed_stage"] == "baseline_processing"
     assert payload["retryable"] is True
     assert payload["message"] == "The server timed out while processing the dataset. Retry the import."
-    assert "internal worker deadline exceeded" not in str(payload)
+    assert payload["technicalMessage"] == "TimeoutError: internal worker deadline exceeded"
+    assert payload["stage"] == "baseline_creation"
 
 
 def test_upload_status_reports_running_when_worker_heartbeat_written(monkeypatch, tmp_path) -> None:

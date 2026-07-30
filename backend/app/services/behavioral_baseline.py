@@ -543,6 +543,7 @@ def build_behavioral_baseline(
     approval_required: bool = True,
     active_model: dict[str, Any] | None = None,
     stage_notifier: StageNotifier | None = None,
+    dataset_id: str | None = None,
 ) -> dict[str, Any]:
     """Build a candidate Behavioral Digital Model without running SII detection."""
 
@@ -553,6 +554,7 @@ def build_behavioral_baseline(
         raise ValueError("active_behavioral_baseline_required_for_extension")
 
     started = time.perf_counter()
+    dataset_id = str(dataset_id or job_id)
     ingestion_report = ingestion_report or {}
     matrix_rows = [[str(row.get(column, "")) for column in columns] for row in rows]
 
@@ -677,7 +679,7 @@ def build_behavioral_baseline(
         "source": {
             "job_id": job_id,
             "upload_id": job_id,
-            "dataset_id": job_id,
+            "dataset_id": dataset_id,
             "portfolio_id": scope.workspace_id,
             "system_id": scope.workspace_id,
             "filename": filename,
@@ -715,7 +717,7 @@ def build_behavioral_baseline(
         "contract_version": BASELINE_RESULT_CONTRACT_VERSION,
         "job_id": job_id,
         "upload_id": job_id,
-        "dataset_id": job_id,
+        "dataset_id": dataset_id,
         "baseline_candidate_id": model_id,
         "established_baseline_id": model_id,
         "portfolio_id": scope.workspace_id,

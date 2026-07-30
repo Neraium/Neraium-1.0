@@ -555,7 +555,9 @@ function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queued
     ["Current operation", propagationLabel],
     ["System message", latestMessage],
     ...(failed ? [
-      ["Error code", uploadJob?.error_code ?? uploadJob?.error_type],
+      ["Error code", uploadJob?.errorCode ?? uploadJob?.error_code ?? uploadJob?.error_type],
+      ["Failure stage", uploadJob?.stage ?? uploadJob?.failed_stage],
+      ["Technical message", uploadJob?.technicalMessage ?? uploadJob?.technical_message],
       ["HTTP status", uploadJob?.response_status],
       ["Request ID", uploadJob?.request_id],
       ["Timestamp", uploadJob?.diagnostic_timestamp],
@@ -637,8 +639,9 @@ function RecoverySummary({ viewState, hasSelectedFiles, selectedFileLabel, uploa
 }
 
 export function failedImportStageRows(uploadJob = {}) {
-  const failedStage = String(uploadJob?.failed_stage ?? uploadJob?.failedStage ?? "").trim().toLowerCase();
+  const failedStage = String(uploadJob?.stage ?? uploadJob?.failed_stage ?? uploadJob?.failedStage ?? "").trim().toLowerCase();
   const failedIndex = {
+    import: 0,
     upload_transfer: 0,
     authentication: 0,
     dataset_creation: 0,
@@ -646,8 +649,11 @@ export function failedImportStageRows(uploadJob = {}) {
     baseline_job_creation: 0,
     csv_parsing: 1,
     validation: 1,
-    baseline_processing: 2,
-    server: 0,
+    relationship_learning: 2,
+    baseline_relationship_learning: 2,
+    baseline_processing: 3,
+    baseline_creation: 3,
+    server: 3,
     unexpected: 0,
   }[failedStage] ?? 0;
   return FAILED_IMPORT_STAGES.map((stage, index) => ({
@@ -768,6 +774,7 @@ export default function IntakeFlowPanel({
   batchResults = [],
   onRetryFailedUploads,
   onResetWorkspace,
+  onChooseAnotherFile,
   onViewResults,
   onOpenBaseline,
   baselineNavigationPending = false,
@@ -974,10 +981,10 @@ export default function IntakeFlowPanel({
               </div>
             </header>
             <p className="upload-error-message">{errorMessage}</p>
-            {failurePresentation.transferSucceeded ? (
+            {failurePresentation.fileStored || failurePresentation.transferSucceeded ? (
               <p className="upload-transfer-complete">
-                <strong>File transfer complete</strong>
-                <span>{uploadTransfer?.label || `${selectedFileLabel} was transferred successfully.`}</span>
+                <strong>File uploaded</strong>
+                <span>{uploadTransfer?.label || `${selectedFileLabel} was transferred and stored successfully.`}</span>
               </p>
             ) : null}
             <ol className="failed-import-stages" aria-label="Import workflow status">
@@ -990,8 +997,10 @@ export default function IntakeFlowPanel({
               ))}
             </ol>
             <div className="upload-simple-actions">
-              <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles && !uploadJob?.job_id}>Retry Import</button>
-              <button type="button" className="secondary-command-button" onClick={() => openFilePicker("csv")}>Choose Another File</button>
+              {failurePresentation.retryable ? (
+                <button type="button" className="command-button" onClick={() => onRetryFailedUploads?.()} disabled={!hasSelectedFiles && !uploadJob?.job_id}>Retry Processing</button>
+              ) : null}
+              <button type="button" className="secondary-command-button" onClick={onChooseAnotherFile ?? (() => openFilePicker("csv"))}>Choose Another File</button>
             </div>
             <AdvancedDetails
               latestUploadSnapshot={latestUploadSnapshot}

@@ -75,6 +75,61 @@ Baseline job progress uses the common upload-status transport so the browser
 can poll one job protocol, but baseline jobs do not publish themselves as the
 latest SII analysis and do not write evidence records.
 
+## Asynchronous upload lifecycle
+
+Baseline upload transport and baseline processing are separate lifecycle phases.
+The production path is:
+
+1. The API stores the uploaded object and creates a dataset identity.
+2. Completion of the transfer creates a separate processing job identity and
+   persists the `dataset_id` to `job_id` mapping before enqueueing work.
+3. The worker restores the stored dataset, parses the CSV, validates signals,
+   learns relationships, constructs the candidate baseline, and commits the
+   result record.
+4. The worker verifies that `GET /api/data/baselines/jobs/{job_id}` can read the
+   committed result. Only then does it publish terminal `COMPLETE` status.
+5. The browser polls `/api/data/upload-status/{job_id}` using only `job_id`. An
+   HTTP 200 response is transport success; the `status`/`job_state`, result
+   availability flags, and structured failure fields determine workflow state.
+6. A short bounded consistency retry is allowed when a result object is not yet
+   visible. Polling otherwise continues until completion, explicit failure, or
+   the documented 30-minute server-analysis deadline.
+
+The identifiers have distinct meanings and must not be substituted:
+
+- `dataset_id`: the stored telemetry object/dataset record;
+- `job_id`: the asynchronous import/baseline processing attempt;
+- `upload_session_id`: the multipart or presigned transfer session; and
+- `request_id`: the request correlation identity recorded by API and worker
+  logs.
+
+A failed processing attempt retains the stored dataset. `Retry Processing`
+re-enqueues the existing job against that dataset and never falls back to a new
+upload. `Choose Another File` abandons the browser workflow and clears dataset,
+job, poll, completion, and error state.
+
+Worker failures publish both the existing compatibility fields and this
+structured contract:
+
+```json
+{
+  "status": "FAILED",
+  "job_state": "failed",
+  "stage": "import | validation | relationship_learning | baseline_creation",
+  "errorCode": "machine_readable_code",
+  "userMessage": "Safe operator-facing reason",
+  "technicalMessage": "OriginalExceptionType: original exception message",
+  "retryable": true,
+  "datasetId": "stored-dataset-id",
+  "jobId": "processing-job-id",
+  "requestId": "correlation-request-id"
+}
+```
+
+The technical message is intended for the collapsed diagnostic UI and logs.
+Worker exception logs include the dataset, job, request, canonical stage,
+exception type, and stack trace.
+
 ## API
 
 `POST /api/data/upload`

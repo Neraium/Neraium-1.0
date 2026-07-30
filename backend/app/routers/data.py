@@ -274,10 +274,21 @@ def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
         processed = upload_jobs.process_next_queued_upload_job()
         logger.info("worker_process_next_finished job_id=%s runtime_dir=%s processed=%s", worker_job_id, runtime_dir, processed)
     except Exception as exc:
-        logger.exception("worker_process_next_failed runtime_dir=%s", runtime_dir)
+        failed = upload_jobs.read_upload_status(worker_job_id) if worker_job_id else {}
+        failed = failed or ({"job_id": worker_job_id} if worker_job_id else {})
+        dataset_id = failed.get("dataset_id") or worker_job_id
+        request_id = failed.get("request_id")
+        technical_message = f"{exc.__class__.__name__}: {str(exc) or 'worker startup failed'}"
+        logger.exception(
+            "worker_process_next_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=%s runtime_dir=%s",
+            dataset_id,
+            worker_job_id,
+            request_id,
+            exc.__class__.__name__,
+            runtime_dir,
+        )
         if worker_job_id:
             now = datetime.now(timezone.utc).isoformat()
-            failed = upload_jobs.read_upload_status(worker_job_id) or {"job_id": worker_job_id}
             failed.update({
                 **build_upload_error_payload(
                     "server_unavailable",
@@ -286,6 +297,13 @@ def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
                     retryable=True,
                     legacy_error_type="worker_start_failed",
                     job_id=worker_job_id,
+                    dataset_id=dataset_id,
+                    request_id=request_id,
+                    technical_message=technical_message,
+                    exception_type=exc.__class__.__name__,
+                    file_stored=bool(failed.get("file_path") or failed.get("shared_upload_source_key")),
+                    transfer_succeeded=bool(failed.get("file_path") or failed.get("shared_upload_source_key")),
+                    retry_url=f"/api/data/upload/{worker_job_id}/retry",
                 ),
                 "progress_label": "Baseline processing could not start.",
                 "worker_state": "stalled",
@@ -526,6 +544,7 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
             upload_session_id,
             {
                 "upload_session_id": upload_session_id,
+                "dataset_id": upload_session_id,
                 "filename": filename,
                 "size_bytes": size_bytes,
                 "content_type": content_type,
@@ -565,6 +584,7 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
     )
     return {
         "upload_session_id": upload_session_id,
+        "dataset_id": upload_session_id,
         "upload_url": target["upload_url"],
         "upload_headers": target["upload_headers"],
         "expires_at": session["expires_at"],
@@ -593,12 +613,15 @@ def complete_large_upload_session(
             retryable=False,
         )
 
-    existing_job = upload_jobs.read_upload_status(upload_session_id)
+    dataset_id = str(session.get("dataset_id") or upload_session_id)
+    job_id = str(session.get("job_id") or "").strip() or uuid.uuid4().hex
+    existing_job = upload_jobs.read_upload_status(job_id)
     if existing_job and str(existing_job.get("status") or "").upper() in {"PENDING", "QUEUED", "PROCESSING", "RUNNING_SII", "COMPLETE"}:
         return {
             **existing_job,
-            "job_id": upload_session_id,
-            "status_url": existing_job.get("status_url") or f"/api/data/upload-status/{upload_session_id}",
+            "job_id": job_id,
+            "dataset_id": existing_job.get("dataset_id") or dataset_id,
+            "status_url": existing_job.get("status_url") or f"/api/data/upload-status/{job_id}",
         }
 
     expires_at = str(session.get("expires_at") or "").strip()
@@ -704,7 +727,9 @@ def complete_large_upload_session(
         )
 
     stored_upload_fields = {
-        "job_id": upload_session_id,
+        "job_id": job_id,
+        "dataset_id": dataset_id,
+        "request_id": request_id,
         "upload_session_id": upload_session_id,
         "file_stored": True,
         "transfer_succeeded": True,
@@ -742,10 +767,40 @@ def complete_large_upload_session(
     except ValueError as exc:
         return _baseline_binding_error(exc, workflow)
     worker_dispatch_status = "thread_dispatched" if _should_dispatch_upload_worker(request.app.state.settings) else "external_worker_queue"
+    try:
+        session = write_large_upload_session(
+            upload_session_id,
+            {
+                **session,
+                "dataset_id": dataset_id,
+                "job_id": job_id,
+                "state": "job_pending",
+            },
+        )
+    except Exception as exc:
+        logger.exception(
+            "large_upload_identity_persist_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=%s",
+            dataset_id,
+            job_id,
+            request_id,
+            exc.__class__.__name__,
+        )
+        return _large_upload_error(
+            503,
+            "upload_enqueue_failed",
+            "The file was transferred, but the dataset record could not be created.",
+            error_code="dataset_record_creation_failed",
+            failed_stage="dataset_creation",
+            retryable=True,
+            technical_message=f"{exc.__class__.__name__}: {str(exc) or 'dataset identity persistence failed'}",
+            exception_type=exc.__class__.__name__,
+            **stored_upload_fields,
+        )
     summary = {
-        "job_id": upload_session_id,
+        "job_id": job_id,
+        "dataset_id": dataset_id,
         "filename": filename,
-        "status_url": f"/api/data/upload-status/{upload_session_id}",
+        "status_url": f"/api/data/upload-status/{job_id}",
         "status": "PENDING",
         "processing_state": "queued",
         "percent": 5,
@@ -783,7 +838,7 @@ def complete_large_upload_session(
                 "core_engine": None,
                 "sii_completed": False,
                 "sii_engine_invoked": False,
-                "baseline_result_url": f"/api/data/baselines/jobs/{upload_session_id}",
+                "baseline_result_url": f"/api/data/baselines/jobs/{job_id}",
                 "message": "Baseline construction queued.",
                 "progress_label": "Baseline construction queued.",
                 "propagation_label": "Baseline construction queued.",
@@ -796,7 +851,7 @@ def complete_large_upload_session(
             correlation_id=upload_session_id,
             request_id=request_id,
             upload_session_id=upload_session_id,
-            dataset_id=upload_session_id,
+            dataset_id=dataset_id,
             source_filename=filename,
             processing_stage="dataset_creation",
         )
@@ -806,12 +861,18 @@ def complete_large_upload_session(
                 correlation_id=upload_session_id,
                 request_id=request_id,
                 upload_session_id=upload_session_id,
-                dataset_id=upload_session_id,
+                dataset_id=dataset_id,
                 source_filename=filename,
                 processing_stage="baseline_job_creation",
             )
-    except Exception:
-        logger.exception("large_upload_job_state_write_failed request_id=%s upload_session_id=%s", request_id, upload_session_id)
+    except Exception as exc:
+        logger.exception(
+            "large_upload_job_state_write_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=%s",
+            dataset_id,
+            job_id,
+            request_id,
+            exc.__class__.__name__,
+        )
         return _large_upload_error(
             503,
             "upload_enqueue_failed",
@@ -819,6 +880,8 @@ def complete_large_upload_session(
             error_code="dataset_record_creation_failed",
             failed_stage="dataset_creation",
             retryable=True,
+            technical_message=f"{exc.__class__.__name__}: {str(exc) or 'processing job persistence failed'}",
+            exception_type=exc.__class__.__name__,
             **stored_upload_fields,
         )
 
@@ -826,7 +889,7 @@ def complete_large_upload_session(
         try:
             upsert_evidence_run(
                 {
-                    "run_id": upload_session_id,
+                    "run_id": job_id,
                     "source_name": filename,
                     "source_type": "csv_upload",
                     "status": "queued",
@@ -861,19 +924,25 @@ def complete_large_upload_session(
             logger.warning("large_upload_evidence_write_failed upload_session_id=%s", upload_session_id, exc_info=True)
 
     try:
-        enqueue_upload_job(upload_session_id)
+        enqueue_upload_job(job_id)
         _log_upload_event(
             "job_queued",
             correlation_id=upload_session_id,
             request_id=request_id,
             upload_session_id=upload_session_id,
-            dataset_id=upload_session_id,
+            dataset_id=dataset_id,
             source_filename=filename,
             queue_status="pending",
             processing_stage="queued",
         )
-    except Exception:
-        logger.exception("large_upload_job_enqueue_failed request_id=%s upload_session_id=%s", request_id, upload_session_id)
+    except Exception as exc:
+        logger.exception(
+            "large_upload_job_enqueue_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=%s",
+            dataset_id,
+            job_id,
+            request_id,
+            exc.__class__.__name__,
+        )
         try:
             upload_jobs.write_job(
                 {
@@ -884,6 +953,8 @@ def complete_large_upload_session(
                         failed_stage="dataset_creation",
                         retryable=True,
                         legacy_error_type="upload_enqueue_failed",
+                        technical_message=f"{exc.__class__.__name__}: {str(exc) or 'processing job enqueue failed'}",
+                        exception_type=exc.__class__.__name__,
                         **stored_upload_fields,
                     ),
                 }
@@ -893,7 +964,7 @@ def complete_large_upload_session(
         if not is_baseline_workflow(workflow):
             try:
                 _upsert_failed_evidence_record(
-                    job_id=upload_session_id,
+                    job_id=job_id,
                     filename=filename,
                     source_type="csv_upload",
                     error_message="Upload completed, but analysis could not be started.",
@@ -908,6 +979,8 @@ def complete_large_upload_session(
             error_code="dataset_record_creation_failed",
             failed_stage="dataset_creation",
             retryable=True,
+            technical_message=f"{exc.__class__.__name__}: {str(exc) or 'processing job enqueue failed'}",
+            exception_type=exc.__class__.__name__,
             **stored_upload_fields,
         )
 
@@ -917,7 +990,8 @@ def complete_large_upload_session(
             {
                 **session,
                 "state": "job_created",
-                "job_id": upload_session_id,
+                "job_id": job_id,
+                "dataset_id": dataset_id,
                 "completed_at": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -929,9 +1003,9 @@ def complete_large_upload_session(
             actor=actor,
             action="upload.accepted",
             resource_type="upload_job",
-            resource_id=upload_session_id,
+            resource_id=job_id,
             request_id=getattr(request.state, "auth_context", {}).get("request_id"),
-            detail={"filename": filename, "size_bytes": received_size, "transport": "presigned_s3_put", "workflow": workflow},
+            detail={"dataset_id": dataset_id, "filename": filename, "size_bytes": received_size, "transport": "presigned_s3_put", "workflow": workflow},
         )
     except Exception:
         logger.warning("large_upload_audit_write_failed upload_session_id=%s", upload_session_id, exc_info=True)
@@ -944,13 +1018,16 @@ def complete_large_upload_session(
         endpoint=f"/api/data/upload-session/{upload_session_id}/complete",
         filename=filename,
         file_size_bytes=received_size,
-        job_id=upload_session_id,
+        job_id=job_id,
+        dataset_id=dataset_id,
         queue_status="pending",
         worker_dispatch_status=worker_dispatch_status,
         processing_stage="queued",
     )
     return {
-        "job_id": upload_session_id,
+        "job_id": job_id,
+        "dataset_id": dataset_id,
+        "upload_session_id": upload_session_id,
         "status": "PENDING",
         "processing_state": "queued",
         "filename": filename,
@@ -958,13 +1035,13 @@ def complete_large_upload_session(
         "progress": 5,
         "progress_label": "Validating data",
         "message": "Validating data",
-        "status_url": f"/api/data/upload-status/{upload_session_id}",
+        "status_url": f"/api/data/upload-status/{job_id}",
         "file_size_bytes": received_size,
         "worker_dispatch_status": worker_dispatch_status,
         "upload_transport": "presigned_s3_put",
         "workflow": workflow,
         "workflow_state": "queued",
-        "baseline_result_url": f"/api/data/baselines/jobs/{upload_session_id}" if is_baseline_workflow(workflow) else None,
+        "baseline_result_url": f"/api/data/baselines/jobs/{job_id}" if is_baseline_workflow(workflow) else None,
         "sii_engine_invoked": False if is_baseline_workflow(workflow) else None,
     }
 
@@ -1077,6 +1154,7 @@ async def upload_data(
     file_size_bytes = 0
     transfer_succeeded = False
     csv_has_non_whitespace = False
+    dataset_id = uuid.uuid4().hex
     job_id = uuid.uuid4().hex
     temp_path = ""
     upload_storage_key: str | None = None
@@ -1146,12 +1224,12 @@ async def upload_data(
             backend_spool_ms=round(backend_spool_ms, 3),
         )
 
-        request.state.upload_session_id = job_id
+        request.state.upload_session_id = dataset_id
         shared_upload_source_key = None
         failure_stage = "file_storage"
         if shared_state_configured():
             shared_upload_source_key = persist_upload_source(
-                job_id,
+                dataset_id,
                 temp_path,
                 filename=filename,
                 content_type=content_type or None,
@@ -1168,6 +1246,7 @@ async def upload_data(
         )
         summary = {
             "job_id": job_id,
+            "dataset_id": dataset_id,
             "filename": filename,
             "status_url": f"/api/data/upload-status/{job_id}",
             "status": "PENDING",
@@ -1188,7 +1267,7 @@ async def upload_data(
             "content_type": content_type,
             "initiated_by": actor,
             "request_id": request_id,
-            "upload_session_id": job_id,
+            "upload_session_id": dataset_id,
             "worker_dispatch_status": worker_dispatch_status,
             "request_received_at": request_received_at,
             "backend_handler_started_at": handler_started_wall,
@@ -1282,6 +1361,8 @@ async def upload_data(
             filename=filename,
             file_size_bytes=file_size_bytes,
             job_id=job_id,
+            dataset_id=dataset_id,
+            upload_session_id=dataset_id,
             queue_status="pending",
             worker_dispatch_status=worker_dispatch_status,
             processing_stage="queued",
@@ -1330,6 +1411,11 @@ async def upload_data(
             retryable=retryable,
             legacy_error_type=error_type,
             job_id=failed_job_id,
+            dataset_id=summary.get("dataset_id") or dataset_id,
+            upload_session_id=summary.get("upload_session_id") or dataset_id,
+            request_id=request_id,
+            technical_message=f"{exc.__class__.__name__}: {internal_error}",
+            exception_type=exc.__class__.__name__,
             filename=filename,
             status_url=f"/api/data/upload-status/{failed_job_id}",
             transfer_succeeded=transfer_succeeded,
@@ -1421,10 +1507,14 @@ async def upload_data(
         endpoint="/api/data/upload",
         filename=filename,
         job_id=summary.get("job_id"),
+        dataset_id=summary.get("dataset_id"),
+        upload_session_id=summary.get("upload_session_id"),
         **response_timings,
     )
     return {
         "job_id": summary.get("job_id"),
+        "dataset_id": summary.get("dataset_id"),
+        "upload_session_id": summary.get("upload_session_id"),
         "status": "PENDING",
         "processing_state": "queued",
         "filename": filename,
@@ -1499,7 +1589,8 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         except Exception:
             shared_upload_source_key = ""
     if not shared_upload_source_key:
-        shared_upload_source_key = resolve_existing_upload_source_key(requested_job_id, filename) or ""
+        source_identity = str(status_payload.get("dataset_id") or requested_job_id)
+        shared_upload_source_key = resolve_existing_upload_source_key(source_identity, filename) or ""
     if not status_payload or (not has_local_file and not shared_upload_source_key):
         return _large_upload_error(
             404,
@@ -1553,7 +1644,12 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         upload_jobs.write_job(retried)
         enqueue_upload_job(requested_job_id)
     except Exception:
-        logger.exception("upload_retry_enqueue_failed request_id=%s job_id=%s", request_id, requested_job_id)
+        logger.exception(
+            "upload_retry_enqueue_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=upload_enqueue_failed",
+            retried.get("dataset_id"),
+            requested_job_id,
+            request_id,
+        )
         failure = build_upload_error_payload(
             "server_unavailable",
             message="The stored file is available, but the import could not be queued. Retry shortly.",
@@ -1561,6 +1657,10 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
             retryable=True,
             legacy_error_type="upload_enqueue_failed",
             job_id=requested_job_id,
+            dataset_id=retried.get("dataset_id"),
+            request_id=request_id,
+            technical_message="The processing job could not be enqueued for retry.",
+            exception_type="UploadEnqueueError",
             file_stored=True,
             retry_url=f"/api/data/upload/{requested_job_id}/retry",
             status_url=status_url,
@@ -1711,7 +1811,14 @@ async def behavioral_baseline_state():
 
 @router.get("/baselines/jobs/{job_id}")
 async def baseline_construction_result(job_id: UploadJobPath):
+    # Shared object stores can expose the terminal status a few moments before
+    # the separately committed result object. Bound that consistency window so
+    # the client does not turn a successful commit into a false missing-result failure.
+    deadline = time.monotonic() + 2.0
     result = read_baseline_result(job_id)
+    while (not isinstance(result, dict) or not payload_matches_dataset_scope(result)) and time.monotonic() < deadline:
+        await asyncio.sleep(0.1)
+        result = read_baseline_result(job_id)
     if not isinstance(result, dict) or not payload_matches_dataset_scope(result):
         raise HTTPException(status_code=404, detail="Baseline construction result was not found.")
     return result

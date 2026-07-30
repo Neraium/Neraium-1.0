@@ -105,7 +105,7 @@ export function baselineIdentityFromResult(result, fallback = {}, stateSource = 
   return {
     jobId: identifier(result?.job_id ?? source?.job_id ?? fallback.jobId),
     uploadId: identifier(result?.upload_id ?? source?.upload_id ?? fallback.uploadId ?? result?.job_id ?? source?.job_id),
-    datasetId: identifier(result?.dataset_id ?? source?.dataset_id ?? fallback.datasetId ?? result?.job_id ?? source?.job_id),
+    datasetId: identifier(result?.dataset_id ?? source?.dataset_id ?? fallback.datasetId),
     candidateId: candidateId ?? baselineId,
     baselineId,
     portfolioId,

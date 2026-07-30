@@ -13,8 +13,10 @@ def build_session_scope(
     filename: str | None = None,
     status: str = "active",
     dataset_scope: DatasetScope | dict[str, Any] | None = None,
+    dataset_id: str | None = None,
 ) -> dict[str, Any]:
     normalized_job_id = str(job_id or "").strip()
+    normalized_dataset_id = str(dataset_id or "").strip() or normalized_job_id or None
     if isinstance(dataset_scope, DatasetScope):
         resolved_scope = dataset_scope
     elif isinstance(dataset_scope, dict):
@@ -27,7 +29,7 @@ def build_session_scope(
         "job_id": normalized_job_id,
         "run_id": normalized_job_id,
         "upload_id": normalized_job_id,
-        "dataset_id": normalized_job_id or None,
+        "dataset_id": normalized_dataset_id,
         "source_name": str(filename or "").strip() or None,
         **resolved_scope.as_dict(),
     }

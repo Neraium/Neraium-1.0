@@ -680,7 +680,7 @@ async function completeLargeUploadSession({ session, etag, file, apiFetch, acces
   } catch (error) {
     error.phase = error.phase || "job_creation";
     error.uploadSessionId = error.uploadSessionId || session.upload_session_id;
-    error.jobId = error.jobId || session.upload_session_id;
+    error.datasetId = error.datasetId || session.dataset_id || session.upload_session_id;
     error.failedStage = error.failedStage || "dataset_creation";
     error.transferSucceeded = true;
     error.fileStored = true;
@@ -697,8 +697,9 @@ async function completeLargeUploadSession({ session, etag, file, apiFetch, acces
       largeUploadRequestError(response, payload, "job_creation", fallback),
       {
         uploadSessionId: payload?.upload_session_id || session.upload_session_id,
-        jobId: payload?.job_id || session.upload_session_id,
-        failedStage: payload?.failed_stage || "dataset_creation",
+        jobId: payload?.job_id || null,
+        datasetId: payload?.dataset_id || session.dataset_id || session.upload_session_id,
+        failedStage: payload?.stage || payload?.failed_stage || "dataset_creation",
         transferSucceeded: true,
         fileStored: payload?.file_stored !== false,
         retryable: payload?.retryable !== false,
@@ -714,7 +715,8 @@ async function completeLargeUploadSession({ session, etag, file, apiFetch, acces
       errorType: "dataset_record_creation_failed",
       detail: "The file was transferred successfully, but Neraium could not begin processing it.",
       uploadSessionId: session.upload_session_id,
-      jobId: session.upload_session_id,
+      jobId: null,
+      datasetId: session.dataset_id || session.upload_session_id,
       failedStage: "dataset_creation",
       transferSucceeded: true,
       fileStored: true,
