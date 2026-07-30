@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.services import behavioral_model_repository, upload_pipeline
+from app.services.baseline_analysis_repository import persist_completed_analysis
+from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope
 from app.services.baseline_contracts import (
     PROHIBITED_BASELINE_OUTPUT_KEYS,
     prohibited_keys_present,
@@ -18,6 +20,7 @@ from app.services.behavioral_model_repository import (
     read_baseline_result,
 )
 from app.services.evidence_store import read_evidence_run
+from app.services.upload_state_repository import write_upload_result
 
 
 def _baseline_csv(rows: int = 72) -> str:
@@ -261,3 +264,153 @@ def test_activation_failure_cannot_replace_the_previous_active_pointer(monkeypat
     persisted_second = behavioral_model_repository.read_baseline_result(second["job_id"])
     assert persisted_second["candidate_model"]["status"] == "awaiting_approval"
     assert persisted_second["activation"]["state"] == "awaiting_approval"
+
+
+def _completed_comparison(baseline_result: dict, run_id: str, **overrides) -> dict:
+    baseline = baseline_result["candidate_model"]
+    source = baseline["source"]
+    scope = current_dataset_scope()
+    payload = {
+        "job_id": run_id,
+        "run_id": run_id,
+        "upload_id": run_id,
+        "dataset_id": run_id,
+        "organization_id": scope.tenant_id,
+        "portfolio_id": source["portfolio_id"],
+        "system_id": source["system_id"],
+        "baseline_id": baseline["model_id"],
+        "comparison_dataset_id": run_id,
+        "analysis_run_id": run_id,
+        "workflow": "analyze_new_data",
+        "status": "COMPLETE",
+        "processing_state": "complete",
+        "sii_completed": True,
+        "filename": f"{run_id}.csv",
+        "completed_at": "2026-07-30T00:00:00+00:00",
+        "active_baseline_reference": {"model_id": baseline["model_id"], "version": baseline["version"]},
+        "conditions": [{"id": f"condition-{run_id}", "headline": "Real comparison condition"}],
+    }
+    payload.update(overrides)
+    return attach_dataset_scope(payload, scope=scope, dataset_id=payload.get("dataset_id"))
+
+
+def _persist_comparison(baseline_result: dict, run_id: str) -> dict:
+    result = _completed_comparison(baseline_result, run_id)
+    write_upload_result(run_id, result)
+    persist_completed_analysis(result)
+    return result
+
+
+def test_explicit_baseline_detail_is_baseline_only_until_an_exact_analysis_exists() -> None:
+    client = TestClient(create_app())
+    queued = _post(client, "create_baseline", "baseline-only.csv", approval_required=False).json()
+    _wait(client, queued["status_url"])
+    baseline_result = client.get(queued["baseline_result_url"]).json()
+    baseline_id = baseline_result["established_baseline_id"]
+    system_id = baseline_result["system_id"]
+
+    baseline_response = client.get(f"/api/data/portfolios/default/baselines/{baseline_id}")
+
+    assert baseline_response.status_code == 200
+    baseline_payload = baseline_response.json()
+    assert baseline_payload["baseline_id"] == baseline_id
+    assert baseline_payload["portfolio_id"] == "default"
+    assert baseline_payload["system_id"] == system_id
+    assert baseline_payload["analysis_state"] == {"status": "empty", "count": 0, "analyses": []}
+    assert "conditions" not in baseline_payload
+    assert "findings" not in baseline_payload
+
+    run_id = "comparison-run-a"
+    _persist_comparison(baseline_result, run_id)
+
+    linked_baseline = client.get(f"/api/data/portfolios/default/baselines/{baseline_id}").json()
+    assert linked_baseline["analysis_state"]["status"] == "available"
+    assert linked_baseline["analysis_state"]["count"] == 1
+    assert linked_baseline["analysis_state"]["analyses"][0]["analysis_run_id"] == run_id
+
+    analysis_response = client.get(
+        f"/api/data/portfolios/default/systems/{system_id}/baselines/{baseline_id}/analyses/{run_id}"
+    )
+    assert analysis_response.status_code == 200
+    assert analysis_response.json()["baseline_id"] == baseline_id
+    assert analysis_response.json()["comparison_dataset_id"] == run_id
+
+
+def test_baseline_a_never_lists_or_serves_baseline_b_analysis() -> None:
+    client = TestClient(create_app())
+    first = _post(client, "create_baseline", "baseline-a.csv", approval_required=False).json()
+    _wait(client, first["status_url"])
+    baseline_a = client.get(first["baseline_result_url"]).json()
+    second = _post(client, "create_baseline", "baseline-b.csv", approval_required=False).json()
+    _wait(client, second["status_url"])
+    baseline_b = client.get(second["baseline_result_url"]).json()
+
+    run_id = "baseline-b-run"
+    _persist_comparison(baseline_b, run_id)
+
+    baseline_a_id = baseline_a["established_baseline_id"]
+    baseline_b_id = baseline_b["established_baseline_id"]
+    system_id = baseline_b["system_id"]
+    opened_a = client.get(f"/api/data/portfolios/default/baselines/{baseline_a_id}").json()
+
+    assert opened_a["analysis_state"] == {"status": "empty", "count": 0, "analyses": []}
+    assert client.get(
+        f"/api/data/portfolios/default/systems/{system_id}/baselines/{baseline_a_id}/analyses/{run_id}"
+    ).status_code == 404
+    assert client.get(
+        f"/api/data/portfolios/default/systems/{system_id}/baselines/{baseline_b_id}/analyses/{run_id}"
+    ).status_code == 200
+
+
+def test_analysis_persistence_rejects_mismatched_baseline_and_scope() -> None:
+    client = TestClient(create_app())
+    queued = _post(client, "create_baseline", "baseline-a.csv", approval_required=False).json()
+    _wait(client, queued["status_url"])
+    baseline = client.get(queued["baseline_result_url"]).json()
+
+    with pytest.raises(ValueError, match="analysis_baseline_reference_mismatch"):
+        persist_completed_analysis(_completed_comparison(
+            baseline,
+            "mismatch-run",
+            active_baseline_reference={"model_id": "another-baseline", "version": 1},
+        ))
+
+    baseline_id = baseline["established_baseline_id"]
+    wrong_portfolio = client.get(
+        f"/api/data/portfolios/another-portfolio/baselines/{baseline_id}",
+        headers={"X-Neraium-Workspace-Id": "default"},
+    )
+    assert wrong_portfolio.status_code == 404
+
+
+def test_comparison_upload_rejects_a_requested_baseline_from_another_identity() -> None:
+    client = TestClient(create_app())
+    queued = _post(client, "create_baseline", "baseline-a.csv", approval_required=False).json()
+    _wait(client, queued["status_url"])
+    baseline = client.get(queued["baseline_result_url"]).json()
+
+    wrong_baseline = client.post(
+        "/api/data/upload",
+        data={
+            "workflow": "analyze_new_data",
+            "baseline_id": "another-baseline",
+            "portfolio_id": "default",
+            "system_id": baseline["system_id"],
+        },
+        files={"file": ("comparison.csv", _baseline_csv(), "text/csv")},
+    )
+    wrong_portfolio = client.post(
+        "/api/data/upload",
+        data={
+            "workflow": "analyze_new_data",
+            "baseline_id": baseline["established_baseline_id"],
+            "portfolio_id": "another-portfolio",
+            "system_id": baseline["system_id"],
+        },
+        files={"file": ("comparison.csv", _baseline_csv(), "text/csv")},
+    )
+
+    assert wrong_baseline.status_code == 409
+    assert wrong_baseline.json()["error_type"] == "active_behavioral_baseline_required"
+    assert wrong_portfolio.status_code == 409
+    assert wrong_portfolio.json()["error_type"] == "analysis_portfolio_mismatch"

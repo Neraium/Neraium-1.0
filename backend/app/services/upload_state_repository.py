@@ -303,6 +303,27 @@ def _get_s3_client() -> Any | None:
         return None
 
 
+def _get_s3_state_client() -> Any | None:
+    state = runtime_state()
+    if state.upload_state_s3_read_client is not None:
+        return state.upload_state_s3_read_client
+    if not _external_shared_state_enabled() or not _upload_state_bucket():
+        return None
+    try:
+        import boto3  # type: ignore
+        from botocore.config import Config  # type: ignore
+
+        state.upload_state_s3_read_client = boto3.client(
+            "s3",
+            config=Config(
+                connect_timeout=2,
+                read_timeout=4,
+                retries={"total_max_attempts": 1, "mode": "standard"},
+            ),
+        )
+        return state.upload_state_s3_read_client
+    except Exception:
+        return None
 
 
 def _shared_state_error_code(error: Exception) -> str:
@@ -338,7 +359,7 @@ def write_local_json(name: str, payload: dict[str, Any], *, scope: DatasetScope 
 
 
 def _read_s3_state(storage_name: str, bucket: str) -> dict[str, Any] | None:
-    client = _get_s3_client()
+    client = _get_s3_state_client()
     if client is None:
         return None
     try:
@@ -365,12 +386,11 @@ def _read_runtime_db_state(storage_name: str) -> dict[str, Any] | None:
 
 def read_shared_state(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
     storage_name = _state_name(name, scope=scope)
+    database_payload = _read_runtime_db_state(storage_name)
+    if isinstance(database_payload, dict):
+        return database_payload
     bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
-    if bucket:
-        payload = _read_s3_state(storage_name, bucket)
-        if isinstance(payload, dict):
-            return payload
-    return _read_runtime_db_state(storage_name)
+    return _read_s3_state(storage_name, bucket) if bucket else None
 
 
 def write_shared_state(name: str, payload: dict[str, Any], *, scope: DatasetScope | None = None) -> None:

@@ -5,12 +5,13 @@ export async function installStoredBaselineUpload(page, {
   modelId = `${jobId}-model`,
   portfolioId = "default",
   filename = `${jobId}.csv`,
+  staleLatestResult = null,
 } = {}) {
   const calls = { sessions: 0, objectPuts: 0, completions: 0, statusPolls: 0, baselineResults: 0, exactBaselineResults: 0, latestUploads: 0 };
   let completionAvailable = false;
   const statusUrl = `/api/data/upload-status/${jobId}`;
   const baselineResultUrl = `/api/data/baselines/jobs/${jobId}`;
-  const exactBaselineResultUrl = `/api/data/baselines/${modelId}`;
+  const exactBaselineResultUrl = `/api/data/portfolios/${portfolioId}/baselines/${modelId}`;
   const processing = {
     job_id: jobId,
     upload_session_id: jobId,
@@ -52,7 +53,14 @@ export async function installStoredBaselineUpload(page, {
       activation: { state: "active", activated_at: "2026-07-29T00:00:00Z" },
       signal_memory: { signal_count: 5 },
       relationship_memory: { relationship_count: 4 },
+      telemetry_schema: { numeric_columns: ["flow_gpm", "pressure_psi", "pump_speed_pct"] },
+      relationship_graph: { edges: [{ edge_id: "edge-1", source: "flow_gpm", target: "pressure_psi", strength: 0.82, sample_count: 48 }] },
+      operating_modes: [{ mode_id: "mode-1", label: "normal load", sample_count: 48, sample_fraction: 1 }],
+      data_quality: { readiness: "ready", reliability_rating: "high", reliability_score: 0.98, timestamp_detected: true },
+      timestamp_quality: { first_timestamp: "2026-07-28T00:00:00Z", last_timestamp: "2026-07-29T00:00:00Z", estimated_sample_interval: "5 minutes" },
+      source: { job_id: jobId, dataset_id: jobId, filename, portfolio_id: portfolioId, system_id: portfolioId, row_count: 48 },
     },
+    analysis_state: { status: "empty", count: 0, analyses: [] },
     activation: { state: "active", activated_at: "2026-07-29T00:00:00Z" },
     data_quality: { rows_accepted: 48, coverage_percent: 100 },
   };
@@ -89,6 +97,20 @@ export async function installStoredBaselineUpload(page, {
   });
   await page.route("**/api/data/latest-upload?*", (route) => {
     calls.latestUploads += 1;
+    if (staleLatestResult) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          status: "COMPLETE",
+          processing_state: "complete",
+          session_state: "restored",
+          latest_result: staleLatestResult,
+          current_upload: { job_id: staleLatestResult.job_id, status: "COMPLETE", result: staleLatestResult },
+          history: [],
+        }),
+      });
+    }
     if (!completionAvailable) {
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "empty", session_state: "empty", history: [] }) });
     }

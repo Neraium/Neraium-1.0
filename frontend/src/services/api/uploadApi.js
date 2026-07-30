@@ -9,6 +9,7 @@ import {
 import * as uploadStateView from "../../viewModels/uploadState";
 import { getCurrentWorkspaceId } from "../datasetSessionCache";
 import { normalizeUploadJob } from "../../viewModels/uploadContract";
+import { analysisBelongsToBaseline } from "../../viewModels/baselineSelection";
 import {
   SERVICE_UNAVAILABLE_RETRY_MESSAGE,
   buildUploadRequestError,
@@ -40,25 +41,36 @@ const latestUploadInflight = new Map();
 const latestUploadCache = new Map();
 const latestUploadRequestVersion = new Map();
 
-export function clearLatestUploadStateCache({ portfolioId = null } = {}) {
-  const prefix = portfolioId ? `latest:${portfolioId}:` : null;
+export function clearLatestUploadStateCache({ scopeKey = null, portfolioId = null } = {}) {
+  const encodedScope = scopeKey ? encodeURIComponent(scopeKey) : null;
+  const encodedPortfolio = portfolioId ? encodeURIComponent(portfolioId) : null;
+  const matches = (key) => {
+    const parts = String(key).split(":");
+    return (!encodedScope || parts[1] === encodedScope) && (!encodedPortfolio || parts[2] === encodedPortfolio);
+  };
   for (const [key, entry] of latestUploadInflight.entries()) {
-    if (!prefix || key.startsWith(prefix)) {
+    if (matches(key)) {
       entry.controller?.abort();
       latestUploadInflight.delete(key);
       latestUploadRequestVersion.set(key, (latestUploadRequestVersion.get(key) ?? 0) + 1);
     }
   }
   for (const key of latestUploadCache.keys()) {
-    if (!prefix || key.startsWith(prefix)) latestUploadCache.delete(key);
+    if (matches(key)) latestUploadCache.delete(key);
   }
 }
 
-export async function fetchLatestUploadState({ apiFetch, accessCode, includePersisted = false, forceRefresh = false } = {}) {
-  const portfolioId = getCurrentWorkspaceId();
-  const key = `latest:${portfolioId}:${includePersisted ? 1 : 0}`;
+export async function fetchLatestUploadState({ apiFetch, accessCode, scopeKey = "anonymous", includePersisted = false, forceRefresh = false, exactAnalysisIdentity = null } = {}) {
+  const portfolioId = String(exactAnalysisIdentity?.portfolioId || getCurrentWorkspaceId());
+  const systemId = String(exactAnalysisIdentity?.systemId || portfolioId);
+  const baselineId = String(exactAnalysisIdentity?.baselineId || "");
+  const analysisRunId = String(exactAnalysisIdentity?.analysisRunId || "");
+  const exactAnalysis = Boolean(baselineId && analysisRunId);
+  const key = exactAnalysis
+    ? `analysis:${encodeURIComponent(scopeKey)}:${encodeURIComponent(portfolioId)}:${encodeURIComponent(systemId)}:${encodeURIComponent(baselineId)}:${encodeURIComponent(analysisRunId)}:${encodeURIComponent(analysisRunId)}`
+    : `latest:${encodeURIComponent(scopeKey)}:${encodeURIComponent(portfolioId)}:${includePersisted ? 1 : 0}`;
   const now = Date.now();
-  if (forceRefresh) clearLatestUploadStateCache({ portfolioId });
+  if (forceRefresh) clearLatestUploadStateCache({ scopeKey, portfolioId });
   else {
     const cached = latestUploadCache.get(key);
     if (cached && cached.expiresAt > now) return cached.value;
@@ -70,7 +82,9 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
   latestUploadRequestVersion.set(key, requestVersion);
   const controller = new AbortController();
   const request = (async () => {
-    const path = `/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`;
+    const path = exactAnalysis
+      ? `/api/data/portfolios/${encodeURIComponent(portfolioId)}/systems/${encodeURIComponent(systemId)}/baselines/${encodeURIComponent(baselineId)}/analyses/${encodeURIComponent(analysisRunId)}`
+      : `/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`;
     let lastError = null;
 
     for (let attempt = 0; attempt <= LATEST_UPLOAD_MAX_RETRIES; attempt += 1) {
@@ -80,17 +94,39 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, includePers
           signal: controller.signal,
           headers: { "X-Neraium-Workspace-Id": portfolioId },
         });
-        const rawPayload = await readJsonPayload(response, { route: path, phase: "result" });
+        const responsePayload = await readJsonPayload(response, { route: path, phase: "result" });
         if (!response.ok) {
-          const requestError = buildUploadRequestError(response, rawPayload, "result");
+          const requestError = buildUploadRequestError(response, responsePayload, "result");
           throw Object.assign(new Error(requestError.detail || "Analysis results could not be loaded. Refresh and retry."), requestError);
         }
 
+        if (exactAnalysis && !analysisBelongsToBaseline(responsePayload, { ...exactAnalysisIdentity, portfolioId, systemId, baselineId, analysisRunId })) {
+          throw Object.assign(new Error("The requested analysis does not belong to this baseline."), {
+            name: "UploadRequestError",
+            errorType: "analysis_ownership_mismatch",
+            status: 404,
+            retryable: false,
+          });
+        }
+        const rawPayload = exactAnalysis ? {
+          status: responsePayload?.status ?? "COMPLETE",
+          processing_state: responsePayload?.processing_state ?? "complete",
+          session_state: "exact_analysis",
+          latest_result: responsePayload,
+          current_upload: {
+            job_id: responsePayload?.job_id,
+            upload_id: responsePayload?.upload_id,
+            dataset_id: responsePayload?.dataset_id,
+            status: responsePayload?.status ?? "COMPLETE",
+            result: responsePayload,
+          },
+          history: [],
+        } : responsePayload;
         const normalizedSnapshot = uploadStateView.normalizeLatestUploadPayload(rawPayload);
         const latestResult = uploadStateView.resolveCurrentUploadResult(normalizedSnapshot);
         const normalizedLatestResult = uploadStateView.hasFullUploadResult(latestResult) ? latestResult : null;
         const value = { snapshot: normalizedSnapshot, latestResult: normalizedLatestResult };
-        if (latestUploadRequestVersion.get(key) === requestVersion && getCurrentWorkspaceId() === portfolioId) {
+        if (latestUploadRequestVersion.get(key) === requestVersion && (exactAnalysis || getCurrentWorkspaceId() === portfolioId)) {
           latestUploadCache.set(key, { expiresAt: Date.now() + LATEST_UPLOAD_DEDUPE_TTL_MS, value });
         }
         return value;
@@ -190,7 +226,7 @@ function getUploadResponseTimeoutMs(fileSizeBytes, baseTimeoutMs) {
   return Math.min(Math.max(base || largeFileMinimumMs, largeFileMinimumMs), 30 * 60 * 1000);
 }
 
-function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analysis", approvalRequired, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, onTiming, requestStartedAt, accessCode } = {}) {
+function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analysis", approvalRequired, baselineIdentity, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, onTiming, requestStartedAt, accessCode } = {}) {
   return new Promise((resolve, reject) => {
     if (!file) {
       reject(new Error("Choose a CSV or JSON telemetry file to upload."));
@@ -253,6 +289,11 @@ function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analys
       formData.append("workflow", String(workflow || "legacy_analysis"));
       if (typeof approvalRequired === "boolean") {
         formData.append("approval_required", approvalRequired ? "true" : "false");
+      }
+      if (workflow === "analyze_new_data" && baselineIdentity?.baselineId) {
+        formData.append("baseline_id", String(baselineIdentity.baselineId));
+        formData.append("portfolio_id", String(baselineIdentity.portfolioId || ""));
+        formData.append("system_id", String(baselineIdentity.systemId || baselineIdentity.portfolioId || ""));
       }
       xhr.open("POST", uploadUrl, true);
       xhr.withCredentials = true;
@@ -494,7 +535,7 @@ function largeUploadRequestError(response, payload, phase, fallback) {
   return Object.assign(new Error(requestError.detail || fallback), requestError);
 }
 
-async function requestLargeUploadSession({ file, workflow = "legacy_analysis", approvalRequired, apiFetch, accessCode }) {
+async function requestLargeUploadSession({ file, workflow = "legacy_analysis", approvalRequired, baselineIdentity, apiFetch, accessCode }) {
   const path = "/api/data/upload-session";
   let response;
   try {
@@ -508,6 +549,11 @@ async function requestLargeUploadSession({ file, workflow = "legacy_analysis", a
         content_type: file.type || "text/csv",
         workflow: String(workflow || "legacy_analysis"),
         ...(typeof approvalRequired === "boolean" ? { approval_required: approvalRequired } : {}),
+        ...(workflow === "analyze_new_data" && baselineIdentity?.baselineId ? {
+          baseline_id: String(baselineIdentity.baselineId),
+          portfolio_id: String(baselineIdentity.portfolioId || ""),
+          system_id: String(baselineIdentity.systemId || baselineIdentity.portfolioId || ""),
+        } : {}),
       }),
     });
   } catch (error) {
@@ -685,7 +731,7 @@ async function completeLargeUploadSession({ session, etag, file, apiFetch, acces
   return { ok: true, status: response.status, payload: normalized };
 }
 
-async function uploadLargeTelemetryFileWithProgress({ file, workflow = "legacy_analysis", approvalRequired, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, accessCode, apiFetch }) {
+async function uploadLargeTelemetryFileWithProgress({ file, workflow = "legacy_analysis", approvalRequired, baselineIdentity, timeoutMs = 4 * 60 * 60 * 1000, onProgress, onDebug, accessCode, apiFetch }) {
   if (typeof apiFetch !== "function") {
     throw new Error("The upload session could not be created. Retry the import.");
   }
@@ -704,11 +750,18 @@ async function uploadLargeTelemetryFileWithProgress({ file, workflow = "legacy_a
     responseStatus: null,
     responseBodyOrError: "",
   });
+  const baselineKey = workflow === "analyze_new_data"
+    ? [baselineIdentity?.portfolioId, baselineIdentity?.systemId, baselineIdentity?.baselineId].map((value) => encodeURIComponent(String(value || ""))).join(":")
+    : "";
   let completedTransfer = completedLargeTransfers.get(file);
+  if (completedTransfer && completedTransfer.baselineKey !== baselineKey) {
+    completedLargeTransfers.delete(file);
+    completedTransfer = null;
+  }
   if (!completedTransfer) {
-    const session = await requestLargeUploadSession({ file, workflow, approvalRequired, apiFetch, accessCode });
+    const session = await requestLargeUploadSession({ file, workflow, approvalRequired, baselineIdentity, apiFetch, accessCode });
     const transferred = await putFileToObjectStorage({ file, session, timeoutMs, onProgress });
-    completedTransfer = { session, etag: transferred.etag };
+    completedTransfer = { session, etag: transferred.etag, baselineKey };
     completedLargeTransfers.set(file, completedTransfer);
     console.info("[neraium] object storage upload completed", {
       uploadSessionId: session.upload_session_id,

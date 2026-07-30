@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, HTTPException, Path
 
+from app.core.config import get_settings
 from app.core.security import require_admin_role, require_api_access
 from app.routers.facility import resolve_uploaded_intelligence
 from app.services.sii_intelligence import build_sample_intelligence
@@ -20,6 +21,8 @@ SessionIdPath = Annotated[str, Path(min_length=1, max_length=128, pattern=r"^[A-
 @router.get("/audit/session/{session_id}")
 def read_audit_session(session_id: SessionIdPath) -> dict[str, Any]:
     intelligence = current_intelligence()
+    if intelligence is None:
+        raise HTTPException(status_code=404, detail="No completed analysis is available for this workspace.")
     replay = _replay_engine.build_timeline(intelligence=intelligence, intervals=24, replay_compression=1)
     return _audit_engine.build_record(
         session_id=session_id,
@@ -31,6 +34,8 @@ def read_audit_session(session_id: SessionIdPath) -> dict[str, Any]:
 @router.get("/audit/replay/{session_id}")
 def read_audit_replay(session_id: SessionIdPath) -> dict[str, Any]:
     intelligence = current_intelligence()
+    if intelligence is None:
+        raise HTTPException(status_code=404, detail="No completed analysis is available for this workspace.")
     replay = _replay_engine.build_timeline(intelligence=intelligence, intervals=24, replay_compression=1)
     return {
         "session_id": session_id,
@@ -41,6 +46,8 @@ def read_audit_replay(session_id: SessionIdPath) -> dict[str, Any]:
 @router.get("/audit/evidence/{session_id}")
 def read_audit_evidence(session_id: SessionIdPath) -> dict[str, Any]:
     intelligence = current_intelligence()
+    if intelligence is None:
+        raise HTTPException(status_code=404, detail="No completed analysis is available for this workspace.")
     lineages = intelligence.get("evidence_lineage", {}).get("lineages", [])
     return {
         "session_id": session_id,
@@ -49,9 +56,11 @@ def read_audit_evidence(session_id: SessionIdPath) -> dict[str, Any]:
     }
 
 
-def current_intelligence() -> dict[str, Any]:
+def current_intelligence() -> dict[str, Any] | None:
     latest_result = read_current_upload_result()
-    if latest_result is None:
-        return build_sample_intelligence()
-    intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=True)
-    return intelligence or build_sample_intelligence()
+    intelligence = resolve_uploaded_intelligence(latest_result, include_persisted=True) if latest_result is not None else None
+    if intelligence:
+        return intelligence
+    if get_settings().app_env in {"prod", "production"}:
+        return None
+    return build_sample_intelligence()

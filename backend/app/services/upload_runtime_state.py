@@ -21,6 +21,7 @@ class UploadRuntimeState:
     reset_block_persisted: bool = False
     reset_blocked_scopes: set[str] = field(default_factory=set)
     upload_state_s3_client: Any | None = None
+    upload_state_s3_read_client: Any | None = None
     max_cached_jobs: int = DEFAULT_MAX_CACHED_UPLOAD_JOBS
 
     def cache_job(self, job_id: str, payload: dict[str, Any]) -> list[str]:
@@ -50,6 +51,7 @@ class UploadRuntimeState:
         self.latest_upload_cache.update({"summary": None, "result": None, "canonical": None})
         self.reset_blocked_scopes.clear()
         self.upload_state_s3_client = None
+        self.upload_state_s3_read_client = None
         if runtime_changed:
             self.reset_block_persisted = True
         return runtime_changed

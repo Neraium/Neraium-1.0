@@ -27,6 +27,53 @@ export function parseBaselineRoute(pathname = typeof window === "undefined" ? ""
   }
 }
 
+export function baselineAnalysisRoutePath(portfolioId, baselineId, analysisRunId) {
+  const baselinePath = baselineRoutePath(portfolioId, baselineId);
+  const run = identifier(analysisRunId);
+  return baselinePath && run ? `${baselinePath}/analyses/${encodeURIComponent(run)}` : null;
+}
+
+export function parseBaselineAnalysisRoute(pathname = typeof window === "undefined" ? "" : window.location.pathname) {
+  const match = String(pathname || "").match(/^\/portfolio\/([^/]+)\/baselines\/([^/]+)\/analyses\/([^/]+)\/?$/);
+  if (!match) return null;
+  try {
+    const portfolioId = identifier(decodeURIComponent(match[1]));
+    const baselineId = identifier(decodeURIComponent(match[2]));
+    const analysisRunId = identifier(decodeURIComponent(match[3]));
+    return portfolioId && baselineId && analysisRunId
+      ? { portfolioId, systemId: portfolioId, baselineId, analysisRunId }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function analysisBelongsToBaseline(result, identity) {
+  const portfolioId = identifier(identity?.portfolioId);
+  const systemId = identifier(identity?.systemId);
+  const baselineId = identifier(identity?.baselineId);
+  const expectedAnalysisRunId = identifier(identity?.analysisRunId);
+  if (!result || !portfolioId || !baselineId) return false;
+  const reference = result?.active_baseline_reference ?? {};
+  const resultPortfolioId = identifier(result?.portfolio_id ?? result?.dataset_scope?.workspace_id);
+  const resultSystemId = identifier(result?.system_id);
+  const resultBaselineId = identifier(result?.baseline_id ?? reference?.model_id);
+  const comparisonDatasetId = identifier(result?.comparison_dataset_id);
+  const analysisRunId = identifier(result?.analysis_run_id ?? result?.run_id);
+  const jobId = identifier(result?.job_id);
+  const workflow = String(result?.workflow ?? "").trim();
+  return workflow === "analyze_new_data"
+    && resultPortfolioId === portfolioId
+    && (!systemId || resultSystemId === systemId)
+    && resultBaselineId === baselineId
+    && identifier(reference?.model_id) === baselineId
+    && Boolean(comparisonDatasetId)
+    && Boolean(analysisRunId)
+    && (!expectedAnalysisRunId || analysisRunId === expectedAnalysisRunId)
+    && comparisonDatasetId === identifier(result?.dataset_id)
+    && analysisRunId === jobId;
+}
+
 export function baselineIdentityFromResult(result, fallback = {}, stateSource = "completion_response") {
   const candidate = result?.candidate_model ?? result?.active_model ?? result ?? {};
   const source = candidate?.source ?? result?.source ?? {};

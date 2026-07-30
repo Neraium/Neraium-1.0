@@ -322,7 +322,10 @@ export default function DataConnectionsWorkspace({
   headless = false,
   currentUser = null,
   onOpenBaseline,
+  onCloseBaseline = null,
   selectedBaselineIdentity = null,
+  activeBaselineIdentity = null,
+  datasetScopeKey = "anonymous",
 }) {
   const seededSelectedFiles = useMemo(() => (Array.isArray(initialSelectedFiles) ? initialSelectedFiles : []), [initialSelectedFiles]);
   const [selectedFiles, setSelectedFiles] = useState(() => seededSelectedFiles);
@@ -632,11 +635,12 @@ export default function DataConnectionsWorkspace({
     fetchBaselineResultById({
       apiFetch,
       accessCode,
+      scopeKey: datasetScopeKey,
       portfolioId: routePortfolioId,
       baselineId: routeBaselineId,
       forceRefresh: baselineDetailReloadKey > 0,
       signal: controller.signal,
-    }).then(({ result, source }) => {
+    }).then(({ result, source, diagnostics }) => {
       if (controller.signal.aborted || exactBaselineRequestVersionRef.current !== requestVersion) return;
       if (selectedBaselineIdRef.current !== routeBaselineId) return;
       const identity = baselineIdentityFromResult(result, requestedIdentity, source);
@@ -644,7 +648,7 @@ export default function DataConnectionsWorkspace({
         throw new Error("The baseline response did not match the selected route.");
       }
       persistBaselineSelection(identity);
-      setBaselineDetailState({ status: "ready", result, identity, message: "", notFound: false });
+      setBaselineDetailState({ status: "ready", result, identity, diagnostics, message: "", notFound: false });
     }).catch((error) => {
       if (controller.signal.aborted || error?.name === "AbortError") return;
       if (exactBaselineRequestVersionRef.current !== requestVersion || selectedBaselineIdRef.current !== routeBaselineId) return;
@@ -654,14 +658,18 @@ export default function DataConnectionsWorkspace({
         result: null,
         identity: requestedIdentity,
         notFound,
+        errorType: error?.errorType ?? "baseline_request_failed",
+        httpStatus: Number(error?.status ?? 0) || null,
+        requestId: error?.requestId ?? null,
+        elapsedMs: error?.elapsedMs ?? null,
         message: notFound
           ? `Baseline ${routeBaselineId} was not found in portfolio ${routePortfolioId}.`
-          : `Baseline ${routeBaselineId} could not be loaded. Check the connection and retry.`,
+          : error?.message || `Baseline ${routeBaselineId} could not be loaded. Check the connection and retry.`,
       });
     });
 
     return () => controller.abort();
-  }, [accessCode, apiFetch, baselineDetailReloadKey, selectedBaselineIdentity]);
+  }, [accessCode, apiFetch, baselineDetailReloadKey, datasetScopeKey, selectedBaselineIdentity]);
 
   useEffect(() => {
     if (headless || uploadState !== "save_complete" || typeof onUploadComplete !== "function") return undefined;
@@ -807,7 +815,7 @@ export default function DataConnectionsWorkspace({
       }, identitySource);
       if (!identity) throw new Error("The completed baseline identifiers were unavailable.");
       uploadJobIdRef.current = identity.jobId ?? jobId;
-      clearBaselineResultCache({ portfolioId: identity.portfolioId, baselineId: identity.baselineId });
+      clearBaselineResultCache({ scopeKey: datasetScopeKey, portfolioId: identity.portfolioId, baselineId: identity.baselineId });
       persistBaselineSelection(identity);
 
       const activationState = baselineResult?.activation?.state ?? baselineResult?.candidate_model?.status;
@@ -1113,6 +1121,7 @@ export default function DataConnectionsWorkspace({
       const uploadResponse = await uploadTelemetryFileWithProgress({
         file,
         workflow: selectedWorkflow,
+        baselineIdentity: selectedWorkflow === "analyze_new_data" ? activeBaselineIdentity : null,
         apiFetch,
         preferStoredUpload: import.meta.env.PROD,
         requestStartedAt: uploadInteractionStartedAt,
@@ -1469,6 +1478,10 @@ export default function DataConnectionsWorkspace({
           routeIdentity={selectedBaselineIdentity}
           detailState={baselineDetailState}
           onRetry={() => setBaselineDetailReloadKey((value) => value + 1)}
+          onImportComparison={() => {
+            resetLocalUploadClientState("analyze_new_data");
+            if (typeof onCloseBaseline === "function") onCloseBaseline(baselineDetailState.identity ?? selectedBaselineIdentity);
+          }}
         />
       </Suspense>
     );

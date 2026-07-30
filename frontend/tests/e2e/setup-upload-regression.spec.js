@@ -68,7 +68,8 @@ test.describe("Initial baseline upload regression", () => {
 
     await openBaseline.click();
     await expect(page).toHaveURL(/\/portfolio\/default\/baselines\/stored-baseline-model$/);
-    await expect(page.getByRole("heading", { name: "stored-baseline-model", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
+    await expect(page.locator("[aria-label=\"Baseline identity\"]").getByText("stored-baseline-model", { exact: true })).toBeVisible();
     expect(calls.exactBaselineResults).toBeGreaterThanOrEqual(1);
   });
 });

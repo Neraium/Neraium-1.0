@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as uploadStateView from "../viewModels/uploadState";
+import { analysisBelongsToBaseline } from "../viewModels/baselineSelection";
 import { deriveCurrentSession, deriveSessionActivity } from "../viewModels/currentSession";
 import { deriveCanonicalFinding } from "../viewModels/operatorFinding";
 import { normalizeUploadStatus, uploadStateMessage } from "../viewModels/uploadFlow";
@@ -60,6 +61,7 @@ export default function useWorkspaceSessionController({
   setAllowPersistedLatest,
   clearUploadSessionState,
   setIsDemoMode,
+  activeBaselineIdentity = null,
 }) {
   const [sessionIntent, setSessionIntent] = useState(() => readStoredSessionIntent());
   const [historianReplayState, setHistorianReplayState] = useState({ enabled: false, frame: null, meta: null });
@@ -88,12 +90,16 @@ export default function useWorkspaceSessionController({
   const pendingUploadJobId = uploadStateView.resolveCurrentUploadJobId(postUploadPendingSnapshot);
   const restoredAnalysisResult = restoredAnalysisOverride?.result ?? null;
   const restoredAnalysisSnapshot = restoredAnalysisOverride?.snapshot ?? null;
-  // Analysis history is navigation-only. The backend canonical record is the
-  // authority for the active dataset, so stale browser history cannot revive it.
-  const guardedLatestUploadResult = resetGuardActive
+  // A selected baseline establishes an ownership boundary. Broad "latest"
+  // records and browser-restored history are ignored unless they are a completed
+  // comparison run linked to this exact portfolio and baseline.
+  const candidateLatestUploadResult = completedUploadOverride ?? restoredAnalysisResult ?? sessionStore?.latestUploadResult ?? null;
+  const selectedBaselineRejectsCandidate = Boolean(activeBaselineIdentity?.baselineId)
+    && !analysisBelongsToBaseline(candidateLatestUploadResult, activeBaselineIdentity);
+  const guardedLatestUploadResult = resetGuardActive || selectedBaselineRejectsCandidate
     ? null
-    : (completedUploadOverride ?? restoredAnalysisResult ?? sessionStore?.latestUploadResult ?? null);
-  const guardedLatestUploadSnapshot = resetGuardActive
+    : candidateLatestUploadResult;
+  const guardedLatestUploadSnapshot = resetGuardActive || selectedBaselineRejectsCandidate
     ? uploadStateView.buildEmptyLatestUploadSnapshot()
     : (postUploadPendingSnapshot ?? restoredAnalysisSnapshot ?? sessionStore?.latestUploadSnapshot ?? uploadStateView.buildEmptyLatestUploadSnapshot());
 

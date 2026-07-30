@@ -515,8 +515,8 @@ describe("exact baseline selection regression", () => {
 
     expect(await screen.findByText("resort chw baseline.csv")).toBeTruthy();
     expect(apiFetch).toHaveBeenCalledWith(
-      "/api/data/baselines/baseline-a",
-      expect.objectContaining({ headers: { "X-Neraium-Workspace-Id": "resort-portfolio" } }),
+      "/api/data/portfolios/resort-portfolio/baselines/baseline-a",
+      expect.objectContaining({ headers: expect.objectContaining({ "X-Neraium-Workspace-Id": "resort-portfolio" }) }),
     );
   });
 

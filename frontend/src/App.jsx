@@ -15,7 +15,13 @@ import {
 } from "./services/datasetSessionCache";
 import { resolveSessionStore } from "./viewModels/sessionState";
 import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/systemState";
-import { baselineRoutePath, parseBaselineRoute } from "./viewModels/baselineSelection";
+import {
+  analysisBelongsToBaseline,
+  baselineAnalysisRoutePath,
+  baselineRoutePath,
+  parseBaselineAnalysisRoute,
+  parseBaselineRoute,
+} from "./viewModels/baselineSelection";
 
 const AppWorkspaceRouter = lazy(() => import("./components/AppWorkspaceRouter"));
 const AuthScreen = lazy(() => import("./components/AuthScreen"));
@@ -37,6 +43,7 @@ function readInitialWorkspaceRoute() {
   const pathname = window.location.pathname.replace(/\/+$/, "") || HOME_PATH;
   if (pathname === HOME_PATH || pathname === "/signin") return "system-body";
   if (parseBaselineRoute(pathname)) return "data-connections";
+  if (parseBaselineAnalysisRoute(pathname)) return "system-body";
   if (["/portfolio", "/workspace"].includes(pathname) || pathname.startsWith("/sites/") || pathname.startsWith("/systems") || pathname.startsWith("/findings") || pathname.startsWith("/investigations") || pathname.startsWith("/evidence") || pathname.startsWith("/trace")) return "system-body";
   return PATH_WORKSPACES[pathname] ?? "system-body";
 }
@@ -45,6 +52,8 @@ function App() {
   const accessCode = String(import.meta.env.VITE_NERAIUM_API_TOKEN ?? "").trim();
   const [activeWorkspace, setActiveWorkspaceState] = useState(() => readInitialWorkspaceRoute());
   const [selectedBaselineIdentity, setSelectedBaselineIdentity] = useState(() => parseBaselineRoute());
+  const [selectedAnalysisIdentity, setSelectedAnalysisIdentity] = useState(() => parseBaselineAnalysisRoute());
+  const [activeBaselineIdentity, setActiveBaselineIdentity] = useState(() => parseBaselineRoute() ?? parseBaselineAnalysisRoute());
   const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
   const [resultsNavigationKey, setResultsNavigationKey] = useState(0);
   const [appReady, setAppReady] = useState(false);
@@ -59,6 +68,7 @@ function App() {
     const nextWorkspace = workspaceId === "home" ? "home" : workspaceId;
     setActiveWorkspaceState(nextWorkspace);
     setSelectedBaselineIdentity(null);
+    setSelectedAnalysisIdentity(null);
 
     if (typeof window === "undefined") return;
     const nextPath = WORKSPACE_PATHS[nextWorkspace] ?? WORKSPACE_PATHS["system-body"];
@@ -79,8 +89,20 @@ function App() {
       }
     }
     setSelectedBaselineIdentity(identity);
+    setSelectedAnalysisIdentity(null);
+    setActiveBaselineIdentity(identity);
     setActiveWorkspaceState("data-connections");
     return true;
+  }, []);
+
+  const handleBaselineClosedForComparison = useCallback((identity) => {
+    if (identity?.baselineId) setActiveBaselineIdentity(identity);
+    setSelectedBaselineIdentity(null);
+    setSelectedAnalysisIdentity(null);
+    setActiveWorkspaceState("data-connections");
+    if (typeof window !== "undefined" && window.location.pathname !== WORKSPACE_PATHS["data-connections"]) {
+      window.history.pushState({}, "", WORKSPACE_PATHS["data-connections"]);
+    }
   }, []);
 
   const {
@@ -107,6 +129,8 @@ function App() {
     formatEndpoint,
     buildProtectedRequestMessage,
     initialAllowPersistedLatest,
+    datasetScopeKey,
+    activeAnalysisIdentity: selectedAnalysisIdentity,
   });
 
   const resolvedSessionStore = useMemo(() => resolveSessionStore({
@@ -154,6 +178,7 @@ function App() {
     setAllowPersistedLatest,
     clearUploadSessionState,
     setIsDemoMode,
+    activeBaselineIdentity,
   });
 
   const liveOps = useMemo(() => {
@@ -260,6 +285,8 @@ function App() {
 
   const resetSignedOutSession = useCallback(() => {
     setDatasetScopeKey("signed-out");
+    setActiveBaselineIdentity(null);
+    setSelectedAnalysisIdentity(null);
     try {
       clearDatasetSessionCache();
     } catch (error) {
@@ -290,8 +317,14 @@ function App() {
     setAuthState({ status: "authenticated", user, notice: "", errorKind: null });
     try {
       const baselineRoute = parseBaselineRoute();
-      if (baselineRoute?.portfolioId) setCurrentWorkspaceId(baselineRoute.portfolioId);
-      const scope = activateDatasetCacheScope(user, baselineRoute?.portfolioId ?? getCurrentWorkspaceId());
+      const analysisRoute = parseBaselineAnalysisRoute();
+      const routeIdentity = baselineRoute ?? analysisRoute;
+      if (routeIdentity?.portfolioId) {
+        setCurrentWorkspaceId(routeIdentity.portfolioId);
+        setActiveBaselineIdentity(routeIdentity);
+        setSelectedAnalysisIdentity(analysisRoute);
+      }
+      const scope = activateDatasetCacheScope(user, routeIdentity?.portfolioId ?? getCurrentWorkspaceId());
       setDatasetScopeKey(scope.scopeKey);
     } catch (error) {
       setDatasetScopeKey("authenticated");
@@ -311,12 +344,24 @@ function App() {
   }, []);
 
   const handleTelemetryAnalysisComplete = useCallback(async (completedPayload = null, options = {}) => {
-    await handleGateUploadComplete(completedPayload, options);
+    const outcome = await handleGateUploadComplete(completedPayload, options);
     setPendingUploadFiles([]);
     if (options.navigateToGate !== false) {
+      const result = outcome?.latestResult ?? null;
+      if (analysisBelongsToBaseline(result, activeBaselineIdentity)) {
+        const identity = {
+          ...activeBaselineIdentity,
+          systemId: String(result.system_id),
+          analysisRunId: String(result.analysis_run_id ?? result.run_id ?? result.job_id),
+        };
+        const path = baselineAnalysisRoutePath(identity.portfolioId, identity.baselineId, identity.analysisRunId);
+        if (path && typeof window !== "undefined") window.history.replaceState({}, "", path);
+        setSelectedAnalysisIdentity(identity);
+        setActiveBaselineIdentity(identity);
+      }
       setResultsNavigationKey((current) => current + 1);
     }
-  }, [handleGateUploadComplete]);
+  }, [activeBaselineIdentity, handleGateUploadComplete]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -405,7 +450,11 @@ function App() {
     if (typeof window === "undefined") return undefined;
 
     const handlePopState = () => {
-      setSelectedBaselineIdentity(parseBaselineRoute());
+      const baselineRoute = parseBaselineRoute();
+      const analysisRoute = parseBaselineAnalysisRoute();
+      setSelectedBaselineIdentity(baselineRoute);
+      setSelectedAnalysisIdentity(analysisRoute);
+      if (baselineRoute ?? analysisRoute) setActiveBaselineIdentity(baselineRoute ?? analysisRoute);
       setActiveWorkspaceState(readInitialWorkspaceRoute());
     };
 
@@ -481,7 +530,10 @@ function App() {
         currentUser={authState.user}
         setActiveWorkspace={setActiveWorkspace}
         selectedBaselineIdentity={selectedBaselineIdentity}
+        activeBaselineIdentity={activeBaselineIdentity}
+        datasetScopeKey={datasetScopeKey}
         onBaselineSelected={handleBaselineSelected}
+        onBaselineClosedForComparison={handleBaselineClosedForComparison}
         pendingUploadFiles={pendingUploadFiles}
         setPendingUploadFiles={setPendingUploadFiles}
         resultsNavigationKey={resultsNavigationKey}

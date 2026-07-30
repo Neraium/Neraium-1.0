@@ -7,8 +7,8 @@ export function clearFacilitySystemsCache() {
   facilitySystemsCache.clear();
 }
 
-export async function fetchFacilitySystems({ apiFetch, accessCode, domainMode = null, forceRefresh = false }) {
-  const key = `systems:${String(domainMode ?? "")}`;
+export async function fetchFacilitySystems({ apiFetch, accessCode, scopeKey = "anonymous", portfolioId = "default", domainMode = null, forceRefresh = false }) {
+  const key = `systems:${encodeURIComponent(scopeKey)}:${encodeURIComponent(portfolioId)}:${encodeURIComponent(String(domainMode ?? ""))}`;
   const now = Date.now();
   if (forceRefresh) {
     facilitySystemsInflight.delete(key);
@@ -24,7 +24,10 @@ export async function fetchFacilitySystems({ apiFetch, accessCode, domainMode = 
 
   const request = (async () => {
     const domainQuery = domainMode ? `&domain_mode=${encodeURIComponent(domainMode)}` : "";
-    const response = await apiFetch(`/api/facility/systems?include_persisted=1${domainQuery}`, { accessCode });
+    const response = await apiFetch(`/api/facility/systems?include_persisted=1${domainQuery}`, {
+      accessCode,
+      headers: { "X-Neraium-Workspace-Id": portfolioId },
+    });
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
         throw response;
