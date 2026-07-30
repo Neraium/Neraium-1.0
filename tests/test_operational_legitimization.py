@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.routers.audit import current_intelligence
 from app.services.sii_intelligence import build_sample_intelligence
 from app.services.sii_runner import write_latest_sii_state
 
@@ -40,3 +41,10 @@ def test_audit_endpoints_return_replay_and_lineage() -> None:
 
     evidence_payload = evidence_response.json()
     assert "evidence_lineage" in evidence_payload
+
+
+def test_production_audit_has_no_sample_intelligence_fallback(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
+
+    assert current_intelligence() is None

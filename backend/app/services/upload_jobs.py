@@ -15,10 +15,12 @@ from app.services.analysis_explanations import build_analysis_explanation
 from app.services.analysis_result_contract import attach_analysis_result, build_normalized_telemetry
 from app.services.condition_corroboration import ConditionCorroborationService
 from app.services.baseline_contracts import (
+    WORKFLOW_ANALYZE_NEW_DATA,
     WORKFLOW_LEGACY_ANALYSIS,
     is_baseline_workflow,
     normalize_workflow,
 )
+from app.services.baseline_analysis_repository import persist_completed_analysis
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.behavioral_baseline import build_behavioral_baseline
 from app.services.behavioral_model_repository import (
@@ -562,6 +564,7 @@ def _finalize_completed_upload(
     finalized_result["processing_stats"] = processing_stats
     persistence_started = time.perf_counter()
     _persist_completed_upload(job_id, result=finalized_result, summary=finalized_summary)
+    persist_completed_analysis(finalized_result)
     completion_write_ms = (time.perf_counter() - persistence_started) * 1000
     completed_timings = _finish_job_timing(job_id, completion_write_ms=completion_write_ms)
     logger.info(
@@ -1101,10 +1104,26 @@ def _build_csv_result(
     latest_runner_state = pipeline["latest_runner_state"]
     relationship_model = pipeline["relationship_model"]
 
+    job_scope = dataset_scope_from_payload(job_context) or current_dataset_scope()
+    baseline_id = str(job_context.get("active_baseline_model_id") or "").strip() or None
+    system_id = str(job_context.get("active_baseline_system_id") or job_scope.workspace_id).strip()
+    comparison_identity = (
+        {
+            "baseline_id": baseline_id,
+            "comparison_dataset_id": job_id,
+            "analysis_run_id": job_id,
+        }
+        if workflow == WORKFLOW_ANALYZE_NEW_DATA
+        else {}
+    )
     result = {
         "job_id": job_id,
         "run_id": job_id,
         "upload_id": job_id,
+        "organization_id": job_scope.tenant_id,
+        "portfolio_id": job_scope.workspace_id,
+        "system_id": system_id,
+        **comparison_identity,
         "filename": filename,
         "row_count": row_count_total,
         "column_count": len(columns),
@@ -1181,7 +1200,6 @@ def _build_csv_result(
             else None
         ),
     }
-    job_scope = dataset_scope_from_payload(job_context) or current_dataset_scope()
     result["initiated_by"] = initiated_by
     result["session_scope"] = build_session_scope(job_id, filename=filename, status="active", dataset_scope=job_scope)
     result = attach_dataset_scope(result, scope=job_scope, dataset_id=job_id)
@@ -1252,6 +1270,10 @@ def _build_csv_result(
     summary["initiated_by"] = initiated_by
     summary["workflow"] = workflow
     summary["active_baseline_reference"] = result.get("active_baseline_reference")
+    summary["organization_id"] = result.get("organization_id")
+    summary["portfolio_id"] = result.get("portfolio_id")
+    summary["system_id"] = result.get("system_id")
+    summary.update(comparison_identity)
     summary["session_scope"] = build_session_scope(job_id, filename=filename, status="active", dataset_scope=job_scope)
     summary = attach_dataset_scope(summary, scope=job_scope, dataset_id=job_id)
     summary["traceability"] = dict(result["traceability"])

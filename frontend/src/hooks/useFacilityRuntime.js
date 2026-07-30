@@ -29,6 +29,8 @@ export default function useFacilityRuntime({
   formatEndpoint,
   buildProtectedRequestMessage,
   initialAllowPersistedLatest = true,
+  datasetScopeKey = "anonymous",
+  activeAnalysisIdentity = null,
 }) {
   const isUploadInProgress = () => (typeof window !== "undefined" && window.__NERAIUM_UPLOAD_IN_PROGRESS__ === true);
   const isUploadJobLocked = () => false;
@@ -136,7 +138,7 @@ export default function useFacilityRuntime({
     }
 
     try {
-      const payload = await fetchSystemFacility({ apiFetch, accessCode, domainMode, forceRefresh });
+      const payload = await fetchSystemFacility({ apiFetch, accessCode, scopeKey: datasetScopeKey, portfolioId: getCurrentWorkspaceId(), domainMode, forceRefresh });
       const rawDomainMode = payload.domain_mode ?? null;
       setSystems(payload.systems);
       setDomainDetection({
@@ -169,7 +171,7 @@ export default function useFacilityRuntime({
     } finally {
       systemsRequestInFlightRef.current = false;
     }
-  }, [accessCode, buildProtectedRequestMessage, domainMode, hasAccess]);
+  }, [accessCode, buildProtectedRequestMessage, datasetScopeKey, domainMode, hasAccess]);
 
   // Contract sentinel: const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => {
   const loadLatestUploadState = useCallback(async ({ includePersisted, forceRefresh = false, returnPayload = false } = {}) => {
@@ -192,7 +194,14 @@ export default function useFacilityRuntime({
     }
     const shouldIncludePersisted = typeof includePersisted === "boolean" ? includePersisted : allowPersistedLatest;
     try {
-      const payload = await fetchLatestUploadState({ apiFetch, accessCode, includePersisted: shouldIncludePersisted, forceRefresh });
+      const payload = await fetchLatestUploadState({
+        apiFetch,
+        accessCode,
+        scopeKey: datasetScopeKey,
+        includePersisted: shouldIncludePersisted,
+        forceRefresh,
+        exactAnalysisIdentity: activeAnalysisIdentity,
+      });
       if (latestUploadRequestVersionRef.current !== requestVersion || getCurrentWorkspaceId() !== requestedPortfolioId) {
         return latestReturn(Boolean(latestUploadResultRef.current));
       }
@@ -264,7 +273,7 @@ export default function useFacilityRuntime({
     } finally {
       if (latestUploadRequestVersionRef.current === requestVersion) latestUploadRequestInFlightRef.current = false;
     }
-  }, [accessCode, allowPersistedLatest, clearUploadSessionState, hasAccess, latestUploadSnapshot]);
+  }, [accessCode, activeAnalysisIdentity, allowPersistedLatest, clearUploadSessionState, datasetScopeKey, hasAccess, latestUploadSnapshot]);
 
   useEffect(() => {
     latestUploadResultRef.current = latestUploadResult;

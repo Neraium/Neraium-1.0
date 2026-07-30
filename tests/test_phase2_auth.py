@@ -98,8 +98,8 @@ def test_admin_can_access_admin_audit_route_in_production(monkeypatch, tmp_path)
 
     response = client.get("/api/audit/session/demo")
 
-    assert response.status_code == 200
-    assert response.json()["audit_record"]["audit_id"] == "audit-demo"
+    assert response.status_code == 404
+    assert response.json()["detail"] == "No completed analysis is available for this workspace."
 
 
 def test_database_connector_endpoints_require_admin_in_production(monkeypatch, tmp_path) -> None:

@@ -28,6 +28,7 @@ from app.services.baseline_contracts import (
     is_baseline_workflow,
     normalize_workflow,
 )
+from app.services.baseline_analysis_repository import list_completed_analyses, read_completed_analysis
 from app.services.behavioral_model_repository import (
     activate_candidate,
     read_active_behavioral_model,
@@ -85,10 +86,65 @@ class LargeUploadSessionRequest(BaseModel):
     content_type: str = Field(default="text/csv", max_length=255)
     workflow: str = Field(default=WORKFLOW_LEGACY_ANALYSIS, max_length=64)
     approval_required: bool | None = None
+    baseline_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+    portfolio_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+    system_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
 
 class LargeUploadCompleteRequest(BaseModel):
     etag: str | None = Field(default=None, max_length=256)
+
+
+def _resolve_analysis_baseline(
+    workflow: str,
+    *,
+    baseline_id: str | None = None,
+    portfolio_id: str | None = None,
+    system_id: str | None = None,
+) -> dict[str, Any] | None:
+    if workflow not in {WORKFLOW_ANALYZE_NEW_DATA, WORKFLOW_EXTEND_BASELINE}:
+        return None
+    scope = current_dataset_scope()
+    if portfolio_id and str(portfolio_id) != scope.workspace_id:
+        raise ValueError("analysis_portfolio_mismatch")
+    requested_id = str(baseline_id or "").strip()
+    model = read_model(requested_id) if requested_id else read_active_behavioral_model()
+    if not isinstance(model, dict) or str(model.get("status") or "") != "active":
+        raise ValueError("active_behavioral_baseline_required")
+    model_id = str(model.get("model_id") or "").strip()
+    source = model.get("source") if isinstance(model.get("source"), dict) else {}
+    source_portfolio = str(source.get("portfolio_id") or "").strip()
+    source_system = str(source.get("system_id") or "").strip()
+    if not model_id or (requested_id and model_id != requested_id):
+        raise ValueError("analysis_baseline_mismatch")
+    if source_portfolio != scope.workspace_id:
+        raise ValueError("analysis_portfolio_mismatch")
+    if not source_system or (system_id and str(system_id) != source_system):
+        raise ValueError("analysis_system_mismatch")
+    return {
+        "model_id": model_id,
+        "version": model.get("version"),
+        "portfolio_id": scope.workspace_id,
+        "system_id": source_system,
+    }
+
+
+def _baseline_binding_error(error: ValueError, workflow: str) -> JSONResponse:
+    error_type = str(error) or "analysis_baseline_mismatch"
+    messages = {
+        "active_behavioral_baseline_required": "Activate the selected Behavioral Digital Model before starting this workflow.",
+        "analysis_baseline_mismatch": "The selected baseline could not be verified for this comparison.",
+        "analysis_portfolio_mismatch": "The selected baseline does not belong to this portfolio.",
+        "analysis_system_mismatch": "The selected baseline does not belong to this system.",
+    }
+    return _large_upload_error(
+        409,
+        error_type,
+        messages.get(error_type, "The selected baseline could not be verified for this comparison."),
+        failed_stage="validation",
+        retryable=False,
+        workflow=workflow,
+    )
 
 
 def _upload_storage_root(runtime_dir: Path) -> Path:
@@ -402,14 +458,15 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
         workflow = normalize_workflow(payload.workflow)
     except ValueError as exc:
         return _large_upload_error(422, "invalid_workflow", str(exc))
-    active_baseline = read_active_behavioral_model()
-    if workflow in {WORKFLOW_ANALYZE_NEW_DATA, WORKFLOW_EXTEND_BASELINE} and not active_baseline:
-        return _large_upload_error(
-            409,
-            "active_behavioral_baseline_required",
-            "Activate a suitable Behavioral Digital Model before starting this workflow.",
-            workflow=workflow,
+    try:
+        baseline_binding = _resolve_analysis_baseline(
+            workflow,
+            baseline_id=payload.baseline_id,
+            portfolio_id=payload.portfolio_id,
+            system_id=payload.system_id,
         )
+    except ValueError as exc:
+        return _baseline_binding_error(exc, workflow)
     resolved_approval_required = (
         bool(getattr(settings, "baseline_approval_required", True))
         if payload.approval_required is None
@@ -480,8 +537,10 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
                 "request_id": request_id,
                 "workflow": workflow,
                 "approval_required": resolved_approval_required if is_baseline_workflow(workflow) else None,
-                "active_baseline_model_id": (active_baseline or {}).get("model_id"),
-                "active_baseline_version": (active_baseline or {}).get("version"),
+                "active_baseline_model_id": (baseline_binding or {}).get("model_id"),
+                "active_baseline_version": (baseline_binding or {}).get("version"),
+                "active_baseline_system_id": (baseline_binding or {}).get("system_id") or current_dataset_scope().workspace_id,
+                "active_baseline_portfolio_id": (baseline_binding or {}).get("portfolio_id") or current_dataset_scope().workspace_id,
             },
         )
     except Exception:
@@ -673,14 +732,15 @@ def complete_large_upload_session(
         workflow = normalize_workflow(session.get("workflow") or WORKFLOW_LEGACY_ANALYSIS)
     except ValueError as exc:
         return _large_upload_error(422, "invalid_workflow", str(exc))
-    active_baseline = read_active_behavioral_model()
-    if workflow in {WORKFLOW_ANALYZE_NEW_DATA, WORKFLOW_EXTEND_BASELINE} and not active_baseline:
-        return _large_upload_error(
-            409,
-            "active_behavioral_baseline_required",
-            "Activate a suitable Behavioral Digital Model before starting this workflow.",
-            workflow=workflow,
+    try:
+        baseline_binding = _resolve_analysis_baseline(
+            workflow,
+            baseline_id=session.get("active_baseline_model_id"),
+            portfolio_id=session.get("active_baseline_portfolio_id"),
+            system_id=session.get("active_baseline_system_id"),
         )
+    except ValueError as exc:
+        return _baseline_binding_error(exc, workflow)
     worker_dispatch_status = "thread_dispatched" if _should_dispatch_upload_worker(request.app.state.settings) else "external_worker_queue"
     summary = {
         "job_id": upload_session_id,
@@ -710,8 +770,10 @@ def complete_large_upload_session(
         "workflow": workflow,
         "workflow_state": "queued",
         "approval_required": session.get("approval_required") if is_baseline_workflow(workflow) else None,
-        "active_baseline_model_id": (active_baseline or {}).get("model_id") or session.get("active_baseline_model_id"),
-        "active_baseline_version": (active_baseline or {}).get("version") or session.get("active_baseline_version"),
+        "active_baseline_model_id": (baseline_binding or {}).get("model_id"),
+        "active_baseline_version": (baseline_binding or {}).get("version"),
+        "active_baseline_system_id": (baseline_binding or {}).get("system_id") or current_dataset_scope().workspace_id,
+        "active_baseline_portfolio_id": (baseline_binding or {}).get("portfolio_id") or current_dataset_scope().workspace_id,
     }
     if is_baseline_workflow(workflow):
         summary.update(
@@ -913,6 +975,9 @@ async def upload_data(
     file: UploadFile = File(...),
     workflow: str = Form(WORKFLOW_LEGACY_ANALYSIS),
     approval_required: bool | None = Form(None),
+    baseline_id: str | None = Form(None),
+    portfolio_id: str | None = Form(None),
+    system_id: str | None = Form(None),
 ):
     if _strict_auth_mode(request):
         allowed, retry_after = consume_rate_limit(
@@ -934,16 +999,15 @@ async def upload_data(
             failed_stage="validation",
             retryable=False,
         )
-    active_baseline = read_active_behavioral_model()
-    if workflow in {WORKFLOW_ANALYZE_NEW_DATA, WORKFLOW_EXTEND_BASELINE} and not active_baseline:
-        return _large_upload_error(
-            409,
-            "active_behavioral_baseline_required",
-            "Activate a suitable Behavioral Digital Model before starting this workflow.",
-            failed_stage="validation",
-            retryable=False,
-            workflow=workflow,
+    try:
+        baseline_binding = _resolve_analysis_baseline(
+            workflow,
+            baseline_id=baseline_id,
+            portfolio_id=portfolio_id,
+            system_id=system_id,
         )
+    except ValueError as exc:
+        return _baseline_binding_error(exc, workflow)
     resolved_approval_required = (
         bool(getattr(settings, "baseline_approval_required", True))
         if approval_required is None
@@ -1140,8 +1204,10 @@ async def upload_data(
             "workflow": workflow,
             "workflow_state": "queued",
             "approval_required": resolved_approval_required if is_baseline_workflow(workflow) else None,
-            "active_baseline_model_id": (active_baseline or {}).get("model_id"),
-            "active_baseline_version": (active_baseline or {}).get("version"),
+            "active_baseline_model_id": (baseline_binding or {}).get("model_id"),
+            "active_baseline_version": (baseline_binding or {}).get("version"),
+            "active_baseline_system_id": (baseline_binding or {}).get("system_id") or current_dataset_scope().workspace_id,
+            "active_baseline_portfolio_id": (baseline_binding or {}).get("portfolio_id") or current_dataset_scope().workspace_id,
         }
         if is_baseline_workflow(workflow):
             summary.update(
@@ -1659,14 +1725,107 @@ async def behavioral_model_candidate(model_id: UploadJobPath):
     return model
 
 
-@router.get("/baselines/{model_id}")
-async def behavioral_baseline_by_id(model_id: UploadJobPath):
+def _exact_baseline_detail(portfolio_id: str, model_id: str) -> dict[str, Any] | None:
+    scope = current_dataset_scope()
+    if str(portfolio_id) != scope.workspace_id:
+        return None
     result = read_baseline_result_by_model_id(model_id)
-    if not isinstance(result, dict) or not payload_matches_dataset_scope(result):
+    if not isinstance(result, dict) or not payload_matches_dataset_scope(result, scope):
+        return None
+    candidate = result.get("candidate_model") if isinstance(result.get("candidate_model"), dict) else {}
+    source = candidate.get("source") if isinstance(candidate.get("source"), dict) else {}
+    returned_model_id = str(candidate.get("model_id") or "").strip()
+    returned_baseline_id = str(candidate.get("baseline_id") or returned_model_id).strip()
+    returned_portfolio_id = str(result.get("portfolio_id") or source.get("portfolio_id") or "").strip()
+    returned_system_id = str(result.get("system_id") or source.get("system_id") or "").strip()
+    if returned_model_id != model_id or returned_baseline_id != model_id:
+        return None
+    if returned_portfolio_id != scope.workspace_id or str(source.get("portfolio_id") or "") != scope.workspace_id:
+        return None
+    if not returned_system_id or str(source.get("system_id") or "") != returned_system_id:
+        return None
+    analyses = list_completed_analyses(
+        model_id,
+        portfolio_id=scope.workspace_id,
+        system_id=returned_system_id,
+    )
+    return {
+        **result,
+        "organization_id": scope.tenant_id,
+        "portfolio_id": scope.workspace_id,
+        "system_id": returned_system_id,
+        "baseline_id": model_id,
+        "analysis_state": {
+            "status": "available" if analyses else "empty",
+            "count": len(analyses),
+            "analyses": analyses,
+        },
+    }
+
+
+@router.get("/portfolios/{portfolio_id}/baselines/{model_id}")
+def behavioral_baseline_by_portfolio(
+    request: Request,
+    portfolio_id: UploadJobPath,
+    model_id: UploadJobPath,
+):
+    started = time.perf_counter()
+    result = _exact_baseline_detail(portfolio_id, model_id)
+    if result is None:
+        logger.info(
+            "baseline_detail_lookup",
+            extra={
+                "event": "baseline_detail_lookup",
+                "portfolio_id": portfolio_id,
+                "baseline_id": model_id,
+                "request_id": getattr(request.state, "request_id", None),
+                "lookup_status": "not_found",
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            },
+        )
+        raise HTTPException(status_code=404, detail="Baseline was not found in the requested portfolio.")
+    logger.info(
+        "baseline_detail_lookup",
+        extra={
+            "event": "baseline_detail_lookup",
+            "portfolio_id": portfolio_id,
+            "system_id": result.get("system_id"),
+            "baseline_id": model_id,
+            "request_id": getattr(request.state, "request_id", None),
+            "lookup_status": "loaded",
+            "analysis_count": (result.get("analysis_state") or {}).get("count", 0),
+            "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+        },
+    )
+    return result
+
+
+@router.get("/baselines/{model_id}")
+def behavioral_baseline_by_id(model_id: UploadJobPath):
+    result = _exact_baseline_detail(current_dataset_scope().workspace_id, model_id)
+    if result is None:
         raise HTTPException(status_code=404, detail="Baseline was not found.")
-    returned_model_id = str((result.get("candidate_model") or {}).get("model_id") or "").strip()
-    if returned_model_id != model_id:
-        raise HTTPException(status_code=404, detail="Baseline was not found.")
+    return result
+
+
+@router.get("/portfolios/{portfolio_id}/systems/{system_id}/baselines/{baseline_id}/analyses/{analysis_run_id}")
+def baseline_comparison_analysis_by_id(
+    portfolio_id: UploadJobPath,
+    system_id: UploadJobPath,
+    baseline_id: UploadJobPath,
+    analysis_run_id: UploadJobPath,
+):
+    baseline = _exact_baseline_detail(portfolio_id, baseline_id)
+    if baseline is None or str(baseline.get("system_id") or "") != str(system_id):
+        raise HTTPException(status_code=404, detail="Baseline was not found in the requested system.")
+    result = read_completed_analysis(
+        baseline_id,
+        analysis_run_id,
+        portfolio_id=portfolio_id,
+        system_id=system_id,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Analysis was not found for the requested baseline.")
     return result
 
 

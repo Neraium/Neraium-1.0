@@ -100,7 +100,10 @@ export default function AppWorkspaceRouter({
   currentUser = null,
   setActiveWorkspace,
   selectedBaselineIdentity = null,
+  activeBaselineIdentity = null,
+  datasetScopeKey = "anonymous",
   onBaselineSelected = () => false,
+  onBaselineClosedForComparison = () => false,
   pendingUploadFiles = [],
   setPendingUploadFiles = () => {},
   resultsNavigationKey = 0,
@@ -145,7 +148,10 @@ export default function AppWorkspaceRouter({
             roomContext={roomContext}
             onUploadComplete={handleGateUploadComplete}
             onOpenBaseline={(identity) => onBaselineSelected(identity, { replace: false })}
+            onCloseBaseline={onBaselineClosedForComparison}
             selectedBaselineIdentity={selectedBaselineIdentity}
+            activeBaselineIdentity={activeBaselineIdentity}
+            datasetScopeKey={datasetScopeKey}
             sessionStore={liveOps.session}
             onResetDemo={handleResetDemo}
             formatClockTime={formatClockTime}

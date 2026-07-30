@@ -48,7 +48,7 @@ test.describe("Open Baseline navigation", () => {
     });
     const exactRequests = [];
     page.on("request", (request) => {
-      if (request.url().includes("/api/data/baselines/bdm-v4-04f9195e")) exactRequests.push(request.url());
+      if (request.url().includes("/api/data/portfolios/default/baselines/bdm-v4-04f9195e")) exactRequests.push(request.url());
     });
     await completeBaseline(page);
 
@@ -65,7 +65,7 @@ test.describe("Open Baseline navigation", () => {
     await openButton.click();
     await expect(page).toHaveURL(/\/portfolio\/default\/baselines\/bdm-v4-04f9195e$/);
     await expect(page.getByRole("heading", { name: "Baseline Details", level: 2 })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "bdm-v4-04f9195e", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
     expect(exactRequests.length).toBeGreaterThanOrEqual(1);
     if (browserName !== "firefox") {
       expect(navigationLogs.some((line) => line.includes("button activated"))).toBe(true);
@@ -90,8 +90,43 @@ test.describe("Open Baseline navigation", () => {
     await expect(page.getByText("cache", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Open Baseline" }).click();
     await expect(page).toHaveURL(/\/portfolio\/default\/baselines\/bdm-v4-04f9195e$/);
-    await expect(page.getByRole("heading", { name: "bdm-v4-04f9195e", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
     expect(errors).toEqual([]);
+  });
+
+  test("ignores a stale legacy latest analysis while opening an exact baseline", async ({ page }) => {
+    const staleLatestResult = {
+      job_id: "fac4f77516d643f880adf70301260597",
+      run_id: "fac4f77516d643f880adf70301260597",
+      dataset_id: "fac4f77516d643f880adf70301260597",
+      portfolio_id: "default",
+      system_id: "default",
+      workflow: "legacy_analysis",
+      status: "COMPLETE",
+      processing_state: "complete",
+      sii_completed: true,
+      filename: "commercial water system.csv",
+      conditions: [{
+        id: "condition-pumping-system-5c07679cd8",
+        headline: "Connected relationships strengthening in Pumping System",
+        affected_signals: ["pump_vibration_mms", "ct_outlet_temp_f", "differential_pressure_psi"],
+      }],
+    };
+    await installStoredBaselineUpload(page, {
+      jobId: "baseline-only-job",
+      modelId: "bdm-v5-d5556684",
+      filename: "resort chw baseline.csv",
+      staleLatestResult,
+    });
+
+    await page.goto("/portfolio/default/baselines/bdm-v5-d5556684", { waitUntil: "domcontentloaded" });
+
+    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
+    await expect(page.getByText(/No comparison dataset or live telemetry has been evaluated yet/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Import Comparison Dataset" })).toBeVisible();
+    await expect(page.getByText(/Pumping System/i)).toHaveCount(0);
+    await expect(page.getByText(/pump_vibration_mms/i)).toHaveCount(0);
+    await expect(page.getByText(/Unassigned Analysis/i)).toHaveCount(0);
   });
 
   test("preserves native keyboard activation", async ({ page }) => {
@@ -101,7 +136,7 @@ test.describe("Open Baseline navigation", () => {
     await page.keyboard.press("Enter");
 
     await expect(page).toHaveURL(/\/portfolio\/default\/baselines\/keyboard-baseline$/);
-    await expect(page.getByRole("heading", { name: "keyboard-baseline", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
   });
 
   test("loads two exact routes independently and reports a missing baseline", async ({ page }) => {
@@ -110,20 +145,20 @@ test.describe("Open Baseline navigation", () => {
     await installStoredBaselineUpload(page, { jobId: "job-b", modelId: "baseline-b", filename: "baseline-b.csv" });
 
     await page.goto("/portfolio/default/baselines/baseline-a", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "baseline-a", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
     await expect(page.getByText("baseline-a.csv")).toBeVisible();
     await expect(page.getByText("baseline-b.csv")).toHaveCount(0);
 
     await page.goto("/portfolio/default/baselines/baseline-b", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "baseline-b", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
     await expect(page.getByText("baseline-b.csv")).toBeVisible();
     await expect(page.getByText("baseline-a.csv")).toHaveCount(0);
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "baseline-b", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
 
     expect(errors).toEqual([]);
 
-    await page.route("**/api/data/baselines/missing-baseline", (route) => route.fulfill({
+    await page.route("**/api/data/portfolios/default/baselines/missing-baseline", (route) => route.fulfill({
       status: 404,
       contentType: "application/json",
       body: JSON.stringify({ detail: "Baseline was not found." }),
@@ -146,7 +181,7 @@ test.describe("Open Baseline touch activation", () => {
     await openButton.tap({ timeout: 15000 });
 
     await expect(page).toHaveURL(/\/portfolio\/default\/baselines\/mobile-baseline$/);
-    await expect(page.getByRole("heading", { name: "mobile-baseline", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
     expect(errors).toEqual([]);
   });
 });

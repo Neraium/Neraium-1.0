@@ -134,6 +134,56 @@ describe("fetchLatestUploadState", () => {
     expect(apiFetch).toHaveBeenCalledTimes(2);
   });
 
+  it("does not reuse latest results across authenticated scopes", async () => {
+    const apiFetch = vi.fn()
+      .mockResolvedValueOnce(createResponse({ status: "complete", latest_result: { job_id: "user-a-run", filename: "a.csv" } }))
+      .mockResolvedValueOnce(createResponse({ status: "complete", latest_result: { job_id: "user-b-run", filename: "b.csv" } }));
+
+    const userA = await fetchLatestUploadState({ apiFetch, accessCode: "", scopeKey: "user-a::default", includePersisted: true });
+    const userB = await fetchLatestUploadState({ apiFetch, accessCode: "", scopeKey: "user-b::default", includePersisted: true });
+
+    expect(userA.latestResult?.job_id).toBe("user-a-run");
+    expect(userB.latestResult?.job_id).toBe("user-b-run");
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("loads and caches only the exact analysis run from an analysis route", async () => {
+    const result = {
+      job_id: "run-a",
+      run_id: "run-a",
+      upload_id: "run-a",
+      dataset_id: "run-a",
+      comparison_dataset_id: "run-a",
+      analysis_run_id: "run-a",
+      organization_id: "user-a",
+      portfolio_id: "portfolio-a",
+      system_id: "system-a",
+      baseline_id: "baseline-a",
+      workflow: "analyze_new_data",
+      status: "COMPLETE",
+      processing_state: "complete",
+      sii_completed: true,
+      active_baseline_reference: { model_id: "baseline-a" },
+      data_quality: { readiness: "ready" },
+    };
+    const apiFetch = vi.fn().mockResolvedValue(createResponse(result));
+    const exactAnalysisIdentity = {
+      portfolioId: "portfolio-a",
+      systemId: "system-a",
+      baselineId: "baseline-a",
+      analysisRunId: "run-a",
+    };
+
+    const first = await fetchLatestUploadState({ apiFetch, scopeKey: "user-a::portfolio-a", exactAnalysisIdentity });
+    const cached = await fetchLatestUploadState({ apiFetch, scopeKey: "user-a::portfolio-a", exactAnalysisIdentity });
+
+    expect(first.latestResult?.analysis_run_id).toBe("run-a");
+    expect(cached.latestResult?.analysis_run_id).toBe("run-a");
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect(apiFetch.mock.calls[0][0]).toBe("/api/data/portfolios/portfolio-a/systems/system-a/baselines/baseline-a/analyses/run-a");
+    expect(apiFetch.mock.calls[0][1].headers).toEqual({ "X-Neraium-Workspace-Id": "portfolio-a" });
+  });
+
   it("does not retry a non-idempotent upload after all bytes transferred", async () => {
     const body = "timestamp,value\n2026-06-22,1\n";
     const xhr = installXhrSequence([
@@ -206,6 +256,30 @@ describe("fetchLatestUploadState", () => {
       });
       expect(xhr.instances[0].sentBody.get("workflow")).toBe("extend_baseline");
       expect(xhr.instances[0].sentBody.get("approval_required")).toBe("true");
+    } finally {
+      xhr.restore();
+    }
+  });
+
+  it("sends exact baseline identity with a direct comparison upload", async () => {
+    const xhr = installXhrSequence([{
+      status: 202,
+      body: JSON.stringify({ job_id: "comparison-job", status: "PENDING" }),
+      headers: { "content-type": "application/json" },
+    }]);
+
+    try {
+      await uploadTelemetryFileWithProgress({
+        file: new File(["timestamp,value\n2026-06-22,1\n"], "comparison.csv", { type: "text/csv" }),
+        workflow: "analyze_new_data",
+        baselineIdentity: { portfolioId: "portfolio-a", systemId: "system-a", baselineId: "baseline-a" },
+        accessCode: "",
+      });
+      const body = xhr.instances[0].sentBody;
+      expect(body.get("workflow")).toBe("analyze_new_data");
+      expect(body.get("portfolio_id")).toBe("portfolio-a");
+      expect(body.get("system_id")).toBe("system-a");
+      expect(body.get("baseline_id")).toBe("baseline-a");
     } finally {
       xhr.restore();
     }
