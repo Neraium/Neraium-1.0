@@ -6,7 +6,7 @@ from app.services.upload_lifecycle import (
     canonical_stage_payload,
     infer_legacy_stage,
 )
-from app.services.baseline_contracts import is_baseline_workflow
+from app.services.baseline_contracts import canonical_baseline_creation_response, is_baseline_workflow
 
 
 
@@ -190,6 +190,23 @@ def normalize_upload_status_payload(payload: dict) -> dict:
         return _with_propagation_fields(normalized, payload, status)
     if status == "COMPLETE":
         if is_baseline_workflow(payload.get("workflow")):
+            try:
+                handoff = canonical_baseline_creation_response(payload)
+            except ValueError as exc:
+                normalized.update({
+                    "status": "FAILED",
+                    "processing_state": "failed",
+                    "analysis_state": "failed",
+                    "result_available": False,
+                    "baseline_result_available": False,
+                    "error_type": "baseline_identifier_missing",
+                    "error_code": "result_persistence_failed",
+                    "error": "result_persistence_failed",
+                    "message": "The baseline was saved incompletely and cannot be opened safely.",
+                    "technicalMessage": f"BaselineCompletionInvariantError: {exc}",
+                })
+                return _with_propagation_fields(normalized, payload, "FAILED")
+            normalized.update({key: value for key, value in handoff.items() if key != "status"})
             normalized["sii_completed"] = False
             normalized["sii_engine_invoked"] = False
             normalized["result_available"] = True

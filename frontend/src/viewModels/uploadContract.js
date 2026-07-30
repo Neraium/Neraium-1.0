@@ -1,3 +1,5 @@
+import { normalizeBaselineCreationResponse } from "../contracts/baselineCreation";
+
 export const UPLOAD_STATUSES = Object.freeze({
   IDLE: "idle",
   VALIDATED: "validated",
@@ -206,7 +208,9 @@ export function hasSupportedSiiClaims(payload = {}) {
 }
 
 export function normalizeUploadJob(payload = {}) {
-  const jobId = payload.job_id ?? payload.jobId ?? payload.id ?? null;
+  const baselineHandoff = normalizeBaselineCreationResponse(payload);
+  const jobId = payload.jobId ?? payload.job_id ?? null;
+  const datasetId = payload.datasetId ?? payload.dataset_id ?? null;
   const status = normalizeUploadStatus(
     payload.contract_stage
       ?? payload.status
@@ -223,6 +227,12 @@ export function normalizeUploadJob(payload = {}) {
     ...payload,
     job_id: jobId,
     jobId,
+    datasetId,
+    baselineId: baselineHandoff.baselineId,
+    workspacePath: baselineHandoff.workspacePath,
+    createdAt: baselineHandoff.createdAt,
+    portfolioId: baselineHandoff.portfolioId,
+    systemId: baselineHandoff.systemId,
     status,
     processing_state: payload.processing_state ?? status,
     contract_stage: payload.contract_stage ?? status,

@@ -12,8 +12,13 @@ export async function installStoredBaselineUpload(page, {
   const statusUrl = `/api/data/upload-status/${jobId}`;
   const baselineResultUrl = `/api/data/baselines/jobs/${jobId}`;
   const exactBaselineResultUrl = `/api/data/portfolios/${portfolioId}/baselines/${modelId}`;
+  const createdAt = "2026-07-30T00:00:00Z";
+  const workspacePath = `/portfolio/${portfolioId}/baselines/${modelId}`;
   const processing = {
     job_id: jobId,
+    jobId,
+    dataset_id: jobId,
+    datasetId: jobId,
     upload_session_id: jobId,
     status: "PROCESSING",
     processing_state: "validating",
@@ -34,11 +39,28 @@ export async function installStoredBaselineUpload(page, {
     progress: 100,
     progress_label: "Initial baseline established",
     result_available: true,
+    baseline_result_available: true,
+    job_state: "completed",
+    baselineId: modelId,
+    portfolioId,
+    systemId: portfolioId,
+    workspacePath,
+    createdAt,
   };
   const baselineResult = {
+    status: "COMPLETE",
+    processing_state: "complete",
     job_id: jobId,
+    jobId,
     upload_id: jobId,
     dataset_id: jobId,
+    datasetId: jobId,
+    baselineId: modelId,
+    portfolioId,
+    systemId: portfolioId,
+    workspacePath,
+    createdAt,
+    completed_at: createdAt,
     baseline_candidate_id: modelId,
     established_baseline_id: modelId,
     portfolio_id: portfolioId,

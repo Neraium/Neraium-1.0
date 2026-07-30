@@ -744,18 +744,23 @@ describe("upload and polling behavior", () => {
     });
 
     fireEvent.click(await screen.findByRole("button", { name: "Open Baseline" }));
-    expect(await screen.findByRole("heading", { name: "Baseline Saved, Workspace Not Opened" })).toBeTruthy();
-    expect(screen.getByRole("alert").textContent).toContain("Baseline bdm-v1-baseline could not be opened. Please retry.");
+    expect(await screen.findByRole("heading", { name: "Baseline Created, Workspace Not Opened" })).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("Baseline created successfully. We could not open the workspace automatically.");
+    expect(screen.getByRole("button", { name: "Return to Portfolio" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Import Comparison Dataset" })).toBeNull();
   });
 
-  it("does not substitute a job or dataset ID when the baseline ID is missing", async () => {
+  it("does not substitute a job or dataset ID when recovery cannot find baselineId", async () => {
     const result = learnedBaseline();
     delete result.established_baseline_id;
     delete result.baseline_candidate_id;
     result.activation = { state: "active" };
     result.candidate_model = { ...result.candidate_model, model_id: null, baseline_id: null, baseline_candidate_id: null, status: "active", activation: { state: "active" } };
+    const onOpenBaseline = vi.fn(() => true);
+    const apiFetch = vi.fn(async () => jsonResponse({}));
     renderWorkspace({
-      onOpenBaseline: vi.fn(() => true),
+      apiFetch,
+      onOpenBaseline,
       hasActiveSession: true,
       hasResumedSession: true,
       latestUploadResult: result,
@@ -768,12 +773,126 @@ describe("upload and polling behavior", () => {
     });
 
     fireEvent.click(await screen.findByRole("button", { name: "Open Baseline" }));
-    expect(await screen.findByRole("heading", { name: "Baseline Saved, Workspace Not Opened" })).toBeTruthy();
-    expect(screen.getByRole("alert").textContent).toContain("baseline ID is unavailable");
+    expect(await screen.findByRole("heading", { name: "Baseline Created, Workspace Not Opened" })).toBeTruthy();
+    expect(apiFetch.mock.calls.map(([path]) => path)).toContain("/api/data/jobs/baseline-job/result");
+    expect(apiFetch.mock.calls.map(([path]) => path)).toContain("/api/data/datasets/baseline-dataset/baseline");
+    expect(onOpenBaseline).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Import Comparison Dataset" })).toBeNull();
+  });
+
+  it("recovers baselineId from jobId and opens the canonical baseline route", async () => {
+    const result = learnedBaseline();
+    delete result.established_baseline_id;
+    delete result.baseline_candidate_id;
+    result.activation = { state: "active" };
+    result.candidate_model = { ...result.candidate_model, model_id: null, baseline_id: null, baseline_candidate_id: null, status: "active", activation: { state: "active" } };
+    const onOpenBaseline = vi.fn(() => true);
+    const apiFetch = vi.fn(async (path) => {
+      if (path === "/api/data/jobs/baseline-job/result") {
+        return jsonResponse({
+          status: "completed",
+          jobId: "baseline-job",
+          datasetId: "baseline-dataset",
+          baselineId: "recovered-baseline",
+          portfolioId: "default",
+          systemId: "default",
+          workspacePath: "/portfolio/default/baselines/recovered-baseline",
+          createdAt: "2026-07-30T00:00:00Z",
+        });
+      }
+      return jsonResponse({});
+    });
+    renderWorkspace({
+      apiFetch,
+      onOpenBaseline,
+      hasActiveSession: true,
+      hasResumedSession: true,
+      latestUploadResult: result,
+      sessionStore: {
+        jobId: "baseline-job",
+        uiState: "verified",
+        latestUploadSnapshot: result,
+        latestUploadResult: result,
+      },
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open Baseline" }));
+
+    await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: "baseline-job",
+      datasetId: "baseline-dataset",
+      baselineId: "recovered-baseline",
+      portfolioId: "default",
+    })));
+    expect(onOpenBaseline.mock.calls[0][0].baselineId).not.toBe("baseline-job");
+    expect(onOpenBaseline.mock.calls[0][0].baselineId).not.toBe("baseline-dataset");
+  });
+
+  it("restores a completed baseline from the canonical terminal snapshot after refresh", async () => {
+    const onOpenBaseline = vi.fn(() => true);
+    const snapshot = {
+      status: "COMPLETE",
+      processing_state: "complete",
+      job_state: "completed",
+      workflow: "create_baseline",
+      jobId: "refresh-job",
+      datasetId: "refresh-dataset",
+      baselineId: "refresh-baseline",
+      portfolioId: "default",
+      systemId: "default",
+      workspacePath: "/portfolio/default/baselines/refresh-baseline",
+      createdAt: "2026-07-30T00:00:00Z",
+      filename: "refresh.csv",
+    };
+    renderWorkspace({
+      onOpenBaseline,
+      hasActiveSession: false,
+      hasResumedSession: false,
+      latestUploadResult: null,
+      sessionStore: {
+        jobId: "refresh-job",
+        uiState: "stale",
+        latestUploadSnapshot: snapshot,
+        latestUploadResult: null,
+      },
+    });
+
+    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open Baseline" }));
+    await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledWith(expect.objectContaining({ baselineId: "refresh-baseline" })));
+  });
+
+  it("preserves baselineId across a mobile completion rerender", async () => {
+    const result = learnedBaseline();
+    result.activation = { state: "active" };
+    result.candidate_model = { ...result.candidate_model, status: "active", activation: { state: "active" } };
+    const onOpenBaseline = vi.fn(() => true);
+    const props = {
+      onOpenBaseline,
+      hasActiveSession: true,
+      hasResumedSession: true,
+      latestUploadResult: result,
+      sessionStore: {
+        jobId: "baseline-job",
+        uiState: "verified",
+        latestUploadSnapshot: result,
+        latestUploadResult: result,
+      },
+    };
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    const view = renderWorkspace(props);
+    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+
+    view.rerender(workspaceElement({ ...props, currentUser: { id: "engineer-1" } }));
+    fireEvent(window, new Event("resize"));
+    fireEvent.click(screen.getByRole("button", { name: "Open Baseline" }));
+
+    await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledWith(expect.objectContaining({ baselineId: "bdm-v1-baseline" })));
   });
 
   it("moves the completed page into a separate comparison workflow without resetting the baseline", async () => {
     const result = learnedBaseline();
+    uploadTelemetryFileWithProgress.mockImplementation(() => new Promise(() => {}));
     renderWorkspace({
       hasActiveSession: true,
       hasResumedSession: true,
@@ -789,6 +908,13 @@ describe("upload and polling behavior", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Import Comparison Dataset" }));
     expect(screen.getByRole("heading", { name: "Import Comparison Dataset" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Initial Baseline Established" })).toBeNull();
+
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("comparison.csv")] } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate Against Baseline" }));
+    await waitFor(() => expect(uploadTelemetryFileWithProgress).toHaveBeenCalledWith(expect.objectContaining({
+      workflow: "analyze_new_data",
+      baselineIdentity: expect.objectContaining({ baselineId: "bdm-v1-baseline" }),
+    })));
   });
 
   it("shows a clean service failure and keeps retry available", async () => {

@@ -17,6 +17,7 @@ from app.services.behavioral_model_repository import (
     next_model_version,
     persist_candidate,
     read_active_behavioral_model,
+    verify_persisted_baseline,
 )
 from app.services.data_quality import build_data_quality, profile_timestamps
 from app.services.dataset_scope import current_dataset_scope
@@ -720,6 +721,11 @@ def build_behavioral_baseline(
         "dataset_id": dataset_id,
         "baseline_candidate_id": model_id,
         "established_baseline_id": model_id,
+        "jobId": job_id,
+        "datasetId": dataset_id,
+        "baselineId": model_id,
+        "workspacePath": f"/portfolio/{scope.workspace_id}/baselines/{model_id}",
+        "createdAt": now,
         "portfolio_id": scope.workspace_id,
         "system_id": scope.workspace_id,
         "dataset_scope": scope.as_dict(),
@@ -741,8 +747,10 @@ def build_behavioral_baseline(
         },
     }
     assert_baseline_output_contract(result)
-    persisted_model = persist_candidate(model, result, activate=auto_activate)
-    if persisted_model.get("status") == "active":
-        result["candidate_model"] = persisted_model
-        result["activation"] = dict(persisted_model.get("activation") or {})
-    return result
+    persist_candidate(model, result, activate=auto_activate)
+    persisted = verify_persisted_baseline(job_id)
+    persisted_result = dict(persisted["result"])
+    persisted_model = dict(persisted["model"])
+    persisted_result["candidate_model"] = persisted_model
+    persisted_result["activation"] = dict(persisted_model.get("activation") or {})
+    return persisted_result

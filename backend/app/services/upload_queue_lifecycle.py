@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app.core.path_safety import StoragePathError, resolve_existing_storage_path, storage_key_for_server_path
-from app.services.baseline_contracts import is_baseline_workflow
+from app.services.baseline_contracts import canonical_baseline_creation_response, is_baseline_workflow
+from app.services.behavioral_model_repository import read_baseline_result_by_model_id, read_model
 from app.services.dataset_scope import current_dataset_scope, dataset_scope_from_payload, set_current_dataset_scope
 from app.services.runtime_db import (
     claim_next_upload_job,
@@ -412,8 +413,26 @@ class UploadQueueLifecycleService:
             while not isinstance(persisted_result, dict) and time.monotonic() < result_deadline:
                 time.sleep(0.05)
                 persisted_result = result_reader(job_id)
+
+            persistence_error = None
+            baseline_contract: dict[str, Any] = {}
             if not isinstance(persisted_result, dict) or str(persisted_result.get("job_id") or job_id) != job_id:
-                technical_message = "ResultPersistenceError: terminal status was produced without a retrievable result"
+                persistence_error = "terminal status was produced without a retrievable result"
+            elif baseline_workflow:
+                try:
+                    baseline_contract = canonical_baseline_creation_response(persisted_result)
+                    baseline_id = baseline_contract["baselineId"]
+                    persisted_model = read_model(baseline_id)
+                    model_readback = read_baseline_result_by_model_id(baseline_id)
+                    if not isinstance(persisted_model, dict) or str(persisted_model.get("model_id") or "").strip() != baseline_id:
+                        raise ValueError("baseline row could not be read by ID")
+                    if not isinstance(model_readback, dict) or str(model_readback.get("job_id") or "").strip() != job_id:
+                        raise ValueError("baseline result could not be read by ID")
+                except (KeyError, TypeError, ValueError) as exc:
+                    persistence_error = str(exc) or exc.__class__.__name__
+
+            if persistence_error:
+                technical_message = f"ResultPersistenceError: {persistence_error}"
                 failure = build_upload_error_payload(
                     "result_persistence_failed",
                     message="Processing finished, but the baseline result could not be made available.",
@@ -440,9 +459,10 @@ class UploadQueueLifecycleService:
                 )
                 return False
             if baseline_workflow:
-                self.write_job({
+                terminal_response = {
                     **completed,
                     **terminal_candidate,
+                    **baseline_contract,
                     "job_id": job_id,
                     "status": "COMPLETE",
                     "processing_state": "complete",
@@ -451,8 +471,20 @@ class UploadQueueLifecycleService:
                     "terminal": True,
                     "result_available": True,
                     "baseline_result_available": True,
-                })
-                completed = self.read_upload_status(job_id) or terminal_candidate
+                }
+                self.write_job(terminal_response)
+                completed = self.read_upload_status(job_id) or terminal_response
+                _log_queue_event(
+                    self.logger,
+                    "baseline_handoff_completed",
+                    job_id=job_id,
+                    dataset_id=baseline_contract.get("datasetId"),
+                    baseline_id=baseline_contract.get("baselineId"),
+                    request_id=request_id,
+                    persistence_result="readback_verified",
+                    returned_response_body=baseline_contract,
+                    route_destination=baseline_contract.get("workspacePath"),
+                )
             complete_upload_queue_job(job_id, "completed")
             _log_queue_event(
                 self.logger,

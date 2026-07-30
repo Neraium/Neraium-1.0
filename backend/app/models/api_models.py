@@ -84,6 +84,20 @@ class UploadStatusResponse(BaseModel):
     workflow_state: str | None = None
     baseline_candidate_created: bool = False
     baseline_activation_state: str | None = None
+    baselineId: str | None = None
+    workspacePath: str | None = None
+    createdAt: str | None = None
+
+
+class BaselineCreationResponse(BaseModel):
+    status: Literal["completed"]
+    datasetId: str
+    jobId: str
+    baselineId: str
+    workspacePath: str
+    createdAt: str
+    portfolioId: str | None = None
+    systemId: str | None = None
 
 
 class BaselineSuitabilityResponse(BaseModel):

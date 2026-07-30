@@ -21,6 +21,7 @@ from app.services.behavioral_model_repository import (
 )
 from app.services.evidence_store import read_evidence_run
 from app.services.upload_state_repository import write_upload_result
+from app.services.upload_status_contract import normalize_upload_status_payload
 
 
 def _baseline_csv(rows: int = 72) -> str:
@@ -103,6 +104,56 @@ def test_create_baseline_never_invokes_sii_or_persists_detection_evidence(monkey
     assert read_evidence_run(queued["job_id"]) is None
     latest_analysis = client.get("/api/data/latest-upload").json()
     assert latest_analysis["latest_result"] is None
+
+
+def test_completed_baseline_contract_propagates_id_and_supports_recovery_lookups() -> None:
+    client = TestClient(create_app())
+    accepted = _post(client, "create_baseline").json()
+    terminal = _wait(client, accepted["status_url"])
+
+    baseline_id = terminal["baselineId"]
+    expected_contract = {
+        "status": "completed",
+        "datasetId": terminal["datasetId"],
+        "jobId": terminal["jobId"],
+        "baselineId": baseline_id,
+        "workspacePath": f"/portfolio/default/baselines/{baseline_id}",
+        "createdAt": terminal["createdAt"],
+        "portfolioId": "default",
+        "systemId": "default",
+    }
+    assert terminal["job_id"] == expected_contract["jobId"]
+    assert terminal["dataset_id"] == expected_contract["datasetId"]
+    assert terminal["result_available"] is True
+    assert client.get(f"/api/data/jobs/{terminal['jobId']}/result").json() == expected_contract
+    assert client.get(f"/api/data/datasets/{terminal['datasetId']}/baseline").json() == expected_contract
+
+    persisted = read_baseline_result(terminal["jobId"])
+    assert persisted["baselineId"] == baseline_id
+    assert persisted["candidate_model"]["model_id"] == baseline_id
+    assert persisted["candidate_model"]["baseline_id"] == baseline_id
+    detail = client.get(f"/api/data/portfolios/default/baselines/{baseline_id}")
+    assert detail.status_code == 200
+    assert detail.json()["baseline_id"] == baseline_id
+
+
+def test_completed_baseline_status_is_rejected_without_baseline_id() -> None:
+    normalized = normalize_upload_status_payload({
+        "status": "COMPLETE",
+        "processing_state": "complete",
+        "workflow": "create_baseline",
+        "job_id": "job-without-baseline",
+        "dataset_id": "dataset-without-baseline",
+        "completed_at": "2026-07-30T00:00:00+00:00",
+        "result_available": True,
+        "baseline_result_available": True,
+    })
+
+    assert normalized["status"] == "FAILED"
+    assert normalized["job_state"] == "failed"
+    assert normalized["result_available"] is False
+    assert normalized["baseline_result_available"] is False
+    assert normalized["error_type"] == "baseline_identifier_missing"
 
 
 def test_candidate_requires_approval_and_activation_is_separate() -> None:

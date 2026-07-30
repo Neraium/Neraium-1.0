@@ -1,4 +1,61 @@
 import { readJsonPayload, buildUploadRequestError } from "../../viewModels/uploadFlow";
+import { normalizeBaselineCreationResponse } from "../../contracts/baselineCreation";
+
+
+async function fetchBaselineHandoff({ apiFetch, accessCode, path, fallback = {} }) {
+  const response = await apiFetch(path, { accessCode, expectedResponseType: "json" });
+  const payload = await readJsonPayload(response, { route: path, phase: "baseline_result" });
+  if (!response.ok) throw buildUploadRequestError(response, payload, "baseline_result");
+  return normalizeBaselineCreationResponse(payload, fallback, { requireBaselineId: true });
+}
+
+export async function fetchBaselineCreationResultByJobId({ apiFetch, accessCode, jobId, datasetId = null } = {}) {
+  const canonicalJobId = String(jobId ?? "").trim();
+  if (!canonicalJobId) throw new Error("A jobId is required to recover the completed baseline.");
+  const path = `/api/data/jobs/${encodeURIComponent(canonicalJobId)}/result`;
+  try {
+    return await fetchBaselineHandoff({ apiFetch, accessCode, path, fallback: { jobId: canonicalJobId, datasetId } });
+  } catch (error) {
+    if (Number(error?.status ?? 0) !== 404) throw error;
+    const compatibilityPath = `/api/data/baselines/jobs/${encodeURIComponent(canonicalJobId)}`;
+    return fetchBaselineHandoff({ apiFetch, accessCode, path: compatibilityPath, fallback: { jobId: canonicalJobId, datasetId } });
+  }
+}
+
+export async function fetchBaselineCreationByDatasetId({ apiFetch, accessCode, datasetId, jobId = null } = {}) {
+  const canonicalDatasetId = String(datasetId ?? "").trim();
+  if (!canonicalDatasetId) throw new Error("A datasetId is required to recover the completed baseline.");
+  const path = `/api/data/datasets/${encodeURIComponent(canonicalDatasetId)}/baseline`;
+  return fetchBaselineHandoff({ apiFetch, accessCode, path, fallback: { datasetId: canonicalDatasetId, jobId } });
+}
+
+export async function recoverBaselineCreation({ apiFetch, accessCode, identity = null, jobId = null, datasetId = null } = {}) {
+  const known = normalizeBaselineCreationResponse(identity ?? {}, { jobId, datasetId });
+  if (known.baselineId) return known;
+  let jobError = null;
+  if (known.jobId) {
+    try {
+      return await fetchBaselineCreationResultByJobId({
+        apiFetch,
+        accessCode,
+        jobId: known.jobId,
+        datasetId: known.datasetId,
+      });
+    } catch (error) {
+      jobError = error;
+    }
+  }
+  if (known.datasetId) {
+    return fetchBaselineCreationByDatasetId({
+      apiFetch,
+      accessCode,
+      datasetId: known.datasetId,
+      jobId: known.jobId,
+    });
+  }
+  if (jobError) throw jobError;
+  throw new Error("The completed baseline could not be recovered because both jobId and datasetId are unavailable.");
+}
 
 const baselineResultCache = new Map();
 const baselineResultInflight = new Map();
@@ -88,10 +145,12 @@ function baselineRequestError(error, { path, requestId, elapsedMs }) {
 function validateBaselinePayload(payload, { portfolioId, baselineId }) {
   const candidate = payload?.candidate_model ?? {};
   const source = candidate?.source ?? {};
-  const returnedId = String(payload?.baseline_id ?? payload?.established_baseline_id ?? candidate?.baseline_id ?? candidate?.model_id ?? "").trim();
+  const returnedId = String(payload?.baselineId ?? payload?.baseline_id ?? payload?.established_baseline_id ?? candidate?.baseline_id ?? "").trim();
+  const returnedModelId = String(candidate?.model_id ?? "").trim();
   const returnedPortfolioId = String(payload?.portfolio_id ?? source?.portfolio_id ?? "").trim();
   const returnedSystemId = String(payload?.system_id ?? source?.system_id ?? "").trim();
   if (returnedId !== String(baselineId)) throw new Error("The baseline response did not match the requested baseline identifier.");
+  if (!returnedModelId || returnedModelId !== returnedId) throw new Error("The baseline response model did not reference the requested baseline identifier.");
   if (returnedPortfolioId !== String(portfolioId) || String(source?.portfolio_id ?? "").trim() !== String(portfolioId)) {
     throw new Error("The baseline response did not match the requested portfolio identifier.");
   }

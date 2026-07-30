@@ -1,4 +1,5 @@
 import { getCurrentWorkspaceId } from "../services/datasetSessionCache";
+import { normalizeBaselineCreationResponse } from "../contracts/baselineCreation";
 
 export const BASELINE_SELECTION_STORAGE_PREFIX = "neraium.baseline_selection";
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -75,41 +76,27 @@ export function analysisBelongsToBaseline(result, identity) {
 }
 
 export function baselineIdentityFromResult(result, fallback = {}, stateSource = "completion_response") {
-  const candidate = result?.candidate_model ?? result?.active_model ?? result ?? {};
-  const source = candidate?.source ?? result?.source ?? {};
-  const scope = result?.dataset_scope ?? candidate?.dataset_scope ?? {};
-  const candidateId = identifier(
-    result?.baseline_candidate_id
-      ?? result?.candidate_id
-      ?? candidate?.baseline_candidate_id
-      ?? candidate?.model_id
-      ?? fallback.candidateId,
-  );
-  const baselineId = identifier(
-    result?.selected_baseline_id
-      ?? result?.established_baseline_id
-      ?? result?.baseline_id
-      ?? candidate?.baseline_id
-      ?? candidate?.model_id
-      ?? fallback.baselineId
-      ?? candidateId,
-  );
-  const portfolioId = identifier(
-    result?.portfolio_id
-      ?? result?.system_id
-      ?? scope?.workspace_id
-      ?? fallback.portfolioId
-      ?? getCurrentWorkspaceId(),
-  );
+  const normalized = normalizeBaselineCreationResponse(result, {
+    ...fallback,
+    portfolioId: fallback.portfolioId ?? getCurrentWorkspaceId(),
+  });
+  const baselineId = identifier(normalized.baselineId);
+  const portfolioId = identifier(normalized.portfolioId ?? fallback.portfolioId ?? getCurrentWorkspaceId());
   if (!baselineId || !portfolioId) return null;
   return {
-    jobId: identifier(result?.job_id ?? source?.job_id ?? fallback.jobId),
-    uploadId: identifier(result?.upload_id ?? source?.upload_id ?? fallback.uploadId ?? result?.job_id ?? source?.job_id),
-    datasetId: identifier(result?.dataset_id ?? source?.dataset_id ?? fallback.datasetId),
-    candidateId: candidateId ?? baselineId,
+    jobId: identifier(normalized.jobId ?? fallback.jobId),
+    uploadId: identifier(
+      result?.uploadId
+        ?? result?.upload_id
+        ?? normalized?.candidate_model?.source?.upload_id
+        ?? fallback.uploadId
+        ?? normalized.jobId,
+    ),
+    datasetId: identifier(normalized.datasetId ?? fallback.datasetId),
+    candidateId: identifier(normalized.candidateId ?? fallback.candidateId),
     baselineId,
     portfolioId,
-    systemId: identifier(result?.system_id ?? source?.system_id ?? fallback.systemId ?? portfolioId) ?? portfolioId,
+    systemId: identifier(normalized.systemId ?? fallback.systemId ?? portfolioId) ?? portfolioId,
     stateSource: ["completion_response", "hydration", "cache", "active_baseline_fetch"].includes(stateSource) ? stateSource : "hydration",
   };
 }

@@ -543,10 +543,10 @@ function buildAdvancedRows({ uploadJob, uploadTransfer, propagationLabel, queued
     String(uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status ?? "").toLowerCase(),
   );
   return [
-    ["Selected baseline ID", uploadJob?.selected_baseline_id ?? uploadJob?.established_baseline_id],
-    ["Completed job ID", uploadJob?.job_id ?? uploadJob?.id],
-    ["Dataset ID", uploadJob?.dataset_id],
-    ["Portfolio ID", uploadJob?.portfolio_id ?? uploadJob?.system_id],
+    ["Selected baseline ID", uploadJob?.baselineId],
+    ["Completed job ID", uploadJob?.jobId ?? uploadJob?.job_id],
+    ["Dataset ID", uploadJob?.datasetId ?? uploadJob?.dataset_id],
+    ["Portfolio ID", uploadJob?.portfolioId],
     ["State source", uploadJob?.state_source ? String(uploadJob.state_source).replaceAll("_", " ") : null],
     ["Backend state", uploadJob?.processing_state ?? uploadJob?.processingState ?? uploadJob?.status],
     ["Elapsed time", uploadJob?.processing_time_seconds ? `${uploadJob.processing_time_seconds}s` : null],
@@ -777,6 +777,7 @@ export default function IntakeFlowPanel({
   onChooseAnotherFile,
   onViewResults,
   onOpenBaseline,
+  onReturnToPortfolio,
   baselineNavigationPending = false,
   onImportComparisonDataset,
 }) {
@@ -790,7 +791,7 @@ export default function IntakeFlowPanel({
     : "No file selected";
   const rawViewState = uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing });
   const analysisResult = suppliedAnalysisResult ?? finalAnalysisResult(latestUploadSnapshot, uploadJob);
-  const baselineCompletion = Boolean(baselineResult?.candidate_model);
+  const baselineCompletion = Boolean(baselineResult?.baselineId ?? baselineResult?.candidate_model);
   const viewState = rawViewState === "complete" && !analysisResult && !baselineCompletion ? "finalizing" : rawViewState;
   const showProgress = ["uploading", "processing", "finalizing"].includes(viewState);
   const mainPercent = resolveMainPercent({ viewState, uploadJob, uploadTransfer, visibleProgressPercent });
@@ -959,14 +960,14 @@ export default function IntakeFlowPanel({
               <span aria-hidden="true">!</span>
               <div>
                 <p>Recovery required</p>
-                <h3>Baseline Saved, Workspace Not Opened</h3>
+                <h3>Baseline Created, Workspace Not Opened</h3>
               </div>
             </header>
             <p className="upload-error-message">{errorMessage}</p>
             <RecoverySummary viewState={viewState} hasSelectedFiles={hasSelectedFiles} selectedFileLabel={selectedFileLabel} uploadJob={uploadJob} errorMessage={errorMessage} />
             <div className="upload-simple-actions">
-              <button type="button" className="command-button" onClick={onOpenBaseline ?? onViewResults} disabled={baselineNavigationPending} aria-disabled={baselineNavigationPending}>{baselineNavigationPending ? "Opening Baseline…" : "Open Baseline Again"}</button>
-              <button type="button" className="secondary-command-button" onClick={onImportComparisonDataset ?? onResetWorkspace}>Import Comparison Dataset</button>
+              <button type="button" className="command-button" onClick={onOpenBaseline ?? onViewResults} disabled={baselineNavigationPending} aria-disabled={baselineNavigationPending}>{baselineNavigationPending ? "Opening Baseline…" : "Open Baseline"}</button>
+              <button type="button" className="secondary-command-button" onClick={onReturnToPortfolio ?? onResetWorkspace}>Return to Portfolio</button>
             </div>
           </section>
         ) : null}

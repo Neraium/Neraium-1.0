@@ -17,7 +17,8 @@ import {
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
 import { LARGE_UPLOAD_MAX_BYTES, retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
-import { clearBaselineResultCache, fetchBaselineResultById } from "../services/api/baselineApi";
+import { clearBaselineResultCache, fetchBaselineResultById, recoverBaselineCreation } from "../services/api/baselineApi";
+import { normalizeBaselineCreationResponse } from "../contracts/baselineCreation";
 import { baselineIdentityFromResult, baselineRoutePath, persistBaselineSelection, readPersistedBaselineSelection } from "../viewModels/baselineSelection";
 import { getCurrentWorkspaceId } from "../services/datasetSessionCache";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
@@ -254,8 +255,10 @@ export function resolveOpenBaselineIdentity({
   uploadResult = null,
   latestUploadResult = null,
   latestUploadSnapshot = null,
+  completedBaselineIdentity = null,
 } = {}) {
   const candidates = [
+    completedBaselineIdentity,
     uploadJob?.baseline_result,
     uploadResult,
     latestUploadResult,
@@ -263,17 +266,18 @@ export function resolveOpenBaselineIdentity({
     latestUploadSnapshot,
   ].filter(Boolean);
   const selectedBaselineId = String(
-    uploadJob?.selected_baseline_id
-      ?? uploadResult?.selected_baseline_id
-      ?? latestUploadResult?.selected_baseline_id
+    uploadJob?.baselineId
+      ?? uploadResult?.baselineId
+      ?? latestUploadResult?.baselineId
+      ?? completedBaselineIdentity?.baselineId
       ?? selectedBaselineIdentity?.baselineId
       ?? "",
   ).trim();
   const portfolioHint = String(
-    uploadJob?.portfolio_id
-      ?? uploadJob?.system_id
-      ?? uploadResult?.portfolio_id
-      ?? latestUploadResult?.portfolio_id
+    uploadJob?.portfolioId
+      ?? uploadResult?.portfolioId
+      ?? latestUploadResult?.portfolioId
+      ?? completedBaselineIdentity?.portfolioId
       ?? selectedBaselineIdentity?.portfolioId
       ?? getCurrentWorkspaceId(),
   ).trim();
@@ -287,6 +291,7 @@ export function resolveOpenBaselineIdentity({
   const fallback = {
     ...persisted,
     ...selectedBaselineIdentity,
+    ...completedBaselineIdentity,
     ...(selectedBaselineId ? { baselineId: selectedBaselineId } : {}),
     ...(portfolioHint ? { portfolioId: portfolioHint, systemId: selectedBaselineIdentity?.systemId ?? portfolioHint } : {}),
   };
@@ -327,6 +332,7 @@ export default function DataConnectionsWorkspace({
   currentUser = null,
   onOpenBaseline,
   onCloseBaseline = null,
+  onReturnToPortfolio = null,
   selectedBaselineIdentity = null,
   activeBaselineIdentity = null,
   datasetScopeKey = "anonymous",
@@ -340,6 +346,7 @@ export default function DataConnectionsWorkspace({
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
   const [currentWorkflow, setCurrentWorkflow] = useState("create_baseline");
+  const currentWorkflowRef = useRef("create_baseline");
   const [uploadTransfer, setUploadTransfer] = useState(null);
   const [uploadDebug, setUploadDebug] = useState({
     apiBaseConfig: CONFIGURED_API_BASE_URL || "",
@@ -381,6 +388,7 @@ export default function DataConnectionsWorkspace({
   const completionNavigationTimerRef = useRef(null);
   const completionNavigationEligibleRef = useRef(false);
   const baselineNavigationPendingRef = useRef(false);
+  const completedBaselineIdentityRef = useRef(null);
   const flowOwnerRef = useRef(String(currentUser?.email ?? currentUser?.id ?? ""));
   const flowSessionRef = useRef(0);
   const selectedBaselineIdRef = useRef(String(selectedBaselineIdentity?.baselineId ?? "").trim() || null);
@@ -410,10 +418,10 @@ export default function DataConnectionsWorkspace({
   const logTelemetryStatusProgress = (status, payload = {}) => {
     const normalized = normalizeUploadStatus(status);
     if (PARSING_COMPLETE_STATUSES.has(normalized)) {
-      logTelemetryStageOnce("parsing complete", { jobId: payload?.job_id ?? uploadJobIdRef.current ?? null, status: normalized });
+      logTelemetryStageOnce("parsing complete", { jobId: payload?.jobId ?? payload?.job_id ?? uploadJobIdRef.current ?? null, status: normalized });
     }
     if (ANALYSIS_STARTED_STATUSES.has(normalized)) {
-      logTelemetryStageOnce("analysis started", { jobId: payload?.job_id ?? uploadJobIdRef.current ?? null, status: normalized });
+      logTelemetryStageOnce("analysis started", { jobId: payload?.jobId ?? payload?.job_id ?? uploadJobIdRef.current ?? null, status: normalized });
     }
   };
 
@@ -439,6 +447,7 @@ export default function DataConnectionsWorkspace({
     setUploadTransfer(null);
     setUploadJob(null);
     setUploadResult(null);
+    completedBaselineIdentityRef.current = null;
     setUploadState("validated");
   }, [autoStartInitialFiles, seededSelectedFiles]);
 
@@ -455,7 +464,7 @@ export default function DataConnectionsWorkspace({
 
   useEffect(() => {
     const signature = [
-      uploadJob?.job_id ?? "",
+      uploadJob?.jobId ?? uploadJob?.job_id ?? "",
       uploadJob?.status ?? "",
       uploadJob?.processing_state ?? "",
       uploadJob?.percent ?? uploadJob?.progress ?? "",
@@ -466,7 +475,7 @@ export default function DataConnectionsWorkspace({
       lastProgressSignatureRef.current = signature;
       setLastProgressAt(Date.now());
     }
-  }, [uploadJob?.job_id, uploadJob?.status, uploadJob?.processing_state, uploadJob?.percent, uploadJob?.progress, uploadJob?.propagation_progress, uploadJob?.progress_label, uploadJob?.message]);
+  }, [uploadJob?.jobId, uploadJob?.job_id, uploadJob?.status, uploadJob?.processing_state, uploadJob?.percent, uploadJob?.progress, uploadJob?.propagation_progress, uploadJob?.progress_label, uploadJob?.message]);
 
   // Session hydration is centralized in useFacilityRuntime via
   // apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode }).
@@ -474,31 +483,34 @@ export default function DataConnectionsWorkspace({
     if (typeof window === "undefined" || selectedBaselineIdRef.current) return;
     const sessionJobId = String(sessionStore?.jobId ?? "").trim();
     if (!sessionJobId) return;
-    if (!hasActiveSession && !hasResumedSession) return;
     const normalizedSessionJob = normalizeUploadJob({
       ...(sessionStore?.latestUploadSnapshot ?? {}),
       latest_result: sessionStore?.latestUploadResult ?? null,
       job_id: sessionJobId,
     });
+    const baselineTerminal = isBaselineWorkflow(normalizedSessionJob?.workflow) && isTerminalCompletedPayload(normalizedSessionJob);
+    if (!hasActiveSession && !hasResumedSession && !baselineTerminal) return;
     const sessionResult = sessionStore?.latestUploadResult ?? null;
     const hydrationSource = String(sessionStore?.uiState ?? "") === "restored" ? "cache" : "hydration";
     const hydratedIdentity = baselineIdentityFromResult(sessionResult ?? normalizedSessionJob, {}, hydrationSource);
-    if (hydratedIdentity) persistBaselineSelection(hydratedIdentity);
+    if (hydratedIdentity) {
+      completedBaselineIdentityRef.current = hydratedIdentity;
+      persistBaselineSelection(hydratedIdentity);
+    }
     uploadJobIdRef.current = sessionJobId;
     uploadStatusPathRef.current = normalizeUploadStatusPath(normalizedSessionJob?.status_url, sessionJobId);
     window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, sessionJobId);
     setUploadJob({
       ...normalizedSessionJob,
       ...(hydratedIdentity ? {
-        selected_baseline_id: hydratedIdentity.baselineId,
-        established_baseline_id: hydratedIdentity.baselineId,
-        portfolio_id: hydratedIdentity.portfolioId,
-        system_id: hydratedIdentity.systemId,
+        baselineId: hydratedIdentity.baselineId,
+        portfolioId: hydratedIdentity.portfolioId,
+        systemId: hydratedIdentity.systemId,
         state_source: hydratedIdentity.stateSource,
       } : {}),
     });
     setUploadResult(sessionResult);
-    if (["verified", "restored"].includes(String(sessionStore?.uiState ?? ""))) {
+    if (baselineTerminal || ["verified", "restored"].includes(String(sessionStore?.uiState ?? ""))) {
       setUploadState("complete");
       setUploadProcessingFlag(false);
       return;
@@ -584,6 +596,7 @@ export default function DataConnectionsWorkspace({
     setUploadTransfer(null);
     setUploadJob(null);
     setUploadResult(null);
+    completedBaselineIdentityRef.current = null;
     setUploadError("");
     setCompletionError("");
     setUploadState("idle");
@@ -714,9 +727,11 @@ export default function DataConnectionsWorkspace({
     setUploadTransfer(null);
     setUploadJob(null);
     setUploadResult(null);
+    if (nextWorkflow !== "analyze_new_data") completedBaselineIdentityRef.current = null;
     setUploadError("");
     setCompletionError("");
     setUploadState("idle");
+    currentWorkflowRef.current = nextWorkflow;
     setCurrentWorkflow(nextWorkflow);
     setBatchResults([]);
     completionNavigationEligibleRef.current = false;
@@ -802,39 +817,60 @@ export default function DataConnectionsWorkspace({
   }
 
   async function completeUploadHandoff(completedPayload, requestedJobId, identitySource = "completion_response") {
-    const jobId = completedPayload?.job_id ?? requestedJobId ?? uploadJobIdRef.current ?? null;
-    const datasetId = completedPayload?.dataset_id ?? null;
+    const jobId = completedPayload?.jobId ?? completedPayload?.job_id ?? requestedJobId ?? uploadJobIdRef.current ?? null;
+    const datasetId = completedPayload?.datasetId ?? completedPayload?.dataset_id ?? null;
     const completedWorkflow = completedPayload?.workflow ?? "legacy_analysis";
     if (isBaselineWorkflow(completedWorkflow)) {
       const resultPath = completedPayload?.baseline_result_url ?? `/api/data/baselines/jobs/${encodeURIComponent(jobId)}`;
       const resultDeadline = Date.now() + RESULT_AVAILABILITY_GRACE_MS;
       let response;
       let baselineResult;
+      let rawBaselineResult;
       do {
         response = await apiFetch(resultPath, { accessCode });
-        baselineResult = await readJsonPayload(response, { route: resultPath, phase: "baseline_result" });
-        if (response.ok && baselineResult?.candidate_model) break;
+        rawBaselineResult = await readJsonPayload(response, { route: resultPath, phase: "baseline_result" });
+        if (response.ok) {
+          baselineResult = normalizeBaselineCreationResponse(rawBaselineResult, { jobId, datasetId }, { requireBaselineId: true });
+          if (baselineResult?.candidate_model) break;
+        }
         if (response.status !== 404 || Date.now() >= resultDeadline) {
-          throw buildUploadRequestError(response, baselineResult, "baseline_result");
+          throw buildUploadRequestError(response, rawBaselineResult, "baseline_result");
         }
         await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, RESULT_FETCH_RETRY_INTERVAL_MS); });
       } while (Date.now() < resultDeadline);
       if (!response?.ok || !baselineResult?.candidate_model) {
-        throw buildUploadRequestError(response ?? { status: 404 }, baselineResult ?? {}, "baseline_result");
+        throw buildUploadRequestError(response ?? { status: 404 }, rawBaselineResult ?? {}, "baseline_result");
       }
-      const returnedJobId = String(baselineResult?.job_id ?? "").trim();
+      const returnedJobId = String(baselineResult?.jobId ?? "").trim();
       if (returnedJobId && String(jobId) !== returnedJobId) {
         throw new Error("The completed baseline did not match the requested import job.");
       }
       const identity = baselineIdentityFromResult(baselineResult, {
         jobId,
-        uploadId: completedPayload?.upload_id ?? jobId,
+        uploadId: completedPayload?.uploadId ?? completedPayload?.upload_id ?? jobId,
         datasetId,
       }, identitySource);
       if (!identity) throw new Error("The completed baseline identifiers were unavailable.");
       uploadJobIdRef.current = identity.jobId ?? jobId;
+      completedBaselineIdentityRef.current = identity;
       clearBaselineResultCache({ scopeKey: datasetScopeKey, portfolioId: identity.portfolioId, baselineId: identity.baselineId });
       persistBaselineSelection(identity);
+      console.info("[neraium] baseline creation handoff", {
+        datasetId: identity.datasetId,
+        jobId: identity.jobId,
+        baselineId: identity.baselineId,
+        returnedResponseBody: {
+          status: baselineResult.status,
+          datasetId: baselineResult.datasetId,
+          jobId: baselineResult.jobId,
+          baselineId: baselineResult.baselineId,
+          workspacePath: baselineResult.workspacePath,
+          createdAt: baselineResult.createdAt,
+        },
+        routeDestination: baselineRoutePath(identity.portfolioId, identity.baselineId),
+        persistenceResult: "readback_confirmed_by_backend",
+        requestId: baselineResult.requestId ?? baselineResult.request_id ?? null,
+      });
 
       const activationState = baselineResult?.activation?.state ?? baselineResult?.candidate_model?.status;
       setUploadProcessingFlag(false);
@@ -846,10 +882,11 @@ export default function DataConnectionsWorkspace({
         upload_id: identity.uploadId,
         dataset_id: identity.datasetId,
         baseline_candidate_id: identity.candidateId,
-        established_baseline_id: identity.baselineId,
-        selected_baseline_id: identity.baselineId,
-        portfolio_id: identity.portfolioId,
-        system_id: identity.systemId,
+        baselineId: identity.baselineId,
+        portfolioId: identity.portfolioId,
+        systemId: identity.systemId,
+        workspacePath: baselineResult.workspacePath,
+        createdAt: baselineResult.createdAt,
         state_source: identity.stateSource,
         baseline_result: baselineResult,
         status: "COMPLETE",
@@ -979,7 +1016,7 @@ export default function DataConnectionsWorkspace({
             stage: payload?.processing_state ?? payload?.status ?? null,
             ...pollTiming,
           });
-          const returnedJobId = String(payload?.job_id ?? "").trim();
+          const returnedJobId = String(payload?.jobId ?? payload?.job_id ?? "").trim();
           if (returnedJobId && returnedJobId !== requestedJobId) {
             throw Object.assign(new Error("The status response did not match the requested processing job."), {
               name: "UploadRequestError",
@@ -1077,7 +1114,7 @@ export default function DataConnectionsWorkspace({
                 failedStage: "baseline_creation",
                 retryable: true,
                 jobId: requestedJobId,
-                datasetId: normalizedPayload?.dataset_id ?? null,
+                datasetId: normalizedPayload?.datasetId ?? normalizedPayload?.dataset_id ?? null,
                 requestId: normalizedPayload?.request_id ?? null,
                 technicalMessage: "Terminal job state remained visible without result availability.",
                 terminalJobFailure: true,
@@ -1147,10 +1184,11 @@ export default function DataConnectionsWorkspace({
   }
 
   function normalizeStatusPayload(payload, requestedJobId) {
-    const normalized = normalizeUploadStatus(payload?.status ?? payload?.processing_state ?? payload?.worker_state);
+    const normalizedJob = normalizeUploadJob({ ...(payload ?? {}), jobId: payload?.jobId ?? payload?.job_id ?? requestedJobId });
+    const normalized = normalizeUploadStatus(normalizedJob.status ?? normalizedJob.processing_state ?? normalizedJob.worker_state);
     return {
-      ...(payload ?? {}),
-      job_id: payload?.job_id ?? requestedJobId,
+      ...normalizedJob,
+      job_id: normalizedJob.jobId ?? requestedJobId,
       status: payload?.status ?? normalized,
       percent: payload?.percent ?? payload?.progress ?? fallbackPercentFromStatus(normalized),
       progress_label: payload?.progress_label ?? payload?.message ?? uploadStateMessage(normalized),
@@ -1170,6 +1208,7 @@ export default function DataConnectionsWorkspace({
     const file = selectedFiles[0];
     const flowSessionId = flowSessionRef.current;
     const selectedWorkflow = String(workflow || "create_baseline");
+    currentWorkflowRef.current = selectedWorkflow;
     setCurrentWorkflow(selectedWorkflow);
     const validationError = validateTelemetryFile(file, pendingUploadKind);
     if (validationError) {
@@ -1192,7 +1231,9 @@ export default function DataConnectionsWorkspace({
       const uploadResponse = await uploadTelemetryFileWithProgress({
         file,
         workflow: selectedWorkflow,
-        baselineIdentity: selectedWorkflow === "analyze_new_data" ? activeBaselineIdentity : null,
+        baselineIdentity: selectedWorkflow === "analyze_new_data"
+          ? (activeBaselineIdentity ?? completedBaselineIdentityRef.current)
+          : null,
         apiFetch,
         preferStoredUpload: import.meta.env.PROD,
         requestStartedAt: uploadInteractionStartedAt,
@@ -1220,7 +1261,7 @@ export default function DataConnectionsWorkspace({
       });
       if (flowSessionRef.current !== flowSessionId) return;
       const payload = uploadResponse.payload;
-      const jobId = String(payload?.job_id ?? "").trim() || null;
+      const jobId = String(payload?.jobId ?? payload?.job_id ?? "").trim() || null;
       console.info("[neraium] analysis job response received", {
         jobId: jobId ?? null,
         filename: file.name,
@@ -1316,17 +1357,17 @@ export default function DataConnectionsWorkspace({
   const latestStatusMessage = completionError || uploadError || visibleStatusLabel || readiness;
   const announcedStatusMessage = latestStatusMessage;
   const resultBaselineId = String(
-    uploadResult?.established_baseline_id
-      ?? uploadResult?.candidate_model?.baseline_id
-      ?? uploadResult?.candidate_model?.model_id
-      ?? uploadJob?.baseline_result?.established_baseline_id
-      ?? uploadJob?.baseline_result?.candidate_model?.model_id
+    uploadResult?.baselineId
+      ?? uploadJob?.baseline_result?.baselineId
+      ?? completedBaselineIdentityRef.current?.baselineId
       ?? "",
   ).trim();
-  const selectedCompletionBaselineId = String(uploadJob?.selected_baseline_id ?? "").trim();
+  const selectedCompletionBaselineId = String(uploadJob?.baselineId ?? completedBaselineIdentityRef.current?.baselineId ?? "").trim();
   const baselineResult = selectedCompletionBaselineId && resultBaselineId && selectedCompletionBaselineId !== resultBaselineId
     ? null
-    : uploadResult?.candidate_model ? uploadResult : uploadJob?.baseline_result ?? null;
+    : uploadResult?.candidate_model
+      ? uploadResult
+      : uploadJob?.baseline_result ?? (uploadJob?.baselineId ? uploadJob : null);
 
   function handleFileSelection(event) {
     if (uploadInFlightRef.current || isUploadProcessing(uploadStateRef.current)) {
@@ -1349,6 +1390,7 @@ export default function DataConnectionsWorkspace({
     setUploadTransfer(null);
     setUploadJob(null);
     setUploadResult(null);
+    if (currentWorkflowRef.current !== "analyze_new_data") completedBaselineIdentityRef.current = null;
     clearStoredUploadJobId();
     setSelectedFiles(files);
     setUploadError("");
@@ -1412,7 +1454,7 @@ export default function DataConnectionsWorkspace({
   }
 
   async function retryCurrentBatch() {
-    const currentJobId = String(uploadJob?.job_id ?? uploadJobIdRef.current ?? "").trim();
+    const currentJobId = String(uploadJob?.jobId ?? uploadJob?.job_id ?? uploadJobIdRef.current ?? "").trim();
     if (!currentJobId) {
       await handleUpload();
       return;
@@ -1424,7 +1466,7 @@ export default function DataConnectionsWorkspace({
     try {
       const retryResponse = await retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode });
       const payload = retryResponse.payload;
-      const jobId = String(payload?.job_id ?? "").trim() || currentJobId;
+      const jobId = String(payload?.jobId ?? payload?.job_id ?? "").trim() || currentJobId;
       setUploadJob(normalizeStatusPayload(payload, jobId));
       await pollUploadStatus(jobId, payload?.status_url);
     } catch (error) {
@@ -1469,66 +1511,111 @@ export default function DataConnectionsWorkspace({
       message: "Behavioral Baseline Active",
     }));
     const identity = baselineIdentityFromResult(updated, selectedBaselineIdentity ?? {}, "completion_response");
-    if (identity) persistBaselineSelection(identity);
+    if (identity) {
+      completedBaselineIdentityRef.current = identity;
+      persistBaselineSelection(identity);
+    }
     return updated;
   }
 
   async function openCompletedBaseline() {
     if (baselineNavigationPendingRef.current) return;
-
-    let selectedResult = uploadResult?.candidate_model ? uploadResult : uploadJob?.baseline_result ?? null;
-    const activationState = selectedResult?.activation?.state ?? selectedResult?.candidate_model?.status;
-    if (selectedResult?.candidate_model && activationState === "awaiting_approval") {
-      selectedResult = await approveBaselineCandidate();
-      if (!selectedResult) return;
-    }
-
-    const identity = resolveOpenBaselineIdentity({
-      selectedBaselineIdentity,
-      uploadJob,
-      uploadResult: selectedResult ?? uploadResult,
-      latestUploadResult,
-      latestUploadSnapshot,
-    });
-    const targetRoute = baselineRoutePath(identity?.portfolioId, identity?.baselineId);
-    logBaselineNavigation("button activated", identity, targetRoute);
-    logBaselineNavigation("selected baseline ID", identity, targetRoute);
-    logBaselineNavigation("generated target route", identity, targetRoute);
-
-    if (!identity?.baselineId || !targetRoute) {
-      const message = "The selected baseline cannot be opened because its baseline ID is unavailable.";
-      setCompletionError(message);
-      setUploadError("");
-      setUploadState("completion_error");
-      logBaselineNavigation("navigation failure", identity, targetRoute, "missing_baseline_identity");
-      return;
-    }
-    if (typeof onOpenBaseline !== "function") {
-      const message = `Baseline ${identity.baselineId} could not be opened because navigation is unavailable.`;
-      setCompletionError(message);
-      setUploadError("");
-      setUploadState("completion_error");
-      logBaselineNavigation("navigation failure", identity, targetRoute, "navigation_unavailable");
-      return;
-    }
-
     baselineNavigationPendingRef.current = true;
     setBaselineNavigationPending(true);
     setCompletionError("");
+
+    let identity = null;
+    let targetRoute = null;
     try {
+      let selectedResult = uploadResult?.candidate_model ? uploadResult : uploadJob?.baseline_result ?? null;
+      const activationState = selectedResult?.activation?.state ?? selectedResult?.candidate_model?.status;
+      if (selectedResult?.candidate_model && activationState === "awaiting_approval") {
+        selectedResult = await approveBaselineCandidate();
+        if (!selectedResult) throw new Error("The baseline candidate could not be activated.");
+      }
+
+      identity = resolveOpenBaselineIdentity({
+        selectedBaselineIdentity,
+        completedBaselineIdentity: completedBaselineIdentityRef.current,
+        uploadJob,
+        uploadResult: selectedResult ?? uploadResult,
+        latestUploadResult,
+        latestUploadSnapshot,
+      });
+
+      if (!identity?.baselineId) {
+        const recovery = await recoverBaselineCreation({
+          apiFetch,
+          accessCode,
+          identity: {
+            ...completedBaselineIdentityRef.current,
+            jobId: identity?.jobId ?? uploadJob?.jobId ?? uploadJob?.job_id ?? uploadJobIdRef.current,
+            datasetId: identity?.datasetId ?? uploadJob?.datasetId ?? uploadJob?.dataset_id,
+            portfolioId: identity?.portfolioId ?? uploadJob?.portfolioId ?? getCurrentWorkspaceId(),
+          },
+        });
+        identity = baselineIdentityFromResult(recovery, {
+          ...completedBaselineIdentityRef.current,
+          portfolioId: recovery.portfolioId ?? getCurrentWorkspaceId(),
+        }, "active_baseline_fetch");
+        if (identity) {
+          completedBaselineIdentityRef.current = identity;
+          persistBaselineSelection(identity);
+          setUploadJob((current) => ({
+            ...(current ?? {}),
+            jobId: identity.jobId,
+            job_id: identity.jobId,
+            datasetId: identity.datasetId,
+            dataset_id: identity.datasetId,
+            baselineId: identity.baselineId,
+            portfolioId: identity.portfolioId,
+            systemId: identity.systemId,
+            workspacePath: recovery.workspacePath,
+            createdAt: recovery.createdAt,
+            state_source: identity.stateSource,
+          }));
+          console.info("[neraium] baseline recovery handoff", {
+            datasetId: identity.datasetId,
+            jobId: identity.jobId,
+            baselineId: identity.baselineId,
+            returnedResponseBody: recovery,
+            routeDestination: baselineRoutePath(identity.portfolioId, identity.baselineId),
+          });
+        }
+      }
+
+      targetRoute = baselineRoutePath(identity?.portfolioId, identity?.baselineId);
+      logBaselineNavigation("button activated", identity, targetRoute);
+      logBaselineNavigation("selected baseline ID", identity, targetRoute);
+      logBaselineNavigation("generated target route", identity, targetRoute);
+      if (!identity?.baselineId || !targetRoute) throw new Error("The completed baseline response did not provide a recoverable baselineId.");
+      if (typeof onOpenBaseline !== "function") throw new Error("Baseline navigation is unavailable.");
+
       const navigated = await onOpenBaseline(identity);
       if (navigated !== true) throw new Error("The application router rejected the baseline route.");
-      baselineNavigationPendingRef.current = false;
-      setBaselineNavigationPending(false);
       logBaselineNavigation("navigation success", identity, targetRoute);
-    } catch {
-      baselineNavigationPendingRef.current = false;
-      setBaselineNavigationPending(false);
-      const message = `Baseline ${identity.baselineId} could not be opened. Please retry.`;
+    } catch (error) {
+      const message = "Baseline created successfully. We could not open the workspace automatically.";
       setCompletionError(message);
       setUploadError("");
       setUploadState("completion_error");
-      logBaselineNavigation("navigation failure", identity, targetRoute, "router_rejected");
+      logBaselineNavigation(
+        "navigation failure",
+        identity,
+        targetRoute,
+        identity?.baselineId ? "router_rejected" : "baseline_recovery_failed",
+      );
+      console.warn("[neraium] baseline navigation handoff failed", {
+        datasetId: identity?.datasetId ?? uploadJob?.datasetId ?? uploadJob?.dataset_id ?? null,
+        jobId: identity?.jobId ?? uploadJob?.jobId ?? uploadJob?.job_id ?? uploadJobIdRef.current ?? null,
+        baselineId: identity?.baselineId ?? null,
+        routeDestination: targetRoute,
+        requestId: error?.requestId ?? null,
+        reason: error?.message ?? String(error),
+      });
+    } finally {
+      baselineNavigationPendingRef.current = false;
+      setBaselineNavigationPending(false);
     }
   }
 
@@ -1590,6 +1677,7 @@ export default function DataConnectionsWorkspace({
         onChooseAnotherFile={chooseAnotherFile}
         onViewResults={() => { void viewCompletedResults(); }}
         onOpenBaseline={() => { void openCompletedBaseline(); }}
+        onReturnToPortfolio={onReturnToPortfolio}
         baselineNavigationPending={baselineNavigationPending}
         onImportComparisonDataset={beginComparisonDataset}
       />

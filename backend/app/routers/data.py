@@ -23,6 +23,7 @@ from app.core.path_safety import StoragePathError, ensure_storage_root, resolve_
 from app.services import upload_jobs
 from app.services.baseline_contracts import (
     WORKFLOW_ANALYZE_NEW_DATA,
+    canonical_baseline_creation_response,
     WORKFLOW_EXTEND_BASELINE,
     WORKFLOW_LEGACY_ANALYSIS,
     is_baseline_workflow,
@@ -33,12 +34,13 @@ from app.services.behavioral_model_repository import (
     activate_candidate,
     read_active_behavioral_model,
     read_baseline_result,
+    read_baseline_result_by_dataset_id,
     read_baseline_result_by_model_id,
     read_latest_candidate,
     read_model,
     read_model_index,
 )
-from app.models.api_models import BehavioralModelApprovalRequest
+from app.models.api_models import BaselineCreationResponse, BehavioralModelApprovalRequest
 from app.services.upload_evidence import build_evidence_record_from_result
 from app.services.upload_persistence import summarize_result
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
@@ -1721,6 +1723,19 @@ async def upload_status(request: Request, job_id: UploadJobPath):
     if str(normalized.get("status", "")).upper() == "NOT_FOUND":
         logger.warning("upload_status_missing polling_job_id=%s validation_failure_reason=upload_session_missing metadata_exists=False", job_id)
         return JSONResponse(status_code=404, content=normalized)
+    if is_baseline_workflow(normalized.get("workflow")) and str(normalized.get("status", "")).upper() == "COMPLETE":
+        logger.info(
+            "baseline_creation_handoff dataset_id=%s job_id=%s baseline_id=%s request_id=%s route_destination=%s returned_response_body=%s persistence_result=readback_verified",
+            normalized.get("datasetId") or normalized.get("dataset_id"),
+            normalized.get("jobId") or job_id,
+            normalized.get("baselineId"),
+            request_id,
+            normalized.get("workspacePath"),
+            {
+                key: normalized.get(key)
+                for key in ("status", "datasetId", "jobId", "baselineId", "workspacePath", "createdAt")
+            },
+        )
     return normalized
 
 
@@ -1809,8 +1824,21 @@ async def behavioral_baseline_state():
     }
 
 
+def _baseline_handoff_from_result(result: dict[str, Any]) -> dict[str, str]:
+    if not isinstance(result, dict) or not payload_matches_dataset_scope(result):
+        raise HTTPException(status_code=404, detail="Baseline construction result was not found.")
+    try:
+        handoff = canonical_baseline_creation_response(result)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=f"Baseline completion invariant failed: {exc}") from exc
+    readback = read_baseline_result_by_model_id(handoff["baselineId"])
+    if not isinstance(readback, dict) or str(readback.get("job_id") or "").strip() != handoff["jobId"]:
+        raise HTTPException(status_code=409, detail="Baseline completion invariant failed: readback by baselineId failed.")
+    return handoff
+
+
 @router.get("/baselines/jobs/{job_id}")
-async def baseline_construction_result(job_id: UploadJobPath):
+async def baseline_construction_result(request: Request, job_id: UploadJobPath):
     # Shared object stores can expose the terminal status a few moments before
     # the separately committed result object. Bound that consistency window so
     # the client does not turn a successful commit into a false missing-result failure.
@@ -1821,7 +1849,46 @@ async def baseline_construction_result(job_id: UploadJobPath):
         result = read_baseline_result(job_id)
     if not isinstance(result, dict) or not payload_matches_dataset_scope(result):
         raise HTTPException(status_code=404, detail="Baseline construction result was not found.")
-    return result
+    handoff = _baseline_handoff_from_result(result)
+    response_body = {**result, **handoff, "status": result.get("status") or "COMPLETE"}
+    logger.info(
+        "baseline_result_handoff dataset_id=%s job_id=%s baseline_id=%s request_id=%s route_destination=%s returned_response_body=%s persistence_result=readback_verified",
+        handoff["datasetId"],
+        handoff["jobId"],
+        handoff["baselineId"],
+        getattr(request.state, "request_id", None),
+        handoff["workspacePath"],
+        handoff,
+    )
+    return response_body
+
+
+@router.get("/jobs/{job_id}/result", response_model=BaselineCreationResponse)
+async def completed_baseline_job_result(request: Request, job_id: UploadJobPath):
+    result = read_baseline_result(job_id)
+    handoff = _baseline_handoff_from_result(result) if isinstance(result, dict) else None
+    if handoff is None:
+        raise HTTPException(status_code=404, detail="Completed baseline job result was not found.")
+    logger.info(
+        "baseline_job_recovery dataset_id=%s job_id=%s baseline_id=%s request_id=%s route_destination=%s returned_response_body=%s persistence_result=readback_verified",
+        handoff["datasetId"], handoff["jobId"], handoff["baselineId"],
+        getattr(request.state, "request_id", None), handoff["workspacePath"], handoff,
+    )
+    return handoff
+
+
+@router.get("/datasets/{dataset_id}/baseline", response_model=BaselineCreationResponse)
+async def completed_dataset_baseline(request: Request, dataset_id: UploadJobPath):
+    result = read_baseline_result_by_dataset_id(dataset_id)
+    handoff = _baseline_handoff_from_result(result) if isinstance(result, dict) else None
+    if handoff is None or handoff["datasetId"] != str(dataset_id):
+        raise HTTPException(status_code=404, detail="A baseline for this dataset was not found.")
+    logger.info(
+        "baseline_dataset_recovery dataset_id=%s job_id=%s baseline_id=%s request_id=%s route_destination=%s returned_response_body=%s persistence_result=readback_verified",
+        handoff["datasetId"], handoff["jobId"], handoff["baselineId"],
+        getattr(request.state, "request_id", None), handoff["workspacePath"], handoff,
+    )
+    return handoff
 
 
 @router.get("/baselines/candidates/{model_id}")

@@ -144,6 +144,8 @@ Baseline endpoints:
 
 - `GET /api/data/baselines`
 - `GET /api/data/baselines/jobs/{job_id}`
+- `GET /api/data/jobs/{job_id}/result`
+- `GET /api/data/datasets/{dataset_id}/baseline`
 - `GET /api/data/baselines/{baseline_id}`
 - `GET /api/data/baselines/candidates/{model_id}`
 - `POST /api/data/baselines/candidates/{model_id}/approve`
@@ -155,12 +157,36 @@ reaches it.
 
 ## Exact selection and activation consistency
 
-A completed baseline result carries `job_id`, `upload_id`, `dataset_id`,
-`baseline_candidate_id`, `established_baseline_id`, `portfolio_id`, and
-`system_id`. The completion response is the selection authority. Clients
-persist these identifiers and hydrate the completion view only through
-`GET /api/data/baselines/{baseline_id}` in the matching workspace; the
-portfolio-level state endpoint is not a substitute for an exact selection.
+The production navigation failure was an API-boundary mismatch: the terminal
+job summary exposed `baseline_model_id`, while restored frontend state looked
+for `selected_baseline_id`, `established_baseline_id`, or `baseline_id`.
+Baseline results are intentionally excluded from `latest_result`, so refresh
+left the completed UI with a job and dataset identity but no recognized
+baseline identity. The old retry action reused that same incomplete memory
+state.
+
+The public completion handoff now uses this canonical contract:
+
+```json
+{
+  "status": "completed",
+  "datasetId": "stored-dataset-id",
+  "jobId": "processing-job-id",
+  "baselineId": "bdm-v5-d5556684",
+  "workspacePath": "/portfolio/default/baselines/bdm-v5-d5556684",
+  "createdAt": "2026-07-30T00:00:00Z",
+  "portfolioId": "default",
+  "systemId": "default"
+}
+```
+
+Legacy snake_case storage records are normalized only at the API/client
+boundary. Frontend completion state and route construction use `baselineId`;
+`datasetId`, `jobId`, `modelId`, and candidate identity are never substituted.
+A completed job cannot be published until the result record, model record, and
+read-by-baseline-ID endpoint all return the same non-null `baselineId`.
+Recovery first requests `GET /api/data/jobs/{jobId}/result`, then falls back to
+`GET /api/data/datasets/{datasetId}/baseline`.
 
 Activation uses an activation-critical persistence barrier. The new model and
 active pointer are durably written before a terminal automatic-activation

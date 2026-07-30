@@ -72,6 +72,47 @@ def read_baseline_result_by_model_id(model_id: str) -> dict[str, Any] | None:
     return result if isinstance(result, dict) and returned_model_id == str(model_id) else None
 
 
+def read_baseline_result_by_dataset_id(dataset_id: str) -> dict[str, Any] | None:
+    requested = str(dataset_id or "").strip()
+    if not requested:
+        return None
+    for entry in reversed(read_model_index().get("models", [])):
+        if not isinstance(entry, dict):
+            continue
+        model_id = str(entry.get("model_id") or "").strip()
+        model = read_model(model_id) if model_id else None
+        source = model.get("source") if isinstance(model, dict) and isinstance(model.get("source"), dict) else {}
+        if str(source.get("dataset_id") or "").strip() != requested:
+            continue
+        result = read_baseline_result_by_model_id(model_id)
+        if isinstance(result, dict):
+            return result
+    return None
+
+
+def verify_persisted_baseline(job_id: str) -> dict[str, Any]:
+    """Read back every persisted baseline reference before completion is published."""
+    requested_job_id = str(job_id or "").strip()
+    result = read_baseline_result(requested_job_id)
+    if not isinstance(result, dict):
+        raise ValueError("completed_baseline_result_not_found")
+    candidate = result.get("candidate_model") if isinstance(result.get("candidate_model"), dict) else {}
+    baseline_id = str(result.get("baselineId") or result.get("established_baseline_id") or result.get("baseline_id") or candidate.get("baseline_id") or "").strip()
+    if not baseline_id:
+        raise ValueError("completed_baseline_id_missing")
+    if str(result.get("job_id") or "").strip() != requested_job_id:
+        raise ValueError("completed_baseline_job_id_mismatch")
+    if str(candidate.get("model_id") or "").strip() != baseline_id or str(candidate.get("baseline_id") or "").strip() != baseline_id:
+        raise ValueError("completed_baseline_model_reference_mismatch")
+    model = read_model(baseline_id)
+    if not isinstance(model, dict) or str(model.get("model_id") or "").strip() != baseline_id:
+        raise ValueError("completed_baseline_model_not_found")
+    readback = read_baseline_result_by_model_id(baseline_id)
+    if not isinstance(readback, dict) or str(readback.get("job_id") or "").strip() != requested_job_id:
+        raise ValueError("completed_baseline_readback_failed")
+    return {"baselineId": baseline_id, "model": model, "result": readback}
+
+
 def read_model_index() -> dict[str, Any]:
     payload = _read("index")
     if isinstance(payload, dict):
@@ -130,7 +171,7 @@ def persist_candidate(
 
         if not activate:
             _write(f"results/{persisted_result['job_id']}", persisted_result)
-            return persisted_model
+            return verify_persisted_baseline(str(persisted_result["job_id"]))["model"]
 
         # The active pointer is committed before the terminal result. If any
         # activation write fails, the upload job fails and cannot advertise a
@@ -142,7 +183,7 @@ def persist_candidate(
             "activation": dict(activated.get("activation") or {}),
         }
         _write(f"results/{persisted_result['job_id']}", completed_result)
-        return activated
+        return verify_persisted_baseline(str(persisted_result["job_id"]))["model"]
 
 
 def activate_candidate(model_id: str, *, approved_by: str) -> dict[str, Any]:

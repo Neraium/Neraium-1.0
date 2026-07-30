@@ -149,6 +149,7 @@ export default function AppWorkspaceRouter({
             onUploadComplete={handleGateUploadComplete}
             onOpenBaseline={(identity) => onBaselineSelected(identity, { replace: false })}
             onCloseBaseline={onBaselineClosedForComparison}
+            onReturnToPortfolio={() => setActiveWorkspace("system-body")}
             selectedBaselineIdentity={selectedBaselineIdentity}
             activeBaselineIdentity={activeBaselineIdentity}
             datasetScopeKey={datasetScopeKey}
