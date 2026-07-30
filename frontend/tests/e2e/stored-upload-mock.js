@@ -13,7 +13,7 @@ export async function installStoredBaselineUpload(page, {
   const baselineResultUrl = `/api/data/baselines/jobs/${jobId}`;
   const exactBaselineResultUrl = `/api/data/portfolios/${portfolioId}/baselines/${modelId}`;
   const createdAt = "2026-07-30T00:00:00Z";
-  const workspacePath = `/portfolio/${portfolioId}/baselines/${modelId}`;
+  const workspacePath = `/baselines/${modelId}/ready`;
   const processing = {
     job_id: jobId,
     jobId,

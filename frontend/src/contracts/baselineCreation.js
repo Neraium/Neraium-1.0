@@ -97,7 +97,7 @@ export function normalizeBaselineCreationResponse(payload, fallback = {}, { requ
   const normalizedStatus = rawStatus.toLowerCase().replaceAll("-", "_");
   const completed = COMPLETED_STATUSES.has(normalizedStatus) || normalizedStatus === "completed_compatibility";
   const workspacePath = text(first(ordered, (value) => value?.workspacePath ?? value?.workspace_path))
-    ?? (portfolioId && baselineId ? `/portfolio/${encodeURIComponent(portfolioId)}/baselines/${encodeURIComponent(baselineId)}` : null);
+    ?? (baselineId ? `/baselines/${encodeURIComponent(baselineId)}/ready` : null);
   const createdAt = text(first(ordered, (value) => value?.createdAt ?? value?.created_at ?? value?.completed_at ?? value?.candidate_model?.created_at));
 
   if (requireBaselineId && !baselineId) {

@@ -9,38 +9,85 @@ function identifier(value) {
   return IDENTIFIER_PATTERN.test(normalized) ? normalized : null;
 }
 
-export function baselineRoutePath(portfolioId, baselineId) {
-  const portfolio = identifier(portfolioId);
+function currentPortfolioIdentity(baselineId) {
+  const portfolioId = identifier(getCurrentWorkspaceId());
+  const persisted = portfolioId ? readPersistedBaselineSelection(portfolioId, baselineId) : null;
+  return portfolioId ? {
+    ...persisted,
+    portfolioId,
+    systemId: identifier(persisted?.systemId) ?? portfolioId,
+    baselineId,
+  } : null;
+}
+
+export function baselineRoutePath(_portfolioId, baselineId) {
   const baseline = identifier(baselineId);
-  if (!portfolio || !baseline) return null;
-  return `/portfolio/${encodeURIComponent(portfolio)}/baselines/${encodeURIComponent(baseline)}`;
+  return baseline ? `/baselines/${encodeURIComponent(baseline)}/ready` : null;
+}
+
+export function baselineComparisonRoutePath(_portfolioId, baselineId) {
+  const baseline = identifier(baselineId);
+  return baseline ? `/baselines/${encodeURIComponent(baseline)}/comparisons/new` : null;
 }
 
 export function parseBaselineRoute(pathname = typeof window === "undefined" ? "" : window.location.pathname) {
-  const match = String(pathname || "").match(/^\/portfolio\/([^/]+)\/baselines\/([^/]+)\/?$/);
-  if (!match) return null;
+  const canonical = String(pathname || "").match(/^\/baselines\/([^/]+)\/ready\/?$/);
+  if (canonical) {
+    try {
+      const baselineId = identifier(decodeURIComponent(canonical[1]));
+      return baselineId ? currentPortfolioIdentity(baselineId) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Preserve existing bookmarked baseline-detail URLs while all new handoffs use
+  // the explicit baseline-ready lifecycle route.
+  const legacy = String(pathname || "").match(/^\/portfolio\/([^/]+)\/baselines\/([^/]+)\/?$/);
+  if (!legacy) return null;
   try {
-    const portfolioId = identifier(decodeURIComponent(match[1]));
-    const baselineId = identifier(decodeURIComponent(match[2]));
-    return portfolioId && baselineId ? { portfolioId, systemId: portfolioId, baselineId } : null;
+    const portfolioId = identifier(decodeURIComponent(legacy[1]));
+    const baselineId = identifier(decodeURIComponent(legacy[2]));
+    const persisted = portfolioId && baselineId ? readPersistedBaselineSelection(portfolioId, baselineId) : null;
+    return portfolioId && baselineId ? { ...persisted, portfolioId, systemId: identifier(persisted?.systemId) ?? portfolioId, baselineId } : null;
   } catch {
     return null;
   }
 }
 
-export function baselineAnalysisRoutePath(portfolioId, baselineId, analysisRunId) {
-  const baselinePath = baselineRoutePath(portfolioId, baselineId);
+export function parseBaselineComparisonRoute(pathname = typeof window === "undefined" ? "" : window.location.pathname) {
+  const match = String(pathname || "").match(/^\/baselines\/([^/]+)\/comparisons\/new\/?$/);
+  if (!match) return null;
+  try {
+    const baselineId = identifier(decodeURIComponent(match[1]));
+    return baselineId ? currentPortfolioIdentity(baselineId) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function baselineAnalysisRoutePath(_portfolioId, _baselineId, analysisRunId) {
   const run = identifier(analysisRunId);
-  return baselinePath && run ? `${baselinePath}/analyses/${encodeURIComponent(run)}` : null;
+  return run ? `/analyses/${encodeURIComponent(run)}` : null;
 }
 
 export function parseBaselineAnalysisRoute(pathname = typeof window === "undefined" ? "" : window.location.pathname) {
-  const match = String(pathname || "").match(/^\/portfolio\/([^/]+)\/baselines\/([^/]+)\/analyses\/([^/]+)\/?$/);
-  if (!match) return null;
+  const canonical = String(pathname || "").match(/^\/analyses\/([^/]+)\/?$/);
+  if (canonical) {
+    try {
+      const analysisRunId = identifier(decodeURIComponent(canonical[1]));
+      return analysisRunId ? { analysisRunId } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const legacy = String(pathname || "").match(/^\/portfolio\/([^/]+)\/baselines\/([^/]+)\/analyses\/([^/]+)\/?$/);
+  if (!legacy) return null;
   try {
-    const portfolioId = identifier(decodeURIComponent(match[1]));
-    const baselineId = identifier(decodeURIComponent(match[2]));
-    const analysisRunId = identifier(decodeURIComponent(match[3]));
+    const portfolioId = identifier(decodeURIComponent(legacy[1]));
+    const baselineId = identifier(decodeURIComponent(legacy[2]));
+    const analysisRunId = identifier(decodeURIComponent(legacy[3]));
     return portfolioId && baselineId && analysisRunId
       ? { portfolioId, systemId: portfolioId, baselineId, analysisRunId }
       : null;
@@ -49,27 +96,39 @@ export function parseBaselineAnalysisRoute(pathname = typeof window === "undefin
   }
 }
 
-export function analysisBelongsToBaseline(result, identity) {
+export function analysisBelongsToBaseline(result, identity = {}) {
+  if (!result) return false;
   const portfolioId = identifier(identity?.portfolioId);
   const systemId = identifier(identity?.systemId);
   const baselineId = identifier(identity?.baselineId);
   const expectedAnalysisRunId = identifier(identity?.analysisRunId);
-  if (!result || !portfolioId || !baselineId) return false;
   const reference = result?.active_baseline_reference ?? {};
   const resultPortfolioId = identifier(result?.portfolio_id ?? result?.dataset_scope?.workspace_id);
   const resultSystemId = identifier(result?.system_id);
   const resultBaselineId = identifier(result?.baseline_id ?? reference?.model_id);
+  const baselineDatasetId = identifier(result?.baseline_dataset_id ?? reference?.dataset_id);
   const comparisonDatasetId = identifier(result?.comparison_dataset_id);
-  const analysisRunId = identifier(result?.analysis_run_id ?? result?.run_id);
+  const analysisRunId = identifier(result?.comparison_analysis_id ?? result?.analysis_run_id ?? result?.run_id);
   const jobId = identifier(result?.job_id);
   const workflow = String(result?.workflow ?? "").trim();
+  const status = String(result?.status ?? "").trim().toUpperCase();
+  const processingState = String(result?.processing_state ?? "").trim().toLowerCase();
   return workflow === "analyze_new_data"
-    && resultPortfolioId === portfolioId
-    && (!systemId || resultSystemId === systemId)
-    && resultBaselineId === baselineId
-    && identifier(reference?.model_id) === baselineId
+    && status === "COMPLETE"
+    && processingState === "complete"
+    && result?.sii_completed === true
+    && Boolean(resultPortfolioId)
+    && Boolean(resultSystemId)
+    && Boolean(resultBaselineId)
+    && Boolean(baselineDatasetId)
     && Boolean(comparisonDatasetId)
+    && baselineDatasetId !== comparisonDatasetId
     && Boolean(analysisRunId)
+    && (!portfolioId || resultPortfolioId === portfolioId)
+    && (!systemId || resultSystemId === systemId)
+    && (!baselineId || resultBaselineId === baselineId)
+    && identifier(reference?.model_id) === resultBaselineId
+    && identifier(reference?.dataset_id) === baselineDatasetId
     && (!expectedAnalysisRunId || analysisRunId === expectedAnalysisRunId)
     && comparisonDatasetId === identifier(result?.dataset_id)
     && analysisRunId === jobId;

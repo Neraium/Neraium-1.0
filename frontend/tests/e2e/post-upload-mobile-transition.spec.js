@@ -17,9 +17,11 @@ test.describe("Mobile post-upload transition", () => {
     });
     await page.getByRole("button", { name: "Continue" }).click();
 
-    await expect(page.getByRole("heading", { name: "Initial Baseline Established", level: 3 })).toBeVisible({ timeout: 30000 });
-    await expect(page.getByRole("button", { name: "Open Baseline" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Import Comparison Dataset" })).toBeVisible();
+    await expect(page).toHaveURL(/\/baselines\/mobile-post-upload-model\/ready$/, { timeout: 30000 });
+    await expect(page.getByRole("heading", { name: "Baseline Established", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Waiting for comparison data" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Upload Comparison Dataset" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Return to Portfolio" })).toBeVisible();
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
     expect(calls.sessions).toBe(1);
     expect(calls.objectPuts).toBe(1);

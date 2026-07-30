@@ -31,16 +31,16 @@ const baselineResult = {
 
 describe("baseline-only detail state", () => {
   it("renders the learned model and an explicit empty comparison state without unrelated findings", () => {
-    render(h(BaselineDetailView, { routeIdentity, detailState: { status: "ready", result: baselineResult }, onRetry: () => {}, onImportComparison: () => {} }));
+    render(h(BaselineDetailView, { routeIdentity, detailState: { status: "ready", result: baselineResult }, onRetry: () => {}, onImportComparison: () => {}, onReturnToPortfolio: () => {} }));
 
-    expect(screen.getByRole("heading", { name: "Baseline established", level: 3 })).toBeTruthy();
-    expect(screen.getByText(/No comparison dataset or live telemetry has been evaluated yet/i)).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "No comparison analysis" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Baseline Established", level: 3 })).toBeTruthy();
+    expect(screen.getByText(/learned the system’s normal operating relationships/i)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Waiting for comparison data" })).toBeTruthy();
     expect(screen.getByText("resort chw baseline.csv")).toBeTruthy();
     expect(screen.getByText("chw_supply_temp_f")).toBeTruthy();
     expect(screen.getByText("pump_speed_pct")).toBeTruthy();
     expect(screen.getByText("97%", { selector: "dd" })).toBeTruthy();
-    expect(screen.queryByText(/findings/i)).toBeNull();
+    expect(screen.queryByText(/^Findings$/i)).toBeNull();
     expect(screen.queryByText(/Pumping System/i)).toBeNull();
     expect(screen.queryByText(/items in review/i)).toBeNull();
     expect(screen.queryByText(/being monitored/i)).toBeNull();
@@ -50,12 +50,12 @@ describe("baseline-only detail state", () => {
   it("offers comparison import and exposes bounded failure diagnostics with retry", () => {
     const onImportComparison = vi.fn();
     const onRetry = vi.fn();
-    const { rerender } = render(h(BaselineDetailView, { routeIdentity, detailState: { status: "ready", result: baselineResult }, onRetry, onImportComparison }));
+    const { rerender } = render(h(BaselineDetailView, { routeIdentity, detailState: { status: "ready", result: baselineResult }, onRetry, onImportComparison, onReturnToPortfolio: () => {} }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Import Comparison Dataset" }));
+    fireEvent.click(screen.getByRole("button", { name: "Upload Comparison Dataset" }));
     expect(onImportComparison).toHaveBeenCalledTimes(1);
 
-    rerender(h(BaselineDetailView, { routeIdentity, detailState: { status: "error", message: "The baseline service did not respond within 15 seconds. Retry the request.", errorType: "timeout", httpStatus: 408, requestId: "request-123" }, onRetry, onImportComparison }));
+    rerender(h(BaselineDetailView, { routeIdentity, detailState: { status: "error", message: "The baseline service did not respond within 15 seconds. Retry the request.", errorType: "timeout", httpStatus: 408, requestId: "request-123" }, onRetry, onImportComparison, onReturnToPortfolio: () => {} }));
     expect(screen.getByRole("alert").textContent).toContain("timeout");
     expect(screen.getByRole("alert").textContent).toContain("408");
     expect(screen.getByRole("alert").textContent).toContain("request-123");

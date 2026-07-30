@@ -118,7 +118,7 @@ describe("engineering reasoning model", () => {
       },
     } });
 
-    expect(model.site.name).toBe("Unassigned Analysis");
+    expect(model.site.name).toBe("Dataset assignment pending");
     expect(model.site.locationLabel).toBe("Unassigned dataset");
     expect(model.selectedFinding.location.hierarchy[0]).toBe("Unassigned dataset");
   });

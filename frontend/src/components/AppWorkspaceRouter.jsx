@@ -100,6 +100,8 @@ export default function AppWorkspaceRouter({
   currentUser = null,
   setActiveWorkspace,
   selectedBaselineIdentity = null,
+  comparisonBaselineIdentity = null,
+  selectedAnalysisIdentity = null,
   activeBaselineIdentity = null,
   datasetScopeKey = "anonymous",
   onBaselineSelected = () => false,
@@ -147,11 +149,13 @@ export default function AppWorkspaceRouter({
             hasRealSiiOutput={hasRealSiiOutput}
             roomContext={roomContext}
             onUploadComplete={handleGateUploadComplete}
-            onOpenBaseline={(identity) => onBaselineSelected(identity, { replace: false })}
+            onOpenBaseline={(identity, options = {}) => onBaselineSelected(identity, { replace: options.replace === true })}
             onCloseBaseline={onBaselineClosedForComparison}
             onReturnToPortfolio={() => setActiveWorkspace("system-body")}
             selectedBaselineIdentity={selectedBaselineIdentity}
-            activeBaselineIdentity={activeBaselineIdentity}
+            activeBaselineIdentity={comparisonBaselineIdentity ?? activeBaselineIdentity}
+            comparisonMode={Boolean(comparisonBaselineIdentity?.baselineId)}
+            autoOpenBaselineReady={true}
             datasetScopeKey={datasetScopeKey}
             sessionStore={liveOps.session}
             onResetDemo={handleResetDemo}
@@ -314,6 +318,7 @@ export default function AppWorkspaceRouter({
             domainDetection={domainDetection}
             gateProcessing={gateProcessing}
             resultsNavigationKey={resultsNavigationKey}
+            comparisonAnalysisId={selectedAnalysisIdentity?.analysisRunId ?? null}
             onWorkspaceNavigate={setActiveWorkspace}
             onSignOut={handleSignOut}
             signOutPending={signOutPending}

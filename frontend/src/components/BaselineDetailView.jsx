@@ -25,7 +25,7 @@ function percentage(value) {
   return `${Math.round(Math.abs(number) <= 1 ? number * 100 : number)}%`;
 }
 
-export default function BaselineDetailView({ routeIdentity, detailState, onRetry, onImportComparison }) {
+export default function BaselineDetailView({ routeIdentity, detailState, onRetry, onImportComparison, onReturnToPortfolio }) {
   const baselineId = String(routeIdentity?.baselineId ?? "").trim();
   const portfolioId = String(routeIdentity?.portfolioId ?? "").trim();
   const ready = detailState.status === "ready" && detailState.result?.candidate_model;
@@ -59,7 +59,7 @@ export default function BaselineDetailView({ routeIdentity, detailState, onRetry
 
   return (
     <div className="data-connections-workspace baseline-detail-route" data-testid="baseline-detail-route">
-      <Panel title="Baseline Details" subtitle="Loaded from the portfolio and baseline identifiers in this URL." className="span-7 baseline-detail-panel">
+      <Panel title="Baseline Established" subtitle="The learned baseline is saved and waiting for separate comparison data." className="span-7 baseline-detail-panel">
         {detailState.status === "error" ? (
           <section className="baseline-detail-error" role="alert" aria-live="assertive">
             <p className="baseline-detail-error__eyebrow">Baseline unavailable</p>
@@ -86,12 +86,10 @@ export default function BaselineDetailView({ routeIdentity, detailState, onRetry
           <article className="baseline-detail" aria-labelledby="baseline-detail-heading">
             <header className="baseline-detail__header">
               <div>
-                <p className="baseline-detail__eyebrow">Baseline established</p>
-                <h3 id="baseline-detail-heading">Baseline established</h3>
+                <p className="baseline-detail__eyebrow">Baseline ready</p>
+                <h3 id="baseline-detail-heading">Baseline Established</h3>
                 <p className="baseline-detail__lede">
-                  {hasLinkedAnalysis
-                    ? "Neraium has learned the system’s initial operating model. Comparison results remain separate from this baseline record."
-                    : "Neraium has learned the system’s initial operating model. No comparison dataset or live telemetry has been evaluated yet."}
+                  Neraium has learned the system’s normal operating relationships. Upload a later operating dataset to compare against this baseline.
                 </p>
               </div>
               <span className="baseline-detail__status">{activationState}</span>
@@ -99,13 +97,16 @@ export default function BaselineDetailView({ routeIdentity, detailState, onRetry
 
             <section className="baseline-detail__comparison" aria-labelledby="comparison-state-heading">
               <div>
-                <p className="baseline-detail__eyebrow">Comparison state</p>
-                <h4 id="comparison-state-heading">{!hasLinkedAnalysis ? "No comparison analysis" : `${analysisState.count} linked comparison ${analysisState.count === 1 ? "analysis" : "analyses"}`}</h4>
+                <p className="baseline-detail__eyebrow">Status</p>
+                <h4 id="comparison-state-heading">Waiting for comparison data</h4>
                 <p>{!hasLinkedAnalysis
-                  ? "Operational comparison content remains empty until a comparison dataset or live telemetry is evaluated against this baseline."
-                  : "This baseline page shows only the learned model. Open a linked analysis route to review comparison results."}</p>
+                  ? "No findings, monitoring items, review items, classifications, or trajectories exist yet."
+                  : `${analysisState.count} completed comparison ${analysisState.count === 1 ? "analysis remains" : "analyses remain"} isolated from this baseline record.`}</p>
               </div>
-              <button type="button" className="command-button" onClick={onImportComparison}>Import Comparison Dataset</button>
+              <div className="upload-simple-actions baseline-detail__actions">
+                <button type="button" className="command-button" onClick={onImportComparison}>Upload Comparison Dataset</button>
+                <button type="button" className="secondary-command-button" onClick={onReturnToPortfolio}>Return to Portfolio</button>
+              </div>
             </section>
 
             <dl className="baseline-detail__identity" aria-label="Baseline identity">
@@ -113,6 +114,7 @@ export default function BaselineDetailView({ routeIdentity, detailState, onRetry
               <div><dt>Portfolio ID</dt><dd>{portfolioId}</dd></div>
               <div><dt>System ID</dt><dd>{display(detailState.result?.system_id ?? source?.system_id)}</dd></div>
               <div><dt>Model version</dt><dd>{display(candidate?.version)}</dd></div>
+              <div><dt>Established</dt><dd>{formatTimestamp(detailState.result?.createdAt ?? detailState.result?.completed_at ?? candidate?.created_at)}</dd></div>
             </dl>
 
             <dl className="baseline-success__summary" aria-label="Baseline summary">

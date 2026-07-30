@@ -20,7 +20,7 @@ from app.services.baseline_contracts import (
     is_baseline_workflow,
     normalize_workflow,
 )
-from app.services.baseline_analysis_repository import persist_completed_analysis
+from app.services.baseline_analysis_repository import persist_completed_analysis, stamp_comparison_analysis_identity
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.behavioral_baseline import build_behavioral_baseline
 from app.services.behavioral_model_repository import (
@@ -458,6 +458,8 @@ def _finalize_completed_upload(
     summary: dict[str, Any],
 ) -> None:
     finalized_result = dict(result)
+    if str(finalized_result.get("workflow") or "") == WORKFLOW_ANALYZE_NEW_DATA:
+        stamp_comparison_analysis_identity(finalized_result)
     finalized_summary = dict(summary)
     finalization = {
         "state": "running",
@@ -1134,11 +1136,20 @@ def _build_csv_result(
 
     job_scope = dataset_scope_from_payload(job_context) or current_dataset_scope()
     baseline_id = str(job_context.get("active_baseline_model_id") or "").strip() or None
+    baseline_dataset_id = str(job_context.get("active_baseline_dataset_id") or "").strip() or None
+    comparison_dataset_id = str(job_context.get("dataset_id") or "").strip() or None
     system_id = str(job_context.get("active_baseline_system_id") or job_scope.workspace_id).strip()
+    if workflow == WORKFLOW_ANALYZE_NEW_DATA:
+        if not baseline_id or not baseline_dataset_id or not comparison_dataset_id:
+            raise ValueError("analysis_identity_incomplete")
+        if comparison_dataset_id == baseline_dataset_id:
+            raise ValueError("comparison_dataset_matches_baseline_dataset")
     comparison_identity = (
         {
             "baseline_id": baseline_id,
-            "comparison_dataset_id": job_id,
+            "baseline_dataset_id": baseline_dataset_id,
+            "comparison_dataset_id": comparison_dataset_id,
+            "comparison_analysis_id": job_id,
             "analysis_run_id": job_id,
         }
         if workflow == WORKFLOW_ANALYZE_NEW_DATA
@@ -1223,6 +1234,7 @@ def _build_csv_result(
             {
                 "model_id": job_context.get("active_baseline_model_id"),
                 "version": job_context.get("active_baseline_version"),
+                "dataset_id": job_context.get("active_baseline_dataset_id"),
             }
             if workflow != WORKFLOW_LEGACY_ANALYSIS
             else None

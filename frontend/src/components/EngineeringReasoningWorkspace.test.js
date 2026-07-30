@@ -57,6 +57,18 @@ function analysisResult(overrides = {}) {
   };
   return {
     facility_name: "North Plant",
+    workflow: "analyze_new_data",
+    status: "COMPLETE",
+    processing_state: "complete",
+    portfolio_id: "default",
+    system_id: "default",
+    baseline_id: "baseline-42",
+    baseline_dataset_id: "baseline-dataset-42",
+    comparison_dataset_id: "comparison-dataset-42",
+    comparison_analysis_id: "run-42",
+    analysis_run_id: "run-42",
+    dataset_id: "comparison-dataset-42",
+    active_baseline_reference: { model_id: "baseline-42", dataset_id: "baseline-dataset-42" },
     job_id: "run-42",
     processed_at: new Date().toISOString(),
     sii_completed: true,
@@ -105,6 +117,19 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(screen.getByTestId("workspace-state-noDataset")).toBeTruthy();
     expect(screen.getByText(/Operations Brief · Baseline Needed/)).toBeTruthy();
     expect(screen.getByRole("heading", { name: "No baseline available" })).toBeTruthy();
+  });
+
+  it("withholds the Operations Brief for baseline-only, legacy, or incomplete data", () => {
+    const invalidResults = [
+      { workflow: "create_baseline", status: "COMPLETE", processing_state: "complete", baseline_id: "baseline-42" },
+      { ...analysisResult(), workflow: "legacy_analysis" },
+      { ...analysisResult(), status: "PROCESSING", processing_state: "processing", sii_completed: false },
+    ];
+    for (const result of invalidResults) {
+      const view = renderWorkspace({ result });
+      expect(screen.queryByTestId("operations-brief")).toBeNull();
+      view.unmount();
+    }
   });
 
   it("opens on a restrained Operations Brief and hides empty sections", () => {

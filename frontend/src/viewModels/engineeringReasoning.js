@@ -509,7 +509,7 @@ function buildTrace(finding, result) {
 function assignedSite(result, snapshot, currentSession, liveOps) {
   const candidates = [result?.facility_name, result?.site_name, snapshot?.facility_name, currentSession?.facilityName, liveOps?.facilityName];
   for (const candidate of candidates) { const text = supportedLocationText(candidate); if (text) return { assigned: true, name: text, location: text }; }
-  return { assigned: false, name: "Unassigned Analysis", location: "Unassigned dataset" };
+  return { assigned: false, name: "Dataset assignment pending", location: "Unassigned dataset" };
 }
 function deriveSiteStatus(findings, hasAnalysis, baselineSufficient, coverage) {
   if (findings.some((finding) => finding.status === "Change detected")) return "Change detected";

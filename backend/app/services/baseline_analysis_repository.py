@@ -36,6 +36,10 @@ def _index_key(baseline_id: str, *, scope: DatasetScope | None = None) -> str:
     return f"{_scope_prefix(scope)}/{baseline_id}/index"
 
 
+def _analysis_id_key(analysis_run_id: str, *, scope: DatasetScope | None = None) -> str:
+    return f"{_scope_prefix(scope)}/by-analysis/{analysis_run_id}"
+
+
 def _read(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
     shared = read_shared_state(name, scope=scope)
     if isinstance(shared, dict):
@@ -61,10 +65,64 @@ def analysis_identity(result: dict[str, Any] | None) -> dict[str, str] | None:
         "portfolio_id": str(result.get("portfolio_id") or (scope or current_dataset_scope()).workspace_id).strip(),
         "system_id": str(result.get("system_id") or "").strip(),
         "baseline_id": str(result.get("baseline_id") or baseline_reference.get("model_id") or "").strip(),
+        "baseline_dataset_id": str(result.get("baseline_dataset_id") or baseline_reference.get("dataset_id") or "").strip(),
         "comparison_dataset_id": str(result.get("comparison_dataset_id") or result.get("dataset_id") or "").strip(),
-        "analysis_run_id": str(result.get("analysis_run_id") or result.get("run_id") or result.get("job_id") or "").strip(),
+        "analysis_run_id": str(result.get("comparison_analysis_id") or result.get("analysis_run_id") or result.get("run_id") or result.get("job_id") or "").strip(),
     }
     return identity if all(identity.values()) else None
+
+
+def _finding_collections(result: dict[str, Any]) -> list[list[dict[str, Any]]]:
+    collections: list[list[dict[str, Any]]] = []
+    seen: set[int] = set()
+    candidates: list[Any] = [result.get("findings"), result.get("conditions")]
+    for container_name in ("analysis_explanation", "analysis", "analysis_result"):
+        container = result.get(container_name)
+        if isinstance(container, dict):
+            candidates.extend((container.get("findings"), container.get("insights"), container.get("conditions")))
+    for candidate in candidates:
+        if not isinstance(candidate, list) or id(candidate) in seen:
+            continue
+        seen.add(id(candidate))
+        collections.append([item for item in candidate if isinstance(item, dict)])
+    return collections
+
+
+def stamp_comparison_analysis_identity(result: dict[str, Any]) -> dict[str, Any]:
+    """Stamp every comparison finding with its owning analysis and dataset IDs."""
+    if str(result.get("workflow") or "") != WORKFLOW_ANALYZE_NEW_DATA:
+        return result
+    identity = analysis_identity(result)
+    if identity is None:
+        raise ValueError("analysis_identity_incomplete")
+    result["comparison_analysis_id"] = identity["analysis_run_id"]
+    result["analysis_run_id"] = identity["analysis_run_id"]
+    result["baseline_id"] = identity["baseline_id"]
+    result["baseline_dataset_id"] = identity["baseline_dataset_id"]
+    result["comparison_dataset_id"] = identity["comparison_dataset_id"]
+    finding_identity = {
+        "comparison_analysis_id": identity["analysis_run_id"],
+        "analysis_run_id": identity["analysis_run_id"],
+        "baseline_id": identity["baseline_id"],
+        "baseline_dataset_id": identity["baseline_dataset_id"],
+        "comparison_dataset_id": identity["comparison_dataset_id"],
+    }
+    for collection in _finding_collections(result):
+        for finding in collection:
+            finding.update(finding_identity)
+    return result
+
+
+def comparison_findings(result: dict[str, Any]) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for collection in _finding_collections(result):
+        for finding in collection:
+            if id(finding) in seen:
+                continue
+            seen.add(id(finding))
+            findings.append(dict(finding))
+    return findings
 
 
 def validate_completed_analysis(
@@ -108,10 +166,26 @@ def validate_completed_analysis(
     reference_id = str((baseline_reference or {}).get("model_id") or "").strip()
     if reference_id != identity["baseline_id"]:
         raise ValueError("analysis_baseline_reference_mismatch")
+    reference_dataset_id = str((baseline_reference or {}).get("dataset_id") or "").strip()
+    if reference_dataset_id != identity["baseline_dataset_id"]:
+        raise ValueError("analysis_baseline_dataset_reference_mismatch")
+    if identity["baseline_dataset_id"] == identity["comparison_dataset_id"]:
+        raise ValueError("comparison_dataset_matches_baseline_dataset")
     if str(result.get("dataset_id") or "").strip() != identity["comparison_dataset_id"]:
         raise ValueError("analysis_comparison_dataset_mismatch")
     if str(result.get("run_id") or result.get("job_id") or "").strip() != identity["analysis_run_id"]:
         raise ValueError("analysis_run_id_mismatch")
+    if str(result.get("comparison_analysis_id") or "").strip() != identity["analysis_run_id"]:
+        raise ValueError("comparison_analysis_id_mismatch")
+    for collection in _finding_collections(result):
+        for finding in collection:
+            for key, expected_value in (
+                ("comparison_analysis_id", identity["analysis_run_id"]),
+                ("baseline_id", identity["baseline_id"]),
+                ("comparison_dataset_id", identity["comparison_dataset_id"]),
+            ):
+                if str(finding.get(key) or "").strip() != expected_value:
+                    raise ValueError(f"finding_{key}_mismatch")
     return identity
 
 
@@ -123,6 +197,7 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
     record = {
         **identity,
         "analysis_record_version": 1,
+        "comparison_analysis_id": identity["analysis_run_id"],
         "result_job_id": str(result.get("job_id") or identity["analysis_run_id"]),
         "job_id": identity["analysis_run_id"],
         "run_id": identity["analysis_run_id"],
@@ -137,6 +212,11 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
     }
     _write(
         _analysis_key(identity["baseline_id"], identity["analysis_run_id"], scope=scope),
+        record,
+        scope=scope,
+    )
+    _write(
+        _analysis_id_key(identity["analysis_run_id"], scope=scope),
         record,
         scope=scope,
     )
@@ -240,3 +320,24 @@ def read_completed_analysis(
     except ValueError:
         return None
     return result
+
+
+def read_completed_analysis_by_id(analysis_run_id: str) -> dict[str, Any] | None:
+    scope = current_dataset_scope()
+    requested_id = str(analysis_run_id or "").strip()
+    if not requested_id:
+        return None
+    link = _read(_analysis_id_key(requested_id, scope=scope), scope=scope)
+    if not isinstance(link, dict) or not payload_matches_dataset_scope(link, scope):
+        return None
+    baseline_id = str(link.get("baseline_id") or "").strip()
+    system_id = str(link.get("system_id") or "").strip()
+    portfolio_id = str(link.get("portfolio_id") or "").strip()
+    if not baseline_id or not system_id or not portfolio_id:
+        return None
+    return read_completed_analysis(
+        baseline_id,
+        requested_id,
+        portfolio_id=portfolio_id,
+        system_id=system_id,
+    )

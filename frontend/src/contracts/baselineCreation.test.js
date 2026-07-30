@@ -25,7 +25,7 @@ describe("baseline creation response contract", () => {
       baselineId: "baseline-1",
       portfolioId: "portfolio-1",
       systemId: "system-1",
-      workspacePath: "/portfolio/portfolio-1/baselines/baseline-1",
+      workspacePath: "/baselines/baseline-1/ready",
       createdAt: "2026-07-30T00:00:00Z",
     });
   });

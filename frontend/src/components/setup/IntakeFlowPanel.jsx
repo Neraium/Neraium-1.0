@@ -670,6 +670,7 @@ function SuccessState({
   onImportComparisonDataset,
   onViewResults,
   onResetWorkspace,
+  onReturnToPortfolio,
   latestUploadSnapshot,
   uploadJob,
   uploadState,
@@ -706,7 +707,7 @@ function SuccessState({
         <span className="baseline-success__check" aria-hidden="true">✓</span>
         <div>
           <p className="baseline-success__eyebrow">Initial learning complete</p>
-          <h3 id="baseline-ready-heading">Initial Baseline Established</h3>
+          <h3 id="baseline-ready-heading">Baseline Established</h3>
         </div>
         <div className="baseline-success__model" role="img" aria-label="Stable learned relationship network">
           <RelationshipLearningVisual percent={100} stage={{ index: 3 }} complete />
@@ -721,21 +722,19 @@ function SuccessState({
         ))}
       </dl>
       <div className="baseline-success__explanation">
-        <p>Neraium has established its initial understanding of how this infrastructure normally behaves.</p>
-        <p>This learned operating model becomes the foundation for continuous learning. Future historical datasets and live telemetry will be evaluated against this understanding.</p>
-        <p>As verified operating history grows, Neraium continuously refines its understanding of normal while preserving enough historical context to detect meaningful and persistent changes in system behavior.</p>
+        <p>Neraium has learned the system’s normal operating relationships. Upload a later operating dataset to compare against this baseline.</p>
       </div>
       <div className="upload-simple-actions upload-completion-actions">
         <button
           type="button"
           className="command-button upload-completion-actions__primary"
-          onClick={onOpenBaseline}
+          onClick={onImportComparisonDataset}
           disabled={baselineNavigationPending}
           aria-disabled={baselineNavigationPending}
         >
-          {baselineNavigationPending ? "Opening Baseline…" : "Open Baseline"}
+          {baselineNavigationPending ? "Opening Baseline…" : "Upload Comparison Dataset"}
         </button>
-        <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onImportComparisonDataset}>Import Comparison Dataset</button>
+        <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onReturnToPortfolio}>Return to Portfolio</button>
       </div>
       <AdvancedDetails
         latestUploadSnapshot={latestUploadSnapshot}
@@ -944,6 +943,7 @@ export default function IntakeFlowPanel({
             onImportComparisonDataset={onImportComparisonDataset ?? onResetWorkspace}
             onViewResults={onViewResults}
             onResetWorkspace={onResetWorkspace}
+            onReturnToPortfolio={onReturnToPortfolio ?? onResetWorkspace}
             latestUploadSnapshot={latestUploadSnapshot}
             uploadJob={uploadJob}
             uploadState={uploadState}

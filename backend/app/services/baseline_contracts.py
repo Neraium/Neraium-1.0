@@ -166,7 +166,7 @@ def canonical_baseline_creation_response(payload: dict[str, Any]) -> dict[str, s
         raise ValueError("completed_baseline_dataset_id_mismatch")
     workspace_path = str(value.get("workspacePath") or "").strip()
     if not workspace_path:
-        workspace_path = f"/portfolio/{portfolio_id}/baselines/{baseline_id}" if portfolio_id else f"/baselines/{baseline_id}"
+        workspace_path = f"/baselines/{baseline_id}/ready"
     response = {
         "status": "completed",
         "datasetId": dataset_id,

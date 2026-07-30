@@ -26,7 +26,8 @@ async function completeBaseline(page, options = {}) {
     buffer: Buffer.from("timestamp,flow,pressure\n2026-07-29T00:00:00Z,100,40\n", "utf8"),
   });
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByRole("heading", { name: "Initial Baseline Established", level: 3 })).toBeVisible({ timeout: 30000 });
+  await expect(page).toHaveURL(new RegExp(`/baselines/${modelId}/ready$`), { timeout: 30000 });
+  await expect(page.getByRole("heading", { name: "Baseline Established", level: 3 })).toBeVisible();
   return { calls, jobId, modelId };
 }
 
@@ -39,58 +40,32 @@ function captureConsoleErrors(page) {
   return errors;
 }
 
-test.describe("Open Baseline navigation", () => {
-  test("opens the exact completed baseline and browser back restores completion", async ({ page, browserName }) => {
+test.describe("Baseline-ready navigation", () => {
+  test("automatically opens the exact completed baseline without rendering analysis findings", async ({ page }) => {
     const errors = captureConsoleErrors(page);
-    const navigationLogs = [];
-    page.on("console", (message) => {
-      if (message.text().includes("baseline navigation")) navigationLogs.push(message.text());
-    });
     const exactRequests = [];
     page.on("request", (request) => {
       if (request.url().includes("/api/data/portfolios/default/baselines/bdm-v4-04f9195e")) exactRequests.push(request.url());
     });
+
     await completeBaseline(page);
 
-    await expect(page).toHaveURL(/\/workspace\/data-sources$/);
-    const openButton = page.getByRole("button", { name: "Open Baseline" });
-    await openButton.scrollIntoViewIfNeeded();
-    const hitTargetIsButton = await openButton.evaluate((button) => {
-      const rect = button.getBoundingClientRect();
-      const topElement = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      return topElement === button || button.contains(topElement);
-    });
-    expect(hitTargetIsButton).toBe(true);
-
-    await openButton.click();
-    await expect(page).toHaveURL(/\/portfolio\/default\/baselines\/bdm-v4-04f9195e$/);
-    await expect(page.getByRole("heading", { name: "Baseline Details", level: 2 })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Waiting for comparison data" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Upload Comparison Dataset" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Return to Portfolio" })).toBeVisible();
+    await expect(page.getByText(/items in review|being monitored|Known operational change|Unassigned Analysis/i)).toHaveCount(0);
     expect(exactRequests.length).toBeGreaterThanOrEqual(1);
-    if (browserName !== "firefox") {
-      expect(navigationLogs.some((line) => line.includes("button activated"))).toBe(true);
-      expect(navigationLogs.some((line) => line.includes("navigation success"))).toBe(true);
-    }
-
-    await page.goBack();
-    await expect(page).toHaveURL(/\/workspace\/data-sources$/);
-    await expect(page.getByRole("heading", { name: "Initial Baseline Established", level: 3 })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Open Baseline" })).toBeEnabled();
     expect(errors).toEqual([]);
   });
 
-  test("refreshes cached completion and opens the selected baseline", async ({ page }) => {
+  test("refresh restores the canonical baseline-ready state", async ({ page }) => {
     const errors = captureConsoleErrors(page);
     await completeBaseline(page);
     await page.reload({ waitUntil: "domcontentloaded" });
 
-    await expect(page).toHaveURL(/\/workspace\/data-sources$/);
-    await expect(page.getByRole("heading", { name: "Initial Baseline Established", level: 3 })).toBeVisible({ timeout: 30000 });
-    await page.getByText("Processing details").click();
-    await expect(page.getByText("cache", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Open Baseline" }).click();
-    await expect(page).toHaveURL(/\/portfolio\/default\/baselines\/bdm-v4-04f9195e$/);
-    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
+    await expect(page).toHaveURL(/\/baselines\/bdm-v4-04f9195e\/ready$/);
+    await expect(page.getByRole("heading", { name: "Baseline Established", level: 3 })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole("heading", { name: "Waiting for comparison data" })).toBeVisible();
     expect(errors).toEqual([]);
   });
 
@@ -119,42 +94,41 @@ test.describe("Open Baseline navigation", () => {
       staleLatestResult,
     });
 
-    await page.goto("/portfolio/default/baselines/bdm-v5-d5556684", { waitUntil: "domcontentloaded" });
+    await page.goto("/baselines/bdm-v5-d5556684/ready", { waitUntil: "domcontentloaded" });
 
-    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
-    await expect(page.getByText(/No comparison dataset or live telemetry has been evaluated yet/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Import Comparison Dataset" })).toBeVisible();
-    await expect(page.getByText(/Pumping System/i)).toHaveCount(0);
-    await expect(page.getByText(/pump_vibration_mms/i)).toHaveCount(0);
-    await expect(page.getByText(/Unassigned Analysis/i)).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Baseline Established", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Waiting for comparison data" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Upload Comparison Dataset" })).toBeVisible();
+    await expect(page.getByText(/Pumping System|pump_vibration_mms|Unassigned Analysis/i)).toHaveCount(0);
   });
 
-  test("preserves native keyboard activation", async ({ page }) => {
+  test("primary action opens the canonical comparison upload route", async ({ page }) => {
     await completeBaseline(page, { jobId: "keyboard-job", modelId: "keyboard-baseline" });
-    const openButton = page.getByRole("button", { name: "Open Baseline" });
-    await openButton.focus();
+    const comparisonButton = page.getByRole("button", { name: "Upload Comparison Dataset" });
+    await comparisonButton.focus();
     await page.keyboard.press("Enter");
 
-    await expect(page).toHaveURL(/\/portfolio\/default\/baselines\/keyboard-baseline$/);
-    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
+    await expect(page).toHaveURL(/\/baselines\/keyboard-baseline\/comparisons\/new$/);
+    await expect(page.getByRole("heading", { name: "Import Comparison Dataset", level: 2 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Baseline Established" })).toHaveCount(0);
   });
 
-  test("loads two exact routes independently and reports a missing baseline", async ({ page }) => {
+  test("loads two exact ready routes independently and reports a missing baseline", async ({ page }) => {
     const errors = captureConsoleErrors(page);
     await installStoredBaselineUpload(page, { jobId: "job-a", modelId: "baseline-a", filename: "baseline-a.csv" });
     await installStoredBaselineUpload(page, { jobId: "job-b", modelId: "baseline-b", filename: "baseline-b.csv" });
 
-    await page.goto("/portfolio/default/baselines/baseline-a", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
+    await page.goto("/baselines/baseline-a/ready", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Baseline Established", level: 3 })).toBeVisible();
     await expect(page.getByText("baseline-a.csv")).toBeVisible();
     await expect(page.getByText("baseline-b.csv")).toHaveCount(0);
 
-    await page.goto("/portfolio/default/baselines/baseline-b", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
+    await page.goto("/baselines/baseline-b/ready", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Baseline Established", level: 3 })).toBeVisible();
     await expect(page.getByText("baseline-b.csv")).toBeVisible();
     await expect(page.getByText("baseline-a.csv")).toHaveCount(0);
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Baseline Established", level: 3 })).toBeVisible();
 
     expect(errors).toEqual([]);
 
@@ -163,25 +137,25 @@ test.describe("Open Baseline navigation", () => {
       contentType: "application/json",
       body: JSON.stringify({ detail: "Baseline was not found." }),
     }));
-    await page.goto("/portfolio/default/baselines/missing-baseline", { waitUntil: "domcontentloaded" });
+    await page.goto("/baselines/missing-baseline/ready", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Baseline Not Found", level: 3 })).toBeVisible();
     await expect(page.getByRole("alert")).toContainText("Baseline missing-baseline was not found in portfolio default.");
   });
 });
 
-test.describe("Open Baseline touch activation", () => {
+test.describe("Baseline-ready touch activation", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
-  test("opens from a mobile WebKit-compatible tap target", async ({ page }) => {
+  test("opens comparison upload from a mobile tap target", async ({ page }) => {
     const errors = captureConsoleErrors(page);
     await completeBaseline(page, { jobId: "mobile-job", modelId: "mobile-baseline" });
-    const openButton = page.getByRole("button", { name: "Open Baseline" });
-    await expect(openButton).toBeEnabled();
-    await openButton.scrollIntoViewIfNeeded();
-    await openButton.tap({ timeout: 15000 });
+    const comparisonButton = page.getByRole("button", { name: "Upload Comparison Dataset" });
+    await expect(comparisonButton).toBeEnabled();
+    await comparisonButton.scrollIntoViewIfNeeded();
+    await comparisonButton.tap({ timeout: 15000 });
 
-    await expect(page).toHaveURL(/\/portfolio\/default\/baselines\/mobile-baseline$/);
-    await expect(page.getByRole("heading", { name: "Baseline established", level: 3 })).toBeVisible();
+    await expect(page).toHaveURL(/\/baselines\/mobile-baseline\/comparisons\/new$/);
+    await expect(page.getByRole("heading", { name: "Import Comparison Dataset", level: 2 })).toBeVisible();
     expect(errors).toEqual([]);
   });
 });

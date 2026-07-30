@@ -18,8 +18,10 @@ import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/syst
 import {
   analysisBelongsToBaseline,
   baselineAnalysisRoutePath,
+  baselineComparisonRoutePath,
   baselineRoutePath,
   parseBaselineAnalysisRoute,
+  parseBaselineComparisonRoute,
   parseBaselineRoute,
 } from "./viewModels/baselineSelection";
 
@@ -40,7 +42,7 @@ function readInitialWorkspaceRoute() {
   if (typeof window === "undefined") return "system-body";
   const pathname = window.location.pathname.replace(/\/+$/, "") || HOME_PATH;
   if (pathname === HOME_PATH || pathname === "/signin") return "system-body";
-  if (parseBaselineRoute(pathname)) return "data-connections";
+  if (parseBaselineRoute(pathname) || parseBaselineComparisonRoute(pathname)) return "data-connections";
   if (parseBaselineAnalysisRoute(pathname)) return "system-body";
   if (["/portfolio", "/workspace"].includes(pathname) || pathname.startsWith("/sites/") || pathname.startsWith("/systems") || pathname.startsWith("/findings") || pathname.startsWith("/investigations") || pathname.startsWith("/evidence") || pathname.startsWith("/trace")) return "system-body";
   return PATH_WORKSPACES[pathname] ?? "system-body";
@@ -48,8 +50,9 @@ function readInitialWorkspaceRoute() {
 
 function initializeAuthenticatedRoute(currentUser) {
   const baselineRoute = parseBaselineRoute();
+  const comparisonRoute = parseBaselineComparisonRoute();
   const analysisRoute = parseBaselineAnalysisRoute();
-  const routeIdentity = baselineRoute ?? analysisRoute;
+  const routeIdentity = baselineRoute ?? comparisonRoute ?? analysisRoute;
   let datasetScopeKey = "authenticated";
   try {
     if (routeIdentity?.portfolioId) setCurrentWorkspaceId(routeIdentity.portfolioId);
@@ -61,6 +64,7 @@ function initializeAuthenticatedRoute(currentUser) {
   return {
     activeWorkspace: readInitialWorkspaceRoute(),
     baselineRoute,
+    comparisonRoute,
     analysisRoute,
     routeIdentity,
     datasetScopeKey,
@@ -72,6 +76,7 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
   const [initialRoute] = useState(() => initializeAuthenticatedRoute(currentUser));
   const [activeWorkspace, setActiveWorkspaceState] = useState(initialRoute.activeWorkspace);
   const [selectedBaselineIdentity, setSelectedBaselineIdentity] = useState(initialRoute.baselineRoute);
+  const [comparisonBaselineIdentity, setComparisonBaselineIdentity] = useState(initialRoute.comparisonRoute);
   const [selectedAnalysisIdentity, setSelectedAnalysisIdentity] = useState(initialRoute.analysisRoute);
   const [activeBaselineIdentity, setActiveBaselineIdentity] = useState(initialRoute.routeIdentity);
   const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
@@ -86,6 +91,7 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
     const nextWorkspace = workspaceId === "home" ? "home" : workspaceId;
     setActiveWorkspaceState(nextWorkspace);
     setSelectedBaselineIdentity(null);
+    setComparisonBaselineIdentity(null);
     setSelectedAnalysisIdentity(null);
 
     if (typeof window === "undefined") return;
@@ -107,6 +113,7 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
       }
     }
     setSelectedBaselineIdentity(identity);
+    setComparisonBaselineIdentity(null);
     setSelectedAnalysisIdentity(null);
     setActiveBaselineIdentity(identity);
     setActiveWorkspaceState("data-connections");
@@ -114,13 +121,17 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
   }, []);
 
   const handleBaselineClosedForComparison = useCallback((identity) => {
+    const nextPath = baselineComparisonRoutePath(identity?.portfolioId, identity?.baselineId);
+    if (!nextPath) return false;
     if (identity?.baselineId) setActiveBaselineIdentity(identity);
     setSelectedBaselineIdentity(null);
+    setComparisonBaselineIdentity(identity);
     setSelectedAnalysisIdentity(null);
     setActiveWorkspaceState("data-connections");
-    if (typeof window !== "undefined" && window.location.pathname !== WORKSPACE_PATHS["data-connections"]) {
-      window.history.pushState({}, "", WORKSPACE_PATHS["data-connections"]);
+    if (typeof window !== "undefined" && window.location.pathname !== nextPath) {
+      window.history.pushState({}, "", nextPath);
     }
+    return true;
   }, []);
 
   const {
@@ -304,6 +315,7 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
   const resetSignedOutSession = useCallback(() => {
     setDatasetScopeKey("signed-out");
     setActiveBaselineIdentity(null);
+    setComparisonBaselineIdentity(null);
     setSelectedAnalysisIdentity(null);
     try {
       clearDatasetSessionCache();
@@ -401,10 +413,12 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
 
     const handlePopState = () => {
       const baselineRoute = parseBaselineRoute();
+      const comparisonRoute = parseBaselineComparisonRoute();
       const analysisRoute = parseBaselineAnalysisRoute();
       setSelectedBaselineIdentity(baselineRoute);
+      setComparisonBaselineIdentity(comparisonRoute);
       setSelectedAnalysisIdentity(analysisRoute);
-      if (baselineRoute ?? analysisRoute) setActiveBaselineIdentity(baselineRoute ?? analysisRoute);
+      if (baselineRoute ?? comparisonRoute ?? analysisRoute) setActiveBaselineIdentity(baselineRoute ?? comparisonRoute ?? analysisRoute);
       setActiveWorkspaceState(readInitialWorkspaceRoute());
     };
 
@@ -450,6 +464,8 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
         currentUser={currentUser}
         setActiveWorkspace={setActiveWorkspace}
         selectedBaselineIdentity={selectedBaselineIdentity}
+        comparisonBaselineIdentity={comparisonBaselineIdentity}
+        selectedAnalysisIdentity={selectedAnalysisIdentity}
         activeBaselineIdentity={activeBaselineIdentity}
         datasetScopeKey={datasetScopeKey}
         onBaselineSelected={handleBaselineSelected}

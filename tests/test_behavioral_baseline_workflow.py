@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.services import behavioral_baseline, behavioral_model_repository, upload_jobs, upload_pipeline
-from app.services.baseline_analysis_repository import persist_completed_analysis
+from app.services.baseline_analysis_repository import persist_completed_analysis, stamp_comparison_analysis_identity
 from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope
 from app.services.baseline_contracts import (
     PROHIBITED_BASELINE_OUTPUT_KEYS,
@@ -117,7 +117,7 @@ def test_completed_baseline_contract_propagates_id_and_supports_recovery_lookups
         "datasetId": terminal["datasetId"],
         "jobId": terminal["jobId"],
         "baselineId": baseline_id,
-        "workspacePath": f"/portfolio/default/baselines/{baseline_id}",
+        "workspacePath": f"/baselines/{baseline_id}/ready",
         "createdAt": terminal["createdAt"],
         "portfolioId": "default",
         "systemId": "default",
@@ -344,16 +344,19 @@ def _completed_comparison(baseline_result: dict, run_id: str, **overrides) -> di
     baseline = baseline_result["candidate_model"]
     source = baseline["source"]
     scope = current_dataset_scope()
+    comparison_dataset_id = f"dataset-{run_id}"
     payload = {
         "job_id": run_id,
         "run_id": run_id,
         "upload_id": run_id,
-        "dataset_id": run_id,
+        "dataset_id": comparison_dataset_id,
         "organization_id": scope.tenant_id,
         "portfolio_id": source["portfolio_id"],
         "system_id": source["system_id"],
         "baseline_id": baseline["model_id"],
-        "comparison_dataset_id": run_id,
+        "baseline_dataset_id": source["dataset_id"],
+        "comparison_dataset_id": comparison_dataset_id,
+        "comparison_analysis_id": run_id,
         "analysis_run_id": run_id,
         "workflow": "analyze_new_data",
         "status": "COMPLETE",
@@ -361,11 +364,12 @@ def _completed_comparison(baseline_result: dict, run_id: str, **overrides) -> di
         "sii_completed": True,
         "filename": f"{run_id}.csv",
         "completed_at": "2026-07-30T00:00:00+00:00",
-        "active_baseline_reference": {"model_id": baseline["model_id"], "version": baseline["version"]},
+        "active_baseline_reference": {"model_id": baseline["model_id"], "version": baseline["version"], "dataset_id": source["dataset_id"]},
         "conditions": [{"id": f"condition-{run_id}", "headline": "Real comparison condition"}],
     }
     payload.update(overrides)
-    return attach_dataset_scope(payload, scope=scope, dataset_id=payload.get("dataset_id"))
+    scoped = attach_dataset_scope(payload, scope=scope, dataset_id=payload.get("dataset_id"))
+    return stamp_comparison_analysis_identity(scoped)
 
 
 def _persist_comparison(baseline_result: dict, run_id: str) -> dict:
@@ -407,7 +411,9 @@ def test_explicit_baseline_detail_is_baseline_only_until_an_exact_analysis_exist
     )
     assert analysis_response.status_code == 200
     assert analysis_response.json()["baseline_id"] == baseline_id
-    assert analysis_response.json()["comparison_dataset_id"] == run_id
+    assert analysis_response.json()["comparison_dataset_id"] == f"dataset-{run_id}"
+    assert analysis_response.json()["comparison_dataset_id"] != baseline_result["dataset_id"]
+    assert analysis_response.json()["comparison_analysis_id"] == run_id
 
 
 def test_baseline_a_never_lists_or_serves_baseline_b_analysis() -> None:
@@ -489,6 +495,91 @@ def test_comparison_upload_rejects_a_requested_baseline_from_another_identity() 
     assert wrong_portfolio.status_code == 409
     assert wrong_portfolio.json()["error_type"] == "analysis_portfolio_mismatch"
 
+
+
+def test_completed_comparison_uses_distinct_dataset_and_analysis_ids_and_scopes_findings() -> None:
+    client = TestClient(create_app())
+    baseline_job = _post(client, "create_baseline", "baseline.csv", approval_required=False).json()
+    _wait(client, baseline_job["status_url"])
+    baseline = client.get(baseline_job["baseline_result_url"]).json()
+
+    comparison_job = _post(client, "analyze_new_data", "comparison.csv").json()
+    terminal = _wait(client, comparison_job["status_url"])
+    assert terminal["status"] == "COMPLETE"
+    result = client.get(f"/api/data/intake/{comparison_job['job_id']}/result").json()["result"]
+
+    assert result["baseline_id"] == baseline["baselineId"]
+    assert result["baseline_dataset_id"] == baseline["datasetId"]
+    assert result["comparison_dataset_id"] == comparison_job["dataset_id"]
+    assert result["comparison_dataset_id"] != result["baseline_dataset_id"]
+    assert result["comparison_analysis_id"] == comparison_job["job_id"]
+    assert result["analysis_run_id"] == comparison_job["job_id"]
+
+    exact = client.get(f"/api/data/analyses/{result['comparison_analysis_id']}")
+    findings = client.get(f"/api/data/analyses/{result['comparison_analysis_id']}/findings")
+    assert exact.status_code == 200
+    assert findings.status_code == 200
+    assert findings.json()["comparisonAnalysisId"] == result["comparison_analysis_id"]
+    for finding in findings.json()["findings"]:
+        assert finding["comparison_analysis_id"] == result["comparison_analysis_id"]
+        assert finding["baseline_id"] == result["baseline_id"]
+        assert finding["comparison_dataset_id"] == result["comparison_dataset_id"]
+
+
+def test_comparison_persistence_rejects_the_baseline_dataset_as_evaluation_data() -> None:
+    client = TestClient(create_app())
+    baseline_job = _post(client, "create_baseline", "baseline.csv", approval_required=False).json()
+    _wait(client, baseline_job["status_url"])
+    baseline = client.get(baseline_job["baseline_result_url"]).json()
+    source_dataset_id = baseline["candidate_model"]["source"]["dataset_id"]
+    invalid = _completed_comparison(
+        baseline,
+        "same-dataset-run",
+        dataset_id=source_dataset_id,
+        comparison_dataset_id=source_dataset_id,
+    )
+
+    with pytest.raises(ValueError, match="comparison_dataset_matches_baseline_dataset"):
+        persist_completed_analysis(invalid)
+
+
+def test_new_baseline_hides_stale_findings_until_its_own_comparison_exists() -> None:
+    client = TestClient(create_app())
+    first_job = _post(client, "create_baseline", "first.csv", approval_required=False).json()
+    _wait(client, first_job["status_url"])
+    first = client.get(first_job["baseline_result_url"]).json()
+    _persist_comparison(first, "old-pumping-analysis")
+
+    second_job = _post(client, "create_baseline", "second.csv", approval_required=False).json()
+    _wait(client, second_job["status_url"])
+    second = client.get(second_job["baseline_result_url"]).json()
+    latest = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert second["baselineId"] != first["baselineId"]
+    assert latest["status"] == "baseline_ready"
+    assert latest["processing_state"] == "waiting_for_comparison"
+    assert latest["baseline_ready"]["baseline_id"] == second["baselineId"]
+    assert latest["latest_result"] is None
+    assert latest["current_upload"] is None
+    assert latest["history"] == []
+
+
+def test_second_comparison_creates_a_separate_analysis_without_overwriting_baseline() -> None:
+    client = TestClient(create_app())
+    baseline_job = _post(client, "create_baseline", "baseline.csv", approval_required=False).json()
+    _wait(client, baseline_job["status_url"])
+    baseline = client.get(baseline_job["baseline_result_url"]).json()
+    first = _persist_comparison(baseline, "comparison-one")
+    second = _persist_comparison(baseline, "comparison-two")
+
+    detail = client.get(f"/api/data/portfolios/default/baselines/{baseline['baselineId']}").json()
+    assert detail["baseline_id"] == baseline["baselineId"]
+    assert detail["dataset_id"] == baseline["datasetId"]
+    assert detail["analysis_state"]["count"] == 2
+    assert {item["analysis_run_id"] for item in detail["analysis_state"]["analyses"]} == {"comparison-one", "comparison-two"}
+    assert first["comparison_dataset_id"] != second["comparison_dataset_id"]
+    assert client.get("/api/data/analyses/comparison-one").status_code == 200
+    assert client.get("/api/data/analyses/comparison-two").status_code == 200
 
 def test_upload_creates_distinct_dataset_and_processing_job_ids() -> None:
     client = TestClient(create_app())

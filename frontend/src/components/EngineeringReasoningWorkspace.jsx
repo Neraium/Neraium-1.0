@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { buildEngineeringReasoningModel, buildEngineeringReasoningModelsFromEvidenceRuns } from "../viewModels/engineeringReasoning";
+import { analysisBelongsToBaseline } from "../viewModels/baselineSelection";
 import { deriveEscalationReadiness, deriveWorkspacePresentationState } from "../viewModels/operationsBrief";
 import { feedbackForReviewAction, normalizeReviewRecords, reviewRecordFor } from "../viewModels/findingReviewState";
 import FirstBaselineExperience, { SupportedFormats, WorkflowSteps } from "./FirstBaselineExperience";
@@ -209,7 +210,7 @@ function writeStorageValue(key, value) {
   }
 }
 
-export default function EngineeringReasoningWorkspace({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection, apiFetch, onWorkspaceNavigate, onSignOut, signOutPending = false, currentUser }) {
+export default function EngineeringReasoningWorkspace({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection, apiFetch, comparisonAnalysisId = null, onWorkspaceNavigate, onSignOut, signOutPending = false, currentUser }) {
   const [route, setRoute] = useState(routeFromLocation);
   const [selectedFindingId, setSelectedFindingId] = useState(() => pathIdentity(["findings", "evidence", "investigations"]));
   const [selectedSystemName, setSelectedSystemName] = useState(() => pathIdentity(["systems"]));
@@ -233,7 +234,12 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     }
     return records;
   });
-  const currentModel = useMemo(() => buildEngineeringReasoningModel({ liveOps, canonicalFinding, currentSession, result: effectiveLatestUploadResult, snapshot: effectiveLatestUploadSnapshot, domainDetection }), [liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection]);
+  const verifiedComparisonResult = useMemo(() => (
+    analysisBelongsToBaseline(effectiveLatestUploadResult, { analysisRunId: comparisonAnalysisId })
+      ? effectiveLatestUploadResult
+      : null
+  ), [comparisonAnalysisId, effectiveLatestUploadResult]);
+  const currentModel = useMemo(() => buildEngineeringReasoningModel({ liveOps: {}, canonicalFinding: verifiedComparisonResult ? canonicalFinding : null, currentSession: {}, result: verifiedComparisonResult ?? {}, snapshot: effectiveLatestUploadSnapshot, domainDetection }), [canonicalFinding, domainDetection, effectiveLatestUploadSnapshot, verifiedComparisonResult]);
   const portfolioModels = useMemo(() => {
     const persisted = buildEngineeringReasoningModelsFromEvidenceRuns(portfolioRuns);
     const currentName = currentModel.site.name.trim().toLowerCase();

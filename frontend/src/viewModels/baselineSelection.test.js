@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   analysisBelongsToBaseline,
   baselineAnalysisRoutePath,
+  baselineComparisonRoutePath,
   baselineIdentityFromResult,
   baselineRoutePath,
   parseBaselineAnalysisRoute,
+  parseBaselineComparisonRoute,
   parseBaselineRoute,
   persistBaselineSelection,
   readPersistedBaselineSelection,
@@ -41,30 +43,33 @@ describe("baseline selection identity", () => {
   });
 
   it("round-trips explicit baseline routes and rejects ambiguous paths", () => {
-    expect(baselineRoutePath("portfolio-a", "baseline-b")).toBe("/portfolio/portfolio-a/baselines/baseline-b");
-    expect(parseBaselineRoute("/portfolio/portfolio-a/baselines/baseline-b")).toEqual({ portfolioId: "portfolio-a", systemId: "portfolio-a", baselineId: "baseline-b" });
-    expect(parseBaselineRoute("/portfolio/portfolio-a/baselines")).toBeNull();
-    expect(baselineAnalysisRoutePath("portfolio-a", "baseline-b", "run-c")).toBe("/portfolio/portfolio-a/baselines/baseline-b/analyses/run-c");
-    expect(parseBaselineAnalysisRoute("/portfolio/portfolio-a/baselines/baseline-b/analyses/run-c")).toEqual({
-      portfolioId: "portfolio-a",
-      systemId: "portfolio-a",
-      baselineId: "baseline-b",
-      analysisRunId: "run-c",
-    });
+    window.localStorage.setItem("neraium.current_workspace_id", "portfolio-a");
+    expect(baselineRoutePath("portfolio-a", "baseline-b")).toBe("/baselines/baseline-b/ready");
+    expect(parseBaselineRoute("/baselines/baseline-b/ready")).toMatchObject({ portfolioId: "portfolio-a", systemId: "portfolio-a", baselineId: "baseline-b" });
+    expect(baselineComparisonRoutePath("portfolio-a", "baseline-b")).toBe("/baselines/baseline-b/comparisons/new");
+    expect(parseBaselineComparisonRoute("/baselines/baseline-b/comparisons/new")).toMatchObject({ portfolioId: "portfolio-a", baselineId: "baseline-b" });
+    expect(parseBaselineRoute("/baselines/baseline-b")).toBeNull();
+    expect(baselineAnalysisRoutePath("portfolio-a", "baseline-b", "run-c")).toBe("/analyses/run-c");
+    expect(parseBaselineAnalysisRoute("/analyses/run-c")).toEqual({ analysisRunId: "run-c" });
   });
 
   it("accepts only completed comparison identities owned by the exact baseline and system", () => {
     const identity = { portfolioId: "portfolio-a", systemId: "system-a", baselineId: "baseline-a" };
     const linked = {
       workflow: "analyze_new_data",
+      status: "COMPLETE",
+      processing_state: "complete",
+      sii_completed: true,
       portfolio_id: "portfolio-a",
       system_id: "system-a",
       baseline_id: "baseline-a",
-      comparison_dataset_id: "run-a",
+      baseline_dataset_id: "dataset-baseline-a",
+      comparison_dataset_id: "dataset-comparison-a",
+      comparison_analysis_id: "run-a",
       analysis_run_id: "run-a",
-      dataset_id: "run-a",
+      dataset_id: "dataset-comparison-a",
       job_id: "run-a",
-      active_baseline_reference: { model_id: "baseline-a" },
+      active_baseline_reference: { model_id: "baseline-a", dataset_id: "dataset-baseline-a" },
     };
 
     expect(analysisBelongsToBaseline(linked, identity)).toBe(true);
@@ -73,5 +78,8 @@ describe("baseline selection identity", () => {
     expect(analysisBelongsToBaseline({ ...linked, system_id: "system-b" }, identity)).toBe(false);
     expect(analysisBelongsToBaseline({ ...linked, comparison_dataset_id: "stale-dataset" }, identity)).toBe(false);
     expect(analysisBelongsToBaseline({ ...linked, workflow: "legacy_analysis" }, identity)).toBe(false);
+    expect(analysisBelongsToBaseline({ ...linked, status: "PROCESSING" }, identity)).toBe(false);
+    expect(analysisBelongsToBaseline({ ...linked, sii_completed: false }, identity)).toBe(false);
+    expect(analysisBelongsToBaseline({ ...linked, baseline_dataset_id: "other-baseline-dataset" }, identity)).toBe(false);
   });
 });

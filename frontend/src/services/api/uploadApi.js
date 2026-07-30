@@ -62,12 +62,10 @@ export function clearLatestUploadStateCache({ scopeKey = null, portfolioId = nul
 
 export async function fetchLatestUploadState({ apiFetch, accessCode, scopeKey = "anonymous", includePersisted = false, forceRefresh = false, exactAnalysisIdentity = null } = {}) {
   const portfolioId = String(exactAnalysisIdentity?.portfolioId || getCurrentWorkspaceId());
-  const systemId = String(exactAnalysisIdentity?.systemId || portfolioId);
-  const baselineId = String(exactAnalysisIdentity?.baselineId || "");
   const analysisRunId = String(exactAnalysisIdentity?.analysisRunId || "");
-  const exactAnalysis = Boolean(baselineId && analysisRunId);
+  const exactAnalysis = Boolean(analysisRunId);
   const key = exactAnalysis
-    ? `analysis:${encodeURIComponent(scopeKey)}:${encodeURIComponent(portfolioId)}:${encodeURIComponent(systemId)}:${encodeURIComponent(baselineId)}:${encodeURIComponent(analysisRunId)}:${encodeURIComponent(analysisRunId)}`
+    ? `analysis:${encodeURIComponent(scopeKey)}:${encodeURIComponent(analysisRunId)}`
     : `latest:${encodeURIComponent(scopeKey)}:${encodeURIComponent(portfolioId)}:${includePersisted ? 1 : 0}`;
   const now = Date.now();
   if (forceRefresh) clearLatestUploadStateCache({ scopeKey, portfolioId });
@@ -83,7 +81,7 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, scopeKey = 
   const controller = new AbortController();
   const request = (async () => {
     const path = exactAnalysis
-      ? `/api/data/portfolios/${encodeURIComponent(portfolioId)}/systems/${encodeURIComponent(systemId)}/baselines/${encodeURIComponent(baselineId)}/analyses/${encodeURIComponent(analysisRunId)}`
+      ? `/api/data/analyses/${encodeURIComponent(analysisRunId)}`
       : `/api/data/latest-upload?include_persisted=${includePersisted ? 1 : 0}`;
     let lastError = null;
 
@@ -100,7 +98,7 @@ export async function fetchLatestUploadState({ apiFetch, accessCode, scopeKey = 
           throw Object.assign(new Error(requestError.detail || "Analysis results could not be loaded. Refresh and retry."), requestError);
         }
 
-        if (exactAnalysis && !analysisBelongsToBaseline(responsePayload, { ...exactAnalysisIdentity, portfolioId, systemId, baselineId, analysisRunId })) {
+        if (exactAnalysis && !analysisBelongsToBaseline(responsePayload, { ...exactAnalysisIdentity, analysisRunId })) {
           throw Object.assign(new Error("The requested analysis does not belong to this baseline."), {
             name: "UploadRequestError",
             errorType: "analysis_ownership_mismatch",

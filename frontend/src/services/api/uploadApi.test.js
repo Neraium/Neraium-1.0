@@ -152,8 +152,10 @@ describe("fetchLatestUploadState", () => {
       job_id: "run-a",
       run_id: "run-a",
       upload_id: "run-a",
-      dataset_id: "run-a",
-      comparison_dataset_id: "run-a",
+      dataset_id: "comparison-dataset-a",
+      baseline_dataset_id: "baseline-dataset-a",
+      comparison_dataset_id: "comparison-dataset-a",
+      comparison_analysis_id: "run-a",
       analysis_run_id: "run-a",
       organization_id: "user-a",
       portfolio_id: "portfolio-a",
@@ -163,7 +165,7 @@ describe("fetchLatestUploadState", () => {
       status: "COMPLETE",
       processing_state: "complete",
       sii_completed: true,
-      active_baseline_reference: { model_id: "baseline-a" },
+      active_baseline_reference: { model_id: "baseline-a", dataset_id: "baseline-dataset-a" },
       data_quality: { readiness: "ready" },
     };
     const apiFetch = vi.fn().mockResolvedValue(createResponse(result));
@@ -180,7 +182,7 @@ describe("fetchLatestUploadState", () => {
     expect(first.latestResult?.analysis_run_id).toBe("run-a");
     expect(cached.latestResult?.analysis_run_id).toBe("run-a");
     expect(apiFetch).toHaveBeenCalledTimes(1);
-    expect(apiFetch.mock.calls[0][0]).toBe("/api/data/portfolios/portfolio-a/systems/system-a/baselines/baseline-a/analyses/run-a");
+    expect(apiFetch.mock.calls[0][0]).toBe("/api/data/analyses/run-a");
     expect(apiFetch.mock.calls[0][1].headers).toEqual({ "X-Neraium-Workspace-Id": "portfolio-a" });
   });
 

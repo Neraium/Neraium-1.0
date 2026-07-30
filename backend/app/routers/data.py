@@ -29,7 +29,13 @@ from app.services.baseline_contracts import (
     is_baseline_workflow,
     normalize_workflow,
 )
-from app.services.baseline_analysis_repository import list_completed_analyses, read_completed_analysis
+from app.services.baseline_analysis_repository import (
+    comparison_findings,
+    list_completed_analyses,
+    read_completed_analysis,
+    read_completed_analysis_by_id,
+    validate_completed_analysis,
+)
 from app.services.behavioral_model_repository import (
     activate_candidate,
     read_active_behavioral_model,
@@ -123,12 +129,29 @@ def _resolve_analysis_baseline(
         raise ValueError("analysis_portfolio_mismatch")
     if not source_system or (system_id and str(system_id) != source_system):
         raise ValueError("analysis_system_mismatch")
+    baseline_dataset_id = str(source.get("dataset_id") or "").strip()
+    if not baseline_dataset_id:
+        raise ValueError("analysis_baseline_dataset_missing")
     return {
         "model_id": model_id,
         "version": model.get("version"),
+        "baseline_dataset_id": baseline_dataset_id,
         "portfolio_id": scope.workspace_id,
         "system_id": source_system,
     }
+
+
+def _comparison_dataset_matches_baseline(
+    workflow: str,
+    baseline_binding: dict[str, Any] | None,
+    comparison_dataset_id: str,
+) -> bool:
+    return (
+        workflow == WORKFLOW_ANALYZE_NEW_DATA
+        and bool(baseline_binding)
+        and str((baseline_binding or {}).get("baseline_dataset_id") or "").strip()
+        == str(comparison_dataset_id or "").strip()
+    )
 
 
 def _baseline_binding_error(error: ValueError, workflow: str) -> JSONResponse:
@@ -138,6 +161,8 @@ def _baseline_binding_error(error: ValueError, workflow: str) -> JSONResponse:
         "analysis_baseline_mismatch": "The selected baseline could not be verified for this comparison.",
         "analysis_portfolio_mismatch": "The selected baseline does not belong to this portfolio.",
         "analysis_system_mismatch": "The selected baseline does not belong to this system.",
+        "analysis_baseline_dataset_missing": "The selected baseline does not have a valid reference dataset.",
+        "comparison_dataset_matches_baseline_dataset": "The comparison dataset must be distinct from the baseline dataset.",
     }
     return _large_upload_error(
         409,
@@ -520,6 +545,8 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
         )
 
     upload_session_id = uuid.uuid4().hex
+    if _comparison_dataset_matches_baseline(workflow, baseline_binding, upload_session_id):
+        return _baseline_binding_error(ValueError("comparison_dataset_matches_baseline_dataset"), workflow)
     content_type = str(payload.content_type or "text/csv").strip().lower() or "text/csv"
     if "csv" not in content_type and content_type not in {"application/octet-stream", "text/plain"}:
         content_type = "text/csv"
@@ -560,6 +587,7 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
                 "approval_required": resolved_approval_required if is_baseline_workflow(workflow) else None,
                 "active_baseline_model_id": (baseline_binding or {}).get("model_id"),
                 "active_baseline_version": (baseline_binding or {}).get("version"),
+                "active_baseline_dataset_id": (baseline_binding or {}).get("baseline_dataset_id"),
                 "active_baseline_system_id": (baseline_binding or {}).get("system_id") or current_dataset_scope().workspace_id,
                 "active_baseline_portfolio_id": (baseline_binding or {}).get("portfolio_id") or current_dataset_scope().workspace_id,
             },
@@ -829,6 +857,7 @@ def complete_large_upload_session(
         "approval_required": session.get("approval_required") if is_baseline_workflow(workflow) else None,
         "active_baseline_model_id": (baseline_binding or {}).get("model_id"),
         "active_baseline_version": (baseline_binding or {}).get("version"),
+        "active_baseline_dataset_id": (baseline_binding or {}).get("baseline_dataset_id"),
         "active_baseline_system_id": (baseline_binding or {}).get("system_id") or current_dataset_scope().workspace_id,
         "active_baseline_portfolio_id": (baseline_binding or {}).get("portfolio_id") or current_dataset_scope().workspace_id,
     }
@@ -1157,6 +1186,8 @@ async def upload_data(
     transfer_succeeded = False
     csv_has_non_whitespace = False
     dataset_id = uuid.uuid4().hex
+    if _comparison_dataset_matches_baseline(workflow, baseline_binding, dataset_id):
+        return _baseline_binding_error(ValueError("comparison_dataset_matches_baseline_dataset"), workflow)
     job_id = uuid.uuid4().hex
     temp_path = ""
     upload_storage_key: str | None = None
@@ -1287,6 +1318,7 @@ async def upload_data(
             "approval_required": resolved_approval_required if is_baseline_workflow(workflow) else None,
             "active_baseline_model_id": (baseline_binding or {}).get("model_id"),
             "active_baseline_version": (baseline_binding or {}).get("version"),
+            "active_baseline_dataset_id": (baseline_binding or {}).get("baseline_dataset_id"),
             "active_baseline_system_id": (baseline_binding or {}).get("system_id") or current_dataset_scope().workspace_id,
             "active_baseline_portfolio_id": (baseline_binding or {}).get("portfolio_id") or current_dataset_scope().workspace_id,
         }
@@ -1760,6 +1792,37 @@ async def upload_stream(job_id: UploadJobPath, request: Request = None):
 async def latest_upload(include_persisted: bool = Query(True), request: Request = None):
     request_id = getattr(request.state, "request_id", None) if request is not None else None
     payload = resolve_latest_upload_payload(include_persisted=include_persisted, request_id=request_id)
+    selected_baseline = read_latest_candidate() or read_active_behavioral_model()
+    selected_baseline_id = str((selected_baseline or {}).get("model_id") or "").strip()
+    baseline_source = (selected_baseline or {}).get("source") if isinstance((selected_baseline or {}).get("source"), dict) else {}
+    current_result = payload.get("latest_result") if isinstance(payload, dict) else None
+    if not isinstance(current_result, dict):
+        current_upload = payload.get("current_upload") if isinstance(payload, dict) else None
+        current_result = (current_upload or {}).get("result") if isinstance(current_upload, dict) else None
+    if selected_baseline_id:
+        try:
+            validate_completed_analysis(
+                current_result,
+                baseline_id=selected_baseline_id,
+                portfolio_id=current_dataset_scope().workspace_id,
+                system_id=str(baseline_source.get("system_id") or current_dataset_scope().workspace_id),
+            )
+        except ValueError:
+            payload = {
+                "status": "baseline_ready",
+                "processing_state": "waiting_for_comparison",
+                "session_state": "baseline_ready",
+                "latest_result": None,
+                "current_upload": None,
+                "history": [],
+                "baseline_ready": {
+                    "baseline_id": selected_baseline_id,
+                    "baseline_dataset_id": baseline_source.get("dataset_id"),
+                    "portfolio_id": baseline_source.get("portfolio_id") or current_dataset_scope().workspace_id,
+                    "system_id": baseline_source.get("system_id") or current_dataset_scope().workspace_id,
+                    "status": "waiting_for_comparison_data",
+                },
+            }
     if request is not None:
         request.state.upload_session_id = payload.get("upload_session_id")
     return payload
@@ -2001,6 +2064,27 @@ def baseline_comparison_analysis_by_id(
     if result is None:
         raise HTTPException(status_code=404, detail="Analysis was not found for the requested baseline.")
     return result
+
+
+@router.get("/analyses/{comparison_analysis_id}")
+def comparison_analysis_by_id(comparison_analysis_id: UploadJobPath):
+    result = read_completed_analysis_by_id(comparison_analysis_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Completed comparison analysis was not found.")
+    return result
+
+
+@router.get("/analyses/{comparison_analysis_id}/findings")
+def comparison_findings_by_analysis_id(comparison_analysis_id: UploadJobPath):
+    result = read_completed_analysis_by_id(comparison_analysis_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Completed comparison analysis was not found.")
+    return {
+        "comparisonAnalysisId": comparison_analysis_id,
+        "baselineId": result["baseline_id"],
+        "comparisonDatasetId": result["comparison_dataset_id"],
+        "findings": comparison_findings(result),
+    }
 
 
 @router.post(

@@ -302,7 +302,7 @@ describe("backend state presentation", () => {
     });
 
     expect(screen.getByLabelText("Initial baseline processing: Learn")).toBeTruthy();
-    expect(screen.queryByText("Initial Baseline Established")).toBeNull();
+    expect(screen.queryByText("Baseline Established")).toBeNull();
   });
 
   it("shows queued work as Upload", () => {
@@ -318,8 +318,8 @@ describe("backend state presentation", () => {
 
 describe("completion and recovery", () => {
   it("replaces processing with a stable initial-baseline success experience", () => {
-    const onOpenBaseline = vi.fn();
     const onImportComparisonDataset = vi.fn();
+    const onReturnToPortfolio = vi.fn();
     const result = learnedBaseline();
     const { container } = renderPanel({
       uploadState: "complete",
@@ -327,25 +327,24 @@ describe("completion and recovery", () => {
       selectedFileSize: "8.4 MB",
       baselineResult: result,
       uploadJob: { job_id: "baseline-job", status: "COMPLETE", workflow: "create_baseline" },
-      onOpenBaseline,
       onImportComparisonDataset,
+      onReturnToPortfolio,
     });
 
-    expect(screen.getByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Baseline Established" })).toBeTruthy();
     expect(screen.getByText("Jun 1, 2026, 12:00 AM – Jun 30, 2026, 11:55 PM UTC")).toBeTruthy();
     expect(screen.getByText("Signals analyzed").closest("div").textContent).toContain("4");
     expect(screen.getByText("Relationships learned").closest("div").textContent).toContain("3");
     expect(screen.getByText("Data quality").closest("div").textContent).toContain("Strong · 94/100");
     expect(screen.getByText("Learning confidence").closest("div").textContent).toContain("91/100");
-    expect(screen.getByText(/foundation for continuous learning/i)).toBeTruthy();
-    expect(screen.getByText(/preserving enough historical context/i)).toBeTruthy();
+    expect(screen.getByText("Neraium has learned the system’s normal operating relationships. Upload a later operating dataset to compare against this baseline.")).toBeTruthy();
     expect(container.querySelector(".baseline-learning-visual.is-complete")).toBeTruthy();
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Baseline" }));
-    fireEvent.click(screen.getByRole("button", { name: "Import Comparison Dataset" }));
-    expect(onOpenBaseline).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Upload Comparison Dataset" }));
+    fireEvent.click(screen.getByRole("button", { name: "Return to Portfolio" }));
     expect(onImportComparisonDataset).toHaveBeenCalledTimes(1);
+    expect(onReturnToPortfolio).toHaveBeenCalledTimes(1);
   });
 
   it("derives the requested baseline summary from the real candidate contract", () => {
@@ -444,7 +443,7 @@ describe("completion and recovery", () => {
       uploadJob: { job_id: "old-job", status: "complete", percent: 100, processing_state: "complete" },
     });
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
-    expect(screen.queryByText("Initial Baseline Established")).toBeNull();
+    expect(screen.queryByText("Baseline Established")).toBeNull();
   });
 });
 
@@ -485,7 +484,7 @@ describe("exact baseline selection regression", () => {
       return jsonResponse({});
     });
     const onOpenBaseline = vi.fn(() => true);
-    const props = { apiFetch, latestUploadResult: baselineB, onOpenBaseline };
+    const props = { apiFetch, latestUploadResult: baselineB, onOpenBaseline, autoOpenBaselineReady: true };
     const { rerender } = renderWorkspace(props);
 
     fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("resort chw baseline.csv")] } });
@@ -498,9 +497,10 @@ describe("exact baseline selection regression", () => {
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     expect(screen.getByText("resort chw baseline.csv")).toBeTruthy();
     expect(screen.queryByText("commercial water system.csv")).toBeNull();
-    expect(onOpenBaseline).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Open Baseline" }));
-    expect(onOpenBaseline).toHaveBeenCalledWith(expect.objectContaining({ jobId: "job-a", datasetId: "job-a-dataset", baselineId: "baseline-a", portfolioId: "default" }));
+    await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: "job-a", datasetId: "job-a-dataset", baselineId: "baseline-a", portfolioId: "default" }),
+      { replace: true },
+    ));
 
     fireEvent.click(screen.getByText("Processing details"));
     expect(screen.getByText("Selected baseline ID")).toBeTruthy();
@@ -581,7 +581,7 @@ describe("upload and polling behavior", () => {
     fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Baseline Established" })).toBeTruthy();
     await new Promise((resolve) => window.setTimeout(resolve, 30));
     expect(statusCalls).toBe(1);
     expect(onUploadComplete).not.toHaveBeenCalled();
@@ -628,7 +628,7 @@ describe("upload and polling behavior", () => {
       },
     });
 
-    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Baseline Established" })).toBeTruthy();
     expect(statusCalls).toBe(1);
   });
 
@@ -657,7 +657,7 @@ describe("upload and polling behavior", () => {
 
     renderWorkspace({ apiFetch });
 
-    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Baseline Established" })).toBeTruthy();
     expect(statusCalls).toBe(1);
   });
 
@@ -679,6 +679,7 @@ describe("upload and polling behavior", () => {
     renderWorkspace({
       apiFetch,
       onOpenBaseline,
+      autoOpenBaselineReady: true,
       hasActiveSession: true,
       hasResumedSession: true,
       latestUploadResult: result,
@@ -690,7 +691,6 @@ describe("upload and polling behavior", () => {
       },
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open Baseline" }));
     await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledTimes(1));
     expect(apiFetch).toHaveBeenCalledWith(
       "/api/data/baselines/candidates/bdm-v1-baseline/approve",
@@ -706,6 +706,7 @@ describe("upload and polling behavior", () => {
     const onOpenBaseline = vi.fn(() => new Promise((resolve) => { finishNavigation = resolve; }));
     renderWorkspace({
       onOpenBaseline,
+      autoOpenBaselineReady: true,
       hasActiveSession: true,
       hasResumedSession: true,
       latestUploadResult: result,
@@ -717,13 +718,10 @@ describe("upload and polling behavior", () => {
       },
     });
 
-    const button = await screen.findByRole("button", { name: "Open Baseline" });
-    fireEvent.click(button);
-    fireEvent.click(button);
     await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("button", { name: "Opening Baseline…" }).disabled).toBe(true);
     finishNavigation(true);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Open Baseline" }).disabled).toBe(false));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Upload Comparison Dataset" }).disabled).toBe(false));
   });
 
   it("shows a visible error when the router rejects navigation", async () => {
@@ -732,6 +730,7 @@ describe("upload and polling behavior", () => {
     result.candidate_model = { ...result.candidate_model, status: "active", activation: { state: "active" } };
     renderWorkspace({
       onOpenBaseline: vi.fn(() => false),
+      autoOpenBaselineReady: true,
       hasActiveSession: true,
       hasResumedSession: true,
       latestUploadResult: result,
@@ -743,7 +742,6 @@ describe("upload and polling behavior", () => {
       },
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open Baseline" }));
     expect(await screen.findByRole("heading", { name: "Baseline Created, Workspace Not Opened" })).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("Baseline created successfully. We could not open the workspace automatically.");
     expect(screen.getByRole("button", { name: "Return to Portfolio" })).toBeTruthy();
@@ -761,6 +759,7 @@ describe("upload and polling behavior", () => {
     renderWorkspace({
       apiFetch,
       onOpenBaseline,
+      autoOpenBaselineReady: true,
       hasActiveSession: true,
       hasResumedSession: true,
       latestUploadResult: result,
@@ -772,7 +771,6 @@ describe("upload and polling behavior", () => {
       },
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open Baseline" }));
     expect(await screen.findByRole("heading", { name: "Baseline Created, Workspace Not Opened" })).toBeTruthy();
     expect(apiFetch.mock.calls.map(([path]) => path)).toContain("/api/data/jobs/baseline-job/result");
     expect(apiFetch.mock.calls.map(([path]) => path)).toContain("/api/data/datasets/baseline-dataset/baseline");
@@ -805,6 +803,7 @@ describe("upload and polling behavior", () => {
     renderWorkspace({
       apiFetch,
       onOpenBaseline,
+      autoOpenBaselineReady: true,
       hasActiveSession: true,
       hasResumedSession: true,
       latestUploadResult: result,
@@ -816,14 +815,12 @@ describe("upload and polling behavior", () => {
       },
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open Baseline" }));
-
     await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledWith(expect.objectContaining({
       jobId: "baseline-job",
       datasetId: "baseline-dataset",
       baselineId: "recovered-baseline",
       portfolioId: "default",
-    })));
+    }), { replace: true }));
     expect(onOpenBaseline.mock.calls[0][0].baselineId).not.toBe("baseline-job");
     expect(onOpenBaseline.mock.calls[0][0].baselineId).not.toBe("baseline-dataset");
   });
@@ -846,6 +843,7 @@ describe("upload and polling behavior", () => {
     };
     renderWorkspace({
       onOpenBaseline,
+      autoOpenBaselineReady: true,
       hasActiveSession: false,
       hasResumedSession: false,
       latestUploadResult: null,
@@ -857,9 +855,10 @@ describe("upload and polling behavior", () => {
       },
     });
 
-    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Open Baseline" }));
-    await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledWith(expect.objectContaining({ baselineId: "refresh-baseline" })));
+    await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledWith(
+      expect.objectContaining({ baselineId: "refresh-baseline" }),
+      { replace: true },
+    ));
   });
 
   it("preserves baselineId across a mobile completion rerender", async () => {
@@ -869,6 +868,7 @@ describe("upload and polling behavior", () => {
     const onOpenBaseline = vi.fn(() => true);
     const props = {
       onOpenBaseline,
+      autoOpenBaselineReady: true,
       hasActiveSession: true,
       hasResumedSession: true,
       latestUploadResult: result,
@@ -881,13 +881,15 @@ describe("upload and polling behavior", () => {
     };
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     const view = renderWorkspace(props);
-    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Baseline Established" })).toBeTruthy();
 
     view.rerender(workspaceElement({ ...props, currentUser: { id: "engineer-1" } }));
     fireEvent(window, new Event("resize"));
-    fireEvent.click(screen.getByRole("button", { name: "Open Baseline" }));
 
-    await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledWith(expect.objectContaining({ baselineId: "bdm-v1-baseline" })));
+    await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledWith(
+      expect.objectContaining({ baselineId: "bdm-v1-baseline" }),
+      { replace: true },
+    ));
   });
 
   it("moves the completed page into a separate comparison workflow without resetting the baseline", async () => {
@@ -905,9 +907,9 @@ describe("upload and polling behavior", () => {
       },
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Import Comparison Dataset" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Upload Comparison Dataset" }));
     expect(screen.getByRole("heading", { name: "Import Comparison Dataset" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Initial Baseline Established" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Baseline Established" })).toBeNull();
 
     fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("comparison.csv")] } });
     fireEvent.click(screen.getByRole("button", { name: "Evaluate Against Baseline" }));
@@ -979,7 +981,7 @@ describe("upload and polling behavior", () => {
     fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Baseline Established" })).toBeTruthy();
     expect(apiFetch).toHaveBeenCalledWith("/api/data/upload-status/poll-job", expect.any(Object));
     expect(apiFetch.mock.calls.some(([path]) => String(path).includes("upload-status/stored-dataset"))).toBe(false);
     fireEvent.click(screen.getByText("Processing details"));
@@ -1019,7 +1021,7 @@ describe("upload and polling behavior", () => {
     fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" }, { timeout: 3500 })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Baseline Established" }, { timeout: 3500 })).toBeTruthy();
     expect(statusCalls).toBe(2);
   });
 
@@ -1055,7 +1057,7 @@ describe("upload and polling behavior", () => {
     fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv()] } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Baseline Established" })).toBeTruthy();
     expect(resultCalls).toBe(2);
   });
 
@@ -1155,7 +1157,7 @@ describe("upload and polling behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(await screen.findByRole("button", { name: "Retry Processing" }));
 
-    expect(await screen.findByRole("heading", { name: "Initial Baseline Established" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Baseline Established" })).toBeTruthy();
     expect(retryUploadAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({ jobId: "retry-job" }));
     expect(uploadTelemetryFileWithProgress).toHaveBeenCalledTimes(1);
   });

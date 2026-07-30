@@ -252,7 +252,7 @@ export default function useFacilityRuntime({
       }
       return latestReturn(Boolean(nextSessionStore.hasRuntimeData), payload);
     } catch (error) {
-      if (!shouldIncludePersisted) {
+      if (activeAnalysisIdentity?.analysisRunId || !shouldIncludePersisted) {
         clearUploadSessionState();
         return latestReturn(false);
       }
@@ -274,6 +274,11 @@ export default function useFacilityRuntime({
       if (latestUploadRequestVersionRef.current === requestVersion) latestUploadRequestInFlightRef.current = false;
     }
   }, [accessCode, activeAnalysisIdentity, allowPersistedLatest, clearUploadSessionState, datasetScopeKey, hasAccess, latestUploadSnapshot]);
+
+  useEffect(() => {
+    if (!activeAnalysisIdentity?.analysisRunId) return;
+    clearUploadSessionState();
+  }, [activeAnalysisIdentity?.analysisRunId, clearUploadSessionState]);
 
   useEffect(() => {
     latestUploadResultRef.current = latestUploadResult;

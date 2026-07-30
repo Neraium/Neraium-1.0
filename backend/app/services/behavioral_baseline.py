@@ -724,7 +724,7 @@ def build_behavioral_baseline(
         "jobId": job_id,
         "datasetId": dataset_id,
         "baselineId": model_id,
-        "workspacePath": f"/portfolio/{scope.workspace_id}/baselines/{model_id}",
+        "workspacePath": f"/baselines/{model_id}/ready",
         "createdAt": now,
         "portfolio_id": scope.workspace_id,
         "system_id": scope.workspace_id,
