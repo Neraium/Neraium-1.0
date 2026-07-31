@@ -433,18 +433,24 @@ def evaluate_sii(
         multiscale_analysis["scales_used"] = []
         record("multiscale_analysis", "failed", multiscale_analysis["reason"])
 
+    compatibility_payload = {
+        "engine_result": cfg.get("engine_result") if isinstance(cfg.get("engine_result"), dict) else {},
+        "driver_attribution": cfg.get("driver_attribution") if isinstance(cfg.get("driver_attribution"), dict) else {},
+        "primary_room": str(cfg.get("primary_room") or "Uploaded telemetry"),
+        "processing_trace": cfg.get("processing_trace") if isinstance(cfg.get("processing_trace"), dict) else {},
+        "mode_aware_authority": {
+            "enabled": bool(cfg.get("mode_aware_suppression_enabled", False)),
+            "authority": "suppression_only",
+            "applied": False,
+            "decision": "not_evaluated",
+        },
+    }
     legacy_baseline_analysis = {
         **baseline_analysis,
         "top_relationship_changes": relationship_model.get("top_relationship_changes", []),
         "baseline_relationships": relationship_model.get("baseline_relationships", []),
         "relationship_graph": relationship_model.get("relationship_graph", {}),
         "sampled_for_baseline": bool(relationship_model.get("sampled_for_baseline")),
-    }
-    compatibility_payload = {
-        "engine_result": cfg.get("engine_result") if isinstance(cfg.get("engine_result"), dict) else {},
-        "driver_attribution": cfg.get("driver_attribution") if isinstance(cfg.get("driver_attribution"), dict) else {},
-        "primary_room": str(cfg.get("primary_room") or "Uploaded telemetry"),
-        "processing_trace": cfg.get("processing_trace") if isinstance(cfg.get("processing_trace"), dict) else {},
     }
     context_factory = cfg.get("compatibility_context_factory")
     if callable(context_factory):
@@ -459,10 +465,34 @@ def evaluate_sii(
                     "sensor_health": sensor_health_result,
                     "timestamp_profile": timestamp_profile,
                     "telemetry_signal_catalog": catalog,
+                    "mode_conditioned_baseline": mode_conditioned,
+                    "relationship_graph": dynamic_relationship_graph,
+                    "adaptive_persistence": adaptive_persistence,
+                    "multiscale_analysis": multiscale_analysis,
+                    "mode_aware_suppression_enabled": bool(
+                        cfg.get("mode_aware_suppression_enabled", False)
+                    ),
                 }
             )
             if isinstance(built_context, dict):
                 compatibility_payload.update(built_context)
+                if isinstance(built_context.get("relationship_model"), dict):
+                    relationship_model = built_context["relationship_model"]
+                    legacy_baseline_analysis = {
+                        **baseline_analysis,
+                        "top_relationship_changes": relationship_model.get(
+                            "top_relationship_changes", []
+                        ),
+                        "baseline_relationships": relationship_model.get(
+                            "baseline_relationships", []
+                        ),
+                        "relationship_graph": relationship_model.get(
+                            "relationship_graph", {}
+                        ),
+                        "sampled_for_baseline": bool(
+                            relationship_model.get("sampled_for_baseline")
+                        ),
+                    }
             record("compatibility_context", "complete")
         except Exception as exc:
             record(
@@ -724,8 +754,17 @@ def evaluate_sii(
         "modules_failed": list(failed),
         "module_statuses": preliminary_statuses,
         "module_failures": list(failures),
-        "phase_2_authoritative": False,
-        "phase_2_effect": "supporting_evidence_only",
+        "phase_2_authoritative": bool(
+            (compatibility_payload.get("mode_aware_authority") or {}).get("enabled")
+        ),
+        "phase_2_effect": (
+            "suppression_only"
+            if (compatibility_payload.get("mode_aware_authority") or {}).get("enabled")
+            else "supporting_evidence_only"
+        ),
+        "mode_aware_authority": dict(
+            compatibility_payload.get("mode_aware_authority") or {}
+        ),
         "phase_3_active": True,
         "phase_3_effect": "transparent_evidence_enrichment_only",
         "phase_4_effect": "persistent_behavioral_memory_and_evidence_only",

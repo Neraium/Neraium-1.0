@@ -1,7 +1,9 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
-from app.core.security import require_api_access
+from fastapi import APIRouter, Depends, Query, Request
+from app.core.security import require_api_access, require_operator_role
+from app.models.api_models import FacilityContextRequest
+from app.services.facility_context import read_facility_context, write_facility_context
 from api.cognition_contracts import build_canonical_cognition_state_response
 from app.services.domain_mode import detect_domain_mode, domain_profile, normalize_domain_mode, read_domain_mode
 from app.services.engine_identity import build_engine_identity
@@ -12,6 +14,20 @@ from app.services.upload_state import has_active_session_artifact
 from app.services.upload_state_repository import read_current_upload_result, read_latest_upload_summary, read_upload_result_by_job_id
 
 router = APIRouter(tags=["facility"], dependencies=[Depends(require_api_access)])
+
+
+@router.get("/facility/context")
+def get_facility_context() -> dict[str, Any]:
+    return read_facility_context()
+
+
+@router.put("/facility/context", dependencies=[Depends(require_operator_role)])
+def update_facility_context(request: Request, payload: FacilityContextRequest) -> dict[str, Any]:
+    auth_context = getattr(request.state, "auth_context", {})
+    return write_facility_context(
+        payload.model_dump(),
+        actor=str(auth_context.get("auth_subject") or "operator"),
+    )
 
 
 @router.get("/facility/systems")

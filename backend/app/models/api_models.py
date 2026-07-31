@@ -213,6 +213,19 @@ class EvidenceRunResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
     input_hash: str | None = None
     result_hash: str | None = None
+    evidence_hash: str | None = None
+    organization_id: str | None = None
+    portfolio_id: str | None = None
+    site_id: str | None = None
+    dataset_id: str | None = None
+    baseline_id: str | None = None
+    baseline_dataset_id: str | None = None
+    baseline_version: int | str | None = None
+    baseline_hash: str | None = None
+    engine_version: str | None = None
+    build_commit: str | None = None
+    configuration_hash: str | None = None
+    provenance: dict[str, Any] = Field(default_factory=dict)
     initiated_by: str | None = None
     scenario: str | None = None
     tick: int | None = None
@@ -221,6 +234,10 @@ class EvidenceRunResponse(BaseModel):
     latest_feedback_category: str | None = None
     historical_fact: str | None = None
     operator_feedback_history: list[dict[str, Any]] = Field(default_factory=list)
+    finding_status_history: list[dict[str, Any]] = Field(default_factory=list)
+    finding_owner: str | None = None
+    finding_assignee: str | None = None
+    work_order_reference: str | None = None
     validation_outcome: str | None = None
     validation_status: str | None = None
     validation_event_history: list[dict[str, Any]] = Field(default_factory=list)
@@ -265,6 +282,41 @@ class OperatorFeedbackRequest(ContractModel):
     @classmethod
     def timestamps_are_utc(cls, value: str | None) -> str | None:
         return validate_utc_timestamp(value)
+
+
+class FindingStatusRequest(ContractModel):
+    state: Literal["open", "acknowledged", "investigating", "monitoring", "resolved", "dismissed"]
+    note: OptionalNote | None = None
+    owner: ShortText | None = None
+    assignee: ShortText | None = None
+    work_order_reference: Annotated[str, StringConstraints(max_length=200)] | None = None
+
+
+class FacilitySystemContext(ContractModel):
+    system_id: Identifier
+    name: ShortText
+    system_type: ShortText
+    parent_system_id: Identifier | None = None
+    equipment_ids: list[Identifier] = Field(default_factory=list, max_length=200)
+
+
+class FacilitySignalMapping(ContractModel):
+    raw_tag: Annotated[str, StringConstraints(min_length=1, max_length=256)]
+    normalized_name: Annotated[str, StringConstraints(min_length=1, max_length=128)]
+    system_id: Identifier
+    equipment_id: Identifier | None = None
+    subsystem: ShortText | None = None
+    unit: Annotated[str, StringConstraints(max_length=32)] = ""
+    sample_rate_seconds: float | None = Field(default=None, gt=0, le=86400)
+    alias: ShortText | None = None
+
+
+class FacilityContextRequest(ContractModel):
+    site_id: Identifier
+    site_name: ShortText
+    timezone: Annotated[str, StringConstraints(min_length=1, max_length=64)] = "UTC"
+    systems: list[FacilitySystemContext] = Field(default_factory=list, max_length=200)
+    signal_mappings: list[FacilitySignalMapping] = Field(default_factory=list, max_length=2000)
 
 
 class EvidenceRunsListResponse(BaseModel):

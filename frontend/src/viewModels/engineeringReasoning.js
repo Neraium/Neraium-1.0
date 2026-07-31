@@ -355,6 +355,8 @@ function buildFinding(raw, index, context) {
     recommendationAllowed,
     evidenceObjects,
     outcome: asArray(raw?.operator_feedback_history)[0] ?? null,
+    caseState: firstText(raw?.observation_status, raw?.case_state),
+    caseHistory: asArray(raw?.finding_status_history),
     classification: raw?.classification,
     objectType: raw?.object_type ?? (raw?.condition_id ? "condition" : "finding"),
     conditionId: firstText(raw?.condition_id, raw?.id),
@@ -569,11 +571,11 @@ export function buildEngineeringReasoningModelsFromEvidenceRuns(runs = []) {
     if (!prior || timestamp >= priorTimestamp) latestBySite.set(siteKey, run);
   }
   return [...latestBySite.entries()].map(([siteKey, run]) => {
-    const active = !["resolved", "closed", "normal"].includes(String(run?.observation_status ?? "").toLowerCase());
+    const active = !["resolved", "dismissed", "closed", "normal"].includes(String(run?.observation_status ?? "").toLowerCase());
     const evidence = asArray(run?.evidence_summary);
     const coverage = run?.rows_received ? Math.max(0, Math.min(1, Number(run?.rows_accepted ?? 0) / Number(run.rows_received))) : null;
     const persistedCondition = run?.condition && typeof run.condition === "object"
-      ? { ...run.condition, supporting_evidence: asArray(run.condition.supporting_evidence).length ? run.condition.supporting_evidence : evidence, operator_feedback_history: asArray(run?.operator_feedback_history) }
+      ? { ...run.condition, observation_status: run?.observation_status, finding_status_history: asArray(run?.finding_status_history), supporting_evidence: asArray(run.condition.supporting_evidence).length ? run.condition.supporting_evidence : evidence, operator_feedback_history: asArray(run?.operator_feedback_history) }
       : null;
     const result = { ...run, job_id: run?.run_id, facility_name: firstText(run?.site_name, run?.room), site_id: siteKey === "unassigned-dataset" ? undefined : siteKey, data_quality: { coverage, warnings: [...asArray(run?.warnings), ...asArray(run?.data_conditions)] }, analysis_explanation: { fingerprint: { status: run?.baseline_status }, systems: compact([{ id: run?.system_id, name: firstText(run?.system_name, run?.system_id) }]), conditions: active && persistedCondition ? [persistedCondition] : [], insights: active && !persistedCondition && evidence.length ? [{ id: `evidence-${run.run_id}`, title: firstText(run?.finding_title, run?.historical_fact, evidence[0]), what_changed: evidence[0], why_it_matters: firstText(run?.potential_impact, run?.historical_fact), confidence_tier: run?.confidence_tier, system: firstText(run?.system_name, run?.system_id), subsystem: run?.subsystem_name, asset: run?.asset_name, variables: asArray(run?.variables), supporting_evidence: evidence, limitations: [...asArray(run?.warnings), ...asArray(run?.data_conditions)], operator_feedback_history: asArray(run?.operator_feedback_history) }] : [] } };
     return buildEngineeringReasoningModel({ result });

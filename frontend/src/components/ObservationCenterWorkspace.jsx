@@ -66,7 +66,6 @@ function notificationAllowed() {
 
 function normalizeObservationStatus(run, persistedRunIds = null) {
   if (String(run?.status ?? "").toLowerCase() === "failed") return "failed";
-  if (run?.latest_feedback_category) return "resolved";
   const hasPersistedRun = persistedRunIds instanceof Set && persistedRunIds.has(String(run?.run_id ?? ""));
   if (run?.synthetic_current_run && !hasPersistedRun) return "active";
   const workflowStatus = String(run?.status ?? "").toLowerCase();
@@ -184,60 +183,55 @@ function uniqueBriefingItems(items) {
 function buildObservationBriefing(finding, run) {
   return {
     summary: splitBriefingSentences(finding?.summary).slice(0, 2),
-    possibleCauses: buildObservationCauses(finding, run),
+    possibleExplanations: buildEvidenceBackedExplanations(finding, run),
     relationships: buildObservationRelationships(finding, run),
-    investigation: buildObservationInvestigation(finding, run),
+    investigation: buildEvidenceBackedChecks(finding, run),
   };
 }
 
-function buildObservationCauses(finding, run) {
-  const text = observationBriefingText(finding, run);
-  const causes = [];
-  if (/filter|pressure|dp|differential/.test(text)) causes.push("Filter fouling", "Increased hydraulic resistance");
-  if (/pump|speed|vfd|flow/.test(text)) causes.push("Pump efficiency degradation", "Instrument drift");
-  if (/valve|damper/.test(text)) causes.push("Valve position changed");
-  if (/temperature|cool|chw|thermal|humidity/.test(text)) causes.push("Load shift", "Heat transfer changed");
-  if (/sensor|missing|timestamp|telemetry/.test(text)) causes.push("Sensor calibration drift", "Telemetry quality issue");
-  causes.push("Demand shift", "Recent maintenance activity", "Operating setpoint changed");
-  return uniqueBriefingItems(causes).slice(0, 6);
+function waterInsights(run) {
+  return Array.isArray(run?.water_intelligence?.insights) ? run.water_intelligence.insights : [];
+}
+
+function buildEvidenceBackedExplanations(finding, run) {
+  const persisted = waterInsights(run).flatMap((insight) => (
+    Array.isArray(insight?.possible_explanations)
+      ? insight.possible_explanations.map((item) => item?.explanation)
+      : []
+  ));
+  const classified = Array.isArray(finding?.alternativeExplanations)
+    ? finding.alternativeExplanations
+    : [];
+  return uniqueBriefingItems([...persisted, ...classified]).slice(0, 6);
 }
 
 function buildObservationRelationships(finding, run) {
-  const variables = uniqueBriefingItems([
-    ...(Array.isArray(finding?.affectedVariables) ? finding.affectedVariables : []),
-    ...(Array.isArray(run?.variables) ? run.variables : []),
-  ].map((item) => sanitizeOperatorText(item).replace(/_/g, " ")));
-  const relationships = [];
-  for (let index = 0; index < variables.length - 1 && relationships.length < 6; index += 1) {
-    relationships.push(variables[index] + " ↔ " + variables[index + 1]);
-  }
-  return relationships;
+  const observedPairs = waterInsights(run).flatMap((insight) => (
+    Array.isArray(insight?.observed_evidence)
+      ? insight.observed_evidence.map((item) => (
+        Array.isArray(item?.source_columns) && item.source_columns.length >= 2
+          ? item.source_columns.map((column) => sanitizeOperatorText(column).replace(/_/g, " ")).join(" ↔ ")
+          : ""
+      ))
+      : []
+  ));
+  const findingPairs = Array.isArray(finding?.relationships)
+    ? finding.relationships.map((item) => item?.label ?? item?.relationship ?? "")
+    : [];
+  return uniqueBriefingItems([...observedPairs, ...findingPairs]).slice(0, 6);
 }
 
-function buildObservationInvestigation(finding, run) {
-  const text = observationBriefingText(finding, run);
-  if (/filter|pressure|dp|differential|pump|flow|valve|vfd/.test(text)) {
-    return ["Review recent maintenance activity", "Inspect filter condition and differential pressure trend", "Verify pump loading and operating setpoints"];
-  }
-  if (/temperature|cool|chw|thermal|humidity/.test(text)) {
-    return ["Review affected trend lines", "Verify current equipment mode", "Compare with recent load changes"];
-  }
-  return uniqueBriefingItems([
-    cleanBriefingSentence(finding?.reviewNext),
-    "Review affected signal trends",
-    "Verify current operating mode and setpoints",
-    "Compare with recent maintenance activity",
-  ]).slice(0, 3);
-}
-
-function observationBriefingText(finding, run) {
-  return [
-    finding?.summary,
-    finding?.reviewNext,
-    ...(Array.isArray(finding?.supportingEvidence) ? finding.supportingEvidence : []),
-    ...(Array.isArray(run?.variables) ? run.variables : []),
-    ...(Array.isArray(run?.evidence_summary) ? run.evidence_summary : []),
-  ].filter(Boolean).join(" ").toLowerCase();
+function buildEvidenceBackedChecks(finding, run) {
+  const persisted = waterInsights(run).flatMap((insight) => (
+    Array.isArray(insight?.recommended_checks)
+      ? insight.recommended_checks.map((item) => item?.check)
+      : []
+  ));
+  const classified = Array.isArray(finding?.investigationGuidance)
+    ? finding.investigationGuidance.map((item) => item?.check ?? item)
+    : [];
+  const explicitReview = cleanBriefingSentence(finding?.reviewNext);
+  return uniqueBriefingItems([...persisted, ...classified, explicitReview]).slice(0, 6);
 }
 
 function IssueBriefingList({ title, items }) {
@@ -307,12 +301,17 @@ export default function ObservationCenterWorkspace({
   const [feedbackActionTaken, setFeedbackActionTaken] = useState("");
   const [feedbackNote, setFeedbackNote] = useState("");
   const [feedbackState, setFeedbackState] = useState({ status: "idle", message: "" });
+  const [caseState, setCaseState] = useState("open");
+  const [caseNote, setCaseNote] = useState("");
+  const [workOrderReference, setWorkOrderReference] = useState("");
+  const [caseStateResult, setCaseStateResult] = useState({ status: "idle", message: "" });
   const [notificationPrefs, setNotificationPrefs] = useState(() => loadJsonStorage(NOTIFICATION_STORAGE_KEY, {
     enabled: false,
     quietStart: "22:00",
     quietEnd: "06:00",
   }));
   const [aliases, setAliases] = useState(loadAliasStorage);
+  const [facilityContext, setFacilityContext] = useState(null);
   const [selectedAliasVariable, setSelectedAliasVariable] = useState("");
   const [aliasDraft, setAliasDraft] = useState("");
   const [selectedVariables, setSelectedVariables] = useState(["", ""]);
@@ -334,6 +333,24 @@ export default function ObservationCenterWorkspace({
       window.localStorage.setItem(VARIABLE_ALIAS_STORAGE_KEY, JSON.stringify(aliases));
     }
   }, [aliases]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve(apiFetch?.("/api/facility/context", { accessCode }))
+      .then((response) => response?.ok ? response.json() : null)
+      .then((payload) => {
+        if (cancelled || !payload || !Array.isArray(payload.signal_mappings)) return;
+        setFacilityContext(payload);
+        const sharedAliases = Object.fromEntries(
+          payload.signal_mappings
+            .filter((item) => String(item?.alias ?? "").trim())
+            .map((item) => [String(item.normalized_name), String(item.alias)]),
+        );
+        if (Object.keys(sharedAliases).length) setAliases(sharedAliases);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [accessCode, apiFetch]);
 
   useEffect(() => {
     runsRef.current = runs;
@@ -543,6 +560,12 @@ export default function ObservationCenterWorkspace({
   }, [activeFinding, aliases, hasCurrentFinding, persistedRunIds, selectedRun]);
   const activeBriefing = buildObservationBriefing(selectedReviewFinding ?? activeFinding, selectedRun);
   const selectedRunAllowsFeedback = canRecordFeedback(selectedRun, persistedRunIds);
+
+  useEffect(() => {
+    setCaseState(String(selectedRun?.observation_status ?? "open").toLowerCase());
+    setWorkOrderReference(String(selectedRun?.work_order_reference ?? ""));
+    setCaseNote("");
+  }, [selectedRun?.run_id, selectedRun?.observation_status, selectedRun?.work_order_reference]);
   const gateOrbState = driftToneFor(latestRun);
   const silenceHealth = useMemo(() => {
     const now = Date.now();
@@ -643,12 +666,60 @@ export default function ObservationCenterWorkspace({
     }
   }
 
-  function saveAlias() {
+  async function submitCaseState() {
+    if (!selectedRun?.run_id || !selectedRunAllowsFeedback) return;
+    try {
+      setCaseStateResult({ status: "saving", message: "Saving case state..." });
+      const response = await apiFetch(`/api/evidence/runs/${encodeURIComponent(selectedRun.run_id)}/status`, {
+        accessCode,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          state: caseState,
+          note: caseNote || null,
+          work_order_reference: workOrderReference || null,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(observationRequestError(response, payload, "The case state could not be saved. Retry the update."));
+      setRuns((current) => current.map((run) => (run.run_id === payload.run_id ? payload : run)));
+      setCaseNote("");
+      setCaseStateResult({ status: "saved", message: "Case state recorded." });
+    } catch (submitError) {
+      setCaseStateResult({ status: "error", message: String(submitError?.message ?? submitError) });
+    }
+  }
+
+  async function saveAlias() {
     if (!selectedAliasVariable) return;
-    setAliases((current) => ({
-      ...current,
+    const nextAliases = {
+      ...aliases,
       [selectedAliasVariable]: aliasDraft.trim(),
-    }));
+    };
+    setAliases(nextAliases);
+    if (!facilityContext || typeof apiFetch !== "function") return;
+    const known = new Set((facilityContext.signal_mappings ?? []).map((item) => String(item.normalized_name)));
+    const signalMappings = (facilityContext.signal_mappings ?? []).map((item) => (
+      String(item.normalized_name) === selectedAliasVariable
+        ? { ...item, alias: aliasDraft.trim() || null }
+        : item
+    ));
+    if (!known.has(selectedAliasVariable)) {
+      signalMappings.push({
+        raw_tag: selectedAliasVariable,
+        normalized_name: selectedAliasVariable,
+        system_id: facilityContext.systems?.[0]?.system_id ?? facilityContext.site_id,
+        unit: "",
+        alias: aliasDraft.trim() || null,
+      });
+    }
+    const response = await apiFetch("/api/facility/context", {
+      accessCode,
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...facilityContext, signal_mappings: signalMappings }),
+    });
+    if (response?.ok) setFacilityContext(await response.json());
   }
 
   function downloadRun(runId, format) {
@@ -725,11 +796,14 @@ export default function ObservationCenterWorkspace({
                 <span>Status</span>
                 <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                   <option value="all">All statuses</option>
-                  <option value="active">Active</option>
                   <option value="processing">Processing</option>
                   <option value="open">Open</option>
+                  <option value="acknowledged">Acknowledged</option>
+                  <option value="investigating">Investigating</option>
+                  <option value="monitoring">Monitoring</option>
                   <option value="recorded">Recorded</option>
                   <option value="resolved">Resolved</option>
+                  <option value="dismissed">Dismissed</option>
                   <option value="failed">Failed</option>
                 </select>
               </label>
@@ -818,9 +892,9 @@ export default function ObservationCenterWorkspace({
                 ]}
                 compact
               />
-              <IssueBriefingList title="Possible Operational Contributors" items={activeBriefing.possibleCauses} />
+              <IssueBriefingList title="Possible explanations, not confirmed causes" items={activeBriefing.possibleExplanations} />
               <IssueBriefingList title="Relationships Involved" items={activeBriefing.relationships} />
-              <IssueBriefingList title="Recommended First Checks" items={activeBriefing.investigation} />
+              <IssueBriefingList title="Evidence-linked verification checks" items={activeBriefing.investigation} />
               {hasCurrentFinding ? (
                 <div className="intake-flow__controls">
                   <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Evidence</button>
@@ -868,6 +942,23 @@ export default function ObservationCenterWorkspace({
                   </ul>
                 </details>
               ) : null}
+              <div className="why-panel__section guidance-checks">
+                <span className="section-token">Case state</span>
+                <select value={caseState} onChange={(event) => setCaseState(event.target.value)} aria-label="Case state">
+                  <option value="open">Open</option>
+                  <option value="acknowledged">Acknowledged</option>
+                  <option value="investigating">Investigating</option>
+                  <option value="monitoring">Monitoring</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="dismissed">Dismissed</option>
+                </select>
+                <input aria-label="Work order reference" value={workOrderReference} onChange={(event) => setWorkOrderReference(event.target.value)} placeholder="Optional work order reference" maxLength={200} />
+                <textarea aria-label="Case note" value={caseNote} onChange={(event) => setCaseNote(event.target.value)} placeholder="Optional case note" rows={2} />
+                <div className="intake-flow__controls">
+                  <button type="button" className="command-button" onClick={submitCaseState} disabled={!selectedRunAllowsFeedback || caseStateResult.status === "saving"}>Save Case State</button>
+                  {caseStateResult.message ? <span className="observation-feedback-state" role="status" aria-live="polite">{caseStateResult.message}</span> : null}
+                </div>
+              </div>
               <div className="why-panel__section guidance-checks">
                 <span className="section-token">Review outcome</span>
                 <select value={feedbackCategory} onChange={(event) => setFeedbackCategory(event.target.value)} aria-label="Feedback category">
@@ -968,7 +1059,7 @@ export default function ObservationCenterWorkspace({
             </label>
             <label>
               <span>Friendly label</span>
-              <input value={aliasDraft} onChange={(event) => setAliasDraft(event.target.value)} placeholder="Optional local alias" />
+              <input value={aliasDraft} onChange={(event) => setAliasDraft(event.target.value)} placeholder="Shared site alias" />
             </label>
           </div>
           <div className="intake-flow__controls">

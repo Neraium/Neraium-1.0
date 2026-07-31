@@ -1,0 +1,16 @@
+{
+  "manifest_version": "hydronic-benchmark.v1",
+  "policy": "Each scenario is replayed chronologically. Expected suppressions must never create or escalate a finding.",
+  "scenarios": [
+    {"id": "pump_degradation", "signals": ["pump_speed", "flow", "differential_pressure", "pump_power"], "expected": "surface_persistent_relationship_change"},
+    {"id": "strainer_or_filter_fouling", "signals": ["filter_differential_pressure", "flow", "pump_speed"], "expected": "surface_persistent_relationship_change"},
+    {"id": "valve_hunting", "signals": ["valve_position", "flow", "supply_pressure"], "expected": "surface_persistent_relationship_change"},
+    {"id": "heat_exchanger_fouling", "signals": ["entering_temperature", "leaving_temperature", "flow"], "expected": "surface_persistent_relationship_change"},
+    {"id": "distribution_leak", "signals": ["makeup_flow", "system_pressure", "pump_runtime"], "expected": "surface_persistent_relationship_change"},
+    {"id": "cavitation_risk_pattern", "signals": ["suction_pressure", "discharge_pressure", "flow", "pump_power"], "expected": "surface_only_with_persistence_and_corroboration"},
+    {"id": "scheduled_pump_rotation", "signals": ["lead_pump_status", "lag_pump_status", "flow", "differential_pressure"], "expected": "suppress_when_mode_conditioned_behavior_is_stable"},
+    {"id": "setpoint_change", "signals": ["setpoint", "valve_position", "supply_temperature"], "expected": "suppress_when_mode_conditioned_behavior_is_stable"},
+    {"id": "startup_shutdown_transition", "signals": ["enable_status", "pump_speed", "flow", "pressure"], "expected": "suppress_or_withhold_incomparable_window"},
+    {"id": "sensor_drift_or_flatline", "signals": ["sensor_value", "redundant_sensor", "command"], "expected": "classify_as_instrumentation_or_withhold_not_equipment_cause"}
+  ]
+}

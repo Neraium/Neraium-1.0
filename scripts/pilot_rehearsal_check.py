@@ -7,7 +7,7 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib import error, request
@@ -135,13 +135,17 @@ def upload_csv_and_wait(config: RehearsalConfig, csv_name: str, csv_payload: byt
 
 
 def build_primary_smoke_csv() -> bytes:
-    rows = [
-      "timestamp,room,temperature,humidity,flow_rate,orp,ph",
-      "2026-05-01T08:00:00Z,Pool Deck,81.2,54,118,690,7.35",
-      "2026-05-01T08:05:00Z,Pool Deck,81.4,55,117,688,7.34",
-      "2026-05-01T08:10:00Z,Pool Deck,81.6,55,116,687,7.33",
-      "2026-05-01T08:15:00Z,Pool Deck,81.8,56,116,686,7.32",
-    ]
+    start = datetime(2026, 5, 1, tzinfo=UTC)
+    rows = ["timestamp,system,supply_temperature,return_temperature,flow,differential_pressure,pump_speed,pump_power"]
+    for index in range(96):
+      timestamp = (start + timedelta(minutes=15 * index)).isoformat().replace("+00:00", "Z")
+      degradation = max(0, index - 72)
+      rows.append(
+        f"{timestamp},Chilled Water Loop 1,{42 + index * 0.002:.3f},"
+        f"{54 + degradation * 0.08:.3f},{120 - degradation * 0.7:.3f},"
+        f"{18 + degradation * 0.1:.3f},{55 + degradation * 0.8:.3f},"
+        f"{31 + degradation * 0.6:.3f}"
+      )
     return ("\n".join(rows) + "\n").encode("utf-8")
 
 
@@ -179,15 +183,28 @@ def run_rehearsal() -> int:
     status, latest_upload_after = fetch_json(config, "/api/data/latest-upload")
     report["checks"]["/api/data/latest-upload (after)"] = {"status": status, "payload": latest_upload_after}
 
+    primary_upload = report.get("uploads", {}).get("primary_smoke", {})
+    terminal = primary_upload.get("terminal", {}) if isinstance(primary_upload, dict) else {}
+    run_id = terminal.get("run_id") or terminal.get("job_id")
+    if run_id:
+      status, integrity = fetch_json(config, f"/api/evidence/runs/{run_id}/integrity")
+      report["checks"]["primary_evidence_integrity"] = {"status": status, "payload": integrity}
+
     readiness_pass = all(
       report["checks"].get(endpoint, {}).get("status") == 200
       for endpoint in ("/api/health", "/api/ready", "/api/data/latest-upload")
     )
     primary_terminal = str(report.get("uploads", {}).get("primary_smoke", {}).get("terminal", {}).get("status", "")).upper()
     primary_ok = primary_terminal in TERMINAL_STATES or not config.include_primary_smoke_upload
+    integrity_check = report["checks"].get("primary_evidence_integrity", {})
+    integrity_ok = (
+      integrity_check.get("status") == 200
+      and integrity_check.get("payload", {}).get("result_hash_matches") is True
+    ) if config.include_primary_smoke_upload else True
     report["summary"] = {
       "readiness_endpoints_ok": readiness_pass,
       "primary_upload_terminal_contract_ok": primary_ok,
+      "primary_evidence_integrity_ok": integrity_ok,
       "completed_at": now_iso(),
     }
 
@@ -196,7 +213,7 @@ def run_rehearsal() -> int:
     output_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"Pilot rehearsal report written: {output_path}")
 
-    if not readiness_pass or not primary_ok:
+    if not readiness_pass or not primary_ok or not integrity_ok:
       print("Pilot rehearsal check FAILED.")
       return 1
 

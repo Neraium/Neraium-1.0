@@ -1,10 +1,10 @@
 # Neraium
 
-**See system drift before it becomes operational failure.**
+**Detect meaningful system-level change earlier, using data facilities already collect.**
 
-Neraium is the platform for Systemic Infrastructure Intelligence (SII). It analyzes multivariable telemetry to identify behavior changes, instability, weak signals, and operational risk before conventional threshold alarms or visible symptoms reveal a problem.
+Neraium gives facility teams an additional set of eyes on how connected water systems behave. It analyzes multivariable telemetry to surface persistent relationship changes that ordinary alarms may miss and shows the evidence behind each finding.
 
-The platform is designed first for commercial water systems where pumps, tanks, filtration, treatment, pressure, temperature, flow, chemistry, and equipment signals interact continuously. The same SII intelligence can extend to other telemetry-heavy infrastructure, but commercial water operations are the primary use case.
+The initial product scope is complex water and hydronic systems inside large facilities: chilled-water and condenser-water loops, pumps, heat exchangers, filtration systems, pressure zones, and related water infrastructure. It works with existing BAS, BMS, historian, controller, and maintenance data and does not require proprietary sensors.
 
 ---
 
@@ -54,7 +54,7 @@ Recommended operator flow:
 4. Review the resulting insights and evidence.
 5. Explain what changed, why it matters, and what the operator should inspect next.
 6. Open Evidence Replay to show the behavior change over time.
-7. Close by explaining that the same intelligence layer applies across telemetry-heavy operational environments.
+7. Close by reviewing the evidence, verification checks, and append-only operator outcome.
 
 Workflow and screenshot planning docs:
 
@@ -66,16 +66,15 @@ Workflow and screenshot planning docs:
 
 Neraium is built for operational environments where drift matters before failure becomes obvious.
 
-Primary commercial water-system contexts include:
+Primary water and hydronic contexts include:
 
-- Aquatic facilities and hospitality water systems
-- Pools, spas, and therapy-water operations
-- Filtration and pump networks
+- Chilled-water and condenser-water loops
+- Central-plant pumps, valves, and heat exchangers
+- Filtration and treatment networks
 - Tanks, reservoirs, and recirculation loops
 - Flow, pressure, temperature, and chemistry monitoring
 - Maintenance-heavy mechanical water infrastructure
 - Multi-site facility water operations
-- Sensor-heavy operational networks
 
 The current workflows emphasize uploaded telemetry and read-only intelligence. Neraium does not control equipment at this stage. It analyzes data, produces evidence, and gives operators clearer direction on what to inspect.
 
@@ -120,9 +119,10 @@ Important API areas include:
 - `POST /api/auth/login`
 - `GET /api/auth/me`
 - `GET /api/facility/systems`
+- `GET|PUT /api/facility/context`
 - `POST /api/data/upload`
 - Upload status and replay endpoints
-- Evidence and audit endpoints
+- Evidence, finding-status, integrity, and audit endpoints
 - Observability and readiness endpoints
 
 Backend runtime state is written under `NERAIUM_RUNTIME_DIR`. Runtime storage includes upload jobs, upload queue records, evidence runs, audit events, latest payloads, and data connection records.
@@ -208,6 +208,8 @@ Common variables include:
 - `NERAIUM_MAX_UPLOAD_SIZE_BYTES`
 - `NERAIUM_MAX_PENDING_UPLOAD_JOBS`
 - `NERAIUM_UPLOAD_STATE_BUCKET`
+- `NERAIUM_BUILD_SHA`
+- `NERAIUM_MODE_AWARE_SUPPRESSION_ENABLED`
 - `VITE_API_BASE_URL`
 
 ---

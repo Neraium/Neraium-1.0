@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sqlite3
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timezone
@@ -108,6 +109,35 @@ def init_runtime_db() -> None:
                 payload_json TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS operator_feedback_events (
+                event_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                category TEXT NOT NULL,
+                payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
+                FOREIGN KEY(run_id) REFERENCES evidence_runs(run_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS finding_status_events (
+                event_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                state TEXT NOT NULL CHECK (state IN ('open', 'acknowledged', 'investigating', 'monitoring', 'resolved', 'dismissed')),
+                payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
+                FOREIGN KEY(run_id) REFERENCES evidence_runs(run_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS evidence_audit_tag_events (
+                event_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
+                FOREIGN KEY(run_id) REFERENCES evidence_runs(run_id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS audit_events (
                 event_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_at TEXT NOT NULL,
@@ -165,6 +195,9 @@ def init_runtime_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_upload_queue_status_updated ON upload_queue(status, updated_at ASC);
             CREATE INDEX IF NOT EXISTS idx_evidence_runs_created_at ON evidence_runs(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_evidence_runs_status_created ON evidence_runs(status, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_feedback_events_run_time ON operator_feedback_events(run_id, recorded_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_finding_status_events_run_time ON finding_status_events(run_id, recorded_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_evidence_audit_tags_run_time ON evidence_audit_tag_events(run_id, recorded_at DESC);
             CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_latest_payloads_updated_at ON latest_payloads(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_data_connections_updated_at ON data_connections(updated_at DESC);
@@ -182,6 +215,7 @@ RUNTIME_SCHEMA_MIGRATIONS = (
     "001_queue_integrity",
     "002_query_indexes",
     "003_state_constraints",
+    "004_append_only_finding_events",
 )
 
 
@@ -353,6 +387,18 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
         connection.execute(
             "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
             ("003_state_constraints", now_iso()),
+        )
+
+    if "004_append_only_finding_events" not in applied:
+        for statement in (
+            "CREATE INDEX IF NOT EXISTS idx_feedback_events_run_time ON operator_feedback_events(run_id, recorded_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_finding_status_events_run_time ON finding_status_events(run_id, recorded_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_evidence_audit_tags_run_time ON evidence_audit_tag_events(run_id, recorded_at DESC)",
+        ):
+            connection.execute(statement)
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("004_append_only_finding_events", now_iso()),
         )
 
 
@@ -1261,42 +1307,6 @@ def upsert_evidence_run_db(record: dict[str, Any]) -> None:
     upsert_evidence_runs_db([record])
 
 
-def mutate_evidence_run_db(
-    run_id: str,
-    mutator: Callable[[dict[str, Any]], dict[str, Any]],
-) -> dict[str, Any] | None:
-    """Atomically mutate an evidence record without losing concurrent feedback."""
-    init_runtime_db()
-    with db_connection() as connection:
-        connection.execute("BEGIN IMMEDIATE")
-        row = connection.execute(
-            "SELECT payload_json FROM evidence_runs WHERE run_id = ?",
-            (run_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        current = json.loads(row["payload_json"])
-        updated = mutator(current)
-        if str(updated.get("run_id") or "") != run_id:
-            raise ValueError("evidence mutator cannot change run_id")
-        connection.execute(
-            """
-            UPDATE evidence_runs
-            SET created_at = ?, completed_at = ?, status = ?, source_name = ?, payload_json = ?
-            WHERE run_id = ?
-            """,
-            (
-                updated.get("created_at") or now_iso(),
-                updated.get("completed_at"),
-                updated.get("status", "pending"),
-                updated.get("source_name"),
-                json.dumps(updated),
-                run_id,
-            ),
-        )
-    return updated
-
-
 def list_evidence_runs_db(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
     init_runtime_db()
     bounded_limit = max(1, min(int(limit), 1001))
@@ -1319,6 +1329,121 @@ def read_evidence_run_db(run_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
     return json.loads(row["payload_json"])
+
+
+def append_operator_feedback_event_db(run_id: str, event: dict[str, Any]) -> dict[str, Any]:
+    return _append_evidence_event(
+        table="operator_feedback_events",
+        run_id=run_id,
+        event=event,
+        extra_columns=("category",),
+        extra_values=(str(event.get("category") or ""),),
+    )
+
+
+def append_finding_status_event_db(run_id: str, event: dict[str, Any]) -> dict[str, Any]:
+    return _append_evidence_event(
+        table="finding_status_events",
+        run_id=run_id,
+        event=event,
+        extra_columns=("state",),
+        extra_values=(str(event.get("state") or ""),),
+    )
+
+
+def append_evidence_audit_tag_event_db(run_id: str, event: dict[str, Any]) -> dict[str, Any]:
+    return _append_evidence_event(
+        table="evidence_audit_tag_events",
+        run_id=run_id,
+        event=event,
+    )
+
+
+def _append_evidence_event(
+    *,
+    table: str,
+    run_id: str,
+    event: dict[str, Any],
+    extra_columns: tuple[str, ...] = (),
+    extra_values: tuple[Any, ...] = (),
+) -> dict[str, Any]:
+    allowed_tables = {
+        "operator_feedback_events",
+        "finding_status_events",
+        "evidence_audit_tag_events",
+    }
+    if table not in allowed_tables:
+        raise ValueError("invalid_evidence_event_table")
+    init_runtime_db()
+    persisted = {
+        **event,
+        "event_id": str(event.get("event_id") or uuid.uuid4().hex),
+        "run_id": str(run_id),
+    }
+    columns = ("event_id", "run_id", "recorded_at", "actor", *extra_columns, "payload_json")
+    placeholders = ", ".join("?" for _ in columns)
+    values = (
+        persisted["event_id"],
+        persisted["run_id"],
+        str(persisted.get("recorded_at") or now_iso()),
+        str(persisted.get("actor") or "operator"),
+        *extra_values,
+        json.dumps(persisted),
+    )
+    with db_connection() as connection:
+        exists = connection.execute(
+            "SELECT 1 FROM evidence_runs WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if exists is None:
+            raise ValueError("evidence_run_not_found")
+        connection.execute(
+            f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})",
+            values,
+        )
+    return persisted
+
+
+def hydrate_evidence_event_history_db(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    run_ids = [str(record.get("run_id") or "") for record in records if record.get("run_id")]
+    if not run_ids:
+        return records
+    init_runtime_db()
+    placeholders = ", ".join("?" for _ in run_ids)
+    event_sets: dict[str, dict[str, list[dict[str, Any]]]] = {
+        run_id: {"feedback": [], "status": [], "audit": []} for run_id in run_ids
+    }
+    with db_connection() as connection:
+        for table, bucket in (
+            ("operator_feedback_events", "feedback"),
+            ("finding_status_events", "status"),
+            ("evidence_audit_tag_events", "audit"),
+        ):
+            rows = connection.execute(
+                f"SELECT run_id, payload_json FROM {table} WHERE run_id IN ({placeholders}) ORDER BY recorded_at DESC, event_id DESC",
+                tuple(run_ids),
+            ).fetchall()
+            for row in rows:
+                event_sets[str(row["run_id"])][bucket].append(json.loads(row["payload_json"]))
+    hydrated = []
+    for source in records:
+        record = dict(source)
+        events = event_sets.get(str(record.get("run_id") or ""), {})
+        feedback = [*events.get("feedback", []), *list(record.get("operator_feedback_history") or [])]
+        statuses = [*events.get("status", []), *list(record.get("finding_status_history") or [])]
+        audit_tags = [*events.get("audit", []), *list(record.get("audit_tags") or [])]
+        record["operator_feedback_history"] = feedback
+        record["finding_status_history"] = statuses
+        record["audit_tags"] = audit_tags
+        if feedback:
+            record["latest_feedback_category"] = feedback[0].get("category")
+        if statuses:
+            record["observation_status"] = statuses[0].get("state")
+            record["finding_owner"] = statuses[0].get("owner") or statuses[0].get("actor")
+            record["finding_assignee"] = statuses[0].get("assignee")
+            record["work_order_reference"] = statuses[0].get("work_order_reference")
+        hydrated.append(record)
+    return hydrated
 
 
 def record_audit_event(

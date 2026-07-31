@@ -10,6 +10,7 @@ from app.models.api_models import ObservabilitySummaryResponse
 from app.services.aletheia_governance import list_evp_records
 from app.services.auth_store import auth_summary
 from app.services.evidence_store import list_evidence_runs
+from app.services.pilot_metrics import build_pilot_metrics
 from app.services.runtime_db import audit_events_count, queue_metrics, upload_duration_samples
 from app.services.upload_jobs import read_upload_cache_stats
 from app.services.upload_persistence import read_upload_history
@@ -35,6 +36,7 @@ def get_observability_summary() -> ObservabilitySummaryResponse:
     evidence_runs = list_evidence_runs(limit=100)
     upload_history = read_upload_history(UPLOAD_RUNTIME_STATE.runtime_dir, limit=100, current_result=read_current_upload_result())
     status_counts = Counter(run.get("status", "unknown") for run in evidence_runs)
+    pilot_metrics = build_pilot_metrics(evidence_runs)
     upload_count = len(upload_history)
     sparse_upload_count = 0
     unknown_profile_upload_count = 0
@@ -81,6 +83,7 @@ def get_observability_summary() -> ObservabilitySummaryResponse:
                 "room_count": total_room_count,
                 "flagged_room_count": total_flagged_room_count,
                 "flagged_room_rate": flagged_room_rate,
+                "pilot": pilot_metrics,
             },
         },
         audit={"event_count": audit_events_count()},
@@ -95,6 +98,7 @@ def get_observability_metrics() -> PlainTextResponse:
     evidence_runs = list_evidence_runs(limit=100)
     upload_history = read_upload_history(UPLOAD_RUNTIME_STATE.runtime_dir, limit=100, current_result=read_current_upload_result())
     status_counts = Counter(run.get("status", "unknown") for run in evidence_runs)
+    pilot_metrics = build_pilot_metrics(evidence_runs)
     upload_count = len(upload_history)
     sparse_upload_count = 0
     unknown_profile_upload_count = 0
@@ -146,6 +150,24 @@ def get_observability_metrics() -> PlainTextResponse:
         "# HELP neraium_unknown_profile_rate Share of recent uploads with unknown telemetry profile.",
         "# TYPE neraium_unknown_profile_rate gauge",
         f"neraium_unknown_profile_rate {round(unknown_profile_rate, 4)}",
+        "# HELP neraium_finding_candidates_total Compatibility findings evaluated in the recent pilot window.",
+        "# TYPE neraium_finding_candidates_total gauge",
+        f"neraium_finding_candidates_total {pilot_metrics['candidate_findings']}",
+        "# HELP neraium_finding_candidates_suppressed_total Candidates suppressed by corroborated mode-aware evidence.",
+        "# TYPE neraium_finding_candidates_suppressed_total gauge",
+        f"neraium_finding_candidates_suppressed_total {pilot_metrics['suppressed_candidates']}",
+        "# HELP neraium_findings_surfaced_total Evidence-backed findings surfaced in the recent pilot window.",
+        "# TYPE neraium_findings_surfaced_total gauge",
+        f"neraium_findings_surfaced_total {pilot_metrics['surfaced_findings']}",
+        "# HELP neraium_findings_irrelevant_total Reviewed findings marked irrelevant by operators.",
+        "# TYPE neraium_findings_irrelevant_total gauge",
+        f"neraium_findings_irrelevant_total {pilot_metrics['irrelevant_findings']}",
+        "# HELP neraium_findings_open Current open, acknowledged, investigating, or monitoring findings.",
+        "# TYPE neraium_findings_open gauge",
+        f"neraium_findings_open {pilot_metrics['open_findings']}",
+        "# HELP neraium_findings_per_site_week Surfaced findings normalized by site and observation week.",
+        "# TYPE neraium_findings_per_site_week gauge",
+        f"neraium_findings_per_site_week {pilot_metrics['findings_per_site_week']}",
     ]
     return PlainTextResponse("\n".join(lines) + "\n")
 

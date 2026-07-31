@@ -58,6 +58,7 @@ tmp/
 .tmp/
 output/
 *.csv
+!tests/fixtures/hydronic_pilot/*.csv
 *.jsonl
 *.db
 backend/app/runtime/latest_sii_state.json

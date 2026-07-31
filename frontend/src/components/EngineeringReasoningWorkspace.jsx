@@ -34,6 +34,7 @@ function routeFromLocation() {
   if (path.startsWith("/sites/")) return "site";
   if (path.startsWith("/findings/")) return "finding";
   if (path === "/findings") return "findings";
+  if (path === "/investigations") return "investigations";
   if (path.startsWith("/investigations")) return "investigation";
   if (path.startsWith("/evidence")) return "evidence";
   if (path.startsWith("/trace")) return "trace";
@@ -165,6 +166,15 @@ function FindingsOverview({ model, reviewRecords, onReview, onReviewAction }) {
   );
 }
 
+function EvidenceOutcomesOverview({ model, reviewRecords, onReview, onReviewAction }) {
+  return (
+    <div className="findings-overview operational-overview">
+      <OverviewHeader eyebrow="Evidence & outcomes" name="Finding history" status={model.status} confidence={model.evidenceQuality} summary={model.findings.length ? `${model.findings.length} tracked ${model.findings.length === 1 ? "finding" : "findings"}` : "No finding history"} />
+      {model.findings.length ? <section className="active-findings" aria-label="Evidence and outcomes"><div>{model.findings.map((finding) => <FindingSummary key={finding.id} finding={finding} reviewRecord={reviewRecordFor(finding, reviewRecords)} onReview={onReview} onReviewAction={onReviewAction} />)}</div></section> : <section className="normal-summary"><span>Evidence & outcomes</span><h2>No findings have entered review.</h2><p>Evidence packages and operator outcomes will appear here after a finding is surfaced.</p></section>}
+    </div>
+  );
+}
+
 function TraceWorkspace({ model, finding, apiFetch, onBack }) {
   const [selectedId, setSelectedId] = useState(model.trace[0]?.id ?? null);
   const runId = runIdentity(model, finding);
@@ -257,10 +267,10 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const effectiveRoute = route === "portfolio" && portfolioModels.length <= 1 ? "site" : route;
   const activeNavigation = ["finding", "findings"].includes(effectiveRoute) ? "findings" : ["investigation", "evidence", "trace"].includes(effectiveRoute) ? "investigations" : ["system", "systems"].includes(effectiveRoute) ? "systems" : effectiveRoute;
   const navItems = [
-    ["site", "Operations Brief"],
+    ["site", "System Status"],
     ["systems", "Systems"],
     ["findings", "Findings"],
-    ["investigations", "Investigations"],
+    ["investigations", "Evidence & Outcomes"],
     ["data-connections", "Data"],
     ...(portfolioModels.length > 1 ? [["portfolio", "Sites"]] : []),
     ...(currentUser?.role === "admin" ? [["governance-admin", "Administration"]] : []),
@@ -434,16 +444,27 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
       writeStorageValue(reviewStorageKey, next);
       return next;
     });
-    const feedback = feedbackForReviewAction(action);
     const runId = runIdentity(model, finding);
-    if (!feedback || !runId || typeof apiFetch !== "function") return { persisted: false };
+    if (!runId || typeof apiFetch !== "function") return { persisted: false };
+    const caseState = action.state === "new" ? "open"
+      : action.state === "explained" || action.state === "closed" ? "resolved"
+        : action.state === "not_useful" ? "dismissed"
+          : action.state;
     try {
-      const response = await apiFetch(`/api/evidence/runs/${encodeURIComponent(runId)}/feedback`, {
+      const response = await apiFetch(`/api/evidence/runs/${encodeURIComponent(runId)}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(feedback),
+        body: JSON.stringify({ state: caseState, note: action.note || null, owner: record.owner }),
       });
       if (!response?.ok) return { persisted: false };
+      const feedback = feedbackForReviewAction(action);
+      if (feedback) {
+        await apiFetch(`/api/evidence/runs/${encodeURIComponent(runId)}/feedback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(feedback),
+        });
+      }
       const persistedRecord = { ...record, persisted: true };
       setReviewRecords((current) => {
         const next = { ...current, [id]: persistedRecord };
@@ -502,6 +523,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
                       : effectiveRoute === "portfolio" ? <PortfolioWorkspace sites={portfolioSites} onSelectSite={handleSelectSite} />
                         : effectiveRoute === "systems" ? <SystemsOverview model={model} onSystem={openSystem} />
                           : effectiveRoute === "findings" ? <FindingsOverview model={model} reviewRecords={reviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} />
+                            : effectiveRoute === "investigations" ? <EvidenceOutcomesOverview model={model} reviewRecords={reviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} />
                             : effectiveRoute === "system" ? <SystemOverview model={model} system={selectedSystem} reviewRecords={reviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} onEvidence={openEvidence} />
                               : ["insufficientEvidence", "legacyAnalysis"].includes(presentationState.key) ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
                                 : <SiteOverview model={model} reviewRecords={reviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} />}

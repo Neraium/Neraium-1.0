@@ -1,6 +1,6 @@
 # Neraium Demo Script
 
-Use this as the short operator/investor demo path. Keep the demo focused on system intelligence, not a single vertical.
+Use this as the short operator/investor demo path. Keep the demo focused on complex water and hydronic systems in large facilities.
 
 ## One Sentence
 
@@ -69,11 +69,11 @@ Say:
 
 > Replay gives the operator and technical team a way to trace how the behavior changed over time instead of trusting a black-box score.
 
-### 6. Close with platform scope
+### 6. Close with the pilot claim
 
 Say:
 
-> The same core system intelligence layer can apply across facilities, equipment, water systems, energy systems, building automation, industrial operations, and other telemetry-heavy environments.
+> Neraium uses telemetry the facility already collects to surface persistent changes ordinary alarms may miss, then shows the engineer the evidence and verification checks behind the finding.
 
 ## Thirty Second Version
 
@@ -81,7 +81,7 @@ Neraium turns telemetry into operator-ready system intelligence. It detects drif
 
 ## What Not To Say
 
-Avoid saying Neraium is only for cultivation, only for one industry, or an equipment controller. The current product is a read-only intelligence layer for complex systems.
+Avoid presenting Neraium as a universal infrastructure platform or an equipment controller. The current product is a read-only intelligence layer focused on complex water and hydronic systems.
 
 Avoid saying the platform predicts everything. The stronger claim is that Neraium detects system drift earlier and explains the evidence behind the finding.
 
@@ -98,4 +98,4 @@ Avoid calling it an AI dashboard. The product is a system intelligence platform 
 - [ ] Replay view has current output.
 - [ ] Empty states have been checked.
 - [ ] Mobile layout has been checked.
-- [ ] No screenshots or demo data imply a single exclusive vertical.
+- [ ] Demo data, labels, and claims match the defined water/hydronic pilot scope.

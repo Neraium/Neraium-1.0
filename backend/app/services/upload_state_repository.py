@@ -101,6 +101,10 @@ def _runtime_db_latest_enabled() -> bool:
     return os.getenv("PYTEST_CURRENT_TEST") is None and os.getenv("NERAIUM_DISABLE_RUNTIME_DB_LATEST", "0") != "1"
 
 
+def _runtime_db_latest_write_enabled() -> bool:
+    return os.getenv("NERAIUM_DISABLE_RUNTIME_DB_LATEST", "0") != "1"
+
+
 def _upload_state_bucket() -> str:
     return os.getenv("NERAIUM_UPLOAD_STATE_BUCKET", "").strip()
 
@@ -396,10 +400,11 @@ def read_shared_state(name: str, *, scope: DatasetScope | None = None) -> dict[s
 def write_shared_state(name: str, payload: dict[str, Any], *, scope: DatasetScope | None = None) -> None:
     normalized = dict(payload or {})
     storage_name = _state_name(name, scope=scope, payload=normalized)
-    try:
-        upsert_latest_payload(_shared_key(storage_name), normalized)
-    except Exception:
-        logger.error("shared_state_write_failed backend=runtime_db")
+    if _runtime_db_latest_write_enabled():
+        try:
+            upsert_latest_payload(_shared_key(storage_name), normalized)
+        except Exception:
+            logger.error("shared_state_write_failed backend=runtime_db")
     bucket = _upload_state_bucket()
     if bucket:
         client = _get_s3_client()
@@ -420,11 +425,12 @@ def write_shared_state_strict(name: str, payload: dict[str, Any], *, scope: Data
     normalized = dict(payload or {})
     storage_name = _state_name(name, scope=scope, payload=normalized)
     runtime_written = False
-    try:
-        upsert_latest_payload(_shared_key(storage_name), normalized)
-        runtime_written = True
-    except Exception:
-        logger.error("shared_state_write_failed backend=runtime_db")
+    if _runtime_db_latest_write_enabled():
+        try:
+            upsert_latest_payload(_shared_key(storage_name), normalized)
+            runtime_written = True
+        except Exception:
+            logger.error("shared_state_write_failed backend=runtime_db")
 
     bucket = _upload_state_bucket()
     if bucket:
@@ -445,7 +451,7 @@ def write_shared_state_strict(name: str, payload: dict[str, Any], *, scope: Data
 
     # Tests and single-process development intentionally use local JSON even
     # when the optional runtime latest-payload database is disabled.
-    if _runtime_db_latest_enabled() and not runtime_written:
+    if _runtime_db_latest_write_enabled() and not runtime_written:
         raise RuntimeError("shared_state_write_failed")
 
 

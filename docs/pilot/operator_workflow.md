@@ -1,54 +1,38 @@
-# Operator Workflow
+# Hydronic Finding Workflow
 
-## Canonical Pilot Flow
-Facility State  
--> Room Drift  
--> Propagation  
--> Replay  
--> Evidence  
--> Continuation Window  
--> Operator Review
+## Canonical flow
 
-## Step Guidance
+`System Status -> Findings -> Evidence -> Outcome`
 
-### 1. Facility State
-Start with current structural cognition at the facility level:
-- overall structural stability posture,
-- active environmental topology pressures,
-- current convergence/recovery context.
+### 1. System status
 
-### 2. Room Drift
-Identify rooms with active structural drift:
-- relationship weakening,
-- compensation masking patterns,
-- synchronization drift across rooms.
+Confirm the selected site/system, current data coverage, active operating mode, baseline identity, and whether analysis is complete or limited. Resolve signal mappings and unit problems before interpreting system behavior.
 
-### 3. Propagation
-Inspect propagation pathway behavior:
-- where structural pressure appears to be spreading,
-- which subsystem relationships are carrying instability forward.
+### 2. Findings
 
-### 4. Replay
-Use replay evidence to reconstruct progression:
-- what changed first,
-- how drift evolved over time,
-- where progression accelerated or stabilized.
+Review only persistent, corroborated findings. Each finding should state what changed, affected signals/system boundary, first observed time, confidence tier, and why it may matter. A candidate suppressed by mode-aware evidence is counted in metrics but is not shown as an active finding.
 
-### 5. Evidence
-Inspect evidence lineage for each cognition output:
-- contributing relationships,
-- subsystem corroboration,
-- persistence and topology support.
+Set the case state independently of technical judgment:
 
-### 6. Continuation Window
-Review continuation window context:
-- current structural trajectory if conditions persist,
-- potential convergence/recovery opportunities.
+- `open`
+- `acknowledged`
+- `investigating`
+- `monitoring`
+- `resolved`
+- `dismissed`
 
-### 7. Operator Review
-Record operator interpretation and next checks:
-- priority rooms,
-- targeted verification actions,
-- unresolved questions for next review cycle.
+### 3. Evidence
 
-This workflow is designed for operator-centric review, not automated decisioning.
+Verify the baseline/comparison windows, source signals and rows, relationship changes, persistence, mode comparability, data limitations, engine/configuration versions, and hashes. Review “possible explanations” only as hypotheses. Follow the evidence-linked verification checks in the facility.
+
+### 4. Outcome
+
+Record owner/assignee, work-order reference, action taken, and one operator judgment such as `confirmed_issue`, `known_operational_change`, `sensor_or_data_problem`, `useful_warning`, or `false_positive`. Resolution closes workflow state but does not overwrite the finding or historical evidence.
+
+## Weekly review
+
+- Examine all newly surfaced and suppressed candidates.
+- Review unresolved findings and missing operator outcomes.
+- Compare findings with alarms, inspections, and work orders.
+- Investigate every irrelevant finding and every documented event Neraium missed.
+- Export the evidence package and observability pilot metrics for the weekly record.

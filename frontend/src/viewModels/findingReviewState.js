@@ -73,6 +73,24 @@ export function reviewStateFromFeedback(feedback = {}) {
 }
 
 export function reviewRecordFromFinding(finding = {}) {
+  const statusEvent = Array.isArray(finding.caseHistory) ? finding.caseHistory[0] : null;
+  const caseState = statusEvent?.state ?? finding.caseState;
+  const explicitCaseState = normalizedState(
+    caseState === "open" ? "new"
+      : caseState === "resolved" ? "closed"
+        : caseState === "dismissed" ? "not_useful"
+          : caseState,
+  );
+  if (explicitCaseState) {
+    return {
+      state: explicitCaseState,
+      reason: cleanText(statusEvent?.note),
+      note: cleanText(statusEvent?.note),
+      reviewedAt: cleanText(statusEvent?.recorded_at),
+      owner: cleanText(statusEvent?.owner ?? statusEvent?.actor),
+      persisted: true,
+    };
+  }
   const feedback = finding.outcome && typeof finding.outcome === "object" ? finding.outcome : {};
   const state = reviewStateFromFeedback(feedback);
   if (!state) return null;

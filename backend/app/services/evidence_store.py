@@ -10,8 +10,11 @@ from typing import Any
 
 from app.core.config import get_settings
 from app.services.runtime_db import (
+    append_evidence_audit_tag_event_db,
+    append_finding_status_event_db,
+    append_operator_feedback_event_db,
+    hydrate_evidence_event_history_db,
     list_evidence_runs_db,
-    mutate_evidence_run_db,
     read_latest_payload,
     upsert_evidence_run_db,
     upsert_evidence_runs_db,
@@ -133,6 +136,8 @@ def record_operator_feedback(
 ) -> dict[str, Any]:
     if category not in FEEDBACK_CATEGORIES:
         raise ValueError("invalid_feedback_category")
+    if read_evidence_run(run_id) is None:
+        raise ValueError("evidence_run_not_found")
     feedback_entry = {
         "category": category,
         "note": (note or "").strip() or None,
@@ -144,32 +149,54 @@ def record_operator_feedback(
         "recorded_at": recorded_at,
     }
 
-    def append_feedback(record: dict[str, Any]) -> dict[str, Any]:
-        history = [item for item in record.get("operator_feedback_history", []) if isinstance(item, dict)]
-        return {
-            **record,
-            "latest_feedback_category": category,
-            "operator_feedback_history": [feedback_entry, *history][:20],
-        }
-
-    updated_record = mutate_evidence_run_db(run_id, append_feedback)
+    append_operator_feedback_event_db(run_id, feedback_entry)
+    updated_record = read_evidence_run(run_id)
     if updated_record is None:
         raise ValueError("evidence_run_not_found")
-    return read_evidence_run(run_id) or updated_record
+    return updated_record
+
+
+def record_finding_status(
+    run_id: str,
+    *,
+    state: str,
+    actor: str,
+    recorded_at: str,
+    note: str | None = None,
+    owner: str | None = None,
+    assignee: str | None = None,
+    work_order_reference: str | None = None,
+) -> dict[str, Any]:
+    if read_evidence_run(run_id) is None:
+        raise ValueError("evidence_run_not_found")
+    event = {
+        "state": state,
+        "actor": actor,
+        "recorded_at": recorded_at,
+        "note": (note or "").strip() or None,
+        "owner": (owner or "").strip() or actor,
+        "assignee": (assignee or "").strip() or None,
+        "work_order_reference": (work_order_reference or "").strip() or None,
+    }
+    append_finding_status_event_db(run_id, event)
+    updated_record = read_evidence_run(run_id)
+    if updated_record is None:
+        raise ValueError("evidence_run_not_found")
+    return updated_record
 
 
 
 def tag_evidence_for_audit(run_id: str, actor: str, tagged_at: str) -> dict[str, Any]:
-    tag = {"actor": actor, "tagged_at": tagged_at}
-
-    def append_tag(record: dict[str, Any]) -> dict[str, Any]:
-        tags = [item for item in record.get("audit_tags", []) if isinstance(item, dict)]
-        return {**record, "audit_tags": [tag, *tags][:20]}
-
-    updated_record = mutate_evidence_run_db(run_id, append_tag)
+    if read_evidence_run(run_id) is None:
+        raise ValueError("evidence_run_not_found")
+    append_evidence_audit_tag_event_db(
+        run_id,
+        {"actor": actor, "recorded_at": tagged_at, "tagged_at": tagged_at},
+    )
+    updated_record = read_evidence_run(run_id)
     if updated_record is None:
         raise ValueError("evidence_run_not_found")
-    return read_evidence_run(run_id) or updated_record
+    return updated_record
 
 def build_evidence_export(record: dict[str, Any]) -> str:
     warnings = record.get("warnings") or []
@@ -356,6 +383,13 @@ def build_evidence_package_payload(record: dict[str, Any]) -> dict[str, Any]:
             "result_hash": record.get("result_hash"),
             "model_version": traceability.get("model_version"),
             "schema_version": traceability.get("schema_version"),
+            "evidence_hash": record.get("evidence_hash"),
+            "baseline_id": record.get("baseline_id"),
+            "baseline_dataset_id": record.get("baseline_dataset_id"),
+            "baseline_version": record.get("baseline_version"),
+            "baseline_hash": record.get("baseline_hash"),
+            "configuration_hash": record.get("configuration_hash"),
+            "build_commit": record.get("build_commit"),
             "created_at": record.get("created_at"),
             "completed_at": record.get("completed_at"),
         },
@@ -532,22 +566,22 @@ def _load_raw_evidence_runs(limit: int = 500, offset: int = 0) -> list[dict[str,
     migration_complete = read_latest_payload(LEGACY_EVIDENCE_IMPORT_MARKER) is True
     db_items = list_evidence_runs_db(limit=limit, offset=offset)
     if migration_complete:
-        return [item for item in db_items if isinstance(item, dict)]
+        return hydrate_evidence_event_history_db([item for item in db_items if isinstance(item, dict)])
     if db_items:
         # A populated database is authoritative. Mark the import complete so a
         # stale mirror cannot be resurrected after retention removes all rows.
         upsert_latest_payload(LEGACY_EVIDENCE_IMPORT_MARKER, True)
-        return [item for item in db_items if isinstance(item, dict)]
+        return hydrate_evidence_event_history_db([item for item in db_items if isinstance(item, dict)])
     if offset > 0 and list_evidence_runs_db(limit=1, offset=0):
         upsert_latest_payload(LEGACY_EVIDENCE_IMPORT_MARKER, True)
         return []
     if not _import_legacy_evidence_file():
         return []
-    return [
+    return hydrate_evidence_event_history_db([
         item
         for item in list_evidence_runs_db(limit=limit, offset=offset)
         if isinstance(item, dict)
-    ]
+    ])
 
 
 def _annotate_and_sort_evidence_runs(items: list[dict[str, Any]]) -> list[dict[str, Any]]:

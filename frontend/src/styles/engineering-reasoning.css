@@ -1229,6 +1229,21 @@
 
 .operations-section .operational-finding { background: #0b121b; }
 .operational-finding--escalated { border-color: rgba(77,163,255,.52); box-shadow: inset 3px 0 var(--fr-blue); }
+.operational-finding__alert { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, .62fr); gap: 20px; padding: 15px; border-bottom: 1px solid var(--fr-line); }
+.operational-finding__alert > div { min-width: 0; display: grid; gap: 6px; }
+.operational-finding__alert > div > span,
+.operational-finding__alert dt { color: var(--fr-faint); font-size: 8px; font-weight: 680; letter-spacing: .11em; text-transform: uppercase; }
+.operational-finding__alert h3 { max-width: 52ch; margin: 0; font-size: 18px; line-height: 1.25; font-weight: 560; letter-spacing: -.01em; }
+.operational-finding__alert dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.operational-finding__alert dl > div { min-width: 0; display: grid; align-content: start; gap: 5px; }
+.operational-finding__alert dd { margin: 0; color: #c4d0dc; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.operational-finding__evidence { border-bottom: 1px solid var(--fr-line); color: var(--fr-muted); font-size: 10px; }
+.operational-finding__evidence summary { padding: 11px 15px; color: #b8c8d8; cursor: pointer; font-weight: 580; }
+.operational-finding__evidence[open] summary { border-bottom: 1px solid var(--fr-line); }
+.operational-finding__evidence ul { margin: 0; padding: 12px 15px 13px 32px; }
+.operational-finding__evidence li { color: #c0ccd8; line-height: 1.5; }
+.operational-finding__evidence li + li { margin-top: 5px; }
+.operational-finding__evidence p { margin: 0; padding: 12px 15px; }
 .operational-finding__identity { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px 0; }
 .operational-finding__identity > div:first-child { min-width: 0; display: grid; gap: 3px; }
 .operational-finding__identity > div:first-child strong { overflow: hidden; color: #b7c6d5; font-size: 10px; font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
@@ -1354,6 +1369,11 @@
   .operations-escalation .forensic-button { width: 100%; }
   .operations-sections { gap: 8px; margin-top: 8px; }
   .operations-section > header { min-height: 42px; }
+  .operational-finding__alert { grid-template-columns: 1fr; gap: 12px; padding: 12px; }
+  .operational-finding__alert h3 { font-size: 16px; overflow-wrap: anywhere; }
+  .operational-finding__alert dl { gap: 8px; }
+  .operational-finding__evidence summary { min-height: 44px; display: flex; align-items: center; padding-inline: 12px; }
+  .operational-finding__evidence ul { padding-inline: 28px 12px; }
   .operational-finding__identity { padding: 11px 12px 0; }
   .operational-finding__identity > div:first-child strong { white-space: normal; overflow-wrap: anywhere; }
   .operational-finding__what { padding: 8px 12px 0; }

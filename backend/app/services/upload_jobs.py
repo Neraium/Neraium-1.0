@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from app.core.path_safety import safe_upload_suffix
 from app.services.analysis_explanations import build_analysis_explanation
+from app.services.analysis_provenance import canonical_digest, file_digest
 from app.services.analysis_result_contract import attach_analysis_result, build_normalized_telemetry
 from app.services.condition_corroboration import ConditionCorroborationService
 from app.services.baseline_contracts import (
@@ -30,6 +31,7 @@ from app.services.behavioral_model_repository import (
 from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import build_data_quality, detect_timestamp_column, parse_numeric_value, parse_timestamp, profile_numeric_columns, profile_timestamps
 from app.services.driver_attribution import build_driver_attribution
+from app.services.facility_context import read_facility_context
 from app.services.operator_report import build_operator_report
 from app.services.notifications import dispatch_observation_notification
 from app.services.sii_intelligence import build_upload_intelligence
@@ -1133,12 +1135,32 @@ def _build_csv_result(
     runner_result = pipeline["runner_result"]
     latest_runner_state = pipeline["latest_runner_state"]
     relationship_model = pipeline["relationship_model"]
+    mode_aware_suppressed = bool(
+        (processing_trace.get("mode_aware_authority") or {}).get("applied")
+    )
+    effective_urgency = "nominal" if mode_aware_suppressed else overall_urgency
 
     job_scope = dataset_scope_from_payload(job_context) or current_dataset_scope()
+    facility_context = read_facility_context()
     baseline_id = str(job_context.get("active_baseline_model_id") or "").strip() or None
     baseline_dataset_id = str(job_context.get("active_baseline_dataset_id") or "").strip() or None
     comparison_dataset_id = str(job_context.get("dataset_id") or "").strip() or None
-    system_id = str(job_context.get("active_baseline_system_id") or job_scope.workspace_id).strip()
+    configured_systems = [
+        item for item in facility_context.get("systems", []) if isinstance(item, dict)
+    ]
+    site_id = str(facility_context.get("site_id") or job_scope.workspace_id).strip()
+    system_id = str(
+        job_context.get("active_baseline_system_id")
+        or (configured_systems[0].get("system_id") if configured_systems else None)
+        or job_scope.workspace_id
+    ).strip()
+    active_baseline_model = read_active_behavioral_model()
+    active_baseline_hash = (
+        canonical_digest(active_baseline_model)
+        if isinstance(active_baseline_model, dict)
+        and str(active_baseline_model.get("model_id") or "") == str(baseline_id or "")
+        else None
+    )
     if workflow == WORKFLOW_ANALYZE_NEW_DATA:
         if not baseline_id or not baseline_dataset_id or not comparison_dataset_id:
             raise ValueError("analysis_identity_incomplete")
@@ -1161,7 +1183,16 @@ def _build_csv_result(
         "upload_id": job_id,
         "organization_id": job_scope.tenant_id,
         "portfolio_id": job_scope.workspace_id,
+        "site_id": site_id,
         "system_id": system_id,
+        "facility_context_reference": {
+            "contract_version": facility_context.get("contract_version"),
+            "site_id": site_id,
+            "site_name": facility_context.get("site_name"),
+            "system_id": system_id,
+            "signal_mapping_count": len(facility_context.get("signal_mappings") or []),
+            "updated_at": facility_context.get("updated_at"),
+        },
         **comparison_identity,
         "filename": filename,
         "row_count": row_count_total,
@@ -1185,6 +1216,7 @@ def _build_csv_result(
             "imputation_report": dict(ingestion_report.get("imputation_report") or {}),
             "delimiter": ingestion_report.get("delimiter", ","),
             "header_present": bool(ingestion_report.get("header_present", True)),
+            "input_hash": ingestion_report.get("input_hash"),
         },
         "processing_time_seconds": processing_time_seconds,
         "quality_warning": reliability_warning or (data_quality.get("warnings") or [None])[0],
@@ -1204,8 +1236,8 @@ def _build_csv_result(
         "engine_result": engine_result,
         "relationship_model": relationship_model,
         "driver_attribution": driver_attribution,
-        "operating_state": "Baseline-aligned" if overall_urgency == "nominal" else ("Structural drift observed" if overall_urgency == "review" else "Persistent structural drift observed"),
-        "drift_status": "info" if overall_urgency == "nominal" else ("review" if overall_urgency == "review" else "unstable"),
+        "operating_state": "Baseline-aligned" if effective_urgency == "nominal" else ("Structural drift observed" if effective_urgency == "review" else "Persistent structural drift observed"),
+        "drift_status": "info" if effective_urgency == "nominal" else ("review" if effective_urgency == "review" else "unstable"),
         "sii_intelligence": sii_intelligence,
         "sii_runner_result": runner_result,
         "processing_trace": processing_trace,
@@ -1235,6 +1267,7 @@ def _build_csv_result(
                 "model_id": job_context.get("active_baseline_model_id"),
                 "version": job_context.get("active_baseline_version"),
                 "dataset_id": job_context.get("active_baseline_dataset_id"),
+                "model_hash": active_baseline_hash,
             }
             if workflow != WORKFLOW_LEGACY_ANALYSIS
             else None
@@ -1318,7 +1351,9 @@ def _build_csv_result(
     summary["active_baseline_reference"] = result.get("active_baseline_reference")
     summary["organization_id"] = result.get("organization_id")
     summary["portfolio_id"] = result.get("portfolio_id")
+    summary["site_id"] = result.get("site_id")
     summary["system_id"] = result.get("system_id")
+    summary["facility_context_reference"] = result.get("facility_context_reference")
     summary.update(comparison_identity)
     summary["session_scope"] = build_session_scope(
         job_id,
@@ -1735,6 +1770,8 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
     if not p.exists():
         raise FileNotFoundError(str(p))
 
+    input_hash = file_digest(p)
+
     snapshot: dict[str, Any] | None = None
     processing_started_at = time.perf_counter()
     existing_job = read_job(job_id) or {}
@@ -1814,6 +1851,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
                 "analysis_sample_stride": snapshot.get("analysis_sample_stride", 1),
                 "delimiter": snapshot["delimiter"],
                 "header_present": snapshot["header_present"],
+                "input_hash": input_hash,
             },
             processing_started_at,
         )

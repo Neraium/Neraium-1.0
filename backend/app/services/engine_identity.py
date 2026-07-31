@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 import subprocess
 from pathlib import Path
 from typing import Any, Callable
@@ -118,6 +119,16 @@ def callable_identity(target: Callable[..., Any]) -> dict[str, str | None]:
 
 
 def git_commit() -> str:
+    for key in (
+        "NERAIUM_BUILD_SHA",
+        "GIT_SHA",
+        "RENDER_GIT_COMMIT",
+        "VERCEL_GIT_COMMIT_SHA",
+        "HEROKU_SLUG_COMMIT",
+    ):
+        value = os.getenv(key, "").strip()
+        if value:
+            return value
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],

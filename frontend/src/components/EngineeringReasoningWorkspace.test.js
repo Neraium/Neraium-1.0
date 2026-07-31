@@ -144,17 +144,20 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(screen.getByText("1 new unexplained change.")).toBeTruthy();
   });
 
-  it("caps a brief item at one evidence sentence, one next check, and one primary action", () => {
+  it("keeps the alert scannable and progressively discloses evidence", () => {
     renderWorkspace();
     const card = screen.getByTestId("compact-finding-card");
     const finding = within(card);
-    expect(finding.getByText("Condenser Water")).toBeTruthy();
+    expect(finding.getByText("Cooling system")).toBeTruthy();
     expect(finding.getByRole("heading", { name: "Condenser-side behavior changed" })).toBeTruthy();
-    expect(finding.getByText("Unexplained systemic change")).toBeTruthy();
+    expect(finding.getByText("System")).toBeTruthy();
+    expect(finding.getByText("Confidence")).toBeTruthy();
+    const evidence = finding.getByText("Evidence (4)").closest("details");
+    expect(evidence.open).toBe(false);
+    fireEvent.click(finding.getByText("Evidence (4)"));
+    expect(evidence.open).toBe(true);
     expect(finding.getByText("Condenser approach temperature increased 15.3%.")).toBeTruthy();
-    expect(finding.getByText("Verify pressure transmitter.")).toBeTruthy();
-    expect(card.querySelectorAll(".operational-finding__brief p")).toHaveLength(2);
-    expect(card.textContent).not.toContain("Compressor current increased 5.5%.");
+    expect(finding.getByText("Compressor current increased 5.5%.")).toBeTruthy();
     expect(finding.getByRole("button", { name: "Review" })).toBeTruthy();
     expect(finding.getByText("More actions")).toBeTruthy();
     expect(card.querySelector(".operational-finding__more").open).toBe(false);
@@ -202,13 +205,10 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
 
     const card = screen.getByTestId("compact-finding-card");
     const view = within(card);
-    expect(view.getByText("Condition")).toBeTruthy();
     expect(view.getByRole("heading", { name: "Pump response weakening in Rush Tower water system" })).toBeTruthy();
-    expect(view.getByText("Moderate · 3")).toBeTruthy();
-    expect(view.getAllByText("Strengthening").length).toBeGreaterThan(0);
-    expect(card.querySelectorAll(".operational-finding__condition-evidence li")).toHaveLength(3);
-    expect(view.getByText("Observed for 18 days", { exact: false })).toBeTruthy();
-    expect(view.getByText("Details · 3 supporting relationships").closest("details").open).toBe(false);
+    expect(view.getByText("Pumping System")).toBeTruthy();
+    expect(view.getByText("Evidence (6)").closest("details").open).toBe(false);
+    expect(card.querySelectorAll(".operational-finding__evidence li")).toHaveLength(6);
     expect(view.getByRole("button", { name: "Investigate" })).toBeTruthy();
     expect(view.getByText("Actions")).toBeTruthy();
 
@@ -226,8 +226,9 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     fireEvent.click(screen.getByRole("button", { name: "I’m checking this" }));
     await waitFor(() => expect(screen.queryByRole("heading", { name: "New" })).toBeNull());
     expect(screen.getByRole("heading", { name: "Monitoring" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "I’m checking this" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
     expect(screen.getByText("Unexplained systemic change")).toBeTruthy();
-    expect(screen.getByText("Investigating")).toBeTruthy();
   });
 
   it("normalizes a known condition into the existing feedback endpoint", async () => {
@@ -295,8 +296,8 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
   it("supports direct workflow navigation and keyboard search", () => {
     renderWorkspace();
     const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
-    for (const label of ["Operations Brief", "Systems", "Findings", "Investigations", "Data"]) expect(within(navigation).getByRole("button", { name: label })).toBeTruthy();
-    fireEvent.click(within(navigation).getByRole("button", { name: "Investigations" }));
+    for (const label of ["System Status", "Systems", "Findings", "Evidence & Outcomes", "Data"]) expect(within(navigation).getByRole("button", { name: label })).toBeTruthy();
+    fireEvent.click(within(navigation).getByRole("button", { name: "Evidence & Outcomes" }));
     expect(window.location.pathname).toBe("/investigations");
     fireEvent.click(within(navigation).getByRole("button", { name: "Systems" }));
     expect(screen.getByRole("heading", { name: "North Plant" })).toBeTruthy();

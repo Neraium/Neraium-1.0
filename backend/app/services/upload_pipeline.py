@@ -9,6 +9,7 @@ from app.engine.sii_engine import evaluate_sii
 from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
+from app.services.mode_aware_authority import apply_mode_aware_suppression
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE
 from app.services.telemetry_confidence import apply_telemetry_confidence_adjustment
@@ -22,6 +23,11 @@ def _inline_replay_generation_enabled() -> bool:
     if configured is not None:
         return configured.strip().lower() in {"1", "true", "yes", "on"}
     return os.getenv("PYTEST_CURRENT_TEST") is not None
+
+
+def _mode_aware_suppression_enabled() -> bool:
+    configured = os.getenv("NERAIUM_MODE_AWARE_SUPPRESSION_ENABLED", "1")
+    return configured.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _empty_optional_replay(job_id: str, reason: str) -> dict[str, Any]:
@@ -117,6 +123,17 @@ def run_structural_analysis_pipeline(
             cultivation_mapping=cultivation_mapping,
             overall_urgency=overall_urgency,
         )
+        authority = apply_mode_aware_suppression(
+            engine_result=engine_result,
+            relationship_model=relationship_model,
+            mode_conditioned=context.get("mode_conditioned_baseline"),
+            relationship_graph=context.get("relationship_graph"),
+            adaptive_persistence=context.get("adaptive_persistence"),
+            multiscale_analysis=context.get("multiscale_analysis"),
+            enabled=bool(context.get("mode_aware_suppression_enabled")),
+        )
+        engine_result = authority["engine_result"]
+        relationship_model = authority["relationship_model"]
         driver_attribution = build_driver_attribution(
             {
                 "room": primary_room_assessment.get("room")
@@ -156,6 +173,8 @@ def run_structural_analysis_pipeline(
             "driver_attribution": driver_attribution,
             "primary_room": primary_room,
             "processing_trace": initial_processing_trace,
+            "relationship_model": relationship_model,
+            "mode_aware_authority": authority["decision"],
         }
 
     stage_notifier(
@@ -183,6 +202,7 @@ def run_structural_analysis_pipeline(
             "compatibility_context_factory": compatibility_context_factory,
             "processing_trace": initial_processing_trace,
             "source_run_id": job_id,
+            "mode_aware_suppression_enabled": _mode_aware_suppression_enabled(),
             "infrastructure_identity": {
                 key: ingestion_report.get(key)
                 for key in (

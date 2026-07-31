@@ -4,11 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.core.security import require_api_access, require_operator_role
-from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse, LatestEvidenceResponse, OperatorFeedbackRequest
-from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, build_evidence_package_payload, build_evidence_package_pdf, latest_evidence_run, list_evidence_runs_page, read_evidence_run, record_operator_feedback, tag_evidence_for_audit
+from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse, FindingStatusRequest, LatestEvidenceResponse, OperatorFeedbackRequest
+from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, build_evidence_package_payload, build_evidence_package_pdf, latest_evidence_run, list_evidence_runs_page, read_evidence_run, record_finding_status, record_operator_feedback, tag_evidence_for_audit
 from app.services.runtime_db import now_iso, record_audit_event
 from app.routers import data as data_router
 from app.services.upload_state_repository import read_evidence_by_identity
+from app.services.upload_state_repository import read_upload_result_by_job_id
+from app.services.analysis_provenance import result_digest
 
 
 router = APIRouter(tags=["evidence"], dependencies=[Depends(require_api_access)])
@@ -25,10 +27,31 @@ def get_evidence_runs(
 
 @router.get("/evidence/runs/{run_id}", response_model=EvidenceRunResponse)
 def get_evidence_run(run_id: RunIdPath) -> dict[str, Any]:
-    record = read_evidence_by_identity(run_id) or read_evidence_run(run_id)
+    record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
     return record
+
+
+@router.get("/evidence/runs/{run_id}/integrity")
+def verify_evidence_run_integrity(run_id: RunIdPath) -> dict[str, Any]:
+    record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Evidence run not found.")
+    result = read_upload_result_by_job_id(run_id)
+    expected = str(record.get("result_hash") or "")
+    actual = result_digest(result) if isinstance(result, dict) else None
+    return {
+        "run_id": run_id,
+        "status": "verified" if expected and actual == expected else "unavailable" if actual is None else "mismatch",
+        "result_hash_matches": bool(expected and actual == expected),
+        "expected_result_hash": expected or None,
+        "actual_result_hash": actual,
+        "input_hash_recorded": bool(record.get("input_hash")),
+        "baseline_identity_recorded": bool(record.get("baseline_id") and record.get("baseline_dataset_id")),
+        "configuration_hash_recorded": bool(record.get("configuration_hash")),
+        "build_commit": record.get("build_commit"),
+    }
 
 
 @router.get("/evidence/latest", response_model=LatestEvidenceResponse)
@@ -45,7 +68,7 @@ def get_latest_evidence() -> dict[str, Any]:
 
 @router.get("/evidence/export/{run_id}", response_model=None)
 def export_evidence_run(request: Request, run_id: RunIdPath, format: Literal["markdown", "json", "csv"] = Query(default="markdown")):
-    record = read_evidence_by_identity(run_id) or read_evidence_run(run_id)
+    record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
     auth_context = getattr(request.state, "auth_context", {})
@@ -80,7 +103,7 @@ def export_evidence_run(request: Request, run_id: RunIdPath, format: Literal["ma
 
 @router.get("/evidence/package/{run_id}", response_model=None, dependencies=[Depends(require_operator_role)])
 def export_evidence_package(request: Request, run_id: RunIdPath, format: Literal["pdf", "json"] = Query(default="pdf")):
-    record = read_evidence_by_identity(run_id) or read_evidence_run(run_id)
+    record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
     package = build_evidence_package_payload(record)
@@ -162,6 +185,37 @@ def submit_evidence_feedback(request: Request, run_id: RunIdPath, payload: Opera
             "outcome": payload.outcome,
             "action_taken_present": bool(payload.action_taken),
         },
+    )
+    data_router.invalidate_latest_upload_cache()
+    return updated
+
+
+@router.post("/evidence/runs/{run_id}/status", response_model=EvidenceRunResponse, dependencies=[Depends(require_operator_role)])
+def update_finding_status(request: Request, run_id: RunIdPath, payload: FindingStatusRequest) -> dict[str, Any]:
+    auth_context = getattr(request.state, "auth_context", {})
+    actor = auth_context.get("auth_subject", "operator")
+    try:
+        updated = record_finding_status(
+            run_id,
+            state=payload.state,
+            actor=actor,
+            recorded_at=now_iso(),
+            note=payload.note,
+            owner=payload.owner,
+            assignee=payload.assignee,
+            work_order_reference=payload.work_order_reference,
+        )
+    except ValueError as error:
+        if str(error) == "evidence_run_not_found":
+            raise HTTPException(status_code=404, detail="Evidence run not found.") from None
+        raise
+    record_audit_event(
+        actor=actor,
+        action="finding.status.recorded",
+        resource_type="evidence_run",
+        resource_id=run_id,
+        request_id=auth_context.get("request_id"),
+        detail={"state": payload.state, "work_order_reference_present": bool(payload.work_order_reference)},
     )
     data_router.invalidate_latest_upload_cache()
     return updated

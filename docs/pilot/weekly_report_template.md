@@ -1,58 +1,39 @@
-# Weekly Pilot Report Template
+# Weekly Hydronic Pilot Report
 
-## Pilot Week
-- Week of:
-- Facility:
+## Scope
+
+- Week:
+- Facility/site:
+- Systems included:
 - Reviewer(s):
+- Telemetry hash/configuration hash/build commit:
 
-## 1. Facility Summary
-- Current structural cognition state:
-- Environmental topology posture:
-- Convergence/recovery posture:
+## Pilot measures
 
-## 2. Rooms Reviewed
-- Room list:
-- Priority room(s):
-- Reason for prioritization:
+- Candidate findings:
+- Suppressed candidates:
+- Surfaced findings:
+- Reviewed / useful / irrelevant:
+- Irrelevant-finding rate:
+- Findings per site-week:
+- Event matches / misses:
+- Median lead time:
+- Data coverage:
 
-## 3. Structural Changes Observed
-- Key structural drift patterns:
-- Compensation masking signals:
-- Noted fragmentation or stabilization behavior:
+## Finding review
 
-## 4. Propagation Pathways
-- Dominant propagation pathway(s):
-- Subsystems involved:
-- Room-to-room spread notes:
+For each finding record: finding ID, system, first detected time, affected signals, case state, evidence summary, possible explanations, verification performed, work-order reference, operator judgment, and outcome.
 
-## 5. Evidence Lineage
-- Primary corroborating evidence:
-- Persistence evidence:
-- Topology support:
-- Confidence basis (ordinal):
-  - LOW_EVIDENCE / MODERATE_EVIDENCE / HIGH_EVIDENCE / STRONG_CONVERGENCE
+## Exceptions
 
-## 6. Replay Notes
-- Replay interval reviewed:
-- Key progression moments:
-- Evidence-backed interpretation:
+- Existing events Neraium missed:
+- Findings with no matching event or useful operator outcome:
+- Data gaps, flatlines, timing problems, or mapping changes:
+- Baseline/mode/configuration limitations:
 
-## 7. Continuation Window + Convergence/Recovery
-- Current continuation window:
-- Potential convergence/recovery indicators:
-- Signals requiring close follow-up:
+## Decisions
 
-## 8. Operator Observations
-- What felt operationally clear:
-- What was ambiguous:
-- Additional context from floor operations:
-
-## 9. Follow-Up Questions
-- Open question 1:
-- Open question 2:
-- Open question 3:
-
-## 10. Next Week Focus
-- Rooms to prioritize:
-- Pathways to monitor:
-- Evidence gaps to close:
+- Mappings or data collection to improve:
+- Finding rules to investigate (never tune on the evaluation period without recording a new configuration):
+- Systems to add or remove from scope:
+- Owners and due dates:

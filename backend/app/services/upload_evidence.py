@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.services.analysis_provenance import build_analysis_provenance, canonical_digest
+
 
 def _mapping(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
@@ -157,8 +159,8 @@ def _phase2_supporting_evidence_from_result(result: dict[str, Any]) -> dict[str,
     uncertainty = sii.get("uncertainty") if isinstance(sii.get("uncertainty"), dict) else {}
     trace = sii.get("processing_trace") if isinstance(sii.get("processing_trace"), dict) else {}
     return {
-        "authoritative": False,
-        "effect": "supporting_evidence_only",
+        "authoritative": bool(trace.get("phase_2_authoritative")),
+        "effect": str(trace.get("phase_2_effect") or "supporting_evidence_only"),
         "engine": sii.get("engine"),
         "status": sii.get("status"),
         "relationship_graph": {
@@ -210,6 +212,7 @@ def _phase2_supporting_evidence_from_result(result: dict[str, Any]) -> dict[str,
             for key in (
                 "phase_2_authoritative",
                 "phase_2_effect",
+                "mode_aware_authority",
                 "module_statuses",
                 "module_failures",
                 "modules_attempted",
@@ -346,6 +349,7 @@ def build_traceability_packet(*, job_id: str, filename: str, result: dict[str, A
     source_rows = _source_rows_from_result(result)
     evidence_windows = _evidence_windows_from_result(result)
     timestamps = _traceability_timestamps_from_result(result)
+    provenance = build_analysis_provenance(result)
     return {
         "job_id": str(job_id),
         "run_id": str(job_id),
@@ -354,6 +358,10 @@ def build_traceability_packet(*, job_id: str, filename: str, result: dict[str, A
         "source_rows": source_rows,
         "evidence_windows": evidence_windows,
         "timestamps": timestamps,
+        "provenance": provenance,
+        "model_version": provenance.get("engine_version"),
+        "schema_version": provenance.get("schema_version"),
+        "configuration_hash": provenance.get("configuration_hash"),
         "aligned": True,
         "traceability_complete": bool(
             job_id
@@ -404,6 +412,7 @@ def build_evidence_record_from_result(
     observation_type = "corroborated_condition" if primary_condition else _observation_type_from_result(result)
     structural_state = str(result.get("operating_state") or sii.get("facility_state") or "Monitoring")
     traceability = build_traceability_packet(job_id=run_id, filename=filename, result=result)
+    provenance = traceability["provenance"]
     confidence_score = primary_condition.get("confidence_score") if primary_condition else sii.get("confidence")
     if confidence_score is None:
         confidence_score = ((sii.get("rooms") or [{}])[0] or {}).get("confidence")
@@ -446,7 +455,7 @@ def build_evidence_record_from_result(
         if isinstance(item, dict) and item.get("relationship_prior_id")
     ]
     row_count = _row_count_from_result(result)
-    return {
+    record = {
         "run_id": run_id,
         "job_id": run_id,
         "upload_id": run_id,
@@ -460,6 +469,21 @@ def build_evidence_record_from_result(
         "rows_accepted": rows_accepted if rows_accepted is not None else row_count,
         "rows_rejected": rows_rejected if rows_rejected is not None else 0,
         "sensors_detected": _sensor_count_from_result(result),
+        "input_hash": provenance.get("input_hash"),
+        "result_hash": provenance.get("result_hash"),
+        "organization_id": provenance.get("organization_id"),
+        "portfolio_id": provenance.get("portfolio_id"),
+        "site_id": provenance.get("site_id"),
+        "system_id": provenance.get("system_id"),
+        "dataset_id": provenance.get("dataset_id"),
+        "baseline_id": provenance.get("baseline_id"),
+        "baseline_dataset_id": provenance.get("baseline_dataset_id"),
+        "baseline_version": provenance.get("baseline_version"),
+        "baseline_hash": provenance.get("baseline_hash"),
+        "engine_version": provenance.get("engine_version"),
+        "build_commit": provenance.get("build_commit"),
+        "configuration_hash": provenance.get("configuration_hash"),
+        "provenance": provenance,
         "room": (sii.get("primary_room") or "Uploaded telemetry"),
         "operating_state": result.get("operating_state"),
         "neraium_score": sii.get("neraium_score"),
@@ -471,7 +495,7 @@ def build_evidence_record_from_result(
         "primary_drivers": primary_drivers,
         "evidence_summary": supporting_evidence,
         "structural_archetypes": archetypes,
-        "adaptive_site_key": "site::default",
+        "adaptive_site_key": f"site::{provenance.get('site_id') or 'default'}",
         "operator_feedback_history": [],
         "initiated_by": initiated_by,
         "observation_type": observation_type,
@@ -497,6 +521,10 @@ def build_evidence_record_from_result(
         "water_intelligence": water_intelligence,
         "water_prior_versions": water_prior_versions,
     }
+    record["evidence_hash"] = canonical_digest(
+        {key: value for key, value in record.items() if key != "evidence_hash"}
+    )
+    return record
 
 
 def _evidence_condition_record(condition: dict[str, Any]) -> dict[str, Any]:
