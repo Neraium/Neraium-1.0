@@ -216,6 +216,7 @@ RUNTIME_SCHEMA_MIGRATIONS = (
     "002_query_indexes",
     "003_state_constraints",
     "004_append_only_finding_events",
+    "005_live_telemetry_ingestion",
 )
 
 
@@ -399,6 +400,124 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
         connection.execute(
             "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
             ("004_append_only_finding_events", now_iso()),
+        )
+
+    if "005_live_telemetry_ingestion" not in applied:
+        for statement in (
+            """
+            CREATE TABLE IF NOT EXISTS telemetry_ingestion_batches (
+                batch_id TEXT PRIMARY KEY,
+                system_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                received_at TEXT NOT NULL,
+                completed_at TEXT,
+                result_json TEXT CHECK (result_json IS NULL OR json_valid(result_json))
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS telemetry_signal_mappings (
+                mapping_id TEXT PRIMARY KEY,
+                system_id TEXT NOT NULL,
+                source_tag TEXT NOT NULL,
+                canonical_signal TEXT NOT NULL,
+                unit TEXT,
+                enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (system_id, source_tag)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS normalized_telemetry (
+                telemetry_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                system_id TEXT NOT NULL,
+                canonical_signal TEXT NOT NULL,
+                telemetry_timestamp TEXT NOT NULL,
+                value REAL NOT NULL CHECK (
+                    value = value
+                    AND value <= 1.7976931348623157e308
+                    AND value >= -1.7976931348623157e308
+                ),
+                source TEXT NOT NULL,
+                source_tag TEXT NOT NULL,
+                quality_status TEXT NOT NULL CHECK (quality_status IN ('good', 'out_of_order')),
+                ingested_at TEXT NOT NULL,
+                batch_id TEXT NOT NULL,
+                FOREIGN KEY(batch_id) REFERENCES telemetry_ingestion_batches(batch_id),
+                UNIQUE (system_id, canonical_signal, telemetry_timestamp, source)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS rejected_telemetry (
+                rejection_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_id TEXT NOT NULL,
+                system_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                source_tag TEXT,
+                telemetry_timestamp TEXT,
+                submitted_value_json TEXT CHECK (
+                    submitted_value_json IS NULL OR json_valid(submitted_value_json)
+                ),
+                rejection_reason TEXT NOT NULL CHECK (rejection_reason IN (
+                    'missing_timestamp',
+                    'invalid_timestamp',
+                    'future_timestamp',
+                    'non_numeric_value',
+                    'nan_value',
+                    'infinite_value',
+                    'unmapped_signal',
+                    'duplicate_record',
+                    'out_of_order_record'
+                )),
+                ingested_at TEXT NOT NULL,
+                FOREIGN KEY(batch_id) REFERENCES telemetry_ingestion_batches(batch_id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS telemetry_ingestion_health (
+                system_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                last_successful_ingestion_at TEXT,
+                last_telemetry_timestamp TEXT,
+                accepted_count INTEGER NOT NULL DEFAULT 0 CHECK (accepted_count >= 0),
+                rejected_count INTEGER NOT NULL DEFAULT 0 CHECK (rejected_count >= 0),
+                latest_error_or_warning TEXT,
+                status TEXT NOT NULL CHECK (status IN ('healthy', 'delayed', 'error', 'never_received')),
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (system_id, source)
+            )
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_telemetry_mappings_system_enabled
+                ON telemetry_signal_mappings (system_id, enabled, source_tag)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_telemetry_mappings_system_canonical
+                ON telemetry_signal_mappings (system_id, canonical_signal)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_normalized_telemetry_system_time
+                ON normalized_telemetry (system_id, telemetry_timestamp DESC)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_normalized_telemetry_system_signal_time
+                ON normalized_telemetry (system_id, canonical_signal, telemetry_timestamp DESC)
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_normalized_telemetry_batch ON normalized_telemetry (batch_id)",
+            "CREATE INDEX IF NOT EXISTS idx_rejected_telemetry_batch ON rejected_telemetry (batch_id, rejection_id)",
+            """
+            CREATE INDEX IF NOT EXISTS idx_rejected_telemetry_system_time
+                ON rejected_telemetry (system_id, ingested_at DESC)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_telemetry_health_updated
+                ON telemetry_ingestion_health (updated_at DESC)
+            """,
+        ):
+            connection.execute(statement)
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("005_live_telemetry_ingestion", now_iso()),
         )
 
 

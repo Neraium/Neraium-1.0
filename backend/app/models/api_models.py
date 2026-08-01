@@ -438,3 +438,83 @@ class DataConnectionActionResponse(BaseModel):
 class DataConnectionsBulkActionResponse(BaseModel):
     connections: list[DataConnectionResponse] = Field(default_factory=list)
     message: str
+
+
+TelemetrySourceTag = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=256),
+]
+TelemetryUnit = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=64),
+]
+
+
+class TelemetryReadingRequest(ContractModel):
+    # Timestamp validation happens in the ingestion service so malformed or
+    # missing timestamps can be durably quarantined instead of rejecting the
+    # entire HTTP batch before it is recorded.
+    timestamp: Any | None = None
+    signals: dict[TelemetrySourceTag, Any] = Field(min_length=1)
+
+
+class TelemetryIngestionRequest(ContractModel):
+    batch_id: Identifier | None = None
+    system_id: Identifier
+    source: Identifier
+    readings: list[TelemetryReadingRequest] = Field(min_length=1)
+
+
+class TelemetryIngestionResponse(BaseModel):
+    batch_id: str
+    accepted_reading_count: int
+    rejected_reading_count: int
+    accepted_signal_value_count: int
+    rejected_signal_value_count: int
+    warnings: list[str] = Field(default_factory=list)
+    processing_timestamp: str
+
+
+class TelemetrySignalMappingCreateRequest(ContractModel):
+    system_id: Identifier
+    source_tag: TelemetrySourceTag
+    canonical_signal: Identifier
+    unit: TelemetryUnit | None = None
+    enabled: bool = True
+
+
+class TelemetrySignalMappingUpdateRequest(ContractModel):
+    canonical_signal: Identifier | None = None
+    unit: TelemetryUnit | None = None
+    enabled: bool | None = None
+
+
+class TelemetrySignalMappingResponse(BaseModel):
+    mapping_id: str
+    system_id: str
+    source_tag: str
+    canonical_signal: str
+    unit: str | None = None
+    enabled: bool
+    created_at: str
+    updated_at: str
+
+
+class TelemetrySignalMappingsListResponse(BaseModel):
+    mappings: list[TelemetrySignalMappingResponse] = Field(default_factory=list)
+
+
+class TelemetryIngestionHealthResponse(BaseModel):
+    system_id: str
+    source: str
+    last_successful_ingestion_at: str | None = None
+    last_telemetry_timestamp: str | None = None
+    accepted_count: int = 0
+    rejected_count: int = 0
+    latest_error_or_warning: str | None = None
+    status: Literal["healthy", "delayed", "error", "never_received"]
+    updated_at: str | None = None
+
+
+class TelemetryIngestionHealthListResponse(BaseModel):
+    health: list[TelemetryIngestionHealthResponse] = Field(default_factory=list)

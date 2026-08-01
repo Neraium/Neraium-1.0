@@ -17,7 +17,7 @@ from app.contracts import ErrorResponse, enforce_query_contract, validate_contra
 from app.core.config import Settings, get_settings
 from app.core.logging_config import bind_log_context, configure_logging, reset_log_context
 from app.core.security import require_admin_role, require_api_access
-from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, infrastructure, observability, replay
+from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, infrastructure, observability, replay, telemetry
 from app.routers.data import wait_for_upload_workers
 from app.services.auth_store import initialize_auth_store
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
@@ -229,6 +229,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth.router, prefix="/api")
     app.include_router(connectors.router, prefix="/api")
     app.include_router(data_connections.router, prefix="/api")
+    app.include_router(telemetry.router, prefix="/api")
     app.include_router(facility.router, prefix="/api")
     app.include_router(data.router, prefix="/api")
     app.include_router(evidence.router, prefix="/api")
@@ -251,7 +252,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if request.method in {"POST", "PUT", "PATCH"} and request.url.path not in {
             "/api/data/upload", "/api/connectors/csv/upload"
         }:
-            max_payload_bytes = 1_048_576
+            max_payload_bytes = (
+                settings.telemetry_max_request_size_bytes
+                if request.url.path == "/api/telemetry/ingest"
+                else 1_048_576
+            )
+            payload_limit_message = (
+                f"Telemetry request payload exceeds the {max_payload_bytes}-byte limit."
+                if request.url.path == "/api/telemetry/ingest"
+                else "Request payload exceeds the 1 MiB limit."
+            )
             raw_length = request.headers.get("content-length")
             try:
                 declared_length = int(raw_length) if raw_length is not None else None
@@ -263,14 +273,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if declared_length is not None and declared_length > max_payload_bytes:
                 return JSONResponse(
                     status_code=413,
-                    content={"detail": "Request payload exceeds the 1 MiB limit.", "message": "Request payload exceeds the 1 MiB limit.", "error_type": "payload_too_large"},
+                    content={"detail": payload_limit_message, "message": payload_limit_message, "error_type": "payload_too_large"},
                 )
-            if declared_length is None:
+            if request.url.path == "/api/telemetry/ingest" or declared_length is None:
                 body = await request.body()
                 if len(body) > max_payload_bytes:
                     return JSONResponse(
                         status_code=413,
-                        content={"detail": "Request payload exceeds the 1 MiB limit.", "message": "Request payload exceeds the 1 MiB limit.", "error_type": "payload_too_large"},
+                        content={"detail": payload_limit_message, "message": payload_limit_message, "error_type": "payload_too_large"},
                     )
         inbound_request_id = str(request.headers.get("X-Request-Id") or "").strip()
         request_id = (

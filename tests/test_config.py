@@ -29,6 +29,12 @@ def test_settings_use_local_defaults(monkeypatch) -> None:
     assert settings.cors_origin_regex == DEFAULT_CORS_ORIGIN_REGEX
     assert settings.default_telemetry_url == ""
     assert settings.start_data_connection_poller is False
+    assert settings.telemetry_max_request_size_bytes == 1_048_576
+    assert settings.telemetry_max_readings_per_batch == 1000
+    assert settings.telemetry_max_signals_per_reading == 100
+    assert settings.telemetry_future_skew_seconds == 300
+    assert settings.telemetry_out_of_order_tolerance_seconds == 300
+    assert settings.telemetry_delay_threshold_seconds == 900
 
 
 def test_settings_read_environment_values(monkeypatch) -> None:
@@ -128,6 +134,12 @@ def test_production_settings_accept_explicit_runtime_dir(monkeypatch, tmp_path) 
         ("LOG_FORMAT", "xml"),
         ("BACKEND_PORT", "70000"),
         ("NERAIUM_MAX_PENDING_UPLOAD_JOBS", "0"),
+        ("NERAIUM_TELEMETRY_MAX_REQUEST_SIZE_BYTES", "0"),
+        ("NERAIUM_TELEMETRY_MAX_READINGS_PER_BATCH", "0"),
+        ("NERAIUM_TELEMETRY_MAX_SIGNALS_PER_READING", "0"),
+        ("NERAIUM_TELEMETRY_FUTURE_SKEW_SECONDS", "-1"),
+        ("NERAIUM_TELEMETRY_OUT_OF_ORDER_TOLERANCE_SECONDS", "-1"),
+        ("NERAIUM_TELEMETRY_DELAY_THRESHOLD_SECONDS", "never"),
         ("NERAIUM_SHUTDOWN_TIMEOUT_SECONDS", "-1"),
     ],
 )

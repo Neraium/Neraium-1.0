@@ -30,6 +30,12 @@ DEFAULT_RUNTIME_DIR = Path(__file__).resolve().parents[1] / "runtime"
 DEFAULT_MAX_UPLOAD_SIZE_BYTES = 250 * 1024 * 1024
 DEFAULT_MAX_LARGE_UPLOAD_SIZE_BYTES = 512 * 1024 * 1024
 DEFAULT_MAX_PENDING_UPLOAD_JOBS = 50
+DEFAULT_TELEMETRY_MAX_REQUEST_SIZE_BYTES = 1024 * 1024
+DEFAULT_TELEMETRY_MAX_READINGS_PER_BATCH = 1000
+DEFAULT_TELEMETRY_MAX_SIGNALS_PER_READING = 100
+DEFAULT_TELEMETRY_FUTURE_SKEW_SECONDS = 300.0
+DEFAULT_TELEMETRY_OUT_OF_ORDER_TOLERANCE_SECONDS = 300.0
+DEFAULT_TELEMETRY_DELAY_THRESHOLD_SECONDS = 900.0
 
 _VALID_APP_ENVS = {"development", "test", "staging", "prod", "production"}
 _VALID_PROCESS_ROLES = {"api", "worker", "all", "monolith"}
@@ -54,6 +60,12 @@ class Settings:
     max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_SIZE_BYTES
     max_large_upload_size_bytes: int = DEFAULT_MAX_LARGE_UPLOAD_SIZE_BYTES
     max_pending_upload_jobs: int = DEFAULT_MAX_PENDING_UPLOAD_JOBS
+    telemetry_max_request_size_bytes: int = DEFAULT_TELEMETRY_MAX_REQUEST_SIZE_BYTES
+    telemetry_max_readings_per_batch: int = DEFAULT_TELEMETRY_MAX_READINGS_PER_BATCH
+    telemetry_max_signals_per_reading: int = DEFAULT_TELEMETRY_MAX_SIGNALS_PER_READING
+    telemetry_future_skew_seconds: float = DEFAULT_TELEMETRY_FUTURE_SKEW_SECONDS
+    telemetry_out_of_order_tolerance_seconds: float = DEFAULT_TELEMETRY_OUT_OF_ORDER_TOLERANCE_SECONDS
+    telemetry_delay_threshold_seconds: float = DEFAULT_TELEMETRY_DELAY_THRESHOLD_SECONDS
     notification_webhook_url: str = ""
     notification_email_recipients: list[str] = field(default_factory=list)
     smtp_host: str = ""
@@ -109,6 +121,36 @@ def get_settings() -> Settings:
             os.getenv("NERAIUM_MAX_PENDING_UPLOAD_JOBS"),
             DEFAULT_MAX_PENDING_UPLOAD_JOBS,
             name="NERAIUM_MAX_PENDING_UPLOAD_JOBS",
+        ),
+        telemetry_max_request_size_bytes=parse_positive_int(
+            os.getenv("NERAIUM_TELEMETRY_MAX_REQUEST_SIZE_BYTES"),
+            DEFAULT_TELEMETRY_MAX_REQUEST_SIZE_BYTES,
+            name="NERAIUM_TELEMETRY_MAX_REQUEST_SIZE_BYTES",
+        ),
+        telemetry_max_readings_per_batch=parse_positive_int(
+            os.getenv("NERAIUM_TELEMETRY_MAX_READINGS_PER_BATCH"),
+            DEFAULT_TELEMETRY_MAX_READINGS_PER_BATCH,
+            name="NERAIUM_TELEMETRY_MAX_READINGS_PER_BATCH",
+        ),
+        telemetry_max_signals_per_reading=parse_positive_int(
+            os.getenv("NERAIUM_TELEMETRY_MAX_SIGNALS_PER_READING"),
+            DEFAULT_TELEMETRY_MAX_SIGNALS_PER_READING,
+            name="NERAIUM_TELEMETRY_MAX_SIGNALS_PER_READING",
+        ),
+        telemetry_future_skew_seconds=parse_nonnegative_float(
+            os.getenv("NERAIUM_TELEMETRY_FUTURE_SKEW_SECONDS"),
+            DEFAULT_TELEMETRY_FUTURE_SKEW_SECONDS,
+            name="NERAIUM_TELEMETRY_FUTURE_SKEW_SECONDS",
+        ),
+        telemetry_out_of_order_tolerance_seconds=parse_nonnegative_float(
+            os.getenv("NERAIUM_TELEMETRY_OUT_OF_ORDER_TOLERANCE_SECONDS"),
+            DEFAULT_TELEMETRY_OUT_OF_ORDER_TOLERANCE_SECONDS,
+            name="NERAIUM_TELEMETRY_OUT_OF_ORDER_TOLERANCE_SECONDS",
+        ),
+        telemetry_delay_threshold_seconds=parse_positive_float(
+            os.getenv("NERAIUM_TELEMETRY_DELAY_THRESHOLD_SECONDS"),
+            DEFAULT_TELEMETRY_DELAY_THRESHOLD_SECONDS,
+            name="NERAIUM_TELEMETRY_DELAY_THRESHOLD_SECONDS",
         ),
         notification_webhook_url=os.getenv("NERAIUM_NOTIFICATION_WEBHOOK_URL", "").strip(),
         notification_email_recipients=parse_csv_list(
@@ -267,6 +309,18 @@ def parse_positive_float(raw_value: str | None, default: float, *, name: str = "
         raise ValueError(f"{name} must be a positive number; got {raw_value!r}.") from None
     if value <= 0:
         raise ValueError(f"{name} must be greater than zero; got {value}.")
+    return value
+
+
+def parse_nonnegative_float(raw_value: str | None, default: float, *, name: str = "setting") -> float:
+    if raw_value is None or raw_value.strip() == "":
+        return default
+    try:
+        value = float(raw_value)
+    except ValueError:
+        raise ValueError(f"{name} must be a non-negative number; got {raw_value!r}.") from None
+    if value < 0:
+        raise ValueError(f"{name} must be zero or greater; got {value}.")
     return value
 
 

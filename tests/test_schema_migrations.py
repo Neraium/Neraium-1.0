@@ -63,6 +63,27 @@ def test_runtime_migrations_apply_cleanly_to_fresh_database(tmp_path: Path) -> N
         ]
         indexes = {row[1] for row in connection.execute("PRAGMA index_list(upload_queue)")}
         assert {"idx_upload_queue_status_created", "idx_upload_queue_status_updated"} <= indexes
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        assert {
+            "telemetry_ingestion_batches",
+            "telemetry_signal_mappings",
+            "normalized_telemetry",
+            "rejected_telemetry",
+            "telemetry_ingestion_health",
+        } <= tables
+        normalized_indexes = {
+            row[1]
+            for row in connection.execute("PRAGMA index_list(normalized_telemetry)")
+        }
+        assert {
+            "idx_normalized_telemetry_system_time",
+            "idx_normalized_telemetry_system_signal_time",
+        } <= normalized_indexes
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute(
                 "INSERT INTO data_connections VALUES (?, ?, ?, ?, ?, ?)",
