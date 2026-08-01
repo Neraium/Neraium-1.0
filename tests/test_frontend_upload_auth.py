@@ -63,8 +63,8 @@ def test_frontend_polling_uses_bounded_backoff_under_failures() -> None:
     source = read_frontend(DATA_CONNECTIONS_WORKSPACE)
     assert "const cooldownMs = Math.min(15000, STATUS_ENDPOINT_FAILURE_BASE_DELAY_MS * statusEndpointFailureCountRef.current);" in source
     assert "statusEndpointFailureCountRef.current > MAX_STATUS_POLL_FAILURES" in source
-    assert "Math.min(30000, baseDelay * (1.5 ** failureCount))" in source
-    assert "Math.min(Math.max(backoff, 1000), 45000)" in source
+    assert "Math.min(15000, STATUS_POLL_INTERVAL_MS * (1.5 ** failureIndex))" in source
+    assert "Math.max(backoff, STATUS_POLL_INTERVAL_MS)" in source
 
 
 def test_frontend_uses_uploaded_room_summary_for_room_context() -> None:
@@ -301,7 +301,7 @@ def test_frontend_surfaces_backend_runtime_diagnostics() -> None:
 
     assert "const diagnostics = healthPayload?.ready?.diagnostics ?? healthPayload?.diagnostics ?? null;" in runtime_source
     assert "diagnostics," in runtime_source
-    assert "apiStatus={apiStatus}" in router_source
+    assert "liveOps={{ ...liveOps, apiStatus }}" in router_source
     assert "Service diagnostics" in technical_source
     assert 'data-testid="production-diagnostics"' in technical_source
     assert "Service warnings" in technical_source
@@ -317,6 +317,6 @@ def test_retry_analysis_targets_current_uploaded_job() -> None:
     assert "/api/data/upload/${encodeURIComponent(cleanJobId)}/retry" in upload_api_source
     assert "retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode })" in workspace_source
     assert "await handleUpload();" in workspace_source
-    assert "Start Baseline Analysis" in panel_source
+    assert "Create Baseline" in panel_source
     assert "Choose Dataset" in panel_source
     assert "onClick={() => onRetryFailedUploads?.()}" in panel_source

@@ -58,6 +58,7 @@ tmp/
 .tmp/
 output/
 *.csv
+!tests/fixtures/resort_hydronic/*.csv
 *.jsonl
 *.db
 backend/app/runtime/latest_sii_state.json

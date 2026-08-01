@@ -45,15 +45,13 @@ function measure(files) {
 
 const routes = {
   core: [entryKey],
-  engineeringWorkspace: [entryKey, routeKey("EngineeringReasoningWorkspace.jsx")],
-  issues: [entryKey, routeKey("ObservationCenterWorkspace.jsx")],
-  dataSources: [entryKey, routeKey("DataConnectionsWorkspace.jsx")],
+  monitoringWorkspace: [entryKey, routeKey("MonitoringWorkspace.jsx")],
+  admin: [entryKey, routeKey("GovernanceAdminWorkspace.jsx")],
 };
 const budgets = {
   core: { rawBytes: 380 * 1024, gzipBytes: 100 * 1024 },
-  engineeringWorkspace: { rawBytes: 575 * 1024, gzipBytes: 155 * 1024 },
-  issues: { rawBytes: 415 * 1024, gzipBytes: 112 * 1024 },
-  dataSources: { rawBytes: 530 * 1024, gzipBytes: 134 * 1024 },
+  monitoringWorkspace: { rawBytes: 700 * 1024, gzipBytes: 180 * 1024 },
+  admin: { rawBytes: 460 * 1024, gzipBytes: 125 * 1024 },
 };
 
 const results = {};

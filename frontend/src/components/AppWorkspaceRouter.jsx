@@ -2,70 +2,31 @@ import { Suspense, lazy } from "react";
 
 import AppErrorBoundary from "./AppErrorBoundary";
 import SkipToMainContent from "./SkipToMainContent";
-import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
+import { EmptyState, Panel } from "./workspacePrimitives";
 import { extractTelemetryBoundaryMeta } from "../viewModels/uploadState";
 
-const HomePage = lazy(() => import("./HomePage"));
-const DataConnectionsWorkspace = lazy(() => import("./DataConnectionsWorkspace"));
-const EngineeringReasoningWorkspace = lazy(() => import("./EngineeringReasoningWorkspace"));
-const SystemStoryWorkspace = lazy(() => import("./SystemStoryWorkspace"));
 const GovernanceAdminWorkspace = lazy(() => import("./GovernanceAdminWorkspace"));
-const ObservationCenterWorkspace = lazy(() => import("./ObservationCenterWorkspace"));
-const HelpChangelogWorkspace = lazy(() => import("./HelpChangelogWorkspace"));
+const MonitoringWorkspace = lazy(() => import("./MonitoringWorkspace"));
 
-function renderLoadingPanel(title, message) {
-  return (
-    <div className="workspace-grid workspace-loading-shell" role="status" aria-live="polite" aria-atomic="true">
-      <Panel title={title} className="span-12 workspace-loading-panel">
-        <p className="narrative-text">{message}</p>
-        <div className="workspace-loading-panel__meter" aria-hidden="true">
-          <span />
-        </div>
-      </Panel>
-    </div>
-  );
+function LoadingState() {
+  return <div className="monitoring-route-loading" role="status" aria-live="polite">Loading monitoring state…</div>;
 }
 
-function WorkspaceWithBackControl({
-  appReady,
-  errorBoundaryResetKey,
-  handleBackToGate,
-  handleRetryWorkspace,
-  contextLabel,
-  errorContext,
-  activeWorkspace,
-  onHelp,
-  children,
-}) {
+function AdminRoute({ appReady, errorBoundaryResetKey, handleRetryWorkspace, setActiveWorkspace, apiFetch, accessCode, currentUser }) {
   return (
-    <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace} errorContext={{ ...errorContext, workspaceId: activeWorkspace }}>
+    <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace} errorContext={{ workspaceId: "governance-admin" }}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
         <SkipToMainContent />
-        <div className="workspace-shell-with-back">
-          <nav className="workspace-back-control" aria-label="Workspace navigation">
-            <div className="workspace-back-control__context">
-              <button
-                type="button"
-                className="workspace-back-control__button"
-                onClick={handleBackToGate}
-                aria-label="Back to Portfolio"
-              >
-                Portfolio
-              </button>
-              {contextLabel ? <span className="workspace-back-control__breadcrumb" aria-current="page">{contextLabel}</span> : null}
-            </div>
-            <div className="workspace-back-control__meta">
-              <span className="workspace-back-control__product"><strong>Neraium</strong> · SII intelligence · Read-only</span>
-              {typeof onHelp === "function" ? (
-                <button type="button" className="workspace-back-control__help" onClick={onHelp}>Help</button>
-              ) : null}
-            </div>
-          </nav>
-          <main id="main-content" className="workspace-route-main" aria-label="Neraium platform workspace" tabIndex={-1}>
-            <h1 className="sr-only">Neraium Platform Workspace</h1>
-            {children}
-          </main>
-        </div>
+        <main id="main-content" className="workspace-route-main" tabIndex={-1}>
+          <button type="button" className="monitoring-back" onClick={() => setActiveWorkspace("status")}>Back to Status</button>
+          {currentUser?.role !== "admin" ? (
+            <EmptyState title="Administrator access required" body="Only administrators can manage users, sessions, and internal diagnostics." />
+          ) : (
+            <Suspense fallback={<LoadingState />}>
+              <GovernanceAdminWorkspace apiFetch={apiFetch} accessCode={accessCode} Panel={Panel} EmptyState={EmptyState} onBackToGate={() => setActiveWorkspace("status")} currentUser={currentUser} />
+            </Suspense>
+          )}
+        </main>
       </div>
     </AppErrorBoundary>
   );
@@ -80,251 +41,51 @@ export default function AppWorkspaceRouter({
   accessCode,
   apiStatus,
   liveOps,
-  historianReplayState,
   currentSession,
   canonicalFinding,
   gateProcessing,
   effectiveLatestUploadResult,
   effectiveLatestUploadSnapshot,
-  hasActiveSession,
-  hasCurrentUploadResult,
-  hasResumedSession,
-  hasRealSiiOutput,
-  roomContext,
-  domainMode,
   domainDetection,
-  formatClockTime,
-  handleBackToGate,
   handleRetryWorkspace,
   handleGateUploadComplete,
-  handleResetDemo,
-  handleResumePreviousSession,
-  handleReopenHistoricalAnalysis,
-  handleDeleteHistoricalAnalysis,
-  handleReplayFrameChange,
-  handleReplayModeChange,
   handleSignOut,
   signOutPending = false,
   currentUser = null,
   setActiveWorkspace,
   pendingUploadFiles = [],
   setPendingUploadFiles = () => {},
-  resultsNavigationKey = 0,
 }) {
   const errorContext = extractTelemetryBoundaryMeta(effectiveLatestUploadSnapshot, effectiveLatestUploadResult);
 
-  if (activeWorkspace === "home") {
-    return (
-      <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace}>
-        <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-          <Suspense fallback={renderLoadingPanel("Preparing operations workspace", "Checking access and loading facility context...")}>
-            <HomePage onLaunchWorkspace={() => setActiveWorkspace("system-body")} />
-          </Suspense>
-        </div>
-      </AppErrorBoundary>
-    );
-  }
-
-  if (activeWorkspace === "data-connections") {
-    return (
-      <WorkspaceWithBackControl
-        appReady={appReady}
-        errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
-        handleRetryWorkspace={handleRetryWorkspace}
-        contextLabel="Data Connections"
-        errorContext={errorContext}
-        activeWorkspace={activeWorkspace}
-        onHelp={() => setActiveWorkspace("help-changelog")}
-      >
-        <Suspense fallback={renderLoadingPanel("Preparing telemetry intake", "Loading dataset validation and connector status...")}>
-          <DataConnectionsWorkspace
-            key={`intake:${datasetScopeKey}`}
-            accessCode={accessCode}
-            apiFetch={apiFetch}
-            onUploadComplete={handleGateUploadComplete}
-            initialSelectedFiles={pendingUploadFiles}
-            onInitialSelectedFilesConsumed={() => setPendingUploadFiles([])}
-            autoStartInitialFiles={pendingUploadFiles.length > 0}
-          />
-        </Suspense>
-      </WorkspaceWithBackControl>
-    );
-  }
-
-  if (activeWorkspace === "system-story") {
-    return (
-      <WorkspaceWithBackControl
-        appReady={appReady}
-        errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
-        handleRetryWorkspace={handleRetryWorkspace}
-        contextLabel="Analysis Details"
-        errorContext={errorContext}
-        activeWorkspace={activeWorkspace}
-        onHelp={() => setActiveWorkspace("help-changelog")}
-      >
-        <Suspense fallback={renderLoadingPanel("Loading investigation record", "Preparing analysis history, evidence, and diagnostics...")}>
-          <SystemStoryWorkspace
-            apiFetch={apiFetch}
-            accessCode={accessCode}
-            expertMode={true}
-            normalizeErrorMessage={(value) => String(value ?? "")}
-            formatClockTime={formatClockTime}
-            Panel={Panel}
-            MetricGrid={MetricGrid}
-            EmptyState={EmptyState}
-            hasActiveSession={hasActiveSession}
-            hasCurrentUploadResult={hasCurrentUploadResult}
-            hasResumedSession={hasResumedSession}
-            hasRealSiiOutput={hasRealSiiOutput}
-            currentSession={currentSession}
-            canonicalFinding={canonicalFinding}
-            domainMode={domainMode}
-            onReplayFrameChange={handleReplayFrameChange}
-            onReplayModeChange={handleReplayModeChange}
-          />
-        </Suspense>
-      </WorkspaceWithBackControl>
-    );
-  }
-
-  if (activeWorkspace === "governance-admin" && currentUser?.role !== "admin") {
-    return (
-      <WorkspaceWithBackControl
-        appReady={appReady}
-        errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
-        handleRetryWorkspace={handleRetryWorkspace}
-        contextLabel="Administration"
-        errorContext={errorContext}
-        activeWorkspace={activeWorkspace}
-        onHelp={() => setActiveWorkspace("help-changelog")}
-      >
-        <EmptyState title="Administrator access required" body="Your account can review operational results, but only administrators can manage users, sessions, and governance records." />
-      </WorkspaceWithBackControl>
-    );
-  }
-
   if (activeWorkspace === "governance-admin") {
-    return (
-      <WorkspaceWithBackControl
-        appReady={appReady}
-        errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
-        handleRetryWorkspace={handleRetryWorkspace}
-        contextLabel="Administration"
-        errorContext={errorContext}
-        activeWorkspace={activeWorkspace}
-        onHelp={() => setActiveWorkspace("help-changelog")}
-      >
-        <Suspense fallback={renderLoadingPanel("Loading administration", "Preparing access controls and governance records...")}>
-          <GovernanceAdminWorkspace
-            apiFetch={apiFetch}
-            accessCode={accessCode}
-            Panel={Panel}
-            EmptyState={EmptyState}
-            onBackToGate={() => setActiveWorkspace("system-body")}
-            currentUser={currentUser}
-          />
-        </Suspense>
-      </WorkspaceWithBackControl>
-    );
-  }
-
-  if (activeWorkspace === "observation-center") {
-    return (
-      <WorkspaceWithBackControl
-        appReady={appReady}
-        errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
-        handleRetryWorkspace={handleRetryWorkspace}
-        contextLabel="Insights"
-        errorContext={errorContext}
-        activeWorkspace={activeWorkspace}
-        onHelp={() => setActiveWorkspace("help-changelog")}
-      >
-        <Suspense fallback={renderLoadingPanel("Loading investigation", "Prioritizing findings and preparing evidence...")}>
-          <ObservationCenterWorkspace
-            apiFetch={apiFetch}
-            accessCode={accessCode}
-            canonicalFinding={canonicalFinding}
-            currentSession={currentSession}
-            onBackToGate={() => setActiveWorkspace("system-body")}
-            onReviewEvidence={() => setActiveWorkspace("observation-center")}
-          />
-        </Suspense>
-      </WorkspaceWithBackControl>
-    );
-  }
-
-  if (activeWorkspace === "help-changelog") {
-    return (
-      <WorkspaceWithBackControl
-        appReady={appReady}
-        errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
-        handleRetryWorkspace={handleRetryWorkspace}
-        contextLabel="Help & Status"
-        errorContext={errorContext}
-        activeWorkspace={activeWorkspace}
-      >
-        <Suspense fallback={renderLoadingPanel("Loading support status", "Checking service status and operator guidance...")}>
-          <HelpChangelogWorkspace
-            apiStatus={apiStatus}
-            onBackToGate={() => setActiveWorkspace("system-body")}
-            onWorkspaceNavigate={setActiveWorkspace}
-          />
-        </Suspense>
-      </WorkspaceWithBackControl>
-    );
+    return <AdminRoute appReady={appReady} errorBoundaryResetKey={errorBoundaryResetKey} handleRetryWorkspace={handleRetryWorkspace} setActiveWorkspace={setActiveWorkspace} apiFetch={apiFetch} accessCode={accessCode} currentUser={currentUser} />;
   }
 
   return (
-    <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace} errorContext={{ ...errorContext, workspaceId: activeWorkspace }}>
+    <AppErrorBoundary resetKey={`${errorBoundaryResetKey}:${datasetScopeKey}`} onRetry={handleRetryWorkspace} errorContext={{ ...errorContext, workspaceId: activeWorkspace }}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <Suspense fallback={renderLoadingPanel("Opening engineering workspace", "Preparing site evidence and relationship context...")}>
-          <EngineeringReasoningWorkspace
-            liveOps={{
-              ...liveOps,
-              replayOverlay: historianReplayState.frame ?? null,
-              canonicalFinding,
-            }}
-            replayFrame={historianReplayState.frame}
+        <Suspense fallback={<LoadingState />}>
+          <MonitoringWorkspace
+            key={`monitoring:${datasetScopeKey}`}
+            activeWorkspace={activeWorkspace}
+            accessCode={accessCode}
+            apiFetch={apiFetch}
+            liveOps={{ ...liveOps, apiStatus }}
             currentSession={currentSession}
             canonicalFinding={canonicalFinding}
+            gateProcessing={gateProcessing}
             effectiveLatestUploadResult={effectiveLatestUploadResult}
             effectiveLatestUploadSnapshot={effectiveLatestUploadSnapshot}
-            roomContext={roomContext}
-            domainMode={domainMode}
             domainDetection={domainDetection}
-            gateProcessing={gateProcessing}
-            resultsNavigationKey={resultsNavigationKey}
             onWorkspaceNavigate={setActiveWorkspace}
             onSignOut={handleSignOut}
             signOutPending={signOutPending}
             currentUser={currentUser}
-            apiFetch={apiFetch}
-            onCsvSelected={(files) => {
-              setPendingUploadFiles(files);
-              setActiveWorkspace("data-connections");
-            }}
-            onResumePreviousSession={handleResumePreviousSession}
-            onReopenHistoricalAnalysis={handleReopenHistoricalAnalysis}
-            onDeleteHistoricalAnalysis={handleDeleteHistoricalAnalysis}
-            onRetryLatestTelemetry={handleRetryWorkspace}
+            onUploadComplete={handleGateUploadComplete}
+            pendingUploadFiles={pendingUploadFiles}
+            setPendingUploadFiles={setPendingUploadFiles}
           />
-          {pendingUploadFiles.length > 0 ? (
-            <DataConnectionsWorkspace
-              key={`headless-intake:${datasetScopeKey}`}
-              accessCode={accessCode}
-              apiFetch={apiFetch}
-              onUploadComplete={handleGateUploadComplete}
-              initialSelectedFiles={pendingUploadFiles}
-              autoStartInitialFiles={true}
-              headless={true}
-            />
-          ) : null}
         </Suspense>
       </div>
     </AppErrorBoundary>

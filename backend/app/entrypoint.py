@@ -55,6 +55,12 @@ def process_next_queued_upload_job() -> bool:
     return process_next()
 
 
+def run_due_live_analysis_jobs() -> dict[str, Any]:
+    from app.services.live_analysis import run_due_live_analyses
+
+    return run_due_live_analyses()
+
+
 def shared_state_configured() -> bool:
     from app.services.upload_state_repository import shared_state_configured as configured
 
@@ -199,6 +205,19 @@ def run_worker(
                         },
                     )
                 _publish_worker_health(status="healthy", processed_job=bool(processed))
+                live_summary = run_due_live_analysis_jobs()
+                if live_summary["attempted_systems"]:
+                    logger.info(
+                        "worker_live_analysis_result",
+                        extra={
+                            "event": "worker_live_analysis_result",
+                            "attempted_systems": live_summary["attempted_systems"],
+                            "completed": live_summary["completed"],
+                            "skipped": live_summary["skipped"],
+                            "failed": live_summary["failed"],
+                        },
+                    )
+
                 if not processed:
                     logger.debug(
                         "worker_poll_result",

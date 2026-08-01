@@ -1,0 +1,68 @@
+{
+  "assessment_id": "pilot-906de2fd4ab641de",
+  "baseline_csv": "/home/ubuntu/Neraium-1.0/tests/fixtures/resort_hydronic/resort-tower-baseline.csv",
+  "comparison_csv": "/home/ubuntu/Neraium-1.0/tests/fixtures/resort_hydronic/resort-tower-comparison.csv",
+  "hidden_event_fixture": "/home/ubuntu/Neraium-1.0/tests/fixtures/resort_hydronic/hidden-event.json",
+  "exported_report": "/home/ubuntu/Neraium-1.0/artifacts/neraium-resort-hydronic/neraium-resort-hydronic-pilot-report.html",
+  "finding_title": "Pump demand no longer matches expected flow response",
+  "first_detection_time": "2026-07-02T22:05:00+00:00",
+  "hidden_event_time": "2026-07-08T18:00:00+00:00",
+  "lead_time_hours": 139.92,
+  "supporting_evidence_count": 16,
+  "baseline_quality_result": "baseline_accepted",
+  "baseline_quality_summary": "Baseline accepted with 8 usable signals.",
+  "baseline_quality_warnings": [
+    "7 duplicate baseline timestamps were excluded.",
+    "Comparison-period quality is limited for: Tower enable status."
+  ],
+  "operating_modes": [
+    {
+      "mode": "startup",
+      "baseline_records": 30,
+      "comparison_records": 14,
+      "comparable": false,
+      "used_for_findings": false
+    },
+    {
+      "mode": "stable operation",
+      "baseline_records": 1893,
+      "comparison_records": 904,
+      "comparable": true,
+      "used_for_findings": true
+    },
+    {
+      "mode": "shutdown",
+      "baseline_records": 30,
+      "comparison_records": 14,
+      "comparable": false,
+      "used_for_findings": false
+    },
+    {
+      "mode": "staging",
+      "baseline_records": 0,
+      "comparison_records": 0,
+      "comparable": false,
+      "used_for_findings": false
+    },
+    {
+      "mode": "stable low load",
+      "baseline_records": 2599,
+      "comparison_records": 1221,
+      "comparable": true,
+      "used_for_findings": true
+    },
+    {
+      "mode": "stable high load",
+      "baseline_records": 4077,
+      "comparison_records": 1868,
+      "comparable": true,
+      "used_for_findings": true
+    }
+  ],
+  "persisted_through_event": true,
+  "disappeared_after_repair": true,
+  "post_repair_median_deviation_score": 0.5973999999999999,
+  "pre_repair_supported_median_deviation_score": 5.97715,
+  "feedback_record_count": 2,
+  "evidence_download": "/home/ubuntu/Neraium-1.0/artifacts/neraium-resort-hydronic/neraium-resort-hydronic-evidence.csv"
+}

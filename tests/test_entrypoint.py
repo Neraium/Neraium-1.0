@@ -1,4 +1,5 @@
 import logging
+import threading
 from pathlib import Path
 
 from app.entrypoint import _normalize_startup_role, main, run_worker
@@ -81,3 +82,34 @@ def test_run_worker_logs_startup_and_polls_queue_without_uvicorn(monkeypatch, ca
     assert "worker_loop_started" in caplog.text
     assert "worker_loop_stopped" in caplog.text
     assert "worker_polling_queue" not in caplog.text
+
+
+def test_run_worker_polls_due_live_analyses_independently(monkeypatch, tmp_path) -> None:
+    class Settings:
+        process_role = "worker"
+        runtime_dir = Path(tmp_path)
+
+    stop_event = threading.Event()
+    calls: list[str] = []
+
+    monkeypatch.setattr("app.entrypoint.configure_runtime_db_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.configure_upload_jobs_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.configure_sii_runner_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.init_runtime_db", lambda: None)
+    monkeypatch.setattr("app.entrypoint.upload_state_backend", lambda: "runtime_db")
+    monkeypatch.setattr("app.entrypoint.shared_state_configured", lambda: False)
+    monkeypatch.setattr("app.entrypoint._publish_worker_health", lambda **kwargs: None)
+    monkeypatch.setattr(
+        "app.entrypoint.process_next_queued_upload_job",
+        lambda: calls.append("upload") or False,
+    )
+
+    def run_live() -> dict[str, int]:
+        calls.append("live")
+        stop_event.set()
+        return {"attempted_systems": 1, "completed": 1, "skipped": 0, "failed": 0}
+
+    monkeypatch.setattr("app.entrypoint.run_due_live_analysis_jobs", run_live)
+    run_worker(Settings(), poll_interval_seconds=0.01, shutdown_event=stop_event)
+
+    assert calls == ["upload", "live"]

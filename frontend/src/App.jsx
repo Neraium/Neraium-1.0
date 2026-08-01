@@ -18,22 +18,33 @@ import { classifyDataFreshness, deriveIntelligenceMode } from "./viewModels/syst
 
 const HOME_PATH = "/";
 const WORKSPACE_PATHS = {
-  home: "/home",
-  "system-body": "/portfolio",
-  "data-connections": "/workspace/data-sources",
-  "observation-center": "/workspace/insights",
-  "system-story": "/workspace/advanced",
-  "help-changelog": "/workspace/help",
+  status: "/status",
+  findings: "/findings",
+  systems: "/systems",
+  data: "/data",
+  evidence: "/findings",
   "governance-admin": "/workspace/admin",
 };
 const PATH_WORKSPACES = Object.fromEntries(Object.entries(WORKSPACE_PATHS).map(([workspace, path]) => [path, workspace]));
+const WORKSPACE_ALIASES = {
+  home: "status",
+  "system-body": "status",
+  "data-connections": "data",
+  "observation-center": "findings",
+  "system-story": "evidence",
+  "help-changelog": "status",
+};
 
 function readInitialWorkspaceRoute() {
-  if (typeof window === "undefined") return "system-body";
+  if (typeof window === "undefined") return "status";
   const pathname = window.location.pathname.replace(/\/+$/, "") || HOME_PATH;
-  if (pathname === HOME_PATH || pathname === "/signin") return "system-body";
-  if (["/portfolio", "/workspace"].includes(pathname) || pathname.startsWith("/sites/") || pathname.startsWith("/investigations") || pathname.startsWith("/evidence") || pathname.startsWith("/trace")) return "system-body";
-  return PATH_WORKSPACES[pathname] ?? "system-body";
+  if (pathname === HOME_PATH || pathname === "/signin" || pathname === "/status") return "status";
+  if (pathname === "/findings" || pathname === "/workspace/insights") return "findings";
+  if (pathname.startsWith("/findings/") || pathname.startsWith("/investigations") || pathname.startsWith("/evidence") || pathname.startsWith("/trace")) return "evidence";
+  if (pathname === "/systems" || pathname.startsWith("/systems/")) return "systems";
+  if (pathname === "/data" || pathname === "/workspace/data-sources") return "data";
+  if (["/portfolio", "/workspace"].includes(pathname) || pathname.startsWith("/sites/") || pathname === "/workspace/advanced" || pathname === "/workspace/help") return "status";
+  return PATH_WORKSPACES[pathname] ?? "status";
 }
 
 function App() {
@@ -49,11 +60,11 @@ function App() {
   const hasAccess = authState.status === "authenticated" && Boolean(authState.user);
 
   const setActiveWorkspace = useCallback((workspaceId) => {
-    const nextWorkspace = workspaceId === "home" ? "home" : workspaceId;
+    const nextWorkspace = WORKSPACE_ALIASES[workspaceId] ?? workspaceId;
     setActiveWorkspaceState(nextWorkspace);
 
     if (typeof window === "undefined") return;
-    const nextPath = WORKSPACE_PATHS[nextWorkspace] ?? WORKSPACE_PATHS["system-body"];
+    const nextPath = WORKSPACE_PATHS[nextWorkspace] ?? WORKSPACE_PATHS.status;
     if (window.location.pathname !== nextPath) {
       window.history.pushState({}, "", nextPath);
     }
