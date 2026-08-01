@@ -217,6 +217,7 @@ RUNTIME_SCHEMA_MIGRATIONS = (
     "003_state_constraints",
     "004_append_only_finding_events",
     "005_live_telemetry_ingestion",
+    "006_live_analysis_orchestration",
 )
 
 
@@ -518,6 +519,123 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
         connection.execute(
             "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
             ("005_live_telemetry_ingestion", now_iso()),
+        )
+
+    if "006_live_analysis_orchestration" not in applied:
+        for statement in (
+            """
+            CREATE TABLE IF NOT EXISTS live_analysis_configurations (
+                system_id TEXT PRIMARY KEY,
+                enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+                approved_baseline_id TEXT,
+                analysis_interval_seconds INTEGER NOT NULL DEFAULT 300 CHECK (analysis_interval_seconds > 0),
+                comparison_window_minutes INTEGER NOT NULL DEFAULT 60 CHECK (comparison_window_minutes > 0),
+                minimum_coverage_percent REAL NOT NULL DEFAULT 80 CHECK (
+                    minimum_coverage_percent >= 0 AND minimum_coverage_percent <= 100
+                ),
+                allowed_lateness_minutes INTEGER NOT NULL DEFAULT 5 CHECK (allowed_lateness_minutes >= 0),
+                last_analysis_started_at TEXT,
+                last_analysis_completed_at TEXT,
+                next_analysis_at TEXT,
+                current_status TEXT NOT NULL DEFAULT 'disabled' CHECK (
+                    current_status IN ('enabled', 'disabled', 'running', 'waiting', 'error')
+                ),
+                latest_error TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS live_analysis_runs (
+                run_id TEXT PRIMARY KEY,
+                system_id TEXT NOT NULL,
+                baseline_reference TEXT NOT NULL DEFAULT '',
+                window_start TEXT NOT NULL,
+                window_end TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'skipped', 'failed')),
+                started_at TEXT,
+                completed_at TEXT,
+                rows_analyzed INTEGER NOT NULL DEFAULT 0 CHECK (rows_analyzed >= 0),
+                signals_analyzed INTEGER NOT NULL DEFAULT 0 CHECK (signals_analyzed >= 0),
+                coverage REAL NOT NULL DEFAULT 0 CHECK (coverage >= 0 AND coverage <= 100),
+                skipped_reason TEXT CHECK (skipped_reason IS NULL OR skipped_reason IN (
+                    'disabled', 'missing_baseline', 'insufficient_coverage',
+                    'insufficient_signals', 'telemetry_delayed', 'telemetry_unavailable',
+                    'duplicate_window', 'analysis_already_running'
+                )),
+                error_summary TEXT,
+                analytics_result_reference TEXT,
+                analytics_result_json TEXT CHECK (
+                    analytics_result_json IS NULL OR json_valid(analytics_result_json)
+                ),
+                created_findings_count INTEGER NOT NULL DEFAULT 0 CHECK (created_findings_count >= 0),
+                updated_findings_count INTEGER NOT NULL DEFAULT 0 CHECK (updated_findings_count >= 0),
+                resolved_findings_count INTEGER NOT NULL DEFAULT 0 CHECK (resolved_findings_count >= 0),
+                created_at TEXT NOT NULL,
+                UNIQUE (system_id, baseline_reference, window_start, window_end)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS live_findings (
+                finding_id TEXT PRIMARY KEY,
+                deduplication_key TEXT NOT NULL UNIQUE,
+                system_id TEXT NOT NULL,
+                relationship_identity TEXT NOT NULL,
+                finding_classification_json TEXT NOT NULL CHECK (json_valid(finding_classification_json)),
+                first_detected_at TEXT NOT NULL,
+                last_observed_at TEXT NOT NULL,
+                opened_at TEXT,
+                resolved_at TEXT,
+                current_state TEXT NOT NULL CHECK (current_state IN ('observing', 'open', 'resolved')),
+                persistence_state_json TEXT NOT NULL CHECK (json_valid(persistence_state_json)),
+                severity_score REAL,
+                latest_evidence_json TEXT NOT NULL CHECK (json_valid(latest_evidence_json)),
+                source_live_analysis_run_id TEXT NOT NULL,
+                baseline_reference TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(source_live_analysis_run_id) REFERENCES live_analysis_runs(run_id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS live_analysis_health (
+                system_id TEXT PRIMARY KEY,
+                last_attempted_run_at TEXT,
+                last_completed_run_at TEXT,
+                last_successful_run_at TEXT,
+                current_status TEXT NOT NULL CHECK (current_status IN (
+                    'healthy', 'waiting_for_data', 'missing_baseline', 'delayed',
+                    'running', 'error', 'disabled', 'never_run'
+                )),
+                current_window_coverage REAL NOT NULL DEFAULT 0 CHECK (
+                    current_window_coverage >= 0 AND current_window_coverage <= 100
+                ),
+                latest_skipped_reason TEXT,
+                consecutive_failures INTEGER NOT NULL DEFAULT 0 CHECK (consecutive_failures >= 0),
+                latest_error TEXT,
+                next_scheduled_run TEXT,
+                updated_at TEXT NOT NULL
+            )
+            """,
+            """CREATE INDEX IF NOT EXISTS idx_live_analysis_config_due
+                   ON live_analysis_configurations (enabled, next_analysis_at, system_id)""",
+            """CREATE INDEX IF NOT EXISTS idx_live_analysis_runs_system_created
+                   ON live_analysis_runs (system_id, created_at DESC)""",
+            """CREATE INDEX IF NOT EXISTS idx_live_analysis_runs_window
+                   ON live_analysis_runs (system_id, window_end DESC)""",
+            """CREATE UNIQUE INDEX IF NOT EXISTS idx_live_analysis_one_running
+                   ON live_analysis_runs (system_id) WHERE status = 'running'""",
+            """CREATE INDEX IF NOT EXISTS idx_live_findings_system_state
+                   ON live_findings (system_id, current_state, last_observed_at DESC)""",
+            """CREATE INDEX IF NOT EXISTS idx_live_findings_baseline_relationship
+                   ON live_findings (baseline_reference, relationship_identity)""",
+            """CREATE INDEX IF NOT EXISTS idx_live_analysis_health_status
+                   ON live_analysis_health (current_status, updated_at DESC)""",
+        ):
+            connection.execute(statement)
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("006_live_analysis_orchestration", now_iso()),
         )
 
 

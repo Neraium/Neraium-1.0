@@ -148,11 +148,15 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
         and getattr(route, "include_in_schema", False)
     ]
     assert len(operations) == sum(len(route.methods - {"HEAD", "OPTIONS"}) for route in runtime_operations)
-    assert len(operations) == 133
+    assert len(operations) == 145
     assert "/api/infrastructure/health" in schema["paths"]
     assert "/api/telemetry/ingest" in schema["paths"]
     assert "/api/telemetry/signal-mappings" in schema["paths"]
     assert "/api/telemetry/ingestion-health" in schema["paths"]
+    assert "/api/live-analysis/configurations" in schema["paths"]
+    assert "/api/live-analysis/systems/{system_id}/runs" in schema["paths"]
+    assert "/api/live-analysis/findings" in schema["paths"]
+    assert "/api/live-analysis/health" in schema["paths"]
     assert "/api/data/jobs/{job_id}/result" in schema["paths"]
     assert "/api/data/datasets/{dataset_id}/baseline" in schema["paths"]
     assert "/api/data/portfolios/{portfolio_id}/baselines/{model_id}" in schema["paths"]

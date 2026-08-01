@@ -75,6 +75,10 @@ def test_runtime_migrations_apply_cleanly_to_fresh_database(tmp_path: Path) -> N
             "normalized_telemetry",
             "rejected_telemetry",
             "telemetry_ingestion_health",
+            "live_analysis_configurations",
+            "live_analysis_runs",
+            "live_findings",
+            "live_analysis_health",
         } <= tables
         normalized_indexes = {
             row[1]
@@ -84,6 +88,15 @@ def test_runtime_migrations_apply_cleanly_to_fresh_database(tmp_path: Path) -> N
             "idx_normalized_telemetry_system_time",
             "idx_normalized_telemetry_system_signal_time",
         } <= normalized_indexes
+        run_indexes = {
+            row[1]
+            for row in connection.execute("PRAGMA index_list(live_analysis_runs)")
+        }
+        assert {
+            "idx_live_analysis_runs_system_created",
+            "idx_live_analysis_runs_window",
+            "idx_live_analysis_one_running",
+        } <= run_indexes
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute(
                 "INSERT INTO data_connections VALUES (?, ?, ?, ?, ?, ?)",

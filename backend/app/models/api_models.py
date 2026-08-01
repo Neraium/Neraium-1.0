@@ -518,3 +518,118 @@ class TelemetryIngestionHealthResponse(BaseModel):
 
 class TelemetryIngestionHealthListResponse(BaseModel):
     health: list[TelemetryIngestionHealthResponse] = Field(default_factory=list)
+
+
+class LiveAnalysisConfigurationCreateRequest(ContractModel):
+    system_id: Identifier
+    enabled: bool = False
+    approved_baseline_id: Identifier | None = None
+    analysis_interval_seconds: int = Field(default=300, ge=30, le=86_400)
+    comparison_window_minutes: int = Field(default=60, ge=1, le=10_080)
+    minimum_coverage_percent: float = Field(default=80.0, ge=0, le=100)
+    allowed_lateness_minutes: int = Field(default=5, ge=0, le=1_440)
+
+
+class LiveAnalysisConfigurationUpdateRequest(ContractModel):
+    approved_baseline_id: Identifier | None = None
+    analysis_interval_seconds: int | None = Field(default=None, ge=30, le=86_400)
+    comparison_window_minutes: int | None = Field(default=None, ge=1, le=10_080)
+    minimum_coverage_percent: float | None = Field(default=None, ge=0, le=100)
+    allowed_lateness_minutes: int | None = Field(default=None, ge=0, le=1_440)
+
+
+class LiveAnalysisConfigurationResponse(BaseModel):
+    system_id: str
+    enabled: bool
+    approved_baseline_id: str | None = None
+    analysis_interval_seconds: int
+    comparison_window_minutes: int
+    minimum_coverage_percent: float
+    allowed_lateness_minutes: int
+    last_analysis_started_at: str | None = None
+    last_analysis_completed_at: str | None = None
+    next_analysis_at: str | None = None
+    current_status: str
+    latest_error: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class LiveAnalysisConfigurationsListResponse(BaseModel):
+    configurations: list[LiveAnalysisConfigurationResponse] = Field(default_factory=list)
+
+
+class LiveAnalysisRunResponse(BaseModel):
+    run_id: str
+    system_id: str
+    baseline_reference: str
+    window_start: str
+    window_end: str
+    status: Literal["pending", "running", "completed", "skipped", "failed"]
+    started_at: str | None = None
+    completed_at: str | None = None
+    rows_analyzed: int
+    signals_analyzed: int
+    coverage: float
+    skipped_reason: str | None = None
+    error_summary: str | None = None
+    analytics_result_reference: str | None = None
+    created_findings_count: int
+    updated_findings_count: int
+    resolved_findings_count: int
+    created_at: str
+
+
+class LiveAnalysisRunsListResponse(BaseModel):
+    runs: list[LiveAnalysisRunResponse] = Field(default_factory=list)
+
+
+class LiveFindingResponse(BaseModel):
+    finding_id: str
+    deduplication_key: str
+    system_id: str
+    relationship_identity: str
+    finding_classification: dict[str, Any]
+    first_detected_at: str
+    last_observed_at: str
+    opened_at: str | None = None
+    resolved_at: str | None = None
+    current_state: Literal["observing", "open", "resolved"]
+    persistence_state: dict[str, Any]
+    severity_score: float | None = None
+    latest_evidence: dict[str, Any]
+    source_live_analysis_run_id: str
+    baseline_reference: str
+    created_at: str
+    updated_at: str
+
+
+class LiveFindingsListResponse(BaseModel):
+    findings: list[LiveFindingResponse] = Field(default_factory=list)
+
+
+class LiveAnalysisHealthResponse(BaseModel):
+    system_id: str
+    last_attempted_run_at: str | None = None
+    last_completed_run_at: str | None = None
+    last_successful_run_at: str | None = None
+    current_status: Literal[
+        "healthy",
+        "waiting_for_data",
+        "missing_baseline",
+        "delayed",
+        "running",
+        "error",
+        "disabled",
+        "never_run",
+    ]
+    current_window_coverage: float
+    latest_skipped_reason: str | None = None
+    consecutive_failures: int
+    latest_error: str | None = None
+    next_scheduled_run: str | None = None
+    updated_at: str | None = None
+
+
+class LiveAnalysisHealthListResponse(BaseModel):
+    health: list[LiveAnalysisHealthResponse] = Field(default_factory=list)

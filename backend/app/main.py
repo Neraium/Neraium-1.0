@@ -17,7 +17,7 @@ from app.contracts import ErrorResponse, enforce_query_contract, validate_contra
 from app.core.config import Settings, get_settings
 from app.core.logging_config import bind_log_context, configure_logging, reset_log_context
 from app.core.security import require_admin_role, require_api_access
-from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, infrastructure, observability, replay, telemetry
+from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, health, infrastructure, live_analysis, observability, replay, telemetry
 from app.routers.data import wait_for_upload_workers
 from app.services.auth_store import initialize_auth_store
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
@@ -230,6 +230,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(connectors.router, prefix="/api")
     app.include_router(data_connections.router, prefix="/api")
     app.include_router(telemetry.router, prefix="/api")
+    app.include_router(live_analysis.router, prefix="/api")
     app.include_router(facility.router, prefix="/api")
     app.include_router(data.router, prefix="/api")
     app.include_router(evidence.router, prefix="/api")
