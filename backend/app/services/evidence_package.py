@@ -192,6 +192,8 @@ class ContextRange(StrictModel):
 class ContextMetric(StrictModel):
     canonical_role: str
     unit: str | None = None
+    baseline_unit: str | None = None
+    comparison_unit: str | None = None
     baseline_mean: float | None = None
     comparison_mean: float | None = None
     baseline_range: ContextRange
@@ -342,9 +344,14 @@ def _context_metric(role: str, inputs: dict[str, Any]) -> ContextMetric | None:
     comparison = _mapping(_mapping(inputs.get("comparison")).get(role))
     if not baseline or not comparison:
         return None
+    baseline_unit = _normalized_unit(baseline.get("unit"))
+    comparison_unit = _normalized_unit(comparison.get("unit"))
+    compatible_unit = baseline_unit if _units_compatible(role, baseline_unit, comparison_unit) else None
     return ContextMetric(
         canonical_role=role,
-        unit=comparison.get("unit") or baseline.get("unit"),
+        unit=compatible_unit,
+        baseline_unit=baseline_unit,
+        comparison_unit=comparison_unit,
         baseline_mean=baseline.get("mean"), comparison_mean=comparison.get("mean"),
         baseline_range=ContextRange(min=baseline.get("min"), max=baseline.get("max")),
         comparison_range=ContextRange(min=comparison.get("min"), max=comparison.get("max")),
@@ -355,7 +362,23 @@ def _context_metric(role: str, inputs: dict[str, Any]) -> ContextMetric | None:
     )
 
 
+DIMENSIONLESS_CONTEXT_ROLES = {"equipment_enable", "equipment_state"}
+
+
+def _normalized_unit(value: Any) -> str | None:
+    unit = str(value or "").strip()
+    return unit or None
+
+
+def _units_compatible(role: str, baseline_unit: str | None, comparison_unit: str | None) -> bool:
+    if baseline_unit is None or comparison_unit is None:
+        return role in DIMENSIONLESS_CONTEXT_ROLES and baseline_unit is None and comparison_unit is None
+    return baseline_unit.casefold() == comparison_unit.casefold()
+
+
 def _range_overlap(metric: ContextMetric) -> float | None:
+    if not _units_compatible(metric.canonical_role, metric.baseline_unit, metric.comparison_unit):
+        return None
     left_min, left_max = metric.baseline_range.min, metric.baseline_range.max
     right_min, right_max = metric.comparison_range.min, metric.comparison_range.max
     if None in {left_min, left_max, right_min, right_max}:
@@ -373,14 +396,20 @@ def _comparability(load: ContextMetric | None, controls: list[ContextMetric]) ->
             reason="A canonical process-demand range was not available for both periods.", matched_dimensions=[],
             unavailable_dimensions=["process_demand", "equipment_configuration", "operating_mode", "environmental_conditions"])
     checks = [("process_demand", load_overlap)]
-    checks.extend((item.canonical_role, overlap) for item in controls if (overlap := _range_overlap(item)) is not None)
+    unavailable_controls = []
+    for item in controls:
+        overlap = _range_overlap(item)
+        if overlap is None:
+            unavailable_controls.append(item.canonical_role)
+        else:
+            checks.append((item.canonical_role, overlap))
     score = round(sum(value for _, value in checks) / len(checks), 6)
     level = ComparabilityLevel.high if all(value >= 0.8 for _, value in checks) else ComparabilityLevel.medium if load_overlap > 0 else ComparabilityLevel.low
     return Comparability(
         level=level, score=score, method="minimum_span_range_overlap_v1",
         reason="Each overlap is intersection width divided by the smaller observed range; high requires every available dimension to be at least 0.8, medium requires process-demand overlap, and low means no process-demand overlap.",
         matched_dimensions=[name for name, value in checks if value > 0],
-        unavailable_dimensions=["equipment_configuration", "operating_mode", "environmental_conditions"],
+        unavailable_dimensions=[*unavailable_controls, "equipment_configuration", "operating_mode", "environmental_conditions"],
     )
 
 

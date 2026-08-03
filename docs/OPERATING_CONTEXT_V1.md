@@ -21,6 +21,9 @@ Operating Context never resolves roles from raw names. The current upload classi
 is the existing semantic-mapping adapter; configured BAS, SCADA, PLC, historian,
 database, time-series, and API adapters can provide the same catalog contract.
 Ambiguous or missing mappings are not guessed.
+Broad scheduled-load and weather categories do not themselves prove process demand
+or environmental temperature: those physical roles require more specific semantic
+classification metadata.
 
 ## Schema
 
@@ -69,6 +72,9 @@ requires at least 0.8 overlap for every available checked dimension, `medium` re
 nonzero process-demand overlap, and `low` means zero process-demand overlap. The score
 is the arithmetic mean of the explicit overlap ratios. Without process demand the
 result is `unknown` and has no score. Exact baseline identity alone never contributes.
+Overlap is calculated only when both periods have identical normalized engineering
+units (or the canonical role is explicitly dimensionless). Missing or mismatched units
+make the dimension unavailable; Operating Context v1 performs no unit conversion.
 
 ## Evidence, compatibility, and unsupported data
 

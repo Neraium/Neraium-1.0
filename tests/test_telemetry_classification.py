@@ -43,3 +43,22 @@ def test_signal_catalog_preserves_identity_priority_fields() -> None:
     assert pressure["engineering_units"] == "psi"
     assert pressure["source_column_index"] == 1
     assert catalog["Pump Status"]["structural_class"] == "Binary Status"
+
+
+def test_canonical_context_roles_require_specific_semantic_evidence() -> None:
+    catalog = build_telemetry_signal_catalog([
+        "cooling_demand_tons",
+        "occupancy_load_pct",
+        "outdoor_air_temp_f",
+        "weather_humidity_pct",
+        "wet_bulb_f",
+    ])
+
+    assert catalog["cooling_demand_tons"]["canonical_role"] == "process_demand"
+    assert catalog["cooling_demand_tons"]["engineering_units"] == "tons"
+    assert catalog["occupancy_load_pct"]["telemetry_category"] == "scheduled_load_context"
+    assert catalog["occupancy_load_pct"]["canonical_role"] is None
+    assert catalog["outdoor_air_temp_f"]["canonical_role"] == "environmental_temperature"
+    assert catalog["weather_humidity_pct"]["telemetry_category"] == "weather_environment"
+    assert catalog["weather_humidity_pct"]["canonical_role"] is None
+    assert catalog["wet_bulb_f"]["canonical_role"] is None

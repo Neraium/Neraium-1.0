@@ -46,11 +46,11 @@ def _with_operating_context(result: dict) -> dict:
         "schema_version": "operating-context-input-v1",
         "source": "analysis_metadata",
         "baseline": {
-            "process_demand": {"canonical_role": "process_demand", "source_variable": "cooling_demand_tons", "unit": None, "count": 672, "mean": 311.2, "min": 164.1, "max": 507.8, "source": "baseline_model"},
+            "process_demand": {"canonical_role": "process_demand", "source_variable": "cooling_demand_tons", "unit": "tons", "count": 672, "mean": 311.2, "min": 164.1, "max": 507.8, "source": "baseline_model"},
             "control_command": {"canonical_role": "control_command", "source_variable": "valve_position_pct", "unit": "%", "count": 672, "mean": 67.01, "min": 45.1, "max": 93.0, "source": "baseline_model"},
         },
         "comparison": {
-            "process_demand": {"canonical_role": "process_demand", "source_variable": "cooling_demand_tons", "unit": None, "count": 672, "mean": 311.2, "min": 164.1, "max": 507.8, "early_median": 205.0, "late_median": 207.0, "source": "telemetry"},
+            "process_demand": {"canonical_role": "process_demand", "source_variable": "cooling_demand_tons", "unit": "tons", "count": 672, "mean": 311.2, "min": 164.1, "max": 507.8, "early_median": 205.0, "late_median": 207.0, "source": "telemetry"},
             "control_command": {"canonical_role": "control_command", "source_variable": "valve_position_pct", "unit": "%", "count": 672, "mean": 67.01, "min": 45.1, "max": 93.0, "early_median": 52.0, "late_median": 52.5, "source": "telemetry"},
         },
         "windows": {
@@ -166,6 +166,40 @@ def test_operating_context_comparability_is_unknown_without_canonical_demand() -
     assert context["load_context"] is None
     assert context["comparability"]["level"] == "unknown"
     assert context["comparability"]["score"] is None
+
+
+@pytest.mark.parametrize(
+    ("baseline_unit", "comparison_unit"),
+    [("tons", "kW"), ("tons", None)],
+)
+def test_process_demand_comparability_is_unknown_for_incompatible_units(
+    baseline_unit: str | None, comparison_unit: str | None,
+) -> None:
+    result = _with_operating_context(_comparison(f"analysis-unit-{comparison_unit}"))
+    result["operating_context_inputs"]["baseline"]["process_demand"]["unit"] = baseline_unit
+    result["operating_context_inputs"]["comparison"]["process_demand"]["unit"] = comparison_unit
+
+    context = build_evidence_package(result)["operating_context"]
+
+    assert context["load_context"]["unit"] is None
+    assert context["load_context"]["baseline_unit"] == baseline_unit
+    assert context["load_context"]["comparison_unit"] == comparison_unit
+    assert context["comparability"]["level"] == "unknown"
+    assert context["comparability"]["score"] is None
+
+
+def test_incompatible_control_units_are_excluded_from_comparability() -> None:
+    result = _with_operating_context(_comparison("analysis-control-units"))
+    result["operating_context_inputs"]["comparison"]["control_command"]["unit"] = "V"
+
+    first = build_evidence_package(result)
+    second = build_evidence_package(result)
+
+    assert first == second
+    assert first["operating_context"]["control_context"][0]["unit"] is None
+    assert first["operating_context"]["comparability"]["level"] == "high"
+    assert first["operating_context"]["comparability"]["score"] == 1.0
+    assert "control_command" in first["operating_context"]["comparability"]["unavailable_dimensions"]
 
 
 def test_internal_window_legacy_change_does_not_claim_exact_baseline() -> None:
