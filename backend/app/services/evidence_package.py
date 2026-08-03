@@ -339,6 +339,83 @@ def _unknown(reason: str = "This confidence dimension is not calculated in Evide
     return ConfidenceDimension(level=ConfidenceLevel.unknown, score=None, reason=reason, method="not_calculated", evidence_refs=[])
 
 
+def _confidence_level(value: Any) -> ConfidenceLevel:
+    normalized = str(value or "").strip().lower()
+    aliases = {"moderate": "medium", "limited": "medium", "strong": "high", "usable": "medium", "weak": "low", "not_reliable": "low"}
+    try:
+        return ConfidenceLevel(aliases.get(normalized, normalized))
+    except ValueError:
+        return ConfidenceLevel.unknown
+
+
+def _finding_confidence(edge: dict[str, Any]) -> ConfidenceDimension:
+    """Preserve an existing relationship-confidence result without rescoring it."""
+    score = _first(edge, "confidence_score", "relationship_confidence_score", default=None)
+    level = _confidence_level(_first(edge, "confidence_level", "confidence", default=None))
+    if score is None and level is ConfidenceLevel.unknown:
+        return _unknown("The relationship evidence is recorded, but the comparison workflow did not provide a documented finding-confidence result.")
+    refs = ["ev-baseline-strength", "ev-comparison-strength", "ev-absolute-change", "ev-baseline-samples", "ev-comparison-samples"]
+    if edge.get("persistence_score") is not None:
+        refs.append("ev-persistence")
+    return ConfidenceDimension(
+        level=level,
+        score=float(score) if score is not None else None,
+        reason="The level and score are preserved from the existing relationship comparison; Evidence Package does not average or recalculate them.",
+        method="preserved_relationship_confidence_v1",
+        evidence_refs=refs,
+    )
+
+
+def _data_quality_confidence(result: dict[str, Any]) -> ConfidenceDimension:
+    quality = _mapping(result.get("data_quality"))
+    existing = _mapping(quality.get("data_confidence"))
+    rating = _first(existing, "rating", default=quality.get("reliability_rating"))
+    score = quality.get("reliability_score")
+    if rating is None and score is None:
+        return _unknown("No persisted data-confidence or telemetry reliability assessment was available for this comparison.")
+    reasons = [str(item) for item in existing.get("reasons", []) if str(item).strip()]
+    reason = str(existing.get("summary") or "The existing telemetry reliability assessment is preserved without recalculation.")
+    if reasons:
+        reason = f"{reason} {' '.join(reasons)}"
+    return ConfidenceDimension(
+        level=_confidence_level(rating),
+        score=float(score) if score is not None else None,
+        reason=reason,
+        method="preserved_data_quality_assessment_v1",
+        evidence_refs=["ev-data-quality"],
+    )
+
+
+def _mapping_confidence(result: dict[str, Any], variables: list[str]) -> ConfidenceDimension:
+    catalog = result.get("telemetry_signal_catalog")
+    if not isinstance(catalog, (dict, list)):
+        return _unknown("Canonical semantic role information was not available for the signals supporting this finding.")
+    entries = list(catalog.values()) if isinstance(catalog, dict) else catalog
+    entries = [item for item in entries if isinstance(item, dict)]
+    by_signal = {str(item.get("source_column") or item.get("column") or key): item for key, item in (
+        catalog.items() if isinstance(catalog, dict) else ((str(index), item) for index, item in enumerate(entries))
+    ) if isinstance(item, dict)}
+    selected = [by_signal.get(variable) for variable in variables]
+    roles = [str(item.get("canonical_role") or "").strip() if item else "" for item in selected]
+    if any(not role for role in roles):
+        return _unknown("A canonical semantic role was unavailable for one or more signals supporting this finding.")
+    competing = sorted({
+        role for role in roles
+        if sum(1 for item in entries if str(item.get("canonical_role") or "").strip() == role) > 1
+    })
+    if competing:
+        return ConfidenceDimension(
+            level=ConfidenceLevel.low, score=None,
+            reason=f"Multiple telemetry signals compete for the canonical role(s): {', '.join(competing)}.",
+            method="canonical_role_uniqueness_v1", evidence_refs=[],
+        )
+    return ConfidenceDimension(
+        level=ConfidenceLevel.high, score=None,
+        reason="Each signal supporting the relationship has an available canonical semantic role that is unique in the persisted signal catalog.",
+        method="canonical_role_uniqueness_v1", evidence_refs=[],
+    )
+
+
 def _context_metric(role: str, inputs: dict[str, Any]) -> ContextMetric | None:
     baseline = _mapping(_mapping(inputs.get("baseline")).get(role))
     comparison = _mapping(_mapping(inputs.get("comparison")).get(role))
@@ -519,6 +596,14 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
         )
         for suffix, kind, label, value, unit in evidence_specs if value is not None
     ]
+    data_quality = _mapping(result.get("data_quality"))
+    if data_quality.get("data_confidence") or data_quality.get("reliability_rating") is not None or data_quality.get("reliability_score") is not None:
+        evidence.append(SupportingEvidence(
+            id="ev-data-quality", evidence_type="data_quality", label="Telemetry data quality",
+            summary="Existing data-quality assessment for the comparison telemetry.",
+            value={key: data_quality.get(key) for key in ("readiness", "reliability_rating", "reliability_score", "data_confidence") if data_quality.get(key) is not None},
+            source_variables=variables, quality_status="recorded", calculation_version="existing-data-quality-v1", metadata={},
+        ))
     if operating_context is not None:
         context_specs: list[tuple[str, str, str, Any, str | None, list[str], dict[str, Any]]] = []
         if operating_context.load_context is not None:
@@ -568,9 +653,13 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
         comparison_reference=ComparisonReference(reference_level=ReferenceLevel.matched_historical_baseline, reference_baseline_id=baseline_id,
             reference_baseline_version=reference.get("version"), reference_summary="Compared with the exact selected persisted Behavioral Digital Model."),
         operating_context=operating_context,
-        confidence=PackageConfidence(finding_confidence=_unknown("The existing generic confidence is retained in legacy fields and is not reinterpreted."), data_quality_confidence=_unknown(),
-            operating_state_confidence=_unknown("Available Operating Context v1 summaries are descriptive; no operating-state match or confidence score is calculated.") if operating_context is not None else _unknown(),
-            mapping_confidence=_unknown(), physical_consistency_confidence=_unknown()),
+        confidence=PackageConfidence(
+            finding_confidence=_finding_confidence(edge),
+            data_quality_confidence=_data_quality_confidence(result),
+            operating_state_confidence=_unknown("Operating Context v1 comparability is available, but no operating-state matching model or state-confidence calculation exists.") if operating_context is not None else _unknown("Operating Context v1 evidence was not available for this comparison."),
+            mapping_confidence=_mapping_confidence(result, variables),
+            physical_consistency_confidence=_unknown("Physics consistency engine not implemented."),
+        ),
         timeline=timeline, supporting_evidence=evidence, limitations=[], hypotheses=[],
         provenance=PackageProvenance(analysis_version="analysis-result-v1", algorithm_version=str(_mapping(result.get("traceability")).get("model_version") or "existing-comparison"), baseline_model_version=reference.get("version"), topology_version=None,
             source_dataset_ids=[str(result.get("baseline_dataset_id")), dataset_id], creation_reason="completed_baseline_comparison", last_update_reason="created", created_at=created, latest_evaluated_at=created, revision=1),
