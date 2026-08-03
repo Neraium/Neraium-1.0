@@ -11,6 +11,9 @@ from app.services.evidence_package import (
     ComparabilityLevel,
     ConfidenceLevel,
     EvidencePackage,
+    LimitationCategory,
+    LimitationSeverity,
+    LimitationStatus,
     OperatingStateType,
     PackageStatus,
     ReferenceLevel,
@@ -370,3 +373,94 @@ def test_package_organization_comes_from_dataset_scope() -> None:
     assert package is not None
     assert package["organization_id"] == "tenant-from-scope"
     assert package["id"] == build_evidence_package(result)["id"]
+
+
+def test_unknown_limitation_evidence_does_not_create_a_limitation() -> None:
+    package = build_evidence_package(_comparison("limitations-unknown"))
+
+    assert package["limitations"] == []
+
+
+def test_explicit_missing_operating_context_creates_supported_limitation() -> None:
+    result = _comparison("limitations-context")
+    result["operating_context_inputs"] = None
+
+    package = build_evidence_package(result)
+
+    limitation = package["limitations"][0]
+    assert limitation["category"] == "missing_operating_state_evidence"
+    assert limitation["supporting_evidence_refs"] == ["ev-operating-context-availability"]
+    assert any(item["id"] == "ev-operating-context-availability" for item in package["supporting_evidence"])
+
+
+def test_missing_mapping_creates_only_evidence_bounded_limitation() -> None:
+    result = _comparison("limitations-mapping")
+    result["telemetry_signal_catalog"] = {
+        "pump_power_kw": {"source_column": "pump_power_kw", "canonical_role": "electrical_power"},
+    }
+
+    package = build_evidence_package(result)
+    limitation = package["limitations"][0]
+
+    assert limitation["category"] == "missing_semantic_mapping"
+    assert "chw_flow_gpm" in limitation["reason"]
+    assert limitation["supporting_evidence_refs"] == ["ev-semantic-mapping-availability"]
+
+
+def test_persisted_telemetry_ambiguity_creates_supported_limitation() -> None:
+    result = _comparison("limitations-telemetry")
+    result["telemetry_ambiguity"] = {
+        "status": "supported", "alternatives": ["restriction", "equipment degradation"],
+    }
+
+    limitation = build_evidence_package(result)["limitations"][0]
+
+    assert limitation["category"] == "telemetry_ambiguity"
+    assert "cannot" in limitation["description"]
+    assert limitation["supporting_evidence_refs"] == ["ev-telemetry-ambiguity"]
+
+
+def test_multiple_persisted_explanations_do_not_become_hypotheses() -> None:
+    result = _comparison("limitations-alternatives")
+    result["conditions"][0]["alternative_explanations"] = [
+        "Operating-mode difference", "Instrumentation condition",
+    ]
+
+    package = build_evidence_package(result)
+
+    assert [item["category"] for item in package["limitations"]] == ["multiple_plausible_explanations"]
+    assert package["hypotheses"] == []
+    assert package["limitations"][0]["supporting_evidence_refs"] == ["ev-supported-alternatives"]
+
+
+def test_unknown_comparability_and_physics_unavailability_are_supported() -> None:
+    result = _with_operating_context(_comparison("limitations-availability"))
+    result["operating_context_inputs"]["baseline"].pop("process_demand")
+    result["physics_reasoning"] = {"status": "unavailable", "reason": "No applicable persisted physics result."}
+
+    first = build_evidence_package(result)
+    second = build_evidence_package(result)
+
+    assert first == second
+    assert first["id"] == second["id"]
+    assert [item["category"] for item in first["limitations"]] == [
+        "comparable_operating_conditions_unavailable", "physics_validation_unavailable",
+    ]
+    evidence_ids = {item["id"] for item in first["supporting_evidence"]}
+    assert all(set(item["supporting_evidence_refs"]) <= evidence_ids for item in first["limitations"])
+
+
+def test_invalid_limitation_enums_are_rejected() -> None:
+    result = _comparison("limitations-invalid-enum")
+    result["operating_context_inputs"] = None
+    package = build_evidence_package(result)
+    package["limitations"][0]["category"] = "diagnosis"
+
+    with pytest.raises(ValidationError):
+        EvidencePackage.model_validate(package)
+    with pytest.raises(ValueError):
+        LimitationCategory("diagnosis")
+    with pytest.raises(ValueError):
+        LimitationSeverity("critical")
+    with pytest.raises(ValueError):
+        LimitationStatus("suspected")
