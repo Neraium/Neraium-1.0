@@ -24,6 +24,18 @@ TIMESTAMP = "timestamp"
 UNKNOWN = "unknown"
 COUNTER_DERIVED_RATE = "counter_derived_rate"
 
+# This is the source-agnostic boundary consumed by downstream context analysis.
+# Connector/site-specific tag interpretation happens before this point; analytical
+# code must not infer physical meaning from source column names.
+CANONICAL_ROLE_BY_CATEGORY = {
+    SCHEDULED_LOAD_CONTEXT: "process_demand",
+    CONTROL_OUTPUT: "control_command",
+    SETPOINT: "setpoint",
+    WEATHER_ENVIRONMENT: "environmental_temperature",
+    EQUIPMENT_STATE: "equipment_state",
+    COUNTER_DERIVED_RATE: "process_rate",
+}
+
 STRUCTURAL_CLASS_LABELS = {
     EQUIPMENT_PROCESS: "Equipment Process Variable",
     EQUIPMENT_STATE: "Equipment State",
@@ -265,6 +277,7 @@ def build_telemetry_signal_catalog(
             "source_column_index": index,
             "telemetry_category": classification["category"],
             "analysis_role": classification["analysis_role"],
+            "canonical_role": CANONICAL_ROLE_BY_CATEGORY.get(classification["category"]),
             "telemetry_classification": classification,
             **classification,
         }

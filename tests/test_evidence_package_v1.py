@@ -7,7 +7,15 @@ from pydantic import ValidationError
 from app.main import create_app
 from app.services.baseline_analysis_repository import persist_completed_analysis, stamp_comparison_analysis_identity
 from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope
-from app.services.evidence_package import EvidencePackage, PackageStatus, ReferenceLevel, build_evidence_package
+from app.services.evidence_package import (
+    ComparabilityLevel,
+    EvidencePackage,
+    OperatingStateType,
+    PackageStatus,
+    ReferenceLevel,
+    TransitionDirection,
+    build_evidence_package,
+)
 from app.services.upload_state_repository import write_upload_result
 
 
@@ -31,6 +39,26 @@ def _comparison(run_id: str = "analysis-ep-001") -> dict:
         "replay_frame_count": 120,
     }
     return stamp_comparison_analysis_identity(attach_dataset_scope(result, scope=scope, dataset_id=result["dataset_id"]))
+
+
+def _with_operating_context(result: dict) -> dict:
+    result["operating_context_inputs"] = {
+        "schema_version": "operating-context-input-v1",
+        "source": "analysis_metadata",
+        "baseline": {
+            "process_demand": {"canonical_role": "process_demand", "source_variable": "cooling_demand_tons", "unit": None, "count": 672, "mean": 311.2, "min": 164.1, "max": 507.8, "source": "baseline_model"},
+            "control_command": {"canonical_role": "control_command", "source_variable": "valve_position_pct", "unit": "%", "count": 672, "mean": 67.01, "min": 45.1, "max": 93.0, "source": "baseline_model"},
+        },
+        "comparison": {
+            "process_demand": {"canonical_role": "process_demand", "source_variable": "cooling_demand_tons", "unit": None, "count": 672, "mean": 311.2, "min": 164.1, "max": 507.8, "early_median": 205.0, "late_median": 207.0, "source": "telemetry"},
+            "control_command": {"canonical_role": "control_command", "source_variable": "valve_position_pct", "unit": "%", "count": 672, "mean": 67.01, "min": 45.1, "max": 93.0, "early_median": 52.0, "late_median": 52.5, "source": "telemetry"},
+        },
+        "windows": {
+            "baseline": {"start": "2026-06-01T00:00:00Z", "end": "2026-06-07T23:45:00Z"},
+            "comparison": {"start": "2026-06-15T00:00:00Z", "end": "2026-06-21T23:45:00Z"},
+        },
+    }
+    return result
 
 
 def test_v1_package_preserves_comparison_and_has_deterministic_evidence() -> None:
@@ -89,6 +117,55 @@ def test_invalid_package_enums_are_rejected() -> None:
         PackageStatus("invented_status")
     with pytest.raises(ValueError):
         ReferenceLevel("invented_reference")
+    with pytest.raises(ValueError):
+        OperatingStateType("invented_state")
+    with pytest.raises(ValueError):
+        TransitionDirection("invented_direction")
+    with pytest.raises(ValueError):
+        ComparabilityLevel("invented_level")
+
+
+def test_operating_context_is_deterministic_and_preserves_only_mapped_facts() -> None:
+    result = _with_operating_context(_comparison("analysis-context-001"))
+    original_id = build_evidence_package(_comparison("analysis-context-001"))["id"]
+
+    first = build_evidence_package(result)
+    second = build_evidence_package(result)
+
+    assert first == second
+    assert first["id"] == original_id
+    context = first["operating_context"]
+    assert context["schema_version"] == "operating-context-v1"
+    assert context["load_context"] == {
+        **context["load_context"], "canonical_role": "process_demand", "baseline_mean": 311.2,
+        "comparison_mean": 311.2, "baseline_range": {"min": 164.1, "max": 507.8},
+        "comparison_range": {"min": 164.1, "max": 507.8},
+    }
+    assert context["control_context"][0]["baseline_mean"] == 67.01
+    assert context["control_context"][0]["comparison_mean"] == 67.01
+    assert context["equipment_configuration"] == []
+    assert context["environmental_context"] == []
+    assert context["comparison_state"]["state_confidence"] == {
+        **context["comparison_state"]["state_confidence"], "level": "unknown", "score": None,
+    }
+    assert context["transition_context"]["direction"] == "stable"
+    assert context["comparability"]["level"] == "high"
+    assert context["comparability"]["score"] == 1.0
+    assert [item["id"] for item in first["supporting_evidence"][-6:]] == [
+        "ev-context-baseline-demand-range", "ev-context-comparison-demand-range", "ev-context-control-01",
+        "ev-context-baseline-window", "ev-context-comparison-window", "ev-context-comparability",
+    ]
+
+
+def test_operating_context_comparability_is_unknown_without_canonical_demand() -> None:
+    result = _with_operating_context(_comparison("analysis-context-missing"))
+    result["operating_context_inputs"]["baseline"].pop("process_demand")
+
+    context = build_evidence_package(result)["operating_context"]
+
+    assert context["load_context"] is None
+    assert context["comparability"]["level"] == "unknown"
+    assert context["comparability"]["score"] is None
 
 
 def test_internal_window_legacy_change_does_not_claim_exact_baseline() -> None:

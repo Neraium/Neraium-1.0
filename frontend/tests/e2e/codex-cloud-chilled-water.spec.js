@@ -50,6 +50,37 @@ test("AWS-free chilled-water baseline and persistent pump degradation survive re
     baseline_sample_count: 672,
     comparison_sample_count: 672,
   });
+  expect(firstPackage.operating_context).toMatchObject({
+    schema_version: "operating-context-v1",
+    comparison_state: {
+      state_type: "transitioning",
+      state_confidence: { level: "unknown", score: null },
+    },
+    load_context: {
+      canonical_role: "process_demand",
+      baseline_mean: 317.33788244,
+      comparison_mean: 317.33788244,
+      baseline_range: { min: 164.268, max: 515.902 },
+      comparison_range: { min: 164.268, max: 515.902 },
+    },
+    equipment_configuration: [],
+    environmental_context: [],
+    transition_context: { direction: "mixed" },
+    comparability: { level: "high", score: 1 },
+  });
+  expect(firstPackage.operating_context.control_context[0]).toMatchObject({
+    canonical_role: "control_command",
+    baseline_mean: 67.83942708,
+    comparison_mean: 67.83942708,
+  });
+  expect(firstPackage.operating_context.baseline_window).toMatchObject({
+    start: "2026-06-01T00:00:00",
+    end: "2026-06-07T23:45:00",
+  });
+  expect(firstPackage.operating_context.comparison_window).toMatchObject({
+    start: "2026-06-15T00:00:00",
+    end: "2026-06-21T23:45:00",
+  });
   expect(firstPackage.limitations).toEqual([]);
   expect(firstPackage.hypotheses).toEqual([]);
   for (const marker of foreignMarkers) await expect(page.getByText(marker, { exact: false })).toHaveCount(0);

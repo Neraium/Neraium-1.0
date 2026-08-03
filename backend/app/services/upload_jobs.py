@@ -1233,6 +1233,16 @@ def _build_csv_result(
                 "top_relationship_changes": exact_baseline_changes,
                 "baseline_model_id": active_baseline_model.get("model_id"),
             }
+    operating_context_inputs = None
+    if workflow == WORKFLOW_ANALYZE_NEW_DATA and isinstance(active_baseline_model, dict):
+        from app.services.operating_context import build_operating_context_inputs
+
+        operating_context_inputs = build_operating_context_inputs(
+            rows=rows,
+            telemetry_signal_catalog=telemetry_signal_catalog,
+            baseline_model=active_baseline_model,
+            comparison_window=timestamp_profile,
+        )
     if workflow == WORKFLOW_ANALYZE_NEW_DATA:
         if not baseline_id or not baseline_dataset_id or not comparison_dataset_id:
             raise ValueError("analysis_identity_incomplete")
@@ -1303,6 +1313,7 @@ def _build_csv_result(
         "baseline_analysis": baseline_analysis,
         "telemetry_signal_catalog": telemetry_signal_catalog,
         "telemetry_signals": list(telemetry_signal_catalog.values()) if isinstance(telemetry_signal_catalog, dict) else telemetry_signal_catalog,
+        "operating_context_inputs": operating_context_inputs,
         "cultivation_mapping": cultivation_mapping,
         "operator_report": operator_report,
         "engine_result": engine_result,
