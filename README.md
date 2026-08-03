@@ -172,6 +172,10 @@ The backend runs locally at:
 http://127.0.0.1:8010
 ```
 
+For a complete AWS-free Codex Cloud setup, including local replacements for S3,
+RDS/Secrets Manager, ECS workers, and frontend routing, see
+[`docs/CODEX_CLOUD.md`](docs/CODEX_CLOUD.md).
+
 ---
 
 ## Frontend Setup
