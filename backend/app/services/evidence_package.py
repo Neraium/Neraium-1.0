@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 from uuid import UUID, uuid5
@@ -39,6 +40,15 @@ class ConfidenceLevel(str, Enum):
     high = "high"
     medium = "medium"
     low = "low"
+    unknown = "unknown"
+
+
+class TimelineEventType(str, Enum):
+    comparison_started = "comparison_started"
+    earliest_supported_deviation = "earliest_supported_deviation"
+    behavior_persisted = "behavior_persisted"
+    supporting_relationship_change = "supporting_relationship_change"
+    comparison_completed = "comparison_completed"
     unknown = "unknown"
 
 
@@ -124,7 +134,7 @@ class PackageConfidence(StrictModel):
 class TimelineEvent(StrictModel):
     id: str
     sequence: int
-    event_type: str
+    event_type: TimelineEventType
     occurred_at: str
     summary: str
     variables: list[str]
@@ -300,6 +310,85 @@ def _first(value: Any, *keys: str, default: Any = None) -> Any:
         if candidate is not None and candidate != "":
             return candidate
     return default
+
+
+def _timestamp(value: Any) -> tuple[str, datetime] | None:
+    """Return one canonical UTC timestamp, or no temporal evidence."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    utc = parsed.astimezone(timezone.utc)
+    return utc.isoformat(timespec="microseconds").replace(".000000+00:00", "Z").replace("+00:00", "Z"), utc
+
+
+def _timeline(
+    *,
+    created: str,
+    first_supported: Any,
+    comparison_start: Any,
+    comparison_end: Any,
+    persistence_value: Any,
+    variables: list[str],
+    finding_confidence: ConfidenceDimension,
+    evidence_ids: set[str],
+) -> tuple[list[TimelineEvent], str | None]:
+    """Order only persisted temporal facts; ordering is not a causal claim."""
+    completed = _timestamp(created)
+    start = _timestamp(comparison_start)
+    end = _timestamp(comparison_end)
+    onset = _timestamp(first_supported)
+    onset_supported = onset is not None
+    unknown_reason = "No persisted comparison evidence identifies when the behavioral change first became supported."
+    if onset is not None and start is not None and onset[1] < start[1]:
+        onset_supported = False
+        unknown_reason = "The persisted onset precedes the comparison window and cannot establish earliest support within this comparison."
+    if onset is not None and end is not None and onset[1] > end[1]:
+        onset_supported = False
+        unknown_reason = "The persisted onset follows the comparison window and cannot establish earliest support within this comparison."
+
+    candidates: list[tuple[datetime, int, TimelineEventType, str, list[str], ConfidenceLevel, bool]] = []
+    if start is not None and "ev-context-comparison-window" in evidence_ids:
+        candidates.append((start[1], 0, TimelineEventType.comparison_started,
+            "Persisted comparison evidence window started.", ["ev-context-comparison-window"], ConfidenceLevel.unknown, False))
+    if onset_supported and onset is not None:
+        refs = [ref for ref in ("ev-absolute-change", "ev-comparison-samples", "ev-persistence", "ev-context-comparison-window") if ref in evidence_ids]
+        candidates.append((onset[1], 1, TimelineEventType.earliest_supported_deviation,
+            "Earliest timestamp at which persisted comparison evidence supports the behavioral change; this is not a physical failure-start or causal claim.",
+            refs, finding_confidence.level, True))
+    else:
+        # The completion timestamp records when the unknown determination was
+        # evaluated. It is deliberately not substituted as the onset.
+        assert completed is not None
+        candidates.append((completed[1], 2, TimelineEventType.unknown,
+            f"Earliest supported deviation is unknown. {unknown_reason}", [], ConfidenceLevel.unknown, False))
+    if persistence_value is not None and end is not None and "ev-persistence" in evidence_ids:
+        refs = [ref for ref in ("ev-persistence", "ev-context-comparison-window") if ref in evidence_ids]
+        candidates.append((end[1], 3, TimelineEventType.behavior_persisted,
+            "Persisted comparison output records continued relationship-change persistence through the comparison window.",
+            refs, finding_confidence.level, False))
+    assert completed is not None
+    candidates.append((completed[1], 4, TimelineEventType.comparison_completed,
+        "Persisted comparison analysis completed.",
+        [ref for ref in ("ev-comparison-strength", "ev-comparison-samples", "ev-replay") if ref in evidence_ids],
+        finding_confidence.level, False))
+
+    events = []
+    for sequence, (instant, _priority, event_type, summary, refs, confidence, earliest) in enumerate(
+        sorted(candidates, key=lambda item: (item[0], item[1], item[2].value)), start=1
+    ):
+        occurred_at = instant.isoformat(timespec="microseconds").replace(".000000+00:00", "Z").replace("+00:00", "Z")
+        events.append(TimelineEvent(
+            id=f"event-{sequence:03d}", sequence=sequence, event_type=event_type,
+            occurred_at=occurred_at, summary=summary, variables=variables,
+            evidence_refs=refs, confidence_level=confidence, is_earliest_supported=earliest,
+        ))
+    return events, onset[0] if onset_supported and onset is not None else None
 
 
 def _relationship(result: dict[str, Any]) -> dict[str, Any] | None:
@@ -555,6 +644,7 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
         or not dataset_id
         or edge is None
         or not created
+        or _timestamp(created) is None
         or not organization_id
         or (recorded_organization_id and recorded_organization_id != organization_id)
         or not selected_model_id
@@ -624,20 +714,25 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
             value=value, unit=unit, source_variables=source_variables, quality_status="recorded",
             calculation_version="operating-context-v1", metadata=metadata,
         ) for suffix, kind, label, value, unit, source_variables, metadata in context_specs)
-    timeline = []
-    if first_supported:
-        timeline.append(TimelineEvent(id="event-001", sequence=1, event_type="earliest_supported_deviation", occurred_at=str(first_supported), summary="Earliest supported deviation in the available comparison evidence.", variables=variables, evidence_refs=["ev-absolute-change"], confidence_level=ConfidenceLevel.unknown, is_earliest_supported=True))
     system_label = str(_first(finding, "system", default=_mapping(finding.get("localization")).get("system")) or "System")
     title = str(_first(finding, "headline", "title", default=f"Persistent relationship change in {system_label}"))
     relationship_label = f"{left} / {right}"
     direction = str(_first(edge, "direction", "change_direction", "change_type", default="weakened" if abs(comparison_strength) < abs(baseline_strength) else "strengthened"))
     persistence_value = _first(edge, "persistence_score", default=_first(finding, "persistence_score", "persistence", default=None))
+    finding_confidence = _finding_confidence(edge)
+    comparison_window = operating_context.comparison_window if operating_context is not None else ContextWindow()
+    timeline, canonical_first_supported = _timeline(
+        created=created, first_supported=first_supported,
+        comparison_start=comparison_window.start, comparison_end=comparison_window.end,
+        persistence_value=persistence_value, variables=variables,
+        finding_confidence=finding_confidence, evidence_ids={item.id for item in evidence},
+    )
     package = EvidencePackage(
         id=package_uuid, package_number=package_number, schema_version=SCHEMA_VERSION, revision=1,
         analysis_id=analysis_id, organization_id=organization_id,
         portfolio_id=result.get("portfolio_id"), site_id=result.get("site_id"), system_id=result.get("system_id"),
         baseline_id=baseline_id, baseline_version=reference.get("version"), comparison_dataset_id=dataset_id,
-        created_at=created, updated_at=created, first_supported_at=str(first_supported) if first_supported else None,
+        created_at=created, updated_at=created, first_supported_at=canonical_first_supported,
         last_observed_at=str(last_observed) if last_observed else None, latest_evaluated_at=created,
         title=title, system_label=system_label, condition_type=str(_first(finding, "condition_type", "type", default="persistent_relationship_change")),
         status=PackageStatus.active, severity=_first(finding, "severity", default=None), active_duration_seconds=_first(finding, "active_duration_seconds", default=None),
@@ -654,7 +749,7 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
             reference_baseline_version=reference.get("version"), reference_summary="Compared with the exact selected persisted Behavioral Digital Model."),
         operating_context=operating_context,
         confidence=PackageConfidence(
-            finding_confidence=_finding_confidence(edge),
+            finding_confidence=finding_confidence,
             data_quality_confidence=_data_quality_confidence(result),
             operating_state_confidence=_unknown("Operating Context v1 comparability is available, but no operating-state matching model or state-confidence calculation exists.") if operating_context is not None else _unknown("Operating Context v1 evidence was not available for this comparison."),
             mapping_confidence=_mapping_confidence(result, variables),

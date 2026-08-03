@@ -14,6 +14,7 @@ from app.services.evidence_package import (
     OperatingStateType,
     PackageStatus,
     ReferenceLevel,
+    TimelineEventType,
     TransitionDirection,
     build_evidence_package,
 )
@@ -126,6 +127,76 @@ def test_invalid_package_enums_are_rejected() -> None:
         ComparabilityLevel("invented_level")
     with pytest.raises(ValueError):
         ConfidenceLevel("invented_confidence")
+    package = build_evidence_package(_comparison())
+    package["timeline"][0]["event_type"] = "causal_precursor"
+    with pytest.raises(ValidationError):
+        EvidencePackage.model_validate(package)
+    with pytest.raises(ValueError):
+        TimelineEventType("causal_precursor")
+
+
+def test_timeline_uses_deterministic_persisted_temporal_evidence() -> None:
+    result = _with_operating_context(_comparison("timeline-supported"))
+    result["conditions"][0]["first_supported_at"] = "2026-06-18T04:30:00-04:00"
+    edge = result["baseline_analysis"]["relationship_drift"][0]
+    edge.update({"confidence_level": "high", "confidence_score": 0.91})
+
+    first = build_evidence_package(result)
+    second = build_evidence_package(result)
+
+    assert first == second
+    assert first["schema_version"] == "evidence-package-v1"
+    assert first["id"] == second["id"]
+    assert first["first_supported_at"] == "2026-06-18T08:30:00Z"
+    assert [event["event_type"] for event in first["timeline"]] == [
+        "comparison_started", "earliest_supported_deviation", "behavior_persisted", "comparison_completed",
+    ]
+    assert [event["sequence"] for event in first["timeline"]] == [1, 2, 3, 4]
+    assert [event["occurred_at"] for event in first["timeline"]] == sorted(
+        event["occurred_at"] for event in first["timeline"]
+    )
+    earliest = first["timeline"][1]
+    assert earliest["is_earliest_supported"] is True
+    assert earliest["confidence_level"] == "high"
+    assert earliest["evidence_refs"] == [
+        "ev-absolute-change", "ev-comparison-samples", "ev-persistence", "ev-context-comparison-window",
+    ]
+    evidence_ids = {item["id"] for item in first["supporting_evidence"]}
+    assert all(set(event["evidence_refs"]) <= evidence_ids for event in first["timeline"])
+
+
+def test_timeline_explicitly_records_unknown_earliest_support() -> None:
+    package = build_evidence_package(_with_operating_context(_comparison("timeline-unknown")))
+
+    assert package["first_supported_at"] is None
+    unknown = next(event for event in package["timeline"] if event["event_type"] == "unknown")
+    assert unknown["occurred_at"] == "2026-08-03T12:00:00Z"
+    assert unknown["is_earliest_supported"] is False
+    assert unknown["evidence_refs"] == []
+    assert "No persisted comparison evidence" in unknown["summary"]
+    assert not any(event["event_type"] == "earliest_supported_deviation" for event in package["timeline"])
+
+
+@pytest.mark.parametrize("onset", ["2026-06-14T23:59:59Z", "2026-06-22T00:00:00Z", "not-a-timestamp"])
+def test_timeline_does_not_substitute_onset_outside_comparison_window(onset: str) -> None:
+    result = _with_operating_context(_comparison(f"timeline-window-{onset}"))
+    result["conditions"][0]["first_detected_at"] = onset
+
+    package = build_evidence_package(result)
+
+    assert package["first_supported_at"] is None
+    assert any(event["event_type"] == "unknown" for event in package["timeline"])
+    assert not any(event["event_type"] == "earliest_supported_deviation" for event in package["timeline"])
+
+
+def test_legacy_package_without_temporal_onset_remains_valid() -> None:
+    package = build_evidence_package(_comparison("timeline-legacy"))
+    package["timeline"] = []
+
+    validated = EvidencePackage.model_validate(package).model_dump(mode="json")
+
+    assert validated["timeline"] == []
+    assert validated["id"] == package["id"]
 
 
 def test_multidimensional_confidence_preserves_supported_existing_assessments() -> None:
