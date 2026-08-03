@@ -28,10 +28,15 @@ export NERAIUM_PROCESS_ROLE=monolith
 export NERAIUM_START_BACKGROUND_WORKERS=true
 export NERAIUM_START_DATA_POLLER=false
 export NERAIUM_INFRA_MONITOR_ENABLED=false
+export NERAIUM_INLINE_REPLAY_GENERATION=true
 export NERAIUM_DEFAULT_TELEMETRY_URL=
 export NERAIUM_NOTIFICATION_WEBHOOK_URL=
 export NERAIUM_NOTIFICATION_EMAIL_RECIPIENTS=
 export NERAIUM_SMTP_HOST=
+# Production deployments keep the browser-to-S3 transport default. The local
+# Codex preview has no S3 by design, so its production-mode frontend build must
+# use the supported direct multipart path instead.
+export VITE_PREFER_STORED_UPLOAD=false
 
 cleanup() {
   local status=$?
