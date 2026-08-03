@@ -10,4 +10,9 @@ export default defineConfig({
   build: {
     manifest: true,
   },
+  preview: {
+    proxy: {
+      "/api": "http://127.0.0.1:8010",
+    },
+  },
 });

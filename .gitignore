@@ -42,6 +42,7 @@ logs/
 frontend-dev.log
 frontend-dev.err.log
 .playwright-runtime/
+.codex-runtime/
 
 # Local tool caches
 .uv-cache/
