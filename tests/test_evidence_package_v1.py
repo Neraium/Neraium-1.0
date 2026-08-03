@@ -151,8 +151,9 @@ def test_multidimensional_confidence_preserves_supported_existing_assessments() 
         **confidence["data_quality_confidence"], "level": "high", "score": 96.0,
         "method": "preserved_data_quality_assessment_v1",
     }
-    assert confidence["mapping_confidence"]["level"] == "high"
+    assert confidence["mapping_confidence"]["level"] == "medium"
     assert confidence["mapping_confidence"]["score"] is None
+    assert "physical correctness has not been independently validated" in confidence["mapping_confidence"]["reason"]
     assert confidence["physical_consistency_confidence"]["level"] == "unknown"
     assert confidence["physical_consistency_confidence"]["reason"] == "Physics consistency engine not implemented."
 

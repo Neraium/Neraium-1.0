@@ -410,8 +410,8 @@ def _mapping_confidence(result: dict[str, Any], variables: list[str]) -> Confide
             method="canonical_role_uniqueness_v1", evidence_refs=[],
         )
     return ConfidenceDimension(
-        level=ConfidenceLevel.high, score=None,
-        reason="Each signal supporting the relationship has an available canonical semantic role that is unique in the persisted signal catalog.",
+        level=ConfidenceLevel.medium, score=None,
+        reason="Each signal supporting the relationship has an available, unambiguous canonical semantic role, but its physical correctness has not been independently validated.",
         method="canonical_role_uniqueness_v1", evidence_refs=[],
     )
 
