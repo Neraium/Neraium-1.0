@@ -18,19 +18,24 @@ function LineageStep({ label, value, classification = "inferred", detail }) {
   );
 }
 
-export default function EvidenceLineage({ finding, relationship, result = {} }) {
+export default function EvidenceLineage({ finding, relationship, result = {}, omitUnavailable = false }) {
   const observation = finding?.supporting?.[0] || finding?.observedChange;
   const normalization = result?.normalization ?? result?.normalization_summary;
   const drift = relationship?.delta === null || relationship?.delta === undefined ? null : `Relationship change ${relationship.delta}`;
+  const relationshipValues = [
+    relationship?.baseline !== null && relationship?.baseline !== undefined ? `Baseline ${relationship.baseline}` : "",
+    relationship?.current !== null && relationship?.current !== undefined ? `current ${relationship.current}` : "",
+    relationship?.state ? `state ${relationship.state}` : "",
+  ].filter(Boolean).join("; ");
   return (
     <div className="evidence-lineage" aria-label="Evidence reasoning lineage">
       <LineageStep label="Raw observation" value={observation} classification="measured" detail="The observation persisted with the evidence record; source values remain governed by the configured data policy." />
-      <LineageStep label="Normalization" value={typeof normalization === "string" ? normalization : normalization?.summary || "Configured source normalization"} classification="configured" detail={typeof normalization === "object" ? normalization?.method : "Normalization metadata was not supplied beyond the configured processing boundary."} />
-      <LineageStep label="Relationship inferred" value={relationship?.label || "No supported relationship selected"} classification="inferred" detail={relationship ? `Baseline ${relationship.baseline ?? "not supplied"}; current ${relationship.current ?? "not supplied"}.` : "Select a mapped relationship to inspect its comparison."} />
-      <LineageStep label="Drift vector" value={drift || "Magnitude not supplied"} classification="derived" detail={relationship ? `Edge state: ${relationship.state}. Numerical values remain secondary to the bounded interpretation.` : "A drift vector cannot be shown without mapped relationship evidence."} />
+      <LineageStep label="Normalization" value={typeof normalization === "string" ? normalization : normalization?.summary || (omitUnavailable ? null : "Configured source normalization")} classification="configured" detail={typeof normalization === "object" ? normalization?.method : omitUnavailable ? null : "Normalization metadata was not supplied beyond the configured processing boundary."} />
+      <LineageStep label="Relationship inferred" value={relationship?.label || (omitUnavailable ? null : "No supported relationship selected")} classification="inferred" detail={relationship ? (omitUnavailable ? relationshipValues : `Baseline ${relationship.baseline ?? "not supplied"}; current ${relationship.current ?? "not supplied"}.`) : omitUnavailable ? null : "Select a mapped relationship to inspect its comparison."} />
+      <LineageStep label="Drift vector" value={drift || (omitUnavailable ? null : "Magnitude not supplied")} classification="derived" detail={relationship ? (omitUnavailable ? (relationship?.state ? `Edge state: ${relationship.state}.` : null) : `Edge state: ${relationship.state}. Numerical values remain secondary to the bounded interpretation.`) : omitUnavailable ? null : "A drift vector cannot be shown without mapped relationship evidence."} />
       {finding?.engineeringPrior ? <LineageStep label="Engineering prior" value={typeof finding.engineeringPrior === "string" ? finding.engineeringPrior : finding.engineeringPrior?.label || "Conditional prior applied"} classification="configured" detail="This prior contributes conditionally and is not a universal diagnostic rule." /> : null}
       <LineageStep label="Interpretation" value={finding?.whyItMatters} classification="inferred" />
-      <LineageStep label="Conclusion" value={finding?.title} classification="inferred" detail={`Conclusion is bounded to the ${finding?.tier ?? "Withheld"} confidence tier.`} />
+      <LineageStep label="Conclusion" value={finding?.title} classification="inferred" detail={finding?.tier ? `Conclusion is bounded to the ${finding.tier} confidence tier.` : omitUnavailable ? "No confidence tier was supplied." : "Conclusion is bounded to the Withheld confidence tier."} />
       {finding?.outcome ? <LineageStep label="Engineer outcome" value={finding.outcome?.outcome || finding.outcome?.category} classification="human" detail={finding.outcome?.note} /> : null}
     </div>
   );

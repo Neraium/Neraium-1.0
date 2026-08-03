@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./fixtures.js";
+import { expect, governedComparisonResult, test } from "./fixtures.js";
 
 function reasoningPayload() {
   const analysis = {
@@ -27,13 +27,13 @@ function reasoningPayload() {
       activity_timeline: [{ event_type: "baseline_reference", title: "Baseline reference period", start: "2026-07-19T10:00:00Z", end: "2026-07-20T10:00:00Z", precision: "range" }, { event_type: "persistence_supported", title: "Persistence supported", period_label: "Recent comparison window", precision: "period" }],
     }],
   };
-  const result = {
+  const result = governedComparisonResult({
     job_id: "forensic-job", facility_name: "North Plant", filename: "governed-telemetry.csv", processed_at: "2026-07-26T10:00:00Z",
     sii_reliable_enough_to_show: true, sii_completed: true, data_quality: { coverage_percent: 82, warnings: ["Historian X was unavailable during the comparison window."] },
     data_gaps: [{ id: "gap-1", source: "Historian X", duration: "1h 55m", signals: ["Flow-01"], overlaps_change_window: true }],
     replay_timeline: { timeline: [{ timestamp: "2026-07-19T10:00:00Z" }, { timestamp: "2026-07-22T10:00:00Z" }] },
     analysis_result: analysis, analysis_explanation: analysis, baseline_analysis: { status: "available", relationship_drift: analysis.relationships },
-  };
+  });
   const currentUpload = { job_id: result.job_id, filename: result.filename, status: "complete", result };
   return { status: "complete", session_state: "verified", sii_completed: true, latest_result: result, current_upload: currentUpload, snapshot: { status: "complete", sii_completed: true, current_upload: currentUpload, latest_result: result } };
 }
@@ -57,11 +57,14 @@ test.describe("Daily engineering workflows", () => {
     await expect(card).toHaveCount(1);
     await expect(card.getByRole("heading", { name: "Pump demand no longer matches flow" })).toBeVisible();
     await expect(card.getByText("Flow & Pressure")).toBeVisible();
-    await expect(card.locator(".finding-classification__chip")).toHaveCount(3);
-    await expect(card.getByText("Unexplained systemic change")).toBeVisible();
-    await expect(card.getByText("Flow response decreased 12.4%.")).toBeVisible();
-    await expect(card.getByText("Pump demand increased 6.1%.")).toHaveCount(0);
-    await expect(card.locator(".operational-finding__brief p")).toHaveCount(2);
+    await expect(card.getByText("Confidence")).toBeVisible();
+    await expect(card.getByText("Narrowed")).toBeVisible();
+    const evidence = card.locator(".operational-finding__evidence");
+    await expect(evidence).not.toHaveAttribute("open", "");
+    await expect(evidence.getByText("Flow response decreased 12.4%.")).toBeHidden();
+    await evidence.locator("summary").click();
+    await expect(evidence.getByText("Flow response decreased 12.4%.")).toBeVisible();
+    await expect(evidence.getByText("Pump demand increased 6.1%.")).toBeVisible();
     await expect(card.getByRole("button", { name: "Review" })).toBeVisible();
     await expect(card.getByText("More actions")).toBeVisible();
 
@@ -86,25 +89,23 @@ test.describe("Daily engineering workflows", () => {
     await openSite(page, { width: 390, height: 844 });
     const card = page.locator(".operational-finding");
     const metrics = await card.evaluate((node) => {
-      const brief = node.querySelector(".operational-finding__brief")?.getBoundingClientRect();
+      const header = node.querySelector(".operational-finding__alert")?.getBoundingClientRect();
+      const evidence = node.querySelector(".operational-finding__evidence")?.getBoundingClientRect();
       const action = node.querySelector(".operational-finding__action")?.getBoundingClientRect();
-      const title = node.querySelector(".operational-finding__what")?.getBoundingClientRect();
       const cardBox = node.getBoundingClientRect();
       return {
         overflow: document.documentElement.scrollWidth - window.innerWidth,
-        briefBeforeAction: Boolean(brief && action && brief.bottom <= action.top + 1),
-        titleUsesCardWidth: Boolean(title && title.width >= cardBox.width - 32),
+        headerBeforeEvidence: Boolean(header && evidence && header.bottom <= evidence.top + 1),
+        evidenceBeforeAction: Boolean(evidence && action && evidence.bottom <= action.top + 1),
         actionVisible: Boolean(action && action.top < window.innerHeight),
-        actionsFitCard: Boolean(action && action.right <= cardBox.right + 1),
-        classificationFits: Boolean(node.querySelector(".finding-classification")?.getBoundingClientRect().right <= window.innerWidth + 1),
+        contentFitsCard: [header, evidence, action].every((rect) => rect && rect.left >= cardBox.left - 1 && rect.right <= cardBox.right + 1),
       };
     });
     expect(metrics.overflow).toBeLessThanOrEqual(1);
-    expect(metrics.briefBeforeAction).toBe(true);
-    expect(metrics.titleUsesCardWidth).toBe(true);
+    expect(metrics.headerBeforeEvidence).toBe(true);
+    expect(metrics.evidenceBeforeAction).toBe(true);
     expect(metrics.actionVisible).toBe(true);
-    expect(metrics.actionsFitCard).toBe(true);
-    expect(metrics.classificationFits).toBe(true);
+    expect(metrics.contentFitsCard).toBe(true);
   });
 
   test("long system and signal names reflow at narrow Safari-like viewport heights", async ({ page }) => {
@@ -123,7 +124,7 @@ test.describe("Daily engineering workflows", () => {
     expect(metrics.root).toBeLessThanOrEqual(metrics.viewport + 1);
     expect(metrics.body).toBeLessThanOrEqual(metrics.viewport + 1);
     await expect(page.getByText(longSystem).first()).toBeVisible();
-    await expect(page.locator(".finding-classification__chips")).toBeVisible();
+    await expect(page.locator(".operational-finding__evidence summary")).toBeVisible();
   });
 
   test("back navigation restores Operations Brief context", async ({ page }) => {

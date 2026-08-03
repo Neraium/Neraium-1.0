@@ -268,6 +268,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const activeNavigation = ["finding", "findings"].includes(effectiveRoute) ? "findings" : ["investigation", "evidence", "trace"].includes(effectiveRoute) ? "investigations" : ["system", "systems"].includes(effectiveRoute) ? "systems" : effectiveRoute;
   const navItems = [
     ["site", "System Status"],
+    ["live-monitoring", "Live Monitoring"],
     ["systems", "Systems"],
     ["findings", "Findings"],
     ["investigations", "Evidence & Outcomes"],
@@ -365,7 +366,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   }
 
   function navigate(target) {
-    if (target === "data-connections" || target === "governance-admin") {
+    if (["live-monitoring", "data-connections", "governance-admin"].includes(target)) {
       onWorkspaceNavigate?.(target);
       return;
     }

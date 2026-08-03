@@ -8,6 +8,7 @@ import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 import { extractTelemetryBoundaryMeta } from "../viewModels/uploadState";
 
 const HomePage = lazy(() => import("./HomePage"));
+const LiveMonitoringWorkspace = lazy(() => import("./LiveMonitoringWorkspace"));
 const DataConnectionsWorkspace = lazy(() => import("./DataConnectionsWorkspace"));
 const EngineeringReasoningWorkspace = lazy(() => import("./EngineeringReasoningWorkspace"));
 const SystemStoryWorkspace = lazy(() => import("./SystemStoryWorkspace"));
@@ -34,7 +35,7 @@ function WorkspaceWithBackControl({
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace} errorContext={{ ...errorContext, workspaceId: activeWorkspace }}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
         <SkipToMainContent />
-        <div className="workspace-shell-with-back">
+        <div className={`workspace-shell-with-back workspace-shell--${activeWorkspace}`}>
           <nav className="workspace-back-control" aria-label="Workspace navigation">
             <div className="workspace-back-control__context">
               <button
@@ -121,6 +122,25 @@ export default function AppWorkspaceRouter({
           </Suspense>
         </div>
       </AppErrorBoundary>
+    );
+  }
+
+  if (activeWorkspace === "live-monitoring") {
+    return (
+      <WorkspaceWithBackControl
+        appReady={appReady}
+        errorBoundaryResetKey={errorBoundaryResetKey}
+        handleBackToGate={handleBackToGate}
+        handleRetryWorkspace={handleRetryWorkspace}
+        contextLabel="Live Monitoring"
+        errorContext={errorContext}
+        activeWorkspace={activeWorkspace}
+        onHelp={() => setActiveWorkspace("help-changelog")}
+      >
+        <Suspense fallback={renderLoadingPanel("Opening Live Monitoring", "Loading telemetry, rolling analysis, and finding state...")}>
+          <LiveMonitoringWorkspace apiFetch={apiFetch} accessCode={accessCode} />
+        </Suspense>
+      </WorkspaceWithBackControl>
     );
   }
 

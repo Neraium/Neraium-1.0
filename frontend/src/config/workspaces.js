@@ -6,6 +6,12 @@ export const WORKSPACES = [
     description: "New findings, active review work, instrumentation concerns, and recently resolved items.",
   },
   {
+    id: "live-monitoring",
+    label: "Live Monitoring",
+    eyebrow: "Live Operations",
+    description: "Review configured systems, telemetry health, rolling analysis, and live finding state.",
+  },
+  {
     id: "data-connections",
     label: "Data",
     eyebrow: "Telemetry",

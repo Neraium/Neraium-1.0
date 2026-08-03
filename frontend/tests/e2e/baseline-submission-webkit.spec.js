@@ -2,6 +2,7 @@ import { expect, test } from "./fixtures.js";
 import { installStoredBaselineUpload } from "./stored-upload-mock.js";
 
 test.describe("mobile Safari baseline submission", () => {
+  test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright's mobile context option; WebKit covers this mobile Safari contract.");
   test.use({
     viewport: { width: 390, height: 844 },
     isMobile: true,

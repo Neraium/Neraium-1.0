@@ -108,10 +108,15 @@ vi.mock("./components/EngineeringReasoningWorkspace", () => ({
         onChange: (event) => onCsvSelected?.(Array.from(event.target.files ?? [])),
       }),
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open telemetry intake"),
+      h("button", { type: "button", onClick: () => onWorkspaceNavigate("live-monitoring") }, "Open live monitoring"),
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open insights"),
       h("button", { type: "button", onClick: onSignOut }, "Sign out test user"),
     );
   },
+}));
+
+vi.mock("./components/LiveMonitoringWorkspace", () => ({
+  default: () => h("div", { "data-testid": "live-monitoring-workspace" }, "Live Monitoring"),
 }));
 
 
@@ -336,6 +341,26 @@ it("opens the operational workspace only for direct workspace route entry", asyn
     expect(screen.getByTestId("gate-workspace")).toBeTruthy();
   });
   expect(screen.queryByTestId("home-page")).toBeNull();
+});
+
+it("routes authenticated navigation to Live Monitoring without replacing historical workspaces", async () => {
+  render(h(App));
+  await launchWorkspace();
+
+  fireEvent.click(screen.getByRole("button", { name: "Open live monitoring" }));
+
+  expect(await screen.findByTestId("live-monitoring-workspace")).toBeTruthy();
+  expect(window.location.pathname).toBe("/workspace/live-monitoring");
+  expect(screen.getByRole("button", { name: "Back to Portfolio" })).toBeTruthy();
+});
+
+it("opens Live Monitoring from its direct authenticated route", async () => {
+  window.history.replaceState({}, "", "/workspace/live-monitoring");
+
+  render(h(App));
+
+  expect(await screen.findByTestId("live-monitoring-workspace")).toBeTruthy();
+  expect(window.location.pathname).toBe("/workspace/live-monitoring");
 });
 
 it("routes Operations Brief CSV selections into the visible auto-start upload workflow", async () => {

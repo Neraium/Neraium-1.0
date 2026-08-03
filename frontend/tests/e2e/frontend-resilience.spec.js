@@ -1,7 +1,7 @@
-import { expect, test } from "./fixtures.js";
+import { expect, governedComparisonResult, test } from "./fixtures.js";
 
 function partialUploadPayload() {
-  const result = { job_id: "partial-run", facility_name: "Partial Site", sii_completed: true, sii_reliable_enough_to_show: true, analysis_explanation: { systems: {}, relationships: null, insights: "not-an-array" }, data_quality: { warnings: ["Evidence collection incomplete"] } };
+  const result = governedComparisonResult({ job_id: "partial-run", facility_name: "Partial Site", sii_completed: true, sii_reliable_enough_to_show: true, analysis_explanation: { systems: {}, relationships: null, insights: "not-an-array" }, data_quality: { warnings: ["Evidence collection incomplete"] } });
   const current = { status: "complete", job_id: "partial-run", result };
   return { status: "complete", sii_completed: true, latest_result: result, current_upload: current, snapshot: { status: "complete", latest_result: result, current_upload: current } };
 }

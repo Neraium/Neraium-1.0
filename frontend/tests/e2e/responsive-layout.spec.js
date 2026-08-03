@@ -80,13 +80,13 @@ test.describe("Responsive engineering workspace", () => {
     await toggle.click();
     const navigation = page.getByRole("navigation", { name: "Primary navigation" });
     await expect(navigation).toBeVisible();
-    await expect(navigation.getByRole("button", { name: "Operations Brief" })).toBeFocused();
+    await expect(navigation.getByRole("button", { name: "System Status" })).toBeFocused();
     expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden");
     await page.keyboard.press("Escape");
     await expect(toggle).toBeFocused();
     expect(await page.evaluate(() => document.body.style.overflow)).toBe("");
     await toggle.click();
-    await navigation.getByRole("button", { name: "Operations Brief" }).click();
+    await navigation.getByRole("button", { name: "System Status" }).click();
     await expect(page).toHaveURL(/\/sites\/[^/]+$/);
     await expect(page.locator(".forensic-sidebar")).not.toHaveClass(/is-open/);
     expect(await page.evaluate(() => document.body.style.overflow)).toBe("");

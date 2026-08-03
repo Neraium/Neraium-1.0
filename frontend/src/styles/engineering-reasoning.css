@@ -41,6 +41,7 @@
 .nav-glyph { width: 14px; height: 14px; border: 1px solid currentColor; opacity: .72; }
 .nav-glyph--portfolio { border-radius: 50%; box-shadow: 5px -3px 0 -3px currentColor, -4px 4px 0 -3px currentColor; }
 .nav-glyph--site { border-radius: 2px; transform: rotate(45deg) scale(.75); }
+.nav-glyph--live-monitoring { border-radius: 50%; box-shadow: inset 0 0 0 3px #090f17; }
 .nav-glyph--investigations { border-radius: 50%; position: relative; }
 .nav-glyph--investigations::after { content: ""; position: absolute; width: 6px; height: 1px; background: currentColor; right: -5px; bottom: -2px; transform: rotate(45deg); }
 .nav-glyph--evidence { border-width: 0 0 1px 1px; }

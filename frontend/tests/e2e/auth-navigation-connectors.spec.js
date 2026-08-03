@@ -81,14 +81,14 @@ test.describe("Authentication, navigation, connectors, and permissions", () => {
 
   test("direct links, refresh, back, and forward preserve engineering workspaces", async ({ page }) => {
     await page.goto("/sites/current");
-    await expect(page.getByRole("button", { name: "Operations Brief" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "System Status" })).toHaveAttribute("aria-current", "page");
     await page.reload();
-    await expect(page.getByRole("button", { name: "Operations Brief" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "System Status" })).toHaveAttribute("aria-current", "page");
 
     await page.getByRole("button", { name: "Systems" }).click();
     await expect(page).toHaveURL(/\/systems$/);
     await page.goBack();
-    await expect(page.getByRole("button", { name: "Operations Brief" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "System Status" })).toHaveAttribute("aria-current", "page");
     await page.goForward();
     await expect(page.getByRole("button", { name: "Systems" })).toHaveAttribute("aria-current", "page");
   });

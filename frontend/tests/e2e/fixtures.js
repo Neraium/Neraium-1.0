@@ -2,6 +2,31 @@ import { expect, test as base } from "@playwright/test";
 
 const apiBaseURL = `http://127.0.0.1:${Number(process.env.PLAYWRIGHT_BACKEND_PORT || 8012)}`;
 
+export function governedComparisonResult(result) {
+  const runId = String(result?.job_id ?? "e2e-comparison-run");
+  const baselineId = `${runId}-baseline`;
+  const baselineDatasetId = `${runId}-baseline-dataset`;
+  const comparisonDatasetId = `${runId}-comparison-dataset`;
+  return {
+    ...result,
+    job_id: runId,
+    run_id: runId,
+    workflow: "analyze_new_data",
+    status: "COMPLETE",
+    processing_state: "complete",
+    sii_completed: true,
+    portfolio_id: "default",
+    system_id: "default",
+    baseline_id: baselineId,
+    baseline_dataset_id: baselineDatasetId,
+    comparison_dataset_id: comparisonDatasetId,
+    comparison_analysis_id: runId,
+    analysis_run_id: runId,
+    dataset_id: comparisonDatasetId,
+    active_baseline_reference: { model_id: baselineId, dataset_id: baselineDatasetId },
+  };
+}
+
 export const test = base.extend({
   page: async ({ page, context }, use) => {
     const login = await context.request.post(`${apiBaseURL}/api/auth/login`, {

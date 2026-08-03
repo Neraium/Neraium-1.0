@@ -30,6 +30,7 @@ const HOME_PATH = "/";
 const WORKSPACE_PATHS = {
   home: "/home",
   "system-body": "/sites/current",
+  "live-monitoring": "/workspace/live-monitoring",
   "data-connections": "/workspace/data-sources",
   "observation-center": "/workspace/insights",
   "system-story": "/workspace/advanced",
