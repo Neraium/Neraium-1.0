@@ -24,6 +24,16 @@ TIMESTAMP = "timestamp"
 UNKNOWN = "unknown"
 COUNTER_DERIVED_RATE = "counter_derived_rate"
 
+# This is the source-agnostic boundary consumed by downstream context analysis.
+# Connector/site-specific tag interpretation happens before this point; analytical
+# code must not infer physical meaning from source column names.
+CANONICAL_ROLE_BY_CATEGORY = {
+    CONTROL_OUTPUT: "control_command",
+    SETPOINT: "setpoint",
+    EQUIPMENT_STATE: "equipment_state",
+    COUNTER_DERIVED_RATE: "process_rate",
+}
+
 STRUCTURAL_CLASS_LABELS = {
     EQUIPMENT_PROCESS: "Equipment Process Variable",
     EQUIPMENT_STATE: "Equipment State",
@@ -167,6 +177,7 @@ def classify_telemetry_signal(
     elif category == COUNTER_DERIVED_RATE:
         role = "derived_rate_feature"
 
+    semantic_role = _specific_semantic_role(text, category)
     return {
         "category": category,
         "structural_class": STRUCTURAL_CLASS_LABELS.get(category, "Unknown"),
@@ -179,6 +190,7 @@ def classify_telemetry_signal(
         "is_ignored": category in IGNORED_CATEGORIES,
         "requires_derived_rate": category in {COUNTER, CUMULATIVE_COUNTER},
         "reason": reason,
+        "semantic_role": semantic_role,
     }
 
 
@@ -265,6 +277,7 @@ def build_telemetry_signal_catalog(
             "source_column_index": index,
             "telemetry_category": classification["category"],
             "analysis_role": classification["analysis_role"],
+            "canonical_role": classification.get("semantic_role") or CANONICAL_ROLE_BY_CATEGORY.get(classification["category"]),
             "telemetry_classification": classification,
             **classification,
         }
@@ -402,6 +415,19 @@ def _has_weather_token(text: str) -> bool:
     return any(phrase in text for phrase in phrases)
 
 
+def _specific_semantic_role(text: str, category: str) -> str | None:
+    """Resolve only physical roles proven by specific upstream semantics."""
+    tokens = _tokens(text)
+    if category == SCHEDULED_LOAD_CONTEXT and "demand" in tokens:
+        return "process_demand"
+    if category == WEATHER_ENVIRONMENT:
+        temperature_tokens = {"temp", "temperature", "oat"}
+        excluded = {"humidity", "pressure", "wet", "bulb", "dew", "point"}
+        if tokens & temperature_tokens and not tokens & excluded:
+            return "environmental_temperature"
+    return None
+
+
 def _has_control_output_token(text: str) -> bool:
     tokens = _tokens(text)
     if tokens & {"command", "cmd", "output", "position", "actuator", "vfd", "speed"}:
@@ -494,6 +520,7 @@ def _engineering_units(value: str) -> str:
         "kw": "kW",
         "kwh": "kWh",
         "ips": "ips",
+        "tons": "tons",
     }
     parts = normalized.split("_")
     for width in (2, 1):
@@ -509,7 +536,7 @@ def _display_name(value: str) -> str:
         return ""
     text = re.sub(r"\([^)]*\)", "", text)
     parts = [part for part in _normalized_name(text).split("_") if part]
-    unit_tokens = {"f", "c", "pct", "percent", "psi", "kpa", "gpm", "lpm", "ppm", "kw", "kwh", "ips"}
+    unit_tokens = {"f", "c", "pct", "percent", "psi", "kpa", "gpm", "lpm", "ppm", "kw", "kwh", "ips", "tons"}
     if len(parts) > 1 and parts[-1] in unit_tokens:
         parts = parts[:-1]
     acronyms = {"hvac", "co2", "ph", "vfd", "ct", "chw", "kw", "kwh", "psi", "gpm", "ppm"}

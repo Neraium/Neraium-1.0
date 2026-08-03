@@ -42,6 +42,37 @@ class ConfidenceLevel(str, Enum):
     unknown = "unknown"
 
 
+class OperatingStateType(str, Enum):
+    steady = "steady"
+    ramping_up = "ramping_up"
+    ramping_down = "ramping_down"
+    transitioning = "transitioning"
+    unknown = "unknown"
+
+
+class TransitionDirection(str, Enum):
+    increasing = "increasing"
+    decreasing = "decreasing"
+    stable = "stable"
+    mixed = "mixed"
+    unknown = "unknown"
+
+
+class ComparabilityLevel(str, Enum):
+    high = "high"
+    medium = "medium"
+    low = "low"
+    unknown = "unknown"
+
+
+class ContextSource(str, Enum):
+    telemetry = "telemetry"
+    analysis_metadata = "analysis_metadata"
+    baseline_model = "baseline_model"
+    replay = "replay"
+    not_available = "not_available"
+
+
 class HypothesisSupport(str, Enum):
     strongly_supported = "strongly_supported"
     moderately_supported = "moderately_supported"
@@ -153,6 +184,74 @@ class PackageProvenance(StrictModel):
     revision: int
 
 
+class ContextRange(StrictModel):
+    min: float | None = None
+    max: float | None = None
+
+
+class ContextMetric(StrictModel):
+    canonical_role: str
+    unit: str | None = None
+    baseline_unit: str | None = None
+    comparison_unit: str | None = None
+    baseline_mean: float | None = None
+    comparison_mean: float | None = None
+    baseline_range: ContextRange
+    comparison_range: ContextRange
+    baseline_source_variable: str | None = None
+    comparison_source_variable: str | None = None
+    baseline_source: ContextSource
+    comparison_source: ContextSource
+
+
+class ContextWindow(StrictModel):
+    start: str | None = None
+    end: str | None = None
+    source: ContextSource = ContextSource.analysis_metadata
+
+
+class StateConfidence(StrictModel):
+    level: ConfidenceLevel = ConfidenceLevel.unknown
+    score: float | None = None
+    reason: str
+
+
+class ComparisonState(StrictModel):
+    state_label: str | None = None
+    state_type: OperatingStateType
+    state_confidence: StateConfidence
+
+
+class TransitionContext(StrictModel):
+    direction: TransitionDirection
+    rate: float | None = None
+    unit: str | None = None
+    method: str
+    reason: str
+
+
+class Comparability(StrictModel):
+    level: ComparabilityLevel
+    score: float | None = None
+    method: str
+    reason: str
+    matched_dimensions: list[str]
+    unavailable_dimensions: list[str]
+
+
+class OperatingContext(StrictModel):
+    schema_version: str
+    comparison_state: ComparisonState
+    load_context: ContextMetric | None = None
+    equipment_configuration: list[ContextMetric]
+    control_context: list[ContextMetric]
+    environmental_context: list[ContextMetric]
+    baseline_window: ContextWindow
+    comparison_window: ContextWindow
+    transition_context: TransitionContext
+    comparability: Comparability
+
+
 class EvidencePackage(StrictModel):
     id: str
     package_number: str
@@ -181,6 +280,7 @@ class EvidencePackage(StrictModel):
     change_summary: str
     primary_relationship: PrimaryRelationship
     comparison_reference: ComparisonReference
+    operating_context: OperatingContext | None = None
     confidence: PackageConfidence
     timeline: list[TimelineEvent]
     supporting_evidence: list[SupportingEvidence]
@@ -239,6 +339,125 @@ def _unknown(reason: str = "This confidence dimension is not calculated in Evide
     return ConfidenceDimension(level=ConfidenceLevel.unknown, score=None, reason=reason, method="not_calculated", evidence_refs=[])
 
 
+def _context_metric(role: str, inputs: dict[str, Any]) -> ContextMetric | None:
+    baseline = _mapping(_mapping(inputs.get("baseline")).get(role))
+    comparison = _mapping(_mapping(inputs.get("comparison")).get(role))
+    if not baseline or not comparison:
+        return None
+    baseline_unit = _normalized_unit(baseline.get("unit"))
+    comparison_unit = _normalized_unit(comparison.get("unit"))
+    compatible_unit = baseline_unit if _units_compatible(role, baseline_unit, comparison_unit) else None
+    return ContextMetric(
+        canonical_role=role,
+        unit=compatible_unit,
+        baseline_unit=baseline_unit,
+        comparison_unit=comparison_unit,
+        baseline_mean=baseline.get("mean"), comparison_mean=comparison.get("mean"),
+        baseline_range=ContextRange(min=baseline.get("min"), max=baseline.get("max")),
+        comparison_range=ContextRange(min=comparison.get("min"), max=comparison.get("max")),
+        baseline_source_variable=baseline.get("source_variable"),
+        comparison_source_variable=comparison.get("source_variable"),
+        baseline_source=ContextSource(str(baseline.get("source") or "baseline_model")),
+        comparison_source=ContextSource(str(comparison.get("source") or "telemetry")),
+    )
+
+
+DIMENSIONLESS_CONTEXT_ROLES = {"equipment_enable", "equipment_state"}
+
+
+def _normalized_unit(value: Any) -> str | None:
+    unit = str(value or "").strip()
+    return unit or None
+
+
+def _units_compatible(role: str, baseline_unit: str | None, comparison_unit: str | None) -> bool:
+    if baseline_unit is None or comparison_unit is None:
+        return role in DIMENSIONLESS_CONTEXT_ROLES and baseline_unit is None and comparison_unit is None
+    return baseline_unit.casefold() == comparison_unit.casefold()
+
+
+def _range_overlap(metric: ContextMetric) -> float | None:
+    if not _units_compatible(metric.canonical_role, metric.baseline_unit, metric.comparison_unit):
+        return None
+    left_min, left_max = metric.baseline_range.min, metric.baseline_range.max
+    right_min, right_max = metric.comparison_range.min, metric.comparison_range.max
+    if None in {left_min, left_max, right_min, right_max}:
+        return None
+    intersection = max(0.0, min(float(left_max), float(right_max)) - max(float(left_min), float(right_min)))
+    smaller_span = min(float(left_max) - float(left_min), float(right_max) - float(right_min))
+    if smaller_span <= 0:
+        return 1.0 if left_min == right_min == left_max == right_max else 0.0
+    return round(intersection / smaller_span, 6)
+
+
+def _comparability(load: ContextMetric | None, controls: list[ContextMetric]) -> Comparability:
+    if load is None or (load_overlap := _range_overlap(load)) is None:
+        return Comparability(level=ComparabilityLevel.unknown, score=None, method="not_calculated",
+            reason="A canonical process-demand range was not available for both periods.", matched_dimensions=[],
+            unavailable_dimensions=["process_demand", "equipment_configuration", "operating_mode", "environmental_conditions"])
+    checks = [("process_demand", load_overlap)]
+    unavailable_controls = []
+    for item in controls:
+        overlap = _range_overlap(item)
+        if overlap is None:
+            unavailable_controls.append(item.canonical_role)
+        else:
+            checks.append((item.canonical_role, overlap))
+    score = round(sum(value for _, value in checks) / len(checks), 6)
+    level = ComparabilityLevel.high if all(value >= 0.8 for _, value in checks) else ComparabilityLevel.medium if load_overlap > 0 else ComparabilityLevel.low
+    return Comparability(
+        level=level, score=score, method="minimum_span_range_overlap_v1",
+        reason="Each overlap is intersection width divided by the smaller observed range; high requires every available dimension to be at least 0.8, medium requires process-demand overlap, and low means no process-demand overlap.",
+        matched_dimensions=[name for name, value in checks if value > 0],
+        unavailable_dimensions=[*unavailable_controls, "equipment_configuration", "operating_mode", "environmental_conditions"],
+    )
+
+
+def _transition(inputs: dict[str, Any]) -> tuple[TransitionContext, OperatingStateType]:
+    demand = _mapping(_mapping(inputs.get("comparison")).get("process_demand"))
+    early, late = demand.get("early_median"), demand.get("late_median")
+    minimum, maximum = demand.get("min"), demand.get("max")
+    if None in {early, late, minimum, maximum}:
+        return TransitionContext(direction=TransitionDirection.unknown, method="not_calculated", reason="A complete canonical process-demand summary was unavailable."), OperatingStateType.unknown
+    delta = float(late) - float(early)
+    threshold = max((float(maximum) - float(minimum)) * 0.05, abs(float(early)) * 0.02)
+    segments = [float(value) for value in demand.get("segment_medians", []) if value is not None]
+    material_signs = {
+        1 if right - left > threshold else -1
+        for left, right in zip(segments, segments[1:])
+        if abs(right - left) > threshold
+    }
+    if len(material_signs) > 1:
+        return TransitionContext(direction=TransitionDirection.mixed, method="early_late_decile_median_v1", reason="Five ordered segment medians contained material changes in both directions, so no single directional trend is claimed."), OperatingStateType.transitioning
+    if abs(delta) <= threshold:
+        return TransitionContext(direction=TransitionDirection.stable, method="early_late_decile_median_v1", reason="Early and late 10% medians differed by no more than the deterministic 5%-of-range or 2%-of-early-median threshold."), OperatingStateType.steady
+    direction = TransitionDirection.increasing if delta > 0 else TransitionDirection.decreasing
+    state = OperatingStateType.ramping_up if delta > 0 else OperatingStateType.ramping_down
+    return TransitionContext(direction=direction, method="early_late_decile_median_v1", reason="Direction compares the median of the first and last 10% of canonical process-demand samples using the documented material-change threshold."), state
+
+
+def _operating_context(result: dict[str, Any]) -> OperatingContext | None:
+    inputs = _mapping(result.get("operating_context_inputs"))
+    if inputs.get("schema_version") != "operating-context-input-v1":
+        return None
+    load = _context_metric("process_demand", inputs)
+    controls = [item for role in ("control_command", "setpoint") if (item := _context_metric(role, inputs))]
+    equipment = [item for role in ("equipment_enable", "equipment_state") if (item := _context_metric(role, inputs))]
+    environment = [item for role in ("environmental_temperature",) if (item := _context_metric(role, inputs))]
+    transition, state_type = _transition(inputs)
+    windows = _mapping(inputs.get("windows"))
+    return OperatingContext(
+        schema_version="operating-context-v1",
+        comparison_state=ComparisonState(state_label=None, state_type=state_type,
+            state_confidence=StateConfidence(reason="The transition descriptor is deterministic, but no operating-state matching model or confidence score is calculated.")),
+        load_context=load, equipment_configuration=equipment, control_context=controls,
+        environmental_context=environment,
+        baseline_window=ContextWindow(**_mapping(windows.get("baseline"))),
+        comparison_window=ContextWindow(**_mapping(windows.get("comparison"))),
+        transition_context=transition, comparability=_comparability(load, controls),
+    )
+
+
 def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
     """Formalize one existing comparison finding without adding analytical claims."""
     analysis_id = str(result.get("comparison_analysis_id") or result.get("analysis_run_id") or "").strip()
@@ -281,6 +500,7 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
     package_uuid = str(uuid5(PACKAGE_NAMESPACE, f"{organization_id}:{analysis_id}:{baseline_id}:{dataset_id}"))
     package_number = f"EP-{analysis_id[:8].upper()}-{package_uuid[:4].upper()}"
     variables = [left, right]
+    operating_context = _operating_context(result)
     evidence_specs = [
         ("baseline-strength", "relationship_strength", "Baseline relationship strength", baseline_strength, None),
         ("comparison-strength", "relationship_strength", "Comparison relationship strength", comparison_strength, None),
@@ -299,6 +519,26 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
         )
         for suffix, kind, label, value, unit in evidence_specs if value is not None
     ]
+    if operating_context is not None:
+        context_specs: list[tuple[str, str, str, Any, str | None, list[str], dict[str, Any]]] = []
+        if operating_context.load_context is not None:
+            load = operating_context.load_context
+            context_specs.extend([
+                ("context-baseline-demand-range", "operating_context", "Baseline process-demand range", load.baseline_range.model_dump(), load.unit, [load.baseline_source_variable] if load.baseline_source_variable else [], {"canonical_role": load.canonical_role, "method": "persisted_full_window_summary_v1"}),
+                ("context-comparison-demand-range", "operating_context", "Comparison process-demand range", load.comparison_range.model_dump(), load.unit, [load.comparison_source_variable] if load.comparison_source_variable else [], {"canonical_role": load.canonical_role, "method": "persisted_full_window_summary_v1"}),
+            ])
+        for index, metric in enumerate(operating_context.control_context, start=1):
+            context_specs.append((f"context-control-{index:02d}", "operating_context", f"{metric.canonical_role.replace('_', ' ').title()} means", {"baseline": metric.baseline_mean, "comparison": metric.comparison_mean}, metric.unit, [value for value in (metric.baseline_source_variable, metric.comparison_source_variable) if value], {"canonical_role": metric.canonical_role, "method": "arithmetic_mean_v1"}))
+        context_specs.extend([
+            ("context-baseline-window", "operating_context_window", "Baseline context window", operating_context.baseline_window.model_dump(), None, [], {"method": "persisted_analysis_metadata_v1"}),
+            ("context-comparison-window", "operating_context_window", "Comparison context window", operating_context.comparison_window.model_dump(), None, [], {"method": "persisted_analysis_metadata_v1"}),
+            ("context-comparability", "operating_context_comparability", "Operating-context comparability", {"level": operating_context.comparability.level.value, "score": operating_context.comparability.score}, None, [], {"method": operating_context.comparability.method}),
+        ])
+        evidence.extend(SupportingEvidence(
+            id=f"ev-{suffix}", evidence_type=kind, label=label, summary=f"{label} preserved from canonical operating-context inputs.",
+            value=value, unit=unit, source_variables=source_variables, quality_status="recorded",
+            calculation_version="operating-context-v1", metadata=metadata,
+        ) for suffix, kind, label, value, unit, source_variables, metadata in context_specs)
     timeline = []
     if first_supported:
         timeline.append(TimelineEvent(id="event-001", sequence=1, event_type="earliest_supported_deviation", occurred_at=str(first_supported), summary="Earliest supported deviation in the available comparison evidence.", variables=variables, evidence_refs=["ev-absolute-change"], confidence_level=ConfidenceLevel.unknown, is_earliest_supported=True))
@@ -327,7 +567,10 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
             source_model_edge_id=_first(edge, "edge_id", "id", default=None)),
         comparison_reference=ComparisonReference(reference_level=ReferenceLevel.matched_historical_baseline, reference_baseline_id=baseline_id,
             reference_baseline_version=reference.get("version"), reference_summary="Compared with the exact selected persisted Behavioral Digital Model."),
-        confidence=PackageConfidence(finding_confidence=_unknown("The existing generic confidence is retained in legacy fields and is not reinterpreted."), data_quality_confidence=_unknown(), operating_state_confidence=_unknown(), mapping_confidence=_unknown(), physical_consistency_confidence=_unknown()),
+        operating_context=operating_context,
+        confidence=PackageConfidence(finding_confidence=_unknown("The existing generic confidence is retained in legacy fields and is not reinterpreted."), data_quality_confidence=_unknown(),
+            operating_state_confidence=_unknown("Available Operating Context v1 summaries are descriptive; no operating-state match or confidence score is calculated.") if operating_context is not None else _unknown(),
+            mapping_confidence=_unknown(), physical_consistency_confidence=_unknown()),
         timeline=timeline, supporting_evidence=evidence, limitations=[], hypotheses=[],
         provenance=PackageProvenance(analysis_version="analysis-result-v1", algorithm_version=str(_mapping(result.get("traceability")).get("model_version") or "existing-comparison"), baseline_model_version=reference.get("version"), topology_version=None,
             source_dataset_ids=[str(result.get("baseline_dataset_id")), dataset_id], creation_reason="completed_baseline_comparison", last_update_reason="created", created_at=created, latest_evaluated_at=created, revision=1),

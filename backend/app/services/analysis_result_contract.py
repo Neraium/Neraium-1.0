@@ -196,6 +196,7 @@ def build_normalized_telemetry(
                     "inferred_telemetry_type": classification.get("structural_class"),
                     "telemetry_category": classification["category"],
                     "analysis_role": classification["analysis_role"],
+                    "canonical_role": metadata.get("canonical_role"),
                     "telemetry_classification": classification,
                     "record_count": 0,
                 },
@@ -226,6 +227,7 @@ def build_normalized_telemetry(
                     "detected_metric_type": tag.get("detected_metric_type"),
                     "telemetry_category": tag.get("telemetry_category"),
                     "analysis_role": tag.get("analysis_role"),
+                    "canonical_role": tag.get("canonical_role"),
                     "source_row": row.get("__source_row_number"),
                 }
             )
