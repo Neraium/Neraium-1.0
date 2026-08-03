@@ -34,12 +34,32 @@ test("AWS-free chilled-water baseline and persistent pump degradation survive re
   await expect(page.getByText("1 item in review")).toBeVisible();
   await expect(page.getByText(/Evidence \(\d+\)/).first()).toBeVisible();
   const analysisUrl = page.url();
+  const analysisId = new URL(analysisUrl).pathname.split("/").filter(Boolean).at(-1);
+  const firstPackageResponse = await page.request.get(`/api/data/analyses/${analysisId}/evidence-package`);
+  expect(firstPackageResponse.ok()).toBeTruthy();
+  const firstPackage = await firstPackageResponse.json();
+  expect(firstPackage.id).toBeTruthy();
+  expect(firstPackage.schema_version).toBe("evidence-package-v1");
+  expect(firstPackage.comparison_reference.reference_level).toBe("matched_historical_baseline");
+  expect(firstPackage.primary_relationship).toMatchObject({
+    relationship_label: "pump_power_kw / chw_flow_gpm",
+    change_direction: "weakened",
+    baseline_strength: 0.998290,
+    comparison_strength: 0.690739,
+    absolute_change: 0.307551,
+    baseline_sample_count: 672,
+    comparison_sample_count: 672,
+  });
+  expect(firstPackage.limitations).toEqual([]);
+  expect(firstPackage.hypotheses).toEqual([]);
   for (const marker of foreignMarkers) await expect(page.getByText(marker, { exact: false })).toHaveCount(0);
 
   await page.screenshot({ path: path.resolve(here, "../../../docs/screenshots/codex-cloud-pump-degradation.png"), fullPage: true });
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(analysisUrl);
   await expect(page.getByRole("heading", { name: /Pump response weakening in Pumping System/i }).first()).toBeVisible();
+  const restoredPackage = await (await page.request.get(`/api/data/analyses/${analysisId}/evidence-package`)).json();
+  expect(restoredPackage.id).toBe(firstPackage.id);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId("app-ready-root")).toBeVisible();

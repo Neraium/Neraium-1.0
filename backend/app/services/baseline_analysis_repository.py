@@ -18,6 +18,7 @@ from app.services.upload_state_repository import (
     write_local_json,
     write_shared_state_strict,
 )
+from app.services.evidence_package import ensure_evidence_package, legacy_findings
 
 
 ANALYSIS_INDEX_VERSION = 1
@@ -38,6 +39,10 @@ def _index_key(baseline_id: str, *, scope: DatasetScope | None = None) -> str:
 
 def _analysis_id_key(analysis_run_id: str, *, scope: DatasetScope | None = None) -> str:
     return f"{_scope_prefix(scope)}/by-analysis/{analysis_run_id}"
+
+
+def _package_id_key(package_id: str, *, scope: DatasetScope | None = None) -> str:
+    return f"{_scope_prefix(scope)}/by-package/{package_id}"
 
 
 def _read(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
@@ -110,6 +115,7 @@ def stamp_comparison_analysis_identity(result: dict[str, Any]) -> dict[str, Any]
     for collection in _finding_collections(result):
         for finding in collection:
             finding.update(finding_identity)
+    ensure_evidence_package(result)
     return result
 
 
@@ -122,7 +128,8 @@ def comparison_findings(result: dict[str, Any]) -> list[dict[str, Any]]:
                 continue
             seen.add(id(finding))
             findings.append(dict(finding))
-    return findings
+    package = ensure_evidence_package(result)
+    return legacy_findings(package, findings) if package else findings
 
 
 def validate_completed_analysis(
@@ -194,6 +201,7 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
         return None
     scope = dataset_scope_from_payload(result) or current_dataset_scope()
     identity = validate_completed_analysis(result, scope=scope)
+    package = ensure_evidence_package(result)
     record = {
         **identity,
         "analysis_record_version": 1,
@@ -215,6 +223,12 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
         record,
         scope=scope,
     )
+    if package:
+        _write(
+            _package_id_key(package["id"], scope=scope),
+            {**identity, "package_id": package["id"], "analysis_run_id": identity["analysis_run_id"]},
+            scope=scope,
+        )
     _write(
         _analysis_id_key(identity["analysis_run_id"], scope=scope),
         record,
@@ -341,3 +355,17 @@ def read_completed_analysis_by_id(analysis_run_id: str) -> dict[str, Any] | None
         portfolio_id=portfolio_id,
         system_id=system_id,
     )
+
+
+def read_evidence_package_by_analysis_id(analysis_run_id: str) -> dict[str, Any] | None:
+    result = read_completed_analysis_by_id(analysis_run_id)
+    return ensure_evidence_package(result) if isinstance(result, dict) else None
+
+
+def read_evidence_package_by_id(package_id: str) -> dict[str, Any] | None:
+    scope = current_dataset_scope()
+    link = _read(_package_id_key(str(package_id), scope=scope), scope=scope)
+    if not isinstance(link, dict) or not payload_matches_dataset_scope(link, scope):
+        return None
+    package = read_evidence_package_by_analysis_id(str(link.get("analysis_run_id") or ""))
+    return package if package and package.get("id") == str(package_id) else None

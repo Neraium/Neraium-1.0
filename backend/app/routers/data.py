@@ -34,8 +34,11 @@ from app.services.baseline_analysis_repository import (
     list_completed_analyses,
     read_completed_analysis,
     read_completed_analysis_by_id,
+    read_evidence_package_by_analysis_id,
+    read_evidence_package_by_id,
     validate_completed_analysis,
 )
+from app.services.evidence_package import EvidencePackage, ensure_evidence_package
 from app.services.behavioral_model_repository import (
     activate_candidate,
     read_active_behavioral_model,
@@ -2063,6 +2066,7 @@ def baseline_comparison_analysis_by_id(
     )
     if result is None:
         raise HTTPException(status_code=404, detail="Analysis was not found for the requested baseline.")
+    ensure_evidence_package(result)
     return result
 
 
@@ -2071,7 +2075,24 @@ def comparison_analysis_by_id(comparison_analysis_id: UploadJobPath):
     result = read_completed_analysis_by_id(comparison_analysis_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Completed comparison analysis was not found.")
+    ensure_evidence_package(result)
     return result
+
+
+@router.get("/analyses/{comparison_analysis_id}/evidence-package", response_model=EvidencePackage)
+def evidence_package_by_analysis_id(comparison_analysis_id: UploadJobPath):
+    package = read_evidence_package_by_analysis_id(comparison_analysis_id)
+    if package is None:
+        raise HTTPException(status_code=404, detail="Evidence Package was not found for this analysis.")
+    return package
+
+
+@router.get("/evidence-packages/{package_id}", response_model=EvidencePackage)
+def evidence_package_by_id(package_id: UploadJobPath):
+    package = read_evidence_package_by_id(package_id)
+    if package is None:
+        raise HTTPException(status_code=404, detail="Evidence Package was not found.")
+    return package
 
 
 @router.get("/analyses/{comparison_analysis_id}/findings")
