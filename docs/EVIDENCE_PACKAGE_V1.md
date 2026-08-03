@@ -47,3 +47,25 @@ Collections have stable construction order, schema enums are validated, and all 
 ## Known limitations and deferred phases
 
 V1 does **not** implement physics-informed consistency envelopes, semantic topology inference, adaptive operating-state clustering, propagation reconstruction beyond currently available onset evidence, ranked operational hypotheses, package merging or splitting, recurrence tracking, engineer disposition feedback, CMMS integration, or M&V calculations. It also does not infer severity, diagnoses, missing sensors, calibration state, or confidence scores that the engine does not calculate.
+
+## Timeline and Earliest Supported Deviation v1
+
+### Architecture and persisted timing audit
+
+The Evidence Package already had an ordered `TimelineEvent` collection and package-level `first_supported_at`, `last_observed_at`, completion, and evaluation timestamps. Before this phase, however, the builder emitted only an optional earliest-supported event from an existing finding onset. Completed comparisons persist `completed_at` (or the legacy `last_processed_at` fallback), exact baseline/comparison identity, relationship statistics and optional `persistence_score`. Operating Context v1 optionally persists baseline and comparison window bounds. Replay is persisted as a timeline plus frame-count metadata and is already represented by the deterministic `ev-replay` reference. Supporting evidence already records relationship strengths, change, sample counts, persistence, baseline identity, replay availability, data quality, and operating-context facts.
+
+Timeline v1 uses only those completed-analysis fields. It adds no database table, migration, upload read, raw-file read, or new persistence mechanism. Replay remains supporting evidence and is not copied into the Evidence Package timeline.
+
+### Philosophy and earliest supported deviation
+
+The timeline answers: **when is the earliest timestamp for which the persisted comparison evidence supports this behavioral change?** It does not claim when a physical problem, degradation, or failure began. An `earliest_supported_deviation` event is emitted only when the persisted finding has a valid timezone-aware onset within the persisted comparison window (when window bounds are available). Its evidence references point to already persisted comparison statistics, samples, persistence, and comparison-window evidence.
+
+When no valid persisted onset exists, or an onset falls outside the known comparison window, `first_supported_at` remains null and an `unknown` event states the reason. The unknown event's timestamp is the persisted comparison completion/evaluation time; it records when the unknown determination was made and is not a substitute onset. Baseline start, comparison start, and first replay/sample timestamps are never promoted to earliest support.
+
+### Event ordering and compatibility
+
+Supported events are `comparison_started`, `earliest_supported_deviation`, `behavior_persisted`, `supporting_relationship_change`, `comparison_completed`, and `unknown`. Comparison start requires a persisted comparison-window start. Continued persistence requires both persisted persistence evidence and the comparison-window end. Completion uses the persisted completed-analysis timestamp. Additional relationship-change events are not emitted unless future persisted outputs explicitly support their timing.
+
+Events are sorted by parsed UTC timestamp, then a fixed semantic tie-break order, then event type. Sequence numbers and event IDs are assigned only after sorting. Timestamps are normalized to UTC, and generation uses no wall clock, random identifiers, or raw telemetry reads. Repeated package GETs therefore preserve deterministic timeline content, package identity, routes, and the `evidence-package-v1` schema version.
+
+Temporal order means only “observed before/after.” It never means upstream/downstream, cause/effect, precursor/responder, propagation, topology, or root cause. Those capabilities, including causal inference, propagation, topology, hypotheses, recurrence, lifecycle expansion, feedback, and governance, remain deferred roadmap work.
