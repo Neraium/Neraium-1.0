@@ -41,7 +41,6 @@ export default defineConfig({
       env: {
         ...process.env,
         VITE_API_BASE_URL: `http://127.0.0.1:${backendPort}`,
-        VITE_PREFER_STORED_UPLOAD: "false",
       },
     },
   ],
