@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import threading
 import time
@@ -101,6 +102,63 @@ MAX_INGESTION_ANALYSIS_ROWS = 100_000
 CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "5000"))
 CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "5000"))
 logger = logging.getLogger(__name__)
+
+
+def _comparison_relationship_changes(
+    active_model: dict[str, Any] | None,
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Compare current correlations with the exact persisted behavioral model."""
+    edges = ((active_model or {}).get("relationship_graph") or {}).get("edges") or []
+    changes: list[dict[str, Any]] = []
+    for edge in edges:
+        if not isinstance(edge, dict) or edge.get("mode_id") != "all_operation":
+            continue
+        source, target = str(edge.get("source") or ""), str(edge.get("target") or "")
+        pairs = [
+            (parse_numeric_value(row.get(source)), parse_numeric_value(row.get(target)))
+            for row in rows
+        ]
+        pairs = [(left, right) for left, right in pairs if left is not None and right is not None]
+        if len(pairs) < 20:
+            continue
+        left = [pair[0] for pair in pairs]
+        right = [pair[1] for pair in pairs]
+        left_mean, right_mean = sum(left) / len(left), sum(right) / len(right)
+        numerator = sum((a - left_mean) * (b - right_mean) for a, b in pairs)
+        denominator = math.sqrt(
+            sum((a - left_mean) ** 2 for a in left)
+            * sum((b - right_mean) ** 2 for b in right)
+        )
+        current = numerator / denominator if denominator else 0.0
+        baseline = float(edge.get("correlation") or edge.get("strength") or 0.0)
+        delta = abs(current - baseline)
+        if delta < 0.25:
+            continue
+        changes.append({
+            "id": edge.get("edge_id"),
+            "columns": [source, target],
+            "relationship_type": "linear_correlation",
+            "change_type": "weakened" if abs(current) < abs(baseline) else "strengthened",
+            "baseline_strength": round(abs(baseline), 6),
+            "current_strength": round(abs(current), 6),
+            "baseline_correlation": round(baseline, 6),
+            "recent_correlation": round(current, 6),
+            "correlation_delta": round(delta, 6),
+            "signed_correlation_delta": round(current - baseline, 6),
+            "baseline_sample_size": int(edge.get("sample_count") or 0),
+            "recent_sample_size": len(pairs),
+            "confidence_score": min(0.99, 0.75 + min(len(pairs), 500) / 2500),
+            "persistence_score": 1.0,
+            "relationship_importance_score": round(delta * 100, 3),
+            "relationship_importance_rationale": (
+                f"The persistent {source} / {target} relationship moved outside the exact learned baseline."
+            ),
+        })
+    # One physical degradation can disturb several correlated signals. Surface
+    # the strongest independent relationship rather than duplicating one event
+    # into multiple operator findings.
+    return sorted(changes, key=lambda item: item["correlation_delta"], reverse=True)[:1]
 
 
 def _log_processing_event(event: str, job_id: str, *, filename: str | None = None, **fields: Any) -> None:
@@ -1161,6 +1219,20 @@ def _build_csv_result(
         and str(active_baseline_model.get("model_id") or "") == str(baseline_id or "")
         else None
     )
+    if workflow == WORKFLOW_ANALYZE_NEW_DATA and isinstance(active_baseline_model, dict):
+        exact_baseline_changes = _comparison_relationship_changes(active_baseline_model, rows)
+        if exact_baseline_changes:
+            relationship_model = {
+                **(relationship_model if isinstance(relationship_model, dict) else {}),
+                "top_relationship_changes": exact_baseline_changes,
+                "baseline_relationships": (active_baseline_model.get("relationship_graph") or {}).get("edges", []),
+            }
+            baseline_analysis = {
+                **(baseline_analysis if isinstance(baseline_analysis, dict) else {}),
+                "relationship_drift": exact_baseline_changes,
+                "top_relationship_changes": exact_baseline_changes,
+                "baseline_model_id": active_baseline_model.get("model_id"),
+            }
     if workflow == WORKFLOW_ANALYZE_NEW_DATA:
         if not baseline_id or not baseline_dataset_id or not comparison_dataset_id:
             raise ValueError("analysis_identity_incomplete")

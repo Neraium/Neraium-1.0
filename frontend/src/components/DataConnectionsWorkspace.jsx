@@ -1255,10 +1255,11 @@ export default function DataConnectionsWorkspace({
     uploadInFlightRef.current = true;
     setUploadError("");
     setCompletionError("");
+    const preferStoredUpload = import.meta.env.PROD && import.meta.env.VITE_PREFER_STORED_UPLOAD !== "false";
     console.info("[neraium] baseline submission initiated", {
       filename: file.name,
       size: file.size,
-      transport: import.meta.env.PROD || file.size > 250 * 1024 * 1024 ? "presigned_s3_put" : "direct_multipart",
+      transport: preferStoredUpload || file.size > 250 * 1024 * 1024 ? "presigned_s3_put" : "direct_multipart",
     });
     setUploadState("uploading");
     setUploadProcessingFlag(true);
@@ -1272,7 +1273,7 @@ export default function DataConnectionsWorkspace({
           ? (activeBaselineIdentity ?? completedBaselineIdentityRef.current)
           : null,
         apiFetch,
-        preferStoredUpload: import.meta.env.PROD,
+        preferStoredUpload,
         requestStartedAt: uploadInteractionStartedAt,
         accessCode,
         timeoutMs: UPLOAD_REQUEST_TIMEOUT_MS,

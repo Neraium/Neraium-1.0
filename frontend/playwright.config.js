@@ -30,6 +30,7 @@ export default defineConfig({
         ...process.env,
         PLAYWRIGHT_BACKEND_PORT: String(backendPort),
         PLAYWRIGHT_FRONTEND_PORT: String(frontendPort),
+        NERAIUM_INLINE_REPLAY_GENERATION: "true",
       },
     },
     {
@@ -37,7 +38,11 @@ export default defineConfig({
       port: frontendPort,
       timeout: 240_000,
       reuseExistingServer,
-      env: { ...process.env, VITE_API_BASE_URL: `http://127.0.0.1:${backendPort}` },
+      env: {
+        ...process.env,
+        VITE_API_BASE_URL: `http://127.0.0.1:${backendPort}`,
+        VITE_PREFER_STORED_UPLOAD: "false",
+      },
     },
   ],
   projects: [
