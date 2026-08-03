@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 from uuid import UUID, uuid5
@@ -236,11 +235,6 @@ def _finding(result: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _iso(value: Any, fallback: str) -> str:
-    text = str(value or "").strip()
-    return text or fallback
-
-
 def _unknown(reason: str = "This confidence dimension is not calculated in Evidence Package v1.") -> ConfidenceDimension:
     return ConfidenceDimension(level=ConfidenceLevel.unknown, score=None, reason=reason, method="not_calculated", evidence_refs=[])
 
@@ -250,8 +244,27 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
     analysis_id = str(result.get("comparison_analysis_id") or result.get("analysis_run_id") or "").strip()
     baseline_id = str(result.get("baseline_id") or _mapping(result.get("active_baseline_reference")).get("model_id") or "").strip()
     dataset_id = str(result.get("comparison_dataset_id") or result.get("dataset_id") or "").strip()
+    reference = _mapping(result.get("active_baseline_reference"))
+    baseline_analysis = _mapping(result.get("baseline_analysis"))
+    persisted_model_id = str(baseline_analysis.get("baseline_model_id") or "").strip()
+    selected_model_id = str(reference.get("model_id") or "").strip()
+    scope = _mapping(result.get("dataset_scope"))
+    organization_id = str(scope.get("tenant_id") or "").strip()
+    recorded_organization_id = str(result.get("organization_id") or "").strip()
+    created = str(result.get("completed_at") or result.get("last_processed_at") or "").strip()
     edge = _relationship(result)
-    if not analysis_id or not baseline_id or not dataset_id or edge is None:
+    if (
+        not analysis_id
+        or not baseline_id
+        or not dataset_id
+        or edge is None
+        or not created
+        or not organization_id
+        or (recorded_organization_id and recorded_organization_id != organization_id)
+        or not selected_model_id
+        or selected_model_id != baseline_id
+        or persisted_model_id != selected_model_id
+    ):
         return None
     columns = edge.get("columns") if isinstance(edge.get("columns"), list) else []
     left = str(_first(edge, "left", "source", "left_variable", default=columns[0] if len(columns) > 0 else ""))
@@ -263,11 +276,9 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
     baseline_count = int(_first(edge, "baseline_sample_count", "baseline_sample_size", default=0))
     comparison_count = int(_first(edge, "recent_sample_count", "comparison_sample_count", "recent_sample_size", default=0))
     finding = _finding(result)
-    reference = _mapping(result.get("active_baseline_reference"))
-    created = _iso(result.get("completed_at") or result.get("last_processed_at"), datetime.now(timezone.utc).isoformat())
     first_supported = _first(finding, "first_detected_at", "first_supported_at", "change_onset") or result.get("change_onset")
     last_observed = _first(finding, "last_observed_at", "updated_at") or result.get("last_processed_at") or created
-    package_uuid = str(uuid5(PACKAGE_NAMESPACE, f"{result.get('organization_id')}:{analysis_id}:{baseline_id}:{dataset_id}"))
+    package_uuid = str(uuid5(PACKAGE_NAMESPACE, f"{organization_id}:{analysis_id}:{baseline_id}:{dataset_id}"))
     package_number = f"EP-{analysis_id[:8].upper()}-{package_uuid[:4].upper()}"
     variables = [left, right]
     evidence_specs = [
@@ -298,7 +309,7 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
     persistence_value = _first(edge, "persistence_score", default=_first(finding, "persistence_score", "persistence", default=None))
     package = EvidencePackage(
         id=package_uuid, package_number=package_number, schema_version=SCHEMA_VERSION, revision=1,
-        analysis_id=analysis_id, organization_id=str(result.get("organization_id") or "default"),
+        analysis_id=analysis_id, organization_id=organization_id,
         portfolio_id=result.get("portfolio_id"), site_id=result.get("site_id"), system_id=result.get("system_id"),
         baseline_id=baseline_id, baseline_version=reference.get("version"), comparison_dataset_id=dataset_id,
         created_at=created, updated_at=created, first_supported_at=str(first_supported) if first_supported else None,
@@ -327,6 +338,10 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
 def ensure_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
     existing = result.get("evidence_package")
     if isinstance(existing, dict):
+        # A stored package is readable only while its owning analysis still
+        # proves the exact-baseline invariant required by this schema.
+        if build_evidence_package({key: value for key, value in result.items() if key != "evidence_package"}) is None:
+            return None
         return EvidencePackage.model_validate(existing).model_dump(mode="json")
     package = build_evidence_package(result)
     if package is not None:

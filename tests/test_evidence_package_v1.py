@@ -22,7 +22,7 @@ def _comparison(run_id: str = "analysis-ep-001") -> dict:
         "processing_state": "complete", "sii_completed": True, "completed_at": "2026-08-03T12:00:00+00:00",
         "active_baseline_reference": {"model_id": "baseline-001", "version": 3, "dataset_id": "baseline-dataset-001"},
         "conditions": [{"id": "condition-001", "headline": "Pump response weakening in Pumping System", "system": "Pumping System"}],
-        "baseline_analysis": {"relationship_drift": [{
+        "baseline_analysis": {"baseline_model_id": "baseline-001", "relationship_drift": [{
             "left": "pump_power_kw", "right": "chw_flow_gpm", "direction": "weakened",
             "baseline_correlation": 0.998290, "recent_correlation": 0.690739,
             "correlation_delta": 0.307551, "baseline_sample_count": 672, "recent_sample_count": 672,
@@ -89,3 +89,39 @@ def test_invalid_package_enums_are_rejected() -> None:
         PackageStatus("invented_status")
     with pytest.raises(ValueError):
         ReferenceLevel("invented_reference")
+
+
+def test_internal_window_legacy_change_does_not_claim_exact_baseline() -> None:
+    result = _comparison("legacy-internal-window")
+    result["baseline_analysis"].pop("baseline_model_id")
+
+    assert build_evidence_package(result) is None
+
+
+def test_mismatched_persisted_baseline_model_does_not_create_package() -> None:
+    result = _comparison("mismatched-baseline")
+    result["baseline_analysis"]["baseline_model_id"] = "baseline-other"
+
+    assert build_evidence_package(result) is None
+
+
+def test_missing_persisted_timestamp_is_deterministically_unsupported() -> None:
+    result = _comparison("legacy-without-timestamp")
+    result.pop("completed_at")
+    result.pop("last_processed_at", None)
+
+    assert build_evidence_package(result) is None
+    assert build_evidence_package(result) is None
+
+
+def test_package_organization_comes_from_dataset_scope() -> None:
+    result = _comparison("scoped-package")
+    result["dataset_scope"]["tenant_id"] = "tenant-from-scope"
+    result["dataset_scope"]["user_id"] = "tenant-from-scope"
+    result["organization_id"] = "tenant-from-scope"
+
+    package = build_evidence_package(result)
+
+    assert package is not None
+    assert package["organization_id"] == "tenant-from-scope"
+    assert package["id"] == build_evidence_package(result)["id"]
