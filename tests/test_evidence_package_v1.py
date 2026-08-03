@@ -9,6 +9,7 @@ from app.services.baseline_analysis_repository import persist_completed_analysis
 from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope
 from app.services.evidence_package import (
     ComparabilityLevel,
+    ConfidenceLevel,
     EvidencePackage,
     OperatingStateType,
     PackageStatus,
@@ -123,6 +124,68 @@ def test_invalid_package_enums_are_rejected() -> None:
         TransitionDirection("invented_direction")
     with pytest.raises(ValueError):
         ComparabilityLevel("invented_level")
+    with pytest.raises(ValueError):
+        ConfidenceLevel("invented_confidence")
+
+
+def test_multidimensional_confidence_preserves_supported_existing_assessments() -> None:
+    result = _comparison("multidimensional-supported")
+    edge = result["baseline_analysis"]["relationship_drift"][0]
+    edge.update({"confidence_level": "high", "confidence_score": 0.91})
+    result["data_quality"] = {
+        "readiness": "ready", "reliability_rating": "strong", "reliability_score": 96,
+        "data_confidence": {"rating": "high", "summary": "Telemetry passed existing quality checks.", "reasons": []},
+    }
+    result["telemetry_signal_catalog"] = {
+        "pump_power_kw": {"source_column": "pump_power_kw", "canonical_role": "electrical_power"},
+        "chw_flow_gpm": {"source_column": "chw_flow_gpm", "canonical_role": "process_rate"},
+    }
+
+    confidence = build_evidence_package(result)["confidence"]
+
+    assert confidence["finding_confidence"] == {
+        **confidence["finding_confidence"], "level": "high", "score": 0.91,
+        "method": "preserved_relationship_confidence_v1",
+    }
+    assert confidence["data_quality_confidence"] == {
+        **confidence["data_quality_confidence"], "level": "high", "score": 96.0,
+        "method": "preserved_data_quality_assessment_v1",
+    }
+    assert confidence["mapping_confidence"]["level"] == "medium"
+    assert confidence["mapping_confidence"]["score"] is None
+    assert "physical correctness has not been independently validated" in confidence["mapping_confidence"]["reason"]
+    assert confidence["physical_consistency_confidence"]["level"] == "unknown"
+    assert confidence["physical_consistency_confidence"]["reason"] == "Physics consistency engine not implemented."
+
+
+def test_mapping_ambiguity_decreases_only_mapping_confidence() -> None:
+    result = _comparison("mapping-ambiguous")
+    result["telemetry_signal_catalog"] = {
+        "pump_power_kw": {"source_column": "pump_power_kw", "canonical_role": "electrical_power"},
+        "backup_power_kw": {"source_column": "backup_power_kw", "canonical_role": "electrical_power"},
+        "chw_flow_gpm": {"source_column": "chw_flow_gpm", "canonical_role": "process_rate"},
+    }
+
+    confidence = build_evidence_package(result)["confidence"]
+
+    assert confidence["mapping_confidence"]["level"] == "low"
+    assert "electrical_power" in confidence["mapping_confidence"]["reason"]
+    assert confidence["finding_confidence"]["level"] == "unknown"
+
+
+def test_missing_quality_evidence_remains_unknown() -> None:
+    confidence = build_evidence_package(_comparison("missing-quality"))["confidence"]
+
+    assert confidence["data_quality_confidence"]["level"] == "unknown"
+    assert confidence["data_quality_confidence"]["score"] is None
+
+
+def test_operating_comparability_does_not_become_state_confidence() -> None:
+    confidence = build_evidence_package(_with_operating_context(_comparison("state-unknown")))["confidence"]
+
+    assert confidence["operating_state_confidence"]["level"] == "unknown"
+    assert confidence["operating_state_confidence"]["score"] is None
+    assert "comparability is available" in confidence["operating_state_confidence"]["reason"]
 
 
 def test_operating_context_is_deterministic_and_preserves_only_mapped_facts() -> None:
