@@ -83,6 +83,31 @@ class ContextSource(str, Enum):
     not_available = "not_available"
 
 
+class LimitationCategory(str, Enum):
+    telemetry_ambiguity = "telemetry_ambiguity"
+    comparable_operating_conditions_unavailable = "comparable_operating_conditions_unavailable"
+    insufficient_post_change_evidence = "insufficient_post_change_evidence"
+    insufficient_instrumentation = "insufficient_instrumentation"
+    multiple_plausible_explanations = "multiple_plausible_explanations"
+    missing_semantic_mapping = "missing_semantic_mapping"
+    missing_environmental_context = "missing_environmental_context"
+    missing_operating_state_evidence = "missing_operating_state_evidence"
+    missing_topology = "missing_topology"
+    physics_validation_unavailable = "physics_validation_unavailable"
+
+
+class LimitationSeverity(str, Enum):
+    unknown = "unknown"
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+
+class LimitationStatus(str, Enum):
+    active = "active"
+    resolved = "resolved"
+
+
 class HypothesisSupport(str, Enum):
     strongly_supported = "strongly_supported"
     moderately_supported = "moderately_supported"
@@ -164,10 +189,13 @@ class SupportingEvidence(StrictModel):
 
 class EvidenceLimitation(StrictModel):
     id: str
-    limitation_type: str
-    summary: str
-    affected_confidence_dimensions: list[str]
-    source: str
+    title: str
+    description: str
+    reason: str
+    supporting_evidence_refs: list[str]
+    category: LimitationCategory
+    severity: LimitationSeverity
+    status: LimitationStatus
 
 
 class Hypothesis(StrictModel):
@@ -475,15 +503,28 @@ def _data_quality_confidence(result: dict[str, Any]) -> ConfidenceDimension:
     )
 
 
+def _signal_catalog_entries(catalog: Any) -> list[tuple[str, dict[str, Any]]]:
+    """Resolve exact source identity without display-name or label guessing."""
+    raw_entries = catalog.items() if isinstance(catalog, dict) else (
+        ((None, item) for item in catalog) if isinstance(catalog, list) else []
+    )
+    resolved = []
+    for catalog_key, item in raw_entries:
+        if not isinstance(item, dict):
+            continue
+        identity = str(item.get("source_column") or item.get("column") or catalog_key or "").strip()
+        if identity:
+            resolved.append((identity, item))
+    return resolved
+
+
 def _mapping_confidence(result: dict[str, Any], variables: list[str]) -> ConfidenceDimension:
     catalog = result.get("telemetry_signal_catalog")
     if not isinstance(catalog, (dict, list)):
         return _unknown("Canonical semantic role information was not available for the signals supporting this finding.")
-    entries = list(catalog.values()) if isinstance(catalog, dict) else catalog
-    entries = [item for item in entries if isinstance(item, dict)]
-    by_signal = {str(item.get("source_column") or item.get("column") or key): item for key, item in (
-        catalog.items() if isinstance(catalog, dict) else ((str(index), item) for index, item in enumerate(entries))
-    ) if isinstance(item, dict)}
+    catalog_entries = _signal_catalog_entries(catalog)
+    entries = [item for _, item in catalog_entries]
+    by_signal = dict(catalog_entries)
     selected = [by_signal.get(variable) for variable in variables]
     roles = [str(item.get("canonical_role") or "").strip() if item else "" for item in selected]
     if any(not role for role in roles):
@@ -624,6 +665,121 @@ def _operating_context(result: dict[str, Any]) -> OperatingContext | None:
     )
 
 
+def _limitations(
+    result: dict[str, Any],
+    finding: dict[str, Any],
+    operating_context: OperatingContext | None,
+    evidence: list[SupportingEvidence],
+    variables: list[str],
+) -> list[EvidenceLimitation]:
+    """Describe only boundaries explicitly demonstrated by persisted outputs."""
+    limitations: list[EvidenceLimitation] = []
+
+    def record_evidence(evidence_id: str, label: str, value: Any, source_variables: list[str] | None = None) -> None:
+        evidence.append(SupportingEvidence(
+            id=evidence_id,
+            evidence_type="limitation_support",
+            label=label,
+            summary=f"{label} preserved from the completed comparison result.",
+            value=value,
+            source_variables=source_variables or [],
+            quality_status="recorded",
+            calculation_version="evidence-limitations-v1",
+            metadata={},
+        ))
+
+    def add(
+        *, identifier: str, title: str, description: str, reason: str,
+        evidence_ref: str, category: LimitationCategory,
+        severity: LimitationSeverity = LimitationSeverity.unknown,
+    ) -> None:
+        limitations.append(EvidenceLimitation(
+            id=identifier, title=title, description=description, reason=reason,
+            supporting_evidence_refs=[evidence_ref], category=category,
+            severity=severity, status=LimitationStatus.active,
+        ))
+
+    # Key presence matters: an absent legacy field is unknown, whereas a
+    # persisted null explicitly records that the workflow had no context output.
+    if "operating_context_inputs" in result and result.get("operating_context_inputs") is None:
+        evidence_ref = "ev-operating-context-availability"
+        record_evidence(evidence_ref, "Operating context availability", {"status": "not_available"})
+        add(
+            identifier="lim-missing-operating-context", title="Operating context unavailable",
+            description="The available evidence cannot establish whether the baseline and comparison represent comparable operating states.",
+            reason="The completed comparison explicitly records no operating-context input.",
+            evidence_ref=evidence_ref, category=LimitationCategory.missing_operating_state_evidence,
+        )
+    elif operating_context is not None and operating_context.comparability.level is ComparabilityLevel.unknown:
+        add(
+            identifier="lim-comparable-conditions-unavailable", title="Comparable operating conditions unavailable",
+            description="The available evidence cannot establish that the relationship was compared under comparable process demand.",
+            reason=operating_context.comparability.reason,
+            evidence_ref="ev-context-comparability",
+            category=LimitationCategory.comparable_operating_conditions_unavailable,
+        )
+
+    if "telemetry_signal_catalog" in result:
+        catalog = result.get("telemetry_signal_catalog")
+        mapped = {
+            identity for identity, item in _signal_catalog_entries(catalog)
+            if str(item.get("canonical_role") or "").strip()
+        }
+        missing = [variable for variable in variables if variable not in mapped]
+        if missing:
+            evidence_ref = "ev-semantic-mapping-availability"
+            record_evidence(evidence_ref, "Semantic mapping availability", {"unmapped_variables": missing}, variables)
+            add(
+                identifier="lim-missing-semantic-mapping", title="Semantic mapping unavailable",
+                description="The available evidence cannot interpret every supporting signal through a canonical semantic role.",
+                reason=f"The persisted signal catalog has no canonical role for: {', '.join(missing)}.",
+                evidence_ref=evidence_ref, category=LimitationCategory.missing_semantic_mapping,
+            )
+
+    ambiguity = result.get("telemetry_ambiguity") if "telemetry_ambiguity" in result else None
+    if ambiguity:
+        evidence_ref = "ev-telemetry-ambiguity"
+        record_evidence(evidence_ref, "Telemetry ambiguity", ambiguity, variables)
+        add(
+            identifier="lim-telemetry-ambiguity", title="Telemetry ambiguity",
+            description="The available telemetry cannot uniquely distinguish the recorded alternatives.",
+            reason="The completed comparison explicitly records telemetry ambiguity.",
+            evidence_ref=evidence_ref, category=LimitationCategory.telemetry_ambiguity,
+        )
+
+    alternatives = _first(
+        finding, "alternative_explanations", "possible_explanations", default=[]
+    )
+    if isinstance(alternatives, list):
+        normalized = [item for item in alternatives if isinstance(item, (str, dict)) and item]
+        if len(normalized) > 1:
+            evidence_ref = "ev-supported-alternatives"
+            record_evidence(evidence_ref, "Persisted alternative explanations", normalized, variables)
+            add(
+                identifier="lim-multiple-plausible-explanations", title="Multiple explanations remain plausible",
+                description="The available evidence supports more than one explanation and cannot select among them.",
+                reason=f"The completed finding retains {len(normalized)} alternative explanations.",
+                evidence_ref=evidence_ref, category=LimitationCategory.multiple_plausible_explanations,
+            )
+
+    if "physics_reasoning" in result:
+        physics = _mapping(result.get("physics_reasoning"))
+        status = str(physics.get("status") or "").strip().lower()
+        if status in {"unavailable", "not_available", "not_implemented"}:
+            evidence_ref = "ev-physics-availability"
+            record_evidence(evidence_ref, "Physics validation availability", {
+                key: physics.get(key) for key in ("status", "reason") if physics.get(key) is not None
+            })
+            add(
+                identifier="lim-physics-validation-unavailable", title="Physics validation unavailable",
+                description="The relationship change has not been checked against an applicable physics validation result.",
+                reason=str(physics.get("reason") or "The completed comparison records physics validation as unavailable."),
+                evidence_ref=evidence_ref, category=LimitationCategory.physics_validation_unavailable,
+            )
+
+    return limitations
+
+
 def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
     """Formalize one existing comparison finding without adding analytical claims."""
     analysis_id = str(result.get("comparison_analysis_id") or result.get("analysis_run_id") or "").strip()
@@ -714,6 +870,7 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
             value=value, unit=unit, source_variables=source_variables, quality_status="recorded",
             calculation_version="operating-context-v1", metadata=metadata,
         ) for suffix, kind, label, value, unit, source_variables, metadata in context_specs)
+    limitations = _limitations(result, finding, operating_context, evidence, variables)
     system_label = str(_first(finding, "system", default=_mapping(finding.get("localization")).get("system")) or "System")
     title = str(_first(finding, "headline", "title", default=f"Persistent relationship change in {system_label}"))
     relationship_label = f"{left} / {right}"
@@ -755,7 +912,7 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
             mapping_confidence=_mapping_confidence(result, variables),
             physical_consistency_confidence=_unknown("Physics consistency engine not implemented."),
         ),
-        timeline=timeline, supporting_evidence=evidence, limitations=[], hypotheses=[],
+        timeline=timeline, supporting_evidence=evidence, limitations=limitations, hypotheses=[],
         provenance=PackageProvenance(analysis_version="analysis-result-v1", algorithm_version=str(_mapping(result.get("traceability")).get("model_version") or "existing-comparison"), baseline_model_version=reference.get("version"), topology_version=None,
             source_dataset_ids=[str(result.get("baseline_dataset_id")), dataset_id], creation_reason="completed_baseline_comparison", last_update_reason="created", created_at=created, latest_evaluated_at=created, revision=1),
     )

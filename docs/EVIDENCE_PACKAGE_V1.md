@@ -69,3 +69,30 @@ Supported events are `comparison_started`, `earliest_supported_deviation`, `beha
 Events are sorted by parsed UTC timestamp, then a fixed semantic tie-break order, then event type. Sequence numbers and event IDs are assigned only after sorting. Timestamps are normalized to UTC, and generation uses no wall clock, random identifiers, or raw telemetry reads. Repeated package GETs therefore preserve deterministic timeline content, package identity, routes, and the `evidence-package-v1` schema version.
 
 Temporal order means only “observed before/after.” It never means upstream/downstream, cause/effect, precursor/responder, propagation, topology, or root cause. Those capabilities, including causal inference, propagation, topology, hypotheses, recurrence, lifecycle expansion, feedback, and governance, remain deferred roadmap work.
+
+## Evidence Limitations v1
+
+### Purpose and evidence philosophy
+
+Evidence Limitations answer **“What prevents a stronger conclusion?”** They do not lower or restate confidence, repeat the timeline, propose a hypothesis, or diagnose equipment. A limitation is included only when a completed, persisted comparison output directly demonstrates the boundary. The absence of evidence about a possible limitation is treated as unknown and produces no limitation. This preserves the product doctrine that evidence precedes conclusions, unknown is valid, and limitations are evidence rather than weaknesses.
+
+Uncertainty and limitation are distinct. A confidence dimension records how strongly a defined result is supported and may remain `unknown` when no calculation exists. A limitation records a specific, evidenced reason why the package cannot support a stronger interpretation. Consequently, an unknown confidence value alone never generates a limitation.
+
+### Supported deterministic generation
+
+The v1 builder recognizes only these persisted facts:
+
+* an explicitly null operating-context input records missing operating-state evidence;
+* an Operating Context result whose process-demand comparability is `unknown` records unavailable comparable conditions;
+* a persisted signal catalog missing a supporting signal's canonical role records missing semantic mapping; exact signal identity is resolved from `source_column`, then `column`, then a dictionary catalog key, without display-name or normalized-label guessing;
+* a non-empty persisted `telemetry_ambiguity` result records telemetry ambiguity;
+* two or more alternatives retained on the persisted finding record that multiple explanations remain plausible; and
+* a persisted physics-reasoning status of `unavailable`, `not_available`, or `not_implemented` records unavailable physics validation.
+
+Each generated item has a stable ID, title, description, reason, category, severity, active status, and references to structured supporting evidence in the same package. Limitation existence and limitation severity are independent: v1 evidence supports existence only, so every automatically generated limitation has `severity: unknown`. `low`, `medium`, and `high` are reserved for future explicitly documented and persisted severity evidence; category, confidence, and wording are never used to infer severity. Construction follows a fixed rule order and uses no clock, randomness, raw telemetry reads, or GET-time writes. Repeated generation and repeated GET therefore preserve package identity, schema version, revision, collection order, and byte-equivalent JSON content.
+
+### Unsupported situations and deferred work
+
+A missing legacy key is not reinterpreted as proof that a capability was unavailable. V1 also does not derive limitations merely from unknown confidence, low confidence, an absent onset, an empty replay, a missing topology, generic prose, or a capability that the completed result never evaluated. It does not invent missing sensors, environmental requirements, post-change sufficiency thresholds, causal ambiguity, or physical explanations.
+
+Hypotheses, diagnoses, propagation, topology construction, lifecycle and recurrence logic, engineer feedback, governance, post-intervention validation, adaptive models, and a physics engine remain deferred. Evidence Limitations v1 only exposes boundaries already supported by persisted evidence and does not begin any of those roadmap phases.
