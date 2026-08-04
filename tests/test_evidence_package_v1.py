@@ -14,6 +14,9 @@ from app.services.evidence_package import (
     LimitationCategory,
     LimitationSeverity,
     LimitationStatus,
+    LifecycleActor,
+    LifecycleEventType,
+    LifecycleStatus,
     OperatingStateType,
     PackageStatus,
     ReferenceLevel,
@@ -136,6 +139,112 @@ def test_invalid_package_enums_are_rejected() -> None:
         EvidencePackage.model_validate(package)
     with pytest.raises(ValueError):
         TimelineEventType("causal_precursor")
+    with pytest.raises(ValueError):
+        LifecycleStatus("CLOSED")
+    with pytest.raises(ValueError):
+        LifecycleEventType("investigation_started")
+    with pytest.raises(ValueError):
+        LifecycleActor("technician")
+
+
+def test_lifecycle_defaults_open_and_is_deterministic() -> None:
+    first = build_evidence_package(_comparison("lifecycle-open"))
+    second = build_evidence_package(_comparison("lifecycle-open"))
+
+    assert first == second
+    assert first["revision"] == 1
+    assert first["lifecycle"] == {
+        "status": "OPEN",
+        "events": [{
+            "event_id": first["lifecycle"]["events"][0]["event_id"],
+            "timestamp": "2026-08-03T12:00:00Z",
+            "actor": "system",
+            "event_type": "package_created",
+            "reason": "Evidence Package created from the completed baseline comparison.",
+            "metadata": {},
+        }],
+        "provenance": {
+            "schema_version": "evidence-package-lifecycle-v1",
+            "source": "lifecycle_event_store",
+        },
+    }
+
+
+def test_lifecycle_transitions_are_append_only_and_do_not_rewrite_evidence() -> None:
+    client = TestClient(create_app())
+    result = _comparison("lifecycle-transitions")
+    write_upload_result(result["job_id"], result)
+    persist_completed_analysis(result)
+    package = client.get(f"/api/data/analyses/{result['job_id']}/evidence-package").json()
+    analytical = {key: value for key, value in package.items() if key != "lifecycle"}
+
+    acknowledged = client.post(
+        f"/api/data/evidence-packages/{package['id']}/lifecycle-events",
+        json={
+            "timestamp": "2026-08-03T13:00:00+00:00",
+            "actor": "user",
+            "event_type": "package_acknowledged",
+            "reason": "Accepted for investigation.",
+            "metadata": {"source": "evidence_package"},
+        },
+    )
+    assert acknowledged.status_code == 200
+    assert acknowledged.json()["lifecycle"]["status"] == "ACKNOWLEDGED"
+    assert [event["event_type"] for event in acknowledged.json()["lifecycle"]["events"]] == [
+        "package_created", "package_acknowledged",
+    ]
+    persist_completed_analysis(result)
+    assert client.get(f"/api/data/evidence-packages/{package['id']}").json()["lifecycle"] == acknowledged.json()["lifecycle"]
+
+    resolved = client.post(
+        f"/api/data/evidence-packages/{package['id']}/lifecycle-events",
+        json={
+            "timestamp": "2026-08-03T14:00:00Z",
+            "actor": "unknown",
+            "event_type": "package_resolved",
+            "reason": "Operational resolution recorded.",
+            "metadata": {},
+        },
+    )
+    assert resolved.status_code == 200
+    payload = resolved.json()
+    assert payload["lifecycle"]["status"] == "RESOLVED"
+    assert len(payload["lifecycle"]["events"]) == 3
+    assert {key: value for key, value in payload.items() if key != "lifecycle"} == analytical
+    assert payload["id"] == package["id"]
+    assert payload["revision"] == package["revision"] == 1
+
+    repeated = client.get(f"/api/data/evidence-packages/{package['id']}")
+    analysis = client.get(f"/api/data/analyses/{result['job_id']}")
+    assert repeated.json() == payload
+    assert analysis.json()["evidence_package"] == payload
+
+
+def test_lifecycle_rejects_invalid_transitions_and_is_tenant_scoped() -> None:
+    client = TestClient(create_app())
+    result = _comparison("lifecycle-invalid")
+    write_upload_result(result["job_id"], result)
+    persist_completed_analysis(result)
+    package = client.get(f"/api/data/analyses/{result['job_id']}/evidence-package").json()
+    endpoint = f"/api/data/evidence-packages/{package['id']}/lifecycle-events"
+    request = {
+        "timestamp": "2026-08-03T13:00:00Z", "actor": "user",
+        "event_type": "package_resolved", "reason": "Out of order.", "metadata": {},
+    }
+    assert client.post(endpoint, json=request).status_code == 409
+    request["event_type"] = "closed"
+    assert client.post(endpoint, json=request).status_code == 422
+    request["event_type"] = "package_acknowledged"
+    assert client.post(endpoint, json=request, headers={"X-Neraium-Workspace-Id": "foreign"}).status_code == 404
+    assert client.get(endpoint.removesuffix("/lifecycle-events")).json()["lifecycle"]["status"] == "OPEN"
+
+
+def test_legacy_package_without_lifecycle_remains_valid() -> None:
+    package = build_evidence_package(_comparison("lifecycle-legacy"))
+    package.pop("lifecycle")
+    validated = EvidencePackage.model_validate(package).model_dump(mode="json")
+    assert validated["id"] == package["id"]
+    assert validated["lifecycle"] is None
 
 
 def test_timeline_uses_deterministic_persisted_temporal_evidence() -> None:

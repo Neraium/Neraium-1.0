@@ -40,6 +40,27 @@ test("AWS-free chilled-water baseline and persistent pump degradation survive re
   const firstPackage = await firstPackageResponse.json();
   expect(firstPackage.id).toBeTruthy();
   expect(firstPackage.schema_version).toBe("evidence-package-v1");
+  expect(firstPackage.revision).toBe(1);
+  expect(firstPackage.lifecycle).toMatchObject({
+    status: "OPEN",
+    provenance: {
+      schema_version: "evidence-package-lifecycle-v1",
+      source: "lifecycle_event_store",
+    },
+    events: [{
+      actor: "system",
+      event_type: "package_created",
+      reason: "Evidence Package created from the completed baseline comparison.",
+      metadata: {},
+    }],
+  });
+  expect(firstPackage.lifecycle.events).toHaveLength(1);
+  expect(new Date(firstPackage.lifecycle.events[0].timestamp).toISOString()).toBe(
+    new Date(firstPackage.created_at).toISOString(),
+  );
+  expect(firstPackage.lifecycle.events[0].event_id).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
   expect(firstPackage.comparison_reference.reference_level).toBe("matched_historical_baseline");
   expect(firstPackage.primary_relationship).toMatchObject({
     relationship_label: "pump_power_kw / chw_flow_gpm",
@@ -81,8 +102,22 @@ test("AWS-free chilled-water baseline and persistent pump degradation survive re
     start: "2026-06-15T00:00:00",
     end: "2026-06-21T23:45:00",
   });
-  expect(firstPackage.limitations).toEqual([]);
+  expect(firstPackage.limitations).toEqual([expect.objectContaining({
+    id: "lim-missing-semantic-mapping",
+    category: "missing_semantic_mapping",
+    severity: "unknown",
+    status: "active",
+    supporting_evidence_refs: ["ev-semantic-mapping-availability"],
+  })]);
+  expect(firstPackage.limitations[0].reason).toContain("pump_power_kw, chw_flow_gpm");
   expect(firstPackage.hypotheses).toEqual([]);
+  const immutableAnalyticalEvidence = {
+    timeline: firstPackage.timeline,
+    supporting_evidence: firstPackage.supporting_evidence,
+    confidence: firstPackage.confidence,
+    limitations: firstPackage.limitations,
+    provenance: firstPackage.provenance,
+  };
   for (const marker of foreignMarkers) await expect(page.getByText(marker, { exact: false })).toHaveCount(0);
 
   await page.screenshot({ path: path.resolve(here, "../../../docs/screenshots/codex-cloud-pump-degradation.png"), fullPage: true });
@@ -90,7 +125,18 @@ test("AWS-free chilled-water baseline and persistent pump degradation survive re
   await expect(page).toHaveURL(analysisUrl);
   await expect(page.getByRole("heading", { name: /Pump response weakening in Pumping System/i }).first()).toBeVisible();
   const restoredPackage = await (await page.request.get(`/api/data/analyses/${analysisId}/evidence-package`)).json();
+  expect(restoredPackage).toEqual(firstPackage);
   expect(restoredPackage.id).toBe(firstPackage.id);
+  expect(restoredPackage.revision).toBe(1);
+  expect(restoredPackage.lifecycle.status).toBe("OPEN");
+  expect(restoredPackage.lifecycle.events[0].event_id).toBe(firstPackage.lifecycle.events[0].event_id);
+  expect({
+    timeline: restoredPackage.timeline,
+    supporting_evidence: restoredPackage.supporting_evidence,
+    confidence: restoredPackage.confidence,
+    limitations: restoredPackage.limitations,
+    provenance: restoredPackage.provenance,
+  }).toEqual(immutableAnalyticalEvidence);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId("app-ready-root")).toBeVisible();

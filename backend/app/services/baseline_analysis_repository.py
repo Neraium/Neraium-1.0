@@ -19,6 +19,12 @@ from app.services.upload_state_repository import (
     write_shared_state_strict,
 )
 from app.services.evidence_package import ensure_evidence_package, legacy_findings
+from app.services.evidence_package_lifecycle import (
+    LifecycleTransitionRequest,
+    append_lifecycle_event,
+    initial_lifecycle,
+    lifecycle_lock,
+)
 
 
 ANALYSIS_INDEX_VERSION = 1
@@ -43,6 +49,10 @@ def _analysis_id_key(analysis_run_id: str, *, scope: DatasetScope | None = None)
 
 def _package_id_key(package_id: str, *, scope: DatasetScope | None = None) -> str:
     return f"{_scope_prefix(scope)}/by-package/{package_id}"
+
+
+def _package_lifecycle_key(package_id: str, *, scope: DatasetScope | None = None) -> str:
+    return f"{_scope_prefix(scope)}/package-lifecycle/{package_id}"
 
 
 def _read(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
@@ -229,6 +239,14 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
             {**identity, "package_id": package["id"], "analysis_run_id": identity["analysis_run_id"]},
             scope=scope,
         )
+        lifecycle = initial_lifecycle(package)
+        lifecycle_key = _package_lifecycle_key(package["id"], scope=scope)
+        if _read(lifecycle_key, scope=scope) is None:
+            _write(
+                lifecycle_key,
+                {"package_id": package["id"], "lifecycle": lifecycle.model_dump(mode="json")},
+                scope=scope,
+            )
     _write(
         _analysis_id_key(identity["analysis_run_id"], scope=scope),
         record,
@@ -359,7 +377,14 @@ def read_completed_analysis_by_id(analysis_run_id: str) -> dict[str, Any] | None
 
 def read_evidence_package_by_analysis_id(analysis_run_id: str) -> dict[str, Any] | None:
     result = read_completed_analysis_by_id(analysis_run_id)
-    return ensure_evidence_package(result) if isinstance(result, dict) else None
+    package = ensure_evidence_package(result) if isinstance(result, dict) else None
+    if package is None:
+        return None
+    scope = current_dataset_scope()
+    stored = _read(_package_lifecycle_key(package["id"], scope=scope), scope=scope)
+    lifecycle_payload = stored.get("lifecycle") if isinstance(stored, dict) and payload_matches_dataset_scope(stored, scope) else None
+    lifecycle = initial_lifecycle({**package, "lifecycle": lifecycle_payload}) if isinstance(lifecycle_payload, dict) else initial_lifecycle(package)
+    return {**package, "lifecycle": lifecycle.model_dump(mode="json")}
 
 
 def read_evidence_package_by_id(package_id: str) -> dict[str, Any] | None:
@@ -369,3 +394,21 @@ def read_evidence_package_by_id(package_id: str) -> dict[str, Any] | None:
         return None
     package = read_evidence_package_by_analysis_id(str(link.get("analysis_run_id") or ""))
     return package if package and package.get("id") == str(package_id) else None
+
+
+def transition_evidence_package_lifecycle(
+    package_id: str, request: LifecycleTransitionRequest
+) -> dict[str, Any] | None:
+    with lifecycle_lock():
+        package = read_evidence_package_by_id(package_id)
+        if package is None:
+            return None
+        lifecycle = initial_lifecycle(package)
+        updated = append_lifecycle_event(package, lifecycle, request)
+        scope = current_dataset_scope()
+        _write(
+            _package_lifecycle_key(package_id, scope=scope),
+            {"package_id": package_id, "lifecycle": updated.model_dump(mode="json")},
+            scope=scope,
+        )
+        return {**package, "lifecycle": updated.model_dump(mode="json")}

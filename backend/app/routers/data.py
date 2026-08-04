@@ -36,9 +36,11 @@ from app.services.baseline_analysis_repository import (
     read_completed_analysis_by_id,
     read_evidence_package_by_analysis_id,
     read_evidence_package_by_id,
+    transition_evidence_package_lifecycle,
     validate_completed_analysis,
 )
 from app.services.evidence_package import EvidencePackage, ensure_evidence_package
+from app.services.evidence_package_lifecycle import LifecycleTransitionRequest
 from app.services.behavioral_model_repository import (
     activate_candidate,
     read_active_behavioral_model,
@@ -2066,7 +2068,9 @@ def baseline_comparison_analysis_by_id(
     )
     if result is None:
         raise HTTPException(status_code=404, detail="Analysis was not found for the requested baseline.")
-    ensure_evidence_package(result)
+    package = read_evidence_package_by_analysis_id(analysis_run_id)
+    if package is not None:
+        result["evidence_package"] = package
     return result
 
 
@@ -2075,7 +2079,9 @@ def comparison_analysis_by_id(comparison_analysis_id: UploadJobPath):
     result = read_completed_analysis_by_id(comparison_analysis_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Completed comparison analysis was not found.")
-    ensure_evidence_package(result)
+    package = read_evidence_package_by_analysis_id(comparison_analysis_id)
+    if package is not None:
+        result["evidence_package"] = package
     return result
 
 
@@ -2090,6 +2096,23 @@ def evidence_package_by_analysis_id(comparison_analysis_id: UploadJobPath):
 @router.get("/evidence-packages/{package_id}", response_model=EvidencePackage)
 def evidence_package_by_id(package_id: UploadJobPath):
     package = read_evidence_package_by_id(package_id)
+    if package is None:
+        raise HTTPException(status_code=404, detail="Evidence Package was not found.")
+    return package
+
+
+@router.post(
+    "/evidence-packages/{package_id}/lifecycle-events",
+    response_model=EvidencePackage,
+    dependencies=[Depends(require_operator_role)],
+)
+def record_evidence_package_lifecycle_event(
+    package_id: UploadJobPath, transition: LifecycleTransitionRequest
+):
+    try:
+        package = transition_evidence_package_lifecycle(package_id, transition)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if package is None:
         raise HTTPException(status_code=404, detail="Evidence Package was not found.")
     return package
