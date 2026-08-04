@@ -29,6 +29,24 @@ class PackageStatus(str, Enum):
     insufficient_evidence = "insufficient_evidence"
 
 
+class LifecycleStatus(str, Enum):
+    OPEN = "OPEN"
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    RESOLVED = "RESOLVED"
+
+
+class LifecycleEventType(str, Enum):
+    package_created = "package_created"
+    package_acknowledged = "package_acknowledged"
+    package_resolved = "package_resolved"
+
+
+class LifecycleActor(str, Enum):
+    system = "system"
+    user = "user"
+    unknown = "unknown"
+
+
 class ReferenceLevel(str, Enum):
     matched_historical_baseline = "matched_historical_baseline"
     related_state = "related_state"
@@ -222,6 +240,26 @@ class PackageProvenance(StrictModel):
     revision: int
 
 
+class LifecycleEvent(StrictModel):
+    event_id: str
+    timestamp: str
+    actor: LifecycleActor
+    event_type: LifecycleEventType
+    reason: str
+    metadata: dict[str, Any]
+
+
+class LifecycleProvenance(StrictModel):
+    schema_version: str
+    source: str
+
+
+class PackageLifecycle(StrictModel):
+    status: LifecycleStatus
+    events: list[LifecycleEvent]
+    provenance: LifecycleProvenance
+
+
 class ContextRange(StrictModel):
     min: float | None = None
     max: float | None = None
@@ -325,6 +363,7 @@ class EvidencePackage(StrictModel):
     limitations: list[EvidenceLimitation]
     hypotheses: list[Hypothesis]
     provenance: PackageProvenance
+    lifecycle: PackageLifecycle | None = None
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -822,6 +861,15 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
     last_observed = _first(finding, "last_observed_at", "updated_at") or result.get("last_processed_at") or created
     package_uuid = str(uuid5(PACKAGE_NAMESPACE, f"{organization_id}:{analysis_id}:{baseline_id}:{dataset_id}"))
     package_number = f"EP-{analysis_id[:8].upper()}-{package_uuid[:4].upper()}"
+    created_timestamp = _timestamp(created)[0]
+    created_event = LifecycleEvent(
+        event_id=str(uuid5(PACKAGE_NAMESPACE, f"{package_uuid}:package_created:{created_timestamp}")),
+        timestamp=created_timestamp,
+        actor=LifecycleActor.system,
+        event_type=LifecycleEventType.package_created,
+        reason="Evidence Package created from the completed baseline comparison.",
+        metadata={},
+    )
     variables = [left, right]
     operating_context = _operating_context(result)
     evidence_specs = [
@@ -915,6 +963,11 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
         timeline=timeline, supporting_evidence=evidence, limitations=limitations, hypotheses=[],
         provenance=PackageProvenance(analysis_version="analysis-result-v1", algorithm_version=str(_mapping(result.get("traceability")).get("model_version") or "existing-comparison"), baseline_model_version=reference.get("version"), topology_version=None,
             source_dataset_ids=[str(result.get("baseline_dataset_id")), dataset_id], creation_reason="completed_baseline_comparison", last_update_reason="created", created_at=created, latest_evaluated_at=created, revision=1),
+        lifecycle=PackageLifecycle(
+            status=LifecycleStatus.OPEN,
+            events=[created_event],
+            provenance=LifecycleProvenance(schema_version="evidence-package-lifecycle-v1", source="lifecycle_event_store"),
+        ),
     )
     return package.model_dump(mode="json")
 
