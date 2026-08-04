@@ -29,6 +29,15 @@ from app.services.evidence_package_fingerprint import (
     ExactMatchResult,
     ExactMatchStatus,
     FingerprintStatus,
+    HISTORICAL_PATTERN_ALGORITHM_VERSION,
+    MATCH_SCHEMA_VERSION,
+    SIMILARITY_ALGORITHM_VERSION,
+    SIMILARITY_SCHEMA_VERSION,
+    HistoricalPatternClassification,
+    HistoricalPatternMatch,
+    HistoricalPatternProvenance,
+    HistoricalPatternResponse,
+    SimilarityStatus,
     build_fingerprint,
     aggregate_similarity_status,
     compare_fingerprints,
@@ -629,6 +638,102 @@ def read_approximate_fingerprint_similarity(package_id: str) -> ApproximateSimil
     return ApproximateSimilarityResponse(
         evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id,
         overall_status=status, eligible_history_count=len(results), results=results,
+    )
+
+
+def read_historical_pattern_classification(package_id: str) -> HistoricalPatternResponse | None:
+    """Classify governed historical-match reads without recalculating their evidence."""
+    package = read_evidence_package_by_id(package_id)
+    if package is None:
+        return None
+
+    exact = read_exact_fingerprint_matches(package_id)
+    approximate = read_approximate_fingerprint_similarity(package_id)
+    provenance = HistoricalPatternProvenance(
+        rule=HISTORICAL_PATTERN_ALGORITHM_VERSION,
+        exact_match_schema_version=MATCH_SCHEMA_VERSION,
+        approximate_similarity_schema_version=SIMILARITY_SCHEMA_VERSION,
+        fingerprint_algorithm_version=ALGORITHM_VERSION,
+        approximate_algorithm_version=SIMILARITY_ALGORITHM_VERSION,
+        temporal_tie_break="highest_score_then_earliest_prior_package_timestamp_then_package_id",
+    )
+
+    def response(classification: HistoricalPatternClassification, limitations: list[str]) -> HistoricalPatternResponse:
+        fingerprint_id = exact.evaluated_fingerprint_id if exact else (approximate.evaluated_fingerprint_id if approximate else None)
+        return HistoricalPatternResponse(
+            evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint_id,
+            classification=classification, limitations=limitations, provenance=provenance,
+        )
+
+    if exact is None or approximate is None:
+        return response(HistoricalPatternClassification.unavailable, ["Historical pattern classification is unavailable because governed source evidence is unavailable."])
+    if exact.status == ExactMatchStatus.unavailable or approximate.overall_status == SimilarityStatus.unavailable:
+        return response(HistoricalPatternClassification.unavailable, sorted(set(exact.limitations + approximate.limitations)))
+    if exact.evaluated_fingerprint_id != approximate.evaluated_fingerprint_id or exact.eligible_history_count != approximate.eligible_history_count:
+        return response(HistoricalPatternClassification.unavailable, ["Historical pattern classification is unavailable because governed source results are inconsistent."])
+
+    timestamps: dict[str, str] = {}
+    candidate_ids = {item.prior_package_id for item in exact.matches} | {item.candidate_package_id for item in approximate.results}
+    for candidate_id in candidate_ids:
+        prior = read_evidence_package_by_id(candidate_id)
+        timestamp = (prior or {}).get("latest_evaluated_at")
+        if parse_timestamp(timestamp) is None:
+            return response(HistoricalPatternClassification.unavailable, ["Historical pattern classification is unavailable because governed candidate timestamp evidence is unavailable."])
+        timestamps[candidate_id] = str(timestamp)
+
+    exact_matches = [HistoricalPatternMatch(
+        candidate_package_id=item.prior_package_id,
+        candidate_fingerprint_id=item.prior_fingerprint_id,
+        match_type="exact", exact_match_observation_id=item.observation_id,
+        prior_package_timestamp=timestamps[item.prior_package_id],
+        evidence_refs=item.evidence_refs, limitations=item.limitations,
+        non_causal_interpretation="An earlier eligible Evidence Package contains the same canonical pattern.",
+    ) for item in exact.matches]
+    approximate_matches = [HistoricalPatternMatch(
+        candidate_package_id=item.candidate_package_id,
+        candidate_fingerprint_id=item.candidate_fingerprint_id,
+        match_type="approximate", approximate_similarity_score=item.overall_similarity,
+        approximate_algorithm_version=item.algorithm_version,
+        prior_package_timestamp=timestamps[item.candidate_package_id],
+        evidence_refs=sorted({ref for dimension in item.dimensions for ref in dimension.evidence_refs}),
+        limitations=item.limitations,
+        non_causal_interpretation="A materially similar historical package pattern is present.",
+        supported_dimensions=item.supported_dimensions,
+        unavailable_dimensions=item.unavailable_dimensions,
+        excluded_dimensions=item.excluded_dimensions,
+        supported_weight=item.supported_weight,
+        required_supported_weight=item.required_supported_weight,
+    ) for item in approximate.results if item.overall_status == SimilarityStatus.supported_similarity]
+    approximate_matches.sort(key=lambda item: (
+        -(item.approximate_similarity_score or 0.0),
+        parse_timestamp(item.prior_package_timestamp), item.candidate_package_id,
+    ))
+    supporting = exact_matches + approximate_matches
+    statuses = [item.overall_status for item in approximate.results]
+    if exact_matches:
+        classification = HistoricalPatternClassification.exact_historical_match
+        limitations = ["An exact historical package pattern is present in the eligible prior record."]
+    elif approximate_matches:
+        classification = HistoricalPatternClassification.similar_historical_pattern
+        limitations = ["A materially similar historical package pattern is present."]
+    elif exact.eligible_history_count == 0:
+        classification = HistoricalPatternClassification.insufficient_history
+        limitations = ["Eligible historical evidence is insufficient."]
+    else:
+        classification = HistoricalPatternClassification.no_supported_historical_pattern
+        limitations = ["No supported historical pattern was found in the eligible available history."]
+    return HistoricalPatternResponse(
+        evaluated_package_id=package_id, evaluated_fingerprint_id=exact.evaluated_fingerprint_id,
+        classification=classification, exact_match_count=len(exact_matches),
+        similar_pattern_count=len(approximate_matches),
+        no_supported_similarity_candidate_count=statuses.count(SimilarityStatus.no_supported_similarity),
+        eligible_history_count=exact.eligible_history_count,
+        strongest_supported_match=supporting[0] if supporting else None,
+        supporting_matches=supporting,
+        excluded_candidate_count=statuses.count(SimilarityStatus.excluded),
+        insufficient_evidence_candidate_count=statuses.count(SimilarityStatus.insufficient_similarity_evidence),
+        evidence_refs=sorted({ref for item in supporting for ref in item.evidence_refs}),
+        limitations=limitations, provenance=provenance,
     )
 
 

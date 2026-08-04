@@ -36,6 +36,8 @@ class ExactMatchStatus(str, Enum):
 
 SIMILARITY_SCHEMA_VERSION = "evidence-package-approximate-similarity-v1"
 SIMILARITY_ALGORITHM_VERSION = "evidence-package-explainable-weighted-v1"
+HISTORICAL_PATTERN_SCHEMA_VERSION = "evidence-package-historical-pattern-classification-v1"
+HISTORICAL_PATTERN_ALGORITHM_VERSION = "evidence-package-historical-pattern-rules-v1"
 MINIMUM_SUPPORTED_WEIGHT = 0.80
 SUPPORTED_SIMILARITY_THRESHOLD = 0.60
 
@@ -48,6 +50,15 @@ class SimilarityStatus(str, Enum):
     excluded = "excluded"
     no_supported_similarity = "no_supported_similarity"
     supported_similarity = "supported_similarity"
+
+
+class HistoricalPatternClassification(str, Enum):
+    not_evaluated = "not_evaluated"
+    insufficient_history = "insufficient_history"
+    unavailable = "unavailable"
+    no_supported_historical_pattern = "no_supported_historical_pattern"
+    exact_historical_match = "exact_historical_match"
+    similar_historical_pattern = "similar_historical_pattern"
 
 
 class DimensionStatus(str, Enum):
@@ -157,6 +168,52 @@ class ApproximateSimilarityResponse(StrictModel):
     eligible_history_count: int = 0
     results: list[ApproximateSimilarityResult] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
+
+
+class HistoricalPatternMatch(StrictModel):
+    candidate_package_id: str
+    candidate_fingerprint_id: str
+    match_type: str
+    exact_match_observation_id: str | None = None
+    approximate_similarity_score: float | None = None
+    approximate_algorithm_version: str | None = None
+    prior_package_timestamp: str
+    evidence_refs: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    non_causal_interpretation: str
+    supported_dimensions: list[str] = Field(default_factory=list)
+    unavailable_dimensions: list[str] = Field(default_factory=list)
+    excluded_dimensions: list[str] = Field(default_factory=list)
+    supported_weight: float | None = None
+    required_supported_weight: float | None = None
+
+
+class HistoricalPatternProvenance(StrictModel):
+    rule: str
+    exact_match_schema_version: str
+    approximate_similarity_schema_version: str
+    fingerprint_algorithm_version: str
+    approximate_algorithm_version: str
+    temporal_tie_break: str
+
+
+class HistoricalPatternResponse(StrictModel):
+    schema_version: str = HISTORICAL_PATTERN_SCHEMA_VERSION
+    algorithm_version: str = HISTORICAL_PATTERN_ALGORITHM_VERSION
+    evaluated_package_id: str
+    evaluated_fingerprint_id: str | None = None
+    classification: HistoricalPatternClassification
+    exact_match_count: int = 0
+    similar_pattern_count: int = 0
+    no_supported_similarity_candidate_count: int = 0
+    eligible_history_count: int = 0
+    strongest_supported_match: HistoricalPatternMatch | None = None
+    supporting_matches: list[HistoricalPatternMatch] = Field(default_factory=list)
+    excluded_candidate_count: int = 0
+    insufficient_evidence_candidate_count: int = 0
+    evidence_refs: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    provenance: HistoricalPatternProvenance
 
 
 SIMILARITY_WEIGHTS = {
