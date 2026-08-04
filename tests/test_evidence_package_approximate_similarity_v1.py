@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from app.services import baseline_analysis_repository as repository
+from app.services.dataset_scope import current_dataset_scope
 from app.services.evidence_package_fingerprint import (
+    ApproximateSimilarityResult,
     SIMILARITY_WEIGHTS,
+    SimilarityStatus,
+    aggregate_similarity_status,
     build_fingerprint,
     compare_fingerprints,
 )
@@ -45,6 +50,8 @@ def test_scoring_is_deterministic_ordered_and_reconstructable_without_renormaliz
     assert sum(item.weight for item in first.dimensions) == 1.0
     reconstructed = round(sum(item.score * item.weight for item in first.dimensions if item.score is not None), 8)
     assert first.overall_similarity == reconstructed
+    assert first.supported_weight == 0.80
+    assert first.required_supported_weight == 0.80
     assert first.unavailable_dimensions == [
         "relationship_direction", "persistence_similarity", "operating_context_compatibility"
     ]
@@ -79,10 +86,110 @@ def test_different_system_is_excluded_instead_of_scored() -> None:
     assert result.excluded_dimensions == EXPECTED_DIMENSIONS
 
 
-def test_minimum_evidence_does_not_manufacture_a_score() -> None:
-    package = _package("evaluated")
-    package["primary_relationship"]["comparison_strength"] = None
-    fingerprint = build_fingerprint(package)
-    assert fingerprint.status.value == "unavailable"
-    assert fingerprint.features == {}
-    assert fingerprint.canonical_digest is None
+def test_valid_eligible_comparison_with_too_little_weight_has_first_class_status() -> None:
+    evaluated = _fingerprint("evaluated")
+    candidate = _fingerprint("candidate")
+    for fingerprint in (evaluated, candidate):
+        fingerprint.features["relationship"].pop("comparison_strength")
+        fingerprint.features["relationship"].pop("absolute_change")
+        fingerprint.features["relationship"].pop("signed_change")
+    result = compare_fingerprints(evaluated, candidate)
+    assert result.overall_status == SimilarityStatus.insufficient_similarity_evidence
+    assert result.overall_similarity is None
+    assert result.supported_weight == 0.50
+    assert result.required_supported_weight == 0.80
+    assert "Supported dimension weight 0.50 did not meet required minimum 0.80." in result.limitations
+
+
+def test_status_precedence_is_deterministic() -> None:
+    template = compare_fingerprints(_fingerprint("evaluated"), _fingerprint("candidate"))
+
+    def with_status(status: SimilarityStatus) -> ApproximateSimilarityResult:
+        return template.model_copy(update={"overall_status": status})
+
+    insufficient = with_status(SimilarityStatus.insufficient_similarity_evidence)
+    excluded = with_status(SimilarityStatus.excluded)
+    unsupported = with_status(SimilarityStatus.no_supported_similarity)
+    supported = with_status(SimilarityStatus.supported_similarity)
+    assert aggregate_similarity_status([excluded, insufficient]) == SimilarityStatus.insufficient_similarity_evidence
+    assert aggregate_similarity_status([insufficient, unsupported]) == SimilarityStatus.no_supported_similarity
+    assert aggregate_similarity_status([unsupported, supported, insufficient]) == SimilarityStatus.supported_similarity
+    assert aggregate_similarity_status([insufficient, insufficient]) == SimilarityStatus.insufficient_similarity_evidence
+
+
+def test_different_primary_pair_is_excluded_without_partial_score() -> None:
+    evaluated = _fingerprint("evaluated")
+    candidate_package = _package("candidate")
+    candidate_package["primary_relationship"].update({"left_variable": "signal-b", "right_variable": "signal-c"})
+    candidate_package["relationship_label"] = "signal-z / signal-a"
+    result = compare_fingerprints(evaluated, build_fingerprint(candidate_package))
+    assert result.overall_status == SimilarityStatus.excluded
+    assert result.overall_similarity is None
+    assert all(item.status.value == "excluded" for item in result.dimensions)
+    pair = next(item for item in result.dimensions if item.name == "primary_signal_pair")
+    assert pair.exclusion_reason == "same_primary_signal_pair_required_v1"
+
+
+def test_symmetric_reversal_is_eligible_but_directed_reversal_is_excluded() -> None:
+    symmetric = _package("evaluated")
+    reversed_symmetric = deepcopy(symmetric)
+    reversed_symmetric["id"] = "candidate"
+    reversed_symmetric["primary_relationship"].update({"left_variable": "signal-a", "right_variable": "signal-z"})
+    assert compare_fingerprints(build_fingerprint(symmetric), build_fingerprint(reversed_symmetric)).overall_status == SimilarityStatus.supported_similarity
+
+    directed = _package("evaluated-directed")
+    directed["primary_relationship"]["relationship_type"] = "model_edge"
+    reversed_directed = deepcopy(directed)
+    reversed_directed["id"] = "candidate-directed"
+    reversed_directed["primary_relationship"].update({"left_variable": "signal-a", "right_variable": "signal-z"})
+    directed_result = compare_fingerprints(build_fingerprint(directed), build_fingerprint(reversed_directed))
+    assert directed_result.overall_status == SimilarityStatus.excluded
+    assert directed_result.overall_similarity is None
+
+
+def test_dimension_evidence_refs_are_narrow_and_never_fabricated() -> None:
+    result = compare_fingerprints(_fingerprint("evaluated"), _fingerprint("candidate"))
+    refs = {item.name: item.evidence_refs for item in result.dimensions}
+    assert refs["relationship_strength_similarity"] == ["ev-baseline-strength", "ev-comparison-strength"]
+    assert refs["relationship_change_magnitude"] == ["ev-absolute-change"]
+    assert refs["relationship_change_direction"] == ["ev-baseline-strength", "ev-comparison-strength"]
+    assert refs["system_identity"] == []
+    assert len({tuple(value) for value in refs.values()}) > 2
+    assert any("no typed supporting-evidence reference for system identity" in item for item in result.limitations)
+
+
+def test_history_response_preserves_all_insufficient_status_and_repeat_read_equality(monkeypatch) -> None:
+    scope = current_dataset_scope()
+    evaluated_package = _package("evaluated")
+    evaluated_package.update({
+        "organization_id": scope.tenant_id, "portfolio_id": scope.workspace_id,
+        "latest_evaluated_at": "2026-08-04T12:00:00Z",
+    })
+    candidate_package = deepcopy(evaluated_package)
+    candidate_package.update({"id": "candidate", "latest_evaluated_at": "2026-08-03T12:00:00Z"})
+    evaluated = build_fingerprint(evaluated_package)
+    candidate = build_fingerprint(candidate_package)
+    for fingerprint in (evaluated, candidate):
+        for name in ("comparison_strength", "absolute_change", "signed_change"):
+            fingerprint.features["relationship"].pop(name)
+
+    packages = {"evaluated": evaluated_package, "candidate": candidate_package}
+    monkeypatch.setattr(repository, "read_evidence_package_by_id", packages.get)
+    monkeypatch.setattr(repository, "read_evidence_package_fingerprint", lambda package_id: evaluated if package_id == "evaluated" else candidate)
+    monkeypatch.setattr(repository, "list_shared_state_prefix", lambda *args, **kwargs: [{
+        **scope.as_dict(), "dataset_scope": scope.as_dict(),
+        "organization_id": scope.tenant_id, "portfolio_id": scope.workspace_id,
+        "system_id": "system-a", "algorithm_version": evaluated.algorithm_version,
+        "package_id": "candidate", "evaluated_at": "2026-08-03T12:00:00Z",
+        "fingerprint_id": candidate.fingerprint_id, "canonical_digest": candidate.canonical_digest,
+    }])
+    monkeypatch.setattr(repository, "_read", lambda *args, **kwargs: {
+        "dataset_scope": scope.as_dict(), "fingerprint": candidate.model_dump(mode="json")
+    })
+
+    first = repository.read_approximate_fingerprint_similarity("evaluated")
+    second = repository.read_approximate_fingerprint_similarity("evaluated")
+    assert first == second
+    assert first is not None
+    assert first.overall_status == SimilarityStatus.insufficient_similarity_evidence
+    assert first.results[0].overall_status == SimilarityStatus.insufficient_similarity_evidence

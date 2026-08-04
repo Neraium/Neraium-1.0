@@ -24,6 +24,16 @@ future packages are excluded from eligible history. Invalid scope, stale index
 data, invalid timestamps, or incompatible sidecars make the read unavailable
 rather than broadening scope. No eligible candidates yields `insufficient_history`.
 
+The canonical primary signal pair is also an eligibility gate in v1. It must
+match exactly using persisted fingerprint identities: symmetric relationship
+pairs retain order-insensitive canonical ordering, while directed pairs retain
+signal order and direction. A mismatch excludes the candidate with
+`same_primary_signal_pair_required_v1`; every dimension is marked excluded and
+no partial score is calculated. Display labels, filenames, fuzzy identity, and
+inferred semantic equivalence never satisfy this gate. Cross-relationship
+comparison is deferred until a package owns or references a canonical
+multi-relationship condition graph.
+
 ## Dimensions, ordering, and weights
 
 Dimensions always appear in this order. Their weights are fixed and sum to 1.00:
@@ -53,10 +63,15 @@ unavailable reason, and exclusion reason. Missing data is `unavailable` (or
 renormalized**, so operating context can add supported evidence but cannot
 manufacture resemblance. At least 0.80 configured weight must remain supported;
 otherwise no score is returned and limitations include
-`insufficient_similarity_evidence`.
+the actual supported weight and required minimum. This valid, attempted
+comparison has first-class status `insufficient_similarity_evidence`; it is not
+collapsed into `unavailable`, which remains reserved for missing, corrupt,
+scope-invalid, or otherwise unusable evidence.
 
 An overall score of at least 0.60 is `supported_similarity`; a lower score is
 `no_supported_similarity`. These are reporting thresholds, not classifications.
+The 0.60 threshold is a conservative v1 reporting policy subject to later
+empirical validation; it is not mathematically privileged and is not learned.
 Operating-context v1 has no evidence-backed categorical exclusion rule; a future
 compatible algorithm may exclude a comparison only when explicit contradictory
 context evidence exists.
@@ -71,6 +86,24 @@ places. A reviewer can reproduce the score directly from returned scores and
 weights. Revision 1, UUID/package identities, package numbers, analytical
 immutability, lifecycle, timeline, confidence, limitations, replay, tenant
 isolation, and deterministic serialization remain unchanged.
+
+Collection status uses deterministic precedence:
+`supported_similarity`, then `no_supported_similarity`, then
+`insufficient_similarity_evidence`, then `excluded`, then `unavailable`.
+Consequently, all-insufficient eligible history remains insufficient, while one
+supported result takes precedence over all weaker outcomes. Genuine collection
+availability failures return early as `unavailable` and are not hidden by this
+candidate precedence.
+
+Dimension evidence references are narrowed to typed IDs retained in the v1
+sidecar: strength IDs support pair/type/direction and strength comparisons;
+absolute-change supports magnitude; baseline/comparison strength supports the
+change sign; persistence and `ev-context-*` support their respective optional
+dimensions. The sidecar retains no typed supporting-evidence ID for system
+identity, so that dimension has an empty reference list and explicitly records
+that persisted fingerprint scope is authoritative. No reference is fabricated;
+fully typed dimension lineage is deferred rather than redesigning Fingerprinting
+Foundation v1 here.
 
 ## Non-claims and deferred work
 

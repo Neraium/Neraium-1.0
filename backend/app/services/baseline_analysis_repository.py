@@ -30,6 +30,7 @@ from app.services.evidence_package_fingerprint import (
     ExactMatchStatus,
     FingerprintStatus,
     build_fingerprint,
+    aggregate_similarity_status,
     compare_fingerprints,
     observation_id,
     parse_timestamp,
@@ -502,7 +503,7 @@ def read_exact_fingerprint_matches(package_id: str) -> ExactMatchResult | None:
     if package is None:
         return None
     fingerprint = read_evidence_package_fingerprint(package_id)
-    if fingerprint is None or fingerprint.status != FingerprintStatus.available or not fingerprint.scope.system_id or fingerprint.algorithm_version != ALGORITHM_VERSION:
+    if fingerprint is None or fingerprint.status != FingerprintStatus.available or not fingerprint.scope.system_id:
         return ExactMatchResult(
             status=ExactMatchStatus.unavailable, evaluated_package_id=package_id,
             evaluated_fingerprint_id=fingerprint.fingerprint_id if fingerprint else None,
@@ -624,14 +625,7 @@ def read_approximate_fingerprint_similarity(package_id: str) -> ApproximateSimil
         candidates.append((timestamp, prior_id, prior))
     candidates.sort(key=lambda item: (item[0], item[1]))
     results = [compare_fingerprints(fingerprint, prior) for _, _, prior in candidates]
-    if not results:
-        status = "insufficient_history"
-    elif any(result.overall_status.value == "supported_similarity" for result in results):
-        status = "supported_similarity"
-    elif any(result.overall_status.value == "no_supported_similarity" for result in results):
-        status = "no_supported_similarity"
-    else:
-        status = "unavailable"
+    status = aggregate_similarity_status(results)
     return ApproximateSimilarityResponse(
         evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id,
         overall_status=status, eligible_history_count=len(results), results=results,

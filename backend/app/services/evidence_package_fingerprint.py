@@ -36,12 +36,15 @@ class ExactMatchStatus(str, Enum):
 
 SIMILARITY_SCHEMA_VERSION = "evidence-package-approximate-similarity-v1"
 SIMILARITY_ALGORITHM_VERSION = "evidence-package-explainable-weighted-v1"
+MINIMUM_SUPPORTED_WEIGHT = 0.80
+SUPPORTED_SIMILARITY_THRESHOLD = 0.60
 
 
 class SimilarityStatus(str, Enum):
     not_evaluated = "not_evaluated"
     insufficient_history = "insufficient_history"
     unavailable = "unavailable"
+    insufficient_similarity_evidence = "insufficient_similarity_evidence"
     excluded = "excluded"
     no_supported_similarity = "no_supported_similarity"
     supported_similarity = "supported_similarity"
@@ -135,6 +138,8 @@ class ApproximateSimilarityResult(StrictModel):
     candidate_fingerprint_id: str
     overall_similarity: float | None
     overall_status: SimilarityStatus
+    supported_weight: float
+    required_supported_weight: float = MINIMUM_SUPPORTED_WEIGHT
     dimensions: list[SimilarityDimension]
     supported_dimensions: list[str]
     unavailable_dimensions: list[str]
@@ -165,8 +170,6 @@ SIMILARITY_WEIGHTS = {
     "persistence_similarity": 0.05,
     "operating_context_compatibility": 0.05,
 }
-MINIMUM_SUPPORTED_WEIGHT = 0.80
-SUPPORTED_SIMILARITY_THRESHOLD = 0.60
 
 
 def _bounded_similarity(left: Any, right: Any) -> float:
@@ -182,6 +185,26 @@ def compare_fingerprints(
     evaluated_relationship = evaluated.features.get("relationship", {})
     candidate_relationship = candidate.features.get("relationship", {})
 
+    def dimension_refs(name: str) -> list[str]:
+        """Return only typed evidence IDs retained by Fingerprinting v1."""
+        available = set(evaluated.evidence_refs) | set(candidate.evidence_refs)
+        expected = {
+            "primary_signal_pair": {"ev-baseline-strength", "ev-comparison-strength"},
+            "relationship_type": {"ev-baseline-strength", "ev-comparison-strength"},
+            "relationship_direction": {"ev-baseline-strength", "ev-comparison-strength"},
+            "relationship_strength_similarity": {"ev-baseline-strength", "ev-comparison-strength"},
+            "relationship_change_magnitude": {"ev-absolute-change"},
+            "relationship_change_direction": {"ev-baseline-strength", "ev-comparison-strength"},
+            "persistence_similarity": {"ev-persistence"},
+        }.get(name)
+        if expected is not None:
+            return sorted(available & expected)
+        if name == "operating_context_compatibility":
+            return sorted(ref for ref in available if ref.startswith("ev-context-"))
+        # The v1 sidecar scope is authoritative, but it does not retain a typed
+        # supporting-evidence ID for system identity.
+        return []
+
     def add(name: str, score: float | None, *, unavailable: str | None = None, not_applicable: str | None = None) -> None:
         status = DimensionStatus.supported
         reason = unavailable
@@ -192,7 +215,7 @@ def compare_fingerprints(
             reason = not_applicable
         dimensions.append(SimilarityDimension(
             name=name, status=status, score=score, weight=SIMILARITY_WEIGHTS[name],
-            evidence_refs=sorted(set(evaluated.evidence_refs + candidate.evidence_refs)) if score is not None else [],
+            evidence_refs=dimension_refs(name) if score is not None else [],
             unavailable_reason=reason, exclusion_reason=None,
         ))
 
@@ -203,6 +226,7 @@ def compare_fingerprints(
             evaluated_package_id=evaluated.package_id, evaluated_fingerprint_id=evaluated.fingerprint_id or "",
             candidate_package_id=candidate.package_id, candidate_fingerprint_id=candidate.fingerprint_id or "",
             overall_similarity=None, overall_status=SimilarityStatus.excluded, dimensions=dimensions,
+            supported_weight=0.0,
             supported_dimensions=[], unavailable_dimensions=[], excluded_dimensions=list(SIMILARITY_WEIGHTS),
             limitations=["Comparison requires fingerprint algorithm evidence-package-canonical-sha256-v1."],
             provenance=SimilarityProvenance(eligibility_basis="compatible_persisted_fingerprints_required", scope_basis="not_evaluated", temporal_basis="established_by_caller", score_formula="not_evaluated_for_excluded_comparison"),
@@ -217,13 +241,31 @@ def compare_fingerprints(
             evaluated_package_id=evaluated.package_id, evaluated_fingerprint_id=evaluated.fingerprint_id or "",
             candidate_package_id=candidate.package_id, candidate_fingerprint_id=candidate.fingerprint_id or "",
             overall_similarity=None, overall_status=SimilarityStatus.excluded, dimensions=dimensions,
+            supported_weight=0.0,
             supported_dimensions=[], unavailable_dimensions=[], excluded_dimensions=list(SIMILARITY_WEIGHTS),
             limitations=["Comparison requires equal tenant, workspace, and system identity."],
             provenance=SimilarityProvenance(eligibility_basis="persisted_available_fingerprints", scope_basis="same_system_scope_required", temporal_basis="established_by_caller", score_formula="not_evaluated_for_excluded_comparison"),
         )
 
     add("system_identity", 1.0)
-    add("primary_signal_pair", 1.0 if evaluated_relationship.get("signal_ids") == candidate_relationship.get("signal_ids") else 0.0)
+    if evaluated_relationship.get("signal_ids") != candidate_relationship.get("signal_ids"):
+        dimensions = []
+        for name, weight in SIMILARITY_WEIGHTS.items():
+            reason = "same_primary_signal_pair_required_v1" if name == "primary_signal_pair" else "not_evaluated_after_primary_signal_pair_exclusion"
+            dimensions.append(SimilarityDimension(
+                name=name, status=DimensionStatus.excluded, score=None, weight=weight,
+                evidence_refs=dimension_refs(name) if name == "primary_signal_pair" else [],
+                exclusion_reason=reason,
+            ))
+        return ApproximateSimilarityResult(
+            evaluated_package_id=evaluated.package_id, evaluated_fingerprint_id=evaluated.fingerprint_id or "",
+            candidate_package_id=candidate.package_id, candidate_fingerprint_id=candidate.fingerprint_id or "",
+            overall_similarity=None, overall_status=SimilarityStatus.excluded, supported_weight=0.0,
+            dimensions=dimensions, supported_dimensions=[], unavailable_dimensions=[], excluded_dimensions=list(SIMILARITY_WEIGHTS),
+            limitations=["The canonical primary signal pair must match exactly in Approximate Similarity v1."],
+            provenance=SimilarityProvenance(eligibility_basis="same_primary_signal_pair_required_v1", scope_basis="equal_tenant_workspace_and_system", temporal_basis="established_by_caller", score_formula="not_evaluated_for_excluded_comparison"),
+        )
+    add("primary_signal_pair", 1.0)
     add("relationship_type", 1.0 if evaluated_relationship.get("relationship_type") == candidate_relationship.get("relationship_type") else 0.0)
     evaluated_direction = evaluated_relationship.get("directionality")
     candidate_direction = candidate_relationship.get("directionality")
@@ -231,11 +273,20 @@ def compare_fingerprints(
         add("relationship_direction", None, not_applicable="Both relationship types are symmetric.")
     else:
         add("relationship_direction", 1.0 if evaluated_direction == candidate_direction and evaluated_relationship.get("signal_ids") == candidate_relationship.get("signal_ids") else 0.0)
-    add("relationship_strength_similarity", _bounded_similarity(evaluated_relationship.get("comparison_strength"), candidate_relationship.get("comparison_strength")))
-    add("relationship_change_magnitude", _bounded_similarity(evaluated_relationship.get("absolute_change"), candidate_relationship.get("absolute_change")))
-    evaluated_change = float(evaluated_relationship.get("signed_change"))
-    candidate_change = float(candidate_relationship.get("signed_change"))
-    add("relationship_change_direction", 1.0 if (evaluated_change > 0) == (candidate_change > 0) and (evaluated_change < 0) == (candidate_change < 0) else 0.0)
+    if evaluated_relationship.get("comparison_strength") is None or candidate_relationship.get("comparison_strength") is None:
+        add("relationship_strength_similarity", None, unavailable="Comparison strength is not available for both fingerprints.")
+    else:
+        add("relationship_strength_similarity", _bounded_similarity(evaluated_relationship["comparison_strength"], candidate_relationship["comparison_strength"]))
+    if evaluated_relationship.get("absolute_change") is None or candidate_relationship.get("absolute_change") is None:
+        add("relationship_change_magnitude", None, unavailable="Relationship change magnitude is not available for both fingerprints.")
+    else:
+        add("relationship_change_magnitude", _bounded_similarity(evaluated_relationship["absolute_change"], candidate_relationship["absolute_change"]))
+    if evaluated_relationship.get("signed_change") is None or candidate_relationship.get("signed_change") is None:
+        add("relationship_change_direction", None, unavailable="Relationship change direction is not available for both fingerprints.")
+    else:
+        evaluated_change = float(evaluated_relationship["signed_change"])
+        candidate_change = float(candidate_relationship["signed_change"])
+        add("relationship_change_direction", 1.0 if (evaluated_change > 0) == (candidate_change > 0) and (evaluated_change < 0) == (candidate_change < 0) else 0.0)
     if "persistence" in evaluated_relationship and "persistence" in candidate_relationship:
         add("persistence_similarity", _bounded_similarity(evaluated_relationship["persistence"], candidate_relationship["persistence"]))
     else:
@@ -257,15 +308,19 @@ def compare_fingerprints(
     supported_weight = round(sum(item.weight for item in supported), 8)
     overall = round(sum((item.score or 0.0) * item.weight for item in supported), ROUNDING_PLACES)
     enough = supported_weight >= MINIMUM_SUPPORTED_WEIGHT
-    status = SimilarityStatus.unavailable if not enough else (SimilarityStatus.supported_similarity if overall >= SUPPORTED_SIMILARITY_THRESHOLD else SimilarityStatus.no_supported_similarity)
-    limitations = ["Unavailable dimensions are omitted from the weighted sum and weights are not renormalized."]
+    status = SimilarityStatus.insufficient_similarity_evidence if not enough else (SimilarityStatus.supported_similarity if overall >= SUPPORTED_SIMILARITY_THRESHOLD else SimilarityStatus.no_supported_similarity)
+    limitations = [
+        "Unavailable dimensions are omitted from the weighted sum and weights are not renormalized.",
+        "Fingerprinting v1 retains no typed supporting-evidence reference for system identity; persisted scope is the authority.",
+    ]
     if not enough:
         overall = None
-        limitations.append("insufficient_similarity_evidence")
+        limitations.append(f"Supported dimension weight {supported_weight:.2f} did not meet required minimum {MINIMUM_SUPPORTED_WEIGHT:.2f}.")
     return ApproximateSimilarityResult(
         evaluated_package_id=evaluated.package_id, evaluated_fingerprint_id=evaluated.fingerprint_id or "",
         candidate_package_id=candidate.package_id, candidate_fingerprint_id=candidate.fingerprint_id or "",
         overall_similarity=overall, overall_status=status, dimensions=dimensions,
+        supported_weight=supported_weight,
         supported_dimensions=[item.name for item in supported],
         unavailable_dimensions=[item.name for item in dimensions if item.status in {DimensionStatus.unavailable, DimensionStatus.not_applicable}],
         excluded_dimensions=[item.name for item in dimensions if item.status == DimensionStatus.excluded],
@@ -277,6 +332,21 @@ def compare_fingerprints(
             score_formula="sum(dimension.score * dimension.weight); unavailable weights are not renormalized",
         ),
     )
+
+
+def aggregate_similarity_status(results: list[ApproximateSimilarityResult]) -> SimilarityStatus:
+    """Apply deterministic collection precedence without hiding insufficient evidence."""
+    statuses = {result.overall_status for result in results}
+    for status in (
+        SimilarityStatus.supported_similarity,
+        SimilarityStatus.no_supported_similarity,
+        SimilarityStatus.insufficient_similarity_evidence,
+        SimilarityStatus.excluded,
+        SimilarityStatus.unavailable,
+    ):
+        if status in statuses:
+            return status
+    return SimilarityStatus.insufficient_history
 
 
 def _number(value: Any) -> str:
