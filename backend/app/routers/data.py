@@ -36,13 +36,14 @@ from app.services.baseline_analysis_repository import (
     read_completed_analysis_by_id,
     read_evidence_package_by_analysis_id,
     read_evidence_package_fingerprint,
+    read_approximate_fingerprint_similarity,
     read_evidence_package_by_id,
     read_exact_fingerprint_matches,
     transition_evidence_package_lifecycle,
     validate_completed_analysis,
 )
 from app.services.evidence_package import EvidencePackage, ensure_evidence_package
-from app.services.evidence_package_fingerprint import EvidencePackageFingerprint, ExactMatchResult
+from app.services.evidence_package_fingerprint import ApproximateSimilarityResponse, EvidencePackageFingerprint, ExactMatchResult
 from app.services.evidence_package_lifecycle import LifecycleTransitionRequest
 from app.services.behavioral_model_repository import (
     activate_candidate,
@@ -2123,6 +2124,18 @@ def evidence_package_fingerprint_by_id(package_id: UploadJobPath):
 )
 def evidence_package_exact_matches_by_id(package_id: UploadJobPath):
     result = read_exact_fingerprint_matches(package_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Evidence Package was not found.")
+    return result
+
+
+@router.get(
+    "/evidence-packages/{package_id}/approximate-similarity",
+    response_model=ApproximateSimilarityResponse,
+    operation_id="evidence_package_approximate_similarity_by_id",
+)
+def evidence_package_approximate_similarity_by_id(package_id: UploadJobPath):
+    result = read_approximate_fingerprint_similarity(package_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Evidence Package was not found.")
     return result
