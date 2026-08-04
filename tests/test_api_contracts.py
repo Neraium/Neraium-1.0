@@ -10,6 +10,21 @@ from app.services.auth_store import create_user
 from app.services.rate_limiter import clear_rate_limits
 
 
+# Evidence Package v1 added its analysis-ID and package-ID reads, and Evidence
+# Package Lifecycle v1 added its transition write, to the prior 145-operation
+# surface. Keep the total as a route-surface guard while naming the additions.
+PRE_EVIDENCE_PACKAGE_OPERATION_COUNT = 145
+EVIDENCE_PACKAGE_OPERATIONS = {
+    ("get", "/api/data/analyses/{comparison_analysis_id}/evidence-package"):
+        "evidence_package_by_analysis_id_api_data_analyses__comparison_analysis_id__evidence_package_get",
+    ("get", "/api/data/evidence-packages/{package_id}"):
+        "evidence_package_by_id_api_data_evidence_packages__package_id__get",
+    ("post", "/api/data/evidence-packages/{package_id}/lifecycle-events"):
+        "record_evidence_package_lifecycle_event_api_data_evidence_packages__package_id__lifecycle_events_post",
+}
+EXPECTED_OPENAPI_OPERATION_COUNT = PRE_EVIDENCE_PACKAGE_OPERATION_COUNT + len(EVIDENCE_PACKAGE_OPERATIONS)
+
+
 def production_client(monkeypatch, tmp_path: Path) -> TestClient:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
@@ -148,7 +163,35 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
         and getattr(route, "include_in_schema", False)
     ]
     assert len(operations) == sum(len(route.methods - {"HEAD", "OPTIONS"}) for route in runtime_operations)
-    assert len(operations) == 145
+    assert len(operations) == EXPECTED_OPENAPI_OPERATION_COUNT
+    operation_ids = [operation["operationId"] for operation in operations]
+    assert len(operation_ids) == len(set(operation_ids))
+    for (method, path), operation_id in EVIDENCE_PACKAGE_OPERATIONS.items():
+        operation = schema["paths"][path][method]
+        assert operation["operationId"] == operation_id
+        assert operation["tags"] == ["data"]
+        assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/EvidencePackage"
+        }
+        matching_routes = [
+            route for route in runtime_operations
+            if route.path == path and route.methods == {method.upper()}
+        ]
+        assert len(matching_routes) == 1
+        assert "require_api_access" in {
+            dependency.call.__name__ for dependency in matching_routes[0].dependant.dependencies
+        }
+    lifecycle_operation = schema["paths"]["/api/data/evidence-packages/{package_id}/lifecycle-events"]["post"]
+    assert lifecycle_operation["requestBody"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/LifecycleTransitionRequest"
+    }
+    lifecycle_route = next(
+        route for route in runtime_operations
+        if route.path == "/api/data/evidence-packages/{package_id}/lifecycle-events" and route.methods == {"POST"}
+    )
+    assert "require_operator_role" in {
+        dependency.call.__name__ for dependency in lifecycle_route.dependant.dependencies
+    }
     assert "/api/infrastructure/health" in schema["paths"]
     assert "/api/telemetry/ingest" in schema["paths"]
     assert "/api/telemetry/signal-mappings" in schema["paths"]
