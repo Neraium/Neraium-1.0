@@ -97,6 +97,7 @@ class LimitationCategory(str, Enum):
 
 
 class LimitationSeverity(str, Enum):
+    unknown = "unknown"
     low = "low"
     medium = "medium"
     high = "high"
@@ -502,15 +503,28 @@ def _data_quality_confidence(result: dict[str, Any]) -> ConfidenceDimension:
     )
 
 
+def _signal_catalog_entries(catalog: Any) -> list[tuple[str, dict[str, Any]]]:
+    """Resolve exact source identity without display-name or label guessing."""
+    raw_entries = catalog.items() if isinstance(catalog, dict) else (
+        ((None, item) for item in catalog) if isinstance(catalog, list) else []
+    )
+    resolved = []
+    for catalog_key, item in raw_entries:
+        if not isinstance(item, dict):
+            continue
+        identity = str(item.get("source_column") or item.get("column") or catalog_key or "").strip()
+        if identity:
+            resolved.append((identity, item))
+    return resolved
+
+
 def _mapping_confidence(result: dict[str, Any], variables: list[str]) -> ConfidenceDimension:
     catalog = result.get("telemetry_signal_catalog")
     if not isinstance(catalog, (dict, list)):
         return _unknown("Canonical semantic role information was not available for the signals supporting this finding.")
-    entries = list(catalog.values()) if isinstance(catalog, dict) else catalog
-    entries = [item for item in entries if isinstance(item, dict)]
-    by_signal = {str(item.get("source_column") or item.get("column") or key): item for key, item in (
-        catalog.items() if isinstance(catalog, dict) else ((str(index), item) for index, item in enumerate(entries))
-    ) if isinstance(item, dict)}
+    catalog_entries = _signal_catalog_entries(catalog)
+    entries = [item for _, item in catalog_entries]
+    by_signal = dict(catalog_entries)
     selected = [by_signal.get(variable) for variable in variables]
     roles = [str(item.get("canonical_role") or "").strip() if item else "" for item in selected]
     if any(not role for role in roles):
@@ -677,7 +691,7 @@ def _limitations(
     def add(
         *, identifier: str, title: str, description: str, reason: str,
         evidence_ref: str, category: LimitationCategory,
-        severity: LimitationSeverity = LimitationSeverity.medium,
+        severity: LimitationSeverity = LimitationSeverity.unknown,
     ) -> None:
         limitations.append(EvidenceLimitation(
             id=identifier, title=title, description=description, reason=reason,
@@ -707,10 +721,9 @@ def _limitations(
 
     if "telemetry_signal_catalog" in result:
         catalog = result.get("telemetry_signal_catalog")
-        entries = list(catalog.values()) if isinstance(catalog, dict) else catalog if isinstance(catalog, list) else []
         mapped = {
-            str(item.get("source_column") or item.get("column") or "")
-            for item in entries if isinstance(item, dict) and str(item.get("canonical_role") or "").strip()
+            identity for identity, item in _signal_catalog_entries(catalog)
+            if str(item.get("canonical_role") or "").strip()
         }
         missing = [variable for variable in variables if variable not in mapped]
         if missing:

@@ -84,12 +84,12 @@ The v1 builder recognizes only these persisted facts:
 
 * an explicitly null operating-context input records missing operating-state evidence;
 * an Operating Context result whose process-demand comparability is `unknown` records unavailable comparable conditions;
-* a persisted signal catalog missing a supporting signal's canonical role records missing semantic mapping;
+* a persisted signal catalog missing a supporting signal's canonical role records missing semantic mapping; exact signal identity is resolved from `source_column`, then `column`, then a dictionary catalog key, without display-name or normalized-label guessing;
 * a non-empty persisted `telemetry_ambiguity` result records telemetry ambiguity;
 * two or more alternatives retained on the persisted finding record that multiple explanations remain plausible; and
 * a persisted physics-reasoning status of `unavailable`, `not_available`, or `not_implemented` records unavailable physics validation.
 
-Each generated item has a stable ID, title, description, reason, category, severity, active status, and references to structured supporting evidence in the same package. Construction follows a fixed rule order and uses no clock, randomness, raw telemetry reads, or GET-time writes. Repeated generation and repeated GET therefore preserve package identity, schema version, revision, collection order, and byte-equivalent JSON content.
+Each generated item has a stable ID, title, description, reason, category, severity, active status, and references to structured supporting evidence in the same package. Limitation existence and limitation severity are independent: v1 evidence supports existence only, so every automatically generated limitation has `severity: unknown`. `low`, `medium`, and `high` are reserved for future explicitly documented and persisted severity evidence; category, confidence, and wording are never used to infer severity. Construction follows a fixed rule order and uses no clock, randomness, raw telemetry reads, or GET-time writes. Repeated generation and repeated GET therefore preserve package identity, schema version, revision, collection order, and byte-equivalent JSON content.
 
 ### Unsupported situations and deferred work
 
