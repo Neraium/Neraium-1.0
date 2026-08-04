@@ -17,6 +17,7 @@ from app.services.dataset_scope import (
 )
 from app.services.runtime_db import (
     delete_latest_payload_prefix,
+    list_latest_payloads_prefix,
     read_latest_payload,
     upsert_latest_payload,
 )
@@ -395,6 +396,58 @@ def read_shared_state(name: str, *, scope: DatasetScope | None = None) -> dict[s
         return database_payload
     bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
     return _read_s3_state(storage_name, bucket) if bucket else None
+
+
+def list_shared_state_prefix(name: str, *, scope: DatasetScope | None = None) -> list[dict[str, Any]]:
+    """Enumerate immutable records under a key prefix without mutating storage."""
+    storage_name = _state_name(name, scope=scope)
+    bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
+    if bucket:
+        client = _get_s3_state_client()
+        if client is None:
+            return []
+        payloads: list[dict[str, Any]] = []
+        continuation: str | None = None
+        try:
+            while True:
+                kwargs: dict[str, Any] = {"Bucket": bucket, "Prefix": _s3_object_key(storage_name).removesuffix(".json")}
+                if continuation:
+                    kwargs["ContinuationToken"] = continuation
+                response = client.list_objects_v2(**kwargs)
+                for item in response.get("Contents", []):
+                    key = str(item.get("Key") or "")
+                    if not key:
+                        continue
+                    body = client.get_object(Bucket=bucket, Key=key)["Body"].read().decode("utf-8")
+                    payload = json.loads(body)
+                    if isinstance(payload, dict):
+                        payloads.append(payload)
+                if not response.get("IsTruncated"):
+                    break
+                continuation = str(response.get("NextContinuationToken") or "") or None
+            return payloads
+        except Exception:
+            logger.warning("shared_state_list_failed backend=s3")
+            return []
+    if _runtime_db_latest_enabled():
+        try:
+            return [item for item in list_latest_payloads_prefix(_shared_key(storage_name)) if isinstance(item, dict)]
+        except Exception:
+            logger.warning("shared_state_list_failed backend=runtime_db")
+            return []
+    root = runtime_state().runtime_dir / _local_state_name(storage_name, scope=scope)
+    prefix_path = Path(str(root).removesuffix(".json"))
+    if not prefix_path.exists():
+        return []
+    payloads = []
+    for path in sorted(prefix_path.rglob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    return payloads
 
 
 def write_shared_state(name: str, payload: dict[str, Any], *, scope: DatasetScope | None = None) -> None:
