@@ -23,12 +23,15 @@ from app.services.upload_state_repository import (
 from app.services.evidence_package import ensure_evidence_package, legacy_findings
 from app.services.evidence_package_fingerprint import (
     ALGORITHM_VERSION,
+    ApproximateSimilarityResponse,
     EvidencePackageFingerprint,
     ExactMatchObservation,
     ExactMatchResult,
     ExactMatchStatus,
     FingerprintStatus,
     build_fingerprint,
+    aggregate_similarity_status,
+    compare_fingerprints,
     observation_id,
     parse_timestamp,
 )
@@ -568,6 +571,65 @@ def read_exact_fingerprint_matches(package_id: str) -> ExactMatchResult | None:
         ))
     status = ExactMatchStatus.exact_match if matches else (ExactMatchStatus.no_exact_match if candidates else ExactMatchStatus.insufficient_history)
     return ExactMatchResult(status=status, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, matches=matches, eligible_history_count=len(candidates))
+
+
+def read_approximate_fingerprint_similarity(package_id: str) -> ApproximateSimilarityResponse | None:
+    """Purely compare a package sidecar with valid, same-system, earlier sidecars."""
+    package = read_evidence_package_by_id(package_id)
+    if package is None:
+        return None
+    fingerprint = read_evidence_package_fingerprint(package_id)
+    if fingerprint is None or fingerprint.status != FingerprintStatus.available or not fingerprint.scope.system_id or fingerprint.algorithm_version != ALGORITHM_VERSION:
+        return ApproximateSimilarityResponse(
+            evaluated_package_id=package_id,
+            evaluated_fingerprint_id=fingerprint.fingerprint_id if fingerprint else None,
+            overall_status="unavailable",
+            limitations=["Required persisted fingerprint or system scope evidence is unavailable."],
+        )
+    evaluated_at = parse_timestamp(package.get("latest_evaluated_at"))
+    if evaluated_at is None:
+        return ApproximateSimilarityResponse(
+            evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id,
+            overall_status="unavailable", limitations=["The evaluated package timestamp is missing, invalid, or not timezone-aware."],
+        )
+    scope = current_dataset_scope()
+    entries = list_shared_state_prefix(f"{_fingerprint_index_prefix(fingerprint.scope.system_id, scope=scope)}/", scope=scope)
+    candidates: list[tuple[datetime, str, EvidencePackageFingerprint]] = []
+    for entry in entries:
+        expected_index = (scope.tenant_id, scope.workspace_id, fingerprint.scope.system_id, ALGORITHM_VERSION)
+        actual_index = (entry.get("organization_id"), entry.get("portfolio_id"), entry.get("system_id"), entry.get("algorithm_version"))
+        if not payload_matches_dataset_scope(entry, scope) or actual_index != expected_index:
+            return ApproximateSimilarityResponse(evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, overall_status="unavailable", limitations=["The fingerprint index scope is invalid."])
+        prior_id = str(entry.get("package_id") or "")
+        if prior_id == package_id:
+            continue
+        timestamp = parse_timestamp(entry.get("evaluated_at"))
+        if timestamp is None:
+            return ApproximateSimilarityResponse(evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, overall_status="unavailable", limitations=["Eligible history contains an invalid package timestamp."])
+        if timestamp >= evaluated_at:
+            continue
+        prior_package = read_evidence_package_by_id(prior_id)
+        if prior_package is None or parse_timestamp(prior_package.get("latest_evaluated_at")) != timestamp:
+            return ApproximateSimilarityResponse(evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, overall_status="unavailable", limitations=["Eligible history contains a stale package reference or inconsistent timestamp."])
+        stored = _read(_package_fingerprint_key(prior_id, scope=scope), scope=scope)
+        try:
+            prior = EvidencePackageFingerprint.model_validate((stored or {}).get("fingerprint"))
+        except (ValueError, TypeError):
+            return ApproximateSimilarityResponse(evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, overall_status="unavailable", limitations=["Eligible history contains a stale fingerprint reference."])
+        if (
+            not payload_matches_dataset_scope(stored, scope) or prior.package_id != prior_id
+            or prior.scope != fingerprint.scope or prior.status != FingerprintStatus.available
+            or prior.fingerprint_id != entry.get("fingerprint_id") or prior.canonical_digest != entry.get("canonical_digest")
+        ):
+            return ApproximateSimilarityResponse(evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, overall_status="unavailable", limitations=["Eligible history contains unavailable or scope-invalid fingerprint evidence."])
+        candidates.append((timestamp, prior_id, prior))
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    results = [compare_fingerprints(fingerprint, prior) for _, _, prior in candidates]
+    status = aggregate_similarity_status(results)
+    return ApproximateSimilarityResponse(
+        evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id,
+        overall_status=status, eligible_history_count=len(results), results=results,
+    )
 
 
 def transition_evidence_package_lifecycle(
