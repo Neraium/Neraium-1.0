@@ -111,6 +111,13 @@ def test_package_endpoints_are_idempotent_and_tenant_scoped() -> None:
     assert direct.status_code == exact.status_code == repeated.status_code == 200
     assert direct.json() == exact.json() == repeated.json() == package
     assert repeated.json()["revision"] == before_revision == 1
+    fingerprint = client.get(f"/api/data/evidence-packages/{package['id']}/fingerprint")
+    repeated_fingerprint = client.get(f"/api/data/evidence-packages/{package['id']}/fingerprint")
+    exact_matches = client.get(f"/api/data/evidence-packages/{package['id']}/exact-matches")
+    assert fingerprint.status_code == repeated_fingerprint.status_code == exact_matches.status_code == 200
+    assert fingerprint.json() == repeated_fingerprint.json()
+    assert fingerprint.json()["status"] == "available"
+    assert exact_matches.json()["status"] == "insufficient_history"
     assert client.get(
         f"/api/data/evidence-packages/{package['id']}", headers={"X-Neraium-Workspace-Id": "foreign-portfolio"}
     ).status_code == 404

@@ -56,6 +56,6 @@ route and appear through the existing analysis and Evidence Package reads.
 
 Lifecycle v1 does not add investigation progress, parts waiting, closure,
 reopening, false-positive, duplicate, or deferred states. It also does not add
-recurrence, parent-child packages, CMMS/work orders, technician feedback,
+recurrence classification, parent-child packages, CMMS/work orders, technician feedback,
 interventions, validation, hypotheses, topology, or governance. Those remain
 future roadmap work and must not be inferred from lifecycle metadata.

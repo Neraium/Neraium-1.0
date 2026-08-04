@@ -11,7 +11,8 @@ from app.services.rate_limiter import clear_rate_limits
 
 
 # Evidence Package v1 added its analysis-ID and package-ID reads, and Evidence
-# Package Lifecycle v1 added its transition write, to the prior 145-operation
+# Package Lifecycle v1 added its transition write, and Fingerprinting v1 added
+# two pure reads, to the prior 145-operation
 # surface. Keep the total as a route-surface guard while naming the additions.
 PRE_EVIDENCE_PACKAGE_OPERATION_COUNT = 145
 EVIDENCE_PACKAGE_OPERATIONS = {
@@ -22,7 +23,13 @@ EVIDENCE_PACKAGE_OPERATIONS = {
     ("post", "/api/data/evidence-packages/{package_id}/lifecycle-events"):
         "record_evidence_package_lifecycle_event_api_data_evidence_packages__package_id__lifecycle_events_post",
 }
-EXPECTED_OPENAPI_OPERATION_COUNT = PRE_EVIDENCE_PACKAGE_OPERATION_COUNT + len(EVIDENCE_PACKAGE_OPERATIONS)
+FINGERPRINT_OPERATIONS = {
+    ("get", "/api/data/evidence-packages/{package_id}/fingerprint"):
+        ("evidence_package_fingerprint_by_id", "EvidencePackageFingerprint"),
+    ("get", "/api/data/evidence-packages/{package_id}/exact-matches"):
+        ("evidence_package_exact_matches_by_id", "ExactMatchResult"),
+}
+EXPECTED_OPENAPI_OPERATION_COUNT = PRE_EVIDENCE_PACKAGE_OPERATION_COUNT + len(EVIDENCE_PACKAGE_OPERATIONS) + len(FINGERPRINT_OPERATIONS)
 
 
 def production_client(monkeypatch, tmp_path: Path) -> TestClient:
@@ -180,6 +187,12 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
         assert len(matching_routes) == 1
         assert "require_api_access" in {
             dependency.call.__name__ for dependency in matching_routes[0].dependant.dependencies
+        }
+    for (method, path), (operation_id, model) in FINGERPRINT_OPERATIONS.items():
+        operation = schema["paths"][path][method]
+        assert operation["operationId"] == operation_id
+        assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+            "$ref": f"#/components/schemas/{model}"
         }
     lifecycle_operation = schema["paths"]["/api/data/evidence-packages/{package_id}/lifecycle-events"]["post"]
     assert lifecycle_operation["requestBody"]["content"]["application/json"]["schema"] == {

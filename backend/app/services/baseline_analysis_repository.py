@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import threading
 from typing import Any
 
 from app.services.baseline_contracts import WORKFLOW_ANALYZE_NEW_DATA
@@ -19,6 +20,17 @@ from app.services.upload_state_repository import (
     write_shared_state_strict,
 )
 from app.services.evidence_package import ensure_evidence_package, legacy_findings
+from app.services.evidence_package_fingerprint import (
+    ALGORITHM_VERSION,
+    EvidencePackageFingerprint,
+    ExactMatchObservation,
+    ExactMatchResult,
+    ExactMatchStatus,
+    FingerprintStatus,
+    build_fingerprint,
+    observation_id,
+    parse_timestamp,
+)
 from app.services.evidence_package_lifecycle import (
     LifecycleTransitionRequest,
     append_lifecycle_event,
@@ -28,6 +40,7 @@ from app.services.evidence_package_lifecycle import (
 
 
 ANALYSIS_INDEX_VERSION = 1
+_fingerprint_lock = threading.RLock()
 
 
 def _scope_prefix(scope: DatasetScope | None = None) -> str:
@@ -53,6 +66,14 @@ def _package_id_key(package_id: str, *, scope: DatasetScope | None = None) -> st
 
 def _package_lifecycle_key(package_id: str, *, scope: DatasetScope | None = None) -> str:
     return f"{_scope_prefix(scope)}/package-lifecycle/{package_id}"
+
+
+def _package_fingerprint_key(package_id: str, *, scope: DatasetScope | None = None) -> str:
+    return f"{_scope_prefix(scope)}/package-fingerprints/{package_id}/{ALGORITHM_VERSION}"
+
+
+def _fingerprint_index_key(system_id: str, *, scope: DatasetScope | None = None) -> str:
+    return f"{_scope_prefix(scope)}/fingerprint-index/{system_id}/{ALGORITHM_VERSION}"
 
 
 def _read(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
@@ -247,6 +268,7 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
                 {"package_id": package["id"], "lifecycle": lifecycle.model_dump(mode="json")},
                 scope=scope,
             )
+        _persist_fingerprint(package, scope=scope)
     _write(
         _analysis_id_key(identity["analysis_run_id"], scope=scope),
         record,
@@ -283,6 +305,39 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
         scope=scope,
     )
     return identity
+
+
+def _persist_fingerprint(package: dict[str, Any], *, scope: DatasetScope) -> None:
+    """Publish an immutable sidecar after the owning package link exists."""
+    fingerprint = build_fingerprint(package)
+    key = _package_fingerprint_key(package["id"], scope=scope)
+    with _fingerprint_lock:
+        existing = _read(key, scope=scope)
+        if isinstance(existing, dict) and payload_matches_dataset_scope(existing, scope):
+            try:
+                EvidencePackageFingerprint.model_validate(existing.get("fingerprint"))
+                return
+            except (ValueError, TypeError):
+                # Corrupt records are not silently repaired by ordinary persistence.
+                return
+        _write(key, {"package_id": package["id"], "fingerprint": fingerprint.model_dump(mode="json")}, scope=scope)
+        if fingerprint.scope.system_id is None:
+            return
+        index_key = _fingerprint_index_key(fingerprint.scope.system_id, scope=scope)
+        index = _read(index_key, scope=scope) or {}
+        entries = [item for item in index.get("entries", []) if isinstance(item, dict) and item.get("package_id") != package["id"]]
+        entries.append({
+            "package_id": package["id"],
+            "fingerprint_id": fingerprint.fingerprint_id,
+            "canonical_digest": fingerprint.canonical_digest,
+            "evaluated_at": package.get("latest_evaluated_at"),
+        })
+        entries.sort(key=lambda item: (str(item.get("evaluated_at") or ""), str(item.get("package_id") or "")))
+        _write(index_key, {
+            "version": 1, "algorithm_version": ALGORITHM_VERSION,
+            "organization_id": scope.tenant_id, "portfolio_id": scope.workspace_id,
+            "system_id": fingerprint.scope.system_id, "entries": entries,
+        }, scope=scope)
 
 
 def list_completed_analyses(
@@ -394,6 +449,97 @@ def read_evidence_package_by_id(package_id: str) -> dict[str, Any] | None:
         return None
     package = read_evidence_package_by_analysis_id(str(link.get("analysis_run_id") or ""))
     return package if package and package.get("id") == str(package_id) else None
+
+
+def read_evidence_package_fingerprint(package_id: str) -> EvidencePackageFingerprint | None:
+    """Pure sidecar read; absence never triggers generation or repair."""
+    package = read_evidence_package_by_id(package_id)
+    if package is None:
+        return None
+    scope = current_dataset_scope()
+    stored = _read(_package_fingerprint_key(package_id, scope=scope), scope=scope)
+    if not isinstance(stored, dict) or not payload_matches_dataset_scope(stored, scope):
+        return EvidencePackageFingerprint(
+            status=FingerprintStatus.unavailable, package_id=package_id,
+            scope={"organization_id": package["organization_id"], "workspace_id": package.get("portfolio_id") or "", "system_id": package.get("system_id")},
+            features={}, available_dimensions=[], unavailable_dimensions=["persisted_fingerprint"], evidence_refs=[],
+            limitations=["No persisted fingerprint is available; reads do not generate one."],
+            provenance={"source_schema_version": package["schema_version"], "package_revision": package["revision"], "source": "fingerprint_sidecar_read", "calculation_versions": []},
+        )
+    try:
+        fingerprint = EvidencePackageFingerprint.model_validate(stored.get("fingerprint"))
+    except (ValueError, TypeError):
+        return None
+    expected = (scope.tenant_id, scope.workspace_id, package.get("system_id"))
+    actual = (fingerprint.scope.organization_id, fingerprint.scope.workspace_id, fingerprint.scope.system_id)
+    return fingerprint if actual == expected and fingerprint.package_id == package_id else None
+
+
+def read_exact_fingerprint_matches(package_id: str) -> ExactMatchResult | None:
+    package = read_evidence_package_by_id(package_id)
+    if package is None:
+        return None
+    fingerprint = read_evidence_package_fingerprint(package_id)
+    if fingerprint is None or fingerprint.status != FingerprintStatus.available or not fingerprint.scope.system_id:
+        return ExactMatchResult(
+            status=ExactMatchStatus.unavailable, evaluated_package_id=package_id,
+            evaluated_fingerprint_id=fingerprint.fingerprint_id if fingerprint else None,
+            limitations=["Required persisted fingerprint or system scope evidence is unavailable."],
+        )
+    evaluated_at = parse_timestamp(package.get("latest_evaluated_at"))
+    if evaluated_at is None:
+        return ExactMatchResult(
+            status=ExactMatchStatus.unavailable, evaluated_package_id=package_id,
+            evaluated_fingerprint_id=fingerprint.fingerprint_id,
+            limitations=["The evaluated package timestamp is missing, invalid, or not timezone-aware."],
+        )
+    scope = current_dataset_scope()
+    index = _read(_fingerprint_index_key(fingerprint.scope.system_id, scope=scope), scope=scope)
+    if not isinstance(index, dict) or not payload_matches_dataset_scope(index, scope):
+        return ExactMatchResult(status=ExactMatchStatus.insufficient_history, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id)
+    if (index.get("organization_id"), index.get("portfolio_id"), index.get("system_id"), index.get("algorithm_version")) != (scope.tenant_id, scope.workspace_id, fingerprint.scope.system_id, ALGORITHM_VERSION):
+        return ExactMatchResult(status=ExactMatchStatus.unavailable, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, limitations=["The fingerprint index scope is invalid."])
+
+    candidates: list[tuple[datetime, str, EvidencePackageFingerprint]] = []
+    for entry in index.get("entries", []):
+        if not isinstance(entry, dict) or entry.get("package_id") == package_id:
+            continue
+        timestamp = parse_timestamp(entry.get("evaluated_at"))
+        if timestamp is None:
+            return ExactMatchResult(status=ExactMatchStatus.unavailable, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, limitations=["Eligible history contains an invalid package timestamp."])
+        if timestamp >= evaluated_at:
+            continue
+        prior_id = str(entry.get("package_id") or "")
+        prior_package = read_evidence_package_by_id(prior_id)
+        prior_package_timestamp = parse_timestamp((prior_package or {}).get("latest_evaluated_at"))
+        if prior_package is None or prior_package_timestamp != timestamp:
+            return ExactMatchResult(status=ExactMatchStatus.unavailable, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, limitations=["Eligible history contains a stale package reference or inconsistent timestamp."])
+        stored = _read(_package_fingerprint_key(prior_id, scope=scope), scope=scope)
+        try:
+            prior = EvidencePackageFingerprint.model_validate((stored or {}).get("fingerprint"))
+        except (ValueError, TypeError):
+            return ExactMatchResult(status=ExactMatchStatus.unavailable, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, limitations=["Eligible history contains a stale fingerprint reference."])
+        if not payload_matches_dataset_scope(stored, scope) or prior.package_id != prior_id or prior.scope != fingerprint.scope or prior.status != FingerprintStatus.available:
+            return ExactMatchResult(status=ExactMatchStatus.unavailable, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, limitations=["Eligible history contains unavailable or scope-invalid fingerprint evidence."])
+        candidates.append((timestamp, prior_id, prior))
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    matches = []
+    basis = "same_scope_system_algorithm_and_strictly_earlier_evaluation_v1"
+    for _, prior_id, prior in candidates:
+        if prior.canonical_digest != fingerprint.canonical_digest:
+            continue
+        matches.append(ExactMatchObservation(
+            observation_id=observation_id(package_id, prior_id, ALGORITHM_VERSION, basis),
+            evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id or "",
+            prior_package_id=prior_id, prior_fingerprint_id=prior.fingerprint_id or "",
+            canonical_digest=fingerprint.canonical_digest or "", algorithm_version=ALGORITHM_VERSION,
+            eligibility_basis="Persisted fingerprint evidence was available for both packages.",
+            scope_basis="Tenant, workspace, and persisted system identity are equal.",
+            temporal_basis="Prior package evaluation completed strictly earlier; this is not fault-onset ordering.",
+            evidence_refs=sorted(set(fingerprint.evidence_refs + prior.evidence_refs)), limitations=[],
+        ))
+    status = ExactMatchStatus.exact_match if matches else (ExactMatchStatus.no_exact_match if candidates else ExactMatchStatus.insufficient_history)
+    return ExactMatchResult(status=status, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, matches=matches, eligible_history_count=len(candidates))
 
 
 def transition_evidence_package_lifecycle(

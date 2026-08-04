@@ -35,11 +35,14 @@ from app.services.baseline_analysis_repository import (
     read_completed_analysis,
     read_completed_analysis_by_id,
     read_evidence_package_by_analysis_id,
+    read_evidence_package_fingerprint,
     read_evidence_package_by_id,
+    read_exact_fingerprint_matches,
     transition_evidence_package_lifecycle,
     validate_completed_analysis,
 )
 from app.services.evidence_package import EvidencePackage, ensure_evidence_package
+from app.services.evidence_package_fingerprint import EvidencePackageFingerprint, ExactMatchResult
 from app.services.evidence_package_lifecycle import LifecycleTransitionRequest
 from app.services.behavioral_model_repository import (
     activate_candidate,
@@ -2099,6 +2102,30 @@ def evidence_package_by_id(package_id: UploadJobPath):
     if package is None:
         raise HTTPException(status_code=404, detail="Evidence Package was not found.")
     return package
+
+
+@router.get(
+    "/evidence-packages/{package_id}/fingerprint",
+    response_model=EvidencePackageFingerprint,
+    operation_id="evidence_package_fingerprint_by_id",
+)
+def evidence_package_fingerprint_by_id(package_id: UploadJobPath):
+    fingerprint = read_evidence_package_fingerprint(package_id)
+    if fingerprint is None:
+        raise HTTPException(status_code=404, detail="Evidence Package fingerprint was not found or failed scope validation.")
+    return fingerprint
+
+
+@router.get(
+    "/evidence-packages/{package_id}/exact-matches",
+    response_model=ExactMatchResult,
+    operation_id="evidence_package_exact_matches_by_id",
+)
+def evidence_package_exact_matches_by_id(package_id: UploadJobPath):
+    result = read_exact_fingerprint_matches(package_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Evidence Package was not found.")
+    return result
 
 
 @router.post(
