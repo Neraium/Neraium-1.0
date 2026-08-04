@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from app.main import create_app
 from app.services.baseline_analysis_repository import persist_completed_analysis, stamp_comparison_analysis_identity
+from app.services import baseline_analysis_repository as analysis_repository
 from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope
 from app.services.evidence_package import (
     ComparabilityLevel,
@@ -27,7 +28,7 @@ from app.services.evidence_package import (
 from app.services.upload_state_repository import write_upload_result
 
 
-def _comparison(run_id: str = "analysis-ep-001") -> dict:
+def _comparison(run_id: str = "analysis-ep-001", completed_at: str = "2026-08-03T12:00:00+00:00") -> dict:
     scope = current_dataset_scope()
     result = {
         "job_id": run_id, "run_id": run_id, "dataset_id": "comparison-dataset-001",
@@ -35,7 +36,7 @@ def _comparison(run_id: str = "analysis-ep-001") -> dict:
         "baseline_id": "baseline-001", "baseline_dataset_id": "baseline-dataset-001",
         "comparison_dataset_id": "comparison-dataset-001", "comparison_analysis_id": run_id,
         "analysis_run_id": run_id, "workflow": "analyze_new_data", "status": "COMPLETE",
-        "processing_state": "complete", "sii_completed": True, "completed_at": "2026-08-03T12:00:00+00:00",
+        "processing_state": "complete", "sii_completed": True, "completed_at": completed_at,
         "active_baseline_reference": {"model_id": "baseline-001", "version": 3, "dataset_id": "baseline-dataset-001"},
         "conditions": [{"id": "condition-001", "headline": "Pump response weakening in Pumping System", "system": "Pumping System"}],
         "baseline_analysis": {"baseline_model_id": "baseline-001", "relationship_drift": [{
@@ -121,6 +122,74 @@ def test_package_endpoints_are_idempotent_and_tenant_scoped() -> None:
     assert client.get(
         f"/api/data/evidence-packages/{package['id']}", headers={"X-Neraium-Workspace-Id": "foreign-portfolio"}
     ).status_code == 404
+
+
+def test_completed_analysis_failure_cannot_publish_fingerprint(monkeypatch) -> None:
+    result = _comparison("analysis-persistence-fails")
+    attempted: list[str] = []
+    original_write = analysis_repository._write
+
+    def fail_before_completion(name, payload, *, scope):
+        attempted.append(name)
+        if "/by-analysis/" in name:
+            raise RuntimeError("simulated_completed_analysis_failure")
+        return original_write(name, payload, scope=scope)
+
+    monkeypatch.setattr(analysis_repository, "_write", fail_before_completion)
+    with pytest.raises(RuntimeError, match="simulated_completed_analysis_failure"):
+        persist_completed_analysis(result)
+    assert not any("/package-fingerprints/" in name or "/fingerprint-index/" in name for name in attempted)
+
+
+def test_fingerprint_publication_failure_preserves_completed_analysis(monkeypatch) -> None:
+    result = _comparison("analysis-fingerprint-fails")
+    write_upload_result(result["job_id"], result)
+    monkeypatch.setattr(analysis_repository, "_persist_fingerprint", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("simulated_fingerprint_failure")))
+
+    identity = persist_completed_analysis(result)
+
+    assert identity is not None
+    package = analysis_repository.read_evidence_package_by_analysis_id(result["job_id"])
+    assert package is not None
+    fingerprint = analysis_repository.read_evidence_package_fingerprint(package["id"])
+    assert fingerprint is not None
+    assert fingerprint.status.value == "unavailable"
+
+
+def test_unavailable_fingerprint_is_persisted_but_not_indexed_or_counted() -> None:
+    prior = _comparison("fingerprint-prior", "2026-08-01T12:00:00+00:00")
+    unavailable = _comparison("fingerprint-unavailable", "2026-08-02T12:00:00+00:00")
+    evaluated = _comparison("fingerprint-evaluated", "2026-08-03T12:00:00+00:00")
+    unavailable["evidence_package"]["primary_relationship"]["signed_change"] = None
+    for result in (prior, unavailable, evaluated):
+        write_upload_result(result["job_id"], result)
+        persist_completed_analysis(result)
+
+    prior_package = analysis_repository.read_evidence_package_by_analysis_id(prior["job_id"])
+    unavailable_package = analysis_repository.read_evidence_package_by_analysis_id(unavailable["job_id"])
+    evaluated_package = analysis_repository.read_evidence_package_by_analysis_id(evaluated["job_id"])
+    assert prior_package and unavailable_package and evaluated_package
+    unavailable_fingerprint = analysis_repository.read_evidence_package_fingerprint(unavailable_package["id"])
+    assert unavailable_fingerprint is not None
+    assert unavailable_fingerprint.status.value == "unavailable"
+
+    scope = current_dataset_scope()
+    entries = analysis_repository.list_shared_state_prefix(
+        analysis_repository._fingerprint_index_prefix(evaluated_package["system_id"], scope=scope),
+        scope=scope,
+    )
+    assert {entry["package_id"] for entry in entries} == {prior_package["id"], evaluated_package["id"]}
+    assert all(entry.get("canonical_digest") for entry in entries)
+
+    result = analysis_repository.read_exact_fingerprint_matches(evaluated_package["id"])
+    assert result is not None
+    assert result.status.value == "exact_match"
+    assert result.eligible_history_count == 1
+    assert [match.prior_package_id for match in result.matches] == [prior_package["id"]]
+
+    unavailable_result = analysis_repository.read_exact_fingerprint_matches(unavailable_package["id"])
+    assert unavailable_result is not None
+    assert unavailable_result.status.value == "unavailable"
 
 
 def test_invalid_package_enums_are_rejected() -> None:

@@ -1498,6 +1498,17 @@ def read_latest_payload(key: str) -> Any | None:
     return json.loads(row["payload_json"])
 
 
+def list_latest_payloads_prefix(prefix: str) -> list[Any]:
+    """List independently keyed payloads using a fresh database connection."""
+    init_runtime_db()
+    with db_connection() as connection:
+        rows = connection.execute(
+            "SELECT payload_json FROM latest_payloads WHERE key LIKE ? ORDER BY key ASC",
+            (f"{prefix}%",),
+        ).fetchall()
+    return [json.loads(row["payload_json"]) for row in rows]
+
+
 def delete_latest_payload_prefix(prefix: str) -> int:
     init_runtime_db()
     with db_connection() as connection:

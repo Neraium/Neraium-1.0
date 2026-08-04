@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import multiprocessing
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -13,6 +15,15 @@ from app.services.evidence_package_fingerprint import (
 )
 from app.services import baseline_analysis_repository as repository
 from app.services.dataset_scope import current_dataset_scope
+from app.services.runtime_db import configure_runtime_dir, list_latest_payloads_prefix
+from app.services import runtime_db
+
+
+def _write_independent_index_entry(runtime_dir: str, prefix: str, package_id: str) -> None:
+    from app.services.runtime_db import configure_runtime_dir, upsert_latest_payload
+
+    configure_runtime_dir(Path(runtime_dir))
+    upsert_latest_payload(f"{prefix}/{package_id}", {"package_id": package_id, "canonical_digest": f"digest-{package_id}"})
 
 
 def _package(package_id: str = "package-a", relationship_type: str = "correlation") -> dict:
@@ -122,27 +133,25 @@ def test_exact_match_history_is_strictly_earlier_and_deterministically_ordered(m
     monkeypatch.setattr(repository, "read_evidence_package_by_id", lambda package_id: evaluated_package if package_id == "evaluated" else prior_packages.get(package_id))
     monkeypatch.setattr(repository, "read_evidence_package_fingerprint", lambda package_id: evaluated if package_id == "evaluated" else None)
 
-    index = {
-        "dataset_scope": scope.as_dict(),
-        "organization_id": scope.tenant_id, "portfolio_id": scope.workspace_id,
-        "system_id": "system-a", "algorithm_version": ALGORITHM_VERSION,
-        "entries": [
-            {"package_id": "evaluated", "evaluated_at": "2026-08-04T12:00:00Z"},
-            {"package_id": "future", "evaluated_at": "2026-08-05T12:00:00Z"},
-            {"package_id": "prior-b", "evaluated_at": "2026-08-03T12:00:00Z"},
-            {"package_id": "prior-a", "evaluated_at": "2026-08-03T12:00:00Z"},
-        ],
-    }
+    index_entries = [
+        {"package_id": "evaluated", "evaluated_at": "2026-08-04T12:00:00Z", "fingerprint_id": evaluated.fingerprint_id, "canonical_digest": evaluated.canonical_digest},
+        {"package_id": "future", "evaluated_at": "2026-08-05T12:00:00Z", "fingerprint_id": "sha256:future", "canonical_digest": "future"},
+        {"package_id": "prior-b", "evaluated_at": "2026-08-03T12:00:00Z", "fingerprint_id": priors["prior-b"].fingerprint_id, "canonical_digest": priors["prior-b"].canonical_digest},
+        {"package_id": "prior-a", "evaluated_at": "2026-08-03T12:00:00Z", "fingerprint_id": priors["prior-a"].fingerprint_id, "canonical_digest": priors["prior-a"].canonical_digest},
+    ]
+    for entry in index_entries:
+        entry.update({"dataset_scope": scope.as_dict(), "organization_id": scope.tenant_id, "portfolio_id": scope.workspace_id, "system_id": "system-a", "algorithm_version": ALGORITHM_VERSION})
 
     def fake_read(name, *, scope=None):
         if "/fingerprint-index/" in name:
             return index
         package_id = next((item for item in priors if f"/{item}/" in name), None)
         if package_id:
-            return {"dataset_scope": index["dataset_scope"], "fingerprint": priors[package_id].model_dump(mode="json")}
+            return {"dataset_scope": scope.as_dict(), "fingerprint": priors[package_id].model_dump(mode="json")}
         return None
 
     monkeypatch.setattr(repository, "_read", fake_read)
+    monkeypatch.setattr(repository, "list_shared_state_prefix", lambda *args, **kwargs: index_entries)
     result = repository.read_exact_fingerprint_matches("evaluated")
     assert result.status.value == "exact_match"
     assert [match.prior_package_id for match in result.matches] == ["prior-a", "prior-b"]
@@ -157,5 +166,33 @@ def test_exact_match_empty_history_is_insufficient(monkeypatch) -> None:
     fingerprint = build_fingerprint(package)
     monkeypatch.setattr(repository, "read_evidence_package_by_id", lambda package_id: package)
     monkeypatch.setattr(repository, "read_evidence_package_fingerprint", lambda package_id: fingerprint)
-    monkeypatch.setattr(repository, "_read", lambda *args, **kwargs: None)
+    monkeypatch.setattr(repository, "list_shared_state_prefix", lambda *args, **kwargs: [])
     assert repository.read_exact_fingerprint_matches("evaluated").status.value == "insufficient_history"
+
+
+def test_independent_index_entries_survive_separate_process_connections(tmp_path) -> None:
+    original_runtime_dir = runtime_db.RUNTIME_DIR
+    runtime_dir = tmp_path / "concurrent-runtime"
+    runtime_dir.mkdir()
+    prefix = "scopes/scope-a/baseline-analyses/fingerprint-index/system-a/evidence-package-canonical-sha256-v1"
+    context = multiprocessing.get_context("spawn")
+    processes = [
+        context.Process(target=_write_independent_index_entry, args=(str(runtime_dir), prefix, f"package-{index}"))
+        for index in range(8)
+    ] + [
+        context.Process(target=_write_independent_index_entry, args=(str(runtime_dir), prefix, "package-0"))
+        for _ in range(4)
+    ]
+    for process in processes:
+        process.start()
+    for process in processes:
+        process.join(timeout=30)
+        assert process.exitcode == 0
+
+    try:
+        configure_runtime_dir(runtime_dir)
+        entries = list_latest_payloads_prefix(prefix)
+        assert {entry["package_id"] for entry in entries} == {f"package-{index}" for index in range(8)}
+        assert len(entries) == 8
+    finally:
+        configure_runtime_dir(original_runtime_dir)

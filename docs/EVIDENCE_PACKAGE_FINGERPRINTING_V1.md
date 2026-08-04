@@ -64,12 +64,21 @@ ordered by evaluation timestamp and package ID.
 
 ## Persistence, provenance, compatibility, and read purity
 
-Fingerprint records are stored by tenant/workspace package ID and indexed by
-tenant/workspace/system/algorithm version. Publishing is locked, idempotent, and
-merge-based so retries and concurrent completions do not duplicate or lose entries.
-An existing valid record is immutable. A stale or scope-invalid index reference fails
-closed. Repair/rebuild, if introduced, must be an explicit write operation; GET never
-creates, repairs, or migrates records.
+Fingerprint records are stored by tenant/workspace package ID. Available fingerprints
+are indexed as independently keyed immutable records under
+tenant/workspace/system/algorithm-version/package-ID; unavailable sidecars are never
+indexed. Independent database rows or object keys make publication idempotent and
+prevent concurrent workers from overwriting a shared index array. Entries are listed
+and deterministically ordered only at read time. An existing valid sidecar is
+immutable. A stale or scope-invalid index reference fails closed. Repair/rebuild, if
+introduced, must be an explicit write operation; GET never creates, repairs, or
+migrates records.
+
+The completed-analysis record, analysis-ID ownership record, package ownership link,
+lifecycle initialization, and completed-analysis listing are persisted before any
+fingerprint publication is attempted. Sidecar persistence precedes index-entry
+publication. A fingerprint publication failure is logged and leaves the completed
+analysis readable; it creates no partial index entry and is never repaired by GET.
 
 The sidecar records its schema and algorithm versions, package revision, source
 schema, evidence references, and creation source. Legacy packages and packages with

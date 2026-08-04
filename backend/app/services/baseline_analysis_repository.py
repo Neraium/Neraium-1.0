@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import threading
+import logging
 from typing import Any
 
 from app.services.baseline_contracts import WORKFLOW_ANALYZE_NEW_DATA
@@ -14,6 +14,7 @@ from app.services.dataset_scope import (
 )
 from app.services.upload_state_repository import (
     read_local_json,
+    list_shared_state_prefix,
     read_shared_state,
     read_upload_result_by_job_id,
     write_local_json,
@@ -40,7 +41,7 @@ from app.services.evidence_package_lifecycle import (
 
 
 ANALYSIS_INDEX_VERSION = 1
-_fingerprint_lock = threading.RLock()
+logger = logging.getLogger(__name__)
 
 
 def _scope_prefix(scope: DatasetScope | None = None) -> str:
@@ -72,8 +73,12 @@ def _package_fingerprint_key(package_id: str, *, scope: DatasetScope | None = No
     return f"{_scope_prefix(scope)}/package-fingerprints/{package_id}/{ALGORITHM_VERSION}"
 
 
-def _fingerprint_index_key(system_id: str, *, scope: DatasetScope | None = None) -> str:
+def _fingerprint_index_prefix(system_id: str, *, scope: DatasetScope | None = None) -> str:
     return f"{_scope_prefix(scope)}/fingerprint-index/{system_id}/{ALGORITHM_VERSION}"
+
+
+def _fingerprint_index_entry_key(system_id: str, package_id: str, *, scope: DatasetScope | None = None) -> str:
+    return f"{_fingerprint_index_prefix(system_id, scope=scope)}/{package_id}"
 
 
 def _read(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
@@ -268,7 +273,6 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
                 {"package_id": package["id"], "lifecycle": lifecycle.model_dump(mode="json")},
                 scope=scope,
             )
-        _persist_fingerprint(package, scope=scope)
     _write(
         _analysis_id_key(identity["analysis_run_id"], scope=scope),
         record,
@@ -304,40 +308,56 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
         },
         scope=scope,
     )
+    if package:
+        try:
+            _persist_fingerprint(package, scope=scope)
+        except Exception:
+            # Completed analysis is authoritative and must remain readable when
+            # publication of its derived fingerprint fails.
+            logger.exception("evidence_package_fingerprint_publication_failed package_id=%s", package["id"])
     return identity
 
 
 def _persist_fingerprint(package: dict[str, Any], *, scope: DatasetScope) -> None:
-    """Publish an immutable sidecar after the owning package link exists."""
+    """Publish an immutable sidecar, then an independent available-only entry."""
     fingerprint = build_fingerprint(package)
     key = _package_fingerprint_key(package["id"], scope=scope)
-    with _fingerprint_lock:
-        existing = _read(key, scope=scope)
-        if isinstance(existing, dict) and payload_matches_dataset_scope(existing, scope):
-            try:
-                EvidencePackageFingerprint.model_validate(existing.get("fingerprint"))
-                return
-            except (ValueError, TypeError):
-                # Corrupt records are not silently repaired by ordinary persistence.
-                return
-        _write(key, {"package_id": package["id"], "fingerprint": fingerprint.model_dump(mode="json")}, scope=scope)
-        if fingerprint.scope.system_id is None:
+    existing = _read(key, scope=scope)
+    if isinstance(existing, dict) and payload_matches_dataset_scope(existing, scope):
+        try:
+            fingerprint = EvidencePackageFingerprint.model_validate(existing.get("fingerprint"))
+        except (ValueError, TypeError):
+            # Corrupt records are not silently repaired by ordinary persistence.
             return
-        index_key = _fingerprint_index_key(fingerprint.scope.system_id, scope=scope)
-        index = _read(index_key, scope=scope) or {}
-        entries = [item for item in index.get("entries", []) if isinstance(item, dict) and item.get("package_id") != package["id"]]
-        entries.append({
-            "package_id": package["id"],
-            "fingerprint_id": fingerprint.fingerprint_id,
-            "canonical_digest": fingerprint.canonical_digest,
-            "evaluated_at": package.get("latest_evaluated_at"),
-        })
-        entries.sort(key=lambda item: (str(item.get("evaluated_at") or ""), str(item.get("package_id") or "")))
-        _write(index_key, {
-            "version": 1, "algorithm_version": ALGORITHM_VERSION,
-            "organization_id": scope.tenant_id, "portfolio_id": scope.workspace_id,
-            "system_id": fingerprint.scope.system_id, "entries": entries,
-        }, scope=scope)
+    else:
+        _write(key, {"package_id": package["id"], "fingerprint": fingerprint.model_dump(mode="json")}, scope=scope)
+    stored = _read(key, scope=scope)
+    try:
+        persisted = EvidencePackageFingerprint.model_validate((stored or {}).get("fingerprint"))
+    except (ValueError, TypeError):
+        raise RuntimeError("fingerprint_sidecar_not_persisted")
+    scope_valid = (
+        payload_matches_dataset_scope(stored, scope)
+        and persisted.scope.organization_id == scope.tenant_id
+        and persisted.scope.workspace_id == scope.workspace_id
+        and persisted.package_id == package["id"]
+    )
+    if not (
+        scope_valid
+        and persisted.status == FingerprintStatus.available
+        and persisted.fingerprint_id
+        and persisted.canonical_digest
+        and persisted.scope.system_id
+    ):
+        return
+    entry_key = _fingerprint_index_entry_key(persisted.scope.system_id, package["id"], scope=scope)
+    _write(entry_key, {
+        "version": 1, "algorithm_version": ALGORITHM_VERSION,
+        "organization_id": scope.tenant_id, "portfolio_id": scope.workspace_id,
+        "system_id": persisted.scope.system_id, "package_id": package["id"],
+        "fingerprint_id": persisted.fingerprint_id, "canonical_digest": persisted.canonical_digest,
+        "evaluated_at": package.get("latest_evaluated_at"),
+    }, scope=scope)
 
 
 def list_completed_analyses(
@@ -494,15 +514,16 @@ def read_exact_fingerprint_matches(package_id: str) -> ExactMatchResult | None:
             limitations=["The evaluated package timestamp is missing, invalid, or not timezone-aware."],
         )
     scope = current_dataset_scope()
-    index = _read(_fingerprint_index_key(fingerprint.scope.system_id, scope=scope), scope=scope)
-    if not isinstance(index, dict) or not payload_matches_dataset_scope(index, scope):
-        return ExactMatchResult(status=ExactMatchStatus.insufficient_history, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id)
-    if (index.get("organization_id"), index.get("portfolio_id"), index.get("system_id"), index.get("algorithm_version")) != (scope.tenant_id, scope.workspace_id, fingerprint.scope.system_id, ALGORITHM_VERSION):
-        return ExactMatchResult(status=ExactMatchStatus.unavailable, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, limitations=["The fingerprint index scope is invalid."])
-
+    entries = list_shared_state_prefix(f"{_fingerprint_index_prefix(fingerprint.scope.system_id, scope=scope)}/", scope=scope)
     candidates: list[tuple[datetime, str, EvidencePackageFingerprint]] = []
-    for entry in index.get("entries", []):
-        if not isinstance(entry, dict) or entry.get("package_id") == package_id:
+    for entry in entries:
+        if not payload_matches_dataset_scope(entry, scope):
+            return ExactMatchResult(status=ExactMatchStatus.unavailable, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, limitations=["The fingerprint index scope is invalid."])
+        if (entry.get("organization_id"), entry.get("portfolio_id"), entry.get("system_id"), entry.get("algorithm_version")) != (scope.tenant_id, scope.workspace_id, fingerprint.scope.system_id, ALGORITHM_VERSION):
+            return ExactMatchResult(status=ExactMatchStatus.unavailable, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, limitations=["The fingerprint index scope is invalid."])
+        if not entry.get("fingerprint_id") or not entry.get("canonical_digest"):
+            return ExactMatchResult(status=ExactMatchStatus.unavailable, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, limitations=["The fingerprint index contains an incomplete entry."])
+        if entry.get("package_id") == package_id:
             continue
         timestamp = parse_timestamp(entry.get("evaluated_at"))
         if timestamp is None:
@@ -519,7 +540,14 @@ def read_exact_fingerprint_matches(package_id: str) -> ExactMatchResult | None:
             prior = EvidencePackageFingerprint.model_validate((stored or {}).get("fingerprint"))
         except (ValueError, TypeError):
             return ExactMatchResult(status=ExactMatchStatus.unavailable, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, limitations=["Eligible history contains a stale fingerprint reference."])
-        if not payload_matches_dataset_scope(stored, scope) or prior.package_id != prior_id or prior.scope != fingerprint.scope or prior.status != FingerprintStatus.available:
+        if (
+            not payload_matches_dataset_scope(stored, scope)
+            or prior.package_id != prior_id
+            or prior.scope != fingerprint.scope
+            or prior.status != FingerprintStatus.available
+            or prior.fingerprint_id != entry.get("fingerprint_id")
+            or prior.canonical_digest != entry.get("canonical_digest")
+        ):
             return ExactMatchResult(status=ExactMatchStatus.unavailable, evaluated_package_id=package_id, evaluated_fingerprint_id=fingerprint.fingerprint_id, limitations=["Eligible history contains unavailable or scope-invalid fingerprint evidence."])
         candidates.append((timestamp, prior_id, prior))
     candidates.sort(key=lambda item: (item[0], item[1]))
