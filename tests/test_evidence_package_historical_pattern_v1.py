@@ -31,7 +31,7 @@ def _exact(*candidate_ids: str, eligible: int | None = None) -> ExactMatchResult
     return ExactMatchResult(status=status, evaluated_package_id="evaluated", evaluated_fingerprint_id="fp-evaluated", matches=matches, eligible_history_count=count)
 
 
-def _similar(candidate: str, score: float, status: SimilarityStatus = SimilarityStatus.supported_similarity) -> ApproximateSimilarityResult:
+def _similar(candidate: str, score: float | None, status: SimilarityStatus = SimilarityStatus.supported_similarity) -> ApproximateSimilarityResult:
     return ApproximateSimilarityResult(
         evaluated_package_id="evaluated", evaluated_fingerprint_id="fp-evaluated",
         candidate_package_id=candidate, candidate_fingerprint_id=f"fp-{candidate}",
@@ -47,7 +47,9 @@ def _install(monkeypatch, exact, results=(), approximate_status=None):
     packages = {
         "evaluated": _package("evaluated", "2026-08-04T12:00:00Z"),
         "early": _package("early", "2026-08-01T12:00:00Z"),
+        "middle": _package("middle", "2026-08-02T12:00:00Z"),
         "late": _package("late", "2026-08-03T12:00:00Z"),
+        "latest": _package("latest", "2026-08-03T18:00:00Z"),
     }
     monkeypatch.setattr(repository, "read_evidence_package_by_id", packages.get)
     monkeypatch.setattr(repository, "read_exact_fingerprint_matches", lambda _: exact)
@@ -90,16 +92,69 @@ def test_approximate_ranking_uses_score_then_earliest_time(monkeypatch) -> None:
     assert match.supported_weight == .8
 
 
-def test_candidate_level_non_support_does_not_establish_pattern(monkeypatch) -> None:
+def test_excluded_only_history_is_unavailable_with_preserved_counts(monkeypatch) -> None:
+    _install(monkeypatch, _exact(eligible=1), [_similar("early", None, SimilarityStatus.excluded)])
+    result = repository.read_historical_pattern_classification("evaluated")
+    assert result.classification == HistoricalPatternClassification.unavailable
+    assert result.excluded_candidate_count == 1
+    assert result.insufficient_evidence_candidate_count == 0
+    assert result.no_supported_similarity_candidate_count == 0
+    assert result.eligible_history_count == 1
+    assert result.strongest_supported_match is None
+    assert result.supporting_matches == []
+    assert result.evidence_refs == []
+    assert result.limitations == ["Eligible history exists, but no candidate had sufficient comparable evidence for historical pattern classification."]
+
+
+def test_insufficient_only_history_is_unavailable(monkeypatch) -> None:
+    _install(monkeypatch, _exact(eligible=1), [_similar("early", None, SimilarityStatus.insufficient_similarity_evidence)])
+    result = repository.read_historical_pattern_classification("evaluated")
+    assert result.classification == HistoricalPatternClassification.unavailable
+    assert result.excluded_candidate_count == 0
+    assert result.insufficient_evidence_candidate_count == 1
+
+
+def test_excluded_and_insufficient_only_history_is_unavailable(monkeypatch) -> None:
     results = [
-        _similar("early", 0, SimilarityStatus.excluded).model_copy(update={"overall_similarity": None}),
-        _similar("late", 0, SimilarityStatus.insufficient_similarity_evidence).model_copy(update={"overall_similarity": None}),
+        _similar("early", None, SimilarityStatus.excluded),
+        _similar("late", None, SimilarityStatus.insufficient_similarity_evidence),
     ]
     _install(monkeypatch, _exact(eligible=2), results)
     result = repository.read_historical_pattern_classification("evaluated")
-    assert result.classification == HistoricalPatternClassification.no_supported_historical_pattern
+    assert result.classification == HistoricalPatternClassification.unavailable
     assert result.excluded_candidate_count == 1
     assert result.insufficient_evidence_candidate_count == 1
+    assert result.eligible_history_count == 2
+
+
+def test_valid_negative_with_excluded_or_insufficient_history_is_no_supported_pattern(monkeypatch) -> None:
+    for limited_status in (SimilarityStatus.excluded, SimilarityStatus.insufficient_similarity_evidence):
+        results = [
+            _similar("early", .4, SimilarityStatus.no_supported_similarity),
+            _similar("late", None, limited_status),
+        ]
+        _install(monkeypatch, _exact(eligible=2), results)
+        result = repository.read_historical_pattern_classification("evaluated")
+        assert result.classification == HistoricalPatternClassification.no_supported_historical_pattern
+        assert result.no_supported_similarity_candidate_count == 1
+        assert result.excluded_candidate_count == int(limited_status == SimilarityStatus.excluded)
+        assert result.insufficient_evidence_candidate_count == int(limited_status == SimilarityStatus.insufficient_similarity_evidence)
+
+
+def test_positive_precedence_over_all_other_candidate_statuses(monkeypatch) -> None:
+    results = [
+        _similar("early", .4, SimilarityStatus.no_supported_similarity),
+        _similar("middle", None, SimilarityStatus.excluded),
+        _similar("late", .9, SimilarityStatus.supported_similarity),
+        _similar("latest", None, SimilarityStatus.insufficient_similarity_evidence),
+    ]
+    _install(monkeypatch, _exact(eligible=4), results)
+    similar = repository.read_historical_pattern_classification("evaluated")
+    assert similar.classification == HistoricalPatternClassification.similar_historical_pattern
+    assert (similar.no_supported_similarity_candidate_count, similar.excluded_candidate_count, similar.insufficient_evidence_candidate_count) == (1, 1, 1)
+
+    _install(monkeypatch, _exact("early", eligible=4), results)
+    assert repository.read_historical_pattern_classification("evaluated").classification == HistoricalPatternClassification.exact_historical_match
 
 
 def test_source_unavailability_fails_closed(monkeypatch) -> None:

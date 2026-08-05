@@ -20,13 +20,13 @@ Deterministic precedence is:
 
 1. a valid exact match;
 2. a supported approximate match when no exact match exists;
-3. no supported pattern when eligible history and governed comparisons are available;
-4. insufficient history when no eligible earlier package exists;
-5. unavailable when governed inputs cannot be completed.
+3. no supported pattern when eligible history exists and at least one valid approximate candidate reports `no_supported_similarity`;
+4. unavailable when eligible history exists but its candidates are limited to excluded and/or insufficient-similarity-evidence comparisons;
+5. insufficient history when no eligible earlier package exists.
 
-Integrity failure overrides favorable evidence and returns `unavailable`; it is never silently discarded. Candidate exclusions and insufficient-similarity-evidence results do not establish a pattern. A valid no-supported-similarity result can support `no_supported_historical_pattern`. Exact, supported-approximate, no-supported, insufficient-evidence, and excluded counts remain separate.
+Integrity failure overrides favorable evidence and returns `unavailable`; it is never silently discarded. Excluded candidates do not support either a positive or negative historical-pattern conclusion. Insufficient-similarity-evidence candidates likewise support neither conclusion. Eligible history containing only excluded and/or insufficient candidates therefore returns `unavailable`. A valid `no_supported_similarity` result supports `no_supported_historical_pattern` when no stronger positive result exists, including when other candidates are excluded or insufficient. Exact, supported-approximate, no-supported, insufficient-evidence, and excluded counts remain separate.
 
-`insufficient_history` means only that the eligible historical record is insufficient. `no_supported_historical_pattern` means only: “No supported historical pattern was found in the eligible available history.” It makes no assertion about behavior outside that record. `unavailable` covers a missing evaluated sidecar, invalid timestamp, missing/corrupt/stale governed result, or invalid scope.
+`insufficient_history` means only that the eligible historical record contains no earlier eligible package. `no_supported_historical_pattern` is a valid negative comparison and means only: “No supported historical pattern was found in the eligible available history.” It makes no assertion about behavior outside that record. `unavailable` covers a missing evaluated sidecar, invalid timestamp, missing/corrupt/stale governed result, invalid scope, or eligible history for which comparable evidence could not be completed. The excluded/insufficient-only unavailable result does not mean that no pattern exists.
 
 ## Strongest match and time
 

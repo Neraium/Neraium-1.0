@@ -710,23 +710,27 @@ def read_historical_pattern_classification(package_id: str) -> HistoricalPattern
     ))
     supporting = exact_matches + approximate_matches
     statuses = [item.overall_status for item in approximate.results]
+    no_supported_similarity_count = statuses.count(SimilarityStatus.no_supported_similarity)
     if exact_matches:
         classification = HistoricalPatternClassification.exact_historical_match
         limitations = ["An exact historical package pattern is present in the eligible prior record."]
     elif approximate_matches:
         classification = HistoricalPatternClassification.similar_historical_pattern
         limitations = ["A materially similar historical package pattern is present."]
+    elif no_supported_similarity_count:
+        classification = HistoricalPatternClassification.no_supported_historical_pattern
+        limitations = ["No supported historical pattern was found in the eligible available history."]
     elif exact.eligible_history_count == 0:
         classification = HistoricalPatternClassification.insufficient_history
         limitations = ["Eligible historical evidence is insufficient."]
     else:
-        classification = HistoricalPatternClassification.no_supported_historical_pattern
-        limitations = ["No supported historical pattern was found in the eligible available history."]
+        classification = HistoricalPatternClassification.unavailable
+        limitations = ["Eligible history exists, but no candidate had sufficient comparable evidence for historical pattern classification."]
     return HistoricalPatternResponse(
         evaluated_package_id=package_id, evaluated_fingerprint_id=exact.evaluated_fingerprint_id,
         classification=classification, exact_match_count=len(exact_matches),
         similar_pattern_count=len(approximate_matches),
-        no_supported_similarity_candidate_count=statuses.count(SimilarityStatus.no_supported_similarity),
+        no_supported_similarity_candidate_count=no_supported_similarity_count,
         eligible_history_count=exact.eligible_history_count,
         strongest_supported_match=supporting[0] if supporting else None,
         supporting_matches=supporting,
