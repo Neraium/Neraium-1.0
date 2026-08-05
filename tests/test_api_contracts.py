@@ -12,7 +12,7 @@ from app.services.rate_limiter import clear_rate_limits
 
 # Evidence Package v1 added its analysis-ID and package-ID reads, and Evidence
 # Package Lifecycle v1 added its transition write, and Fingerprinting v1 added
-# three pure reads, to the prior 145-operation
+# three fingerprint reads and one historical-pattern read, to the prior 145-operation
 # surface. Keep the total as a route-surface guard while naming the additions.
 PRE_EVIDENCE_PACKAGE_OPERATION_COUNT = 145
 EVIDENCE_PACKAGE_OPERATIONS = {
@@ -30,6 +30,8 @@ FINGERPRINT_OPERATIONS = {
         ("evidence_package_exact_matches_by_id", "ExactMatchResult"),
     ("get", "/api/data/evidence-packages/{package_id}/approximate-similarity"):
         ("evidence_package_approximate_similarity_by_id", "ApproximateSimilarityResponse"),
+    ("get", "/api/data/evidence-packages/{package_id}/historical-pattern"):
+        ("evidence_package_historical_pattern_by_id", "HistoricalPatternResponse"),
 }
 EXPECTED_OPENAPI_OPERATION_COUNT = PRE_EVIDENCE_PACKAGE_OPERATION_COUNT + len(EVIDENCE_PACKAGE_OPERATIONS) + len(FINGERPRINT_OPERATIONS)
 
