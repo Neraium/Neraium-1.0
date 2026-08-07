@@ -2184,7 +2184,7 @@ def test_upload_polling_reads_persisted_job_state() -> None:
     assert payload["rows_processed"] == 300_000
     assert payload["propagation_stage"] == "parsing_telemetry"
     assert payload["propagation_progress"] == 20
-    assert payload["propagation_label"] == "Normalizing telemetry..."
+    assert payload["propagation_label"] == "Profiling historical data..."
     assert (upload_jobs.JOB_DIR / "polling-job.json").exists()
 
 

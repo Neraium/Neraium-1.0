@@ -1,5 +1,7 @@
 import { Panel } from "./workspacePrimitives";
+import HistoricalIngestionReview from "./setup/HistoricalIngestionReview";
 import "../styles/baseline-detail.css";
+import "../styles/upload-intelligence.css";
 
 function display(value, fallback = "Not reported") {
   if (value === null || value === undefined || value === "") return fallback;
@@ -25,7 +27,7 @@ function percentage(value) {
   return `${Math.round(Math.abs(number) <= 1 ? number * 100 : number)}%`;
 }
 
-export default function BaselineDetailView({ routeIdentity, detailState, onRetry, onImportComparison, onReturnToPortfolio }) {
+export default function BaselineDetailView({ routeIdentity, detailState, onRetry, onImportComparison, onReturnToPortfolio, apiFetch, accessCode }) {
   const baselineId = String(routeIdentity?.baselineId ?? "").trim();
   const portfolioId = String(routeIdentity?.portfolioId ?? "").trim();
   const ready = detailState.status === "ready" && detailState.result?.candidate_model;
@@ -43,6 +45,8 @@ export default function BaselineDetailView({ routeIdentity, detailState, onRetry
   const quality = candidate?.data_quality ?? {};
   const timestamp = candidate?.timestamp_quality ?? {};
   const analysisState = detailState.result?.analysis_state ?? { status: "empty", count: 0, analyses: [] };
+  const ingestionProfile = detailState.result?.ingestion_trust ?? null;
+  const ingestionDatasetId = detailState.result?.dataset_id ?? source?.dataset_id ?? ingestionProfile?.dataset_id;
   const hasLinkedAnalysis = analysisState.status !== "empty" && Number(analysisState.count) > 0;
   const activationState = String(
     detailState.result?.activation?.state ?? candidate?.activation?.state ?? candidate?.status ?? "stored",
@@ -121,6 +125,15 @@ export default function BaselineDetailView({ routeIdentity, detailState, onRetry
               {summary.map((item) => <div key={item.label}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}
             </dl>
 
+            {ingestionProfile && ingestionDatasetId ? (
+              <HistoricalIngestionReview
+                datasetId={ingestionDatasetId}
+                initialProfile={ingestionProfile}
+                apiFetch={apiFetch}
+                accessCode={accessCode}
+              />
+            ) : null}
+
             <div className="baseline-detail__grid">
               <section className="baseline-detail__section" aria-labelledby="baseline-window-heading">
                 <p className="baseline-detail__eyebrow">Learned operating model</p>
@@ -137,8 +150,17 @@ export default function BaselineDetailView({ routeIdentity, detailState, onRetry
                 <p className="baseline-detail__eyebrow">Data quality</p>
                 <h4 id="baseline-quality-heading">Learning confidence</h4>
                 <dl className="baseline-detail__facts">
-                  <div><dt>Reliability</dt><dd>{display(quality?.reliability_rating)}</dd></div>
-                  <div><dt>Reliability score</dt><dd>{percentage(quality?.reliability_score)}</dd></div>
+                  {ingestionProfile ? (
+                    <>
+                      <div><dt>Trust model</dt><dd>Multidimensional</dd></div>
+                      <div><dt>Analysis readiness</dt><dd>{display(ingestionProfile?.readiness?.outcome)}</dd></div>
+                    </>
+                  ) : (
+                    <>
+                      <div><dt>Reliability</dt><dd>{display(quality?.reliability_rating)}</dd></div>
+                      <div><dt>Reliability score</dt><dd>{percentage(quality?.reliability_score)}</dd></div>
+                    </>
+                  )}
                   <div><dt>Imputed cells</dt><dd>{quality?.imputation_report?.imputed_cells ?? 0}</dd></div>
                   <div><dt>Timestamp detected</dt><dd>{quality?.timestamp_detected === true ? "Yes" : "No"}</dd></div>
                 </dl>

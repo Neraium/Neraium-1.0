@@ -102,14 +102,9 @@ test("AWS-free chilled-water baseline and persistent pump degradation survive re
     start: "2026-06-15T00:00:00",
     end: "2026-06-21T23:45:00",
   });
-  expect(firstPackage.limitations).toEqual([expect.objectContaining({
-    id: "lim-missing-semantic-mapping",
-    category: "missing_semantic_mapping",
-    severity: "unknown",
-    status: "active",
-    supporting_evidence_refs: ["ev-semantic-mapping-availability"],
-  })]);
-  expect(firstPackage.limitations[0].reason).toContain("pump_power_kw, chw_flow_gpm");
+  // The historical trust boundary now supplies deterministic power/flow
+  // semantics, so the legacy missing-semantic-mapping limitation is resolved.
+  expect(firstPackage.limitations).toEqual([]);
   expect(firstPackage.hypotheses).toEqual([]);
   const immutableAnalyticalEvidence = {
     timeline: firstPackage.timeline,

@@ -1683,6 +1683,8 @@ export default function DataConnectionsWorkspace({
         <BaselineDetailView
           routeIdentity={selectedBaselineIdentity}
           detailState={baselineDetailState}
+          apiFetch={apiFetch}
+          accessCode={accessCode}
           onRetry={() => setBaselineDetailReloadKey((value) => value + 1)}
           onImportComparison={async () => {
             const detailResult = baselineDetailState.result;
@@ -1737,6 +1739,13 @@ export default function DataConnectionsWorkspace({
         onReturnToPortfolio={onReturnToPortfolio}
         baselineNavigationPending={baselineNavigationPending}
         onImportComparisonDataset={() => { void beginComparisonDataset(); }}
+        apiFetch={apiFetch}
+        accessCode={accessCode}
+        onIngestionReviewUpdated={(profile) => {
+          const trust = profile?.summary ?? profile;
+          setUploadResult((current) => current ? { ...current, ingestion_trust: trust } : current);
+          setUploadJob((current) => current ? { ...current, ingestion_trust: trust } : current);
+        }}
       />
     </div>
   );

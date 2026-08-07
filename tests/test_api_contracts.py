@@ -38,11 +38,17 @@ CORRELATION_OPERATIONS = {
     ("get", "/api/data/evidence-packages/{package_id}/related-packages"):
         ("getEvidencePackageRelatedPackagesV1", "RelatedPackageSetResponse"),
 }
+HISTORICAL_INGESTION_OPERATIONS = {
+    ("get", "/api/data/ingestion/v1/datasets/{dataset_id}"): "getHistoricalIngestionProfileV1",
+    ("get", "/api/data/ingestion/v1/datasets/{dataset_id}/canonical"): "getHistoricalCanonicalDatasetV1",
+    ("patch", "/api/data/ingestion/v1/datasets/{dataset_id}/review"): "reviewHistoricalIngestionDatasetV1",
+}
 EXPECTED_OPENAPI_OPERATION_COUNT = (
     PRE_EVIDENCE_PACKAGE_OPERATION_COUNT
     + len(EVIDENCE_PACKAGE_OPERATIONS)
     + len(FINGERPRINT_OPERATIONS)
     + len(CORRELATION_OPERATIONS)
+    + len(HISTORICAL_INGESTION_OPERATIONS)
 )
 
 
@@ -223,6 +229,21 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
         assert "require_api_access" in {
             dependency.call.__name__ for dependency in matching_routes[0].dependant.dependencies
         }
+    for (method, path), operation_id in HISTORICAL_INGESTION_OPERATIONS.items():
+        operation = schema["paths"][path][method]
+        assert operation["operationId"] == operation_id
+        assert operation["tags"] == ["historical-ingestion"]
+        matching_routes = [
+            route for route in runtime_operations
+            if route.path == path and route.methods == {method.upper()}
+        ]
+        assert len(matching_routes) == 1
+        dependency_names = {
+            dependency.call.__name__ for dependency in matching_routes[0].dependant.dependencies
+        }
+        assert "require_api_access" in dependency_names
+        if method == "patch":
+            assert "require_operator_role" in dependency_names
     lifecycle_operation = schema["paths"]["/api/data/evidence-packages/{package_id}/lifecycle-events"]["post"]
     assert lifecycle_operation["requestBody"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/LifecycleTransitionRequest"

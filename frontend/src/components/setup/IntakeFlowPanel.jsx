@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import {
   buildIntakeStages,
@@ -8,6 +8,8 @@ import {
 import { Panel } from "../workspacePrimitives";
 import "../../styles/operational-workflow.css";
 import "../../styles/upload-intelligence.css";
+
+const HistoricalIngestionReview = lazy(() => import("./HistoricalIngestionReview"));
 
 const hiddenFileInputStyle = {
   position: "absolute",
@@ -779,6 +781,9 @@ export default function IntakeFlowPanel({
   onReturnToPortfolio,
   baselineNavigationPending = false,
   onImportComparisonDataset,
+  apiFetch,
+  accessCode,
+  onIngestionReviewUpdated,
 }) {
   void uploadStateMessage;
   void batchResults;
@@ -822,6 +827,17 @@ export default function IntakeFlowPanel({
   const subtitle = comparison
     ? "Upload verified operating history to evaluate it against Neraium's active learned model. This workflow does not automatically redefine normal."
     : "Upload representative historical operating data so Neraium can learn how the system normally behaves.";
+  const ingestionProfile = baselineResult?.ingestion_trust
+    ?? uploadJob?.ingestion_trust
+    ?? latestUploadSnapshot?.latest_result?.ingestion_trust
+    ?? latestUploadSnapshot?.current_upload?.result?.ingestion_trust
+    ?? null;
+  const ingestionDatasetId = baselineResult?.datasetId
+    ?? baselineResult?.dataset_id
+    ?? uploadJob?.datasetId
+    ?? uploadJob?.dataset_id
+    ?? ingestionProfile?.dataset_id
+    ?? null;
 
   function handleUploadDragOver(event) {
     event.preventDefault();
@@ -935,23 +951,36 @@ export default function IntakeFlowPanel({
         ) : null}
 
         {viewState === "complete" ? (
-          <SuccessState
-            comparison={comparison}
-            summary={summary}
-            onOpenBaseline={onOpenBaseline ?? onViewResults}
-            baselineNavigationPending={baselineNavigationPending}
-            onImportComparisonDataset={onImportComparisonDataset ?? onResetWorkspace}
-            onViewResults={onViewResults}
-            onResetWorkspace={onResetWorkspace}
-            onReturnToPortfolio={onReturnToPortfolio ?? onResetWorkspace}
-            latestUploadSnapshot={latestUploadSnapshot}
-            uploadJob={uploadJob}
-            uploadState={uploadState}
-            uploadTransfer={uploadTransfer}
-            propagationLabel={propagationLabel}
-            queuedWorkerDetail={queuedWorkerDetail}
-            latestMessage={latestMessage}
-          />
+          <>
+            {ingestionProfile && ingestionDatasetId ? (
+              <Suspense fallback={<p role="status">Loading ingestion review…</p>}>
+                <HistoricalIngestionReview
+                  datasetId={ingestionDatasetId}
+                  initialProfile={ingestionProfile}
+                  apiFetch={apiFetch}
+                  accessCode={accessCode}
+                  onUpdated={onIngestionReviewUpdated}
+                />
+              </Suspense>
+            ) : null}
+            <SuccessState
+              comparison={comparison}
+              summary={summary}
+              onOpenBaseline={onOpenBaseline ?? onViewResults}
+              baselineNavigationPending={baselineNavigationPending}
+              onImportComparisonDataset={onImportComparisonDataset ?? onResetWorkspace}
+              onViewResults={onViewResults}
+              onResetWorkspace={onResetWorkspace}
+              onReturnToPortfolio={onReturnToPortfolio ?? onResetWorkspace}
+              latestUploadSnapshot={latestUploadSnapshot}
+              uploadJob={uploadJob}
+              uploadState={uploadState}
+              uploadTransfer={uploadTransfer}
+              propagationLabel={propagationLabel}
+              queuedWorkerDetail={queuedWorkerDetail}
+              latestMessage={latestMessage}
+            />
+          </>
         ) : null}
 
         {viewState === "completion_error" ? (

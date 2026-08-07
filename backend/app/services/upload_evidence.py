@@ -350,6 +350,7 @@ def build_traceability_packet(*, job_id: str, filename: str, result: dict[str, A
     evidence_windows = _evidence_windows_from_result(result)
     timestamps = _traceability_timestamps_from_result(result)
     provenance = build_analysis_provenance(result)
+    ingestion_trust = _mapping(result.get("ingestion_trust"))
     return {
         "job_id": str(job_id),
         "run_id": str(job_id),
@@ -359,6 +360,17 @@ def build_traceability_packet(*, job_id: str, filename: str, result: dict[str, A
         "evidence_windows": evidence_windows,
         "timestamps": timestamps,
         "provenance": provenance,
+        "historical_ingestion": {
+            "contract_version": ingestion_trust.get("contract_version"),
+            "dataset_identity": ingestion_trust.get("dataset_identity"),
+            "revision": ingestion_trust.get("revision"),
+            "readiness": ingestion_trust.get("readiness"),
+            "trust_dimensions": ingestion_trust.get("trust_dimensions"),
+            "raw_source_sha256": _mapping(ingestion_trust.get("raw_source")).get("sha256"),
+            "canonical_dataset": ingestion_trust.get("canonical_dataset"),
+            "configuration_profile": ingestion_trust.get("configuration_profile"),
+            "transformations": _mapping(ingestion_trust.get("provenance")).get("transformations", []),
+        },
         "model_version": provenance.get("engine_version"),
         "schema_version": provenance.get("schema_version"),
         "configuration_hash": provenance.get("configuration_hash"),
@@ -507,6 +519,7 @@ def build_evidence_record_from_result(
         "evidence_windows": traceability["evidence_windows"],
         "timestamps": traceability["timestamps"],
         "traceability": traceability,
+        "historical_ingestion": traceability.get("historical_ingestion"),
         "confidence_score": confidence_score,
         "regime_label": str(sii.get("baseline_regime") or sii.get("regime_label") or "State Group A"),
         "structural_state": structural_state,

@@ -1454,3 +1454,215 @@
     transition: none !important;
   }
 }
+.historical-review {
+  display: grid;
+  gap: 18px;
+  margin: 18px 0;
+  padding: clamp(18px, 3vw, 28px);
+  border: 1px solid color-mix(in srgb, var(--color-accent, #62d6c6) 34%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--color-surface, #102129) 92%, transparent);
+}
+
+.historical-review__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.historical-review__header h3,
+.historical-review__queue h4,
+.historical-review__dimensions h4 {
+  margin: 0;
+}
+
+.historical-review__header p,
+.historical-review__item p,
+.historical-review__dimensions p {
+  margin: 6px 0 0;
+}
+
+.historical-review__eyebrow {
+  color: var(--color-accent, #62d6c6);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.historical-review__readiness,
+.historical-review__evidence-label {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent, #62d6c6) 14%, transparent);
+  color: var(--color-accent, #62d6c6);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.historical-review__readiness--review_required,
+.historical-review__readiness--ready_with_limitations {
+  background: color-mix(in srgb, #f4c36a 14%, transparent);
+  color: #f4c36a;
+}
+
+.historical-review__readiness--insufficient_trustworthy_data {
+  background: color-mix(in srgb, #ff8d82 14%, transparent);
+  color: #ffaaa2;
+}
+
+.historical-review__counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.historical-review__counts div,
+.historical-review__dimensions article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 12px;
+}
+
+.historical-review__counts dt {
+  color: var(--color-text-muted, #9eb1b7);
+  font-size: 0.72rem;
+}
+
+.historical-review__counts dd {
+  margin: 4px 0 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.historical-review__limitations,
+.historical-review__queue {
+  padding: 14px;
+  border-left: 3px solid #f4c36a;
+  border-radius: 8px;
+  background: color-mix(in srgb, #f4c36a 7%, transparent);
+}
+
+.historical-review__limitations ul,
+.historical-review__queue ul,
+.historical-review__evidence-list {
+  margin: 9px 0 0;
+  padding-left: 20px;
+}
+
+.historical-review__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 0.7fr);
+  gap: 16px;
+  align-items: end;
+  padding: 13px 0;
+}
+
+.historical-review__item + .historical-review__item {
+  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.historical-review__item label,
+.historical-review__mapping-controls {
+  display: grid;
+  gap: 7px;
+}
+
+.historical-review__item label span {
+  color: var(--color-text-muted, #9eb1b7);
+  font-size: 0.74rem;
+}
+
+.historical-review__item select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 8px;
+  background: var(--color-surface, #102129);
+  color: inherit;
+}
+
+.historical-review__clear,
+.historical-review__saved {
+  margin: 0;
+  color: var(--color-accent, #62d6c6);
+}
+
+.historical-review__details summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.historical-review__dimensions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.historical-review__dimensions article > span {
+  float: right;
+  color: var(--color-text-muted, #9eb1b7);
+  font-size: 0.72rem;
+}
+
+.historical-review__identity {
+  overflow-wrap: anywhere;
+}
+
+.historical-review__evidence-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.historical-review__evidence-section h4 {
+  margin: 0;
+}
+
+.historical-review__evidence-section ul,
+.historical-review__signal-inventory ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.historical-review__signal-inventory {
+  margin-top: 14px;
+}
+
+.historical-review__signal-inventory li {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.6fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.historical-review__signal-inventory span {
+  color: var(--color-text-muted, #9eb1b7);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .historical-review__header,
+  .historical-review__item,
+  .historical-review__signal-inventory li {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .historical-review__counts,
+  .historical-review__dimensions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .historical-review__counts,
+  .historical-review__dimensions {
+    grid-template-columns: 1fr;
+  }
+}

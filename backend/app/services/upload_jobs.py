@@ -33,6 +33,12 @@ from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.data_quality import build_data_quality, detect_timestamp_column, parse_numeric_value, parse_timestamp, profile_numeric_columns, profile_timestamps
 from app.services.driver_attribution import build_driver_attribution
 from app.services.facility_context import read_facility_context
+from app.services.historical_ingestion import (
+    build_historical_ingestion,
+    ingestion_summary,
+    persist_ingestion_record,
+    prepare_tabular_source,
+)
 from app.services.operator_report import build_operator_report
 from app.services.notifications import dispatch_observation_notification
 from app.services.sii_intelligence import build_upload_intelligence
@@ -40,7 +46,6 @@ from app.services.sii_runner import RUNNER_MODULE, read_latest_sii_state
 from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed, upsert_upload_job, read_upload_job, enqueue_upload_job, complete_upload_queue_job, touch_upload_queue_job
 from app.services.upload_completion import build_partial_upload_artifacts
 from app.services.upload_evidence import build_evidence_record_from_result, build_traceability_packet
-from app.services.upload_parser import json_payload_to_csv_text
 from app.services.upload_pipeline import run_structural_analysis_pipeline
 from app.services.upload_persistence import project_result_for_transport
 from app.services.upload_persistence import read_upload_history as read_upload_history_from_runtime
@@ -707,13 +712,13 @@ def _progress_label(stage: str, *, row_count: int | None = None, signal_count: i
     if stage == "reading_csv":
         return "Validating CSV..."
     if stage == "parsing_telemetry":
-        return f"Normalizing telemetry... {row_count:,} rows read." if row_count else "Normalizing telemetry..."
+        return f"Profiling historical data... {row_count:,} rows read." if row_count else "Profiling historical data..."
     if stage == "detecting_schema_signals":
         return "Validating CSV..."
     if stage == "cleaning_imputing_data":
-        return "Normalizing telemetry..."
+        return "Building trusted canonical dataset..."
     if stage == "profiling_data_quality":
-        return "Normalizing telemetry..."
+        return "Profiling signal quality..."
     if stage == "building_baseline":
         return "Identifying systems..."
     if stage == "scoring_drift_relationships":
@@ -917,8 +922,11 @@ def _build_csv_result(
     memory_estimate_bytes: int,
     ingestion_report: dict[str, Any] | None = None,
     processing_started_at: float | None = None,
+    ingestion_trust: dict[str, Any] | None = None,
+    trusted_signal_catalog: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     clear_reset_block_persisted()
+    source_columns = list(((ingestion_trust or {}).get("source_schema") or {}).get("columns") or columns)
     job_context = read_job(job_id) or {}
     initiated_by = job_context.get("initiated_by", "anonymous")
     request_id = job_context.get("request_id")
@@ -940,6 +948,19 @@ def _build_csv_result(
 
     _set_propagation_stage(job_id, stage="profiling_data_quality", progress=55, label=_progress_label("profiling_data_quality"))
     workflow = normalize_workflow(job_context.get("workflow") or WORKFLOW_LEGACY_ANALYSIS)
+    if ingestion_trust:
+        readiness_outcome = str((ingestion_trust.get("readiness") or {}).get("outcome") or "review_required")
+        ingestion_trust["analysis_handoff"] = {
+            "status": "canonical_input_selected" if readiness_outcome in {"ready", "ready_with_limitations"} else "limited_canonical_input_selected",
+            "workflow": workflow,
+            "dataset_identity": ingestion_trust.get("dataset_identity"),
+            "included_signal_ids": (ingestion_trust.get("readiness") or {}).get("included_signal_ids", []),
+            "excluded_signal_ids": (ingestion_trust.get("readiness") or {}).get("excluded_signal_ids", []),
+            "blocked_methods": (ingestion_trust.get("readiness") or {}).get("blocked_methods", []),
+        }
+        ingestion_trust.pop("summary", None)
+        ingestion_trust["summary"] = ingestion_summary(ingestion_trust)
+        ingestion_trust = persist_ingestion_record(ingestion_trust)
     if is_baseline_workflow(workflow):
         baseline_result = build_behavioral_baseline(
             job_id=job_id,
@@ -956,6 +977,8 @@ def _build_csv_result(
             active_model=read_active_behavioral_model(),
             stage_notifier=_set_propagation_stage,
             dataset_id=job_context.get("dataset_id") or job_id,
+            telemetry_signal_catalog=trusted_signal_catalog,
+            ingestion_trust=ingestion_summary(ingestion_trust),
         )
         candidate = baseline_result["candidate_model"]
         suitability = baseline_result["baseline_suitability"]
@@ -1009,8 +1032,9 @@ def _build_csv_result(
             "filename": filename,
             "row_count": row_count_total,
             "rows_processed": row_count_total,
-            "columns_detected": len(columns),
+            "columns_detected": len(source_columns),
             "initiated_by": initiated_by,
+            "ingestion_trust": ingestion_summary(ingestion_trust),
         }
         summary.update(
             canonical_stage_payload(
@@ -1132,8 +1156,11 @@ def _build_csv_result(
             "last_updated": datetime.now(timezone.utc).isoformat(),
         })
 
-    telemetry_profile, telemetry_profile_confidence, telemetry_profile_signals = classify_telemetry_profile(columns)
-    operational_profile, operational_profile_confidence, operational_profile_signals, operational_modality = classify_operational_profile(columns)
+    # System-family classification is schema metadata, not behavioral analysis.
+    # It may inspect every preserved source header while values from excluded
+    # signals remain outside the canonical analysis rows below.
+    telemetry_profile, telemetry_profile_confidence, telemetry_profile_signals = classify_telemetry_profile(source_columns)
+    operational_profile, operational_profile_confidence, operational_profile_signals, operational_modality = classify_operational_profile(source_columns)
     overall_urgency = "unstable" if max_room_urgency == "unstable" else ("review" if max_room_urgency == "review" else "nominal")
     if overall_urgency == "nominal" and max_room_drift > 0.08:
         overall_urgency = "review"
@@ -1142,6 +1169,7 @@ def _build_csv_result(
         job_id=job_id,
         filename=filename,
         columns=columns,
+        source_columns=source_columns,
         rows=rows,
         numeric_columns=numeric_columns,
         timestamp_column=timestamp_column,
@@ -1160,6 +1188,7 @@ def _build_csv_result(
         operational_profile_signals=operational_profile_signals,
         operational_modality=operational_modality,
         ingestion_report=ingestion_report,
+        telemetry_signal_catalog=trusted_signal_catalog,
         chunk_count=chunk_count,
         memory_estimate_bytes=memory_estimate_bytes,
         processing_started_at=processing_started_at,
@@ -1178,6 +1207,19 @@ def _build_csv_result(
     cultivation_mapping = pipeline["cultivation_mapping"]
     baseline_reliable = pipeline["baseline_reliable"]
     data_quality = pipeline["data_quality"]
+    if ingestion_trust and any(
+        int(((signal or {}).get("quality") or {}).get("valid_numeric_count") or 0) >= 3
+        for signal in ingestion_trust.get("signal_profiles", [])
+        if isinstance(signal, dict)
+    ):
+        # The trust readiness result already explains why source-numeric signals
+        # may be excluded. Keep the legacy quality view compatible without
+        # claiming that the source itself contained no numeric telemetry.
+        data_quality["warnings"] = [
+            warning
+            for warning in data_quality.get("warnings", [])
+            if warning != "No numeric telemetry was available for normalization."
+        ]
     reliability_warning = pipeline["reliability_warning"]
     room_assessments = pipeline["room_assessments"]
     engine_result = pipeline["engine_result"]
@@ -1259,6 +1301,43 @@ def _build_csv_result(
         if workflow == WORKFLOW_ANALYZE_NEW_DATA
         else {}
     )
+    public_numeric_profiles = list(numeric_profiles)
+    public_profile_columns = {
+        str(profile.get("column"))
+        for profile in public_numeric_profiles
+        if isinstance(profile, dict)
+    }
+    for signal in (ingestion_trust or {}).get("signal_profiles", []):
+        if not isinstance(signal, dict):
+            continue
+        column = str(signal.get("source_column") or "")
+        quality = signal.get("quality") or {}
+        if (
+            not column
+            or column in public_profile_columns
+            or int(quality.get("valid_numeric_count") or 0) < 3
+        ):
+            continue
+        missing_count = int(quality.get("missing_count") or 0)
+        total_count = int(quality.get("total_count") or 0)
+        public_numeric_profiles.append({
+            "column": column,
+            "min": quality.get("minimum"),
+            "max": quality.get("maximum"),
+            "minimum": quality.get("minimum"),
+            "maximum": quality.get("maximum"),
+            "average": round(float(quality.get("mean")), 4) if quality.get("mean") is not None else None,
+            "missing_count": missing_count,
+            "missing_percent": round((missing_count / max(1, total_count)) * 100, 4),
+            "valid_numeric_count": quality.get("valid_numeric_count"),
+            "non_numeric_count": quality.get("invalid_numeric_count", 0),
+            "constant_or_stuck": bool(quality.get("stuck")),
+            "distinct_count": quality.get("distinct_count"),
+            "variability": "constant" if quality.get("near_constant") else "variable",
+            "trust_analysis_excluded": not bool(signal.get("included_for_analysis")),
+        })
+        public_profile_columns.add(column)
+
     result = {
         "job_id": job_id,
         "run_id": job_id,
@@ -1278,16 +1357,16 @@ def _build_csv_result(
         **comparison_identity,
         "filename": filename,
         "row_count": row_count_total,
-        "column_count": len(columns),
-        "columns": columns,
+        "column_count": len(source_columns),
+        "columns": source_columns,
         "preview_rows": [{key: value for key, value in row.items() if not str(key).startswith("__")} for row in rows[:10]],
         "detected_timestamp_column": timestamp_column,
-        "numeric_profiles": numeric_profiles,
+        "numeric_profiles": public_numeric_profiles,
         "timestamp_profile": timestamp_profile,
         "data_quality": data_quality,
         "ingestion_report": {
             "rows_received": int(ingestion_report.get("rows_received", row_count_total)),
-            "rows_used": row_count_total,
+            "rows_used": int(ingestion_report.get("rows_used", row_count_total)),
             "rows_dropped": int(ingestion_report.get("rows_dropped", 0)),
             "drop_reasons": dict(ingestion_report.get("drop_reasons") or {}),
             "quality_counts": dict(ingestion_report.get("quality_counts") or {}),
@@ -1345,6 +1424,15 @@ def _build_csv_result(
         "request_id": request_id,
         "upload_session_id": upload_session_id,
         "workflow": workflow,
+        "ingestion_trust": {
+            **(ingestion_summary(ingestion_trust) or {}),
+            "profile_url": f"/api/data/ingestion/v1/datasets/{job_context.get('dataset_id') or job_id}",
+            "canonical_url": f"/api/data/ingestion/v1/datasets/{job_context.get('dataset_id') or job_id}/canonical",
+            "raw_source": (ingestion_trust or {}).get("raw_source"),
+            "canonical_dataset": (ingestion_trust or {}).get("canonical_dataset"),
+            "configuration_profile": (ingestion_trust or {}).get("configuration_profile"),
+            "provenance": (ingestion_trust or {}).get("provenance"),
+        } if ingestion_trust else None,
         "active_baseline_reference": (
             {
                 "model_id": job_context.get("active_baseline_model_id"),
@@ -1427,7 +1515,7 @@ def _build_csv_result(
         "non_blocking": True,
     }
 
-    summary = {"job_id": job_id, "run_id": job_id, "upload_id": job_id, "upload_session_id": upload_session_id, "request_id": request_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Analysis ready.", "message": "Analysis ready.", "progress_label": "Analysis ready.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": bool(baseline_reliable), "column_count": len(columns), "rows_processed": row_count_total, "columns_detected": len(columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}, "evidence_persisted": False, "report_finalization": dict(result["report_finalization"]) }
+    summary = {"job_id": job_id, "run_id": job_id, "upload_id": job_id, "upload_session_id": upload_session_id, "request_id": request_id, "status_url": f"/api/data/upload-status/{job_id}", "status": "COMPLETE", "processing_state": "complete", "percent": 100, "progress": 100, "propagation_stage": "complete", "propagation_progress": 100, "propagation_label": "Analysis ready.", "message": "Analysis ready.", "progress_label": "Analysis ready.", "result_available": True, "first_usable_available": True, "sii_completed": True, "replay_ready": frame_count > 0, "replay_frame_count": frame_count, "latest_replay_frames": frame_count, "replay_source": "persisted", "last_processed_at": now, "filename": filename, "row_count": row_count_total, "rows_received": result["ingestion_report"]["rows_received"], "rows_used": row_count_total, "rows_dropped": result["ingestion_report"]["rows_dropped"], "drop_reasons": result["ingestion_report"]["drop_reasons"], "processing_time_seconds": processing_time_seconds, "quality_warning": result["quality_warning"], "sii_reliable_enough_to_show": bool(baseline_reliable), "column_count": len(source_columns), "rows_processed": row_count_total, "columns_detected": len(source_columns), "chunk_count": chunk_count, "runner_used": bool((runner_result or {}).get("runner_used")), "runner_module": RUNNER_MODULE, "core_engine": (runner_result or {}).get("core_engine"), "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "result_summary": {"filename": filename, "sii_completed": True, "sii_completion_artifacts": {"runner_used": True, "intelligence_present": True, "processing_trace_present": True, "engine_result_present": True}, "runner_errors": []}, "evidence_persisted": False, "report_finalization": dict(result["report_finalization"]) }
     summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label="Analysis ready."))
     summary["initiated_by"] = initiated_by
     summary["workflow"] = workflow
@@ -1437,6 +1525,7 @@ def _build_csv_result(
     summary["site_id"] = result.get("site_id")
     summary["system_id"] = result.get("system_id")
     summary["facility_context_reference"] = result.get("facility_context_reference")
+    summary["ingestion_trust"] = ingestion_summary(ingestion_trust)
     summary.update(comparison_identity)
     summary["session_scope"] = build_session_scope(
         job_id,
@@ -1854,6 +1943,11 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
         raise FileNotFoundError(str(p))
 
     input_hash = file_digest(p)
+    analysis_source_path, source_preparation = prepare_tabular_source(
+        p,
+        filename=filename,
+        source_sha256=input_hash,
+    )
 
     snapshot: dict[str, Any] | None = None
     processing_started_at = time.perf_counter()
@@ -1869,10 +1963,23 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
             "dataset_id": existing_job.get("dataset_id") or job_id,
             "request_id": existing_job.get("request_id"),
         }
+        ingestion_trust, trusted_handoff = build_historical_ingestion(
+            analysis_source_path,
+            dataset_id=str(existing_job.get("dataset_id") or job_id),
+            filename=filename,
+            source_sha256=input_hash,
+            shared_source_key=existing_job.get("shared_upload_source_key"),
+            raw_source_path=p,
+            source_preparation=source_preparation,
+            max_analysis_rows=parse_positive_int_env(
+                "NERAIUM_MAX_INGESTION_ANALYSIS_ROWS",
+                MAX_INGESTION_ANALYSIS_ROWS,
+            ),
+        )
         _log_processing_event("parsing_started", job_id, filename=filename, processing_stage="csv_parsing", **trace_fields)
         _log_processing_event("validation_started", job_id, filename=filename, processing_stage="validation", **trace_fields)
         snapshot = _stream_csv_snapshot(
-            p,
+            analysis_source_path,
             max_analysis_rows=parse_positive_int_env(
                 "NERAIUM_MAX_INGESTION_ANALYSIS_ROWS",
                 MAX_INGESTION_ANALYSIS_ROWS,
@@ -1909,16 +2016,17 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
         summary = _build_csv_result(
             job_id,
             filename,
-            snapshot["columns"],
-            snapshot["sample_rows"],
-            int(snapshot["row_count"]),
-            snapshot["timestamp_column"],
-            snapshot["first_timestamp"],
-            snapshot["last_timestamp"],
+            trusted_handoff["columns"],
+            trusted_handoff["rows"],
+            int(trusted_handoff["row_count_total"]),
+            trusted_handoff["timestamp_column"],
+            (ingestion_trust.get("timestamp_profile") or {}).get("dataset_start"),
+            (ingestion_trust.get("timestamp_profile") or {}).get("dataset_end"),
             int(snapshot["chunk_count"]),
             int(snapshot["memory_estimate_bytes"]),
             {
                 "rows_received": snapshot["rows_received"],
+                "rows_used": snapshot["rows_used"],
                 "rows_dropped": snapshot["rows_dropped"],
                 "drop_reasons": snapshot["drop_reasons"],
                 "quality_counts": snapshot["quality_counts"],
@@ -1928,15 +2036,19 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
                 "data_quality_messages": snapshot.get("data_quality_messages", []),
                 "sample_interval_seconds": snapshot.get("sample_interval_seconds"),
                 "imputation_report": snapshot.get("imputation_report", {}),
-                "analysis_sample_rows": snapshot.get("analysis_sample_rows"),
-                "analysis_population_rows": snapshot.get("analysis_population_rows"),
-                "analysis_sampling_applied": snapshot.get("analysis_sampling_applied", False),
-                "analysis_sample_stride": snapshot.get("analysis_sample_stride", 1),
+                "analysis_sample_rows": len(trusted_handoff["rows"]),
+                "analysis_population_rows": trusted_handoff["row_count_total"],
+                "analysis_sampling_applied": len(trusted_handoff["rows"]) < trusted_handoff["row_count_total"],
+                "analysis_sample_stride": (ingestion_trust.get("canonical_dataset") or {}).get("analysis_sample_stride", 1),
                 "delimiter": snapshot["delimiter"],
                 "header_present": snapshot["header_present"],
                 "input_hash": input_hash,
+                "historical_trust_dataset_identity": ingestion_trust.get("dataset_identity"),
+                "historical_trust_readiness": (ingestion_trust.get("readiness") or {}).get("outcome"),
             },
             processing_started_at,
+            ingestion_trust,
+            trusted_handoff["telemetry_signal_catalog"],
         )
 
         if is_baseline_workflow(summary.get("workflow")):
@@ -1980,7 +2092,13 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
 
 
 def process_json_payload(payload: Any, filename: str = "upload.json", **kwargs) -> dict[str, Any]:
-    return process_csv_content(json_payload_to_csv_text(payload), filename=filename, **kwargs)
+    if isinstance(payload, bytes):
+        content = payload
+    elif isinstance(payload, str):
+        content = payload.encode("utf-8")
+    else:
+        content = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return process_csv_content(content, filename=filename, **kwargs)
 
 
 UPLOAD_QUEUE_LIFECYCLE = UploadQueueLifecycleService(
