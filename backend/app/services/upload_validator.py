@@ -36,9 +36,7 @@ CHILLED_WATER_IMPORTANT_COLUMNS = (
     "chiller_load_pct",
     "compressor_power_kw",
 )
-CHILLED_WATER_FLAG_COLUMNS = {"alarm_count", "maintenance_event", "operator_override"}
 CHILLED_WATER_SPARSE_MISSING_THRESHOLD = 0.05
-SHORT_GAP_LIMIT_ROWS = 6
 DEDUPLICATION_EXACT_HASH_LIMIT = 200_000
 
 
@@ -170,51 +168,6 @@ def detect_interval_seconds(rows: list[tuple[Any, dict[str, Any]]]) -> int | Non
         counts[interval] = counts.get(interval, 0) + 1
     interval, count = max(counts.items(), key=lambda item: item[1])
     return interval if count / max(1, len(intervals)) >= 0.9 else None
-
-
-def interpolate_short_numeric_gaps(
-    rows: list[tuple[Any, dict[str, Any]]],
-    columns_by_normalized_name: dict[str, str],
-    missing_by_column: dict[str, int],
-    total_rows: int,
-) -> dict[str, Any]:
-    imputed_columns: list[str] = []
-    imputed_cells = 0
-    for normalized_name in CHILLED_WATER_IMPORTANT_COLUMNS:
-        if normalized_name in CHILLED_WATER_FLAG_COLUMNS:
-            continue
-        column = columns_by_normalized_name.get(normalized_name)
-        if not column:
-            continue
-        missing_ratio = missing_by_column.get(normalized_name, 0) / max(1, total_rows)
-        if missing_ratio <= 0 or missing_ratio >= CHILLED_WATER_SPARSE_MISSING_THRESHOLD:
-            continue
-        index = 0
-        while index < len(rows):
-            value = parse_numeric_value(str(rows[index][1].get(column, "")))
-            if value is not None:
-                index += 1
-                continue
-            gap_start = index
-            while index < len(rows) and parse_numeric_value(str(rows[index][1].get(column, ""))) is None:
-                index += 1
-            gap_end = index - 1
-            gap_size = gap_end - gap_start + 1
-            if gap_size > SHORT_GAP_LIMIT_ROWS or gap_start == 0 or index >= len(rows):
-                continue
-            previous_value = parse_numeric_value(str(rows[gap_start - 1][1].get(column, "")))
-            next_value = parse_numeric_value(str(rows[index][1].get(column, "")))
-            if previous_value is None or next_value is None:
-                continue
-            for offset, row_index in enumerate(range(gap_start, gap_end + 1), start=1):
-                fraction = offset / (gap_size + 1)
-                rows[row_index][1][column] = str(round(previous_value + (next_value - previous_value) * fraction, 6))
-                imputed_cells += 1
-            imputed_columns.append(normalized_name)
-    return {
-        "imputed_cells": imputed_cells,
-        "imputed_columns": sorted(set(imputed_columns)),
-    }
 
 
 def stream_csv_snapshot(
@@ -396,7 +349,7 @@ def stream_csv_snapshot(
             if analysis_stride == 1 or accepted_index % analysis_stride == 0:
                 raw_rows_in_order.append(last_accepted_row)
             if job_id and on_progress is not None and rows_received % max(1, csv_progress_update_every) == 0:
-                on_progress(job_id, "parsing_telemetry", 20, f"Normalizing telemetry... {rows_received:,} rows read.")
+                on_progress(job_id, "parsing_telemetry", 20, f"Profiling historical data... {rows_received:,} rows read.")
                 last_progress_rows = rows_received
 
         if rows_used == 0 or not raw_rows_in_order:
@@ -406,14 +359,13 @@ def stream_csv_snapshot(
             raw_rows_in_order[-1] = last_accepted_row
         cleaned = sorted(raw_rows_in_order, key=lambda item: item[0]) if timestamp_index is not None else raw_rows_in_order
         interval_seconds = detect_interval_seconds(cleaned) if timestamp_index is not None else None
-        imputation_report = {"imputed_cells": 0, "imputed_columns": []}
-        if chilled_water_schema["detected"] and timestamp_index is not None:
-            imputation_report = interpolate_short_numeric_gaps(
-                cleaned,
-                chilled_water_schema["column_lookup"],
-                important_missing_by_column,
-                rows_used,
-            )
+        # Historical Trust v1 preserves all missing values. The legacy parser
+        # still reports sparse gaps, but it never changes source-derived cells.
+        imputation_report = {
+            "imputed_cells": 0,
+            "imputed_columns": [],
+            "policy": "preserve_missing_values",
+        }
         sample_rows = [row for _, row in cleaned]
         first_timestamp = cleaned[0][1].get(timestamp_column) if timestamp_column else None
         last_timestamp = cleaned[-1][1].get(timestamp_column) if timestamp_column else None
@@ -477,8 +429,8 @@ def stream_csv_snapshot(
                     analysis_gate_state = "DEGRADED_READY"
             if sparse_missing_columns:
                 sparse_labels = ", ".join(display_chilled_water_column(name) for name in sparse_missing_columns)
-                schema_messages.append(f"Sparse missing values detected in {sparse_labels}; short gaps interpolated.")
-                warnings.append(f"Sparse missing values detected in {sparse_labels}; short gaps interpolated.")
+                schema_messages.append(f"Sparse missing values detected in {sparse_labels}; gaps were preserved for review.")
+                warnings.append(f"Sparse missing values detected in {sparse_labels}; gaps were preserved for review.")
         else:
             schema_messages.append("Detected telemetry-style dataset.")
             schema_messages.append(f"{rows_used:,} rows loaded.")
@@ -492,7 +444,7 @@ def stream_csv_snapshot(
             schema_messages.append("Analysis can proceed.")
 
         if job_id and rows_received >= csv_progress_update_every and rows_received != last_progress_rows and on_progress is not None:
-            on_progress(job_id, "parsing_telemetry", 20, f"Normalizing telemetry... {rows_received:,} rows read.")
+            on_progress(job_id, "parsing_telemetry", 20, f"Profiling historical data... {rows_received:,} rows read.")
 
         return {
             "columns": columns,

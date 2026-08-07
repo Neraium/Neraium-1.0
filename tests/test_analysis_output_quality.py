@@ -212,7 +212,8 @@ def test_semantic_header_mapping_survives_pipeline_and_titles_avoid_column_fallb
     assert pressure["original_header"] == "Supply Pressure (psi)"
     assert pressure["normalized_name"] == "supply_pressure_psi"
     assert pressure["display_name"] == "Supply pressure"
-    assert pressure["engineering_units"] == "psi"
+    assert pressure["engineering_units"] == "kPa"
+    assert pressure["original_engineering_units"] == "psi"
     assert pressure["source_column_index"] == 1
     assert pressure["inferred_telemetry_type"] == "Equipment Process Variable"
 

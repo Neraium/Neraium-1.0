@@ -6,6 +6,7 @@ export async function installStoredBaselineUpload(page, {
   portfolioId = "default",
   filename = `${jobId}.csv`,
   staleLatestResult = null,
+  ingestionTrust = null,
 } = {}) {
   const calls = { sessions: 0, objectPuts: 0, completions: 0, statusPolls: 0, baselineResults: 0, exactBaselineResults: 0, latestUploads: 0 };
   let completionAvailable = false;
@@ -28,6 +29,7 @@ export async function installStoredBaselineUpload(page, {
     progress_label: "Validating historical data",
     result_available: false,
     workflow: "create_baseline",
+    ...(ingestionTrust ? { ingestion_trust: ingestionTrust } : {}),
     status_url: statusUrl,
     baseline_result_url: baselineResultUrl,
   };
@@ -67,6 +69,7 @@ export async function installStoredBaselineUpload(page, {
     system_id: portfolioId,
     filename,
     workflow: "create_baseline",
+    ...(ingestionTrust ? { ingestion_trust: ingestionTrust } : {}),
     candidate_model: {
       model_id: modelId,
       baseline_id: modelId,

@@ -545,6 +545,8 @@ def build_behavioral_baseline(
     active_model: dict[str, Any] | None = None,
     stage_notifier: StageNotifier | None = None,
     dataset_id: str | None = None,
+    telemetry_signal_catalog: dict[str, dict[str, Any]] | None = None,
+    ingestion_trust: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a candidate Behavioral Digital Model without running SII detection."""
 
@@ -561,7 +563,7 @@ def build_behavioral_baseline(
 
     _notify(stage_notifier, job_id, stage="baseline_validating", progress=42, label="Validating and normalizing telemetry...")
     timestamp_profile = profile_timestamps(columns, matrix_rows, timestamp_column)
-    telemetry_signal_catalog = build_telemetry_signal_catalog(
+    telemetry_signal_catalog = telemetry_signal_catalog or build_telemetry_signal_catalog(
         columns,
         numeric_profiles=numeric_profiles,
         timestamp_column=timestamp_column,
@@ -572,6 +574,7 @@ def build_behavioral_baseline(
         numeric_columns=numeric_columns,
         timestamp_column=timestamp_column,
         source_id=filename or job_id,
+        allow_fill=not bool(ingestion_trust),
     )
 
     _notify(stage_notifier, job_id, stage="baseline_quality_assessment", progress=55, label="Assessing timestamp, data, and sensor quality...")
@@ -737,6 +740,7 @@ def build_behavioral_baseline(
         "candidate_model": model,
         "baseline_suitability": suitability,
         "activation": dict(model["activation"]),
+        "ingestion_trust": ingestion_trust,
         "processing_trace": {
             "baseline_builder_ran": True,
             "sii_engine_invoked": False,
@@ -753,4 +757,5 @@ def build_behavioral_baseline(
     persisted_model = dict(persisted["model"])
     persisted_result["candidate_model"] = persisted_model
     persisted_result["activation"] = dict(persisted_model.get("activation") or {})
+    persisted_result["ingestion_trust"] = ingestion_trust
     return persisted_result

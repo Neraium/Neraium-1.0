@@ -111,13 +111,16 @@ class IntegrityLayer:
 class NormalizationLayer:
     """Builds the normalized working copy while preserving integrity context."""
 
-    def normalize(self, signal: pd.Series, profile: IntegrityProfile) -> tuple[pd.Series, str | None, str]:
+    def normalize(self, signal: pd.Series, profile: IntegrityProfile, *, allow_fill: bool = True) -> tuple[pd.Series, str | None, str]:
         normalized = signal.copy()
 
         if profile.gap_type is None:
             return normalized, None, "good"
 
         if profile.gap_type == "short_drop":
+            if not allow_fill:
+                profile.treatment = "preserved_missing"
+                return normalized, None, "degraded"
             if self._is_slow_moving(signal):
                 normalized = normalized.interpolate(method="linear", limit_direction="both")
                 fill_method = "linear"
@@ -138,10 +141,11 @@ class NormalizationLayer:
 
 
 class NormalizationPipeline:
-    def __init__(self, source_id: str, maintenance_windows: list[tuple[pd.Timestamp, pd.Timestamp]] | None = None, sample_interval_seconds: int | None = None):
+    def __init__(self, source_id: str, maintenance_windows: list[tuple[pd.Timestamp, pd.Timestamp]] | None = None, sample_interval_seconds: int | None = None, *, allow_fill: bool = True):
         self.source_id = source_id
         self.integrity = IntegrityLayer(maintenance_windows, sample_interval_seconds)
         self.normalizer = NormalizationLayer()
+        self.allow_fill = allow_fill
 
     def run(self, raw: pd.DataFrame, window_start: Any, window_end: Any) -> dict[str, Any]:
         correlated = set(self.integrity.detect_correlated(raw))
@@ -160,7 +164,7 @@ class NormalizationPipeline:
                 profile.treatment = "sentinel"
                 profile.suppress_confidence = True
 
-            normalized, fill_method, integrity_flag = self.normalizer.normalize(signal, profile)
+            normalized, fill_method, integrity_flag = self.normalizer.normalize(signal, profile, allow_fill=self.allow_fill)
             profiles[str(column)] = profile
             normalized_cols[str(column)] = normalized
             fill_methods[str(column)] = fill_method
@@ -184,6 +188,7 @@ def build_normalization_report(
     timestamp_column: str | None,
     source_id: str,
     maintenance_windows: list[tuple[pd.Timestamp, pd.Timestamp]] | None = None,
+    allow_fill: bool = True,
 ) -> dict[str, Any]:
     raw, window_start, window_end = dataframe_from_rows(rows, numeric_columns, timestamp_column)
     if raw.empty or not list(raw.columns):
@@ -210,6 +215,7 @@ def build_normalization_report(
         source_id=source_id,
         maintenance_windows=maintenance_windows,
         sample_interval_seconds=sample_interval,
+        allow_fill=allow_fill,
     ).run(raw, window_start, window_end)
     profiles: dict[str, IntegrityProfile] = result["integrity_profiles"]
     signal_integrity = [profile.to_dict() for profile in profiles.values()]
@@ -286,7 +292,10 @@ def build_integrity_warnings(profiles: dict[str, IntegrityProfile]) -> list[str]
     warnings: list[str] = []
     for profile in profiles.values():
         if profile.gap_type == "short_drop":
-            warnings.append(f"{profile.signal_id} had short telemetry gaps that were filled for analysis.")
+            if profile.treatment == "preserved_missing":
+                warnings.append(f"{profile.signal_id} had short telemetry gaps that were preserved as missing for analysis.")
+            else:
+                warnings.append(f"{profile.signal_id} had short telemetry gaps that were filled for analysis.")
         elif profile.gap_type == "correlated":
             warnings.append(f"{profile.signal_id} appears affected by a correlated source gap.")
         elif profile.gap_type in {"sustained", "terminal", "scheduled"}:

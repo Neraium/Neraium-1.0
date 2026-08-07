@@ -1,0 +1,5 @@
+Timestamp,Supply Temp F,Pressure psi,Comment
+2026-04-01T00:00:00Z,44 F,10 psi,ok
+2026-04-01T00:05:00Z,45 F
+2026-02-31T00:10:00Z,bad,inf,bad date
+2026-04-01T00:15:00Z,46 F,11 psi,manual override

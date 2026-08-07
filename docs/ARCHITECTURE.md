@@ -24,7 +24,7 @@ backend/requirements.txt     Python runtime and test dependencies
 
 Major API workflows include authentication and session management, system discovery, dataset import, connector setup and health, analysis status and retry, insights, evidence review and export, administration, observability, and behavior replay.
 
-CSV imports are validated and processed through a bounded analysis workflow. Source files are deleted after processing; analysis metadata, results, evidence, and the latest SII state are retained in the configured runtime directory. SII compares behavior windows and system relationships. It does not claim root cause, predict failure, or control equipment.
+Historical imports pass through the versioned ingestion and trust boundary in [Historical Data Ingestion & Trust v1](HISTORICAL_DATA_INGESTION_TRUST_V1.md). Received bytes are retained as immutable, content-addressed raw artifacts in the existing tenant/workspace storage scope. Parsing, mapping, unit conversion, exclusions, review decisions, and canonical rows are separate derived records. Only included canonical values enter the bounded analysis workflow. SII compares behavior windows and system relationships. It does not claim root cause, predict failure, or control equipment.
 
 Behavioral baseline index entries persist their canonical model, dataset, and job references together. Dataset-to-baseline recovery therefore resolves the newest matching result directly from the index; model-record scanning remains only as a compatibility path for indexes created by older releases.
 

@@ -48,6 +48,7 @@ def run_structural_analysis_pipeline(
     job_id: str,
     filename: str,
     columns: list[str],
+    source_columns: list[str],
     rows: list[dict[str, Any]],
     numeric_columns: list[str],
     timestamp_column: str | None,
@@ -66,6 +67,7 @@ def run_structural_analysis_pipeline(
     operational_profile_signals: list[str],
     operational_modality: str,
     ingestion_report: dict[str, Any] | None,
+    telemetry_signal_catalog: dict[str, dict[str, Any]] | None,
     chunk_count: int,
     memory_estimate_bytes: int,
     processing_started_at: float | None,
@@ -86,8 +88,9 @@ def run_structural_analysis_pipeline(
         numeric_columns=numeric_columns,
         timestamp_column=timestamp_column,
         source_id=filename or job_id,
+        allow_fill=not bool(ingestion_report.get("historical_trust_dataset_identity")),
     )
-    cultivation_mapping = map_cultivation_columns(columns)
+    cultivation_mapping = map_cultivation_columns(source_columns)
     room_assessments = {
         item["room"]: dict(item)
         for item in room_intelligence
@@ -152,7 +155,7 @@ def run_structural_analysis_pipeline(
                 "data_quality": data_quality,
                 "numeric_profiles": numeric_profiles,
                 "cultivation_mapping": cultivation_mapping,
-                "columns": columns,
+                "columns": source_columns,
                 "telemetry_profile": telemetry_profile,
                 "telemetry_profile_signals": telemetry_profile_signals,
                 "operational_signal_profile": operational_profile,
@@ -188,6 +191,7 @@ def run_structural_analysis_pipeline(
         rows=rows,
         numeric_profiles=numeric_profiles,
         timestamp_column=timestamp_column,
+        telemetry_signal_catalog=telemetry_signal_catalog,
         config={
             "numeric_columns": numeric_columns,
             "row_count_total": row_count_total,

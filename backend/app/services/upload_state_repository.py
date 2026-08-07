@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import logging
+import re
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
@@ -294,6 +296,109 @@ def delete_upload_source(source_key: str | None) -> None:
             client.delete_object(Bucket=bucket, Key=source_key)
     except Exception:
         logger.exception("shared_upload_source_delete_failed bucket=%s key=%s", bucket, source_key)
+
+
+def persist_immutable_derived_artifact(
+    dataset_id: str,
+    source_path: str | os.PathLike[str],
+    *,
+    artifact_id: str,
+    artifact_kind: str,
+    content_type: str = "application/octet-stream",
+) -> dict[str, Any]:
+    """Persist a scoped immutable derived artifact when shared storage is configured."""
+
+    clean_dataset_id = str(dataset_id or "").strip()
+    clean_artifact_id = str(artifact_id or "").strip().lower()
+    clean_kind = str(artifact_kind or "").strip().lower()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", clean_dataset_id):
+        raise ValueError("invalid_derived_artifact_dataset_id")
+    if not re.fullmatch(r"[a-f0-9]{64}", clean_artifact_id):
+        raise ValueError("invalid_derived_artifact_id")
+    if clean_kind not in {"raw", "canonical", "profile"}:
+        raise ValueError("invalid_derived_artifact_kind")
+    digest = hashlib.sha256()
+    with Path(source_path).open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    if digest.hexdigest() != clean_artifact_id:
+        raise ValueError("derived_artifact_digest_mismatch")
+    client = _get_s3_client()
+    bucket = _upload_state_bucket()
+    if client is None or not bucket:
+        return {"backend": "scoped_local", "artifact_id": clean_artifact_id}
+    scope = current_dataset_scope()
+    key = (
+        f"{_upload_state_prefix()}/scopes/{scope.storage_id}/historical-ingestion/"
+        f"{clean_dataset_id}/{clean_kind}/{clean_artifact_id}.artifact"
+    )
+    with Path(source_path).open("rb") as handle:
+        if hasattr(client, "put_object"):
+            try:
+                client.put_object(
+                    Bucket=bucket,
+                    Key=key,
+                    Body=handle,
+                    ContentType=content_type,
+                    Tagging="neraium-artifact=historical-derived",
+                    Metadata={"sha256": clean_artifact_id, "immutability": "content-addressed"},
+                    IfNoneMatch="*",
+                )
+            except Exception as exc:
+                response = getattr(exc, "response", {})
+                error = response.get("Error", {}) if isinstance(response, dict) else {}
+                status = (response.get("ResponseMetadata") or {}).get("HTTPStatusCode") if isinstance(response, dict) else None
+                if status != 412 and str(error.get("Code") or "") not in {"PreconditionFailed", "412"}:
+                    raise
+        else:
+            # Compatibility for storage doubles without conditional PUT. The
+            # production S3 client follows the atomic If-None-Match path above.
+            client.upload_fileobj(
+                Fileobj=handle,
+                Bucket=bucket,
+                Key=key,
+                ExtraArgs={
+                    "ContentType": content_type,
+                    "Tagging": "neraium-artifact=historical-derived",
+                    "Metadata": {"sha256": clean_artifact_id, "immutability": "content-addressed"},
+                },
+            )
+    return {"backend": "s3_immutable", "artifact_id": clean_artifact_id, "object_key": key}
+
+
+def restore_immutable_derived_artifact(reference: dict[str, Any]) -> Path:
+    artifact_id = str((reference or {}).get("artifact_id") or "").strip().lower()
+    object_key = str((reference or {}).get("object_key") or "").strip()
+    if not re.fullmatch(r"[a-f0-9]{64}", artifact_id) or not object_key:
+        raise ValueError("invalid_derived_artifact_reference")
+    scope = current_dataset_scope()
+    required_fragment = f"/scopes/{scope.storage_id}/historical-ingestion/"
+    if required_fragment not in f"/{object_key}":
+        raise ValueError("derived_artifact_scope_mismatch")
+    client = _get_s3_client()
+    bucket = _upload_state_bucket()
+    if client is None or not bucket:
+        raise RuntimeError("shared_derived_artifact_client_unavailable")
+    upload_root = ensure_storage_root(runtime_state().upload_dir)
+    with NamedTemporaryFile(delete=False, dir=upload_root, prefix="historical-derived-", suffix=".artifact") as temp:
+        path = Path(temp.name)
+    try:
+        with path.open("wb") as output:
+            if hasattr(client, "download_fileobj"):
+                client.download_fileobj(bucket, object_key, output)
+            else:
+                response = client.get_object(Bucket=bucket, Key=object_key)
+                output.write(response["Body"].read())
+        digest = hashlib.sha256()
+        with path.open("rb") as restored:
+            for chunk in iter(lambda: restored.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != artifact_id:
+            raise RuntimeError("derived_artifact_digest_mismatch")
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return path
 
 
 def _get_s3_client() -> Any | None:

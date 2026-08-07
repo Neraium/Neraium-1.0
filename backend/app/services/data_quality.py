@@ -303,8 +303,8 @@ def parse_timestamp(raw_value: str) -> datetime | None:
     return None
 
 
-def parse_numeric_value(raw_value: str) -> float | None:
-    normalized = raw_value.strip()
+def parse_numeric_value(raw_value: Any) -> float | None:
+    normalized = str(raw_value if raw_value is not None else "").strip()
     if not normalized:
         return None
     normalized = normalized.replace(",", "").replace("%", "")

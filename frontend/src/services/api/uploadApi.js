@@ -817,3 +817,35 @@ export async function retryUploadAnalysisJob({ jobId, apiFetch, accessCode } = {
   }
   return { ok: true, status: response.status, payload: normalizeUploadJob(payload) };
 }
+
+export async function fetchHistoricalIngestionProfile({ datasetId, apiFetch, accessCode } = {}) {
+  const cleanDatasetId = String(datasetId ?? "").trim();
+  if (!cleanDatasetId) throw new Error("No dataset is available for ingestion review.");
+  const path = `/api/data/ingestion/v1/datasets/${encodeURIComponent(cleanDatasetId)}`;
+  const response = await apiFetch(path, { accessCode });
+  const payload = await readJsonPayload(response, { route: path, phase: "ingestion_review" });
+  if (!response.ok) {
+    const requestError = buildUploadRequestError(response, payload, "ingestion_review");
+    throw Object.assign(new Error(requestError.detail || "The ingestion profile could not be loaded."), requestError);
+  }
+  return payload;
+}
+
+export async function submitHistoricalIngestionReview({ datasetId, decisions, apiFetch, accessCode } = {}) {
+  const cleanDatasetId = String(datasetId ?? "").trim();
+  if (!cleanDatasetId) throw new Error("No dataset is available for ingestion review.");
+  if (!Array.isArray(decisions) || decisions.length === 0) throw new Error("Choose at least one review decision.");
+  const path = `/api/data/ingestion/v1/datasets/${encodeURIComponent(cleanDatasetId)}/review`;
+  const response = await apiFetch(path, {
+    method: "PATCH",
+    accessCode,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decisions }),
+  });
+  const payload = await readJsonPayload(response, { route: path, phase: "ingestion_review" });
+  if (!response.ok) {
+    const requestError = buildUploadRequestError(response, payload, "ingestion_review");
+    throw Object.assign(new Error(requestError.detail || "The ingestion review could not be saved."), requestError);
+  }
+  return payload;
+}

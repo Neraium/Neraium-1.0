@@ -344,7 +344,7 @@ class UploadQueueLifecycleService:
                 pass
             if path.suffix.lower() == ".json":
                 result = self.process_json_payload(
-                    path.read_text(encoding="utf-8"),
+                    path.read_bytes(),
                     filename=metadata.get("filename") or path.name,
                     job_id=job_id,
                 )
