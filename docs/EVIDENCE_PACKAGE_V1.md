@@ -40,9 +40,11 @@ No destructive relational migration is required because canonical analyses/findi
 * `GET /api/data/analyses/{analysis_id}` returns the existing result with `evidence_package` when supportable.
 * `GET /api/data/analyses/{analysis_id}/evidence-package` returns the explicitly validated package.
 * `GET /api/data/evidence-packages/{package_id}` resolves the exact package through a tenant/workspace-scoped lookup.
+* `GET /api/data/evidence-packages/{package_id}/related-packages` returns the pure, non-causal Evidence Package Correlation v1 sidecar view without revising the package.
 * `GET /api/data/analyses/{analysis_id}/findings` retains the legacy contract, projected one-way from the canonical package while preserving existing presentation fields.
 
 Collections have stable construction order, schema enums are validated, and all access follows existing dataset-scope isolation.
+Correlation ownership, integrity binding, and explicit non-claims are documented in `EVIDENCE_PACKAGE_CORRELATION_V1.md`.
 
 ## Known limitations and deferred phases
 

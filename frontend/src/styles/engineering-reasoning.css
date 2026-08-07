@@ -1305,6 +1305,8 @@
 .case-primary-action { min-height: 70px; display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 12px; padding: 13px 15px; border: 1px solid rgba(77,163,255,.3); background: rgba(77,163,255,.045); }
 .case-primary-action > div { display: grid; gap: 5px; }
 .case-primary-action strong { font-size: 12px; font-weight: 560; }
+.case-primary-action > .forensic-button { background: #1268aa; }
+.case-primary-action > .forensic-button:hover { background: #176ba8; }
 .case-primary-action--top { margin-top: 12px; }
 .case-sections { display: grid; margin-top: 12px; border: 1px solid var(--fr-line); background: var(--fr-surface); }
 .case-sections > section { min-width: 0; padding: 18px; border-bottom: 1px solid var(--fr-line); }
@@ -1330,6 +1332,28 @@
 .case-classification-detail > :last-child { margin-bottom: 15px; }
 .evidence-record-grid { display: grid; gap: 1px; margin-top: 12px; border: 1px solid var(--fr-line); background: var(--fr-line); }
 .evidence-record-grid > section { min-width: 0; padding: 18px; background: var(--fr-surface); }
+.related-evidence { min-width: 0; display: grid; gap: 12px; margin-top: 12px; padding: 18px; border: 1px solid var(--fr-line); background: var(--fr-surface); }
+.related-evidence__header { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
+.related-evidence__header > div { min-width: 0; }
+.related-evidence__header h2 { margin: 5px 0 0; color: #d9e3ec; font-size: 18px; font-weight: 560; }
+.related-evidence__header small { color: var(--fr-muted); font-size: 9px; overflow-wrap: anywhere; text-align: right; }
+.related-evidence__header code,
+.related-evidence__item code,
+.related-evidence__refs code { color: #a9c7d8; overflow-wrap: anywhere; white-space: normal; }
+.related-evidence > p { margin: 0; color: var(--fr-muted); font-size: 11px; line-height: 1.55; }
+.related-evidence--related { border-color: rgba(77,163,255,.32); }
+.related-evidence--unavailable { border-color: rgba(214,164,80,.3); }
+.related-evidence__list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.related-evidence__item { min-width: 0; padding: 14px; border: 1px solid var(--fr-line); background: rgba(10,17,26,.52); }
+.related-evidence__item h3 { margin: 0; color: #cbd8e3; font-size: 12px; font-weight: 560; overflow-wrap: anywhere; }
+.related-evidence__item p { margin: 7px 0 0; color: #b8c5d1; font-size: 11px; line-height: 1.55; }
+.related-evidence__dimensions { display: flex; flex-wrap: wrap; gap: 6px; margin: 11px 0 0; padding: 0; list-style: none; }
+.related-evidence__dimensions li { margin: 0; padding: 4px 7px; border: 1px solid rgba(77,163,255,.26); color: #abc9e4; font-size: 9px; }
+.related-evidence__item details { margin-top: 12px; }
+.related-evidence__item summary { min-height: 44px; display: flex; align-items: center; color: #aab9c8; cursor: pointer; font-size: 10px; }
+.related-evidence__refs,
+.related-evidence__limitations { display: grid; gap: 5px; margin: 7px 0 0; padding-left: 18px; color: #aebdca; font-size: 9px; line-height: 1.5; }
+.related-evidence__non-claim { padding: 9px 11px; border-left: 2px solid rgba(214,164,80,.65); background: rgba(102,72,20,.12); color: #c8b990 !important; }
 .evidence-record-actions { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-top: 12px; padding: 15px; border: 1px solid var(--fr-line); background: rgba(10,17,26,.58); }
 
 @media (max-width: 900px) {
@@ -1405,6 +1429,10 @@
   .case-primary-action .forensic-button, .evidence-record-actions > .forensic-button { width: 100%; }
   .case-sections { margin-top: 8px; }
   .case-sections > section, .evidence-record-grid > section { padding: 14px 12px; }
+  .related-evidence { padding: 14px 12px; }
+  .related-evidence__header { align-items: start; flex-direction: column; gap: 7px; }
+  .related-evidence__header small { text-align: left; }
+  .related-evidence__list { grid-template-columns: minmax(0, 1fr); }
   .case-review-state dl { display: grid; grid-template-columns: 1fr 1fr; }
   .case-review-state dl > div { min-width: 0; }
   .classification-timeline li { grid-template-columns: 1fr; }

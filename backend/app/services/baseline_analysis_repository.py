@@ -21,6 +21,7 @@ from app.services.upload_state_repository import (
     write_shared_state_strict,
 )
 from app.services.evidence_package import ensure_evidence_package, legacy_findings
+from app.services.evidence_correlation import persist_completed_package_projection
 from app.services.evidence_package_fingerprint import (
     ALGORITHM_VERSION,
     ApproximateSimilarityResponse,
@@ -327,6 +328,12 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
             # Completed analysis is authoritative and must remain readable when
             # publication of its derived fingerprint fails.
             logger.exception("evidence_package_fingerprint_publication_failed package_id=%s", package["id"])
+        try:
+            persist_completed_package_projection(package, scope=scope)
+        except Exception:
+            # Correlation is an independent immutable sidecar. Its publication
+            # cannot alter or obscure the authoritative completed analysis.
+            logger.exception("evidence_package_correlation_publication_failed package_id=%s", package["id"])
     return identity
 
 

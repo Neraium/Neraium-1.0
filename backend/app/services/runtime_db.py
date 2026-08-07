@@ -1458,6 +1458,29 @@ def upsert_latest_payload(key: str, payload: Any) -> None:
         )
 
 
+def insert_latest_payload_if_absent(key: str, payload: Any) -> tuple[bool, Any]:
+    """Atomically publish one immutable payload without replacing a prior value."""
+    init_runtime_db()
+    serialized = json.dumps(payload)
+    with db_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        cursor = connection.execute(
+            """
+            INSERT INTO latest_payloads (key, updated_at, payload_json)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO NOTHING
+            """,
+            (key, now_iso(), serialized),
+        )
+        row = connection.execute(
+            "SELECT payload_json FROM latest_payloads WHERE key = ?",
+            (key,),
+        ).fetchone()
+    if row is None:
+        raise RuntimeError("latest_payload_insert_failed")
+    return cursor.rowcount == 1, json.loads(row["payload_json"])
+
+
 def mutate_latest_payload(key: str, mutator: Callable[[Any | None], Any]) -> Any:
     """Atomically read, mutate, and persist one JSON payload.
 
@@ -1498,6 +1521,28 @@ def read_latest_payload(key: str) -> Any | None:
     return json.loads(row["payload_json"])
 
 
+def read_latest_payload_pure(key: str) -> Any | None:
+    """Read without initializing, migrating, creating, or writing the database."""
+    path = Path(DB_PATH)
+    if not path.exists():
+        return None
+    connection = sqlite3.connect(
+        f"{path.resolve().as_uri()}?mode=ro",
+        uri=True,
+        timeout=30,
+        check_same_thread=False,
+    )
+    connection.row_factory = sqlite3.Row
+    try:
+        row = connection.execute(
+            "SELECT payload_json FROM latest_payloads WHERE key = ?",
+            (key,),
+        ).fetchone()
+    finally:
+        connection.close()
+    return json.loads(row["payload_json"]) if row is not None else None
+
+
 def list_latest_payloads_prefix(prefix: str) -> list[Any]:
     """List independently keyed payloads using a fresh database connection."""
     init_runtime_db()
@@ -1506,6 +1551,28 @@ def list_latest_payloads_prefix(prefix: str) -> list[Any]:
             "SELECT payload_json FROM latest_payloads WHERE key LIKE ? ORDER BY key ASC",
             (f"{prefix}%",),
         ).fetchall()
+    return [json.loads(row["payload_json"]) for row in rows]
+
+
+def list_latest_payloads_prefix_pure(prefix: str) -> list[Any]:
+    """List immutable payloads without touching runtime schema or timestamps."""
+    path = Path(DB_PATH)
+    if not path.exists():
+        return []
+    connection = sqlite3.connect(
+        f"{path.resolve().as_uri()}?mode=ro",
+        uri=True,
+        timeout=30,
+        check_same_thread=False,
+    )
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = connection.execute(
+            "SELECT payload_json FROM latest_payloads WHERE key LIKE ? ORDER BY key ASC",
+            (f"{prefix}%",),
+        ).fetchall()
+    finally:
+        connection.close()
     return [json.loads(row["payload_json"]) for row in rows]
 
 

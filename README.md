@@ -123,9 +123,13 @@ Important API areas include:
 - `POST /api/data/upload`
 - Upload status and replay endpoints
 - Evidence, finding-status, integrity, and audit endpoints
+- `GET /api/data/evidence-packages/{package_id}/related-packages` for pure,
+  non-causal Evidence Package Correlation v1 reads
 - Observability and readiness endpoints
 
 Backend runtime state is written under `NERAIUM_RUNTIME_DIR`. Runtime storage includes upload jobs, upload queue records, evidence runs, audit events, latest payloads, and data connection records.
+The correlation contract and its explicit evidence limitations are documented
+in `docs/EVIDENCE_PACKAGE_CORRELATION_V1.md`.
 
 ---
 

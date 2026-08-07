@@ -44,6 +44,11 @@ from app.services.baseline_analysis_repository import (
     validate_completed_analysis,
 )
 from app.services.evidence_package import EvidencePackage, ensure_evidence_package
+from app.services.evidence_correlation import (
+    PackageNotFoundError,
+    RelatedPackageSetResponse,
+    get_related_package_set,
+)
 from app.services.evidence_package_fingerprint import ApproximateSimilarityResponse, EvidencePackageFingerprint, ExactMatchResult, HistoricalPatternResponse
 from app.services.evidence_package_lifecycle import LifecycleTransitionRequest
 from app.services.behavioral_model_repository import (
@@ -2104,6 +2109,18 @@ def evidence_package_by_id(package_id: UploadJobPath):
     if package is None:
         raise HTTPException(status_code=404, detail="Evidence Package was not found.")
     return package
+
+
+@router.get(
+    "/evidence-packages/{package_id}/related-packages",
+    response_model=RelatedPackageSetResponse,
+    operation_id="getEvidencePackageRelatedPackagesV1",
+)
+def evidence_package_related_packages_by_id(package_id: UploadJobPath):
+    try:
+        return get_related_package_set(package_id)
+    except PackageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Evidence Package was not found.") from exc
 
 
 @router.get(

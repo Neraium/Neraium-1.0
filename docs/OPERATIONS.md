@@ -23,6 +23,9 @@ Startup validates configuration before binding the HTTP port or entering the wor
 9. Mark startup complete and begin serving.
 
 For split-role production, both tasks must use the same `NERAIUM_UPLOAD_STATE_BUCKET`. Local runtime files are not shared across ECS tasks.
+Completed-analysis workers publish immutable Evidence Package Correlation
+sidecars to this repository, and API reads use the same bucket without
+GET-time backfill or repair.
 
 ## Health and readiness
 
