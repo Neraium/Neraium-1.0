@@ -17,8 +17,11 @@ from app.services.dataset_scope import (
 )
 from app.services.runtime_db import (
     delete_latest_payload_prefix,
+    insert_latest_payload_if_absent,
     list_latest_payloads_prefix,
+    list_latest_payloads_prefix_pure,
     read_latest_payload,
+    read_latest_payload_pure,
     upsert_latest_payload,
 )
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE, UploadRuntimeState
@@ -378,6 +381,23 @@ def _read_s3_state(storage_name: str, bucket: str) -> dict[str, Any] | None:
         return None
 
 
+def _read_s3_state_pure(storage_name: str, bucket: str) -> dict[str, Any] | None:
+    """Read S3 state without suppressing integrity or availability failures."""
+    client = _get_s3_state_client()
+    if client is None:
+        raise RuntimeError("shared_state_client_unavailable")
+    try:
+        response = client.get_object(Bucket=bucket, Key=_s3_object_key(storage_name))
+    except Exception as error:
+        if _is_missing_shared_state_error(error):
+            return None
+        raise RuntimeError("shared_state_read_failed") from error
+    payload = json.loads(response["Body"].read().decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("shared_state_payload_not_object")
+    return payload
+
+
 def _read_runtime_db_state(storage_name: str) -> dict[str, Any] | None:
     if not _runtime_db_latest_enabled():
         return None
@@ -396,6 +416,29 @@ def read_shared_state(name: str, *, scope: DatasetScope | None = None) -> dict[s
         return database_payload
     bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
     return _read_s3_state(storage_name, bucket) if bucket else None
+
+
+def read_shared_state_pure(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
+    """Read shared state without initializing storage or mutating cache state."""
+    storage_name = _state_name(name, scope=scope)
+    bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
+    if bucket:
+        payload = _read_s3_state_pure(storage_name, bucket)
+        if payload is not None:
+            return payload
+    if _runtime_db_latest_write_enabled():
+        payload = read_latest_payload_pure(_shared_key(storage_name))
+        if payload is not None and not isinstance(payload, dict):
+            raise ValueError("shared_state_payload_not_object")
+        if payload is not None:
+            return payload
+    path = runtime_state().runtime_dir / _local_state_name(storage_name, scope=scope)
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("shared_state_payload_not_object")
+    return payload
 
 
 def list_shared_state_prefix(name: str, *, scope: DatasetScope | None = None) -> list[dict[str, Any]]:
@@ -447,6 +490,53 @@ def list_shared_state_prefix(name: str, *, scope: DatasetScope | None = None) ->
             continue
         if isinstance(payload, dict):
             payloads.append(payload)
+    return payloads
+
+
+def list_shared_state_prefix_pure(name: str, *, scope: DatasetScope | None = None) -> list[dict[str, Any]]:
+    """Enumerate shared state without initializing tables, directories, or caches."""
+    storage_name = _state_name(name, scope=scope)
+    bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
+    if bucket:
+        client = _get_s3_state_client()
+        if client is None:
+            raise RuntimeError("shared_state_client_unavailable")
+        payloads: list[dict[str, Any]] = []
+        continuation: str | None = None
+        while True:
+            kwargs: dict[str, Any] = {
+                "Bucket": bucket,
+                "Prefix": _s3_object_key(storage_name).removesuffix(".json"),
+            }
+            if continuation:
+                kwargs["ContinuationToken"] = continuation
+            response = client.list_objects_v2(**kwargs)
+            for item in response.get("Contents", []):
+                key = str(item.get("Key") or "")
+                if not key:
+                    continue
+                body = client.get_object(Bucket=bucket, Key=key)["Body"].read().decode("utf-8")
+                payload = json.loads(body)
+                if not isinstance(payload, dict):
+                    raise ValueError("shared_state_payload_not_object")
+                payloads.append(payload)
+            if not response.get("IsTruncated"):
+                return payloads
+            continuation = str(response.get("NextContinuationToken") or "") or None
+    if _runtime_db_latest_write_enabled():
+        payloads = list_latest_payloads_prefix_pure(_shared_key(storage_name))
+        if any(not isinstance(payload, dict) for payload in payloads):
+            raise ValueError("shared_state_payload_not_object")
+        return payloads
+    prefix_path = runtime_state().runtime_dir / storage_name
+    if not prefix_path.exists():
+        return []
+    payloads = []
+    for path in sorted(prefix_path.rglob("*.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("shared_state_payload_not_object")
+        payloads.append(payload)
     return payloads
 
 
@@ -506,6 +596,77 @@ def write_shared_state_strict(name: str, payload: dict[str, Any], *, scope: Data
     # when the optional runtime latest-payload database is disabled.
     if _runtime_db_latest_write_enabled() and not runtime_written:
         raise RuntimeError("shared_state_write_failed")
+
+
+def insert_shared_state_strict(
+    name: str,
+    payload: dict[str, Any],
+    *,
+    scope: DatasetScope | None = None,
+) -> tuple[bool, dict[str, Any]]:
+    """Publish an immutable shared-state value and return the canonical stored value."""
+    normalized = dict(payload or {})
+    storage_name = _state_name(name, scope=scope, payload=normalized)
+    bucket = _upload_state_bucket()
+    if bucket:
+        client = _get_s3_client()
+        if client is None:
+            raise RuntimeError("shared_state_client_unavailable")
+        inserted = True
+        try:
+            client.put_object(
+                Bucket=bucket,
+                Key=_s3_object_key(storage_name),
+                Body=json.dumps(normalized, indent=2, default=str).encode("utf-8"),
+                ContentType="application/json",
+                IfNoneMatch="*",
+            )
+            canonical = normalized
+        except Exception as error:
+            if _shared_state_error_code(error) not in {
+                "PreconditionFailed",
+                "412",
+                "ConditionalRequestConflict",
+                "409",
+            }:
+                raise RuntimeError("shared_state_write_failed") from error
+            inserted = False
+            canonical = _read_s3_state(storage_name, bucket)
+            if not isinstance(canonical, dict):
+                raise RuntimeError("shared_state_existing_value_unavailable") from error
+        if _runtime_db_latest_write_enabled():
+            upsert_latest_payload(_shared_key(storage_name), canonical)
+        write_local_json(f"{storage_name}.json", canonical, scope=scope)
+        return inserted, canonical
+
+    if _runtime_db_latest_write_enabled():
+        inserted, canonical = insert_latest_payload_if_absent(_shared_key(storage_name), normalized)
+        if not isinstance(canonical, dict):
+            raise RuntimeError("shared_state_existing_value_invalid")
+        write_local_json(f"{storage_name}.json", canonical, scope=scope)
+        return inserted, canonical
+
+    path = runtime_state().runtime_dir / _local_state_name(storage_name, scope=scope, payload=normalized)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with NamedTemporaryFile("w", delete=False, dir=path.parent, encoding="utf-8") as temporary:
+            json.dump(normalized, temporary, indent=2, default=str)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            temporary_path = Path(temporary.name)
+        try:
+            os.link(temporary_path, path)
+            inserted = True
+        except FileExistsError:
+            inserted = False
+        canonical = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(canonical, dict):
+            raise RuntimeError("shared_state_existing_value_invalid")
+        return inserted, canonical
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def write_upload_result(job_id: str, payload: dict[str, Any]) -> None:

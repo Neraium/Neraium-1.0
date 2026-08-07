@@ -11,9 +11,10 @@ from app.services.rate_limiter import clear_rate_limits
 
 
 # Evidence Package v1 added its analysis-ID and package-ID reads, and Evidence
-# Package Lifecycle v1 added its transition write, and Fingerprinting v1 added
-# three fingerprint reads and one historical-pattern read, to the prior 145-operation
-# surface. Keep the total as a route-surface guard while naming the additions.
+# Package Lifecycle v1 added its transition write, Fingerprinting v1 added
+# three fingerprint reads and one historical-pattern read, and Correlation v1
+# added one related-package read to the prior 145-operation surface. Keep the
+# total as a route-surface guard while naming the additions.
 PRE_EVIDENCE_PACKAGE_OPERATION_COUNT = 145
 EVIDENCE_PACKAGE_OPERATIONS = {
     ("get", "/api/data/analyses/{comparison_analysis_id}/evidence-package"):
@@ -33,7 +34,16 @@ FINGERPRINT_OPERATIONS = {
     ("get", "/api/data/evidence-packages/{package_id}/historical-pattern"):
         ("evidence_package_historical_pattern_by_id", "HistoricalPatternResponse"),
 }
-EXPECTED_OPENAPI_OPERATION_COUNT = PRE_EVIDENCE_PACKAGE_OPERATION_COUNT + len(EVIDENCE_PACKAGE_OPERATIONS) + len(FINGERPRINT_OPERATIONS)
+CORRELATION_OPERATIONS = {
+    ("get", "/api/data/evidence-packages/{package_id}/related-packages"):
+        ("getEvidencePackageRelatedPackagesV1", "RelatedPackageSetResponse"),
+}
+EXPECTED_OPENAPI_OPERATION_COUNT = (
+    PRE_EVIDENCE_PACKAGE_OPERATION_COUNT
+    + len(EVIDENCE_PACKAGE_OPERATIONS)
+    + len(FINGERPRINT_OPERATIONS)
+    + len(CORRELATION_OPERATIONS)
+)
 
 
 def production_client(monkeypatch, tmp_path: Path) -> TestClient:
@@ -197,6 +207,21 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
         assert operation["operationId"] == operation_id
         assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
             "$ref": f"#/components/schemas/{model}"
+        }
+    for (method, path), (operation_id, model) in CORRELATION_OPERATIONS.items():
+        operation = schema["paths"][path][method]
+        assert operation["operationId"] == operation_id
+        assert operation["tags"] == ["data"]
+        assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+            "$ref": f"#/components/schemas/{model}"
+        }
+        matching_routes = [
+            route for route in runtime_operations
+            if route.path == path and route.methods == {method.upper()}
+        ]
+        assert len(matching_routes) == 1
+        assert "require_api_access" in {
+            dependency.call.__name__ for dependency in matching_routes[0].dependant.dependencies
         }
     lifecycle_operation = schema["paths"]["/api/data/evidence-packages/{package_id}/lifecycle-events"]["post"]
     assert lifecycle_operation["requestBody"]["content"]["application/json"]["schema"] == {

@@ -79,6 +79,10 @@ Upload path audit: multipart requests through the API are capped at 250 MiB (`NE
 The API task also receives `NERAIUM_BOOTSTRAP_ADMIN_EMAIL` as an environment variable, `NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD` from the repository variable (default `false`), and `NERAIUM_BOOTSTRAP_ADMIN_PASSWORD` from the Secrets Manager secret referenced by `NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN`. The API startup normalizes the email, creates a missing administrator, and repairs an existing account's active/admin state. It resets the password only when the reset flag is `true`; otherwise the existing password is preserved. Neither bootstrap administrator value nor the reset flag is injected into the worker task. Startup emits only the non-secret result events `bootstrap_admin_created`, `bootstrap_admin_already_exists`, `bootstrap_admin_updated`, `bootstrap_admin_skipped_missing_configuration`, or `bootstrap_admin_failed`.
 
 For split-role production ECS, do not rely on `NERAIUM_RUNTIME_DIR` for cross-task queue state. The queue and latest-upload state are shared through `NERAIUM_UPLOAD_STATE_BUCKET`.
+Evidence Package Correlation source and relationship sidecars use that same
+shared bucket. Both API and worker task roles therefore need the existing
+read/write/list permissions for the configured upload-state prefix; no new
+bucket or environment variable is introduced.
 
 ## Frontend: AWS Amplify Hosting
 

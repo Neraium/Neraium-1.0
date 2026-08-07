@@ -11,7 +11,7 @@ a versioned `behavioral-digital-model.v1` candidate through
 its exact identifier through `GET /api/data/baselines/{baseline_id}`. It never returns the canonical SII
 analysis contract. See [Behavioral baseline workflows](BEHAVIORAL_BASELINE_WORKFLOWS.md).
 
-All 145 documented HTTP operations are inventoried by `tests/test_api_contracts.py`. Request models reject undeclared top-level fields and trim declared strings. Dynamic connector configuration remains an explicitly open nested object because each connector owns its configuration schema; its serialized size and key count are bounded.
+All 153 documented HTTP operations are inventoried by `tests/test_api_contracts.py`. Request models reject undeclared top-level fields and trim declared strings. Dynamic connector configuration remains an explicitly open nested object because each connector owns its configuration schema; its serialized size and key count are bounded.
 
 Non-upload request bodies are capped at 1 MiB. Historical telemetry uploads use the configured `max_upload_size_bytes` limit, and connector CSV uploads use the 16 MiB connector limit. Relevant identity headers, filenames, paths, strings, URLs, enums, timestamps, pagination, and numeric controls have explicit bounds. Unknown query parameters are rejected. Replay times require timezone-aware ISO 8601 values.
 
@@ -27,3 +27,8 @@ Phase 1 telemetry and approved behavioral models. See
 [Live telemetry analysis: Phase 2](LIVE_TELEMETRY_PHASE_2.md).
 
 The shorthand `/latest-upload` and `/systems` routes are deprecated in OpenAPI and remain compatibility aliases. Admin surfaces are the connector configuration routes, auth user/session management, audit, observability, startup status, route debug, data-connection administration, and global resets; production runtime authorization tests cover unauthenticated and insufficient-role access.
+
+`GET /api/data/evidence-packages/{package_id}/related-packages` is the
+authenticated Evidence Package Correlation v1 read. It uses the same
+tenant/workspace dataset scope as the package lookup, returns `404` across a
+scope boundary, and never creates or repairs correlation state.

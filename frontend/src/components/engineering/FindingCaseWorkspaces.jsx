@@ -5,9 +5,14 @@ import FindingClassificationSummary from "../operational/FindingClassificationSu
 import EvidenceLineage from "./EvidenceLineage";
 import EvidencePackageExport from "./EvidencePackageExport";
 import FindingReviewActions from "./FindingReviewActions";
+import RelatedEvidencePackages from "./RelatedEvidencePackages";
 
 function runIdentity(model, finding) {
   return finding?.runId ?? model?.result?.run_id ?? model?.result?.job_id ?? model?.result?.upload_id ?? null;
+}
+
+function packageIdentity(model) {
+  return model?.result?.evidence_package?.id ?? null;
 }
 
 function sentence(value) {
@@ -167,6 +172,7 @@ export function EvidenceRecordWorkspace({ model, finding, reviewRecord, apiFetch
   if (!finding) return <EmptyCase onBack={onBack} />;
   const relationship = finding.relationships[0] ?? model.relationships[0] ?? null;
   const runId = runIdentity(model, finding);
+  const packageId = packageIdentity(model);
   return (
     <div className="case-workspace evidence-record-workspace" data-testid="evidence-record">
       <button type="button" className="evidence-back" onClick={onBack}>Back to investigation</button>
@@ -177,6 +183,7 @@ export function EvidenceRecordWorkspace({ model, finding, reviewRecord, apiFetch
         <section><h2>Record context</h2><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Baseline window</dt><dd>{finding.comparison.baseline}</dd></div><div><dt>Current window</dt><dd>{finding.comparison.current}</dd></div><div><dt>Evidence run</dt><dd>{runId ?? "Not persisted"}</dd></div><div><dt>Generated</dt><dd>{finding.generatedAt || "Not supplied"}</dd></div></dl></section>
         <section><h2>Technical values</h2><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Baseline relationship value</dt><dd>{finding.comparison.baselineValue ?? "Not supplied"}</dd></div><div><dt>Current relationship value</dt><dd>{finding.comparison.currentValue ?? "Not supplied"}</dd></div><div><dt>Relationship delta</dt><dd>{finding.comparison.delta ?? "Not supplied"}</dd></div><div><dt>Evidence records</dt><dd>{finding.evidenceObjects.length}</dd></div></dl></section>
       </div>
+      <RelatedEvidencePackages packageId={packageId} apiFetch={apiFetch} />
       <section className="evidence-record-actions"><EvidencePackageExport runId={runId} apiFetch={apiFetch} disabled={!runId} /><button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open trace mode</button></section>
       <details className="case-classification-detail"><summary>Audit history</summary><ReviewStateBlock finding={finding} reviewRecord={reviewRecord} showActions={false} /><p>{finding.outcome ? JSON.stringify(finding.outcome) : "No persisted review outcome was recorded."}</p></details>
     </div>
