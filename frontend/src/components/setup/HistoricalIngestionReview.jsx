@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   fetchHistoricalIngestionProfile,
+  fetchUploadJobProgress,
   submitHistoricalIngestionReview,
 } from "../../services/api/uploadApi";
+import JobProgressPanel from "./JobProgressPanel";
 
 
 const SUPPORTED_ROLES = [
@@ -110,6 +112,7 @@ export default function HistoricalIngestionReview({
   const [state, setState] = useState(initialProfile ? "ready" : "idle");
   const [message, setMessage] = useState("");
   const [decisions, setDecisions] = useState({});
+  const [reviewJob, setReviewJob] = useState(null);
 
   useEffect(() => {
     if (!datasetId || typeof apiFetch !== "function") return undefined;
@@ -129,6 +132,34 @@ export default function HistoricalIngestionReview({
       });
     return () => { active = false; };
   }, [accessCode, apiFetch, datasetId, initialProfile]);
+
+  useEffect(() => {
+    if (state !== "saving" || !datasetId || typeof apiFetch !== "function") return undefined;
+    let active = true;
+    let timer = null;
+
+    const poll = async () => {
+      try {
+        const next = await fetchUploadJobProgress({ jobId: datasetId, apiFetch, accessCode });
+        if (!active) return;
+        setReviewJob(next);
+      } catch {
+        if (!active) return;
+        setReviewJob((current) => current ? {
+          ...current,
+          poll_connection_state: "retrying",
+          message: "The progress connection was interrupted. Retrying while the review continues.",
+        } : current);
+      }
+      if (active) timer = window.setTimeout(poll, 1500);
+    };
+
+    timer = window.setTimeout(poll, 150);
+    return () => {
+      active = false;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [accessCode, apiFetch, datasetId, state]);
 
   const signalById = useMemo(() => Object.fromEntries(
     (profile?.signal_profiles || []).map((signal) => [signal.canonical_signal_id, signal]),
@@ -153,9 +184,19 @@ export default function HistoricalIngestionReview({
     if (!changedDecisions.length) return;
     setState("saving");
     setMessage("");
+    setReviewJob(null);
     try {
       const next = await submitHistoricalIngestionReview({ datasetId, decisions: changedDecisions, apiFetch, accessCode });
       setProfile(next);
+      if (next?.job_progress?.contract_version === "job-progress.v1") {
+        setReviewJob({
+          job_id: datasetId,
+          status: "COMPLETE",
+          processing_state: "complete",
+          execution_state: "completed",
+          job_progress: next.job_progress,
+        });
+      }
       setDecisions({});
       setState("ready");
       setMessage("Review saved. The canonical dataset revision is ready for reanalysis.");
@@ -183,6 +224,12 @@ export default function HistoricalIngestionReview({
         </div>
         <span className={`historical-review__readiness historical-review__readiness--${outcome || "pending"}`}>{label(outcome)}</span>
       </header>
+
+      {reviewJob ? <JobProgressPanel uploadJob={reviewJob} /> : state === "saving" ? (
+        <p className="historical-review__progress-waiting" role="status" aria-live="polite">
+          Waiting for the first persisted backend progress update…
+        </p>
+      ) : null}
 
       <dl className="historical-review__counts" aria-label="Ingestion trust summary">
         {summaryItems(profile).map(([name, value]) => (

@@ -7,6 +7,7 @@ from app.services.upload_lifecycle import (
     infer_legacy_stage,
 )
 from app.services.baseline_contracts import canonical_baseline_creation_response, is_baseline_workflow
+from app.services.job_progress import enrich_progress_timing
 
 
 
@@ -145,6 +146,10 @@ def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_sta
         stage = "complete"
         default_label = LEGACY_STAGE_DEFAULTS["complete"][1]
     normalized["propagation_stage"] = str(raw_payload.get("propagation_stage") or stage)
+    # Older persisted jobs did not always include processing_state.  Keep the
+    # strict response contract useful by deriving it from the same canonical
+    # lifecycle stage used for the compatibility fields.
+    normalized.setdefault("processing_state", normalized["propagation_stage"])
     raw_label = str(raw_payload.get("propagation_label") or "")
     if normalized_status == "COMPLETE" and raw_label.strip() in {"", "Complete.", "Complete"}:
         raw_label = "Analysis ready."
@@ -165,6 +170,18 @@ def _with_propagation_fields(normalized: dict, raw_payload: dict, normalized_sta
     normalized["job_state"] = _canonical_job_state(normalized.get("status"), normalized)
     normalized["terminal"] = normalized["job_state"] in {"completed", "completed_compatibility", "failed", "cancelled"}
     normalized.setdefault("dataset_id", normalized.get("job_id"))
+    if isinstance(normalized.get("job_progress"), dict):
+        normalized["job_progress"] = enrich_progress_timing(normalized["job_progress"])
+        if normalized["job_progress"].get("contract_version") == "job-progress.v1":
+            # Keep legacy numeric fields backward compatible, but source them
+            # from the deterministic progress contract instead of the retired
+            # lifecycle-stage guesses.
+            overall = normalized["job_progress"].get("overall_percent_complete")
+            if overall is not None:
+                normalized["percent"] = int(overall)
+                normalized["progress"] = int(overall)
+                normalized["contract_progress"] = int(overall)
+                normalized["propagation_progress"] = int(overall)
     return with_canonical_analysis_state(normalized)
 
 
@@ -185,6 +202,12 @@ def normalize_upload_status_payload(payload: dict) -> dict:
     normalized.setdefault("progress", int(payload.get("percent", payload.get("progress", 0)) or 0))
     if status in {"RUNNING_SII", "PROCESSING", "PENDING", "QUEUED"}:
         normalized.setdefault("message", "Dataset analysis is in progress.")
+    if status in {"FAILED", "FAILURE"}:
+        normalized.setdefault("processing_state", "failed")
+        normalized.setdefault(
+            "message",
+            str((normalized.get("job_progress") or {}).get("message") or normalized.get("error") or "Processing failed."),
+        )
     if status in {"TIMEOUT", "CANCELLED"}:
         normalized.setdefault("error", str(normalized.get("message") or status.title()))
         return _with_propagation_fields(normalized, payload, status)

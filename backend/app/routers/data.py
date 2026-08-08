@@ -61,7 +61,7 @@ from app.services.behavioral_model_repository import (
     read_model,
     read_model_index,
 )
-from app.models.api_models import BaselineCreationResponse, BehavioralModelApprovalRequest
+from app.models.api_models import BaselineCreationResponse, BehavioralModelApprovalRequest, UploadStatusResponse
 from app.services.upload_evidence import build_evidence_record_from_result
 from app.services.upload_persistence import summarize_result
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
@@ -851,12 +851,12 @@ def complete_large_upload_session(
         "status_url": f"/api/data/upload-status/{job_id}",
         "status": "PENDING",
         "processing_state": "queued",
-        "percent": 5,
-        "progress": 5,
+        "percent": 0,
+        "progress": 0,
         "progress_label": "Validating data",
         "message": "Validating data",
         "propagation_stage": "queued",
-        "propagation_progress": 5,
+        "propagation_progress": 0,
         "propagation_label": "Validating data",
         "runner_used": False if str(getattr(request.app.state.settings, "process_role", "")).lower() == "api" else True,
         "runner_module": RUNNER_MODULE,
@@ -1073,23 +1073,26 @@ def complete_large_upload_session(
         worker_dispatch_status=worker_dispatch_status,
         processing_stage="queued",
     )
+    accepted = upload_jobs.read_upload_status(job_id) or summary
+    accepted_progress = int((accepted.get("job_progress") or {}).get("overall_percent_complete") or 0)
     return {
         "job_id": job_id,
         "dataset_id": dataset_id,
         "upload_session_id": upload_session_id,
-        "status": "PENDING",
-        "processing_state": "queued",
+        "status": accepted.get("status") or "PENDING",
+        "processing_state": accepted.get("processing_state") or "queued",
         "filename": filename,
-        "percent": 5,
-        "progress": 5,
-        "progress_label": "Validating data",
-        "message": "Validating data",
+        "percent": accepted_progress,
+        "progress": accepted_progress,
+        "progress_label": accepted.get("progress_label") or "Waiting for a worker to claim this job.",
+        "message": accepted.get("message") or "Waiting for a worker to claim this job.",
         "status_url": f"/api/data/upload-status/{job_id}",
         "file_size_bytes": received_size,
         "worker_dispatch_status": worker_dispatch_status,
         "upload_transport": "presigned_s3_put",
         "workflow": workflow,
         "workflow_state": "queued",
+        "job_progress": accepted.get("job_progress"),
         "baseline_result_url": f"/api/data/baselines/jobs/{job_id}" if is_baseline_workflow(workflow) else None,
         "sii_engine_invoked": False if is_baseline_workflow(workflow) else None,
     }
@@ -1302,12 +1305,12 @@ async def upload_data(
             "status_url": f"/api/data/upload-status/{job_id}",
             "status": "PENDING",
             "processing_state": "queued",
-            "percent": 5,
-            "progress": 5,
+            "percent": 0,
+            "progress": 0,
             "progress_label": "Worker starting...",
             "message": "Worker starting...",
             "propagation_stage": "queued",
-            "propagation_progress": 5,
+            "propagation_progress": 0,
             "propagation_label": "Worker starting...",
             "runner_used": False if str(getattr(settings, "process_role", "")).lower() == "api" else True,
             "runner_module": RUNNER_MODULE,
@@ -1563,25 +1566,27 @@ async def upload_data(
         upload_session_id=summary.get("upload_session_id"),
         **response_timings,
     )
+    accepted = upload_jobs.read_upload_status(str(summary.get("job_id"))) or summary
+    accepted_progress = int((accepted.get("job_progress") or {}).get("overall_percent_complete") or 0)
     return {
         "job_id": summary.get("job_id"),
         "dataset_id": summary.get("dataset_id"),
         "upload_session_id": summary.get("upload_session_id"),
-        "status": "PENDING",
-        "processing_state": "queued",
+        "status": accepted.get("status") or "PENDING",
+        "processing_state": accepted.get("processing_state") or "queued",
         "filename": filename,
-        "percent": 5,
-        "progress": 5,
-        "progress_label": "Worker starting...",
-        "message": "Worker starting...",
+        "percent": accepted_progress,
+        "progress": accepted_progress,
+        "progress_label": accepted.get("progress_label") or "Waiting for a worker to claim this job.",
+        "message": accepted.get("message") or "Waiting for a worker to claim this job.",
         "status_url": f"/api/data/upload-status/{summary.get('job_id')}",
         "file_size_bytes": file_size_bytes,
         "propagation_stage": "queued",
-        "propagation_progress": 5,
-        "propagation_label": "Worker starting...",
+        "propagation_progress": accepted_progress,
+        "propagation_label": accepted.get("progress_label") or "Waiting for a worker to claim this job.",
         "worker_state": "starting" if summary.get("worker_dispatch_status") == "thread_dispatched" else "queued",
         "worker_dispatch_status": summary.get("worker_dispatch_status"),
-        "worker_last_seen_at": datetime.now(timezone.utc).isoformat(),
+        "worker_last_seen_at": accepted.get("worker_last_seen_at"),
         "queue_position": None,
         "queued_seconds": 0,
         "status_checked_at": datetime.now(timezone.utc).isoformat(),
@@ -1592,6 +1597,7 @@ async def upload_data(
         "timings": response_timings,
         "workflow": workflow,
         "workflow_state": "queued",
+        "job_progress": accepted.get("job_progress"),
         "baseline_result_url": f"/api/data/baselines/jobs/{summary.get('job_id')}" if is_baseline_workflow(workflow) else None,
         "sii_completed": False,
         "sii_engine_invoked": False if is_baseline_workflow(workflow) else None,
@@ -1666,8 +1672,8 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         "status_url": status_url,
         "status": "PENDING",
         "processing_state": "queued",
-        "percent": 5,
-        "progress": 5,
+        "percent": 0,
+        "progress": 0,
         "progress_label": "Retry queued.",
         "message": "Retry queued.",
         "error": None,
@@ -1681,7 +1687,7 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         "sii_completed": False,
         "replay_ready": False,
         "propagation_stage": "queued",
-        "propagation_progress": 5,
+        "propagation_progress": 0,
         "propagation_label": "Retry queued.",
         "retry_requested_at": now,
         "file_stored": True,
@@ -1739,13 +1745,18 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         processing_stage="queued",
         retry=True,
     )
+    persisted_retry = upload_jobs.read_upload_status(requested_job_id) or retried
     return {
-        **retried,
+        **persisted_retry,
         "retry_reused_existing_job": False,
     }
 
 
-@router.get("/upload-status/{job_id}")
+@router.get(
+    "/upload-status/{job_id}",
+    response_model=UploadStatusResponse,
+    operation_id="getUploadJobStatusV1",
+)
 async def upload_status(request: Request, job_id: UploadJobPath):
     status_started_at = time.perf_counter()
     if _strict_auth_mode(request):

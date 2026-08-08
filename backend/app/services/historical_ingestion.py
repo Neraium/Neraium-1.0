@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope
 from app.services.telemetry_classification import build_telemetry_signal_catalog
@@ -1531,8 +1531,25 @@ def build_historical_ingestion(
     review_history: list[dict[str, Any]] | None = None,
     revision: int = 1,
     max_analysis_rows: int | None = None,
+    progress_callback: Callable[..., Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     started = time.perf_counter()
+
+    def report(*, substage: str, status: str = "processing", force: bool = False, **values: Any) -> None:
+        if progress_callback is None:
+            return
+        try:
+            progress_callback(
+                stage="validate",
+                substage=substage,
+                status=status,
+                force=force,
+                **values,
+            )
+        except Exception:
+            # Progress visibility must not make the authoritative ingestion fail.
+            pass
+
     source_path = Path(path)
     raw_path = Path(raw_source_path) if raw_source_path is not None else source_path
     source_sha256 = source_sha256 or file_sha256(raw_path)
@@ -1559,6 +1576,12 @@ def build_historical_ingestion(
             "local_artifact_id": raw_reference.get("artifact_id"),
         }
     raw_preservation_seconds = time.perf_counter() - started
+    report(
+        substage="parse_source",
+        message="Opening and parsing the persisted source.",
+        unit_type="rows",
+        force=True,
+    )
     parsing_started = time.perf_counter()
     delimiter, header_present, columns, column_count = _read_delimited_header(source_path)
     parsing_seconds = time.perf_counter() - parsing_started
@@ -1574,6 +1597,39 @@ def build_historical_ingestion(
         candidate_rows += 1
         if values is not None and len(sample_rows) < 1000:
             sample_rows.append(values)
+        if candidate_rows % 5000 == 0:
+            report(
+                substage="parse_source",
+                completed_units=candidate_rows,
+                unit_type="rows",
+                message=f"Parsed {candidate_rows:,} source rows; total not known yet.",
+            )
+    report(
+        substage="parse_source",
+        status="completed",
+        completed_units=candidate_rows,
+        total_units=candidate_rows,
+        unit_type="rows",
+        message=f"Parsed {candidate_rows:,} source rows.",
+        force=True,
+    )
+    report(
+        substage="schema_detection",
+        status="completed",
+        completed_units=column_count,
+        total_units=column_count,
+        unit_type="columns",
+        message=f"Detected a {column_count}-column source schema.",
+        force=True,
+    )
+    report(
+        substage="timestamp_detection",
+        completed_units=0,
+        total_units=column_count,
+        unit_type="columns",
+        message="Evaluating timestamp candidates.",
+        force=True,
+    )
     timestamp_candidates = _timestamp_candidates(columns, sample_rows)
     selected_timestamp, selection_reasons = _select_timestamp(timestamp_candidates)
     timestamp_index = int(selected_timestamp["source_column_index"]) if selected_timestamp else None
@@ -1584,6 +1640,15 @@ def build_historical_ingestion(
     }
     identity_index = next((index for index, column in enumerate(columns) if _tokens(column) & IDENTITY_NAME_TOKENS and index != timestamp_index), None)
     schema_seconds = time.perf_counter() - schema_started
+    report(
+        substage="timestamp_detection",
+        status="completed",
+        completed_units=column_count,
+        total_units=column_count,
+        unit_type="columns",
+        message=(f"Selected timestamp signal {selected_timestamp['source_column']}." if selected_timestamp else "No timestamp signal met the deterministic selection rules."),
+        force=True,
+    )
 
     quality_started = time.perf_counter()
     sample_stride = max(1, math.ceil(candidate_rows / MAX_PROFILE_SAMPLES))
@@ -1598,9 +1663,29 @@ def build_historical_ingestion(
     seen_exact_rows: set[str] = set()
     timestamp_key_sequence: list[str] = []
     exclusion_counts: Counter[str] = Counter(malformed_counts)
+    profiled_rows = 0
+    quality_processed_rows = 0
+    report(
+        substage="timestamp_quality",
+        completed_units=0,
+        total_units=candidate_rows,
+        unit_type="rows",
+        message="Profiling timestamp and row quality.",
+        force=True,
+    )
     for source_row, values, error in _iter_source_rows(source_path, delimiter=delimiter, header_present=header_present, column_count=column_count):
+        quality_processed_rows += 1
         if error or values is None:
+            if quality_processed_rows % 5000 == 0:
+                report(
+                    substage="timestamp_quality",
+                    completed_units=quality_processed_rows,
+                    total_units=candidate_rows,
+                    unit_type="rows",
+                    message=f"Evaluated timestamp quality for {quality_processed_rows:,} of {candidate_rows:,} rows.",
+                )
             continue
+        profiled_rows += 1
         for index, accumulator in accumulator_by_index.items():
             accumulator.add(values[index], source_row, sample_stride=sample_stride)
         exact_digest = _digest(values)
@@ -1627,6 +1712,14 @@ def build_historical_ingestion(
                         duplicate_timestamps += 1
                     elif len(seen_timestamp_keys) < 200_000:
                         seen_timestamp_keys.add(key)
+        if quality_processed_rows % 5000 == 0:
+            report(
+                substage="timestamp_quality",
+                completed_units=quality_processed_rows,
+                total_units=candidate_rows,
+                unit_type="rows",
+                message=f"Evaluated timestamp quality for {quality_processed_rows:,} of {candidate_rows:,} rows.",
+            )
     repeated_windows = Counter(
         tuple(timestamp_key_sequence[index : index + 3])
         for index in range(max(0, len(timestamp_key_sequence) - 2))
@@ -1653,16 +1746,103 @@ def build_historical_ingestion(
         repeated_timestamp_blocks=repeated_timestamp_blocks,
     )
     timestamp_coverage = timestamp_profile.get("effective_usable_coverage_seconds")
+    report(
+        substage="timestamp_quality",
+        status="completed",
+        completed_units=candidate_rows,
+        total_units=candidate_rows,
+        unit_type="rows",
+        message=f"Evaluated timestamp quality for {candidate_rows:,} rows.",
+        metadata={"valid_rows_profiled": profiled_rows},
+        force=True,
+    )
+    report(
+        substage="signal_inventory",
+        status="completed",
+        completed_units=len(accumulators),
+        total_units=len(accumulators),
+        unit_type="signals",
+        message=f"Inventoried {len(accumulators):,} candidate signals.",
+        force=True,
+    )
 
     mapping_started = time.perf_counter()
     signal_profiles: list[dict[str, Any]] = []
     decisions = decisions or {}
-    for accumulator in accumulators:
+    prepared_signals: list[tuple[SignalAccumulator, dict[str, Any], dict[str, Any]]] = []
+    total_signals = len(accumulators)
+    report(
+        substage="unit_detection",
+        completed_units=0,
+        total_units=total_signals,
+        unit_type="signals",
+        message="Detecting engineering units.",
+        force=True,
+    )
+    for signal_index, accumulator in enumerate(accumulators, start=1):
         header_unit, _ = _header_unit(accumulator.source_column)
         preliminary = accumulator.preliminary()
         provisional_mapping = _semantic_mapping(accumulator.source_column, preliminary, header_unit or (next(iter(accumulator.observed_units), None)), header_present=header_present)
         unit = _unit_profile(accumulator.source_column, accumulator.observed_units, provisional_mapping)
+        prepared_signals.append((accumulator, preliminary, unit))
+        if signal_index % 25 == 0 or signal_index == total_signals:
+            report(
+                substage="unit_detection",
+                completed_units=signal_index,
+                total_units=total_signals,
+                unit_type="signals",
+                message=f"Evaluated units for {signal_index:,} of {total_signals:,} signals.",
+            )
+    report(
+        substage="unit_detection",
+        status="completed",
+        completed_units=total_signals,
+        total_units=total_signals,
+        unit_type="signals",
+        message=f"Evaluated units for {total_signals:,} signals.",
+        force=True,
+    )
+
+    mapped_signals: list[tuple[SignalAccumulator, dict[str, Any], dict[str, Any]]] = []
+    report(
+        substage="semantic_mapping",
+        completed_units=0,
+        total_units=total_signals,
+        unit_type="signals",
+        message="Mapping source signals to canonical roles.",
+        force=True,
+    )
+    for signal_index, (accumulator, preliminary, unit) in enumerate(prepared_signals, start=1):
         mapping = _semantic_mapping(accumulator.source_column, preliminary, unit.get("inferred_unit"), header_present=header_present)
+        signal_id = _canonical_signal_id(accumulator.source_column, accumulator.source_column_index, mapping.get("proposed_canonical_role"))
+        mapped_signals.append((accumulator, mapping, unit))
+        if signal_index % 25 == 0 or signal_index == total_signals:
+            report(
+                substage="semantic_mapping",
+                completed_units=signal_index,
+                total_units=total_signals,
+                unit_type="signals",
+                message=f"Mapped {signal_index:,} of {total_signals:,} signals.",
+            )
+    report(
+        substage="semantic_mapping",
+        status="completed",
+        completed_units=total_signals,
+        total_units=total_signals,
+        unit_type="signals",
+        message=f"Mapped {total_signals:,} signals.",
+        force=True,
+    )
+
+    report(
+        substage="data_quality_profiling",
+        completed_units=0,
+        total_units=total_signals,
+        unit_type="signals",
+        message="Profiling per-signal data quality.",
+        force=True,
+    )
+    for signal_index, (accumulator, mapping, unit) in enumerate(mapped_signals, start=1):
         signal_id = _canonical_signal_id(accumulator.source_column, accumulator.source_column_index, mapping.get("proposed_canonical_role"))
         quality = accumulator.profile(role=mapping.get("proposed_canonical_role"), timestamp_coverage_seconds=timestamp_coverage)
         included = bool(mapping.get("proposed_canonical_role")) and mapping.get("mapping_state") not in {"ambiguous", "unresolved", "excluded"} and quality.get("relationship_fitness") != "insufficient"
@@ -1678,7 +1858,24 @@ def build_historical_ingestion(
         }
         decision = decisions.get(signal_id) or decisions.get(accumulator.source_column)
         signal_profiles.append(_apply_decision(signal, decision))
+        if signal_index % 25 == 0 or signal_index == total_signals:
+            report(
+                substage="data_quality_profiling",
+                completed_units=signal_index,
+                total_units=total_signals,
+                unit_type="signals",
+                message=f"Profiled quality for {signal_index:,} of {total_signals:,} signals.",
+            )
     _add_correlation_alternatives(signal_profiles, accumulators)
+    report(
+        substage="data_quality_profiling",
+        status="completed",
+        completed_units=total_signals,
+        total_units=total_signals,
+        unit_type="signals",
+        message=f"Profiled quality for {total_signals:,} signals.",
+        force=True,
+    )
     mapping_seconds = time.perf_counter() - mapping_started
 
     duplicate_findings = _duplicate_channels(signal_profiles, accumulators)
@@ -1709,6 +1906,7 @@ def build_historical_ingestion(
     analysis_stride = max(1, math.ceil(candidate_rows / max(1, analysis_limit)))
     analysis_rows: list[dict[str, Any]] = []
     canonical_row_count = 0
+    canonical_processed_rows = 0
     included_row_count = 0
     temp_artifact: Path | None = None
     transformations: list[dict[str, Any]] = []
@@ -1735,6 +1933,14 @@ def build_historical_ingestion(
         })
     canonical_seen_exact: set[str] = set()
     canonical_seen_timestamps: set[str] = set()
+    report(
+        substage="unit_normalization",
+        completed_units=0,
+        total_units=candidate_rows,
+        unit_type="rows",
+        message="Normalizing source values into the canonical projection.",
+        force=True,
+    )
     try:
         with NamedTemporaryFile("w", delete=False, dir=canonical_path.parent, encoding="utf-8") as output:
             temp_artifact = Path(output.name)
@@ -1744,7 +1950,16 @@ def build_historical_ingestion(
                 header_present=header_present,
                 column_count=column_count,
             ):
+                canonical_processed_rows += 1
                 if source_error or source_values is None:
+                    if canonical_processed_rows % 5000 == 0:
+                        report(
+                            substage="unit_normalization",
+                            completed_units=canonical_processed_rows,
+                            total_units=candidate_rows,
+                            unit_type="rows",
+                            message=f"Normalized {canonical_processed_rows:,} of {candidate_rows:,} rows.",
+                        )
                     continue
                 row = {column: source_values[index] for index, column in enumerate(columns)}
                 row_exclusions: list[str] = []
@@ -1817,6 +2032,14 @@ def build_historical_ingestion(
                 }
                 output.write(_stable_json(canonical_row) + "\n")
                 canonical_row_count += 1
+                if canonical_processed_rows % 5000 == 0:
+                    report(
+                        substage="unit_normalization",
+                        completed_units=canonical_processed_rows,
+                        total_units=candidate_rows,
+                        unit_type="rows",
+                        message=f"Normalized {canonical_processed_rows:,} of {candidate_rows:,} rows.",
+                    )
                 if not excluded:
                     if included_row_count % analysis_stride == 0 and len(analysis_rows) < analysis_limit:
                         analysis_row["__source_row_number"] = source_row
@@ -1839,8 +2062,34 @@ def build_historical_ingestion(
                 int(row.get("__source_row_number") or 0),
             )
         )
+    report(
+        substage="unit_normalization",
+        status="completed",
+        completed_units=candidate_rows,
+        total_units=candidate_rows,
+        unit_type="rows",
+        message=f"Normalized {candidate_rows:,} source rows.",
+        metadata={"canonical_rows_written": canonical_row_count},
+        force=True,
+    )
+    report(
+        substage="canonical_dataset_build",
+        completed_units=0,
+        total_units=2,
+        unit_type="persistence_checks",
+        message="Hashing and persisting the canonical dataset.",
+        force=True,
+    )
     canonical_persistence_started = time.perf_counter()
     canonical_sha256 = file_sha256(canonical_path)
+    report(
+        substage="canonical_dataset_build",
+        completed_units=1,
+        total_units=2,
+        unit_type="persistence_checks",
+        message="Canonical dataset hashed; persisting the immutable artifact.",
+        force=True,
+    )
     canonical_storage = persist_immutable_derived_artifact(
         str(dataset_id),
         canonical_path,
@@ -1849,6 +2098,16 @@ def build_historical_ingestion(
         content_type="application/x-ndjson",
     )
     canonical_persistence_seconds = time.perf_counter() - canonical_persistence_started
+    report(
+        substage="canonical_dataset_build",
+        status="completed",
+        completed_units=2,
+        total_units=2,
+        unit_type="persistence_checks",
+        message=f"Built and persisted {canonical_row_count:,} canonical rows.",
+        metadata={"canonical_rows_written": canonical_row_count},
+        force=True,
+    )
     if source_was_reordered:
         transformations.append({
             "transformation_id": f"tr_{_digest({'dataset': dataset_identity, 'type': 'row_order'})[:12]}",
@@ -1871,9 +2130,35 @@ def build_historical_ingestion(
                 "rule_version": UNIT_VERSION,
             })
     canonical_seconds = time.perf_counter() - canonical_started
-
+    report(
+        substage="configuration_awareness",
+        completed_units=0,
+        total_units=total_signals,
+        unit_type="signals",
+        message="Evaluating configuration and operating-state boundaries.",
+        force=True,
+    )
     configuration = _configuration_profile(signal_profiles, analysis_rows, timestamp_column)
+    report(
+        substage="configuration_awareness",
+        status="completed",
+        completed_units=total_signals,
+        total_units=total_signals,
+        unit_type="signals",
+        message="Evaluated configuration and operating-state boundaries.",
+        force=True,
+    )
     readiness = _readiness(timestamp_profile, signal_profiles, included_row_count, configuration)
+    report(
+        substage="readiness_evaluation",
+        status="completed",
+        completed_units=1,
+        total_units=1,
+        unit_type="operation",
+        message=f"Readiness evaluation: {str(readiness.get('outcome') or 'complete').replace('_', ' ')}.",
+        metadata={"readiness_outcome": readiness.get("outcome")},
+        force=True,
+    )
     history = list(review_history or [])
     review = _review_summary(timestamp_profile, signal_profiles, duplicate_findings, configuration, history)
     trust_dimensions = _trust_dimensions(timestamp_profile, signal_profiles, configuration, readiness)
@@ -2029,6 +2314,7 @@ def apply_review(
     *,
     decisions: list[dict[str, Any]],
     actor: str,
+    progress_callback: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     current = read_ingestion_record(dataset_id)
     if current is None:
@@ -2081,6 +2367,7 @@ def apply_review(
             decisions=decision_map,
             review_history=history,
             revision=int(current.get("revision") or 1) + 1,
+            progress_callback=progress_callback,
         )
     finally:
         if temporary_source:

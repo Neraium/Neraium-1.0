@@ -24,6 +24,7 @@ from app.services.dataset_scope import current_dataset_scope
 from app.services.sensor_health import assess_sensor_health, build_data_confidence
 from app.services.telemetry_classification import build_telemetry_signal_catalog
 from app.services.telemetry_normalization import build_normalization_report
+from app.services.job_progress import ProgressReporter
 
 
 StageNotifier = Callable[..., None]
@@ -301,9 +302,11 @@ def _learn_distributions(
     numeric_columns: list[str],
     modes: list[dict[str, Any]],
     membership: dict[str, list[int]],
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> dict[str, dict[str, Any]]:
     learned: dict[str, dict[str, Any]] = {}
-    for column in numeric_columns[:50]:
+    selected_columns = numeric_columns[:50]
+    for index, column in enumerate(selected_columns, start=1):
         characteristics = _signal_characteristics(_series(rows, column))
         characteristics["mode_conditioned"] = {
             mode["mode_id"]: _signal_characteristics(
@@ -313,6 +316,8 @@ def _learn_distributions(
             if len(membership.get(mode["mode_id"], [])) >= 3
         }
         learned[column] = characteristics
+        if progress_callback and (index % 10 == 0 or index == len(selected_columns)):
+            progress_callback(index, len(selected_columns))
     return learned
 
 
@@ -363,6 +368,7 @@ def _learn_relationship_graph(
     numeric_columns: list[str],
     modes: list[dict[str, Any]],
     membership: dict[str, list[int]],
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
     selected = numeric_columns[:20]
     edges: list[dict[str, Any]] = []
@@ -373,14 +379,19 @@ def _learn_relationship_graph(
             for mode in modes
         }
     )
-    for mode_id, mode_rows in row_groups.items():
-        if len(mode_rows) < 4:
-            continue
+    eligible_groups = [(mode_id, mode_rows) for mode_id, mode_rows in row_groups.items() if len(mode_rows) >= 4]
+    pairs_per_group = len(selected) * max(0, len(selected) - 1) // 2
+    total_pairs = len(eligible_groups) * pairs_per_group
+    completed_pairs = 0
+    for mode_id, mode_rows in eligible_groups:
         for left_index, left in enumerate(selected):
             for right in selected[left_index + 1 :]:
                 edge = _relationship_edge(mode_rows, left, right, mode_id=mode_id)
                 if edge:
                     edges.append(edge)
+                completed_pairs += 1
+                if progress_callback and (completed_pairs % 25 == 0 or completed_pairs == total_pairs):
+                    progress_callback(completed_pairs, total_pairs)
     edges.sort(key=lambda item: (-item["strength"], item["edge_id"]))
     return {
         "nodes": [
@@ -390,7 +401,7 @@ def _learn_relationship_graph(
         "edges": edges[:200],
         "mode_conditioned": True,
         "construction_method": "empirical_mode_conditioned_correlation_v1",
-        "relationships_evaluated": len(selected) * max(0, len(selected) - 1) // 2,
+        "relationships_evaluated": completed_pairs,
     }
 
 
@@ -445,9 +456,11 @@ def _fit_expected_models(
     rows: list[dict[str, Any]],
     relationship_graph: dict[str, Any],
     membership: dict[str, list[int]],
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[dict[str, Any]]:
     models = []
-    for edge in relationship_graph.get("edges", [])[:50]:
+    selected_edges = relationship_graph.get("edges", [])[:50]
+    for index, edge in enumerate(selected_edges, start=1):
         mode_id = str(edge.get("mode_id"))
         model_rows = rows if mode_id == "all_operation" else [
             rows[index] for index in membership.get(mode_id, [])
@@ -455,6 +468,8 @@ def _fit_expected_models(
         model = _fit_linear_model(model_rows, edge)
         if model:
             models.append(model)
+        if progress_callback and (index % 10 == 0 or index == len(selected_edges)):
+            progress_callback(index, len(selected_edges))
     return models
 
 
@@ -547,6 +562,7 @@ def build_behavioral_baseline(
     dataset_id: str | None = None,
     telemetry_signal_catalog: dict[str, dict[str, Any]] | None = None,
     ingestion_trust: dict[str, Any] | None = None,
+    progress_reporter: ProgressReporter | None = None,
 ) -> dict[str, Any]:
     """Build a candidate Behavioral Digital Model without running SII detection."""
 
@@ -560,6 +576,27 @@ def build_behavioral_baseline(
     dataset_id = str(dataset_id or job_id)
     ingestion_report = ingestion_report or {}
     matrix_rows = [[str(row.get(column, "")) for column in columns] for row in rows]
+    if progress_reporter:
+        progress_reporter.report(
+            stage="learn",
+            substage="select_usable_signals",
+            status="completed",
+            completed_units=len(columns),
+            total_units=len(columns),
+            unit_type="columns",
+            message=f"Selected {len(numeric_columns):,} usable signals from {len(columns):,} source columns.",
+            metadata={"usable_signal_count": len(numeric_columns)},
+            force=True,
+        )
+        progress_reporter.report(
+            stage="learn",
+            substage="build_operating_context",
+            completed_units=0,
+            total_units=len(rows),
+            unit_type="rows",
+            message="Profiling baseline quality and building operating context.",
+            force=True,
+        )
 
     _notify(stage_notifier, job_id, stage="baseline_validating", progress=42, label="Validating and normalizing telemetry...")
     timestamp_profile = profile_timestamps(columns, matrix_rows, timestamp_column)
@@ -629,27 +666,143 @@ def build_behavioral_baseline(
         numeric_columns,
         telemetry_signal_catalog,
     )
+    if progress_reporter:
+        progress_reporter.report(
+            stage="learn",
+            substage="build_operating_context",
+            status="completed",
+            completed_units=len(rows),
+            total_units=len(rows),
+            unit_type="rows",
+            message=f"Built operating context from {len(rows):,} analysis rows.",
+            metadata={"operating_mode_count": len(operating_modes)},
+            force=True,
+        )
 
     _notify(stage_notifier, job_id, stage="baseline_relationship_learning", progress=78, label="Learning distributions and mode-conditioned relationships...")
+    if progress_reporter:
+        progress_reporter.report(
+            stage="learn",
+            substage="compute_baseline_statistics",
+            completed_units=0,
+            total_units=len(numeric_columns[:50]),
+            unit_type="signals",
+            message="Computing per-signal baseline statistics.",
+            force=True,
+        )
     signal_characteristics = _learn_distributions(
         rows,
         numeric_columns,
         operating_modes,
         membership,
+        progress_callback=(
+            lambda completed, total: progress_reporter.report(
+                stage="learn",
+                substage="compute_baseline_statistics",
+                completed_units=completed,
+                total_units=total,
+                unit_type="signals",
+                message=f"Computed baseline statistics for {completed:,} of {total:,} signals.",
+            )
+            if progress_reporter else None
+        ),
     )
+    if progress_reporter:
+        progress_reporter.report(
+            stage="learn",
+            substage="compute_baseline_statistics",
+            status="completed",
+            completed_units=len(numeric_columns[:50]),
+            total_units=len(numeric_columns[:50]),
+            unit_type="signals",
+            message=f"Computed baseline statistics for {len(numeric_columns[:50]):,} signals.",
+            force=True,
+        )
+        selected_count = len(numeric_columns[:20])
+        pairs_per_group = selected_count * max(0, selected_count - 1) // 2
+        eligible_groups = int(len(rows) >= 4) + sum(
+            len(membership.get(mode["mode_id"], [])) >= 4 for mode in operating_modes
+        )
+        progress_reporter.report(
+            stage="learn",
+            substage="learn_relationships",
+            completed_units=0,
+            total_units=pairs_per_group * eligible_groups,
+            unit_type="relationship_pairs",
+            message="Evaluating eligible signal relationships.",
+            force=True,
+        )
     relationship_graph = _learn_relationship_graph(
         rows,
         numeric_columns,
         operating_modes,
         membership,
+        progress_callback=(
+            lambda completed, total: progress_reporter.report(
+                stage="learn",
+                substage="learn_relationships",
+                completed_units=completed,
+                total_units=total,
+                unit_type="relationship_pairs",
+                message=f"Evaluated {completed:,} of {total:,} eligible relationship pairs.",
+            )
+            if progress_reporter else None
+        ),
     )
+    if progress_reporter:
+        relationship_total = int(relationship_graph.get("relationships_evaluated") or 0)
+        progress_reporter.report(
+            stage="learn",
+            substage="learn_relationships",
+            status="completed",
+            completed_units=relationship_total,
+            total_units=relationship_total,
+            unit_type="relationship_pairs",
+            message=f"Evaluated {relationship_total:,} eligible relationship pairs.",
+            metadata={"relationships_retained": len(relationship_graph.get("edges", []))},
+            force=True,
+        )
 
     _notify(stage_notifier, job_id, stage="baseline_model_fitting", progress=88, label="Fitting and validating expected behavior...")
+    model_total = len(relationship_graph.get("edges", [])[:50])
+    if progress_reporter:
+        progress_reporter.report(
+            stage="learn",
+            substage="fit_expected_models",
+            completed_units=0,
+            total_units=model_total,
+            unit_type="relationship_models",
+            message="Fitting and validating expected-behavior models.",
+            force=True,
+        )
     expected_behavior_models = _fit_expected_models(
         rows,
         relationship_graph,
         membership,
+        progress_callback=(
+            lambda completed, total: progress_reporter.report(
+                stage="learn",
+                substage="fit_expected_models",
+                completed_units=completed,
+                total_units=total,
+                unit_type="relationship_models",
+                message=f"Evaluated {completed:,} of {total:,} relationship models.",
+            )
+            if progress_reporter else None
+        ),
     )
+    if progress_reporter:
+        progress_reporter.report(
+            stage="learn",
+            substage="fit_expected_models",
+            status="completed",
+            completed_units=model_total,
+            total_units=model_total,
+            unit_type="relationship_models",
+            message=f"Validated {model_total:,} candidate relationship models.",
+            metadata={"models_retained": len(expected_behavior_models)},
+            force=True,
+        )
     suitability = _suitability_report(
         row_count=row_count_total,
         numeric_columns=numeric_columns,
@@ -751,8 +904,49 @@ def build_behavioral_baseline(
         },
     }
     assert_baseline_output_contract(result)
+    if progress_reporter:
+        progress_reporter.report(
+            stage="learn",
+            substage="persistence_checks",
+            completed_units=0,
+            total_units=2,
+            unit_type="checks",
+            message="Persisting and verifying the baseline candidate.",
+            force=True,
+        )
     persist_candidate(model, result, activate=auto_activate)
+    if progress_reporter:
+        progress_reporter.report(
+            stage="learn",
+            substage="persistence_checks",
+            completed_units=1,
+            total_units=2,
+            unit_type="checks",
+            message="Baseline candidate persisted; verifying readback.",
+            force=True,
+        )
     persisted = verify_persisted_baseline(job_id)
+    if progress_reporter:
+        progress_reporter.report(
+            stage="learn",
+            substage="persistence_checks",
+            status="completed",
+            completed_units=2,
+            total_units=2,
+            unit_type="checks",
+            message="Baseline persistence and readback checks passed.",
+            force=True,
+        )
+        progress_reporter.report(
+            stage="ready",
+            substage="finalize_baseline",
+            status="completed",
+            completed_units=1,
+            total_units=1,
+            unit_type="operation",
+            message="Behavioral baseline candidate ready.",
+            force=True,
+        )
     persisted_result = dict(persisted["result"])
     persisted_model = dict(persisted["model"])
     persisted_result["candidate_model"] = persisted_model

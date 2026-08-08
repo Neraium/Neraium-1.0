@@ -93,10 +93,10 @@ def test_upload_returns_accepted_job_id() -> None:
     assert payload["message"] == "Worker starting..."
     assert payload["status_url"] == f"/api/data/upload-status/{payload['job_id']}"
     assert payload["propagation_stage"] == "queued"
-    assert payload["propagation_progress"] == 5
+    assert payload["propagation_progress"] == payload["job_progress"]["overall_percent_complete"] == 6
     assert payload["propagation_label"] == "Worker starting..."
     assert payload["worker_state"] == "starting"
-    assert payload["worker_last_seen_at"]
+    assert payload["worker_last_seen_at"] is None
     assert payload["queue_position"] is None
     assert payload["queued_seconds"] == 0
     assert payload["status_checked_at"]
@@ -692,7 +692,8 @@ def test_upload_status_can_return_queued_state() -> None:
     payload = status.json()
     assert payload["status"] == "PENDING"
     assert payload["propagation_stage"] in {"queued", "accepted"}
-    assert payload["propagation_progress"] in {5, 10}
+    assert payload["propagation_progress"] == payload["job_progress"]["overall_percent_complete"]
+    assert payload["propagation_progress"] == 6
     assert payload.get("propagation_label") in {"Worker starting...", "Validating CSV...", "Upload received.", "Queued."}
     assert payload["worker_state"] == "queued"
     assert payload["execution_state"] == "queued"
@@ -760,6 +761,7 @@ def test_upload_processing_persists_intermediate_progress_states(monkeypatch) ->
                 "progress": payload.get("progress"),
                 "label": payload.get("progress_label") or payload.get("message"),
                 "status": payload.get("status"),
+                "backend_substage": (payload.get("job_progress") or {}).get("substage"),
             })
         return original(job_id, payload, *args, **kwargs)
 
@@ -780,7 +782,11 @@ def test_upload_processing_persists_intermediate_progress_states(monkeypatch) ->
         job_id="progress-sequence-job",
     )
 
-    stages = [event["stage"] for event in progress_events]
+    stages = [
+        event["stage"]
+        for index, event in enumerate(progress_events)
+        if index == 0 or event["stage"] != progress_events[index - 1]["stage"]
+    ]
     assert result["job_id"] == "progress-sequence-job"
     assert stages[:2] == ["reading_csv", "detecting_schema_signals"]
     for expected in [
@@ -797,13 +803,17 @@ def test_upload_processing_persists_intermediate_progress_states(monkeypatch) ->
 
     nonterminal_progress = [event["progress"] for event in progress_events if event["stage"] != "complete"]
     assert 5 not in nonterminal_progress or min(nonterminal_progress) >= 5
-    assert max(nonterminal_progress) == 95
+    assert 95 <= max(nonterminal_progress) < 100
     assert progress_events[-1]["stage"] == "complete"
     assert progress_events[-1]["progress"] == 100
     assert progress_events[-1]["label"] == "Analysis ready."
+    backend_substages = {event["backend_substage"] for event in progress_events}
+    assert {"parse_source", "signal_drift", "evidence_fusion", "finalize_analysis"} <= backend_substages
+    assert result["job_progress"]["overall_percent_complete"] == 100
+    assert all(operation["status"] == "completed" for operation in result["job_progress"]["operations"])
 
 
-def test_upload_status_preserves_explicit_processing_progress_stage() -> None:
+def test_upload_status_preserves_explicit_processing_stage_but_not_unmeasured_percentage() -> None:
     client = TestClient(create_app())
     job = {
         "job_id": "progress-stage-job",
@@ -828,13 +838,13 @@ def test_upload_status_preserves_explicit_processing_progress_stage() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "PROCESSING"
-    assert payload["percent"] == 60
-    assert payload["progress"] == 60
+    assert payload["percent"] == payload["job_progress"]["overall_percent_complete"] == 6
+    assert payload["progress"] == 6
     assert payload["propagation_stage"] == "scoring_relationship_drift"
-    assert payload["propagation_progress"] == 60
+    assert payload["propagation_progress"] == 6
     assert payload["propagation_label"] == "Scoring relationship drift."
     assert payload["contract_stage"] == "structural_scoring"
-    assert payload["contract_progress"] == 60
+    assert payload["contract_progress"] == 6
 
 def test_upload_status_can_return_failed_state() -> None:
     client = TestClient(create_app())
@@ -2185,7 +2195,7 @@ def test_upload_polling_reads_persisted_job_state() -> None:
     assert payload["status"] == "RUNNING_SII"
     assert payload["rows_processed"] == 300_000
     assert payload["propagation_stage"] == "parsing_telemetry"
-    assert payload["propagation_progress"] == 20
+    assert payload["propagation_progress"] == payload["job_progress"]["overall_percent_complete"] == 6
     assert payload["propagation_label"] == "Profiling historical data..."
     assert (upload_jobs.JOB_DIR / "polling-job.json").exists()
 
@@ -2782,7 +2792,7 @@ def test_worker_timeout_returns_structured_retryable_import_error(monkeypatch, t
     assert payload["stage"] == "baseline_creation"
 
 
-def test_upload_status_reports_running_when_worker_heartbeat_written(monkeypatch, tmp_path) -> None:
+def test_upload_status_does_not_claim_running_before_worker_claim(monkeypatch, tmp_path) -> None:
     settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
     client = TestClient(create_app(settings))
 

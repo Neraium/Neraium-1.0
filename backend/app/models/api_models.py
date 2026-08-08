@@ -2,9 +2,79 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from app.contracts import ContractModel, EmailAddress, Identifier, OptionalNote, SecretText, ShortText, validate_http_url, validate_utc_timestamp
+
+
+class JobProgressOperation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    stage: str
+    label: str
+    status: Literal["pending", "queued", "processing", "waiting", "retrying", "completed", "failed", "cancelled"]
+    completed_units: int | None = Field(default=None, ge=0)
+    total_units: int | None = Field(default=None, ge=0)
+    percent_complete: int | None = Field(default=None, ge=0, le=100)
+    unit_type: str | None = None
+    message: str | None = None
+    started_at: str | None = None
+    updated_at: str | None = None
+    completed_at: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("started_at", "updated_at", "completed_at", mode="before")
+    @classmethod
+    def validate_timestamps(cls, value: str | None) -> str | None:
+        return validate_utc_timestamp(value)
+
+
+class JobProgressStep(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    label: str
+    status: Literal["pending", "queued", "processing", "waiting", "retrying", "completed", "failed", "cancelled"]
+    completed_work_units: int = Field(ge=0)
+    total_work_units: int = Field(ge=0)
+    percent_complete: int = Field(ge=0, le=100)
+
+
+class JobProgress(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    contract_version: Literal["job-progress.v1"]
+    job_id: str
+    workflow: str
+    status: Literal["queued", "processing", "waiting", "retrying", "completed", "failed", "cancelled"]
+    stage: str | None = None
+    substage: str | None = None
+    completed_units: int | None = Field(default=None, ge=0)
+    total_units: int | None = Field(default=None, ge=0)
+    percent_complete: int | None = Field(default=None, ge=0, le=100)
+    unit_type: str | None = None
+    message: str
+    started_at: str
+    updated_at: str
+    elapsed_seconds: int = Field(ge=0)
+    last_worker_heartbeat_at: str | None = None
+    seconds_since_worker_heartbeat: int | None = Field(default=None, ge=0)
+    seconds_since_update: int = Field(ge=0)
+    stalled: bool
+    retryable: bool | None = None
+    error: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    workflow_steps: list[JobProgressStep] = Field(default_factory=list)
+    operations: list[JobProgressOperation] = Field(default_factory=list)
+    overall_percent_complete: int = Field(ge=0, le=100)
+    overall_basis: Literal["equal_completed_declared_substages"]
+    visibility_message: str | None = None
+
+    @field_validator("started_at", "updated_at", "last_worker_heartbeat_at", mode="before")
+    @classmethod
+    def validate_timestamps(cls, value: str | None) -> str | None:
+        return validate_utc_timestamp(value)
 
 
 class UploadAcceptedResponse(BaseModel):
@@ -31,12 +101,16 @@ class UploadAcceptedResponse(BaseModel):
         "analyze_new_data",
         "extend_baseline",
         "legacy_analysis",
+        "historical_review",
     ] = "legacy_analysis"
     baseline_result_url: str | None = None
+    job_progress: JobProgress | None = None
 
 
 
 class UploadStatusResponse(BaseModel): 
+    model_config = ConfigDict(extra="allow")
+
     job_id: str | None
     dataset_id: str | None = None
     analysis_state: str = "no_dataset"
@@ -80,6 +154,7 @@ class UploadStatusResponse(BaseModel):
         "analyze_new_data",
         "extend_baseline",
         "legacy_analysis",
+        "historical_review",
     ] = "legacy_analysis"
     workflow_state: str | None = None
     baseline_candidate_created: bool = False
@@ -87,6 +162,7 @@ class UploadStatusResponse(BaseModel):
     baselineId: str | None = None
     workspacePath: str | None = None
     createdAt: str | None = None
+    job_progress: JobProgress | None = None
 
 
 class BaselineCreationResponse(BaseModel):

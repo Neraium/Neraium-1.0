@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import HistoricalIngestionReview from "./HistoricalIngestionReview";
@@ -62,6 +62,61 @@ function profile(overrides = {}) {
   };
 }
 
+function jobProgress({ status = "processing", completed = 5, total = 10 } = {}) {
+  const complete = status === "completed";
+  const now = "2026-08-08T12:00:00+00:00";
+  const operations = [
+    ["receiving", "upload", "Receiving file", "completed"],
+    ["source_persisted", "upload", "Source persisted", "completed"],
+    ["parse_source", "validate", "Parse source", complete ? "completed" : status],
+    ["readiness_evaluation", "validate", "Readiness evaluation", complete ? "completed" : "pending"],
+  ].map(([id, stage, operationLabel, operationStatus]) => ({
+    id,
+    stage,
+    label: operationLabel,
+    status: operationStatus,
+    completed_units: id === "parse_source" ? completed : operationStatus === "completed" ? 1 : null,
+    total_units: id === "parse_source" ? total : operationStatus === "completed" ? 1 : null,
+    percent_complete: operationStatus === "completed" ? 100 : id === "parse_source" ? Math.floor(completed * 100 / total) : null,
+    unit_type: id === "parse_source" ? "rows" : "operation",
+    message: id === "parse_source" ? `Parsed ${completed} of ${total} rows.` : null,
+    started_at: now,
+    updated_at: now,
+    completed_at: operationStatus === "completed" ? now : null,
+    metadata: {},
+  }));
+  return {
+    contract_version: "job-progress.v1",
+    job_id: "dataset-1",
+    workflow: "historical_review",
+    status,
+    stage: complete ? "validate" : "validate",
+    substage: complete ? "readiness_evaluation" : "parse_source",
+    completed_units: complete ? 1 : completed,
+    total_units: complete ? 1 : total,
+    percent_complete: complete ? 100 : Math.floor(completed * 100 / total),
+    unit_type: complete ? "operation" : "rows",
+    message: complete ? "Canonical dataset review complete." : `Parsed ${completed} of ${total} rows.`,
+    started_at: now,
+    updated_at: now,
+    elapsed_seconds: 4,
+    last_worker_heartbeat_at: now,
+    seconds_since_worker_heartbeat: 0,
+    seconds_since_update: 0,
+    stalled: false,
+    retryable: null,
+    error: null,
+    metadata: {},
+    workflow_steps: [
+      { id: "upload", label: "Upload", status: "completed", completed_work_units: 2, total_work_units: 2, percent_complete: 100 },
+      { id: "validate", label: "Validate", status: complete ? "completed" : "processing", completed_work_units: complete ? 2 : 0, total_work_units: 2, percent_complete: complete ? 100 : 25 },
+    ],
+    operations,
+    overall_percent_complete: complete ? 100 : 62,
+    overall_basis: "equal_completed_declared_substages",
+  };
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -107,6 +162,39 @@ describe("HistoricalIngestionReview", () => {
     ] });
     expect((await screen.findByRole("status")).textContent).toContain("canonical dataset revision is ready for reanalysis");
     expect(onUpdated).toHaveBeenCalledWith(expect.objectContaining({ revision: 2, dataset_identity: updated.dataset_identity }));
+  });
+
+  it("polls and renders persisted backend progress while a review rebuild is running", async () => {
+    let resolveReview;
+    const reviewResponse = new Promise((resolve) => { resolveReview = resolve; });
+    const apiFetch = vi.fn((path, options = {}) => {
+      if (path.endsWith("/review") && options.method === "PATCH") return reviewResponse;
+      if (path.includes("/upload-status/")) {
+        return Promise.resolve(response({
+          job_id: "dataset-1",
+          status: "PROCESSING",
+          processing_state: "historical_review",
+          execution_state: "processing",
+          job_progress: jobProgress(),
+        }));
+      }
+      return Promise.resolve(response(profile()));
+    });
+    render(h(HistoricalIngestionReview, { datasetId: "dataset-1", apiFetch }));
+
+    fireEvent.change(await screen.findByLabelText("Confirmed source unit for Mystery Flow"), { target: { value: "gpm" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Review Decisions" }));
+
+    expect(await screen.findByLabelText("Backend job progress")).toBeTruthy();
+    expect(screen.getByRole("progressbar", { name: "Parse source" }).getAttribute("aria-valuenow")).toBe("50");
+    expect(screen.getByText("5 / 10 rows")).toBeTruthy();
+
+    await act(async () => {
+      resolveReview(response(profile({ revision: 2, job_progress: jobProgress({ status: "completed", completed: 10, total: 10 }) })));
+      await reviewResponse;
+    });
+    expect(await screen.findByText("Canonical dataset review complete.")).toBeTruthy();
+    expect(screen.getByText("Completed")).toBeTruthy();
   });
 
   it("shows a useful error state when the profile cannot be loaded", async () => {

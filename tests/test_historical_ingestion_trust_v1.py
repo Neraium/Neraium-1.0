@@ -467,6 +467,13 @@ def test_versioned_api_is_pure_and_records_human_review(client, tmp_path: Path) 
     assert review.status_code == 200
     assert review.json()["revision"] == 2
     assert review.json()["review"]["history"][0]["provenance"] == "human_review"
+    assert review.json()["job_progress"]["workflow"] == "historical_review"
+    assert review.json()["job_progress"]["status"] == "completed"
+    assert review.json()["job_progress"]["overall_percent_complete"] == 100
+    persisted_progress = client.get("/api/data/upload-status/api-review")
+    assert persisted_progress.status_code == 200
+    assert persisted_progress.json()["job_progress"]["workflow"] == "historical_review"
+    assert persisted_progress.json()["job_progress"]["status"] == "completed"
 
     rejected = client.patch(
         "/api/data/ingestion/v1/datasets/api-review/review",
