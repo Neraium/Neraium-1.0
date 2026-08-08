@@ -62,6 +62,19 @@ function sleep(ms) {
 }
 
 function buildSmokeCsv() {
+  if (BASELINE_WORKFLOWS.has(UPLOAD_WORKFLOW)) {
+    const started = Date.now() - 72 * 5 * 60000;
+    const rows = Array.from({ length: 72 }, (_, index) => {
+      const timestamp = new Date(started + index * 5 * 60000).toISOString();
+      const stage = Math.floor(index / 18) % 2 === 0 ? 1 : 2;
+      const load = 35 + stage * 18 + (index % 9);
+      const flow = 80 + load * 1.7;
+      const pressure = 12 + flow * 0.08;
+      return `${timestamp},${stage},${load.toFixed(3)},${flow.toFixed(3)},${pressure.toFixed(3)}`;
+    });
+    return `timestamp,equipment_stage,load_pct,flow_gpm,pressure_psi\n${rows.join("\n")}\n`;
+  }
+
   const base = Date.now();
   const rows = Array.from({ length: 8 }, (_, index) => {
     const timestamp = new Date(base + index * 60000).toISOString();
