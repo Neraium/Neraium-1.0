@@ -1,11 +1,13 @@
 from app.main import create_app
-from app.services.runtime_db import claim_next_upload_job, clear_stale_processing_queue_jobs, db_connection, enqueue_upload_job, init_runtime_db, queue_metrics, read_upload_queue_job
+from app.services.runtime_db import claim_next_upload_job, clear_stale_processing_queue_jobs, complete_upload_queue_job, db_connection, enqueue_upload_job, init_runtime_db, queue_metrics, read_upload_queue_job
+from app.services import upload_queue_lifecycle
 from app.services.upload_jobs import UPLOAD_QUEUE_LIFECYCLE, process_next_queued_upload_job, read_job, reset_latest_upload_state, write_job
 from app.services.upload_state_repository import persist_upload_source, write_upload_result
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
 from fastapi.testclient import TestClient
 from pathlib import Path
 import json
+import time
 
 
 def test_clear_stale_processing_queue_jobs_marks_processing_as_failed() -> None:
@@ -266,3 +268,35 @@ def test_queue_lifecycle_uses_explicit_runtime_state() -> None:
 
     assert UPLOAD_RUNTIME_STATE.jobs[job_id]["status"] == "FAILED"
     assert UPLOAD_RUNTIME_STATE.jobs[job_id]["processing_state"] == "failed"
+
+
+def test_claim_heartbeat_refreshes_only_the_claimed_processing_row(monkeypatch) -> None:
+    reset_latest_upload_state(purge_job_records=True)
+    job_id = "heartbeat-owned-job"
+    write_job({
+        "job_id": job_id,
+        "filename": "heartbeat.csv",
+        "status": "PENDING",
+        "processing_state": "queued",
+    })
+    enqueue_upload_job(job_id)
+    assert claim_next_upload_job() == job_id
+    before = read_upload_queue_job(job_id)["updated_at"]
+    monkeypatch.setattr(upload_queue_lifecycle, "UPLOAD_QUEUE_HEARTBEAT_INTERVAL_SECONDS", 0.01)
+
+    stop, thread = UPLOAD_QUEUE_LIFECYCLE._start_claim_heartbeat(job_id)
+    try:
+        deadline = time.monotonic() + 0.5
+        while time.monotonic() < deadline and read_upload_queue_job(job_id)["updated_at"] == before:
+            time.sleep(0.01)
+        assert read_upload_queue_job(job_id)["updated_at"] != before
+
+        complete_upload_queue_job(job_id, "failed", "test_finished")
+        thread.join(timeout=0.5)
+        assert thread.is_alive() is False
+        terminal_updated_at = read_upload_queue_job(job_id)["updated_at"]
+        time.sleep(0.03)
+        assert read_upload_queue_job(job_id)["updated_at"] == terminal_updated_at
+    finally:
+        stop.set()
+        thread.join(timeout=0.5)

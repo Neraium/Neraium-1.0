@@ -1454,6 +1454,100 @@
     transition: none !important;
   }
 }
+
+.upload-reconciliation-message {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #62d6c6) 28%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-accent, #62d6c6) 7%, transparent);
+}
+
+.upload-recent-job {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 14px;
+}
+
+.upload-recent-job p,
+.upload-recent-job h3,
+.upload-job-actions p {
+  margin: 0;
+}
+
+.upload-recent-job h3 {
+  margin-block: 4px;
+  overflow-wrap: anywhere;
+}
+
+.upload-job-status {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 10px;
+}
+
+.upload-job-status > span {
+  color: var(--color-text-muted, #9eb1b7);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.upload-job-status > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-muted, #9eb1b7);
+}
+
+.upload-job-status > p > span {
+  color: var(--color-text, currentColor);
+  font-weight: 700;
+}
+
+.upload-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.upload-job-actions p {
+  flex-basis: 100%;
+  color: var(--color-text-muted, #9eb1b7);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 620px) {
+  .upload-recent-job {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .upload-recent-job .upload-simple-actions,
+  .upload-job-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .upload-recent-job button,
+  .upload-job-actions button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .upload-job-status {
+    grid-template-columns: 1fr;
+  }
+}
 .historical-review {
   display: grid;
   gap: 18px;

@@ -297,7 +297,10 @@ def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
             staged = {
                 **current,
                 "job_id": worker_job_id,
-                "worker_state": "running",
+                # The worker process is awake, but this job is not active until
+                # claim_next_upload_job() transitions its queue row atomically.
+                "worker_state": "starting",
+                "worker_claimed": False,
                 "worker_last_seen_at": now,
             }
             if not staged.get("propagation_stage"):

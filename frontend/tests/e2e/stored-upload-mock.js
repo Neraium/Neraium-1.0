@@ -7,6 +7,8 @@ export async function installStoredBaselineUpload(page, {
   filename = `${jobId}.csv`,
   staleLatestResult = null,
   ingestionTrust = null,
+  processingOverrides = {},
+  latestWhileProcessing = false,
 } = {}) {
   const calls = { sessions: 0, objectPuts: 0, completions: 0, statusPolls: 0, baselineResults: 0, exactBaselineResults: 0, latestUploads: 0 };
   let completionAvailable = false;
@@ -29,9 +31,11 @@ export async function installStoredBaselineUpload(page, {
     progress_label: "Validating historical data",
     result_available: false,
     workflow: "create_baseline",
+    filename,
     ...(ingestionTrust ? { ingestion_trust: ingestionTrust } : {}),
     status_url: statusUrl,
     baseline_result_url: baselineResultUrl,
+    ...processingOverrides,
   };
   const complete = {
     ...processing,
@@ -138,6 +142,19 @@ export async function installStoredBaselineUpload(page, {
     }
     if (!completionAvailable) {
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "empty", session_state: "empty", history: [] }) });
+    }
+    if (latestWhileProcessing && !completeWhenPolled) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ...processing,
+          session_state: String(processing.execution_state || processing.processing_state || "processing").toLowerCase(),
+          latest_result: null,
+          current_upload: processing,
+          history: [],
+        }),
+      });
     }
     return route.fulfill({
       status: 200,

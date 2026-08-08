@@ -10,7 +10,7 @@ from app.core.config import Settings
 from app.main import create_app, upload_error_payload
 from app.routers import data as data_router
 from app.services import evidence_store
-from app.services.runtime_db import read_upload_queue_job, upsert_latest_payload
+from app.services.runtime_db import claim_next_upload_job, db_connection, read_upload_queue_job, upsert_latest_payload
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services import sii_runner, upload_jobs
 from app.services.upload_jobs import UploadTooLargeError, create_upload_job, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, read_latest_upload_summary, write_job, write_latest_upload_result, write_latest_upload_summary
@@ -694,7 +694,9 @@ def test_upload_status_can_return_queued_state() -> None:
     assert payload["propagation_stage"] in {"queued", "accepted"}
     assert payload["propagation_progress"] in {5, 10}
     assert payload.get("propagation_label") in {"Worker starting...", "Validating CSV...", "Upload received.", "Queued."}
-    assert payload["worker_state"] in {"starting", "running", "stalled", "unknown"}
+    assert payload["worker_state"] == "queued"
+    assert payload["execution_state"] == "queued"
+    assert payload["worker_claimed"] is False
     assert "worker_last_seen_at" in payload
     assert "queue_position" in payload
     assert "queued_seconds" in payload
@@ -2602,7 +2604,8 @@ def test_upload_status_marks_stalled_when_queued_without_heartbeat() -> None:
     status = client.get("/api/data/upload-status/stalled-job")
     assert status.status_code == 200
     payload = status.json()
-    assert payload["worker_state"] in {"stalled", "starting"}
+    assert payload["worker_state"] == "queued"
+    assert payload["execution_state"] == "queued"
     assert payload.get("queued_seconds") is None or payload["queued_seconds"] >= 0
 
 
@@ -2618,7 +2621,7 @@ def test_relationship_baseline_reports_sampling_metadata() -> None:
         assert "sampled_for_baseline" in result["top_relationship_changes"][0]
 
 
-def test_worker_transitions_starting_to_running_on_thread_start(monkeypatch, tmp_path) -> None:
+def test_worker_does_not_report_running_before_queue_claim(monkeypatch, tmp_path) -> None:
     settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
     create_app(settings)
 
@@ -2638,7 +2641,8 @@ def test_worker_transitions_starting_to_running_on_thread_start(monkeypatch, tmp
     data_router._run_upload_worker_for_runtime(tmp_path)
 
     payload = upload_jobs.read_upload_status(job_id) or {}
-    assert payload.get("worker_state") == "running"
+    assert payload.get("worker_state") == "starting"
+    assert payload.get("worker_claimed") is False
     assert payload.get("worker_last_seen_at")
 
 
@@ -2800,8 +2804,115 @@ def test_upload_status_reports_running_when_worker_heartbeat_written(monkeypatch
     response = client.get(f"/api/data/upload-status/{job_id}")
     assert response.status_code == 200
     payload = response.json()
-    assert payload.get("worker_state") == "running"
+    assert payload.get("processing_state") == "queued"
+    assert payload.get("queue_state") == "pending"
+    assert payload.get("execution_state") == "queued"
+    assert payload.get("worker_state") == "queued"
+    assert payload.get("worker_claimed") is False
     assert payload.get("worker_last_seen_at")
+
+
+def test_upload_status_reports_claimed_only_after_durable_queue_claim(tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
+    client = TestClient(create_app(settings))
+    job_id = "worker-claimed-job"
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "filename": "claimed.csv",
+        "status": "PENDING",
+        "processing_state": "queued",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    upload_jobs.enqueue_upload_job(job_id)
+
+    assert claim_next_upload_job() == job_id
+    payload = client.get(f"/api/data/upload-status/{job_id}").json()
+
+    assert payload["queue_state"] == "processing"
+    assert payload["worker_claimed"] is True
+    assert payload["worker_claimed_at"]
+    assert payload["execution_state"] == "claimed"
+    assert payload["worker_state"] == "claimed"
+
+
+def test_upload_status_reports_processing_only_for_claimed_processing_job(tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
+    client = TestClient(create_app(settings))
+    job_id = "worker-processing-visible-job"
+    now = datetime.now(timezone.utc).isoformat()
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "filename": "processing.csv",
+        "status": "PENDING",
+        "processing_state": "queued",
+        "updated_at": now,
+    })
+    upload_jobs.enqueue_upload_job(job_id)
+    assert claim_next_upload_job() == job_id
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "filename": "processing.csv",
+        "status": "PROCESSING",
+        "processing_state": "baseline_relationship_learning",
+        "updated_at": now,
+    })
+
+    payload = client.get(f"/api/data/upload-status/{job_id}").json()
+
+    assert payload["worker_claimed"] is True
+    assert payload["execution_state"] == "processing"
+    assert payload["worker_state"] == "running"
+
+
+def test_upload_status_marks_claimed_job_stalled_after_old_heartbeat(tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
+    client = TestClient(create_app(settings))
+    job_id = "worker-stalled-claimed-job"
+    old = "2026-01-01T00:00:00+00:00"
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "filename": "stalled.csv",
+        "status": "PROCESSING",
+        "processing_state": "baseline_relationship_learning",
+        "updated_at": old,
+        "worker_last_seen_at": old,
+    })
+    upload_jobs.enqueue_upload_job(job_id)
+    assert claim_next_upload_job() == job_id
+    with db_connection() as connection:
+        connection.execute(
+            "UPDATE upload_queue SET updated_at = ?, locked_at = ? WHERE job_id = ?",
+            (old, old, job_id),
+        )
+
+    payload = client.get(f"/api/data/upload-status/{job_id}").json()
+
+    assert payload["worker_claimed"] is True
+    assert payload["worker_heartbeat_stale"] is True
+    assert payload["execution_state"] == "stalled"
+    assert payload["worker_state"] == "stalled"
+
+
+def test_upload_status_marks_legacy_processing_job_stalled_without_fresh_backend_evidence(tmp_path) -> None:
+    settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
+    client = TestClient(create_app(settings))
+    job_id = "legacy-worker-with-old-heartbeat"
+    old = "2026-01-01T00:00:00+00:00"
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "filename": "legacy.csv",
+        "status": "PROCESSING",
+        "processing_state": "baseline_relationship_learning",
+        "updated_at": old,
+        "worker_last_seen_at": old,
+    })
+
+    payload = client.get(f"/api/data/upload-status/{job_id}").json()
+
+    assert payload["queue_state"] is None
+    assert payload["worker_claimed"] is False
+    assert payload["execution_state"] == "stalled"
+    assert payload["worker_state"] == "stalled"
 
 
 

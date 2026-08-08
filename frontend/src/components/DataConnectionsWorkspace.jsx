@@ -21,12 +21,14 @@ import { clearBaselineResultCache, fetchBaselineResultById, recoverBaselineCreat
 import { normalizeBaselineCreationResponse } from "../contracts/baselineCreation";
 import { baselineIdentityFromResult, baselineRoutePath, persistBaselineSelection, readPersistedBaselineSelection } from "../viewModels/baselineSelection";
 import { getCurrentWorkspaceId } from "../services/datasetSessionCache";
+import { authoritativeJobState, isPollableJobState } from "../viewModels/uploadJobState";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
 const MAX_UPLOAD_BYTES = LARGE_UPLOAD_MAX_BYTES;
 const LARGE_OPERATIONAL_UPLOAD_BYTES = 100 * 1024 * 1024;
 const UPLOAD_REQUEST_TIMEOUT_MS = 4 * 60 * 60 * 1000;
-const LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
+const LEGACY_LAST_UPLOAD_JOB_ID_STORAGE_KEY = "neraium.last_upload_job_id";
+const UPLOAD_JOB_STORAGE_VERSION = "v2";
 const MAX_STATUS_POLL_FAILURES = 8;
 const SERVER_ANALYSIS_TIMEOUT_MS = 30 * 60 * 1000;
 const RESULT_AVAILABILITY_GRACE_MS = 5000;
@@ -66,6 +68,12 @@ const BASELINE_WORKFLOWS = new Set(["create_baseline", "extend_baseline"]);
 
 function isBaselineWorkflow(value) {
   return BASELINE_WORKFLOWS.has(String(value || "").trim().toLowerCase());
+}
+
+function uploadJobStorageKey(kind, datasetScopeKey, currentUser) {
+  const workspace = encodeURIComponent(String(datasetScopeKey || "anonymous"));
+  const owner = encodeURIComponent(String(currentUser?.id ?? currentUser?.email ?? "anonymous"));
+  return `neraium.upload_job.${kind}.${UPLOAD_JOB_STORAGE_VERSION}:${owner}:${workspace}`;
 }
 
 
@@ -139,7 +147,7 @@ export function frontendPollingTiming(payload, requestStartedAt, receivedAt = Da
 
 export function formatAnalysisUpdateTime(value, now = Date.now()) {
   const updatedAt = Date.parse(String(value ?? ""));
-  if (!Number.isFinite(updatedAt)) return "just now";
+  if (!Number.isFinite(updatedAt)) return "at an unknown time";
   const elapsedSeconds = Math.max(0, Math.floor((Number(now) - updatedAt) / 1000));
   if (elapsedSeconds < 60) return "just now";
   const minutes = Math.floor(elapsedSeconds / 60);
@@ -151,17 +159,22 @@ export function formatAnalysisUpdateTime(value, now = Date.now()) {
 }
 
 export function queuedWorkerMessage(uploadJob, now = Date.now()) {
+  const executionState = authoritativeJobState(uploadJob);
   const workerState = String(uploadJob?.worker_state ?? uploadJob?.workerState ?? "").toLowerCase();
   const lastUpdate = uploadJob?.worker_last_update_at ?? uploadJob?.worker_last_update ?? uploadJob?.updated_at ?? "";
-  if (workerState === "starting") return UPLOAD_OPERATOR_COPY.queuedWorkerLine;
-  if (workerState === "active" || workerState === "running") return `Analysis active · updated ${formatAnalysisUpdateTime(lastUpdate, now)}`;
-  if (workerState === "queued" || normalizeUploadStatus(uploadJob?.status) === "queued") return UPLOAD_OPERATOR_COPY.queuedWorkerLine;
-  if (workerState === "stalled") return "No recent progress update; analysis may still be continuing.";
+  if (executionState === "queued") return "Queued · waiting for worker claim";
+  if (executionState === "claimed") return "Claimed by worker · processing has not started";
+  if (executionState === "processing" && ["active", "running"].includes(workerState)) {
+    return `Analysis active · updated ${formatAnalysisUpdateTime(lastUpdate, now)}`;
+  }
+  if (executionState === "processing") return "Processing confirmed by backend";
+  if (executionState === "waiting") return "Status connection interrupted · backend state preserved";
+  if (executionState === "stalled") return "Stalled · no recent job heartbeat";
   return "";
 }
 
 function isActiveUploadProgressState(uploadState) {
-  return ["uploading", "running_sii", "processing", "saving_results", "save_complete", "navigation_pending", "completion_error", "complete"].includes(String(uploadState || "").toLowerCase());
+  return ["uploading", "queued", "claimed", "running_sii", "processing", "waiting", "stalled", "saving_results", "save_complete", "navigation_pending", "completion_error", "complete"].includes(String(uploadState || "").toLowerCase());
 }
 
 function uploadFailureDiagnosticsFrom(value = {}) {
@@ -347,6 +360,8 @@ export default function DataConnectionsWorkspace({
   const [completionError, setCompletionError] = useState("");
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
+  const [recentJob, setRecentJob] = useState(null);
+  const [reconciliationMessage, setReconciliationMessage] = useState("");
   const initialWorkflow = comparisonMode ? "analyze_new_data" : "create_baseline";
   const [currentWorkflow, setCurrentWorkflow] = useState(initialWorkflow);
   const currentWorkflowRef = useRef(initialWorkflow);
@@ -360,8 +375,6 @@ export default function DataConnectionsWorkspace({
     responseBodyOrError: "",
   });
   const [batchResults, setBatchResults] = useState([]);
-  const [heartbeatTick, setHeartbeatTick] = useState(0);
-  const [lastProgressAt, setLastProgressAt] = useState(() => Date.now());
   const [baselineNavigationPending, setBaselineNavigationPending] = useState(false);
   const [baselineDetailReloadKey, setBaselineDetailReloadKey] = useState(0);
   const [baselineDetailState, setBaselineDetailState] = useState(() => ({
@@ -376,6 +389,7 @@ export default function DataConnectionsWorkspace({
   const pollFailureCountRef = useRef(0);
   const pollInFlightRef = useRef(null);
   const pollOwnerJobIdRef = useRef(null);
+  const pollAbortControllerRef = useRef(null);
   const missingStatusCooldownUntilRef = useRef(0);
   const statusEndpointCooldownUntilRef = useRef(0);
   const statusEndpointFailureCountRef = useRef(0);
@@ -383,21 +397,29 @@ export default function DataConnectionsWorkspace({
   const uploadInputRef = useRef(null);
   const uploadStateRef = useRef("idle");
   const pollSessionRef = useRef(0);
-  const lastProgressSignatureRef = useRef("");
   const uploadInFlightRef = useRef(false);
   const telemetryStageLogRef = useRef(new Set());
   const autoStartedSignatureRef = useRef("");
-  const storedJobRestoreRef = useRef(false);
+  const reconciledJobRef = useRef("");
+  const reconcileAbortControllerRef = useRef(null);
   const completionNavigationTimerRef = useRef(null);
   const completionNavigationEligibleRef = useRef(false);
   const baselineNavigationPendingRef = useRef(false);
   const completedBaselineIdentityRef = useRef(null);
   const openCompletedBaselineRef = useRef(null);
-  const flowOwnerRef = useRef(String(currentUser?.email ?? currentUser?.id ?? ""));
+  const flowOwnerRef = useRef(`${String(currentUser?.email ?? currentUser?.id ?? "")}:${String(datasetScopeKey)}`);
   const flowSessionRef = useRef(0);
   const selectedBaselineIdRef = useRef(String(selectedBaselineIdentity?.baselineId ?? "").trim() || null);
   const exactBaselineRequestVersionRef = useRef(0);
   const exactBaselineAbortRef = useRef(null);
+  const rememberedJobStorageKey = useMemo(
+    () => uploadJobStorageKey("remembered", datasetScopeKey, currentUser),
+    [currentUser, datasetScopeKey],
+  );
+  const ignoredJobStorageKey = useMemo(
+    () => uploadJobStorageKey("ignored", datasetScopeKey, currentUser),
+    [currentUser, datasetScopeKey],
+  );
 
   const setUploadProcessingFlag = (active) => {
     if (typeof window !== "undefined") {
@@ -459,124 +481,58 @@ export default function DataConnectionsWorkspace({
     uploadStateRef.current = uploadState;
   }, [uploadState]);
 
-  useEffect(() => {
-    const active = ["running_sii", "processing", "uploading", "saving_results", "navigation_pending"].includes(String(uploadState || "").toLowerCase());
-    if (!active || typeof window === "undefined") return undefined;
-    const timer = window.setInterval(() => setHeartbeatTick((value) => value + 1), 1000);
-    return () => window.clearInterval(timer);
-  }, [uploadState]);
-
-  useEffect(() => {
-    const signature = [
-      uploadJob?.jobId ?? uploadJob?.job_id ?? "",
-      uploadJob?.status ?? "",
-      uploadJob?.processing_state ?? "",
-      uploadJob?.percent ?? uploadJob?.progress ?? "",
-      uploadJob?.propagation_progress ?? "",
-      uploadJob?.progress_label ?? uploadJob?.message ?? "",
-    ].join("|");
-    if (signature && signature !== lastProgressSignatureRef.current) {
-      lastProgressSignatureRef.current = signature;
-      setLastProgressAt(Date.now());
-    }
-  }, [uploadJob?.jobId, uploadJob?.job_id, uploadJob?.status, uploadJob?.processing_state, uploadJob?.percent, uploadJob?.progress, uploadJob?.propagation_progress, uploadJob?.progress_label, uploadJob?.message]);
-
-  // Session hydration is centralized in useFacilityRuntime via
-  // apiFetch("/api/data/latest-upload?include_persisted=1", { accessCode }).
+  // A latest-upload snapshot or browser key is only a candidate. The job-specific
+  // endpoint must confirm it in the current authenticated scope before the UI is
+  // allowed to enter a blocking/progress state.
   useEffect(() => {
     if (typeof window === "undefined" || selectedBaselineIdRef.current) return;
     const sessionJobId = String(sessionStore?.jobId ?? "").trim();
-    if (!sessionJobId) return;
-    const normalizedSessionJob = normalizeUploadJob({
-      ...(sessionStore?.latestUploadSnapshot ?? {}),
-      latest_result: sessionStore?.latestUploadResult ?? null,
-      job_id: sessionJobId,
-    });
-    const baselineTerminal = isBaselineWorkflow(normalizedSessionJob?.workflow) && isTerminalCompletedPayload(normalizedSessionJob);
-    if (!hasActiveSession && !hasResumedSession && !baselineTerminal) return;
-    const sessionResult = sessionStore?.latestUploadResult ?? null;
-    const hydrationSource = String(sessionStore?.uiState ?? "") === "restored" ? "cache" : "hydration";
-    const hydratedIdentity = baselineIdentityFromResult(sessionResult ?? normalizedSessionJob, {}, hydrationSource);
-    if (hydratedIdentity) {
-      completedBaselineIdentityRef.current = hydratedIdentity;
-      persistBaselineSelection(hydratedIdentity);
-    }
-    uploadJobIdRef.current = sessionJobId;
-    uploadStatusPathRef.current = normalizeUploadStatusPath(normalizedSessionJob?.status_url, sessionJobId);
-    window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, sessionJobId);
-    setUploadJob({
-      ...normalizedSessionJob,
-      ...(hydratedIdentity ? {
-        baselineId: hydratedIdentity.baselineId,
-        portfolioId: hydratedIdentity.portfolioId,
-        systemId: hydratedIdentity.systemId,
-        state_source: hydratedIdentity.stateSource,
-      } : {}),
-    });
-    setUploadResult(sessionResult);
-    if (baselineTerminal || ["verified", "restored"].includes(String(sessionStore?.uiState ?? ""))) {
+    const rememberedJobId = readRememberedUploadJobId();
+    const candidateJobId = sessionJobId || rememberedJobId;
+    if (!candidateJobId) return;
+    const reconciliationKey = `${rememberedJobStorageKey}:${candidateJobId}`;
+    if (reconciledJobRef.current === reconciliationKey) return;
+    reconciledJobRef.current = reconciliationKey;
+    reconcileAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    reconcileAbortControllerRef.current = controller;
+    const sourcePayload = sessionJobId
+      ? {
+        ...(sessionStore?.latestUploadSnapshot ?? {}),
+        latest_result: sessionStore?.latestUploadResult ?? null,
+        job_id: sessionJobId,
+      }
+      : null;
+    const identitySource = String(sessionStore?.uiState ?? "") === "restored" ? "cache" : "hydration";
+    const normalizedSource = sourcePayload ? normalizeStatusPayload(sourcePayload, sessionJobId) : null;
+    if (normalizedSource && authoritativeJobState(normalizedSource) === "completed") {
+      const sessionResult = sessionStore?.latestUploadResult ?? null;
+      const hydratedIdentity = baselineIdentityFromResult(sessionResult ?? normalizedSource, {}, identitySource);
+      if (hydratedIdentity) {
+        completedBaselineIdentityRef.current = hydratedIdentity;
+        persistBaselineSelection(hydratedIdentity);
+      }
+      setUploadJob({
+        ...normalizedSource,
+        ...(hydratedIdentity ? {
+          baselineId: hydratedIdentity.baselineId,
+          portfolioId: hydratedIdentity.portfolioId,
+          systemId: hydratedIdentity.systemId,
+          state_source: hydratedIdentity.stateSource,
+        } : {}),
+      });
+      uploadJobIdRef.current = sessionJobId;
+      uploadStatusPathRef.current = normalizeUploadStatusPath(normalizedSource?.status_url, sessionJobId);
+      setUploadResult(sessionResult);
       setUploadState("complete");
       setUploadProcessingFlag(false);
       return;
     }
-    if (["queued", "processing"].includes(String(sessionStore?.uiState ?? ""))) {
-      setUploadState("running_sii");
-      setUploadProcessingFlag(true);
-      pollUploadStatus(sessionJobId, normalizedSessionJob?.status_url).catch(() => {});
-    }
+    void reconcileRememberedJob(candidateJobId, { sourcePayload, identitySource, signal: controller.signal });
+    return () => controller.abort();
+  // Polling owns changes after the one job-specific reconciliation request.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasActiveSession, hasResumedSession, sessionStore?.jobId, sessionStore?.uiState, sessionStore?.latestUploadSnapshot, sessionStore?.latestUploadResult]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || storedJobRestoreRef.current || selectedBaselineIdRef.current) return;
-    if (String(sessionStore?.jobId ?? "").trim()) return;
-    const storedJobId = String(window.localStorage.getItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY) ?? "").trim();
-    if (!storedJobId) return;
-    storedJobRestoreRef.current = true;
-    const restoreStoredJob = async () => {
-      const path = `/api/data/upload-status/${encodeURIComponent(storedJobId)}`;
-      const response = await apiFetch(path, { accessCode });
-      const payload = await readJsonPayload(response, { route: path, phase: "poll" });
-      if (response.status === 404) {
-        window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
-        return;
-      }
-      if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
-      const normalized = normalizeStatusPayload(payload, storedJobId);
-      uploadJobIdRef.current = storedJobId;
-      uploadStatusPathRef.current = normalizeUploadStatusPath(normalized?.status_url, storedJobId);
-      setUploadJob(normalized);
-      const state = normalizeUploadStatus(normalized?.processing_state ?? normalized?.status);
-      if (state === "complete") {
-        setUploadState("complete");
-        await completeUploadHandoff(normalized, storedJobId, "cache");
-      } else if (["failed", "error", "timeout", "cancelled"].includes(state)) {
-        markUploadFailed({
-          message: normalized?.message ?? normalized?.error ?? "Dataset import failed.",
-          errorType: normalized?.error_code ?? normalized?.error_type ?? null,
-          jobId: storedJobId,
-          keepStoredJobId: true,
-          diagnostics: normalized,
-        });
-      } else {
-        setUploadState("running_sii");
-        setUploadProcessingFlag(true);
-        await pollUploadStatus(storedJobId, normalized?.status_url);
-      }
-    };
-    restoreStoredJob().catch((error) => {
-      const classified = classifyUploadError(error, "poll");
-      markUploadFailed({
-        message: classified.message,
-        errorType: classified.errorType,
-        jobId: storedJobId,
-        keepStoredJobId: true,
-        diagnostics: classified,
-      });
-    });
-  // Restore is deliberately one-shot; pollUploadStatus owns subsequent state.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessCode, apiFetch, sessionStore?.jobId]);
+  }, [accessCode, apiFetch, rememberedJobStorageKey, sessionStore?.jobId, sessionStore?.uiState]);
 
   useEffect(() => {
     if (selectedFiles.length > 0 || hasResumedSession || uploadJobIdRef.current) return;
@@ -588,10 +544,12 @@ export default function DataConnectionsWorkspace({
   }, [hasResumedSession, selectedFiles.length]);
 
   useEffect(() => {
-    const owner = String(currentUser?.email ?? currentUser?.id ?? "");
+    const owner = `${String(currentUser?.email ?? currentUser?.id ?? "")}:${String(datasetScopeKey)}`;
     if (owner === flowOwnerRef.current) return;
     flowOwnerRef.current = owner;
     flowSessionRef.current += 1;
+    reconciledJobRef.current = "";
+    reconcileAbortControllerRef.current?.abort();
     stopUploadPolling("session_identity_changed");
     uploadInFlightRef.current = false;
     uploadJobIdRef.current = null;
@@ -600,19 +558,22 @@ export default function DataConnectionsWorkspace({
     setUploadTransfer(null);
     setUploadJob(null);
     setUploadResult(null);
+    setRecentJob(null);
+    setReconciliationMessage("");
     completedBaselineIdentityRef.current = null;
     setUploadError("");
     setCompletionError("");
     setUploadState("idle");
-    clearStoredUploadJobId();
     if (uploadInputRef.current) uploadInputRef.current.value = "";
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.email, currentUser?.id]);
+  }, [currentUser?.email, currentUser?.id, datasetScopeKey]);
 
   useEffect(() => () => {
     flowSessionRef.current += 1;
     exactBaselineRequestVersionRef.current += 1;
     exactBaselineAbortRef.current?.abort();
+    reconcileAbortControllerRef.current?.abort();
+    pollAbortControllerRef.current?.abort();
     uploadInFlightRef.current = false;
     pollSessionRef.current += 1;
     if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
@@ -717,8 +678,198 @@ export default function DataConnectionsWorkspace({
     completionNavigationTimerRef.current = null;
   }
 
-  function clearStoredUploadJobId() {
-    if (typeof window !== "undefined") window.localStorage.removeItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY);
+  function readRememberedUploadJobId() {
+    if (typeof window === "undefined") return "";
+    try {
+      return String(
+        window.localStorage.getItem(rememberedJobStorageKey)
+          ?? window.localStorage.getItem(LEGACY_LAST_UPLOAD_JOB_ID_STORAGE_KEY)
+          ?? "",
+      ).trim();
+    } catch {
+      return "";
+    }
+  }
+
+  function rememberUploadJobId(jobId) {
+    if (typeof window === "undefined" || !jobId) return;
+    try {
+      window.localStorage.setItem(rememberedJobStorageKey, String(jobId));
+      window.localStorage.removeItem(LEGACY_LAST_UPLOAD_JOB_ID_STORAGE_KEY);
+      if (window.localStorage.getItem(ignoredJobStorageKey) === String(jobId)) {
+        window.localStorage.removeItem(ignoredJobStorageKey);
+      }
+    } catch {
+      // Backend reconciliation remains authoritative when storage is unavailable.
+    }
+  }
+
+  function readIgnoredUploadJobId() {
+    if (typeof window === "undefined") return "";
+    try {
+      return String(window.localStorage.getItem(ignoredJobStorageKey) ?? "").trim();
+    } catch {
+      return "";
+    }
+  }
+
+  function ignoreUploadJobId(jobId) {
+    if (typeof window === "undefined" || !jobId) return;
+    try {
+      window.localStorage.setItem(ignoredJobStorageKey, String(jobId));
+    } catch {
+      // The action still detaches the current render if storage is unavailable.
+    }
+  }
+
+  function clearIgnoredUploadJobId(jobId = null) {
+    if (typeof window === "undefined") return;
+    try {
+      if (!jobId || window.localStorage.getItem(ignoredJobStorageKey) === String(jobId)) {
+        window.localStorage.removeItem(ignoredJobStorageKey);
+      }
+    } catch {
+      // Ignore unavailable browser storage.
+    }
+  }
+
+  function clearStoredUploadJobId(jobId = null) {
+    if (typeof window === "undefined") return;
+    try {
+      if (!jobId || window.localStorage.getItem(rememberedJobStorageKey) === String(jobId)) {
+        window.localStorage.removeItem(rememberedJobStorageKey);
+      }
+      if (!jobId || window.localStorage.getItem(LEGACY_LAST_UPLOAD_JOB_ID_STORAGE_KEY) === String(jobId)) {
+        window.localStorage.removeItem(LEGACY_LAST_UPLOAD_JOB_ID_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore unavailable browser storage.
+    }
+  }
+
+  function restoreUsableUploadControls(message, detachedJob = null) {
+    stopUploadPolling("job_reconciled_to_controls");
+    uploadJobIdRef.current = null;
+    uploadStatusPathRef.current = null;
+    setUploadJob(null);
+    setUploadResult(null);
+    setUploadTransfer(null);
+    setUploadError("");
+    setCompletionError("");
+    setUploadState(selectedFiles.length ? "validated" : "idle");
+    setUploadProcessingFlag(false);
+    setRecentJob(detachedJob);
+    setReconciliationMessage(message);
+  }
+
+  async function reconcileRememberedJob(jobId, { sourcePayload = null, identitySource = "hydration", signal = null } = {}) {
+    const requestedJobId = String(jobId ?? "").trim();
+    if (!requestedJobId) return null;
+    const path = `/api/data/upload-status/${encodeURIComponent(requestedJobId)}`;
+    try {
+      const response = await apiFetch(path, { accessCode, signal });
+      const payload = await readJsonPayload(response, { route: path, phase: "poll" });
+      if (signal?.aborted) return null;
+      if (response.status === 404) {
+        clearStoredUploadJobId(requestedJobId);
+        clearIgnoredUploadJobId(requestedJobId);
+        restoreUsableUploadControls("The previous processing job no longer exists. You can start a new upload.");
+        return null;
+      }
+      if (!response.ok) throw buildUploadRequestError(response, payload, "poll");
+      const returnedJobId = String(payload?.jobId ?? payload?.job_id ?? "").trim();
+      if (!returnedJobId || returnedJobId !== requestedJobId) {
+        throw Object.assign(new Error("The status response did not match the remembered processing job."), {
+          name: "UploadRequestError",
+          phase: "poll",
+          errorType: "job_identity_mismatch",
+          retryable: false,
+          jobId: requestedJobId,
+        });
+      }
+      const normalized = normalizeStatusPayload(payload, requestedJobId);
+      const state = authoritativeJobState(normalized);
+      if (readIgnoredUploadJobId() === requestedJobId) {
+        restoreUsableUploadControls("A backend job is available, but it is detached from the new upload controls.", normalized);
+        return normalized;
+      }
+
+      const cachedResult = sourcePayload?.latest_result ?? null;
+      const hydratedIdentity = baselineIdentityFromResult(cachedResult ?? normalized, {}, identitySource);
+      if (hydratedIdentity) {
+        completedBaselineIdentityRef.current = hydratedIdentity;
+        persistBaselineSelection(hydratedIdentity);
+      }
+      rememberUploadJobId(requestedJobId);
+      setRecentJob(null);
+      setReconciliationMessage("");
+      uploadJobIdRef.current = requestedJobId;
+      uploadStatusPathRef.current = normalizeUploadStatusPath(normalized?.status_url, requestedJobId);
+      setUploadJob({
+        ...normalized,
+        ...(hydratedIdentity ? {
+          baselineId: hydratedIdentity.baselineId,
+          portfolioId: hydratedIdentity.portfolioId,
+          systemId: hydratedIdentity.systemId,
+          state_source: hydratedIdentity.stateSource,
+        } : {}),
+      });
+      setUploadResult(cachedResult);
+
+      if (state === "failed") {
+        markUploadFailed({
+          message: normalized?.message ?? normalized?.error ?? "Dataset import failed.",
+          errorType: normalized?.error_code ?? normalized?.error_type ?? null,
+          jobId: requestedJobId,
+          keepStoredJobId: true,
+          diagnostics: normalized,
+        });
+        return normalized;
+      }
+      if (state === "completed") {
+        setUploadProcessingFlag(false);
+        if (normalized?.result_available === true && (!isBaselineWorkflow(normalized?.workflow) || normalized?.baseline_result_available === true)) {
+          setUploadState("saving_results");
+          await completeUploadHandoff(normalized, requestedJobId, identitySource);
+        } else {
+          setUploadState("saving_results");
+          void pollUploadStatus(requestedJobId, normalized?.status_url);
+        }
+        return normalized;
+      }
+      if (isPollableJobState(state)) {
+        setUploadState(state);
+        setUploadProcessingFlag(true);
+        void pollUploadStatus(requestedJobId, normalized?.status_url);
+        return normalized;
+      }
+      restoreUsableUploadControls("The remembered job is not active. You can start a new upload.", normalized);
+      return normalized;
+    } catch (error) {
+      if (signal?.aborted || error?.name === "AbortError") return null;
+      const classified = classifyUploadError(error, "poll");
+      if (classified.errorType === "job_identity_mismatch") {
+        clearStoredUploadJobId(requestedJobId);
+        clearIgnoredUploadJobId(requestedJobId);
+      }
+      const cached = sourcePayload
+        ? {
+          ...normalizeStatusPayload(sourcePayload, requestedJobId),
+          execution_state: "waiting",
+          poll_connection_state: "interrupted",
+        }
+        : null;
+      restoreUsableUploadControls(
+        "The previous job could not be verified. Upload controls remain available; retry viewing the job when the connection recovers.",
+        cached,
+      );
+      console.warn("[neraium] remembered upload reconciliation failed", {
+        jobId: requestedJobId,
+        status: classified.responseStatus ?? null,
+        errorType: classified.errorType ?? null,
+      });
+      return null;
+    }
   }
 
   function resetLocalUploadClientState(nextWorkflow = "create_baseline") {
@@ -734,6 +885,7 @@ export default function DataConnectionsWorkspace({
     if (nextWorkflow !== "analyze_new_data") completedBaselineIdentityRef.current = null;
     setUploadError("");
     setCompletionError("");
+    setReconciliationMessage("");
     setUploadState("idle");
     currentWorkflowRef.current = nextWorkflow;
     setCurrentWorkflow(nextWorkflow);
@@ -746,6 +898,54 @@ export default function DataConnectionsWorkspace({
       window.__NERAIUM_UPLOAD_COMPLETE__ = false;
       window.__NERAIUM_UPLOAD_IN_PROGRESS__ = false;
     }
+  }
+
+  function startAnotherUpload() {
+    const detached = uploadJob;
+    const detachedJobId = String(detached?.jobId ?? detached?.job_id ?? uploadJobIdRef.current ?? "").trim();
+    resetLocalUploadClientState(currentWorkflowRef.current);
+    if (detachedJobId) ignoreUploadJobId(detachedJobId);
+    setRecentJob(detached ? { ...detached, execution_state: authoritativeJobState(detached) } : null);
+    setReconciliationMessage(
+      detachedJobId
+        ? "The existing backend job is preserved. Choose a file to start another upload."
+        : "Choose a file to start another upload.",
+    );
+    window.setTimeout(() => uploadInputRef.current?.click(), 0);
+  }
+
+  function dismissCurrentJob() {
+    const jobId = String(uploadJob?.jobId ?? uploadJob?.job_id ?? uploadJobIdRef.current ?? "").trim();
+    if (jobId) ignoreUploadJobId(jobId);
+    resetLocalUploadClientState(currentWorkflowRef.current);
+    setRecentJob(null);
+    setReconciliationMessage("The job was dismissed from this browser. Backend data was not deleted.");
+  }
+
+  function dismissRecentJob() {
+    const jobId = String(recentJob?.jobId ?? recentJob?.job_id ?? "").trim();
+    if (jobId) ignoreUploadJobId(jobId);
+    setRecentJob(null);
+    setReconciliationMessage("The job was dismissed from this browser. Backend data was not deleted.");
+  }
+
+  async function viewRecentJob() {
+    const jobId = String(recentJob?.jobId ?? recentJob?.job_id ?? "").trim();
+    if (!jobId) return;
+    clearIgnoredUploadJobId(jobId);
+    reconciledJobRef.current = "";
+    setRecentJob(null);
+    setReconciliationMessage("Checking the backend job state…");
+    await reconcileRememberedJob(jobId, { identitySource: "hydration" });
+  }
+
+  async function resumeCurrentJob() {
+    const jobId = String(uploadJob?.jobId ?? uploadJob?.job_id ?? uploadJobIdRef.current ?? "").trim();
+    if (!jobId) return;
+    stopUploadPolling("resume_job_status");
+    uploadJobIdRef.current = jobId;
+    setReconciliationMessage("Checking the backend job state…");
+    await reconcileRememberedJob(jobId, { sourcePayload: uploadJob, identitySource: "hydration" });
   }
 
   async function beginComparisonDataset() {
@@ -792,6 +992,8 @@ export default function DataConnectionsWorkspace({
 
   function stopUploadPolling(reason = "manual") {
     pollSessionRef.current += 1;
+    pollAbortControllerRef.current?.abort();
+    pollAbortControllerRef.current = null;
     if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
     pollTimerRef.current = null;
     pollInFlightRef.current = null;
@@ -847,7 +1049,7 @@ export default function DataConnectionsWorkspace({
     }
     if (resolvedJobId && (keepStoredJobId || failureDiagnostics.fileStored)) {
       uploadJobIdRef.current = resolvedJobId;
-      if (typeof window !== "undefined") window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, resolvedJobId);
+      rememberUploadJobId(resolvedJobId);
     } else if (!keepStoredJobId) {
       clearStoredUploadJobId();
     }
@@ -1018,9 +1220,12 @@ export default function DataConnectionsWorkspace({
     statusEndpointCooldownUntilRef.current = 0;
     statusEndpointFailureCountRef.current = 0;
     uploadJobIdRef.current = requestedJobId;
+    pollAbortControllerRef.current?.abort();
+    const pollController = new AbortController();
+    pollAbortControllerRef.current = pollController;
     let pollingPath = normalizeUploadStatusPath(statusUrl, requestedJobId) ?? `/api/data/upload-status/${requestedJobId}`;
     uploadStatusPathRef.current = pollingPath;
-    if (typeof window !== "undefined") window.localStorage.setItem(LAST_UPLOAD_JOB_ID_STORAGE_KEY, requestedJobId);
+    rememberUploadJobId(requestedJobId);
     logTelemetryStage("job polling started", { jobId: requestedJobId, statusPath: pollingPath });
     const runPoll = async () => {
       const pollingStartedAt = Date.now();
@@ -1045,8 +1250,9 @@ export default function DataConnectionsWorkspace({
           }
           const requestPath = pollingPath;
           const pollRequestStartedAt = Date.now();
-          const response = await apiFetch(requestPath, { accessCode });
+          const response = await apiFetch(requestPath, { accessCode, signal: pollController.signal });
           const payload = await readJsonPayload(response, { route: requestPath, phase: "poll" });
+          if (pollController.signal.aborted || pollSessionRef.current !== pollSessionId) return null;
           const pollTiming = frontendPollingTiming(payload, pollRequestStartedAt);
           console.info("[neraium] frontend polling timing", {
             jobId: requestedJobId,
@@ -1070,24 +1276,17 @@ export default function DataConnectionsWorkspace({
           if (!response.ok) {
             if (response.status === 404 || response.status >= 500) {
               statusEndpointFailureCountRef.current += 1;
-              if (isTransientUploadServiceStatus(response.status)) {
-                setUploadState("running_sii");
-                setUploadJob((current) => ({
-                  ...(current ?? {}),
-                  ...(payload ?? {}),
-                  job_id: requestedJobId,
-                  status: "PROCESSING",
-                  processing_state: "processing",
-                  progress_label: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
-                  message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
-                  error_type: payload?.error_type ?? "service_unavailable",
-                  response_status: response.status,
-                  failure_url: payload?.failure_url ?? requestPath,
-                  failure_phase: payload?.failure_phase ?? "poll",
-                  raw_response_body: payload?.raw_response_body ?? "",
-                  response_content_type: payload?.response_content_type ?? null,
-                }));
-              }
+              setUploadJob((current) => ({
+                ...(current ?? {}),
+                job_id: requestedJobId,
+                poll_connection_state: "retrying",
+                poll_message: isTransientUploadServiceStatus(response.status)
+                  ? SERVICE_UNAVAILABLE_RETRY_MESSAGE
+                  : "The job status endpoint is not available yet. Retrying.",
+                response_status: response.status,
+                failure_url: payload?.failure_url ?? requestPath,
+                failure_phase: payload?.failure_phase ?? "poll",
+              }));
               if (statusEndpointFailureCountRef.current > MAX_STATUS_POLL_FAILURES) {
                 pollFailureCountRef.current = MAX_STATUS_POLL_FAILURES;
                 throw buildUploadRequestError(
@@ -1108,11 +1307,17 @@ export default function DataConnectionsWorkspace({
             throw buildUploadRequestError(response, payload, "poll");
           }
           statusEndpointFailureCountRef.current = 0;
-          const normalizedPayload = normalizeStatusPayload({ ...payload, frontend_polling_timing: pollTiming }, requestedJobId);
+          pollFailureCountRef.current = 0;
+          const normalizedPayload = normalizeStatusPayload({
+            ...payload,
+            frontend_polling_timing: pollTiming,
+            poll_connection_state: "connected",
+          }, requestedJobId);
           pollingPath = normalizeUploadStatusPath(normalizedPayload?.status_url, requestedJobId) ?? pollingPath;
           uploadStatusPathRef.current = pollingPath;
           setUploadJob(normalizedPayload);
-          const normalizedStatus = normalizeUploadStatus(normalizedPayload.status ?? normalizedPayload.processing_state ?? normalizedPayload.worker_state);
+          const normalizedStatus = normalizeUploadStatus(normalizedPayload.status ?? normalizedPayload.processing_state);
+          const authoritativeState = authoritativeJobState(normalizedPayload);
           logTelemetryStatusProgress(normalizedStatus, normalizedPayload);
           const terminalSuccess = isTerminalCompletedPayload(normalizedPayload);
           const resultAvailable = normalizedPayload?.result_available === true
@@ -1159,17 +1364,18 @@ export default function DataConnectionsWorkspace({
             }
             setUploadJob({
               ...normalizedPayload,
-              status: "PROCESSING",
-              processing_state: "saving_result",
+              result_commit_state: "waiting",
               progress_label: "Waiting for the committed baseline result...",
               message: "Waiting for the committed baseline result...",
             });
+            setUploadState("saving_results");
           } else {
             terminalWithoutResultAt = null;
+            setUploadState(authoritativeState);
           }
-          setUploadState("running_sii");
           await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, STATUS_POLL_INTERVAL_MS); });
         } catch (error) {
+          if (pollController.signal.aborted || error?.name === "AbortError") return null;
           if (error?.terminalJobFailure === true) throw error;
           pollFailureCountRef.current += 1;
           console.warn("[neraium] upload status poll failed; retrying", {
@@ -1182,8 +1388,7 @@ export default function DataConnectionsWorkspace({
             ...(current ?? {}),
             poll_connection_state: "retrying",
             poll_failure_count: pollFailureCountRef.current,
-            progress_label: "Analysis status connection interrupted. Retrying.",
-            message: "Analysis status connection interrupted. Retrying.",
+            poll_message: "Analysis status connection interrupted. Retrying.",
           }));
           if (pollFailureCountRef.current >= MAX_STATUS_POLL_FAILURES) {
             throw error;
@@ -1200,21 +1405,46 @@ export default function DataConnectionsWorkspace({
         return completeUploadHandoff(completedPayload, requestedJobId);
       })
       .catch((error) => {
+        if (pollController.signal.aborted || error?.name === "AbortError") return null;
         const classified = classifyUploadError(error, "poll");
         logUploadFailureDiagnostics(classified);
-        logTelemetryStage("error", { jobId: requestedJobId, message: classified.message || error?.message || "Telemetry analysis failed." });
-        markUploadFailed({
-          message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."),
-          errorType: classified.errorType,
-          jobId: requestedJobId,
-          keepStoredJobId: true,
-          diagnostics: { ...classified, fileStored: classified.fileStored || classified.errorType !== "file_storage_failed" },
-        });
-        throw error;
+        if (Number(classified.responseStatus ?? error?.status ?? 0) === 404) {
+          clearStoredUploadJobId(requestedJobId);
+          clearIgnoredUploadJobId(requestedJobId);
+          restoreUsableUploadControls("The previous processing job no longer exists. You can start a new upload.");
+          return null;
+        }
+        if (error?.terminalJobFailure === true) {
+          logTelemetryStage("error", { jobId: requestedJobId, message: classified.message || error?.message || "Telemetry analysis failed." });
+          markUploadFailed({
+            message: classified.message || normalizeErrorMessage(error, "Telemetry analysis failed."),
+            errorType: classified.errorType,
+            jobId: requestedJobId,
+            keepStoredJobId: true,
+            diagnostics: { ...classified, fileStored: classified.fileStored || classified.errorType !== "file_storage_failed" },
+          });
+          return null;
+        }
+        stopUploadPolling("poll_connection_interrupted");
+        setUploadProcessingFlag(false);
+        setUploadState("waiting");
+        setUploadJob((current) => ({
+          ...(current ?? {}),
+          job_id: requestedJobId,
+          execution_state: "waiting",
+          poll_connection_state: "interrupted",
+          poll_failure_count: pollFailureCountRef.current,
+          poll_message: "Analysis status connection interrupted. Resume status when the connection recovers.",
+        }));
+        setReconciliationMessage("Backend status is temporarily unavailable. The last valid job state is preserved.");
+        return null;
       })
       .finally(() => {
-        pollInFlightRef.current = null;
-        pollOwnerJobIdRef.current = null;
+        if (pollSessionRef.current === pollSessionId) {
+          pollInFlightRef.current = null;
+          pollOwnerJobIdRef.current = null;
+          if (pollAbortControllerRef.current === pollController) pollAbortControllerRef.current = null;
+        }
       });
     pollOwnerJobIdRef.current = requestedJobId;
     return pollInFlightRef.current;
@@ -1335,7 +1565,7 @@ export default function DataConnectionsWorkspace({
         label: `Transfer complete · ${formatFileSize(file.size)} of ${formatFileSize(file.size)}`,
         message: "File transferred successfully.",
       }));
-      setUploadState("running_sii");
+      setUploadState(authoritativeJobState(normalizeStatusPayload(payload, jobId)));
       await pollUploadStatus(jobId, payload?.status_url);
     } catch (error) {
       if (flowSessionRef.current !== flowSessionId) return;
@@ -1382,12 +1612,12 @@ export default function DataConnectionsWorkspace({
     : [propagationPercent, backendPercent, statusFallbackPercent];
   const uploadPercent = uploadPercentCandidates.find((value) => Number.isFinite(Number(value))) ?? null;
   const propagationLabel = progressUploadJob?.propagation_label ?? progressUploadJob?.propagationLabel ?? progressUploadJob?.propagation_stage ?? "";
-  const statusLabel = progressUploadJob?.progress_label ?? progressUploadJob?.message ?? progressUploadTransfer?.message ?? uploadStateMessage(uploadState);
-  const isProcessingQuiet = ["running_sii", "processing"].includes(String(uploadState || "").toLowerCase())
-    && normalizeUploadStatus(progressUploadJob?.status ?? progressUploadJob?.processing_state) !== "complete"
-    && Date.now() - lastProgressAt > 6000
-    && heartbeatTick >= 0;
-  const visibleStatusLabel = isProcessingQuiet ? "Analysis is still progressing..." : statusLabel;
+  const statusLabel = progressUploadJob?.poll_message
+    ?? progressUploadJob?.progress_label
+    ?? progressUploadJob?.message
+    ?? progressUploadTransfer?.message
+    ?? uploadStateMessage(uploadState);
+  const visibleStatusLabel = statusLabel;
   const queuedWorkerDetail = queuedWorkerMessage(progressUploadJob);
   const visibleProgressPercent = Number.isFinite(Number(uploadPercent))
     ? Math.max(0, Math.min(100, Math.round(Number(uploadPercent))))
@@ -1433,12 +1663,12 @@ export default function DataConnectionsWorkspace({
     setSelectedFiles(files);
     setUploadError("");
     setCompletionError("");
+    setReconciliationMessage("");
     setUploadState(files.length ? "validated" : "idle");
   }
 
   function chooseAnotherFile() {
-    resetLocalUploadClientState(currentWorkflow === "analyze_new_data" ? "analyze_new_data" : "create_baseline");
-    window.setTimeout(() => uploadInputRef.current?.click(), 0);
+    startAnotherUpload();
   }
 
   function openFilePicker(kind = "csv") {
@@ -1499,13 +1729,14 @@ export default function DataConnectionsWorkspace({
     }
     setUploadError("");
     setCompletionError("");
-    setUploadState("running_sii");
+    setUploadState("waiting");
     setUploadProcessingFlag(true);
     try {
       const retryResponse = await retryUploadAnalysisJob({ jobId: currentJobId, apiFetch, accessCode });
       const payload = retryResponse.payload;
       const jobId = String(payload?.jobId ?? payload?.job_id ?? "").trim() || currentJobId;
       setUploadJob(normalizeStatusPayload(payload, jobId));
+      setUploadState(authoritativeJobState(payload));
       await pollUploadStatus(jobId, payload?.status_url);
     } catch (error) {
       const classified = classifyUploadError(error, error?.phase || "upload");
@@ -1732,13 +1963,19 @@ export default function DataConnectionsWorkspace({
         batchResults={batchResults}
         onRetryFailedUploads={() => { void retryCurrentBatch(); }}
         onReprocessCurrentBatch={() => { void retryCurrentBatch(); }}
-        onResetWorkspace={() => { resetLocalUploadClientState(currentWorkflow === "analyze_new_data" ? "analyze_new_data" : "create_baseline"); }}
+        onResetWorkspace={dismissCurrentJob}
         onChooseAnotherFile={chooseAnotherFile}
         onViewResults={() => { void viewCompletedResults(); }}
         onOpenBaseline={() => { void openCompletedBaseline(); }}
         onReturnToPortfolio={onReturnToPortfolio}
         baselineNavigationPending={baselineNavigationPending}
         onImportComparisonDataset={() => { void beginComparisonDataset(); }}
+        recentJob={recentJob}
+        reconciliationMessage={reconciliationMessage}
+        onViewRecentJob={() => { void viewRecentJob(); }}
+        onDismissRecentJob={dismissRecentJob}
+        onResumeJob={() => { void resumeCurrentJob(); }}
+        onStartAnotherUpload={startAnotherUpload}
         apiFetch={apiFetch}
         accessCode={accessCode}
         onIngestionReviewUpdated={(profile) => {

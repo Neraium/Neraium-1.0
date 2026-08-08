@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,9 @@ from app.services.runtime_db import (
 )
 from app.services.upload_runtime_state import UploadRuntimeState
 from app.services.upload_errors import build_upload_error_payload
+
+
+UPLOAD_QUEUE_HEARTBEAT_INTERVAL_SECONDS = 30.0
 
 
 def _parse_iso_timestamp(value: Any) -> datetime | None:
@@ -116,11 +120,43 @@ class UploadQueueLifecycleService:
         self.write_job({**metadata, "job_id": job_id, "file_path": restored_key})
         return restored
 
+    def _start_claim_heartbeat(self, job_id: str) -> tuple[threading.Event, threading.Thread]:
+        """Refresh only a still-claimed queue row until this worker invocation ends."""
+        stop = threading.Event()
+
+        def heartbeat() -> None:
+            while not stop.wait(UPLOAD_QUEUE_HEARTBEAT_INTERVAL_SECONDS):
+                try:
+                    queue_entry = read_upload_queue_job(job_id)
+                    if not isinstance(queue_entry, dict) or str(queue_entry.get("status") or "").lower() != "processing":
+                        return
+                    touch_upload_queue_job(job_id, "processing")
+                except Exception:
+                    # Status polling can tolerate a missed heartbeat. Processing must
+                    # continue so a transient queue-store failure cannot fail the job.
+                    self.logger.warning("upload_queue_heartbeat_failed job_id=%s", job_id, exc_info=True)
+
+        thread = threading.Thread(
+            target=heartbeat,
+            daemon=True,
+            name=f"neraium-upload-heartbeat-{job_id[:8]}",
+        )
+        thread.start()
+        return stop, thread
+
     def process_next_queued_upload_job(self) -> bool:
         started_at = time.perf_counter()
         job_id = claim_next_upload_job()
         if not job_id:
             return False
+        heartbeat_stop, heartbeat_thread = self._start_claim_heartbeat(job_id)
+        try:
+            return self._process_claimed_upload_job(job_id, started_at)
+        finally:
+            heartbeat_stop.set()
+            heartbeat_thread.join(timeout=1.0)
+
+    def _process_claimed_upload_job(self, job_id: str, started_at: float) -> bool:
         metadata = self._read_processing_metadata(job_id)
         claimed_at = datetime.now(timezone.utc)
         queue_entry = read_upload_queue_job(job_id) or {}
