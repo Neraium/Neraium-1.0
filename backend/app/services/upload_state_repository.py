@@ -520,11 +520,18 @@ def _read_runtime_db_state(storage_name: str) -> dict[str, Any] | None:
 
 def read_shared_state(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
     storage_name = _state_name(name, scope=scope)
+    # A configured S3 bucket is the cross-process source of truth. API and
+    # worker tasks can each have a valid but divergent runtime database, so a
+    # process-local row must not shadow a newer shared worker update.
+    bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
+    if bucket:
+        shared_payload = _read_s3_state(storage_name, bucket)
+        if isinstance(shared_payload, dict):
+            return shared_payload
     database_payload = _read_runtime_db_state(storage_name)
     if isinstance(database_payload, dict):
         return database_payload
-    bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
-    return _read_s3_state(storage_name, bucket) if bucket else None
+    return None
 
 
 def _read_legacy_unscoped_state(name: str) -> dict[str, Any] | None:

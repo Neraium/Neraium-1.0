@@ -72,6 +72,9 @@ def _configure_shared_runtime(monkeypatch: pytest.MonkeyPatch, fake_s3: _FakeS3C
     monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-upload-state")
     monkeypatch.setattr("app.services.runtime_db._get_s3_client", lambda: fake_s3)
     monkeypatch.setattr(upload_state_repository, "_external_shared_state_enabled", lambda: True)
+    # Production keeps a process-local runtime database alongside shared S3.
+    # Exercise both so a stale API-local row cannot hide a worker's S3 update.
+    monkeypatch.setattr(upload_state_repository, "_runtime_db_latest_enabled", lambda: True)
     monkeypatch.setattr(upload_state_repository, "_get_s3_client", lambda: fake_s3)
     monkeypatch.setattr(upload_state_repository, "_get_s3_state_client", lambda: fake_s3)
 
