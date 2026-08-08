@@ -1,3 +1,5 @@
+import time
+
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -11,12 +13,15 @@ def post_csv(client: TestClient, filename: str, content: str):
 
 
 def wait_for_terminal_upload_status(client: TestClient, status_url: str) -> dict:
-    for _ in range(160):
+    deadline = time.time() + 15
+    last_payload: dict = {}
+    while time.time() < deadline:
         response = client.get(status_url)
-        payload = response.json()
-        if payload["status"] in {"COMPLETE", "FAILED"}:
-            return payload
-    raise AssertionError("Upload did not reach a terminal state.")
+        last_payload = response.json()
+        if last_payload["status"] in {"COMPLETE", "FAILED"}:
+            return last_payload
+        time.sleep(0.05)
+    raise AssertionError(f"Upload did not reach a terminal state: {last_payload}")
 
 
 def test_latest_upload_disables_adaptive_learning_snapshot() -> None:

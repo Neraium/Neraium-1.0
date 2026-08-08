@@ -10,9 +10,15 @@ from typing import Any, Callable
 from app.core.path_safety import StoragePathError, resolve_existing_storage_path, storage_key_for_server_path
 from app.services.baseline_contracts import canonical_baseline_creation_response, is_baseline_workflow
 from app.services.behavioral_model_repository import read_baseline_result_by_model_id, read_model
-from app.services.dataset_scope import current_dataset_scope, dataset_scope_from_payload, set_current_dataset_scope
+from app.services.dataset_scope import (
+    DatasetScope,
+    current_dataset_scope,
+    dataset_scope_context,
+    dataset_scope_from_queue_routing,
+    payload_matches_dataset_scope,
+)
 from app.services.runtime_db import (
-    claim_next_upload_job,
+    claim_next_upload_job_record,
     complete_upload_queue_job,
     mark_queue_job_failed,
     read_upload_job,
@@ -87,7 +93,7 @@ class UploadQueueLifecycleService:
         self.restore_upload_source = restore_upload_source
         self.delete_upload_source = delete_upload_source
 
-    def _read_processing_metadata(self, job_id: str) -> dict[str, Any]:
+    def _read_processing_metadata(self, job_id: str, scope: DatasetScope) -> dict[str, Any] | None:
         """Return the private processing metadata, including file_path when available.
 
         The public upload-status artifact can intentionally omit internal fields such as
@@ -100,6 +106,14 @@ class UploadQueueLifecycleService:
             public_metadata = {}
         if not isinstance(private_metadata, dict):
             private_metadata = {}
+        if public_metadata and not payload_matches_dataset_scope(public_metadata, scope):
+            self.logger.error("upload_queue_public_metadata_scope_mismatch job_id=%s", job_id)
+            public_metadata = {}
+        if private_metadata and not payload_matches_dataset_scope(private_metadata, scope):
+            self.logger.error("upload_queue_private_metadata_scope_mismatch job_id=%s", job_id)
+            private_metadata = {}
+        if not public_metadata and not private_metadata:
+            return None
         return {**public_metadata, **private_metadata, "job_id": job_id}
 
     def _resolve_processing_path(self, job_id: str, metadata: dict[str, Any]) -> Path | None:
@@ -146,20 +160,151 @@ class UploadQueueLifecycleService:
 
     def process_next_queued_upload_job(self) -> bool:
         started_at = time.perf_counter()
-        job_id = claim_next_upload_job()
-        if not job_id:
+        queue_entry = claim_next_upload_job_record()
+        if not queue_entry:
             return False
-        heartbeat_stop, heartbeat_thread = self._start_claim_heartbeat(job_id)
+        job_id = str(queue_entry.get("job_id") or "").strip()
+        if not job_id:
+            self.logger.error("upload_queue_claim_missing_job_id")
+            return False
         try:
-            return self._process_claimed_upload_job(job_id, started_at)
-        finally:
-            heartbeat_stop.set()
-            heartbeat_thread.join(timeout=1.0)
+            dataset_scope = dataset_scope_from_queue_routing(queue_entry)
+        except ValueError as exc:
+            reason = str(exc) or "upload_queue_routing_invalid"
+            mark_queue_job_failed(job_id, reason)
+            self.logger.error(
+                "upload_queue_job_routing_failed job_id=%s reason=%s",
+                job_id,
+                reason,
+            )
+            return False
+        with dataset_scope_context(dataset_scope):
+            heartbeat_stop, heartbeat_thread = self._start_claim_heartbeat(job_id)
+            try:
+                try:
+                    return self._process_claimed_upload_job(
+                        job_id,
+                        started_at,
+                        queue_entry=queue_entry,
+                        dataset_scope=dataset_scope,
+                    )
+                except Exception as exc:
+                    return self._record_worker_bootstrap_failure(
+                        job_id,
+                        started_at=started_at,
+                        dataset_scope=dataset_scope,
+                        error=exc,
+                    )
+            finally:
+                heartbeat_stop.set()
+                heartbeat_thread.join(timeout=1.0)
 
-    def _process_claimed_upload_job(self, job_id: str, started_at: float) -> bool:
-        metadata = self._read_processing_metadata(job_id)
+    def _record_worker_bootstrap_failure(
+        self,
+        job_id: str,
+        *,
+        started_at: float,
+        dataset_scope: DatasetScope,
+        error: Exception,
+    ) -> bool:
+        """Persist a scoped, sanitized failure for exceptions before processing starts."""
+        exception_type = error.__class__.__name__
+        queue_reason = f"upload_worker_bootstrap_failed:{exception_type}"
+        safe_message = "The worker claimed the upload but could not start processing it. Retry the import."
+        self.logger.exception(
+            "upload_queue_worker_bootstrap_failed job_id=%s scope_storage_id=%s exception_type=%s",
+            job_id,
+            dataset_scope.storage_id,
+            exception_type,
+        )
+        _log_queue_event(
+            self.logger,
+            "job_failed",
+            job_id=job_id,
+            queue_status="failed",
+            processing_stage="worker_bootstrap",
+            elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+            failure_reason=queue_reason,
+        )
+        try:
+            current = self.read_job(job_id) or {"job_id": job_id}
+        except Exception:
+            current = {"job_id": job_id}
+        try:
+            self.write_job(
+                {
+                    **current,
+                    **build_upload_error_payload(
+                        "server_unavailable",
+                        message=safe_message,
+                        failed_stage="worker_bootstrap",
+                        retryable=True,
+                        legacy_error_type="upload_worker_bootstrap_failed",
+                        job_id=job_id,
+                        dataset_id=current.get("dataset_id") or job_id,
+                        request_id=current.get("request_id"),
+                        technical_message=f"{exception_type}: upload worker bootstrap failed",
+                        exception_type=exception_type,
+                        file_stored=bool(current.get("shared_upload_source_key") or current.get("file_path")),
+                        transfer_succeeded=bool(current.get("shared_upload_source_key") or current.get("file_path")),
+                        retry_url=f"/api/data/upload/{job_id}/retry",
+                    ),
+                    "result_available": False,
+                }
+            )
+        except Exception:
+            self.logger.exception(
+                "upload_queue_worker_bootstrap_status_write_failed job_id=%s exception_type=%s",
+                job_id,
+                exception_type,
+            )
+        try:
+            mark_queue_job_failed(job_id, queue_reason)
+            complete_upload_queue_job(job_id, "failed", queue_reason)
+        except Exception:
+            self.logger.exception(
+                "upload_queue_worker_bootstrap_queue_write_failed job_id=%s exception_type=%s",
+                job_id,
+                exception_type,
+            )
+        return False
+
+    def _process_claimed_upload_job(
+        self,
+        job_id: str,
+        started_at: float,
+        *,
+        queue_entry: dict[str, Any],
+        dataset_scope: DatasetScope,
+    ) -> bool:
+        metadata = self._read_processing_metadata(job_id, dataset_scope)
+        if metadata is None:
+            reason = "scoped_upload_job_metadata_missing"
+            self.write_job(
+                {
+                    "job_id": job_id,
+                    **build_upload_error_payload(
+                        "file_storage_failed",
+                        message="The queued upload could not be recovered for processing. Retry the import.",
+                        failed_stage="worker_bootstrap",
+                        retryable=True,
+                        legacy_error_type=reason,
+                        job_id=job_id,
+                        dataset_id=job_id,
+                        technical_message=reason,
+                    ),
+                    "result_available": False,
+                }
+            )
+            mark_queue_job_failed(job_id, reason)
+            complete_upload_queue_job(job_id, "failed", reason)
+            self.logger.error(
+                "upload_queue_scoped_metadata_missing job_id=%s scope_storage_id=%s",
+                job_id,
+                dataset_scope.storage_id,
+            )
+            return False
         claimed_at = datetime.now(timezone.utc)
-        queue_entry = read_upload_queue_job(job_id) or {}
         queued_at = _parse_iso_timestamp(queue_entry.get("created_at")) or _parse_iso_timestamp(metadata.get("enqueued_at"))
         worker_pickup_delay_ms = max(0.0, (claimed_at - queued_at).total_seconds() * 1000) if queued_at else None
         timings = {**dict(metadata.get("timings") or {})}
@@ -170,12 +315,6 @@ class UploadQueueLifecycleService:
             "worker_pickup_delay_ms": round(worker_pickup_delay_ms, 3) if worker_pickup_delay_ms is not None else None,
             "timings": timings,
         })
-        dataset_scope = dataset_scope_from_payload(metadata)
-        if dataset_scope is None:
-            mark_queue_job_failed(job_id, "missing_dataset_scope")
-            self.logger.error("upload_queue_job_missing_dataset_scope job_id=%s", job_id)
-            return False
-        set_current_dataset_scope(dataset_scope)
         filename = metadata.get("filename")
         request_id = metadata.get("request_id")
         dataset_id = str(metadata.get("dataset_id") or job_id)
@@ -216,8 +355,6 @@ class UploadQueueLifecycleService:
                 elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
                 failure_reason=str(exc) or exc.__class__.__name__,
             )
-            mark_queue_job_failed(job_id, technical_message)
-            complete_upload_queue_job(job_id, "failed", technical_message)
             self.write_job({
                 **metadata,
                 **build_upload_error_payload(
@@ -237,6 +374,8 @@ class UploadQueueLifecycleService:
                 ),
                 "result_available": False,
             })
+            mark_queue_job_failed(job_id, technical_message)
+            complete_upload_queue_job(job_id, "failed", technical_message)
             return False
         if path is None or not path.exists():
             existing_result = self.read_upload_result_by_job_id(job_id)
@@ -289,7 +428,6 @@ class UploadQueueLifecycleService:
                     elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
                 )
                 return True
-            mark_queue_job_failed(job_id, "missing_upload_file")
             self.write_job(
                 {
                     **metadata,
@@ -305,6 +443,7 @@ class UploadQueueLifecycleService:
                     ),
                 }
             )
+            mark_queue_job_failed(job_id, "missing_upload_file")
             _log_queue_event(
                 self.logger,
                 "job_failed",
@@ -393,8 +532,6 @@ class UploadQueueLifecycleService:
             completed_status = str(terminal_candidate.get("status") or completed.get("status") or "").upper()
             if completed_status in {"FAILED", "TIMEOUT", "CANCELLED"}:
                 error_message = str(terminal_candidate.get("error") or completed.get("error") or terminal_candidate.get("message") or completed.get("message") or completed_status.lower())
-                mark_queue_job_failed(job_id, error_message)
-                complete_upload_queue_job(job_id, "failed", error_message)
                 self.write_job({
                     **metadata,
                     **completed,
@@ -409,6 +546,8 @@ class UploadQueueLifecycleService:
                     "propagation_stage": "failed",
                     "propagation_label": completed.get("propagation_label") or "Failed.",
                 })
+                mark_queue_job_failed(job_id, error_message)
+                complete_upload_queue_job(job_id, "failed", error_message)
                 _log_queue_event(
                     self.logger,
                     "job_failed",
@@ -424,8 +563,6 @@ class UploadQueueLifecycleService:
                 return False
             if completed_status != "COMPLETE":
                 error_message = f"terminal_status_missing:{completed_status or 'empty'}"
-                mark_queue_job_failed(job_id, error_message)
-                complete_upload_queue_job(job_id, "failed", error_message)
                 self.write_job({
                     **metadata,
                     **completed,
@@ -442,6 +579,8 @@ class UploadQueueLifecycleService:
                     "propagation_stage": "failed",
                     "propagation_label": "Failed.",
                 })
+                mark_queue_job_failed(job_id, error_message)
+                complete_upload_queue_job(job_id, "failed", error_message)
                 return False
             result_reader = self.read_baseline_result if baseline_workflow else self.read_upload_result_by_job_id
             result_deadline = time.monotonic() + 2.0
@@ -484,9 +623,9 @@ class UploadQueueLifecycleService:
                     transfer_succeeded=True,
                     retry_url=f"/api/data/upload/{job_id}/retry",
                 )
+                self.write_job({**metadata, **completed, **failure, "result_available": False})
                 mark_queue_job_failed(job_id, technical_message)
                 complete_upload_queue_job(job_id, "failed", technical_message)
-                self.write_job({**metadata, **completed, **failure, "result_available": False})
                 self.logger.error(
                     "upload_result_persistence_failed dataset_id=%s job_id=%s request_id=%s stage=baseline_creation exception_type=ResultPersistenceError",
                     metadata.get("dataset_id") or job_id,
@@ -560,8 +699,6 @@ class UploadQueueLifecycleService:
                 elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
                 failure_reason=str(exc) or exc.__class__.__name__,
             )
-            mark_queue_job_failed(job_id, str(exc) or exc.__class__.__name__)
-            complete_upload_queue_job(job_id, "failed", str(exc) or exc.__class__.__name__)
             self.write_job(
                 {
                     **metadata,
@@ -588,6 +725,8 @@ class UploadQueueLifecycleService:
                     "propagation_label": "Timed out.",
                 }
             )
+            mark_queue_job_failed(job_id, str(exc) or exc.__class__.__name__)
+            complete_upload_queue_job(job_id, "failed", str(exc) or exc.__class__.__name__)
             return False
         except Exception as exc:
             current = self.read_upload_status(job_id) or {}
@@ -645,8 +784,6 @@ class UploadQueueLifecycleService:
                 elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
                 failure_reason=error_message,
             )
-            mark_queue_job_failed(job_id, error_message)
-            complete_upload_queue_job(job_id, "failed", error_message)
             failed_payload = {
                 **metadata,
                 **current,
@@ -717,4 +854,6 @@ class UploadQueueLifecycleService:
             except Exception:
                 self.logger.exception("failed_evidence_persistence_failed job_id=%s", job_id)
             self.write_job(failed_payload)
+            mark_queue_job_failed(job_id, error_message)
+            complete_upload_queue_job(job_id, "failed", error_message)
             return False

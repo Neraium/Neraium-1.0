@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from app.services.runtime_db import (
     read_upload_job,
     read_upload_queue_job,
 )
+from app.services.job_progress import complete_progress
 from app.services.upload_session_service import resolve_upload_status
 
 
@@ -161,6 +163,184 @@ def test_split_api_worker_runtime_routes_failure_to_scoped_shared_status(
         f"upload-state/scopes/{other_scope.storage_id}/upload_status_{job_id}.json",
     )
     assert other_status_key not in fake_s3.objects
+
+
+def test_split_runtime_worker_claims_routed_job_and_publishes_terminal_heartbeat(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fake_s3 = _FakeS3Client()
+    _configure_shared_runtime(monkeypatch, fake_s3)
+    api_runtime = tmp_path / "success-api-runtime"
+    worker_runtime = tmp_path / "success-worker-runtime"
+    owner_scope = build_dataset_scope(user_id="owner@example.com", workspace_id="plant-a")
+    worker_scope = build_dataset_scope(user_id="worker", workspace_id="default")
+    job_id = "split-runtime-success-job"
+    dataset_id = "split-runtime-success-dataset"
+
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    upload_jobs.configure_runtime_dir(api_runtime)
+    set_current_dataset_scope(owner_scope)
+    upload_jobs.write_job(
+        {
+            "job_id": job_id,
+            "dataset_id": dataset_id,
+            "filename": "owner-upload.csv",
+            "shared_upload_source_key": (
+                f"upload-state/scopes/{owner_scope.storage_id}/upload-sources/{dataset_id}.csv"
+            ),
+            "status": "PENDING",
+            "processing_state": "queued",
+            "message": "Waiting for a worker to claim this job.",
+        }
+    )
+    enqueue_upload_job(job_id)
+
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "worker")
+    upload_jobs.configure_runtime_dir(worker_runtime)
+    upload_jobs.JOB_RUNTIME_DIRS.clear()
+    set_current_dataset_scope(worker_scope)
+    captured: dict[str, object] = {}
+
+    def restore_source(claimed_job_id: str, source_key: str, *, filename: str | None = None) -> Path:
+        assert current_dataset_scope() == owner_scope
+        assert claimed_job_id == job_id
+        assert source_key.endswith(f"/{dataset_id}.csv")
+        restored = upload_jobs.UPLOAD_DIR / (filename or "owner-upload.csv")
+        restored.parent.mkdir(parents=True, exist_ok=True)
+        restored.write_text("timestamp,flow\n2026-01-01T00:00:00Z,1\n", encoding="utf-8")
+        return restored
+
+    def process_csv(path: Path, **kwargs: object) -> dict[str, object]:
+        assert current_dataset_scope() == owner_scope
+        claimed = read_upload_queue_job(job_id)
+        assert claimed is not None
+        assert claimed["status"] == "processing"
+        assert claimed["attempts"] == 1
+        assert claimed["locked_at"]
+        captured["claimed"] = True
+        current = upload_jobs.read_job(job_id) or {}
+        completed_at = datetime.now(timezone.utc).isoformat()
+        result = {
+            **current,
+            "job_id": job_id,
+            "dataset_id": dataset_id,
+            "filename": kwargs.get("filename") or path.name,
+            "status": "COMPLETE",
+            "processing_state": "complete",
+            "worker_state": "complete",
+            "worker_last_seen_at": completed_at,
+            "completed_at": completed_at,
+            "sii_completed": True,
+            "result_available": True,
+            "sii_completion_artifacts": {
+                "evidence_persisted": True,
+                "relationships_persisted": True,
+                "behavioral_structure_persisted": True,
+                "baseline_persisted": True,
+                "final_result_persisted": True,
+                "terminal_backend_state_published": True,
+            },
+            "job_progress": complete_progress(
+                current.get("job_progress") if isinstance(current.get("job_progress"), dict) else None,
+                job_id=job_id,
+                workflow="legacy_analysis",
+                message="Analysis ready.",
+            ),
+        }
+        upload_state_repository.write_upload_result(job_id, result)
+        upload_jobs.write_job(result)
+        return result
+
+    monkeypatch.setattr(upload_jobs.UPLOAD_QUEUE_LIFECYCLE, "restore_upload_source", restore_source)
+    monkeypatch.setattr(upload_jobs, "process_csv_file", process_csv)
+
+    assert upload_jobs.process_next_queued_upload_job() is True
+    assert captured == {"claimed": True}
+    assert current_dataset_scope() == worker_scope
+    completed_queue = read_upload_queue_job(job_id)
+    assert completed_queue is not None
+    assert completed_queue["status"] == "completed"
+    assert completed_queue["attempts"] == 1
+
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    upload_jobs.configure_runtime_dir(api_runtime)
+    upload_jobs.JOB_RUNTIME_DIRS.clear()
+    set_current_dataset_scope(owner_scope)
+    completed = resolve_upload_status(job_id)
+    assert completed["status"] == "COMPLETE", completed
+    assert completed["dataset_scope"] == owner_scope.as_dict()
+    assert completed["job_progress"]["status"] == "completed"
+    assert completed["job_progress"]["last_worker_heartbeat_at"]
+    assert completed["job_progress"]["overall_percent_complete"] == 100
+
+    set_current_dataset_scope(worker_scope)
+    assert resolve_upload_status(job_id)["status"] == "NOT_FOUND"
+
+
+def test_split_runtime_worker_bootstrap_exception_is_scoped_and_sanitized(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fake_s3 = _FakeS3Client()
+    _configure_shared_runtime(monkeypatch, fake_s3)
+    api_runtime = tmp_path / "bootstrap-api-runtime"
+    worker_runtime = tmp_path / "bootstrap-worker-runtime"
+    owner_scope = build_dataset_scope(user_id="owner@example.com", workspace_id="plant-a")
+    worker_scope = build_dataset_scope(user_id="worker", workspace_id="default")
+    job_id = "split-runtime-bootstrap-failure"
+
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    upload_jobs.configure_runtime_dir(api_runtime)
+    set_current_dataset_scope(owner_scope)
+    upload_jobs.write_job(
+        {
+            "job_id": job_id,
+            "dataset_id": "bootstrap-dataset",
+            "filename": "bootstrap.csv",
+            "shared_upload_source_key": "private/source/location.csv",
+            "status": "PENDING",
+            "processing_state": "queued",
+        }
+    )
+    enqueue_upload_job(job_id)
+
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "worker")
+    upload_jobs.configure_runtime_dir(worker_runtime)
+    upload_jobs.JOB_RUNTIME_DIRS.clear()
+    set_current_dataset_scope(worker_scope)
+
+    def fail_metadata_read(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise RuntimeError("sensitive internal storage detail")
+
+    monkeypatch.setattr(
+        upload_jobs.UPLOAD_QUEUE_LIFECYCLE,
+        "_read_processing_metadata",
+        fail_metadata_read,
+    )
+
+    assert upload_jobs.process_next_queued_upload_job() is False
+    assert current_dataset_scope() == worker_scope
+    failed_queue = read_upload_queue_job(job_id)
+    assert failed_queue is not None
+    assert failed_queue["status"] == "failed"
+    assert failed_queue["attempts"] == 1
+    assert failed_queue["last_error"] == "upload_worker_bootstrap_failed:RuntimeError"
+
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    upload_jobs.configure_runtime_dir(api_runtime)
+    upload_jobs.JOB_RUNTIME_DIRS.clear()
+    set_current_dataset_scope(owner_scope)
+    failed = resolve_upload_status(job_id)
+    assert failed["status"] == "FAILED"
+    assert failed["error_type"] == "upload_worker_bootstrap_failed"
+    assert failed["failed_stage"] == "worker_bootstrap"
+    assert failed["retryable"] is True
+    assert failed["technicalMessage"] == "RuntimeError: upload worker bootstrap failed"
+    assert "sensitive internal storage detail" not in json.dumps(failed)
+
+    set_current_dataset_scope(worker_scope)
+    assert resolve_upload_status(job_id)["status"] == "NOT_FOUND"
 
 
 def test_shared_queue_route_cannot_be_replaced_by_another_scope(

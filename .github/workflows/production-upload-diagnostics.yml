@@ -183,16 +183,15 @@ jobs:
             status_key="upload-state/scopes/${scope_id}/upload_status_${job_id}.json"
             if aws s3api get-object --bucket "$UPLOAD_STATE_BUCKET" --key "$status_key" --region "$AWS_REGION" status.json >/dev/null 2>&1; then
               jq '{job_id,dataset_id,workflow,status,processing_state,job_state,worker_state,worker_claimed,worker_last_seen_at,error_type,failed_stage,retryable,message,job_progress:(.job_progress | if type == "object" then {contract_version,status,overall_percent_complete,last_worker_heartbeat_at,seconds_since_worker_heartbeat} else null end)}' status.json
+              source_key=$(jq -r '.shared_upload_source_key // ""' status.json)
+              if [ -n "$source_key" ] && aws s3api head-object --bucket "$UPLOAD_STATE_BUCKET" --key "$source_key" --region "$AWS_REGION" > source-head.json 2>/dev/null; then
+                echo "scoped_upload_source_exists=true scoped_upload_source_bytes=$(jq -r '.ContentLength' source-head.json)"
+              else
+                echo "scoped_upload_source_exists=false"
+              fi
             else
               echo "scoped_status_object=missing"
             fi
-            source_count=$(aws s3api list-objects-v2 \
-              --bucket "$UPLOAD_STATE_BUCKET" \
-              --prefix "upload-state/scopes/${scope_id}/upload-sources/" \
-              --region "$AWS_REGION" \
-              --query "length(Contents[?contains(Key, '${job_id}')])" \
-              --output text)
-            echo "scoped_upload_source_count=$source_count"
           else
             echo "scope_storage_id=missing"
           fi
