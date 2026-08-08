@@ -25,24 +25,29 @@ test("active initial learning remains readable and contained on narrow mobile", 
   await expect(page.getByRole("heading", { name: "Validate", level: 3 })).toBeVisible();
   await expect(page.locator(".baseline-processing-panel__header").getByText("Verifying dataset integrity, timestamps, signal consistency, and data quality.", { exact: true })).toBeVisible();
   await expect(page.getByRole("progressbar", { name: "Validate, stage 2 of 4" })).toHaveAttribute("aria-valuenow", "2");
+  await expect(page.getByRole("progressbar", { name: "Signal inventory" })).toHaveAttribute("aria-valuenow", "60");
+  await expect(page.getByRole("list", { name: "Overall workflow steps" })).toContainText("Baseline Ready");
 
   const metrics = await page.evaluate(() => {
     const root = document.documentElement;
     const panel = document.querySelector(".upload-ops-panel--command")?.getBoundingClientRect();
     const card = document.querySelector(".baseline-processing-panel")?.getBoundingClientRect();
     const dataset = document.querySelector(".baseline-processing-panel__dataset")?.getBoundingClientRect();
+    const backendProgress = document.querySelector(".backend-progress")?.getBoundingClientRect();
     const animated = Array.from(document.querySelectorAll(".baseline-learning-visual *"))
       .map((node) => Number.parseFloat(getComputedStyle(node).animationDuration || "0"));
     return {
       overflow: root.scrollWidth - root.clientWidth,
       cardContained: Boolean(panel && card && card.left >= panel.left && card.right <= panel.right),
       datasetContained: Boolean(card && dataset && dataset.left >= card.left && dataset.right <= card.right),
+      progressContained: Boolean(card && backendProgress && backendProgress.left >= card.left && backendProgress.right <= card.right),
       maxAnimationDuration: Math.max(0, ...animated),
     };
   });
   expect(metrics.overflow).toBeLessThanOrEqual(1);
   expect(metrics.cardContained).toBe(true);
   expect(metrics.datasetContained).toBe(true);
+  expect(metrics.progressContained).toBe(true);
   expect(metrics.maxAnimationDuration).toBeLessThanOrEqual(0.01);
 
   const results = await new AxeBuilder({ page })

@@ -42,37 +42,6 @@ export const UPLOAD_PROCESSING_STATUSES = Object.freeze([
   "navigation_pending",
 ]);
 
-export const UPLOAD_STAGE_PROGRESS = Object.freeze({
-  idle: 0,
-  validated: 5,
-  uploading: 12,
-  accepted: 20,
-  queued: 20,
-  claimed: 25,
-  pending: 20,
-  waiting: 25,
-  stalled: 25,
-  validating_schema: 45,
-  parsing: 20,
-  baseline_modeling: 70,
-  processing: 45,
-  structural_scoring: 70,
-  running_sii: 70,
-  building_fingerprint: 90,
-  writing_state: 90,
-  cognition_ready: 90,
-  saving_result: 90,
-  saving_results: 99,
-  save_complete: 100,
-  navigation_pending: 100,
-  complete: 100,
-  cancelled: 100,
-  timeout: 100,
-  failed: 100,
-  error: 100,
-  validation_error: 100,
-});
-
 export const UPLOAD_STAGE_LABELS = Object.freeze({
   idle: "Choose a dataset",
   validated: "Dataset validated",
@@ -187,11 +156,6 @@ export function normalizeUploadStatus(status) {
   return map[raw] ?? raw ?? UPLOAD_STATUSES.IDLE;
 }
 
-export function uploadStagePercent(status) {
-  const normalized = normalizeUploadStatus(status);
-  return UPLOAD_STAGE_PROGRESS[normalized] ?? null;
-}
-
 export function uploadStageLabel(status) {
   const normalized = normalizeUploadStatus(status);
   return UPLOAD_STAGE_LABELS[normalized] ?? UPLOAD_STAGE_LABELS.idle;
@@ -236,10 +200,13 @@ export function normalizeUploadJob(payload = {}) {
       ?? payload.stage
       ?? payload.propagation_stage
   );
-  const percentRaw = payload.contract_progress ?? payload.percent ?? payload.progress ?? payload.propagation_progress ?? uploadStagePercent(status) ?? 0;
-  const percent = Number.isFinite(Number(percentRaw))
+  const hasBackendProgress = payload.job_progress?.contract_version === "job-progress.v1";
+  const percentRaw = hasBackendProgress
+    ? payload.job_progress.overall_percent_complete
+    : payload.contract_progress ?? payload.percent ?? payload.progress ?? payload.propagation_progress ?? null;
+  const percent = percentRaw !== null && percentRaw !== undefined && Number.isFinite(Number(percentRaw))
     ? Math.min(100, Math.max(0, Number(percentRaw)))
-    : 0;
+    : null;
 
   return {
     ...payload,
@@ -254,7 +221,11 @@ export function normalizeUploadJob(payload = {}) {
     status,
     processing_state: payload.processing_state ?? status,
     contract_stage: payload.contract_stage ?? status,
-    contract_progress: Number.isFinite(Number(payload.contract_progress))
+    contract_progress: hasBackendProgress
+      ? percent
+      : payload.contract_progress !== null
+        && payload.contract_progress !== undefined
+        && Number.isFinite(Number(payload.contract_progress))
       ? Math.min(100, Math.max(0, Number(payload.contract_progress)))
       : percent,
     contract_label: payload.contract_label ?? payload.progress_label ?? payload.message ?? uploadStageLabel(status),
@@ -266,7 +237,7 @@ export function normalizeUploadJob(payload = {}) {
       : null,
     propagation_label: payload.propagation_label ?? null,
     filename: payload.filename ?? payload.file_name ?? null,
-    message: payload.message ?? payload.progress_label ?? payload.contract_label ?? payload.propagation_label ?? payload.error ?? "",
+    message: payload.job_progress?.visibility_message ?? payload.job_progress?.message ?? payload.message ?? payload.progress_label ?? payload.contract_label ?? payload.propagation_label ?? payload.error ?? "",
     error: payload.error ?? payload.detail ?? null,
     result_available: Boolean(payload.result_available),
     replay_ready: Boolean(payload.replay_ready),

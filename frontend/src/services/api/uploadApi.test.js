@@ -330,6 +330,7 @@ describe("fetchLatestUploadState", () => {
       expect(xhr.instances).toHaveLength(2);
       expect(result.payload.job_id).toBe("job-retry");
       expect(progress.some((event) => event.message === SERVICE_UNAVAILABLE_RETRY_MESSAGE)).toBe(true);
+      expect(progress.find((event) => event.message === SERVICE_UNAVAILABLE_RETRY_MESSAGE)).toMatchObject({ loaded: 0, percent: 0 });
     } finally {
       xhr.restore();
       vi.useRealTimers();
@@ -539,6 +540,7 @@ describe("large telemetry upload transport", () => {
         "If-None-Match": "*",
       });
       expect(progress.some((event) => event.stage === "uploading" || event.stage === "upload_transferred")).toBe(true);
+      expect(progress.filter((event) => event.loaded === 0).every((event) => event.percent === 0)).toBe(true);
       expect(progress.at(-1)).toMatchObject({ stage: "validating", message: "Transfer complete. Creating dataset record." });
       expect(response.payload).toMatchObject({
         job_id: "large-session-4095",

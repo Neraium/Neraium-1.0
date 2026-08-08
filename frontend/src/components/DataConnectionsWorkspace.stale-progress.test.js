@@ -113,6 +113,48 @@ function renderPanel(overrides = {}) {
   }));
 }
 
+function backendProgress(overrides = {}) {
+  return {
+    contract_version: "job-progress.v1",
+    job_id: "progress-job",
+    workflow: "create_baseline",
+    status: "processing",
+    stage: "validate",
+    substage: "signal_inventory",
+    completed_units: 6,
+    total_units: 10,
+    percent_complete: 60,
+    unit_type: "signals",
+    message: "Profiling signal inventory.",
+    started_at: "2026-08-08T12:00:00Z",
+    updated_at: "2026-08-08T12:00:10Z",
+    elapsed_seconds: 10,
+    last_worker_heartbeat_at: "2026-08-08T12:00:10Z",
+    seconds_since_worker_heartbeat: 0,
+    seconds_since_update: 0,
+    stalled: false,
+    retryable: null,
+    error: null,
+    metadata: {},
+    workflow_steps: [
+      { id: "upload", label: "Upload", status: "completed", completed_work_units: 2, total_work_units: 2, percent_complete: 100 },
+      { id: "validate", label: "Validate", status: "processing", completed_work_units: 4, total_work_units: 11, percent_complete: 42 },
+      { id: "learn", label: "Learn", status: "pending", completed_work_units: 0, total_work_units: 6, percent_complete: 0 },
+      { id: "ready", label: "Baseline Ready", status: "pending", completed_work_units: 0, total_work_units: 1, percent_complete: 0 },
+    ],
+    operations: [
+      { id: "receiving", stage: "upload", label: "Receiving file", status: "completed", percent_complete: 100 },
+      { id: "parse_source", stage: "validate", label: "Parse source", status: "completed", percent_complete: 100 },
+      { id: "signal_inventory", stage: "validate", label: "Signal inventory", status: "processing", completed_units: 6, total_units: 10, percent_complete: 60 },
+      { id: "semantic_mapping", stage: "validate", label: "Semantic mapping", status: "pending", percent_complete: null },
+      { id: "learn_relationships", stage: "learn", label: "Learn relationships", status: "pending", percent_complete: null },
+    ],
+    overall_percent_complete: 32,
+    overall_basis: "equal_completed_declared_substages",
+    ...overrides,
+  };
+}
+
 function workspaceElement(props = {}) {
   return h(DataConnectionsWorkspace, {
     accessCode: "",
@@ -291,7 +333,7 @@ describe("backend state presentation", () => {
     expect(screen.getByText("Initial operating model successfully established.")).toBeTruthy();
     expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
     expect(container.querySelector(".baseline-learning-path")).toBeNull();
-    expect(container.querySelector(".baseline-learning-visual")).toBeTruthy();
+    expect(container.querySelector(".baseline-learning-visual")).toBeNull();
   });
 
   it("keeps final persistence in Learn until the backend reports completion", () => {
@@ -313,6 +355,113 @@ describe("backend state presentation", () => {
     });
 
     expect(screen.getByLabelText("Initial baseline processing: Upload")).toBeTruthy();
+  });
+
+  it("shows measured file-transfer progress before a backend job exists", () => {
+    renderPanel({
+      uploadState: "uploading",
+      selectedFiles: [selectedCsv("transfer.csv")],
+      uploadTransfer: {
+        percent: 25,
+        loaded: 256,
+        total: 1024,
+        label: "Sending telemetry 256 B of 1 KB",
+      },
+    });
+
+    const transfer = within(screen.getByLabelText("File transfer progress"));
+    expect(transfer.getByRole("progressbar", { name: "File transfer" }).value).toBe(25);
+    expect(transfer.getByText("Sending telemetry 256 B of 1 KB")).toBeTruthy();
+  });
+
+  it("renders exact backend units and progress semantics", () => {
+    renderPanel({
+      uploadState: "running_sii",
+      selectedFiles: [selectedCsv("measurable.csv")],
+      uploadJob: {
+        job_id: "progress-job",
+        execution_state: "processing",
+        job_progress: backendProgress(),
+      },
+    });
+
+    const progress = within(screen.getByLabelText("Backend job progress"));
+    expect(progress.getByRole("status").textContent).toContain("Processing");
+    expect(progress.getByRole("progressbar", { name: "Overall backend workflow" }).getAttribute("aria-valuenow")).toBe("32");
+    expect(progress.getByRole("progressbar", { name: "Signal inventory" }).getAttribute("aria-valuenow")).toBe("60");
+    expect(progress.getByText("6 / 10 signals")).toBeTruthy();
+    expect(progress.getByRole("list", { name: "Overall workflow steps" }).textContent).toContain("42% · processing");
+    expect(progress.getByRole("list", { name: "Detailed backend operations" }).textContent).toContain("Semantic mappingPending");
+  });
+
+  it("keeps unknown totals indeterminate without generating a percentage", () => {
+    renderPanel({
+      uploadState: "running_sii",
+      selectedFiles: [selectedCsv("indeterminate.csv")],
+      uploadJob: {
+        job_id: "indeterminate-job",
+        execution_state: "processing",
+        job_progress: backendProgress({
+          substage: "parse_source",
+          completed_units: 5_000,
+          total_units: null,
+          percent_complete: null,
+          unit_type: "rows",
+          message: "Parsed 5,000 rows; discovering the source total.",
+          operations: [
+            { id: "receiving", stage: "upload", label: "Receiving file", status: "completed", percent_complete: 100 },
+            { id: "parse_source", stage: "validate", label: "Parse source", status: "processing", completed_units: 5_000, total_units: null, percent_complete: null },
+            { id: "semantic_mapping", stage: "validate", label: "Semantic mapping", status: "pending", percent_complete: null },
+          ],
+        }),
+      },
+    });
+
+    const progress = within(screen.getByLabelText("Backend job progress"));
+    expect(progress.getByText("Measuring work")).toBeTruthy();
+    expect(progress.getByText("5,000 rows processed")).toBeTruthy();
+    expect(progress.queryByRole("progressbar", { name: "Parse source" })).toBeNull();
+    expect(progress.getByText("The backend has not established a safe total for this operation.")).toBeTruthy();
+  });
+
+  it("distinguishes stalled worker visibility from a failed job", () => {
+    renderPanel({
+      uploadState: "running_sii",
+      selectedFiles: [selectedCsv("stalled.csv")],
+      uploadJob: {
+        job_id: "stalled-job",
+        execution_state: "waiting",
+        job_progress: backendProgress({
+          stalled: true,
+          seconds_since_update: 185,
+          visibility_message: "No progress update received for 3 minute(s).",
+        }),
+      },
+    });
+
+    const progress = within(screen.getByLabelText("Backend job progress"));
+    expect(progress.getByRole("status").textContent).toContain("Waiting for worker progress");
+    expect(progress.getByText("No progress update received for 3 minute(s).")).toBeTruthy();
+    expect(progress.queryByText("Failed")).toBeNull();
+  });
+
+  it("shows status-connection recovery while preserving the latest backend counters", () => {
+    renderPanel({
+      uploadState: "running_sii",
+      selectedFiles: [selectedCsv("recovering.csv")],
+      uploadJob: {
+        job_id: "recovering-job",
+        execution_state: "processing",
+        poll_connection_state: "retrying",
+        message: "Analysis status connection interrupted. Retrying.",
+        job_progress: backendProgress(),
+      },
+    });
+
+    const progress = within(screen.getByLabelText("Backend job progress"));
+    expect(progress.getByRole("status").textContent).toContain("Retrying status connection");
+    expect(progress.getByText("Analysis status connection interrupted. Retrying.")).toBeTruthy();
+    expect(progress.getByText("6 / 10 signals")).toBeTruthy();
   });
 });
 
@@ -378,6 +527,41 @@ describe("completion and recovery", () => {
     expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry Processing" }));
     expect(onRetryFailedUploads).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves completed operation detail when a backend stage fails", () => {
+    renderPanel({
+      uploadState: "error",
+      selectedFiles: [selectedCsv("failed-progress.csv")],
+      latestMessage: "Signal mapping could not continue.",
+      uploadJob: {
+        job_id: "failed-progress-job",
+        processing_state: "failed",
+        execution_state: "failed",
+        retryable: true,
+        job_progress: backendProgress({
+          status: "failed",
+          substage: "semantic_mapping",
+          completed_units: 4,
+          total_units: 10,
+          percent_complete: 40,
+          retryable: true,
+          error: "Signal mapping could not continue.",
+          message: "Signal mapping could not continue.",
+          operations: [
+            { id: "receiving", stage: "upload", label: "Receiving file", status: "completed", percent_complete: 100 },
+            { id: "parse_source", stage: "validate", label: "Parse source", status: "completed", percent_complete: 100 },
+            { id: "semantic_mapping", stage: "validate", label: "Semantic mapping", status: "failed", completed_units: 4, total_units: 10, percent_complete: 40 },
+            { id: "canonical_dataset_build", stage: "validate", label: "Canonical dataset build", status: "pending", percent_complete: null },
+          ],
+        }),
+      },
+    });
+
+    const detail = within(screen.getByLabelText("Detailed backend operations"));
+    expect(detail.getByText("Parse source").closest("li").textContent).toContain("Complete");
+    expect(detail.getByText("Semantic mapping").closest("li").textContent).toContain("40% · Failed");
+    expect(detail.getByText("Canonical dataset build").closest("li").textContent).toContain("Pending");
   });
 
   it("shows a completed transfer with only Import Dataset failed", () => {
@@ -585,6 +769,44 @@ describe("upload and polling behavior", () => {
     await new Promise((resolve) => window.setTimeout(resolve, 30));
     expect(statusCalls).toBe(1);
     expect(onUploadComplete).not.toHaveBeenCalled();
+  });
+
+  it("cleans up an outstanding polling delay when the workspace unmounts", async () => {
+    uploadTelemetryFileWithProgress.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: {
+        job_id: "cleanup-job",
+        dataset_id: "cleanup-dataset",
+        workflow: "create_baseline",
+        status: "PENDING",
+        status_url: "/api/data/upload-status/cleanup-job",
+      },
+    });
+    const apiFetch = vi.fn(async () => jsonResponse({
+      job_id: "cleanup-job",
+      dataset_id: "cleanup-dataset",
+      workflow: "create_baseline",
+      status: "PROCESSING",
+      processing_state: "parsing_telemetry",
+      result_available: false,
+    }));
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+    const clearTimeoutSpy = vi.spyOn(window, "clearTimeout");
+    const { unmount } = renderWorkspace({ apiFetch });
+
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("cleanup.csv")] } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    await waitFor(() => expect(setTimeoutSpy.mock.calls.some(([, delay]) => Number(delay) >= 1_000)).toBe(true));
+    const pollTimerIndex = setTimeoutSpy.mock.calls.findIndex(([, delay]) => Number(delay) >= 1_000);
+    const pollTimer = setTimeoutSpy.mock.results[pollTimerIndex].value;
+    unmount();
+
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(pollTimer);
+    setTimeoutSpy.mockRestore();
+    clearTimeoutSpy.mockRestore();
   });
 
   it("resumes an existing processing job after reload", async () => {

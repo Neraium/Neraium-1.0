@@ -7,6 +7,7 @@ import {
 } from "../../viewModels/uploadFlow";
 import { jobStateLabel } from "../../viewModels/uploadJobState";
 import { Panel } from "../workspacePrimitives";
+import JobProgressPanel from "./JobProgressPanel";
 import "../../styles/operational-workflow.css";
 import "../../styles/upload-intelligence.css";
 
@@ -113,12 +114,6 @@ const VALIDATE_STATES = new Set([
   "baseline_quality_assessment",
 ]);
 
-function clampPercent(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0;
-  return Math.max(0, Math.min(100, Math.round(numeric)));
-}
-
 function normalizeStatusText(value) {
   return String(value || "")
     .trim()
@@ -191,24 +186,6 @@ function finalAnalysisResult(latestUploadSnapshot, uploadJob) {
   return candidates.find(isFinalAnalysisResult) ?? null;
 }
 
-function resolveMainPercent({ viewState, uploadJob, uploadTransfer, visibleProgressPercent }) {
-  if (viewState === "complete") return 100;
-  if (viewState === "finalizing") return 99;
-  if (viewState === "uploading") {
-    return clampPercent(uploadTransfer?.percent ?? visibleProgressPercent ?? 0);
-  }
-  if (viewState === "processing") {
-    const backendPercent = uploadJob?.propagation_progress
-      ?? uploadJob?.propagationProgress
-      ?? uploadJob?.percent
-      ?? uploadJob?.progress
-      ?? visibleProgressPercent
-      ?? 0;
-    return Math.min(99, clampPercent(backendPercent));
-  }
-  return 0;
-}
-
 export function resolveBaselineProcessingStage({
   viewState,
   uploadJob,
@@ -224,6 +201,17 @@ export function resolveBaselineProcessingStage({
       ? { ...stages[1], index: 1 }
       : { ...stages[0], index: 0 };
   }
+
+  const contractStage = normalizeStageText(uploadJob?.job_progress?.stage);
+  const contractStageIndex = {
+    queue: 0,
+    upload: 0,
+    validate: 1,
+    learn: 2,
+    analysis: 2,
+    ready: 3,
+  }[contractStage];
+  if (Number.isInteger(contractStageIndex)) return { ...stages[contractStageIndex], index: contractStageIndex };
 
   const raw = rawJobStatus(uploadJob, uploadState);
   const normalized = normalizeStageText(primaryJobStatus(uploadJob, uploadState));
@@ -365,24 +353,16 @@ export function baselineCompletionSummary({
   return rows;
 }
 
-function edgeProgress({ percent, stageIndex, edgeIndex, complete }) {
-  if (complete) return 0;
-  if (stageIndex < 1) return 100;
-  if (stageIndex === 1) return edgeIndex < 3 ? 0 : 100;
-  const learnedEdges = Math.max(4, Math.ceil((clampPercent(percent) / 100) * NETWORK_EDGES.length));
-  return edgeIndex < learnedEdges ? 0 : 100;
-}
-
 const NETWORK_NODES = [
-  { x: 34, y: 68, r: 4, stage: 0 },
-  { x: 79, y: 30, r: 5, stage: 0 },
-  { x: 88, y: 97, r: 4, stage: 0 },
-  { x: 145, y: 64, r: 7, stage: 1 },
-  { x: 202, y: 29, r: 4, stage: 1 },
-  { x: 212, y: 98, r: 5, stage: 1 },
-  { x: 277, y: 63, r: 4, stage: 2 },
-  { x: 256, y: 111, r: 3, stage: 2 },
-  { x: 266, y: 18, r: 3, stage: 2 },
+  { x: 34, y: 68, r: 4 },
+  { x: 79, y: 30, r: 5 },
+  { x: 88, y: 97, r: 4 },
+  { x: 145, y: 64, r: 7 },
+  { x: 202, y: 29, r: 4 },
+  { x: 212, y: 98, r: 5 },
+  { x: 277, y: 63, r: 4 },
+  { x: 256, y: 111, r: 3 },
+  { x: 266, y: 18, r: 3 },
 ];
 
 const NETWORK_EDGES = [
@@ -400,10 +380,9 @@ const NETWORK_EDGES = [
   "M212 98L256 111",
 ];
 
-function RelationshipLearningVisual({ percent, stage, complete = false }) {
-  const stageIndex = stage?.index ?? 0;
+function RelationshipLearningVisual() {
   return (
-    <div className={`baseline-learning-visual${complete ? " is-complete" : ""}`} aria-hidden="true">
+    <div className="baseline-learning-visual is-complete" aria-hidden="true">
       <div className="baseline-learning-visual__label">
         <span>Signals</span>
         <span>Learned operating model</span>
@@ -419,25 +398,15 @@ function RelationshipLearningVisual({ percent, stage, complete = false }) {
           {NETWORK_EDGES.map((path) => <path key={`ghost-${path}`} d={path} />)}
         </g>
         <g className="baseline-learning-visual__edges">
-          {NETWORK_EDGES.map((path, index) => (
-            <path
-              key={path}
-              d={path}
-              pathLength="100"
-              style={{ "--edge-offset": edgeProgress({ percent, stageIndex, edgeIndex: index, complete }) }}
-            />
-          ))}
+          {NETWORK_EDGES.map((path) => <path key={path} d={path} />)}
         </g>
         <g className="baseline-learning-visual__nodes" filter="url(#baseline-node-glow)">
-          {NETWORK_NODES.map((node, index) => {
-            const visible = complete || stageIndex >= node.stage;
-            return (
-              <g key={`${node.x}-${node.y}`} className={visible ? "is-visible" : ""} style={{ "--node-index": index }}>
+          {NETWORK_NODES.map((node, index) => (
+              <g key={`${node.x}-${node.y}`} className="is-visible" style={{ "--node-index": index }}>
                 <circle className="baseline-learning-visual__node-ring" cx={node.x} cy={node.y} r={node.r + 5} />
                 <circle className="baseline-learning-visual__node" cx={node.x} cy={node.y} r={node.r} />
               </g>
-            );
-          })}
+          ))}
         </g>
       </svg>
     </div>
@@ -474,7 +443,6 @@ function DatasetFileRow({ filename, size, status }) {
 function ProcessingPanel({
   comparison,
   dataset,
-  percent,
   stage,
   uploadJob,
   uploadState,
@@ -527,7 +495,7 @@ function ProcessingPanel({
             })}
           </ol>
         </div>
-        <RelationshipLearningVisual percent={percent} stage={stage} />
+        <JobProgressPanel uploadJob={uploadJob} uploadTransfer={uploadTransfer} />
       </div>
       {!comparison ? (
         <p className="baseline-processing-panel__policy">
@@ -756,7 +724,7 @@ function SuccessState({
           <h3 id="baseline-ready-heading">Baseline Established</h3>
         </div>
         <div className="baseline-success__model" role="img" aria-label="Stable learned relationship network">
-          <RelationshipLearningVisual percent={100} stage={{ index: 3 }} complete />
+          <RelationshipLearningVisual />
         </div>
       </header>
       <dl className="baseline-success__summary" aria-label="Initial baseline summary">
@@ -811,7 +779,6 @@ export default function IntakeFlowPanel({
   openFilePicker,
   uploadJob,
   latestMessage,
-  visibleProgressPercent,
   propagationLabel,
   queuedWorkerDetail = "",
   uploadTransfer,
@@ -848,7 +815,6 @@ export default function IntakeFlowPanel({
   const baselineCompletion = Boolean(baselineResult?.baselineId ?? baselineResult?.candidate_model);
   const viewState = rawViewState === "complete" && !analysisResult && !baselineCompletion ? "finalizing" : rawViewState;
   const showProgress = ["uploading", "processing", "finalizing"].includes(viewState);
-  const mainPercent = resolveMainPercent({ viewState, uploadJob, uploadTransfer, visibleProgressPercent });
   const processingStage = resolveBaselineProcessingStage({
     viewState,
     uploadJob,
@@ -992,8 +958,7 @@ export default function IntakeFlowPanel({
         {showProgress ? (
           <ProcessingPanel
             comparison={comparison}
-            dataset={uploadJob?.filename || "Previously selected dataset"}
-            percent={mainPercent}
+            dataset={uploadJob?.filename || selectedFileLabel || "Previously selected dataset"}
             stage={processingStage}
             uploadJob={uploadJob}
             uploadState={uploadState}
@@ -1068,6 +1033,7 @@ export default function IntakeFlowPanel({
               </div>
             </header>
             <p className="upload-error-message">{errorMessage}</p>
+            <JobProgressPanel uploadJob={uploadJob} uploadTransfer={uploadTransfer} />
             {failurePresentation.fileStored || failurePresentation.transferSucceeded ? (
               <p className="upload-transfer-complete">
                 <strong>File uploaded</strong>

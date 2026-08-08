@@ -178,6 +178,7 @@ def stream_csv_snapshot(
     csv_chunk_size_rows: int,
     job_id: str | None = None,
     on_progress: Callable[[str, str, int, str], None] | None = None,
+    on_measured_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
     with path.open("r", encoding="utf-8-sig", errors="replace", newline="") as handle:
         sample_lines: list[str] = []
@@ -206,6 +207,7 @@ def stream_csv_snapshot(
         saw_header = not header_present
         detection_rows: list[list[str]] = []
         candidate_row_count = 0
+        source_row_count = 0
         while True:
             line = handle.readline()
             if line == "":
@@ -215,6 +217,7 @@ def stream_csv_snapshot(
             if header_present and not saw_header:
                 saw_header = True
                 continue
+            source_row_count += 1
             tokens = row_tokens(line.rstrip("\r\n"), delimiter)
             if len(tokens) != len(columns):
                 continue
@@ -272,6 +275,9 @@ def stream_csv_snapshot(
         last_accepted_row: tuple[Any, dict[str, Any]] | None = None
         previous_timestamp: Any = None
         timestamps_were_unsorted = False
+        snapshot_processed_rows = 0
+        if on_measured_progress is not None:
+            on_measured_progress(0, source_row_count)
 
         for line in handle:
             if not line.strip():
@@ -285,6 +291,12 @@ def stream_csv_snapshot(
                 continue
 
             rows_received += 1
+            snapshot_processed_rows += 1
+            if on_measured_progress is not None and (
+                snapshot_processed_rows % max(1, csv_progress_update_every) == 0
+                or snapshot_processed_rows == source_row_count
+            ):
+                on_measured_progress(snapshot_processed_rows, source_row_count)
             tokens = row_tokens(line.rstrip("\r\n"), delimiter)
             if len(tokens) != len(columns):
                 malformed_rows += 1
@@ -446,6 +458,9 @@ def stream_csv_snapshot(
         if job_id and rows_received >= csv_progress_update_every and rows_received != last_progress_rows and on_progress is not None:
             on_progress(job_id, "parsing_telemetry", 20, f"Profiling historical data... {rows_received:,} rows read.")
 
+        if on_measured_progress is not None and snapshot_processed_rows < source_row_count:
+            on_measured_progress(source_row_count, source_row_count)
+
         return {
             "columns": columns,
             "timestamp_column": timestamp_column,
@@ -457,6 +472,7 @@ def stream_csv_snapshot(
             "analysis_sample_stride": analysis_stride,
             "deduplication_mode": "bounded" if bounded_deduplication else "exact",
             "rows_received": rows_received,
+            "snapshot_rows_evaluated": snapshot_processed_rows,
             "rows_used": rows_used,
             "rows_dropped": rows_dropped,
             "drop_reasons": drop_reasons,

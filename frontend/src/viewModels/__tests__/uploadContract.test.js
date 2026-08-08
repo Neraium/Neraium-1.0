@@ -26,6 +26,32 @@ describe("upload reliability contract", () => {
     expect(job.evidence_persisted).toBe(true);
     expect(job.sii_reliable_enough_to_show).toBe(false);
   });
+
+  it("does not derive a percentage from an active lifecycle stage", () => {
+    const job = normalizeUploadJob({ status: "RUNNING_SII", processing_state: "building_fingerprint" });
+
+    expect(job.percent).toBeNull();
+    expect(job.progress).toBeNull();
+    expect(job.contract_progress).toBeNull();
+  });
+
+  it("uses only backend-authored deterministic progress when the v1 contract is present", () => {
+    const job = normalizeUploadJob({
+      status: "PROCESSING",
+      percent: 95,
+      job_progress: {
+        contract_version: "job-progress.v1",
+        overall_percent_complete: 37,
+        percent_complete: null,
+        message: "Discovering the row total.",
+      },
+    });
+
+    expect(job.percent).toBe(37);
+    expect(job.progress).toBe(37);
+    expect(job.contract_progress).toBe(37);
+    expect(job.message).toBe("Discovering the row total.");
+  });
 });
 
 

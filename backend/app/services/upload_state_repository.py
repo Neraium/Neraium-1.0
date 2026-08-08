@@ -49,13 +49,17 @@ _SCOPED_LATEST_NAMES = {
 }
 
 
+def _is_scope_bound_state(raw_name: str) -> bool:
+    return raw_name in _SCOPED_LATEST_NAMES or raw_name.startswith(("upload_status_", "upload_result_"))
+
+
 def _state_scope(*, scope: DatasetScope | None = None, payload: dict[str, Any] | None = None) -> DatasetScope:
     return scope or dataset_scope_from_payload(payload) or current_dataset_scope()
 
 
 def _state_name(name: str, *, scope: DatasetScope | None = None, payload: dict[str, Any] | None = None) -> str:
     raw_name = str(name).replace(".json", "")
-    if raw_name not in _SCOPED_LATEST_NAMES:
+    if not _is_scope_bound_state(raw_name):
         return raw_name
     resolved = _state_scope(scope=scope, payload=payload)
     return f"scopes/{resolved.storage_id}/{raw_name}"
@@ -521,6 +525,27 @@ def read_shared_state(name: str, *, scope: DatasetScope | None = None) -> dict[s
         return database_payload
     bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
     return _read_s3_state(storage_name, bucket) if bucket else None
+
+
+def _read_legacy_unscoped_state(name: str) -> dict[str, Any] | None:
+    """Read a pre-scope per-job object for a verified migration fallback."""
+    storage_name = str(name).replace(".json", "")
+    database_payload = _read_runtime_db_state(storage_name)
+    if isinstance(database_payload, dict):
+        return database_payload
+    bucket = _upload_state_bucket() if _external_shared_state_enabled() else ""
+    return _read_s3_state(storage_name, bucket) if bucket else None
+
+
+def _read_legacy_unscoped_local(name: str) -> dict[str, Any] | None:
+    path = runtime_state().runtime_dir / f"{str(name).replace('.json', '')}.json"
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def read_shared_state_pure(name: str, *, scope: DatasetScope | None = None) -> dict[str, Any] | None:
@@ -1030,21 +1055,35 @@ def read_latest_upload_summary() -> dict[str, Any] | None:
 
 
 def read_upload_result_by_job_id(job_id: str) -> dict[str, Any] | None:
-    persisted = read_shared_state(f"upload_result_{job_id}")
-    if isinstance(persisted, dict):
+    scope = current_dataset_scope()
+    name = f"upload_result_{job_id}"
+    persisted = read_shared_state(name, scope=scope)
+    if isinstance(persisted, dict) and payload_matches_dataset_scope(persisted, scope):
         return persisted
-    return read_local_json(f"upload_result_{job_id}.json")
+    local = read_local_json(f"{name}.json", scope=scope)
+    if isinstance(local, dict) and payload_matches_dataset_scope(local, scope):
+        return local
+    legacy = _read_legacy_unscoped_state(name) or _read_legacy_unscoped_local(name)
+    return legacy if payload_matches_dataset_scope(legacy, scope) else None
 
 
 def read_upload_status(job_id: str) -> dict[str, Any] | None:
-    persisted = read_shared_state(f"upload_status_{job_id}")
-    if isinstance(persisted, dict):
+    scope = current_dataset_scope()
+    name = f"upload_status_{job_id}"
+    persisted = read_shared_state(name, scope=scope)
+    if isinstance(persisted, dict) and payload_matches_dataset_scope(persisted, scope):
         runtime_state().cache_job(job_id, persisted)
         return persisted
     cached = runtime_state().jobs.get(job_id)
-    if isinstance(cached, dict):
+    if isinstance(cached, dict) and payload_matches_dataset_scope(cached, scope):
         return cached
-    return read_local_json(f"upload_status_{job_id}.json")
+    local = read_local_json(f"{name}.json", scope=scope)
+    if isinstance(local, dict) and payload_matches_dataset_scope(local, scope):
+        return local
+    legacy = _read_legacy_unscoped_state(name)
+    if not isinstance(legacy, dict):
+        legacy = _read_legacy_unscoped_local(name)
+    return legacy if payload_matches_dataset_scope(legacy, scope) else None
 
 
 def clear_reset_block_persisted(scope: DatasetScope | None = None) -> None:

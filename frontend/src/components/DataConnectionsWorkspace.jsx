@@ -1,9 +1,6 @@
 import { lazy, startTransition, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL, API_ROUTE_MODE, CONFIGURED_API_BASE_URL } from "../config";
-import {
-  normalizeUploadJob,
-  uploadStagePercent,
-} from "../viewModels/uploadContract";
+import { normalizeUploadJob } from "../viewModels/uploadContract";
 import {
   SERVICE_UNAVAILABLE_RETRY_MESSAGE,
   buildUploadRequestError,
@@ -123,10 +120,6 @@ function validateTelemetryFile(file, kind) {
   return "";
 }
 
-function fallbackPercentFromStatus(status) {
-  return uploadStagePercent(status);
-}
-
 function boundedFailureDelay(failureCount) {
   const failureIndex = Math.max(0, Number(failureCount || 1) - 1);
   const backoff = Math.min(15000, STATUS_POLL_INTERVAL_MS * (1.5 ** failureIndex));
@@ -161,14 +154,14 @@ export function formatAnalysisUpdateTime(value, now = Date.now()) {
 export function queuedWorkerMessage(uploadJob, now = Date.now()) {
   const executionState = authoritativeJobState(uploadJob);
   const workerState = String(uploadJob?.worker_state ?? uploadJob?.workerState ?? "").toLowerCase();
-  const lastUpdate = uploadJob?.worker_last_update_at ?? uploadJob?.worker_last_update ?? uploadJob?.updated_at ?? "";
-  if (executionState === "queued") return "Queued · waiting for worker claim";
+  const lastUpdate = uploadJob?.job_progress?.updated_at ?? uploadJob?.worker_last_update_at ?? uploadJob?.worker_last_update ?? uploadJob?.updated_at ?? "";
+  if (executionState === "queued") return uploadJob?.queue_position ? `Queued · position ${uploadJob.queue_position}` : "Queued · waiting for worker claim";
   if (executionState === "claimed") return "Claimed by worker · processing has not started";
   if (executionState === "processing" && ["active", "running"].includes(workerState)) {
     return `Analysis active · updated ${formatAnalysisUpdateTime(lastUpdate, now)}`;
   }
   if (executionState === "processing") return "Processing confirmed by backend";
-  if (executionState === "waiting") return "Status connection interrupted · backend state preserved";
+  if (executionState === "waiting") return uploadJob?.job_progress?.visibility_message || "Status connection interrupted · backend state preserved";
   if (executionState === "stalled") return "Stalled · no recent job heartbeat";
   return "";
 }
@@ -386,6 +379,7 @@ export default function DataConnectionsWorkspace({
   void uploadResult;
   const uploadJobIdRef = useRef(null);
   const pollTimerRef = useRef(null);
+  const pollDelayResolveRef = useRef(null);
   const pollFailureCountRef = useRef(0);
   const pollInFlightRef = useRef(null);
   const pollOwnerJobIdRef = useRef(null);
@@ -576,7 +570,7 @@ export default function DataConnectionsWorkspace({
     pollAbortControllerRef.current?.abort();
     uploadInFlightRef.current = false;
     pollSessionRef.current += 1;
-    if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
+    clearPollDelay();
     clearCompletionNavigationTimer();
     pollTimerRef.current = null;
     pollInFlightRef.current = null;
@@ -990,12 +984,31 @@ export default function DataConnectionsWorkspace({
     return Boolean(jobId) && String(uploadJobIdRef.current ?? "") === String(jobId);
   }
 
+  function clearPollDelay() {
+    if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
+    pollTimerRef.current = null;
+    const resolve = pollDelayResolveRef.current;
+    pollDelayResolveRef.current = null;
+    resolve?.();
+  }
+
+  function waitForPollDelay(milliseconds) {
+    clearPollDelay();
+    return new Promise((resolve) => {
+      pollDelayResolveRef.current = resolve;
+      pollTimerRef.current = window.setTimeout(() => {
+        pollTimerRef.current = null;
+        pollDelayResolveRef.current = null;
+        resolve();
+      }, milliseconds);
+    });
+  }
+
   function stopUploadPolling(reason = "manual") {
     pollSessionRef.current += 1;
     pollAbortControllerRef.current?.abort();
     pollAbortControllerRef.current = null;
-    if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
-    pollTimerRef.current = null;
+    clearPollDelay();
     pollInFlightRef.current = null;
     pollOwnerJobIdRef.current = null;
     if (reason !== "component_unmount") {
@@ -1075,7 +1088,7 @@ export default function DataConnectionsWorkspace({
         if (response.status !== 404 || Date.now() >= resultDeadline) {
           throw buildUploadRequestError(response, rawBaselineResult, "baseline_result");
         }
-        await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, RESULT_FETCH_RETRY_INTERVAL_MS); });
+        await waitForPollDelay(RESULT_FETCH_RETRY_INTERVAL_MS);
       } while (Date.now() < resultDeadline);
       if (!response?.ok || !baselineResult?.candidate_model) {
         throw buildUploadRequestError(response ?? { status: 404 }, rawBaselineResult ?? {}, "baseline_result");
@@ -1245,7 +1258,7 @@ export default function DataConnectionsWorkspace({
           const now = Date.now();
           const activeCooldownUntil = Math.max(Number(missingStatusCooldownUntilRef.current || 0), Number(statusEndpointCooldownUntilRef.current || 0));
           if (activeCooldownUntil > now) {
-            await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, Math.max(1000, activeCooldownUntil - now)); });
+            await waitForPollDelay(Math.max(1000, activeCooldownUntil - now));
             continue;
           }
           const requestPath = pollingPath;
@@ -1301,7 +1314,7 @@ export default function DataConnectionsWorkspace({
               }
               const cooldownMs = Math.min(15000, STATUS_ENDPOINT_FAILURE_BASE_DELAY_MS * statusEndpointFailureCountRef.current);
               statusEndpointCooldownUntilRef.current = Date.now() + cooldownMs;
-              await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, cooldownMs); });
+              await waitForPollDelay(cooldownMs);
               continue;
             }
             throw buildUploadRequestError(response, payload, "poll");
@@ -1373,7 +1386,7 @@ export default function DataConnectionsWorkspace({
             terminalWithoutResultAt = null;
             setUploadState(authoritativeState);
           }
-          await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, STATUS_POLL_INTERVAL_MS); });
+          await waitForPollDelay(STATUS_POLL_INTERVAL_MS);
         } catch (error) {
           if (pollController.signal.aborted || error?.name === "AbortError") return null;
           if (error?.terminalJobFailure === true) throw error;
@@ -1394,7 +1407,7 @@ export default function DataConnectionsWorkspace({
             throw error;
           }
           const retryDelay = boundedFailureDelay(pollFailureCountRef.current);
-          await new Promise((resolve) => { pollTimerRef.current = window.setTimeout(resolve, retryDelay); });
+          await waitForPollDelay(retryDelay);
         }
       }
       return null;
@@ -1457,7 +1470,7 @@ export default function DataConnectionsWorkspace({
       ...normalizedJob,
       job_id: normalizedJob.jobId ?? requestedJobId,
       status: payload?.status ?? normalized,
-      percent: payload?.percent ?? payload?.progress ?? fallbackPercentFromStatus(normalized),
+      percent: payload?.job_progress?.overall_percent_complete ?? payload?.percent ?? payload?.progress ?? null,
       progress_label: payload?.progress_label ?? payload?.message ?? uploadStateMessage(normalized),
       message: payload?.message ?? payload?.progress_label ?? uploadStateMessage(normalized),
     };
@@ -1493,7 +1506,7 @@ export default function DataConnectionsWorkspace({
     });
     setUploadState("uploading");
     setUploadProcessingFlag(true);
-    setUploadTransfer({ percent: 5, loaded: 0, total: file.size, label: `Sending telemetry ${formatFileSize(0)} of ${formatFileSize(file.size)}` });
+    setUploadTransfer({ percent: 0, loaded: 0, total: file.size, label: `Sending telemetry ${formatFileSize(0)} of ${formatFileSize(file.size)}` });
     try {
       const uploadInteractionStartedAt = Date.now();
       const uploadResponse = await uploadTelemetryFileWithProgress({
@@ -1603,25 +1616,16 @@ export default function DataConnectionsWorkspace({
   const progressUploadJob = hasActiveProgress ? uploadJob : null;
   const isUploadingState = String(uploadState || "").toLowerCase() === "uploading";
   const progressUploadTransfer = hasActiveProgress && isUploadingState ? uploadTransfer : null;
-  const uploadTransferPercent = progressUploadTransfer?.percent;
-  const propagationPercent = progressUploadJob?.propagation_progress ?? progressUploadJob?.propagationProgress;
-  const backendPercent = progressUploadJob?.percent ?? progressUploadJob?.progress;
-  const statusFallbackPercent = hasActiveProgress ? fallbackPercentFromStatus(uploadState) : null;
-  const uploadPercentCandidates = isUploadingState
-    ? [uploadTransferPercent, backendPercent, statusFallbackPercent]
-    : [propagationPercent, backendPercent, statusFallbackPercent];
-  const uploadPercent = uploadPercentCandidates.find((value) => Number.isFinite(Number(value))) ?? null;
   const propagationLabel = progressUploadJob?.propagation_label ?? progressUploadJob?.propagationLabel ?? progressUploadJob?.propagation_stage ?? "";
   const statusLabel = progressUploadJob?.poll_message
+    ?? progressUploadJob?.job_progress?.visibility_message
+    ?? progressUploadJob?.job_progress?.message
     ?? progressUploadJob?.progress_label
     ?? progressUploadJob?.message
     ?? progressUploadTransfer?.message
     ?? uploadStateMessage(uploadState);
   const visibleStatusLabel = statusLabel;
   const queuedWorkerDetail = queuedWorkerMessage(progressUploadJob);
-  const visibleProgressPercent = Number.isFinite(Number(uploadPercent))
-    ? Math.max(0, Math.min(100, Math.round(Number(uploadPercent))))
-    : null;
   const latestStatusMessage = completionError || uploadError || visibleStatusLabel || readiness;
   const announcedStatusMessage = latestStatusMessage;
   const resultBaselineId = String(
@@ -1954,7 +1958,6 @@ export default function DataConnectionsWorkspace({
         openFilePicker={openFilePicker}
         uploadJob={uploadJob}
         latestMessage={announcedStatusMessage}
-        visibleProgressPercent={visibleProgressPercent}
         propagationLabel={propagationLabel}
         queuedWorkerDetail={queuedWorkerDetail}
         uploadTransfer={uploadTransfer}

@@ -14,6 +14,7 @@ from app.services.historical_ingestion import (
     read_ingestion_record,
 )
 from app.services.runtime_db import record_audit_event
+from app.services import upload_jobs
 
 
 router = APIRouter(
@@ -92,16 +93,38 @@ def review_historical_ingestion_dataset(
 ):
     auth_context = getattr(request.state, "auth_context", {})
     actor = str(auth_context.get("auth_subject") or "authenticated-operator")
+    if read_ingestion_record(dataset_id) is None:
+        raise HTTPException(status_code=404, detail="Historical ingestion profile not found for this dataset.")
+    reporter = upload_jobs.begin_historical_review_progress(dataset_id)
     try:
         record = apply_review(
             dataset_id,
             decisions=[item.model_dump(exclude_none=True) for item in payload.decisions],
             actor=actor,
+            progress_callback=reporter.report,
         )
     except FileNotFoundError as exc:
+        upload_jobs.fail_historical_review_progress(
+            dataset_id,
+            message="The preserved source for this dataset could not be restored.",
+            retryable=False,
+        )
         raise HTTPException(status_code=404, detail="Historical ingestion profile not found for this dataset.") from exc
     except ValueError as exc:
+        upload_jobs.fail_historical_review_progress(
+            dataset_id,
+            message="The review decisions could not be applied to this dataset.",
+            retryable=False,
+        )
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception:
+        upload_jobs.fail_historical_review_progress(
+            dataset_id,
+            message="The canonical dataset could not be rebuilt from the review decisions.",
+            retryable=True,
+        )
+        raise
+    completed_progress = upload_jobs.complete_historical_review_progress(dataset_id)
     record_audit_event(
         actor=actor,
         action="historical_ingestion.reviewed",
@@ -114,4 +137,4 @@ def review_historical_ingestion_dataset(
             "decision_count": len(payload.decisions),
         },
     )
-    return record
+    return {**record, "job_progress": completed_progress}

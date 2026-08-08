@@ -4,7 +4,7 @@ import { analysisBelongsToBaseline } from "../viewModels/baselineSelection";
 import { deriveCurrentSession, deriveSessionActivity } from "../viewModels/currentSession";
 import { deriveCanonicalFinding } from "../viewModels/operatorFinding";
 import { normalizeUploadStatus, uploadStateMessage } from "../viewModels/uploadFlow";
-import { isUploadProcessingStatus, uploadStageLabel, uploadStagePercent } from "../viewModels/uploadContract";
+import { isUploadProcessingStatus, uploadStageLabel } from "../viewModels/uploadContract";
 import {
   createAnalysisRecord,
   deleteAnalysisRecord,
@@ -494,7 +494,10 @@ function buildPendingUploadSnapshot({ completedPayload = null, completedResult =
     processing_state: "structural_scoring",
     progress_label: completedPayload?.progress_label ?? completedPayload?.message ?? "Telemetry is available. Analysis has not started.",
     message: completedPayload?.message ?? completedPayload?.progress_label ?? "Telemetry is available. Analysis has not started.",
-    percent: Number(completedPayload?.percent ?? completedPayload?.progress) || 86,
+    percent: completedPayload?.job_progress?.overall_percent_complete
+      ?? completedPayload?.percent
+      ?? completedPayload?.progress
+      ?? null,
     current_upload: {
       ...(completedPayload?.current_upload ?? {}),
       job_id: expectedJobId,
@@ -509,10 +512,15 @@ function buildPendingUploadSnapshot({ completedPayload = null, completedResult =
 function deriveGateProcessing(snapshot) {
   const rawStatus = String(snapshot?.contract_stage ?? snapshot?.status ?? snapshot?.processing_state ?? "");
   const status = normalizeUploadStatus(rawStatus);
-  const percent = Number(snapshot?.contract_progress ?? snapshot?.percent ?? snapshot?.progress);
+  const rawPercent = snapshot?.job_progress?.overall_percent_complete
+    ?? snapshot?.contract_progress
+    ?? snapshot?.percent
+    ?? snapshot?.progress
+    ?? null;
+  const percent = rawPercent === null ? null : Number(rawPercent);
   return {
     active: isUploadProcessingStatus(status),
-    percent: Number.isFinite(percent) ? Math.max(1, Math.min(99, Math.round(percent))) : (uploadStagePercent(status) ?? 0),
+    percent: Number.isFinite(percent) ? Math.max(0, Math.min(100, Math.round(percent))) : null,
     label: String(snapshot?.contract_label ?? snapshot?.progress_label ?? snapshot?.message ?? uploadStageLabel(status) ?? uploadStateMessage(status)),
   };
 }

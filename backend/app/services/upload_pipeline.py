@@ -13,6 +13,7 @@ from app.services.mode_aware_authority import apply_mode_aware_suppression
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE
 from app.services.telemetry_confidence import apply_telemetry_confidence_adjustment
+from app.services.job_progress import ProgressReporter
 
 
 UPLOAD_TEMPORAL_MAX_ROWS = 2048
@@ -75,6 +76,7 @@ def run_structural_analysis_pipeline(
     minimal_replay: Callable[..., dict[str, Any]],
     build_upload_engine_result: Callable[..., dict[str, Any]],
     stage_notifier: Callable[..., None],
+    progress_reporter: ProgressReporter | None = None,
 ) -> dict[str, Any]:
     stage_notifier(job_id, stage="building_baseline", progress=60, label="Identifying systems...")
     matrix_rows = matrix_rows_for_profiles
@@ -186,6 +188,43 @@ def run_structural_analysis_pipeline(
         progress=72,
         label="Mapping relationships...",
     )
+    engine_steps = [
+        "prepare_inputs",
+        "signal_drift",
+        "relationship_analysis",
+        "operating_modes",
+        "data_conditions",
+        "sensor_health",
+        "empirical_thresholds",
+        "mode_conditioned_baseline",
+        "relationship_graph_analysis",
+        "fixed_persistence",
+        "adaptive_persistence",
+        "temporal_analysis",
+        "multiscale_analysis",
+        "covariance_analysis",
+        "physics_reasoning",
+        "behavioral_model",
+        "evidence_fusion",
+    ]
+    def report_engine_progress(step: str, _legacy_fraction: float, metadata: dict[str, Any]) -> None:
+        if progress_reporter is None:
+            return
+        if step == "complete":
+            return
+        if step not in engine_steps:
+            return
+        progress_reporter.report(
+            stage="analysis",
+            substage=step,
+            completed_units=0,
+            total_units=1,
+            unit_type="module",
+            message=f"Running {step.replace('_', ' ')}.",
+            metadata=metadata,
+            force=True,
+        )
+
     sii_result = evaluate_sii(
         columns=columns,
         rows=rows,
@@ -220,6 +259,7 @@ def run_structural_analysis_pipeline(
                 if ingestion_report.get(key)
             },
         },
+        progress_callback=report_engine_progress,
     )
     compatibility = sii_result.get("compatibility") or {}
     baseline_analysis = compatibility.get("baseline_analysis") or {}
@@ -366,6 +406,16 @@ def run_structural_analysis_pipeline(
         label="Generating insights...",
     )
     stage_notifier(job_id, stage="saving_result", progress=95, label="Saving result...")
+    if progress_reporter:
+        progress_reporter.report(
+            stage="ready",
+            substage="finalize_analysis",
+            completed_units=0,
+            total_units=1,
+            unit_type="operation",
+            message="Persisting analysis evidence and verifying the committed result.",
+            force=True,
+        )
     latest_runner_state = runner_result.get("latest_state")
     return {
         "sii_result": sii_result,

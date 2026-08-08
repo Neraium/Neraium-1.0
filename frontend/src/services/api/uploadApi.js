@@ -305,7 +305,7 @@ function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analys
         stage: "uploading",
         loaded: 0,
         total: file.size,
-        percent: file.size > 0 ? 1 : 0,
+        percent: 0,
         speedBytesPerSecond: 0,
         message: "Connecting to telemetry ingestion.",
       });
@@ -315,7 +315,7 @@ function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analys
           stage: "uploading",
           loaded: 0,
           total: file.size,
-          percent: file.size > 0 ? 1 : 0,
+          percent: 0,
           speedBytesPerSecond: 0,
           message: "Connecting to telemetry ingestion.",
         });
@@ -406,9 +406,9 @@ function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analys
         if (isTransientUploadServiceStatus(xhr.status) && retryCount < MAX_SAME_URL_RETRIES && attemptLoaded === 0) {
           onProgress?.({
             stage: "upload_retrying",
-            loaded: file.size,
+            loaded: 0,
             total: file.size,
-            percent: 100,
+            percent: 0,
             speedBytesPerSecond: 0,
             message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
           });
@@ -440,9 +440,9 @@ function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analys
         if (retryCount < MAX_SAME_URL_RETRIES && attemptLoaded === 0) {
           onProgress?.({
             stage: "upload_retrying",
-            loaded: file.size,
+            loaded: 0,
             total: file.size,
-            percent: file.size > 0 ? 100 : 0,
+            percent: 0,
             speedBytesPerSecond: 0,
             message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
           });
@@ -483,9 +483,9 @@ function uploadTelemetryFileDirectWithProgress({ file, workflow = "legacy_analys
         if (retryCount < MAX_SAME_URL_RETRIES && attemptLoaded === 0) {
           onProgress?.({
             stage: "upload_retrying",
-            loaded: file.size,
+            loaded: 0,
             total: file.size,
-            percent: file.size > 0 ? 100 : 0,
+            percent: 0,
             speedBytesPerSecond: 0,
             message: SERVICE_UNAVAILABLE_RETRY_MESSAGE,
           });
@@ -593,7 +593,7 @@ function putFileToObjectStorage({ file, session, timeoutMs, onProgress }) {
       const loaded = Number(event?.loaded || 0);
       const total = event?.lengthComputable ? Number(event.total || file.size) : file.size;
       const elapsedSeconds = Math.max((Date.now() - startedAt) / 1000, 0.001);
-      const percent = total > 0 ? Math.max(1, Math.min(100, Math.round((loaded / total) * 100))) : null;
+      const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : null;
       onProgress?.({
         stage: percent === 100 ? "upload_transferred" : "uploading",
         loaded,
@@ -829,6 +829,19 @@ export async function fetchHistoricalIngestionProfile({ datasetId, apiFetch, acc
     throw Object.assign(new Error(requestError.detail || "The ingestion profile could not be loaded."), requestError);
   }
   return payload;
+}
+
+export async function fetchUploadJobProgress({ jobId, apiFetch, accessCode } = {}) {
+  const cleanJobId = String(jobId ?? "").trim();
+  if (!cleanJobId) throw new Error("No backend job is available for progress reporting.");
+  const path = `/api/data/upload-status/${encodeURIComponent(cleanJobId)}`;
+  const response = await apiFetch(path, { accessCode });
+  const payload = await readJsonPayload(response, { route: path, phase: "progress" });
+  if (!response.ok) {
+    const requestError = buildUploadRequestError(response, payload, "progress");
+    throw Object.assign(new Error(requestError.detail || "The latest backend progress could not be loaded."), requestError);
+  }
+  return normalizeUploadJob(payload);
 }
 
 export async function submitHistoricalIngestionReview({ datasetId, decisions, apiFetch, accessCode } = {}) {

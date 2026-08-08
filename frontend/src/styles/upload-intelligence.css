@@ -542,6 +542,205 @@
   color: #a6b5c0;
 }
 
+.backend-progress {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(137, 163, 184, .16);
+  border-radius: 9px;
+  background: #050b13;
+}
+
+.historical-review > .backend-progress {
+  margin-block: 1rem;
+}
+
+.historical-review__progress-waiting {
+  margin: 1rem 0;
+  color: var(--baseline-text-soft);
+  font-size: .78rem;
+}
+
+.backend-progress__status {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.backend-progress__status strong,
+.backend-progress__meter-row strong,
+.backend-progress__workflow strong,
+.backend-progress__operations strong {
+  color: var(--baseline-text);
+}
+
+.backend-progress__status p,
+.backend-progress__indeterminate {
+  margin: 0;
+  color: var(--baseline-text-soft);
+  font-size: .75rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.backend-progress__state {
+  justify-self: start;
+  padding: 3px 8px;
+  border: 1px solid rgba(114, 189, 255, .28);
+  border-radius: 999px;
+  color: var(--baseline-blue-soft);
+  font-size: .62rem;
+  font-weight: 760;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.backend-progress__state--waiting,
+.backend-progress__state--retrying,
+.backend-progress__state--failed {
+  border-color: rgba(242, 174, 85, .45);
+  color: #f2c078;
+}
+
+.backend-progress__meter-row {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.backend-progress__meter-row > div:first-child {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--baseline-text-soft);
+  font-size: .72rem;
+}
+
+.backend-progress__meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(137, 163, 184, .13);
+}
+
+.backend-progress__meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--baseline-blue);
+}
+
+.backend-progress__meter-row > small,
+.backend-progress__workflow small,
+.backend-progress__operations small {
+  color: var(--baseline-text-muted);
+  font-size: .65rem;
+}
+
+.backend-progress__timing {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.backend-progress__timing div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(137, 163, 184, .1);
+  border-radius: 7px;
+}
+
+.backend-progress__timing dt {
+  color: var(--baseline-text-muted);
+  font-size: .59rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.backend-progress__timing dd {
+  margin: 4px 0 0;
+  color: var(--baseline-text-soft);
+  font-size: .7rem;
+  overflow-wrap: anywhere;
+}
+
+.backend-progress__workflow,
+.backend-progress__operations {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.backend-progress__workflow {
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+  gap: 7px;
+}
+
+.backend-progress__workflow-step,
+.backend-progress__operation {
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(137, 163, 184, .1);
+  border-radius: 7px;
+}
+
+.backend-progress__workflow-step {
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 8px;
+}
+
+.backend-progress__workflow-step small {
+  grid-column: 2;
+}
+
+.backend-progress__operations {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 10px;
+}
+
+.backend-progress__operation {
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.backend-progress__workflow-step > span,
+.backend-progress__operation > span {
+  color: var(--baseline-text-muted);
+  font-weight: 760;
+}
+
+.backend-progress__workflow-step--completed > span,
+.backend-progress__operation--completed > span {
+  color: var(--baseline-blue-soft);
+}
+
+.backend-progress__workflow-step--processing,
+.backend-progress__operation--processing {
+  border-color: rgba(114, 189, 255, .34);
+  background: rgba(38, 142, 255, .06);
+}
+
+.backend-progress__workflow-step--failed,
+.backend-progress__operation--failed {
+  border-color: rgba(242, 174, 85, .42);
+}
+
+.backend-progress__workflow strong,
+.backend-progress__operations strong {
+  min-width: 0;
+  font-size: .69rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
 /* Relationships visibly form, then settle. */
 .baseline-learning-visual {
   display: grid;
@@ -1174,6 +1373,23 @@
   .upload-analysis-card--baseline .upload-analysis-card__description {
     font-size: .74rem;
     line-height: 1.4;
+  }
+
+  .backend-progress {
+    padding: 10px;
+  }
+
+  .backend-progress__timing,
+  .backend-progress__operations {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .backend-progress__workflow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .backend-progress__operation {
+    grid-template-columns: 14px minmax(0, 1fr) auto;
   }
 
   .baseline-file-dropzone {

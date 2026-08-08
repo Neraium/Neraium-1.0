@@ -52,8 +52,16 @@ from app.services.upload_persistence import read_upload_history as read_upload_h
 from app.services.upload_persistence import summarize_result as summarize_result_payload
 from app.services.upload_queue_lifecycle import UploadQueueLifecycleService
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
-from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope, dataset_scope_from_payload
+from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope, dataset_scope_from_payload, payload_matches_dataset_scope
 from app.services.upload_lifecycle import VISIBLE_UPLOAD_STATES, canonical_stage_payload
+from app.services.job_progress import (
+    ProgressReporter,
+    complete_progress,
+    fail_progress,
+    initialize_progress,
+    retry_progress,
+    update_progress,
+)
 from app.services.upload_state_repository import (
     cache_latest_upload_payload,
     clear_reset_block_persisted,
@@ -339,14 +347,21 @@ def _read_upload_status_from_recorded_runtime(job_id: str) -> dict[str, Any] | N
     runtime_dir = JOB_RUNTIME_DIRS.get(str(job_id))
     if runtime_dir is None:
         return None
-    path = Path(runtime_dir) / f"upload_status_{job_id}.json"
-    if not path.exists():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    return payload if isinstance(payload, dict) else None
+    scope = current_dataset_scope()
+    candidates = (
+        Path(runtime_dir) / "scopes" / scope.storage_id / f"upload_status_{job_id}.json",
+        Path(runtime_dir) / f"upload_status_{job_id}.json",
+    )
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(payload, dict) and payload_matches_dataset_scope(payload, scope):
+            return payload
+    return None
 
 
 def read_upload_status(job_id: str) -> dict[str, Any] | None:
@@ -627,6 +642,14 @@ def _finalize_completed_upload(
         "runner_errors": [],
     }
     finalized_summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label="Analysis ready."))
+    completed_progress = complete_progress(
+        finalized_summary.get("job_progress") if isinstance(finalized_summary.get("job_progress"), dict) else None,
+        job_id=job_id,
+        workflow=str(finalized_summary.get("workflow") or WORKFLOW_LEGACY_ANALYSIS),
+        message="Analysis ready.",
+    )
+    finalized_summary["job_progress"] = completed_progress
+    finalized_result["job_progress"] = completed_progress
     terminal_stage_changed_at = datetime.now(timezone.utc).isoformat()
     finalized_summary["stage_changed_at"] = terminal_stage_changed_at
     finalized_summary["updated_at"] = terminal_stage_changed_at
@@ -752,15 +775,45 @@ def _normalized_columns(tokens: list[str], *, header_present: bool) -> list[str]
     return normalized_columns(tokens, header_present=header_present)
 
 
-def _stream_csv_snapshot(path: Path, *, max_analysis_rows: int | None, job_id: str | None = None) -> dict[str, Any]:
-    return stream_csv_snapshot(
+def _stream_csv_snapshot(
+    path: Path,
+    *,
+    max_analysis_rows: int | None,
+    job_id: str | None = None,
+    progress_reporter: ProgressReporter | None = None,
+) -> dict[str, Any]:
+    snapshot = stream_csv_snapshot(
         path,
         max_analysis_rows=max_analysis_rows,
         csv_progress_update_every=CSV_PROGRESS_UPDATE_EVERY,
         csv_chunk_size_rows=CSV_CHUNK_SIZE_ROWS,
         job_id=job_id,
         on_progress=lambda current_job_id, stage, progress, label: _set_propagation_stage(current_job_id, stage=stage, progress=progress, label=label),
+        on_measured_progress=(
+            lambda completed, total: progress_reporter.report(
+                stage="validate",
+                substage="analysis_snapshot_build",
+                completed_units=completed,
+                total_units=total,
+                unit_type="rows",
+                message=f"Prepared {completed:,} of {total:,} source rows for analysis.",
+            )
+            if progress_reporter else None
+        ),
     )
+    if progress_reporter:
+        total = int(snapshot.get("snapshot_rows_evaluated") or 0)
+        progress_reporter.report(
+            stage="validate",
+            substage="analysis_snapshot_build",
+            status="completed",
+            completed_units=total,
+            total_units=total,
+            unit_type="rows",
+            message=f"Prepared the analysis snapshot from {total:,} source rows.",
+            force=True,
+        )
+    return snapshot
 
 
 def _signal_level_from_drift(item: dict[str, Any]) -> str:
@@ -924,6 +977,7 @@ def _build_csv_result(
     processing_started_at: float | None = None,
     ingestion_trust: dict[str, Any] | None = None,
     trusted_signal_catalog: dict[str, dict[str, Any]] | None = None,
+    progress_reporter: ProgressReporter | None = None,
 ) -> dict[str, Any]:
     clear_reset_block_persisted()
     source_columns = list(((ingestion_trust or {}).get("source_schema") or {}).get("columns") or columns)
@@ -979,6 +1033,7 @@ def _build_csv_result(
             dataset_id=job_context.get("dataset_id") or job_id,
             telemetry_signal_catalog=trusted_signal_catalog,
             ingestion_trust=ingestion_summary(ingestion_trust),
+            progress_reporter=progress_reporter,
         )
         candidate = baseline_result["candidate_model"]
         suitability = baseline_result["baseline_suitability"]
@@ -1196,6 +1251,7 @@ def _build_csv_result(
         minimal_replay=_minimal_replay,
         build_upload_engine_result=_build_upload_engine_result,
         stage_notifier=_set_propagation_stage,
+        progress_reporter=progress_reporter,
     )
     sii_result = pipeline["sii_result"]
     replay = pipeline["replay"]
@@ -1699,8 +1755,10 @@ def read_upload_cache_stats() -> dict[str, int]:
 def _purge_local_upload_job_records() -> None:
     UPLOAD_RUNTIME_STATE.jobs.clear()
     JOB_RUNTIME_DIRS.clear()
+    scope = current_dataset_scope()
+    state_roots = (RUNTIME_DIR, RUNTIME_DIR / "scopes" / scope.storage_id)
     for pattern in ("upload_status_*.json", "upload_result_*.json"):
-        for path in RUNTIME_DIR.glob(pattern):
+        for path in (candidate for root in state_roots for candidate in root.glob(pattern)):
             try:
                 path.unlink(missing_ok=True)
             except OSError:
@@ -1797,6 +1855,53 @@ def _scope_job_payload(job_id: str, payload: dict[str, Any]) -> tuple[dict[str, 
     payload.setdefault("upload_session_id", job_id)
     lifecycle_status = str(payload.get("processing_state") or payload.get("status") or "active").lower()
     dataset_id = str(payload.get("dataset_id") or existing.get("dataset_id") or job_id)
+    workflow = str(payload.get("workflow") or existing.get("workflow") or WORKFLOW_LEGACY_ANALYSIS)
+    progress = payload.get("job_progress") if isinstance(payload.get("job_progress"), dict) else existing.get("job_progress")
+    if not isinstance(progress, dict):
+        progress = initialize_progress(
+            job_id=job_id,
+            workflow=workflow,
+            status="queued",
+            message=str(payload.get("message") or "Waiting for a worker to claim this job."),
+            started_at=payload.get("job_created_at") or payload.get("started_at") or payload.get("enqueued_at"),
+            source_persisted=bool(payload.get("file_stored", True)),
+        )
+    if payload.get("retry_requested_at") and str(payload.get("processing_state") or "").lower() == "queued":
+        retry_requested_at = str(payload.get("retry_requested_at"))
+        if retry_requested_at != str((progress.get("metadata") or {}).get("retry_requested_at") or ""):
+            progress = retry_progress(
+                progress,
+                job_id=job_id,
+                workflow=workflow,
+                message=str(payload.get("message") or "Retry queued."),
+            )
+            progress["metadata"] = {**dict(progress.get("metadata") or {}), "retry_requested_at": retry_requested_at}
+    progress_workflow = str(progress.get("workflow") or workflow)
+    status_text = str(payload.get("status") or "").upper()
+    processing_state = str(payload.get("processing_state") or "").lower()
+    if status_text in {"FAILED", "FAILURE", "ERROR", "TIMEOUT"} or processing_state in {"failed", "error", "timeout"}:
+        progress = fail_progress(
+            progress,
+            job_id=job_id,
+            workflow=progress_workflow,
+            message=str(payload.get("message") or payload.get("error") or "Processing failed."),
+            retryable=payload.get("retryable") if isinstance(payload.get("retryable"), bool) else None,
+        )
+    elif status_text in {"COMPLETE", "COMPLETED", "SUCCESS"} or processing_state == "complete":
+        progress = complete_progress(
+            progress,
+            job_id=job_id,
+            workflow=progress_workflow,
+            message=str(payload.get("message") or "Processing complete."),
+        )
+    payload["job_progress"] = progress
+    overall_progress = int(progress.get("overall_percent_complete") or 0)
+    # Compatibility fields remain available, but once the v1 contract exists
+    # they are projections of its deterministic work-unit calculation.
+    payload["percent"] = overall_progress
+    payload["progress"] = overall_progress
+    payload["contract_progress"] = overall_progress
+    payload["propagation_progress"] = overall_progress
     payload["session_scope"] = build_session_scope(
         job_id,
         filename=payload.get("filename"),
@@ -1805,6 +1910,177 @@ def _scope_job_payload(job_id: str, payload: dict[str, Any]) -> tuple[dict[str, 
         dataset_id=dataset_id,
     )
     return attach_dataset_scope(payload, scope=scope, dataset_id=dataset_id), scope
+
+
+def _persist_job_progress(
+    *,
+    job_id: str,
+    workflow: str,
+    stage: str,
+    substage: str,
+    status: str = "processing",
+    **values: Any,
+) -> dict[str, Any]:
+    current = read_job(job_id) or {"job_id": job_id, "workflow": workflow}
+    progress = update_progress(
+        current.get("job_progress") if isinstance(current.get("job_progress"), dict) else None,
+        job_id=job_id,
+        workflow=workflow,
+        stage=stage,
+        substage=substage,
+        status=status,
+        **values,
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    historical_review = workflow == "historical_review"
+    current_processing_state = str(current.get("processing_state") or "").strip().lower()
+    processing_state = (
+        "historical_review"
+        if historical_review
+        else "processing"
+        if status not in {"completed", "failed", "cancelled"}
+        and current_processing_state in {"", "queued", "pending", "accepted"}
+        else current.get("processing_state")
+    )
+    write_job({
+        **current,
+        "job_id": job_id,
+        "workflow": current.get("workflow") or workflow,
+        "status": "PROCESSING" if status not in {"completed", "failed", "cancelled"} else current.get("status", "PROCESSING"),
+        # A durable progress write is the first authoritative evidence that a
+        # claimed worker has begun measurable processing.
+        "processing_state": processing_state,
+        "worker_state": "running" if status not in {"completed", "failed", "cancelled"} else current.get("worker_state"),
+        "worker_last_seen_at": now,
+        "updated_at": now,
+        "message": progress.get("message") or current.get("message"),
+        "progress_label": progress.get("message") or current.get("progress_label"),
+        "job_progress": progress,
+    })
+    try:
+        touch_upload_queue_job(job_id, "processing")
+    except Exception:
+        pass
+    return progress
+
+
+def begin_historical_review_progress(
+    job_id: str,
+    *,
+    message: str = "Rebuilding the canonical dataset from the saved review decisions.",
+) -> ProgressReporter:
+    """Start a persisted review attempt without replacing the job's original workflow."""
+
+    current = read_job(job_id) or {"job_id": job_id, "dataset_id": job_id}
+    previous = current.get("job_progress") if isinstance(current.get("job_progress"), dict) else None
+    progress = initialize_progress(
+        job_id=job_id,
+        workflow="historical_review",
+        status="processing",
+        message=message,
+        source_persisted=True,
+    )
+    if previous:
+        progress["metadata"] = {
+            "previous_attempt_workflow": previous.get("workflow"),
+            "previous_attempt_status": previous.get("status"),
+            "previous_attempt_completed_operations": [
+                str(item.get("id"))
+                for item in previous.get("operations", [])
+                if isinstance(item, dict) and item.get("status") == "completed"
+            ],
+        }
+    now = datetime.now(timezone.utc).isoformat()
+    write_job({
+        **current,
+        "job_id": job_id,
+        "dataset_id": current.get("dataset_id") or job_id,
+        "workflow": current.get("workflow") or "historical_review",
+        "status": "PROCESSING",
+        "processing_state": "historical_review",
+        "worker_state": "running",
+        "worker_last_seen_at": now,
+        "updated_at": now,
+        "message": message,
+        "progress_label": message,
+        "job_progress": progress,
+    })
+    return ProgressReporter(
+        job_id=job_id,
+        workflow="historical_review",
+        persist=_persist_job_progress,
+    )
+
+
+def complete_historical_review_progress(
+    job_id: str,
+    *,
+    message: str = "Canonical dataset review complete.",
+) -> dict[str, Any]:
+    current = read_job(job_id) or {"job_id": job_id, "dataset_id": job_id}
+    progress = complete_progress(
+        current.get("job_progress") if isinstance(current.get("job_progress"), dict) else None,
+        job_id=job_id,
+        workflow="historical_review",
+        message=message,
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    write_job({
+        **current,
+        "job_id": job_id,
+        "dataset_id": current.get("dataset_id") or job_id,
+        "workflow": current.get("workflow") or "historical_review",
+        "status": "COMPLETE",
+        "processing_state": "complete",
+        "worker_state": "complete",
+        "worker_last_seen_at": now,
+        "updated_at": now,
+        "message": message,
+        "progress_label": message,
+        "job_progress": progress,
+    })
+    try:
+        complete_upload_queue_job(job_id, "completed")
+    except Exception:
+        pass
+    return progress
+
+
+def fail_historical_review_progress(
+    job_id: str,
+    *,
+    message: str,
+    retryable: bool | None,
+) -> dict[str, Any]:
+    current = read_job(job_id) or {"job_id": job_id, "dataset_id": job_id}
+    progress = fail_progress(
+        current.get("job_progress") if isinstance(current.get("job_progress"), dict) else None,
+        job_id=job_id,
+        workflow="historical_review",
+        message=message,
+        retryable=retryable,
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    write_job({
+        **current,
+        "job_id": job_id,
+        "dataset_id": current.get("dataset_id") or job_id,
+        "workflow": current.get("workflow") or "historical_review",
+        "status": "FAILED",
+        "processing_state": "failed",
+        "worker_state": "failed",
+        "worker_last_seen_at": now,
+        "updated_at": now,
+        "message": message,
+        "progress_label": message,
+        "retryable": retryable,
+        "job_progress": progress,
+    })
+    try:
+        complete_upload_queue_job(job_id, "failed", message)
+    except Exception:
+        pass
+    return progress
 
 
 def _cache_job_payload(job_id: str, payload: dict[str, Any]) -> None:
@@ -1912,15 +2188,15 @@ async def create_upload_job(upload_file: Any = None, filename: str = "upload.csv
         "filename": filename,
         "status": "QUEUED",
         "processing_state": "queued",
-        "percent": 5,
-        "progress": 5,
+        "percent": 0,
+        "progress": 0,
         "progress_label": "Worker starting...",
         "message": "Worker starting...",
         "propagation_stage": "queued",
-        "propagation_progress": 5,
+        "propagation_progress": 0,
         "propagation_label": "Worker starting...",
     }
-    payload.update(canonical_stage_payload(legacy_stage="queued", status=payload["status"], progress=5, label="Worker starting..."))
+    payload.update(canonical_stage_payload(legacy_stage="queued", status=payload["status"], progress=0, label="Worker starting..."))
     write_job(job_id, payload)
     return payload
 
@@ -1953,6 +2229,12 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
     processing_started_at = time.perf_counter()
     existing_job = read_job(job_id) or {}
     baseline_workflow = is_baseline_workflow(existing_job.get("workflow"))
+    workflow = normalize_workflow(existing_job.get("workflow") or WORKFLOW_LEGACY_ANALYSIS)
+    progress_reporter = ProgressReporter(
+        job_id=job_id,
+        workflow=workflow,
+        persist=_persist_job_progress,
+    )
     _begin_job_timing(job_id, dict(existing_job.get("timings") or {}))
 
     if job_id:
@@ -1975,6 +2257,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
                 "NERAIUM_MAX_INGESTION_ANALYSIS_ROWS",
                 MAX_INGESTION_ANALYSIS_ROWS,
             ),
+            progress_callback=progress_reporter.report,
         )
         _log_processing_event("parsing_started", job_id, filename=filename, processing_stage="csv_parsing", **trace_fields)
         _log_processing_event("validation_started", job_id, filename=filename, processing_stage="validation", **trace_fields)
@@ -1985,6 +2268,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
                 MAX_INGESTION_ANALYSIS_ROWS,
             ),
             job_id=job_id,
+            progress_reporter=progress_reporter,
         )
 
         _log_processing_event(
@@ -2049,6 +2333,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
             processing_started_at,
             ingestion_trust,
             trusted_handoff["telemetry_signal_catalog"],
+            progress_reporter,
         )
 
         if is_baseline_workflow(summary.get("workflow")):

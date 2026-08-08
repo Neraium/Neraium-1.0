@@ -43,6 +43,12 @@ HISTORICAL_INGESTION_OPERATIONS = {
     ("get", "/api/data/ingestion/v1/datasets/{dataset_id}/canonical"): "getHistoricalCanonicalDatasetV1",
     ("patch", "/api/data/ingestion/v1/datasets/{dataset_id}/review"): "reviewHistoricalIngestionDatasetV1",
 }
+UPLOAD_PROGRESS_OPERATION = (
+    "get",
+    "/api/data/upload-status/{job_id}",
+    "getUploadJobStatusV1",
+    "UploadStatusResponse",
+)
 EXPECTED_OPENAPI_OPERATION_COUNT = (
     PRE_EVIDENCE_PACKAGE_OPERATION_COUNT
     + len(EVIDENCE_PACKAGE_OPERATIONS)
@@ -244,6 +250,15 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
         assert "require_api_access" in dependency_names
         if method == "patch":
             assert "require_operator_role" in dependency_names
+    progress_method, progress_path, progress_operation_id, progress_model = UPLOAD_PROGRESS_OPERATION
+    progress_operation = schema["paths"][progress_path][progress_method]
+    assert progress_operation["operationId"] == progress_operation_id
+    assert progress_operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": f"#/components/schemas/{progress_model}"
+    }
+    progress_schema = schema["components"]["schemas"]["JobProgress"]
+    assert progress_schema["additionalProperties"] is False
+    assert progress_schema["properties"]["contract_version"]["const"] == "job-progress.v1"
     lifecycle_operation = schema["paths"]["/api/data/evidence-packages/{package_id}/lifecycle-events"]["post"]
     assert lifecycle_operation["requestBody"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/LifecycleTransitionRequest"

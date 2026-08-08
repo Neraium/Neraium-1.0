@@ -227,6 +227,39 @@ def _with_worker_visibility(payload: dict[str, Any], job_id: str | None) -> dict
         "worker_heartbeat_stale": bool(heartbeat_stale) if queue_claimed else False,
         "execution_state": execution_state,
     })
+
+    progress = enriched.get("job_progress") if isinstance(enriched.get("job_progress"), dict) else None
+    if progress:
+        # Queue ownership remains the claim boundary. A pending row's timestamp
+        # is never promoted to a worker heartbeat inside the progress contract.
+        worker_is_authoritative = queue_claimed or (
+            not isinstance(queue_entry, dict)
+            and execution_state in {"processing", "stalled"}
+        )
+        heartbeat_fields: dict[str, Any] = {}
+        if worker_is_authoritative:
+            heartbeat_fields = {
+                "last_worker_heartbeat_at": worker_last_seen_at,
+                "seconds_since_worker_heartbeat": (
+                    max(0, int(heartbeat_age_seconds))
+                    if heartbeat_age_seconds is not None
+                    else None
+                ),
+            }
+        elif execution_state == "queued":
+            heartbeat_fields = {
+                "last_worker_heartbeat_at": None,
+                "seconds_since_worker_heartbeat": None,
+            }
+        # Terminal snapshots retain the persisted final worker heartbeat.
+        progress = {**progress, **heartbeat_fields}
+        if progress.get("stalled") and execution_state not in {"queued", "completed", "failed", "stalled"}:
+            execution_state = "waiting"
+            enriched["execution_state"] = execution_state
+        if progress.get("stalled"):
+            minutes = max(1, int(progress.get("seconds_since_update") or 0) // 60)
+            progress["visibility_message"] = f"No progress update received for {minutes} minute(s)."
+        enriched["job_progress"] = progress
     return enriched
 
 
