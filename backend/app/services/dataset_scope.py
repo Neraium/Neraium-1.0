@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 import hashlib
 import re
-from typing import Any
+from typing import Any, Iterator
 
 
 DEFAULT_WORKSPACE_ID = "default"
 WORKSPACE_HEADER = "X-Neraium-Workspace-Id"
 _SCOPE_VERSION = 1
+UPLOAD_QUEUE_ROUTING_VERSION = "upload-queue-routing.v1"
 _WORKSPACE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
@@ -100,6 +102,43 @@ def current_dataset_scope() -> DatasetScope:
 
 def set_current_dataset_scope(scope: DatasetScope) -> None:
     _CURRENT_DATASET_SCOPE.set(scope)
+
+
+@contextmanager
+def dataset_scope_context(scope: DatasetScope) -> Iterator[None]:
+    """Temporarily bind scoped persistence to one immutable dataset route."""
+    token = _CURRENT_DATASET_SCOPE.set(scope)
+    try:
+        yield
+    finally:
+        _CURRENT_DATASET_SCOPE.reset(token)
+
+
+def build_upload_queue_routing(scope: DatasetScope | None = None) -> dict[str, Any]:
+    """Build the internal routing envelope carried by a shared queue record."""
+    resolved = scope or current_dataset_scope()
+    return {
+        "version": UPLOAD_QUEUE_ROUTING_VERSION,
+        "dataset_scope": resolved.as_dict(),
+        "scope_storage_id": resolved.storage_id,
+    }
+
+
+def dataset_scope_from_queue_routing(payload: dict[str, Any] | None) -> DatasetScope:
+    """Validate and recover a DatasetScope without reading scoped job state."""
+    if not isinstance(payload, dict):
+        raise ValueError("upload_queue_routing_record_invalid")
+    routing = payload.get("routing")
+    if not isinstance(routing, dict):
+        raise ValueError("upload_queue_routing_missing")
+    if str(routing.get("version") or "") != UPLOAD_QUEUE_ROUTING_VERSION:
+        raise ValueError("upload_queue_routing_version_invalid")
+    scope = dataset_scope_from_payload(routing)
+    if scope is None:
+        raise ValueError("upload_queue_dataset_scope_invalid")
+    if str(routing.get("scope_storage_id") or "") != scope.storage_id:
+        raise ValueError("upload_queue_scope_storage_id_mismatch")
+    return scope
 
 
 def payload_matches_dataset_scope(payload: dict[str, Any] | None, scope: DatasetScope | None = None) -> bool:

@@ -5,8 +5,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.services import upload_jobs
-from app.services.dataset_scope import payload_matches_dataset_scope
+from app.services.dataset_scope import (
+    current_dataset_scope,
+    dataset_scope_from_queue_routing,
+    payload_matches_dataset_scope,
+)
 from app.services.analysis_result_contract import empty_analysis_result, ensure_analysis_result
+from app.services.job_progress import fail_progress
 from app.services.runtime_db import (
     queue_metrics,
     queue_operational_metrics,
@@ -153,6 +158,17 @@ def _with_worker_visibility(payload: dict[str, Any], job_id: str | None) -> dict
     now = datetime.now(timezone.utc)
     enriched["status_checked_at"] = now.isoformat()
     queue_entry = read_upload_queue_job(str(job_id))
+    if isinstance(queue_entry, dict):
+        try:
+            queue_scope = dataset_scope_from_queue_routing(queue_entry)
+        except ValueError:
+            # A legacy queue row has no independently verifiable route. It may
+            # augment an already-owned scoped status, but never a missing job.
+            if not payload_matches_dataset_scope(enriched):
+                queue_entry = None
+        else:
+            if queue_scope != current_dataset_scope():
+                queue_entry = None
     queue_position = queue_entry.get("queue_position") if isinstance(queue_entry, dict) else None
     enriched["queue_position"] = int(queue_position) if isinstance(queue_position, int) else None
 
@@ -193,6 +209,33 @@ def _with_worker_visibility(payload: dict[str, Any], job_id: str | None) -> dict
     elif terminal_failed:
         execution_state = "failed"
         worker_state = "idle"
+    elif queue_status == "failed":
+        execution_state = "failed"
+        worker_state = "idle"
+        queue_failure = str((queue_entry or {}).get("last_error") or "").strip()
+        routing_failure = queue_failure.startswith("upload_queue_")
+        failure_message = (
+            "This queued upload could not be routed to its workspace. Retry the import."
+            if routing_failure
+            else "The upload worker stopped before processing could finish. Retry the import."
+        )
+        enriched.update(
+            {
+                "status": "FAILED",
+                "processing_state": "failed",
+                "job_state": "failed",
+                "terminal": True,
+                "session_state": SESSION_STATE_ERROR,
+                "analysis_state": "failed",
+                "result_available": False,
+                "retryable": True,
+                "error_type": "upload_queue_routing_failed" if routing_failure else "upload_worker_failed",
+                "failed_stage": "worker_bootstrap" if routing_failure else "processing",
+                "error": failure_message,
+                "message": failure_message,
+                "progress_label": failure_message,
+            }
+        )
     elif queue_status == "pending":
         execution_state = "queued"
         worker_state = "queued"
@@ -230,6 +273,14 @@ def _with_worker_visibility(payload: dict[str, Any], job_id: str | None) -> dict
 
     progress = enriched.get("job_progress") if isinstance(enriched.get("job_progress"), dict) else None
     if progress:
+        if execution_state == "failed" and queue_status == "failed" and progress.get("status") != "failed":
+            progress = fail_progress(
+                progress,
+                job_id=str(job_id),
+                workflow=str(progress.get("workflow") or enriched.get("workflow") or "legacy_analysis"),
+                message=str(enriched.get("message") or "Upload processing failed."),
+                retryable=enriched.get("retryable") if isinstance(enriched.get("retryable"), bool) else None,
+            )
         # Queue ownership remains the claim boundary. A pending row's timestamp
         # is never promoted to a worker heartbeat inside the progress contract.
         worker_is_authoritative = queue_claimed or (

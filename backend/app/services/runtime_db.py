@@ -12,6 +12,13 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from app.core.config import get_settings
+from app.services.dataset_scope import (
+    build_upload_queue_routing,
+    current_dataset_scope,
+    dataset_scope_context,
+    dataset_scope_from_payload,
+    dataset_scope_from_queue_routing,
+)
 
 
 RUNTIME_DIR = get_settings().runtime_dir
@@ -810,11 +817,15 @@ def _queue_timestamp(value: str | None) -> str:
     return str(value or "")
 
 
-def _normalize_queue_record(payload: dict[str, Any]) -> dict[str, Any]:
+def _normalize_queue_record(
+    payload: dict[str, Any],
+    *,
+    fallback_job_id: str | None = None,
+) -> dict[str, Any]:
     normalized = dict(payload or {})
     raw_status = normalized.get("status")
     normalized["status"] = _normalize_upload_queue_status(raw_status) or str(raw_status or "pending").lower()
-    normalized["job_id"] = str(normalized.get("job_id") or "")
+    normalized["job_id"] = str(normalized.get("job_id") or fallback_job_id or "")
     normalized["attempts"] = int(normalized.get("attempts") or 0)
     normalized["last_error"] = normalized.get("last_error")
     normalized["created_at"] = str(normalized.get("created_at") or now_iso())
@@ -860,7 +871,7 @@ def _read_s3_queue_job(job_id: str) -> dict[str, Any] | None:
     except Exception:
         logger.exception("upload_queue_read_failed queue_backend=s3 job_id=%s", job_id)
         return None
-    return _normalize_queue_record(payload) if isinstance(payload, dict) else None
+    return _normalize_queue_record(payload, fallback_job_id=job_id) if isinstance(payload, dict) else None
 
 
 def _list_s3_queue_jobs(*, statuses: set[str] | None = None) -> list[dict[str, Any]]:
@@ -889,7 +900,8 @@ def _list_s3_queue_jobs(*, statuses: set[str] | None = None) -> list[dict[str, A
                 continue
             if not isinstance(payload, dict):
                 continue
-            normalized = _normalize_queue_record(payload)
+            object_job_id = key.rsplit("/", 1)[-1].removesuffix(".json")
+            normalized = _normalize_queue_record(payload, fallback_job_id=object_job_id)
             if statuses and normalized["status"] not in statuses:
                 continue
             jobs.append(normalized)
@@ -950,11 +962,30 @@ def _queue_operational_metrics_from_records(records: list[dict[str, Any]]) -> di
 
 
 def enqueue_upload_job(job_id: str) -> None:
+    routing = build_upload_queue_routing(current_dataset_scope())
     backend = upload_queue_backend()
     if backend == "s3":
         _ensure_shared_upload_queue_backend()
         timestamp = now_iso()
-        existing = _read_s3_queue_job(job_id) or {}
+        existing_record = _read_s3_queue_job(job_id)
+        existing = existing_record or {}
+        if existing_record is not None:
+            try:
+                existing_scope = dataset_scope_from_queue_routing(existing)
+            except ValueError as exc:
+                if _normalize_upload_queue_status(existing.get("status")) in {"pending", "processing"}:
+                    _write_s3_queue_job(
+                        {
+                            **existing,
+                            "status": "failed",
+                            "last_error": str(exc),
+                            "updated_at": timestamp,
+                            "locked_at": None,
+                        }
+                    )
+                raise RuntimeError(str(exc)) from exc
+            if existing_scope != current_dataset_scope():
+                raise RuntimeError("upload_queue_scope_conflict")
         if _normalize_upload_queue_status(existing.get("status")) in {"pending", "processing"}:
             logger.info("upload_queue_duplicate_enqueue_ignored queue_backend=%s job_id=%s status=%s", backend, job_id, existing.get("status"))
             return
@@ -967,6 +998,7 @@ def enqueue_upload_job(job_id: str) -> None:
                 "created_at": existing.get("created_at") or timestamp,
                 "updated_at": timestamp,
                 "locked_at": None,
+                "routing": existing.get("routing") or routing,
             }
         )
         logger.info("upload_queue_enqueued queue_backend=%s job_id=%s", backend, job_id)
@@ -991,7 +1023,7 @@ def enqueue_upload_job(job_id: str) -> None:
     logger.info("upload_queue_enqueued queue_backend=%s job_id=%s", backend, job_id)
 
 
-def claim_next_upload_job() -> str | None:
+def claim_next_upload_job_record() -> dict[str, Any] | None:
     backend = upload_queue_backend()
     if backend == "s3":
         _ensure_shared_upload_queue_backend()
@@ -1017,7 +1049,7 @@ def claim_next_upload_job() -> str | None:
             len(pending_jobs),
             selected["job_id"],
         )
-        return str(selected["job_id"])
+        return dict(selected)
 
     init_runtime_db()
     with db_connection() as connection:
@@ -1036,9 +1068,12 @@ def claim_next_upload_job() -> str | None:
         )
         row = connection.execute(
             """
-            SELECT job_id FROM upload_queue
-            WHERE status = 'pending'
-            ORDER BY created_at ASC, job_id ASC
+            SELECT q.job_id, q.status, q.attempts, q.last_error,
+                   q.created_at, q.updated_at, q.locked_at, j.payload_json
+            FROM upload_queue AS q
+            INNER JOIN upload_jobs AS j ON j.job_id = q.job_id
+            WHERE q.status = 'pending'
+            ORDER BY q.created_at ASC, q.job_id ASC
             LIMIT 1
             """
         ).fetchone()
@@ -1066,7 +1101,29 @@ def claim_next_upload_job() -> str | None:
         pending_count,
         job_id,
     )
-    return job_id
+    try:
+        job_payload = json.loads(row["payload_json"])
+    except (TypeError, json.JSONDecodeError):
+        job_payload = {}
+    scope = dataset_scope_from_payload(job_payload) if isinstance(job_payload, dict) else None
+    claimed_record = {
+        "job_id": job_id,
+        "status": "processing",
+        "attempts": int(row["attempts"] or 0) + 1,
+        "last_error": row["last_error"],
+        "created_at": row["created_at"],
+        "updated_at": timestamp,
+        "locked_at": timestamp,
+    }
+    if scope is not None:
+        claimed_record["routing"] = build_upload_queue_routing(scope)
+    return claimed_record
+
+
+def claim_next_upload_job() -> str | None:
+    """Compatibility wrapper for callers that only need the claimed job ID."""
+    record = claim_next_upload_job_record()
+    return None if record is None else str(record.get("job_id") or "") or None
 
 
 def peek_next_upload_job_for_worker() -> str | None:
@@ -1121,12 +1178,13 @@ def mark_queue_job_failed(job_id: str, reason: str) -> None:
         )
 
 
-def _publish_interrupted_upload_status(job_ids: list[str]) -> None:
-    if not job_ids:
+def _publish_interrupted_upload_status(queue_records: list[dict[str, Any]]) -> None:
+    if not queue_records:
         return
     # Lazy imports avoid a module cycle: the upload-state repository uses this
     # runtime store for its durable payload backend.
     from app.services.evidence_store import read_evidence_run, upsert_evidence_run
+    from app.services.job_progress import fail_progress
     from app.services.upload_state_repository import (
         persist_latest_upload_state,
         read_latest_upload_record,
@@ -1134,54 +1192,97 @@ def _publish_interrupted_upload_status(job_ids: list[str]) -> None:
         write_upload_status,
     )
 
-    canonical = read_latest_upload_record() or {}
-    canonical_summary = canonical.get("summary") if isinstance(canonical.get("summary"), dict) else {}
-    canonical_job_id = str(canonical.get("job_id") or canonical_summary.get("job_id") or "")
     recovered_at = now_iso()
-    for job_id in job_ids:
-        current = read_upload_status(job_id) or read_upload_job(job_id) or {"job_id": job_id}
-        failed = {
-            **current,
-            "job_id": job_id,
-            "run_id": current.get("run_id") or job_id,
-            "upload_id": current.get("upload_id") or job_id,
-            "status": "FAILED",
-            "processing_state": "failed",
-            "error_type": "interrupted_upload",
-            "error": "Upload processing was interrupted by a service restart.",
-            "message": "Upload processing was interrupted by a service restart. Retry the analysis.",
-            "progress_label": "Processing interrupted. Retry the analysis.",
-            "result_available": False,
-            "first_usable_available": False,
-            "sii_completed": False,
-            "replay_ready": False,
-            "replay_frame_count": 0,
-            "propagation_stage": "failed",
-            "propagation_label": "Interrupted by restart.",
-            "worker_state": "stopped",
-            "updated_at": recovered_at,
-        }
-        upsert_upload_job(failed)
-        write_upload_status(job_id, failed)
+    for record in queue_records:
+        job_id = str(record.get("job_id") or "").strip()
+        if not job_id:
+            continue
+        try:
+            scope = dataset_scope_from_queue_routing(record)
+        except ValueError as exc:
+            if upload_queue_backend() == "s3":
+                scope = None
+            else:
+                local_payload = read_upload_job(job_id) or {}
+                scope = dataset_scope_from_payload(local_payload) or current_dataset_scope()
+            if scope is None:
+                logger.error(
+                    "stale_upload_status_routing_failed job_id=%s reason=%s",
+                    job_id,
+                    str(exc),
+                )
+                continue
 
-        evidence = read_evidence_run(job_id)
-        if isinstance(evidence, dict) and str(evidence.get("status") or "").lower() not in {"completed", "failed"}:
-            errors = list(evidence.get("errors") or [])
-            interruption = "Upload processing was interrupted by a service restart."
-            if interruption not in errors:
-                errors.append(interruption)
-            upsert_evidence_run(
-                {
-                    **evidence,
-                    "status": "failed",
-                    "observation_status": "failed",
-                    "completed_at": recovered_at,
-                    "errors": errors,
-                }
-            )
+        with dataset_scope_context(scope):
+            canonical = read_latest_upload_record() or {}
+            canonical_summary = canonical.get("summary") if isinstance(canonical.get("summary"), dict) else {}
+            canonical_job_id = str(canonical.get("job_id") or canonical_summary.get("job_id") or "")
+            current = read_upload_status(job_id) or read_upload_job(job_id) or {"job_id": job_id}
+            failed = {
+                **current,
+                "job_id": job_id,
+                "run_id": current.get("run_id") or job_id,
+                "upload_id": current.get("upload_id") or job_id,
+                "status": "FAILED",
+                "processing_state": "failed",
+                "error_type": "interrupted_upload",
+                "error": "Upload processing was interrupted by a service restart.",
+                "message": "Upload processing was interrupted by a service restart. Retry the analysis.",
+                "progress_label": "Processing interrupted. Retry the analysis.",
+                "result_available": False,
+                "first_usable_available": False,
+                "sii_completed": False,
+                "replay_ready": False,
+                "replay_frame_count": 0,
+                "propagation_stage": "failed",
+                "propagation_label": "Interrupted by restart.",
+                "worker_state": "stopped",
+                "updated_at": recovered_at,
+            }
+            current_progress = current.get("job_progress")
+            if isinstance(current_progress, dict):
+                failed_progress = fail_progress(
+                    current_progress,
+                    job_id=job_id,
+                    workflow=str(
+                        current_progress.get("workflow")
+                        or current.get("workflow")
+                        or "legacy_analysis"
+                    ),
+                    message=failed["message"],
+                    retryable=True,
+                )
+                overall_progress = int(failed_progress.get("overall_percent_complete") or 0)
+                failed.update(
+                    {
+                        "job_progress": failed_progress,
+                        "percent": overall_progress,
+                        "progress": overall_progress,
+                        "contract_progress": overall_progress,
+                        "propagation_progress": overall_progress,
+                    }
+                )
+            upsert_upload_job(failed)
+            write_upload_status(job_id, failed)
 
-        if job_id == canonical_job_id:
-            persist_latest_upload_state(summary=failed, result=None, keep_result=False)
+            evidence = read_evidence_run(job_id)
+            if isinstance(evidence, dict) and str(evidence.get("status") or "").lower() not in {"completed", "failed"}:
+                errors = list(evidence.get("errors") or [])
+                interruption = "Upload processing was interrupted by a service restart."
+                if interruption not in errors:
+                    errors.append(interruption)
+                upsert_evidence_run(
+                    {
+                        **evidence,
+                        "status": "failed",
+                        "observation_status": "failed",
+                        "completed_at": recovered_at,
+                        "errors": errors,
+                    }
+                )
+
+            if job_id == canonical_job_id:
+                persist_latest_upload_state(summary=failed, result=None, keep_result=False)
 
 
 def clear_stale_processing_queue_jobs() -> int:
@@ -1201,7 +1302,7 @@ def clear_stale_processing_queue_jobs() -> int:
             )
         stale_job_ids = [str(record.get("job_id") or "") for record in processing_jobs]
         stale_job_ids = [job_id for job_id in stale_job_ids if job_id]
-        _publish_interrupted_upload_status(stale_job_ids)
+        _publish_interrupted_upload_status(processing_jobs)
         return len(stale_job_ids)
 
     init_runtime_db()
@@ -1219,7 +1320,7 @@ def clear_stale_processing_queue_jobs() -> int:
                 """,
                 [("stale_processing_job_recovered", now_iso(), job_id) for job_id in stale_job_ids],
             )
-    _publish_interrupted_upload_status(stale_job_ids)
+    _publish_interrupted_upload_status([{"job_id": job_id} for job_id in stale_job_ids])
     return len(stale_job_ids)
 
 

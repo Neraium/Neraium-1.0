@@ -365,13 +365,15 @@ def _read_upload_status_from_recorded_runtime(job_id: str) -> dict[str, Any] | N
 
 
 def read_upload_status(job_id: str) -> dict[str, Any] | None:
+    scope = current_dataset_scope()
     status = repository_read_upload_status(job_id)
     if isinstance(status, dict):
         return status
     status = _read_upload_status_from_recorded_runtime(str(job_id))
     if isinstance(status, dict):
         return status
-    return read_upload_job(job_id)
+    status = read_upload_job(job_id)
+    return status if payload_matches_dataset_scope(status, scope) else None
 
 
 def _invalidate_router_latest_cache() -> None:

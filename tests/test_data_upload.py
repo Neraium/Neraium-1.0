@@ -250,7 +250,12 @@ def test_upload_in_split_role_production_uses_external_worker_queue(monkeypatch,
     assert payload["worker_state"] == "queued"
     assert enqueued_jobs == [payload["job_id"]]
     assert dispatched_workers == []
-    status_payload = upload_jobs.read_upload_status(payload["job_id"])
+    status_response = client.get(
+        payload["status_url"],
+        headers={"X-Neraium-Access-Code": "expected-secret"},
+    )
+    assert status_response.status_code == 200
+    status_payload = status_response.json()
     assert payload["dataset_id"] != payload["job_id"]
     assert status_payload["dataset_id"] == payload["dataset_id"]
     assert status_payload["shared_upload_source_key"] == f"upload-state/upload-sources/{payload['dataset_id']}.csv"
