@@ -87,6 +87,7 @@ export default function useWorkspaceSessionController({
   }, [datasetScopeKey]);
 
   const canonicalLatestUploadJobId = sessionStore?.jobId ?? null;
+  const canonicalLatestUploadSnapshot = sessionStore?.latestUploadSnapshot ?? null;
   const pendingUploadJobId = uploadStateView.resolveCurrentUploadJobId(postUploadPendingSnapshot);
   const restoredAnalysisResult = restoredAnalysisOverride?.result ?? null;
   const restoredAnalysisSnapshot = restoredAnalysisOverride?.snapshot ?? null;
@@ -131,13 +132,14 @@ export default function useWorkspaceSessionController({
   useEffect(() => {
     if (!postUploadExpectedJobId) return;
     if (!canonicalLatestUploadJobId || String(canonicalLatestUploadJobId) !== String(postUploadExpectedJobId)) return;
+    if (!uploadStateView.isCompletedUploadState(canonicalLatestUploadSnapshot)) return;
     console.info("[neraium] current upload refetch result", {
       expectedJobId: postUploadExpectedJobId,
       canonicalJobId: canonicalLatestUploadJobId,
     });
     setPostUploadPendingSnapshot(null);
     setPostUploadExpectedJobId(null);
-  }, [canonicalLatestUploadJobId, postUploadExpectedJobId]);
+  }, [canonicalLatestUploadJobId, canonicalLatestUploadSnapshot, postUploadExpectedJobId]);
 
   useEffect(() => {
     if (!completedUploadOverride) return;
@@ -146,6 +148,7 @@ export default function useWorkspaceSessionController({
     const sessionResult = sessionStore?.latestUploadResult ?? null;
     if (!sessionResult || !uploadStateView.hasFullUploadResult(sessionResult)) return;
     if (String(sessionResult?.job_id ?? "").trim() !== overrideJobId) return;
+    if (!uploadStateView.isCompletedUploadState(sessionStore?.latestUploadSnapshot)) return;
     setCompletedUploadOverride(null);
   }, [completedUploadOverride, sessionStore]);
 
@@ -487,17 +490,26 @@ function buildPersistedLatestUpload({ latestUploadResult = null, latestUploadSna
 
 function buildPendingUploadSnapshot({ completedPayload = null, completedResult = null, expectedJobId = null } = {}) {
   if (!expectedJobId) return null;
+  const terminalCompletion = uploadStateView.isCompletedUploadState(completedPayload)
+    || completedPayload?.result_available === true
+    || completedPayload?.sii_completed === true;
+  const status = terminalCompletion
+    ? "COMPLETE"
+    : normalizeUploadStatus(completedPayload?.status ?? completedPayload?.processing_state ?? completedPayload?.worker_state) || "structural_scoring";
   return {
     ...uploadStateView.buildEmptyLatestUploadSnapshot(),
     ...(completedPayload ?? {}),
-    status: normalizeUploadStatus(completedPayload?.status ?? completedPayload?.processing_state ?? completedPayload?.worker_state) || "structural_scoring",
-    processing_state: "structural_scoring",
-    progress_label: completedPayload?.progress_label ?? completedPayload?.message ?? "Telemetry is available. Analysis has not started.",
-    message: completedPayload?.message ?? completedPayload?.progress_label ?? "Telemetry is available. Analysis has not started.",
-    percent: completedPayload?.job_progress?.overall_percent_complete
-      ?? completedPayload?.percent
-      ?? completedPayload?.progress
-      ?? null,
+    status,
+    processing_state: terminalCompletion ? "complete" : status,
+    ...(terminalCompletion ? { job_state: "completed", terminal: true, result_available: true } : {}),
+    progress_label: completedPayload?.progress_label ?? completedPayload?.message ?? (terminalCompletion ? "Analysis ready." : "Telemetry is available. Analysis has not started."),
+    message: completedPayload?.message ?? completedPayload?.progress_label ?? (terminalCompletion ? "Analysis ready." : "Telemetry is available. Analysis has not started."),
+    percent: terminalCompletion
+      ? 100
+      : completedPayload?.job_progress?.overall_percent_complete ?? completedPayload?.percent ?? completedPayload?.progress ?? null,
+    progress: terminalCompletion
+      ? 100
+      : completedPayload?.job_progress?.overall_percent_complete ?? completedPayload?.progress ?? completedPayload?.percent ?? null,
     current_upload: {
       ...(completedPayload?.current_upload ?? {}),
       job_id: expectedJobId,

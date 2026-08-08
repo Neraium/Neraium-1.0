@@ -287,6 +287,13 @@ def update_progress(
 ) -> dict[str, Any]:
     now = observed_at or _now()
     base = dict(existing or initialize_progress(job_id=job_id, workflow=workflow))
+    # Completion is terminal for one progress attempt. A worker callback that
+    # was queued before finalization must not reopen the completed contract.
+    # Explicit follow-on attempts (for example a historical-review rebuild)
+    # start with initialize_progress and therefore do not pass a completed
+    # snapshot into this function.
+    if str(base.get("status") or "").strip().lower() == "completed" and status != "completed":
+        return enrich_progress_timing(base, observed_at=now)
     definitions = operation_definitions(workflow)
     definition_by_id = {item[0]: item for item in definitions}
     if substage not in definition_by_id:
@@ -460,6 +467,29 @@ def retry_progress(existing: dict[str, Any] | None, *, job_id: str, workflow: st
 def enrich_progress_timing(progress: dict[str, Any], *, observed_at: datetime | None = None) -> dict[str, Any]:
     now = observed_at or _now()
     enriched = dict(progress or {})
+    operations = [item for item in enriched.get("operations", []) if isinstance(item, dict)]
+    active_operation = next(
+        (item for item in operations if str(item.get("id") or "") == str(enriched.get("substage") or "")),
+        None,
+    )
+    if active_operation is None:
+        active_operation = next(
+            (item for item in operations if item.get("status") in ACTIVE_STATUSES | {"failed", "cancelled"}),
+            None,
+        )
+    if active_operation is not None:
+        # The named operation is the canonical active-operation record. Keep
+        # the convenience fields as an exact projection so consumers cannot
+        # observe a label/counter/percentage assembled from different models.
+        enriched.update({
+            "stage": active_operation.get("stage") or enriched.get("stage"),
+            "substage": active_operation.get("id") or enriched.get("substage"),
+            "completed_units": active_operation.get("completed_units"),
+            "total_units": active_operation.get("total_units"),
+            "percent_complete": active_operation.get("percent_complete"),
+            "unit_type": active_operation.get("unit_type"),
+            "message": active_operation.get("message") or enriched.get("message"),
+        })
     started = _parse_datetime(enriched.get("started_at")) or now
     updated = _parse_datetime(enriched.get("updated_at")) or started
     heartbeat = _parse_datetime(enriched.get("last_worker_heartbeat_at"))

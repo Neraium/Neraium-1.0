@@ -401,6 +401,7 @@ export default function DataConnectionsWorkspace({
   const baselineNavigationPendingRef = useRef(false);
   const completedBaselineIdentityRef = useRef(null);
   const openCompletedBaselineRef = useRef(null);
+  const terminalJobIdRef = useRef(null);
   const flowOwnerRef = useRef(`${String(currentUser?.email ?? currentUser?.id ?? "")}:${String(datasetScopeKey)}`);
   const flowSessionRef = useRef(0);
   const selectedBaselineIdRef = useRef(String(selectedBaselineIdentity?.baselineId ?? "").trim() || null);
@@ -468,6 +469,7 @@ export default function DataConnectionsWorkspace({
     setUploadJob(null);
     setUploadResult(null);
     completedBaselineIdentityRef.current = null;
+    terminalJobIdRef.current = null;
     setUploadState("validated");
   }, [autoStartInitialFiles, seededSelectedFiles]);
 
@@ -515,6 +517,7 @@ export default function DataConnectionsWorkspace({
           state_source: hydratedIdentity.stateSource,
         } : {}),
       });
+      terminalJobIdRef.current = sessionJobId;
       uploadJobIdRef.current = sessionJobId;
       uploadStatusPathRef.current = normalizeUploadStatusPath(normalizedSource?.status_url, sessionJobId);
       setUploadResult(sessionResult);
@@ -555,6 +558,7 @@ export default function DataConnectionsWorkspace({
     setRecentJob(null);
     setReconciliationMessage("");
     completedBaselineIdentityRef.current = null;
+    terminalJobIdRef.current = null;
     setUploadError("");
     setCompletionError("");
     setUploadState("idle");
@@ -783,6 +787,9 @@ export default function DataConnectionsWorkspace({
       }
       const normalized = normalizeStatusPayload(payload, requestedJobId);
       const state = authoritativeJobState(normalized);
+      if (terminalJobIdRef.current === requestedJobId && state !== "completed") {
+        return normalized;
+      }
       if (readIgnoredUploadJobId() === requestedJobId) {
         restoreUsableUploadControls("A backend job is available, but it is detached from the new upload controls.", normalized);
         return normalized;
@@ -821,6 +828,7 @@ export default function DataConnectionsWorkspace({
         return normalized;
       }
       if (state === "completed") {
+        terminalJobIdRef.current = requestedJobId;
         setUploadProcessingFlag(false);
         if (normalized?.result_available === true && (!isBaselineWorkflow(normalized?.workflow) || normalized?.baseline_result_available === true)) {
           setUploadState("saving_results");
@@ -877,6 +885,7 @@ export default function DataConnectionsWorkspace({
     setUploadJob(null);
     setUploadResult(null);
     if (nextWorkflow !== "analyze_new_data") completedBaselineIdentityRef.current = null;
+    terminalJobIdRef.current = null;
     setUploadError("");
     setCompletionError("");
     setReconciliationMessage("");
@@ -1070,6 +1079,7 @@ export default function DataConnectionsWorkspace({
 
   async function completeUploadHandoff(completedPayload, requestedJobId, identitySource = "completion_response") {
     const jobId = completedPayload?.jobId ?? completedPayload?.job_id ?? requestedJobId ?? uploadJobIdRef.current ?? null;
+    terminalJobIdRef.current = String(jobId ?? "").trim() || terminalJobIdRef.current;
     const datasetId = completedPayload?.datasetId ?? completedPayload?.dataset_id ?? null;
     const completedWorkflow = completedPayload?.workflow ?? "legacy_analysis";
     if (isBaselineWorkflow(completedWorkflow)) {
@@ -1326,15 +1336,20 @@ export default function DataConnectionsWorkspace({
             frontend_polling_timing: pollTiming,
             poll_connection_state: "connected",
           }, requestedJobId);
+          const terminalSuccess = isTerminalCompletedPayload(normalizedPayload);
+          if (terminalJobIdRef.current === requestedJobId && !terminalSuccess) {
+            stopUploadPolling("terminal_complete");
+            return null;
+          }
           pollingPath = normalizeUploadStatusPath(normalizedPayload?.status_url, requestedJobId) ?? pollingPath;
           uploadStatusPathRef.current = pollingPath;
           setUploadJob(normalizedPayload);
           const normalizedStatus = normalizeUploadStatus(normalizedPayload.status ?? normalizedPayload.processing_state);
           const authoritativeState = authoritativeJobState(normalizedPayload);
           logTelemetryStatusProgress(normalizedStatus, normalizedPayload);
-          const terminalSuccess = isTerminalCompletedPayload(normalizedPayload);
           const resultAvailable = normalizedPayload?.result_available === true
             && (!isBaselineWorkflow(normalizedPayload?.workflow) || normalizedPayload?.baseline_result_available === true);
+          if (terminalSuccess) terminalJobIdRef.current = requestedJobId;
           if (terminalSuccess && resultAvailable) {
             terminalWithoutResultAt = null;
             logTelemetryStageOnce("analysis complete", { jobId: requestedJobId });
@@ -1350,7 +1365,7 @@ export default function DataConnectionsWorkspace({
             setUploadJob(completePayload);
             completionNavigationEligibleRef.current = false;
             setUploadState("saving_results");
-            setUploadProcessingFlag(false);
+            stopUploadPolling("terminal_complete");
             return completePayload;
           }
           if (isTerminalFailedPayload(normalizedPayload)) {
@@ -1418,7 +1433,7 @@ export default function DataConnectionsWorkspace({
         return completeUploadHandoff(completedPayload, requestedJobId);
       })
       .catch((error) => {
-        if (pollController.signal.aborted || error?.name === "AbortError") return null;
+        if (error?.name === "AbortError") return null;
         const classified = classifyUploadError(error, "poll");
         logUploadFailureDiagnostics(classified);
         if (Number(classified.responseStatus ?? error?.status ?? 0) === 404) {
@@ -1663,6 +1678,7 @@ export default function DataConnectionsWorkspace({
     setUploadJob(null);
     setUploadResult(null);
     if (currentWorkflowRef.current !== "analyze_new_data") completedBaselineIdentityRef.current = null;
+    terminalJobIdRef.current = null;
     clearStoredUploadJobId();
     setSelectedFiles(files);
     setUploadError("");
@@ -1688,6 +1704,7 @@ export default function DataConnectionsWorkspace({
     if (typeof onUploadComplete !== "function") return;
     completionNavigationEligibleRef.current = false;
     clearCompletionNavigationTimer();
+    stopUploadPolling("results_navigation");
     const payload = uploadJob ?? uploadResult ?? latestUploadResult ?? latestUploadSnapshot ?? null;
     const hasResults = Boolean(resolveFinalAnalysisResult(uploadJob, uploadResult, latestUploadResult, latestUploadSnapshot));
     if (!payload || !hasResults) {

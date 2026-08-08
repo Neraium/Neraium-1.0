@@ -24,6 +24,18 @@ export function resolveCurrentUploadJobId(payload) {
   ).trim() || null;
 }
 
+export function isCompletedUploadState(payload) {
+  const value = payload?.snapshot ?? payload ?? {};
+  const jobState = String(value?.job_state ?? value?.jobState ?? "").trim().toLowerCase();
+  if (["completed", "completed_compatibility"].includes(jobState)) return true;
+  const status = String(value?.status ?? "").trim().toLowerCase();
+  const processingState = String(value?.processing_state ?? value?.processingState ?? "").trim().toLowerCase();
+  const progressStatus = String(value?.job_progress?.status ?? "").trim().toLowerCase();
+  return ["complete", "completed", "success", "save_complete", "navigation_pending"].includes(status)
+    || ["complete", "completed", "save_complete", "navigation_pending"].includes(processingState)
+    || progressStatus === "completed";
+}
+
 export function hasFullUploadResult(result) {
   return Boolean(
     result

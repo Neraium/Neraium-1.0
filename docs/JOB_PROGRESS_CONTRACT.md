@@ -24,6 +24,9 @@ second state store.
 
 `percent_complete` is null unless the active operation has a safe total. A
 completed operation is 100%. No stage-start percentage is generated.
+The top-level active-operation fields are a convenience projection of the
+operation named by `substage`; the named `operations` record is canonical and
+status reads keep the projection synchronized with it.
 
 `overall_percent_complete` uses the documented
 `equal_completed_declared_substages` rule. Every operation that the selected
@@ -110,6 +113,9 @@ operations and counters are preserved on failure. A retry starts a fresh
 progress attempt and records the prior failed substage, completed operation IDs,
 and retry count in attempt-lineage metadata. Counters are monotonic within an
 operation and late callbacks from an earlier operation are ignored.
+Once an upload/evaluation attempt publishes `COMPLETE`, later callbacks from
+that attempt cannot restore `PROCESSING`; an explicit historical-review rebuild
+starts a new progress attempt instead.
 
 ## Heartbeat and queue semantics
 

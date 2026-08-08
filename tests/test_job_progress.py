@@ -112,6 +112,59 @@ def test_measurable_progress_is_exact_bounded_and_monotonic() -> None:
     assert progress["percent_complete"] == 100
 
 
+def test_relationship_pair_progress_keeps_operation_stage_and_overall_models_consistent() -> None:
+    progress = update_progress(
+        None,
+        job_id="relationship-progress",
+        workflow="create_baseline",
+        stage="learn",
+        substage="learn_relationships",
+        completed_units=100,
+        total_units=1_710,
+        unit_type="relationship_pairs",
+        message="Evaluated 100 of 1,710 eligible relationship pairs.",
+    )
+
+    operation = _operation(progress, "learn_relationships")
+    stage = next(item for item in progress["workflow_steps"] if item["id"] == "learn")
+    assert progress["percent_complete"] == operation["percent_complete"] == 5
+    assert progress["completed_units"] == operation["completed_units"] == 100
+    assert progress["total_units"] == operation["total_units"] == 1_710
+    assert stage["percent_complete"] == 50
+    assert progress["overall_percent_complete"] == 82
+
+    progress = update_progress(
+        progress,
+        job_id="relationship-progress",
+        workflow="create_baseline",
+        stage="learn",
+        substage="learn_relationships",
+        completed_units=775,
+        total_units=1_710,
+        unit_type="relationship_pairs",
+        message="Evaluated 775 of 1,710 eligible relationship pairs.",
+    )
+
+    operation = _operation(progress, "learn_relationships")
+    stage = next(item for item in progress["workflow_steps"] if item["id"] == "learn")
+    assert progress["percent_complete"] == operation["percent_complete"] == 45
+    assert progress["completed_units"] == operation["completed_units"] == 775
+    assert progress["total_units"] == operation["total_units"] == 1_710
+    assert stage["percent_complete"] == 57
+    assert progress["overall_percent_complete"] == 83
+
+    stale_projection = {
+        **progress,
+        "completed_units": 100,
+        "total_units": 1_710,
+        "percent_complete": 5,
+    }
+    projected = enrich_progress_timing(stale_projection)
+    assert projected["completed_units"] == 775
+    assert projected["total_units"] == 1_710
+    assert projected["percent_complete"] == 45
+
+
 def test_late_callback_cannot_move_progress_back_to_an_earlier_substage() -> None:
     progress = update_progress(
         None,
@@ -191,6 +244,67 @@ def test_terminal_completion_is_exactly_one_hundred_percent() -> None:
     assert progress["status"] == "completed"
     assert progress["overall_percent_complete"] == 100
     assert all(item["status"] == "completed" for item in progress["operations"])
+
+
+def test_late_progress_cannot_reopen_completed_contract_or_upload_status() -> None:
+    job_id = "monotonic-complete-job"
+    completed_progress = complete_progress(
+        initialize_progress(job_id=job_id, workflow="create_baseline"),
+        job_id=job_id,
+        workflow="create_baseline",
+        message="Baseline ready.",
+    )
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "dataset_id": job_id,
+        "baseline_id": "baseline-monotonic",
+        "created_at": "2026-08-08T12:00:00+00:00",
+        "workflow": "create_baseline",
+        "status": "COMPLETE",
+        "processing_state": "complete",
+        "result_available": True,
+        "baseline_result_available": True,
+        "job_progress": completed_progress,
+    })
+
+    late_progress = upload_jobs._persist_job_progress(
+        job_id=job_id,
+        workflow="create_baseline",
+        stage="learn",
+        substage="learn_relationships",
+        completed_units=100,
+        total_units=1_710,
+        unit_type="relationship_pairs",
+        message="Late relationship callback.",
+    )
+    stale_contract = update_progress(
+        None,
+        job_id=job_id,
+        workflow="create_baseline",
+        stage="learn",
+        substage="learn_relationships",
+        completed_units=100,
+        total_units=1_710,
+        unit_type="relationship_pairs",
+        message="Older processing snapshot.",
+    )
+    upload_jobs.write_job({
+        "job_id": job_id,
+        "dataset_id": job_id,
+        "workflow": "create_baseline",
+        "status": "PROCESSING",
+        "processing_state": "processing",
+        "job_progress": stale_contract,
+    })
+    persisted = upload_jobs.read_upload_status(job_id)
+
+    assert late_progress["status"] == "completed"
+    assert late_progress["overall_percent_complete"] == 100
+    assert persisted["status"] == "COMPLETE"
+    assert persisted["processing_state"] == "complete"
+    assert persisted["job_progress"]["status"] == "completed"
+    assert persisted["job_progress"]["overall_percent_complete"] == 100
+    assert resolve_upload_status(job_id)["execution_state"] == "completed"
 
 
 def test_stall_detection_is_visibility_only(monkeypatch) -> None:

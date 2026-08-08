@@ -72,18 +72,20 @@ export default function JobProgressPanel({ uploadJob, uploadTransfer = null }) {
       </section>
     );
   }
-  const operationPercent = Number(progress.percent_complete);
   const overallPercent = clampPercent(progress.overall_percent_complete);
-  const measurable = progress.percent_complete !== null
-    && progress.percent_complete !== undefined
-    && Number.isFinite(operationPercent);
-  const count = formatProgressCount(progress);
   const pollConnectionState = String(uploadJob?.poll_connection_state || "").toLowerCase();
   const stateLabel = progressStateLabel(progress, uploadJob?.execution_state, pollConnectionState);
-  const currentOperation = progress.operations?.find((operation) => ["processing", "retrying", "failed"].includes(operation.status));
+  const currentOperation = progress.operations?.find((operation) => operation.id === progress.substage)
+    ?? progress.operations?.find((operation) => ["processing", "retrying", "failed"].includes(operation.status));
+  const operationModel = currentOperation ? { ...progress, ...currentOperation } : progress;
+  const operationPercent = Number(operationModel.percent_complete);
+  const measurable = operationModel.percent_complete !== null
+    && operationModel.percent_complete !== undefined
+    && Number.isFinite(operationPercent);
+  const count = formatProgressCount(operationModel);
   const message = pollConnectionState === "retrying"
     ? uploadJob?.message
-    : progress.visibility_message || progress.message || currentOperation?.message;
+    : progress.visibility_message || currentOperation?.message || progress.message;
   const visualState = pollConnectionState === "retrying" ? "retrying" : uploadJob?.execution_state || progress.status;
 
   return (

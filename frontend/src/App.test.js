@@ -85,7 +85,7 @@ vi.mock("./hooks/useFacilityRuntime", () => ({
 }));
 
 vi.mock("./components/EngineeringReasoningWorkspace", () => ({
-  default: ({ liveOps, onWorkspaceNavigate, onResumePreviousSession, onSignOut, gateProcessing, onCsvSelected }) => {
+  default: ({ liveOps, onWorkspaceNavigate, onResumePreviousSession, onSignOut, gateProcessing, onCsvSelected, resultsNavigationKey }) => {
     if (runtimeState.throwGateError) {
       throw new Error("gate render failed");
     }
@@ -100,6 +100,8 @@ vi.mock("./components/EngineeringReasoningWorkspace", () => ({
       h("span", { "data-testid": "gate-heartbeat-status" }, liveOps.connectionStatusLine ?? "none"),
       h("span", { "data-testid": "gate-processing-active" }, String(Boolean(gateProcessing?.active))),
       h("span", { "data-testid": "gate-processing-label" }, gateProcessing?.label ?? "none"),
+      h("span", { "data-testid": "gate-upload-status" }, liveOps.latestUploadSnapshot?.status ?? "empty"),
+      h("span", { "data-testid": "results-navigation-key" }, String(resultsNavigationKey ?? 0)),
       h("span", { "data-testid": "gate-previous-upload" }, liveOps.persistedLatestUpload?.jobId ?? "none"),
       liveOps.persistedLatestUpload ? h("button", { type: "button", onClick: onResumePreviousSession }, "Resume Previous Analysis") : null,
       h("input", {
@@ -445,6 +447,43 @@ describe("App telemetry completion navigation", () => {
     expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-42");
     expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true, returnPayload: true });
     expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Results terminal when an older processing snapshot arrives after navigation", async () => {
+    const { rerender } = render(h(App));
+    await launchWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open telemetry intake" }));
+    await waitFor(() => expect(screen.getByTestId("telemetry-workspace")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Finish analysis" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("gate-workspace")).toBeTruthy();
+      expect(screen.getByTestId("gate-upload-status").textContent).toBe("COMPLETE");
+      expect(screen.getByTestId("results-navigation-key").textContent).toBe("1");
+    });
+    expect(window.location.pathname).toBe("/sites/current");
+
+    runtimeState.latestUploadResult = {
+      job_id: "persisted-job-42",
+      sii_intelligence: { facility_state: "Monitoring" },
+    };
+    runtimeState.latestUploadSnapshot = {
+      job_id: "persisted-job-42",
+      status: "PROCESSING",
+      processing_state: "processing",
+      session_state: "processing",
+      state_available: true,
+      current_upload: { job_id: "persisted-job-42", result: runtimeState.latestUploadResult },
+    };
+    rerender(h(App));
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/sites/current");
+      expect(screen.getByTestId("gate-upload-status").textContent).toBe("COMPLETE");
+      expect(screen.getByTestId("gate-processing-active").textContent).toBe("false");
+      expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-42");
+    });
   });
 
   it("reset workspace clears the current analysis state", async () => {

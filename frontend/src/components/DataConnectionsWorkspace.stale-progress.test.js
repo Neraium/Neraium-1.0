@@ -394,6 +394,55 @@ describe("backend state presentation", () => {
     expect(progress.getByRole("list", { name: "Detailed backend operations" }).textContent).toContain("Semantic mappingPending");
   });
 
+  it("uses the named operation projection consistently for relationship-pair progress", () => {
+    const { container } = renderPanel({
+      selectedFiles: [selectedCsv()],
+      uploadState: "processing",
+      uploadJob: {
+        job_id: "progress-job",
+        status: "PROCESSING",
+        execution_state: "processing",
+        job_progress: backendProgress({
+          stage: "learn",
+          substage: "learn_relationships",
+          completed_units: 100,
+          total_units: 1_710,
+          percent_complete: 5,
+          unit_type: "relationship_pairs",
+          overall_percent_complete: 83,
+          workflow_steps: [
+            { id: "upload", label: "Upload", status: "completed", completed_work_units: 2, total_work_units: 2, percent_complete: 100 },
+            { id: "validate", label: "Validate", status: "completed", completed_work_units: 13, total_work_units: 13, percent_complete: 100 },
+            { id: "learn", label: "Learn", status: "processing", completed_work_units: 3, total_work_units: 6, percent_complete: 57 },
+            { id: "ready", label: "Baseline Ready", status: "pending", completed_work_units: 0, total_work_units: 1, percent_complete: 0 },
+          ],
+          operations: [
+            { id: "receiving", stage: "upload", label: "Receiving file", status: "completed", percent_complete: 100 },
+            { id: "parse_source", stage: "validate", label: "Parse source", status: "completed", percent_complete: 100 },
+            {
+              id: "learn_relationships",
+              stage: "learn",
+              label: "Learn relationships",
+              status: "processing",
+              completed_units: 775,
+              total_units: 1_710,
+              percent_complete: 45,
+              unit_type: "relationship_pairs",
+            },
+          ],
+        }),
+      },
+    });
+
+    const progress = within(screen.getByLabelText("Backend job progress"));
+    expect(progress.getByRole("progressbar", { name: "Overall backend workflow" }).getAttribute("aria-valuenow")).toBe("83");
+    expect(progress.getByRole("progressbar", { name: "Learn relationships" }).getAttribute("aria-valuenow")).toBe("45");
+    expect(progress.getByText("775 / 1,710 relationship pairs")).toBeTruthy();
+    expect(progress.getByRole("list", { name: "Overall workflow steps" }).textContent).toContain("Learn57% · processing");
+    expect(progress.getByRole("list", { name: "Detailed backend operations" }).textContent).toContain("Learn relationships45% · Processing");
+    expect(container.textContent).not.toContain("100 / 1,710 relationship pairs");
+  });
+
   it("keeps unknown totals indeterminate without generating a percentage", () => {
     renderPanel({
       uploadState: "running_sii",

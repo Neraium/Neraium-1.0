@@ -1851,6 +1851,21 @@ def _normalize_job_write_args(args: tuple[Any, ...]) -> tuple[str, dict[str, Any
 def _scope_job_payload(job_id: str, payload: dict[str, Any]) -> tuple[dict[str, Any], Any]:
     existing = repository_read_upload_status(job_id) or {}
     scope = dataset_scope_from_payload(payload) or dataset_scope_from_payload(existing) or current_dataset_scope()
+    existing_complete = str(existing.get("status") or "").strip().upper() in {"COMPLETE", "COMPLETED", "SUCCESS"}
+    incoming_complete = str(payload.get("status") or "").strip().upper() in {"COMPLETE", "COMPLETED", "SUCCESS"}
+    existing_progress = existing.get("job_progress") if isinstance(existing.get("job_progress"), dict) else {}
+    incoming_progress = payload.get("job_progress") if isinstance(payload.get("job_progress"), dict) else {}
+    existing_progress_workflow = str(existing_progress.get("workflow") or "").strip().lower()
+    incoming_progress_workflow = str(incoming_progress.get("workflow") or "").strip().lower()
+    starts_historical_review = (
+        incoming_progress_workflow == "historical_review"
+        and existing_progress_workflow != "historical_review"
+    )
+    if existing_complete and not incoming_complete and not starts_historical_review:
+        # COMPLETE is monotonic for an upload/evaluation attempt. Ignore a
+        # stale stage notifier or progress callback instead of publishing a
+        # contradictory PROCESSING envelope around terminal progress.
+        return dict(existing), scope
     clear_reset_block_persisted(scope)
     payload["run_id"] = job_id
     payload["upload_id"] = job_id
@@ -1933,6 +1948,10 @@ def _persist_job_progress(
         status=status,
         **values,
     )
+    if progress.get("status") == "completed" and status != "completed":
+        # A callback from the completed attempt must not refresh worker
+        # visibility or put its queue record back into processing.
+        return progress
     now = datetime.now(timezone.utc).isoformat()
     historical_review = workflow == "historical_review"
     current_processing_state = str(current.get("processing_state") or "").strip().lower()
