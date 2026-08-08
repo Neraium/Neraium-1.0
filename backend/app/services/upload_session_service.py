@@ -36,6 +36,8 @@ from app.services.upload_status_contract import normalize_upload_status_payload
 
 logger = logging.getLogger(__name__)
 
+JOB_HEARTBEAT_STALE_SECONDS = 180
+
 SESSION_STATE_EMPTY = "empty"
 SESSION_STATE_QUEUED = "queued"
 SESSION_STATE_PROCESSING = "processing"
@@ -56,9 +58,10 @@ def _parse_iso(value: Any) -> datetime | None:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except Exception:
         return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
 def _lifecycle_log(*, event: str, upload_session_id: str | None, request_id: str | None, state: str, source: str, **extra: Any) -> None:
@@ -156,30 +159,74 @@ def _with_worker_visibility(payload: dict[str, Any], job_id: str | None) -> dict
     created_at = _parse_iso((queue_entry or {}).get("created_at") if isinstance(queue_entry, dict) else None)
     enriched["queued_seconds"] = max(0, int((now - created_at).total_seconds())) if created_at else None
 
-    payload_last_seen = _parse_iso(enriched.get("worker_last_seen_at"))
-    last_seen = _parse_iso((queue_entry or {}).get("updated_at") if isinstance(queue_entry, dict) else None) or payload_last_seen
+    heartbeat_candidates = [
+        _parse_iso((queue_entry or {}).get("updated_at") if isinstance(queue_entry, dict) else None),
+        _parse_iso(enriched.get("worker_last_seen_at")),
+        _parse_iso(enriched.get("updated_at")),
+        _parse_iso(enriched.get("stage_changed_at")),
+    ]
+    last_seen = max((value for value in heartbeat_candidates if value is not None), default=None)
     worker_last_seen_at = last_seen.isoformat() if last_seen else None
     enriched["worker_last_seen_at"] = worker_last_seen_at
 
-    if str(enriched.get("worker_state") or "").lower() == "running" and worker_last_seen_at:
-        enriched["worker_state"] = "running"
-        return enriched
-
-    state = "unknown"
     status_text = str(enriched.get("status") or "").upper()
     processing_state = str(enriched.get("processing_state") or "").lower()
     queue_status = str((queue_entry or {}).get("status") or "").lower() if isinstance(queue_entry, dict) else ""
+    job_state = str(enriched.get("job_state") or "").lower()
+    terminal_completed = job_state in {"completed", "completed_compatibility"} or status_text in {"COMPLETE", "COMPLETED", "SUCCESS"}
+    terminal_failed = job_state in {"failed", "cancelled"} or status_text in {"FAILED", "FAILURE", "ERROR", "TIMEOUT", "CANCELLED"}
+    queue_claimed = bool(
+        queue_status == "processing"
+        and (
+            (queue_entry or {}).get("locked_at")
+            or int((queue_entry or {}).get("attempts") or 0) > 0
+        )
+    )
+    heartbeat_age_seconds = max(0.0, (now - last_seen).total_seconds()) if last_seen else None
+    heartbeat_stale = heartbeat_age_seconds is None or heartbeat_age_seconds > JOB_HEARTBEAT_STALE_SECONDS
 
-    if status_text == "PENDING" and processing_state == "queued":
-        state = "starting"
-    if queue_status == "processing" or status_text in {"PROCESSING", "RUNNING_SII"} or processing_state in PROCESSING_STATES:
-        state = "running"
-    if state == "starting" and enriched.get("queued_seconds") is not None and int(enriched["queued_seconds"]) > 15:
-        state = "stalled" if not last_seen or (now - last_seen).total_seconds() > 15 else "starting"
-    if not isinstance(queue_entry, dict):
-        state = "unknown" if status_text not in {"PENDING", "PROCESSING", "RUNNING_SII"} else "starting"
+    # Queue ownership is the claim boundary. A process heartbeat written before
+    # claim must never turn a pending job into an active job in the public API.
+    if terminal_completed:
+        execution_state = "completed"
+        worker_state = "idle"
+    elif terminal_failed:
+        execution_state = "failed"
+        worker_state = "idle"
+    elif queue_status == "pending":
+        execution_state = "queued"
+        worker_state = "queued"
+    elif queue_claimed and heartbeat_stale:
+        execution_state = "stalled"
+        worker_state = "stalled"
+    elif queue_claimed and processing_state in {"queued", "pending", "accepted", ""}:
+        execution_state = "claimed"
+        worker_state = "claimed"
+    elif queue_claimed:
+        execution_state = "processing"
+        worker_state = "running"
+    elif status_text in {"PENDING", "QUEUED"} or processing_state in {"queued", "pending"}:
+        execution_state = "queued"
+        worker_state = "queued"
+    elif status_text in {"PROCESSING", "RUNNING_SII"} or processing_state in PROCESSING_STATES:
+        # Legacy jobs may predate the durable queue row. Their backend processing
+        # state remains authoritative, but activity still requires fresh backend
+        # evidence and no queue claim is fabricated.
+        execution_state = "stalled" if heartbeat_stale else "processing"
+        worker_state = "stalled" if heartbeat_stale else "running"
+    else:
+        execution_state = "idle"
+        worker_state = "idle"
 
-    enriched["worker_state"] = state
+    enriched.update({
+        "queue_state": queue_status or None,
+        "worker_state": worker_state,
+        "worker_claimed": queue_claimed,
+        "worker_claimed_at": (queue_entry or {}).get("locked_at") if queue_claimed else None,
+        "worker_heartbeat_age_seconds": round(heartbeat_age_seconds, 3) if heartbeat_age_seconds is not None else None,
+        "worker_heartbeat_stale": bool(heartbeat_stale) if queue_claimed else False,
+        "execution_state": execution_state,
+    })
     return enriched
 
 
@@ -587,4 +634,3 @@ def session_metrics_snapshot(*, current_state: str | None = None) -> dict[str, A
         "stale_sessions": 1 if current_state == SESSION_STATE_STALE else 0,
         "upload_state_problems": 1 if current_state in {SESSION_STATE_STALE, SESSION_STATE_ERROR} else 0,
     }
-

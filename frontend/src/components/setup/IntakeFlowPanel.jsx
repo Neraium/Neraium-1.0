@@ -5,6 +5,7 @@ import {
   normalizeUploadStatus as normalizeUploadLifecycle,
   uploadErrorPresentation,
 } from "../../viewModels/uploadFlow";
+import { jobStateLabel } from "../../viewModels/uploadJobState";
 import { Panel } from "../workspacePrimitives";
 import "../../styles/operational-workflow.css";
 import "../../styles/upload-intelligence.css";
@@ -89,6 +90,9 @@ const UPLOAD_STATES = new Set([
   "accepted",
   "pending",
   "queued",
+  "claimed",
+  "waiting",
+  "stalled",
   "uploading",
 ]);
 
@@ -479,8 +483,11 @@ function ProcessingPanel({
   queuedWorkerDetail,
   latestMessage,
   latestUploadSnapshot,
+  onResumeJob,
+  onStartAnotherUpload,
 }) {
   const stages = comparison ? COMPARISON_STAGES : INITIAL_BASELINE_STAGES;
+  const executionState = String(uploadJob?.execution_state ?? uploadState ?? "waiting").toLowerCase();
   return (
     <section
       className="baseline-processing-panel"
@@ -527,6 +534,19 @@ function ProcessingPanel({
           Continuous learning starts from this model. Temporary abnormalities never redefine normal without persistent, verified operating history.
         </p>
       ) : null}
+      <div className="upload-job-status" role="status" aria-label="Backend job status">
+        <span>Job status</span>
+        <strong>{jobStateLabel(executionState)}</strong>
+        {queuedWorkerDetail ? <p>{queuedWorkerDetail}</p> : null}
+        {propagationLabel ? <p><span>Current operation:</span> {propagationLabel}</p> : null}
+      </div>
+      <div className="upload-job-actions" aria-label="Processing job actions">
+        {["waiting", "stalled"].includes(String(uploadJob?.execution_state ?? "").toLowerCase()) || uploadJob?.poll_connection_state === "interrupted" ? (
+          <button type="button" className="command-button" onClick={onResumeJob}>Resume/view processing status</button>
+        ) : null}
+        <button type="button" className="secondary-command-button" onClick={onStartAnotherUpload}>Start another upload</button>
+        <p>The displayed job keeps running in the backend if you start another upload.</p>
+      </div>
       <AdvancedDetails
         latestUploadSnapshot={latestUploadSnapshot}
         uploadJob={uploadJob}
@@ -616,7 +636,27 @@ function AdvancedDetails({
   );
 }
 
+function RecentJobSummary({ job, onView, onDismiss }) {
+  if (!job) return null;
+  const state = String(job.execution_state ?? job.processing_state ?? job.status ?? "waiting").replaceAll("_", " ");
+  const filename = job.filename || "Previously submitted dataset";
+  return (
+    <section className="upload-recent-job" aria-labelledby="recent-upload-job-heading">
+      <div>
+        <p>Current or recent backend job</p>
+        <h3 id="recent-upload-job-heading">{filename}</h3>
+        <p><strong>Status:</strong> {titleCase(state)}</p>
+      </div>
+      <div className="upload-simple-actions">
+        <button type="button" className="secondary-command-button" onClick={onView}>View active job</button>
+        <button type="button" className="secondary-command-button" onClick={onDismiss}>Dismiss job</button>
+      </div>
+    </section>
+  );
+}
+
 function RecoverySummary({ viewState, hasSelectedFiles, selectedFileLabel, uploadJob, errorMessage }) {
+  const storedJobFilename = String(uploadJob?.filename ?? "").trim();
   const rows = viewState === "completion_error"
     ? [
       ["What happened", "The baseline was saved, but the operating workspace did not open."],
@@ -625,7 +665,11 @@ function RecoverySummary({ viewState, hasSelectedFiles, selectedFileLabel, uploa
     ]
     : [
       ["What happened", errorMessage || "Neraium could not finish establishing the initial baseline."],
-      ["What is preserved", hasSelectedFiles ? `${selectedFileLabel} remains selected for retry.` : "No dataset is currently selected."],
+      ["What is preserved", storedJobFilename
+        ? `${storedJobFilename} remains associated with the backend job.`
+        : hasSelectedFiles
+          ? `${selectedFileLabel} remains selected for retry.`
+          : "No dataset is currently selected for a new upload."],
       ["Next action", uploadJob?.job_id ? "Retry this job. If it has expired, choose the source dataset again." : "Check the source file and choose the dataset again."],
     ];
   return (
@@ -784,6 +828,12 @@ export default function IntakeFlowPanel({
   apiFetch,
   accessCode,
   onIngestionReviewUpdated,
+  recentJob = null,
+  reconciliationMessage = "",
+  onViewRecentJob,
+  onDismissRecentJob,
+  onResumeJob,
+  onStartAnotherUpload,
 }) {
   void uploadStateMessage;
   void batchResults;
@@ -864,6 +914,7 @@ export default function IntakeFlowPanel({
         aria-busy={showProgress}
       >
         <p className="intake-flow__subtitle">{subtitle}</p>
+        {reconciliationMessage ? <p className="upload-reconciliation-message" role="status">{reconciliationMessage}</p> : null}
         <input
           data-testid="csv-upload-input"
           ref={uploadInputRef}
@@ -879,6 +930,10 @@ export default function IntakeFlowPanel({
         />
 
         {!comparison && ["noFile", "fileSelected"].includes(viewState) ? <BaselineWorkflow /> : null}
+
+        {["noFile", "fileSelected"].includes(viewState) ? (
+          <RecentJobSummary job={recentJob} onView={onViewRecentJob} onDismiss={onDismissRecentJob} />
+        ) : null}
 
         {["noFile", "fileSelected"].includes(viewState) ? (
           <section
@@ -937,7 +992,7 @@ export default function IntakeFlowPanel({
         {showProgress ? (
           <ProcessingPanel
             comparison={comparison}
-            dataset={selectedFileLabel}
+            dataset={uploadJob?.filename || "Previously selected dataset"}
             percent={mainPercent}
             stage={processingStage}
             uploadJob={uploadJob}
@@ -947,6 +1002,8 @@ export default function IntakeFlowPanel({
             queuedWorkerDetail={queuedWorkerDetail}
             latestMessage={normalizeStatusText(latestMessage) === normalizeStatusText(processingStage.description) ? "" : latestMessage}
             latestUploadSnapshot={latestUploadSnapshot}
+            onResumeJob={onResumeJob}
+            onStartAnotherUpload={onStartAnotherUpload}
           />
         ) : null}
 
@@ -1014,7 +1071,7 @@ export default function IntakeFlowPanel({
             {failurePresentation.fileStored || failurePresentation.transferSucceeded ? (
               <p className="upload-transfer-complete">
                 <strong>File uploaded</strong>
-                <span>{uploadTransfer?.label || `${selectedFileLabel} was transferred and stored successfully.`}</span>
+                <span>{uploadTransfer?.label || `${uploadJob?.filename || selectedFileLabel} was transferred and stored successfully.`}</span>
               </p>
             ) : null}
             <ol className="failed-import-stages" aria-label="Import workflow status">

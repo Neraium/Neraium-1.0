@@ -661,6 +661,256 @@ describe("upload and polling behavior", () => {
     expect(statusCalls).toBe(1);
   });
 
+  it("reconciles a queued baseline after refresh without trusting cached worker activity or locking new uploads", async () => {
+    const pollingStarted = vi.spyOn(console, "info");
+    let statusCalls = 0;
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).includes("/upload-status/refresh-queued-job")) {
+        statusCalls += 1;
+        return jsonResponse({
+          job_id: "refresh-queued-job",
+          dataset_id: "refresh-queued-dataset",
+          filename: "production-baseline.csv",
+          workflow: "create_baseline",
+          status: "PENDING",
+          processing_state: "queued",
+          execution_state: "queued",
+          queue_state: "pending",
+          worker_state: "queued",
+          worker_claimed: false,
+          progress_label: "Baseline construction queued",
+          propagation_label: "Baseline construction queued",
+        });
+      }
+      return jsonResponse({});
+    });
+
+    renderWorkspace({
+      apiFetch,
+      hasActiveSession: true,
+      hasResumedSession: true,
+      sessionStore: {
+        jobId: "refresh-queued-job",
+        uiState: "processing",
+        latestUploadSnapshot: {
+          job_id: "refresh-queued-job",
+          filename: "cached-file.csv",
+          workflow: "create_baseline",
+          status: "PENDING",
+          processing_state: "queued",
+          worker_state: "running",
+        },
+        latestUploadResult: null,
+      },
+    });
+
+    expect(await screen.findByText("production-baseline.csv")).toBeTruthy();
+    expect(screen.getByTestId("csv-upload-input").files).toHaveLength(0);
+    expect(screen.queryByText(/Analysis active/i)).toBeNull();
+    expect(within(screen.getByRole("status", { name: "Backend job status" })).getByText("Queued · waiting for worker claim")).toBeTruthy();
+    expect(screen.getAllByText("Baseline construction queued").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Start another upload" }).disabled).toBe(false);
+    await waitFor(() => expect(statusCalls).toBeGreaterThanOrEqual(2));
+    expect(pollingStarted.mock.calls.filter(([message]) => message === "[neraium] telemetry job polling started")).toHaveLength(1);
+    expect(uploadTelemetryFileWithProgress).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start another upload" }));
+    expect(screen.getByRole("heading", { name: "Upload historical data" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "production-baseline.csv" })).toBeTruthy();
+    expect(screen.getByText("Status:").parentElement.textContent).toContain("Queued");
+    expect(screen.getByRole("button", { name: "View active job" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Dismiss job" })).toBeTruthy();
+    expect(uploadTelemetryFileWithProgress).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["claimed", "claimed", "Claimed by worker · processing has not started"],
+    ["processing", "baseline_relationship_learning", "Analysis active"],
+    ["stalled", "baseline_relationship_learning", "Stalled · no recent job heartbeat"],
+  ])("restores a %s job from the backend after refresh", async (executionState, processingState, workerMessage) => {
+    const jobId = `refresh-${executionState}-job`;
+    const apiFetch = vi.fn(async (path) => String(path).includes(`/upload-status/${jobId}`)
+      ? jsonResponse({
+        job_id: jobId,
+        dataset_id: `${jobId}-dataset`,
+        filename: `${executionState}.csv`,
+        workflow: "create_baseline",
+        status: executionState === "claimed" ? "PENDING" : "PROCESSING",
+        processing_state: processingState,
+        execution_state: executionState,
+        queue_state: "processing",
+        worker_state: executionState === "processing" ? "running" : executionState,
+        worker_claimed: true,
+        worker_heartbeat_stale: executionState === "stalled",
+        updated_at: "2026-08-08T00:00:00Z",
+      })
+      : jsonResponse({}));
+
+    renderWorkspace({
+      apiFetch,
+      sessionStore: {
+        jobId,
+        uiState: "processing",
+        latestUploadSnapshot: { job_id: jobId, status: "PROCESSING" },
+        latestUploadResult: null,
+      },
+    });
+
+    expect(await screen.findByText(`${executionState}.csv`)).toBeTruthy();
+    expect(within(screen.getByRole("status", { name: "Backend job status" })).getByText(new RegExp(workerMessage, "i"))).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start another upload" })).toBeTruthy();
+    if (executionState !== "processing") expect(screen.queryByText(/Analysis active/i)).toBeNull();
+  });
+
+  it("clears a nonexistent remembered job and restores usable upload controls", async () => {
+    window.localStorage.setItem("neraium.last_upload_job_id", "deleted-refresh-job");
+    const apiFetch = vi.fn(async () => jsonResponse({ detail: "not found" }, { ok: false, status: 404 }));
+
+    renderWorkspace({ apiFetch });
+
+    expect(await screen.findByText("The previous processing job no longer exists. You can start a new upload.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Upload historical data" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Continue" }).disabled).toBe(false);
+    expect(window.localStorage.getItem("neraium.last_upload_job_id")).toBeNull();
+    expect(uploadTelemetryFileWithProgress).not.toHaveBeenCalled();
+  });
+
+  it("keeps controls usable and preserves the cached job separately when initial reconciliation is transiently unavailable", async () => {
+    const apiFetch = vi.fn(async () => jsonResponse(
+      { error_type: "service_unavailable", message: "temporarily unavailable" },
+      { ok: false, status: 503 },
+    ));
+
+    renderWorkspace({
+      apiFetch,
+      sessionStore: {
+        jobId: "transient-refresh-job",
+        uiState: "processing",
+        latestUploadSnapshot: {
+          job_id: "transient-refresh-job",
+          filename: "cached-transient.csv",
+          workflow: "create_baseline",
+          status: "PROCESSING",
+          processing_state: "baseline_relationship_learning",
+        },
+        latestUploadResult: null,
+      },
+    });
+
+    expect(await screen.findByText(/previous job could not be verified/i)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Upload historical data" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "cached-transient.csv" })).toBeTruthy();
+    expect(screen.getByText("Status:").parentElement.textContent).toContain("Waiting");
+    expect(screen.getByRole("button", { name: "View active job" })).toBeTruthy();
+    expect(screen.queryByText(/Analysis active/i)).toBeNull();
+  });
+
+  it("preserves the last valid queued state through a transient polling failure", async () => {
+    let statusCalls = 0;
+    const apiFetch = vi.fn(async (path) => {
+      if (!String(path).includes("/upload-status/transient-poll-job")) return jsonResponse({});
+      statusCalls += 1;
+      if (statusCalls === 2) throw new TypeError("temporary network interruption");
+      return jsonResponse({
+        job_id: "transient-poll-job",
+        dataset_id: "transient-poll-dataset",
+        filename: "transient-poll.csv",
+        workflow: "create_baseline",
+        status: "PENDING",
+        processing_state: "queued",
+        execution_state: "queued",
+        queue_state: "pending",
+        worker_state: "queued",
+        worker_claimed: false,
+      });
+    });
+
+    renderWorkspace({
+      apiFetch,
+      sessionStore: {
+        jobId: "transient-poll-job",
+        uiState: "processing",
+        latestUploadSnapshot: { job_id: "transient-poll-job", status: "PENDING" },
+        latestUploadResult: null,
+      },
+    });
+
+    expect(await screen.findByText("transient-poll.csv")).toBeTruthy();
+    await waitFor(() => expect(statusCalls).toBe(2));
+    const status = screen.getByRole("status", { name: "Backend job status" });
+    expect(within(status).getByText("Queued")).toBeTruthy();
+    expect(within(status).getByText("Queued · waiting for worker claim")).toBeTruthy();
+    expect(screen.queryByText(/Analysis active/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Start another upload" })).toBeTruthy();
+  });
+
+  it("stops the old polling owner and keeps remembered IDs scoped when the workspace changes", async () => {
+    let statusCalls = 0;
+    const apiFetch = vi.fn(async (path) => {
+      if (!String(path).includes("/upload-status/workspace-a-job")) return jsonResponse({});
+      statusCalls += 1;
+      return jsonResponse({
+        job_id: "workspace-a-job",
+        dataset_id: "workspace-a-dataset",
+        filename: "workspace-a.csv",
+        workflow: "create_baseline",
+        status: "PENDING",
+        processing_state: "queued",
+        execution_state: "queued",
+        queue_state: "pending",
+        worker_state: "queued",
+      });
+    });
+    const view = renderWorkspace({
+      apiFetch,
+      datasetScopeKey: "workspace-a",
+      sessionStore: {
+        jobId: "workspace-a-job",
+        uiState: "processing",
+        latestUploadSnapshot: { job_id: "workspace-a-job", status: "PENDING" },
+        latestUploadResult: null,
+      },
+    });
+
+    expect(await screen.findByText("workspace-a.csv")).toBeTruthy();
+    await waitFor(() => expect(statusCalls).toBeGreaterThanOrEqual(2));
+    view.rerender(workspaceElement({ apiFetch, datasetScopeKey: "workspace-b", sessionStore: null }));
+    expect(await screen.findByRole("heading", { name: "Upload historical data" })).toBeTruthy();
+    const callsAfterScopeChange = statusCalls;
+    await new Promise((resolve) => window.setTimeout(resolve, 1100));
+    expect(statusCalls).toBe(callsAfterScopeChange);
+    expect(window.localStorage.getItem("neraium.upload_job.remembered.v2:engineer-1:workspace-a")).toBe("workspace-a-job");
+    expect(window.localStorage.getItem("neraium.upload_job.remembered.v2:engineer-1:workspace-b")).toBeNull();
+  });
+
+  it("restores a failed remembered job as terminal with retry and recovery actions", async () => {
+    window.localStorage.setItem("neraium.last_upload_job_id", "failed-refresh-job");
+    const apiFetch = vi.fn(async () => jsonResponse({
+      job_id: "failed-refresh-job",
+      dataset_id: "failed-refresh-dataset",
+      filename: "failed-refresh.csv",
+      workflow: "create_baseline",
+      status: "FAILED",
+      processing_state: "failed",
+      execution_state: "failed",
+      job_state: "failed",
+      error_type: "relationship_learning_failed",
+      message: "Relationship learning failed.",
+      retryable: true,
+      file_stored: true,
+      transfer_succeeded: true,
+    }));
+
+    renderWorkspace({ apiFetch });
+
+    expect(await screen.findByRole("heading", { name: /Processing failed during:/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry Processing" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
+    expect(screen.queryByText(/Analysis active/i)).toBeNull();
+    expect(screen.getByText("failed-refresh.csv was transferred and stored successfully.")).toBeTruthy();
+    expect(screen.queryByText(/No file selected was transferred/i)).toBeNull();
+  });
+
   it("approves a controlled baseline before opening it", async () => {
     const result = learnedBaseline();
     const onOpenBaseline = vi.fn();
@@ -1257,8 +1507,9 @@ describe("status utilities", () => {
 
   it("keeps worker diagnostics available as secondary detail", () => {
     const now = Date.parse("2026-07-22T21:30:01.070Z");
-    expect(queuedWorkerMessage({ worker_state: "starting" }, now)).toBe("Preparing analysis resources");
-    expect(queuedWorkerMessage({ worker_state: "active", worker_last_update_at: "2026-07-22T21:28:01.070289+00:00" }, now)).toBe("Analysis active · updated 2 minutes ago");
+    expect(queuedWorkerMessage({ worker_state: "starting" }, now)).toBe("");
+    expect(queuedWorkerMessage({ execution_state: "queued", worker_state: "running", status: "PENDING" }, now)).toBe("Queued · waiting for worker claim");
+    expect(queuedWorkerMessage({ execution_state: "processing", worker_state: "active", worker_last_update_at: "2026-07-22T21:28:01.070289+00:00" }, now)).toBe("Analysis active · updated 2 minutes ago");
     expect(formatAnalysisUpdateTime("2026-07-22T19:30:01Z", now)).toBe("2 hours ago");
   });
 });
