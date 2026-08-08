@@ -1,0 +1,235 @@
+name: Production Upload Diagnostics
+
+on:
+  workflow_dispatch:
+    inputs:
+      submit_baseline:
+        description: Submit a small baseline upload before collecting evidence
+        required: true
+        default: true
+        type: boolean
+      api_base_url:
+        description: Production API or routed application base URL
+        required: true
+        default: https://app.neraium.com
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+  ECS_CLUSTER: neraium-prod-cluster
+  ECS_API_SERVICE: neraium-prod-api-service
+  ECS_WORKER_SERVICE: neraium-prod-worker-service
+  API_LOG_GROUP: /ecs/neraium-prod-api
+  WORKER_LOG_GROUP: /ecs/neraium-prod-worker
+  UPLOAD_STATE_BUCKET: ${{ secrets.NERAIUM_UPLOAD_STATE_BUCKET }}
+  API_TOKEN_SECRET_ARN: ${{ vars.NERAIUM_API_TOKEN_SECRET_ARN }}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Inspect ECS service and task health
+        run: |
+          set -euo pipefail
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE" \
+            --region "$AWS_REGION" > services.json
+          jq -r '.services[] | "service=\(.serviceName) status=\(.status) desired=\(.desiredCount) running=\(.runningCount) pending=\(.pendingCount) task_definition=\(.taskDefinition | split("/")[-1])"' services.json
+
+          for service in "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE"; do
+            task_arn=$(aws ecs list-tasks \
+              --cluster "$ECS_CLUSTER" \
+              --service-name "$service" \
+              --desired-status RUNNING \
+              --region "$AWS_REGION" \
+              --query 'taskArns[0]' \
+              --output text)
+            test -n "$task_arn"
+            test "$task_arn" != "None"
+            aws ecs describe-tasks \
+              --cluster "$ECS_CLUSTER" \
+              --tasks "$task_arn" \
+              --region "$AWS_REGION" \
+              --query 'tasks[0].{taskArn:taskArn,lastStatus:lastStatus,healthStatus:healthStatus,startedAt:startedAt,taskDefinitionArn:taskDefinitionArn,containers:containers[*].{name:name,lastStatus:lastStatus,exitCode:exitCode,reason:reason}}' \
+              --output json | jq -c --arg service "$service" '{service: $service, task: .}'
+          done
+
+          stopped=$(aws ecs list-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --service-name "$ECS_WORKER_SERVICE" \
+            --desired-status STOPPED \
+            --region "$AWS_REGION" \
+            --query 'taskArns[-10:]' \
+            --output text)
+          if [ -n "$stopped" ] && [ "$stopped" != "None" ]; then
+            aws ecs describe-tasks \
+              --cluster "$ECS_CLUSTER" \
+              --tasks $stopped \
+              --region "$AWS_REGION" \
+              --query 'tasks[*].{stoppedAt:stoppedAt,stopCode:stopCode,stoppedReason:stoppedReason,containers:containers[*].{name:name,exitCode:exitCode,reason:reason}}' \
+              --output json | jq -c '.[]'
+          else
+            echo "worker_stopped_tasks=none"
+          fi
+
+      - name: Compare API and worker queue-critical configuration
+        run: |
+          set -euo pipefail
+          api_task=$(aws ecs list-tasks --cluster "$ECS_CLUSTER" --service-name "$ECS_API_SERVICE" --desired-status RUNNING --region "$AWS_REGION" --query 'taskArns[0]' --output text)
+          worker_task=$(aws ecs list-tasks --cluster "$ECS_CLUSTER" --service-name "$ECS_WORKER_SERVICE" --desired-status RUNNING --region "$AWS_REGION" --query 'taskArns[0]' --output text)
+          api_definition=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$api_task" --region "$AWS_REGION" --query 'tasks[0].taskDefinitionArn' --output text)
+          worker_definition=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$worker_task" --region "$AWS_REGION" --query 'tasks[0].taskDefinitionArn' --output text)
+          aws ecs describe-task-definition --task-definition "$api_definition" --region "$AWS_REGION" --query 'taskDefinition.containerDefinitions[0].environment' --output json > api-env.json
+          aws ecs describe-task-definition --task-definition "$worker_definition" --region "$AWS_REGION" --query 'taskDefinition.containerDefinitions[0].environment' --output json > worker-env.json
+
+          value_for() {
+            jq -r --arg name "$2" '.[] | select(.name == $name) | .value' "$1" | head -n 1
+          }
+          api_bucket=$(value_for api-env.json NERAIUM_UPLOAD_STATE_BUCKET)
+          worker_bucket=$(value_for worker-env.json NERAIUM_UPLOAD_STATE_BUCKET)
+          api_prefix=$(value_for api-env.json NERAIUM_UPLOAD_STATE_PREFIX)
+          worker_prefix=$(value_for worker-env.json NERAIUM_UPLOAD_STATE_PREFIX)
+          api_runtime=$(value_for api-env.json NERAIUM_RUNTIME_DIR)
+          worker_runtime=$(value_for worker-env.json NERAIUM_RUNTIME_DIR)
+          api_sha=$(value_for api-env.json NERAIUM_BUILD_SHA)
+          worker_sha=$(value_for worker-env.json NERAIUM_BUILD_SHA)
+          api_role=$(value_for api-env.json NERAIUM_PROCESS_ROLE)
+          worker_role=$(value_for worker-env.json NERAIUM_PROCESS_ROLE)
+          api_env=$(value_for api-env.json APP_ENV)
+          worker_env=$(value_for worker-env.json APP_ENV)
+
+          test -n "$api_bucket"
+          test -n "$worker_bucket"
+          echo "upload_bucket_api_configured=true upload_bucket_worker_configured=true upload_bucket_match=$([ "$api_bucket" = "$worker_bucket" ] && echo true || echo false)"
+          echo "upload_prefix_match=$([ "$api_prefix" = "$worker_prefix" ] && echo true || echo false) api_prefix_configured=$([ -n "$api_prefix" ] && echo true || echo false) worker_prefix_configured=$([ -n "$worker_prefix" ] && echo true || echo false)"
+          echo "runtime_dir_match=$([ "$api_runtime" = "$worker_runtime" ] && echo true || echo false) api_runtime=$api_runtime worker_runtime=$worker_runtime"
+          echo "build_sha_match=$([ "$api_sha" = "$worker_sha" ] && echo true || echo false) api_sha=$api_sha worker_sha=$worker_sha"
+          echo "api_role=$api_role worker_role=$worker_role app_env_match=$([ "$api_env" = "$worker_env" ] && echo true || echo false)"
+
+      - name: Submit representative baseline upload
+        if: inputs.submit_baseline
+        id: smoke
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
+          SMOKE_UPLOAD_WORKFLOW: create_baseline
+          SMOKE_UPLOAD_TIMEOUT_MS: "60000"
+        run: |
+          set -euo pipefail
+          token=$(aws secretsmanager get-secret-value \
+            --secret-id "$API_TOKEN_SECRET_ARN" \
+            --region "$AWS_REGION" \
+            --query SecretString \
+            --output text)
+          test -n "$token"
+          echo "::add-mask::$token"
+
+          set +e
+          NERAIUM_API_TOKEN="$token" node scripts/smoke-production.js 2>&1 | tee smoke-output.txt
+          smoke_status=${PIPESTATUS[0]}
+          set -e
+          job_id=$(sed -n 's/.*accepted_job_id=\([A-Za-z0-9._:-]*\).*/\1/p' smoke-output.txt | tail -n 1)
+          echo "smoke_exit_code=$smoke_status"
+          echo "job_id=$job_id" >> "$GITHUB_OUTPUT"
+          echo "smoke_exit_code=$smoke_status" >> "$GITHUB_OUTPUT"
+
+      - name: Inspect durable upload queue and scoped status
+        id: durable
+        env:
+          SMOKE_JOB_ID: ${{ steps.smoke.outputs.job_id }}
+        run: |
+          set -euo pipefail
+          job_id="$SMOKE_JOB_ID"
+          if [ -z "$job_id" ]; then
+            aws s3api list-objects-v2 \
+              --bucket "$UPLOAD_STATE_BUCKET" \
+              --prefix upload-state/upload-queue/ \
+              --region "$AWS_REGION" \
+              --query 'reverse(sort_by(Contents,&LastModified))[:20].Key' \
+              --output text > recent-queue-keys.txt
+            for key in $(tr '\t' '\n' < recent-queue-keys.txt); do
+              aws s3api get-object --bucket "$UPLOAD_STATE_BUCKET" --key "$key" --region "$AWS_REGION" queue-candidate.json >/dev/null
+              candidate_error=$(jq -r '.last_error // ""' queue-candidate.json)
+              if [ "$candidate_error" = "missing_dataset_scope" ]; then
+                job_id=$(jq -r '.job_id // ""' queue-candidate.json)
+                break
+              fi
+            done
+          fi
+          test -n "$job_id"
+          echo "job_id=$job_id" >> "$GITHUB_OUTPUT"
+          echo "diagnostic_job_id=$job_id"
+
+          queue_key="upload-state/upload-queue/${job_id}.json"
+          aws s3api get-object --bucket "$UPLOAD_STATE_BUCKET" --key "$queue_key" --region "$AWS_REGION" queue.json >/dev/null
+          jq '{job_id,status,attempts,last_error,created_at,updated_at,locked_at,routing:{version:.routing.version,scope_storage_id_present:(.routing.scope_storage_id != null and .routing.scope_storage_id != ""),dataset_scope:{version_present:(.routing.dataset_scope.version != null),tenant_id_present:(.routing.dataset_scope.tenant_id != null and .routing.dataset_scope.tenant_id != ""),user_id_present:(.routing.dataset_scope.user_id != null and .routing.dataset_scope.user_id != ""),workspace_id_present:(.routing.dataset_scope.workspace_id != null and .routing.dataset_scope.workspace_id != "")}}}' queue.json
+
+          scope_id=$(jq -r '.routing.scope_storage_id // ""' queue.json)
+          if [ -n "$scope_id" ]; then
+            status_key="upload-state/scopes/${scope_id}/upload_status_${job_id}.json"
+            if aws s3api get-object --bucket "$UPLOAD_STATE_BUCKET" --key "$status_key" --region "$AWS_REGION" status.json >/dev/null 2>&1; then
+              jq '{job_id,dataset_id,workflow,status,processing_state,job_state,worker_state,worker_claimed,worker_last_seen_at,error_type,failed_stage,retryable,message,job_progress:(.job_progress | if type == "object" then {contract_version,status,overall_percent_complete,last_worker_heartbeat_at,seconds_since_worker_heartbeat} else null end)}' status.json
+            else
+              echo "scoped_status_object=missing"
+            fi
+            source_count=$(aws s3api list-objects-v2 \
+              --bucket "$UPLOAD_STATE_BUCKET" \
+              --prefix "upload-state/scopes/${scope_id}/upload-sources/" \
+              --region "$AWS_REGION" \
+              --query "length(Contents[?contains(Key, '${job_id}')])" \
+              --output text)
+            echo "scoped_upload_source_count=$source_count"
+          else
+            echo "scope_storage_id=missing"
+          fi
+
+      - name: Inspect matching API and worker lifecycle logs
+        env:
+          JOB_ID: ${{ steps.durable.outputs.job_id }}
+        run: |
+          set -euo pipefail
+          start_time=$(( $(date +%s) - 21600 ))000
+          for group in "$API_LOG_GROUP" "$WORKER_LOG_GROUP"; do
+            echo "log_group=$group job_id=$JOB_ID"
+            aws logs filter-log-events \
+              --log-group-name "$group" \
+              --start-time "$start_time" \
+              --filter-pattern "\"$JOB_ID\"" \
+              --region "$AWS_REGION" \
+              --query 'events[].message' \
+              --output json > matching-events.json
+            jq -r '.[]' matching-events.json \
+              | sed -E 's/(user_id|organization_id)=[^ ]+/\1=<redacted>/g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<redacted-email>/g'
+          done
+
+          echo "worker_queue_and_process_events"
+          aws logs filter-log-events \
+            --log-group-name "$WORKER_LOG_GROUP" \
+            --start-time "$start_time" \
+            --filter-pattern '"upload_queue"' \
+            --region "$AWS_REGION" \
+            --query 'events[].message' \
+            --output json > worker-queue-events.json
+          jq -r '.[]' worker-queue-events.json \
+            | tail -n 200 \
+            | sed -E 's/(user_id|organization_id)=[^ ]+/\1=<redacted>/g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<redacted-email>/g'
+
+      - name: Fail when representative upload failed
+        if: inputs.submit_baseline && steps.smoke.outputs.smoke_exit_code != '0'
+        run: |
+          echo "Representative production baseline upload failed; diagnostic evidence was collected above."
+          exit 1

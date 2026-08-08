@@ -5,6 +5,8 @@ const TOKEN = process.env.NERAIUM_API_TOKEN || process.env.API_TOKEN || "";
 const UPLOAD_TIMEOUT_MS = Number(process.env.SMOKE_UPLOAD_TIMEOUT_MS || 45000);
 const POLL_INTERVAL_MS = Number(process.env.SMOKE_POLL_INTERVAL_MS || 1000);
 const CLOCK_SKEW_TOLERANCE_MS = Number(process.env.SMOKE_CLOCK_SKEW_TOLERANCE_MS || 120000);
+const UPLOAD_WORKFLOW = String(process.env.SMOKE_UPLOAD_WORKFLOW || "legacy_analysis").trim() || "legacy_analysis";
+const BASELINE_WORKFLOWS = new Set(["create_baseline", "extend_baseline"]);
 
 const endpoints = [
   { name: "health", path: "/api/health", required: true },
@@ -124,6 +126,7 @@ async function uploadSmokeTelemetry() {
   const filename = `smoke-production-${Date.now()}.csv`;
   const form = new FormData();
   form.set("file", new Blob([buildSmokeCsv()], { type: "text/csv" }), filename);
+  form.set("workflow", UPLOAD_WORKFLOW);
   const response = await fetch(toAbsoluteUrl("/api/data/upload"), {
     method: "POST",
     headers: {
@@ -205,7 +208,7 @@ async function main() {
   const beforeRunnerStatus = resultByName.get("runner_status")?.json || {};
   const beforeProcessedAt = beforeRunnerStatus.last_processed_at || null;
   const uploadStartedAt = new Date().toISOString();
-  console.log(`\n[STEP] upload smoke telemetry batch`);
+  console.log(`\n[STEP] upload smoke telemetry batch workflow=${UPLOAD_WORKFLOW}`);
 
   try {
     const upload = await uploadSmokeTelemetry();
@@ -215,19 +218,50 @@ async function main() {
     if (!uploadOk) {
       throw new Error(`Upload was not accepted. body=${snippet(upload.body) || "<empty>"}`);
     }
+    console.log(`accepted_job_id=${upload.json.job_id}`);
 
     const terminal = await pollUploadStatus(upload.json.status_url);
-    console.log(`terminal_status=${terminal.status} job_id=${terminal.job_id} runner_used=${terminal.runner_used}`);
+    console.log(`terminal_status=${terminal.status} job_id=${terminal.job_id} workflow=${terminal.workflow || UPLOAD_WORKFLOW} runner_used=${terminal.runner_used}`);
+
+    const uploadIssues = [];
+    if (terminal.status !== "COMPLETE") {
+      uploadIssues.push(`upload finished with ${terminal.status}`);
+    }
+
+    if (BASELINE_WORKFLOWS.has(UPLOAD_WORKFLOW)) {
+      if (terminal.sii_engine_invoked !== false) {
+        uploadIssues.push("baseline workflow unexpectedly invoked the SII engine");
+      }
+      if (terminal.baseline_candidate_created !== true) {
+        uploadIssues.push("baseline workflow did not create a candidate");
+      }
+      if (!terminal.baselineId) {
+        uploadIssues.push("baseline workflow completed without baselineId");
+      }
+
+      const baselineResultUrl = upload.json.baseline_result_url;
+      if (!baselineResultUrl) {
+        uploadIssues.push("baseline upload response omitted baseline_result_url");
+      } else {
+        const baselineResult = await fetchJson(baselineResultUrl);
+        if (baselineResult.response.status !== 200) {
+          uploadIssues.push(`baseline result returned ${baselineResult.response.status}`);
+        } else if (!baselineResult.json?.baselineId) {
+          uploadIssues.push("baseline result omitted baselineId");
+        }
+      }
+
+      if (uploadIssues.length) {
+        throw new Error(`baseline upload smoke failed: ${uploadIssues.join("; ")}`);
+      }
+      console.log("baseline upload smoke passed.");
+      return;
+    }
 
     const latestUpload = await fetchJson("/api/data/latest-upload");
     const latestPayload = latestUpload.json || {};
     const afterRunner = await fetchJson("/api/intelligence/runner-status");
     const runnerPayload = afterRunner.json || {};
-    const uploadIssues = [];
-
-    if (terminal.status !== "COMPLETE") {
-      uploadIssues.push(`upload finished with ${terminal.status}`);
-    }
     if (!terminal.runner_used) {
       uploadIssues.push("upload completed without SII runner");
     }
