@@ -33,6 +33,7 @@ def analyze_relationship_graph(
     operating_mode: dict[str, Any] | None = None,
     mode_conditioned_analysis: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Build non-causal graph evidence from existing Pearson relationship edges."""
 
@@ -70,8 +71,13 @@ def analyze_relationship_graph(
     enriched_edges: list[dict[str, Any]] = []
     eligible_edges: list[dict[str, Any]] = []
     promoted_edges: list[dict[str, Any]] = []
-    for raw_edge in source_edges if isinstance(source_edges, list) else []:
+    edge_candidates = source_edges if isinstance(source_edges, list) else []
+    if progress_callback:
+        progress_callback(0, len(edge_candidates))
+    for edge_index, raw_edge in enumerate(edge_candidates, start=1):
         if not isinstance(raw_edge, dict):
+            if progress_callback:
+                progress_callback(edge_index, len(edge_candidates))
             continue
         edge = _enrich_edge(
             raw_edge,
@@ -83,11 +89,15 @@ def analyze_relationship_graph(
         )
         enriched_edges.append(edge)
         if not edge["eligible"]:
+            if progress_callback:
+                progress_callback(edge_index, len(edge_candidates))
             continue
         eligible_edges.append(edge)
         if _promoted(edge, cfg):
             edge["promoted_changed_edge"] = True
             promoted_edges.append(edge)
+        if progress_callback:
+            progress_callback(edge_index, len(edge_candidates))
 
     metric_nodes = sorted({column for edge in eligible_edges for column in edge["columns"]})
     subsystem_by_metric = {

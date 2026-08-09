@@ -32,6 +32,7 @@ def estimate_empirical_thresholds(
     numeric_columns: list[str],
     relationship_columns: list[str] | None = None,
     config: dict[str, Any] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Fit deterministic, conservative thresholds on historical rows only.
 
@@ -46,9 +47,15 @@ def estimate_empirical_thresholds(
     minimum_rows = int(cfg["minimum_baseline_rows"])
     fixed_relationship = float(cfg["fixed_relationship_change_threshold"])
     limitations: list[str] = []
+    relationship_fit_columns = numeric_columns if relationship_columns is None else relationship_columns
+    total_candidates = len(numeric_columns) + (
+        len(relationship_fit_columns) * max(0, len(relationship_fit_columns) - 1) // 2
+    )
+    if progress_callback:
+        progress_callback(0, total_candidates)
 
     signal_thresholds: dict[str, dict[str, Any]] = {}
-    for column in numeric_columns:
+    for signal_index, column in enumerate(numeric_columns, start=1):
         values = numeric_values(baseline_rows, column)
         if len(values) < int(cfg["minimum_signal_values"]):
             signal_thresholds[column] = {
@@ -57,6 +64,8 @@ def estimate_empirical_thresholds(
                 "fallback_reason": "insufficient_baseline_signal_values",
                 "sample_count": len(values),
             }
+            if progress_callback:
+                progress_callback(signal_index, total_candidates)
             continue
         center = quantile(values, 0.5)
         deviations = [abs(value - center) for value in values]
@@ -76,13 +85,24 @@ def estimate_empirical_thresholds(
             "fixed_floor": round(fixed_floor, 6),
             "sample_count": len(values),
         }
+        if progress_callback:
+            progress_callback(signal_index, total_candidates)
 
     relationship_deltas: list[float] = []
-    relationship_fit_columns = numeric_columns if relationship_columns is None else relationship_columns
     relationship_windows = _relationship_window_correlations(
         baseline_rows,
         relationship_fit_columns,
         window_rows=max(3, int(cfg["relationship_window_rows"])),
+        progress_callback=(
+            (
+                lambda completed, total: progress_callback(
+                    len(numeric_columns) + completed,
+                    len(numeric_columns) + total,
+                )
+            )
+            if progress_callback
+            else None
+        ),
     )
     for pair_windows in relationship_windows.values():
         for left, right in zip(pair_windows, pair_windows[1:]):
@@ -179,6 +199,7 @@ def _relationship_window_correlations(
     columns: list[str],
     *,
     window_rows: int,
+    progress_callback: Any | None = None,
 ) -> dict[tuple[str, str], list[float]]:
     output: dict[tuple[str, str], list[float]] = {}
     if window_rows < 3:
@@ -188,7 +209,10 @@ def _relationship_window_correlations(
         rows[index * window_rows : (index + 1) * window_rows]
         for index in range(full_window_count)
     ]
-    for left, right in combinations(columns, 2):
+    pairs = list(combinations(columns, 2))
+    if progress_callback:
+        progress_callback(0, len(pairs))
+    for pair_index, (left, right) in enumerate(pairs, start=1):
         correlations = [
             correlation
             for window in windows
@@ -197,4 +221,6 @@ def _relationship_window_correlations(
         ]
         if correlations:
             output[(left, right)] = correlations
+        if progress_callback:
+            progress_callback(pair_index, len(pairs))
     return output

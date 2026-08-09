@@ -427,6 +427,7 @@ def build_relationship_baseline(
     max_relationship_columns: int = 32,
     baseline_analysis: dict[str, Any] | None = None,
     telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     signal_catalog = telemetry_catalog_by_column(telemetry_signal_catalog)
     cumulative_counters = detect_cumulative_counters_from_rows(rows, numeric_columns)
@@ -466,6 +467,9 @@ def build_relationship_baseline(
         relationship_numeric_columns,
         max_relationship_columns=max_relationship_columns,
     )
+    total_pairs = len(selected_numeric_columns) * max(0, len(selected_numeric_columns) - 1) // 2
+    if progress_callback:
+        progress_callback(0, total_pairs)
     if len(rows) < 12 or len(selected_numeric_columns) < 2:
         return {
             "top_relationship_changes": [],
@@ -526,16 +530,26 @@ def build_relationship_baseline(
     recent_counts = recent_frame.notna().astype(int).T.dot(recent_frame.notna().astype(int))
     source_rows = _relationship_source_rows(baseline_rows, recent_rows)
 
+    processed_pairs = 0
+
+    def pair_processed() -> None:
+        nonlocal processed_pairs
+        processed_pairs += 1
+        if progress_callback:
+            progress_callback(processed_pairs, total_pairs)
+
     for idx, left_col in enumerate(selected_numeric_columns):
         for right_col in selected_numeric_columns[idx + 1 :]:
             baseline_corr = baseline_corr_matrix.at[left_col, right_col] if left_col in baseline_corr_matrix.index and right_col in baseline_corr_matrix.columns else None
             recent_corr = recent_corr_matrix.at[left_col, right_col] if left_col in recent_corr_matrix.index and right_col in recent_corr_matrix.columns else None
             if baseline_corr is None or recent_corr is None or pd.isna(baseline_corr) or pd.isna(recent_corr):
+                pair_processed()
                 continue
 
             baseline_sample_size = int(baseline_counts.at[left_col, right_col]) if left_col in baseline_counts.index and right_col in baseline_counts.columns else 0
             recent_sample_size = int(recent_counts.at[left_col, right_col]) if left_col in recent_counts.index and right_col in recent_counts.columns else 0
             if baseline_sample_size < 3 or recent_sample_size < 3:
+                pair_processed()
                 continue
 
             baseline_strength = abs(float(baseline_corr))
@@ -593,6 +607,7 @@ def build_relationship_baseline(
                 drift=drift,
                 relationship_context=relationship_context,
             ):
+                pair_processed()
                 continue
 
             candidates.append(
@@ -647,6 +662,7 @@ def build_relationship_baseline(
                     "summary": _relationship_summary(display_columns[0], display_columns[1], edge),
                 }
             )
+            pair_processed()
 
     candidates.sort(key=lambda item: (float(item.get("relationship_importance_score") or 0), item["correlation_delta"], item["coupling_strength"]), reverse=True)
     graph_edges.sort(key=lambda item: (float(item.get("relationship_importance_score") or 0), abs(float(item.get("correlation_delta") or 0)), float(item.get("baseline_strength") or 0)), reverse=True)

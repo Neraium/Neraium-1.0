@@ -50,6 +50,7 @@ def evaluate_physics_reasoning(
     priors: list[dict[str, Any]] | None,
     analytical_evidence: dict[str, Any],
     equipment_context: dict[str, Any] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Evaluate externally configured engineering expectations.
 
@@ -69,6 +70,8 @@ def evaluate_physics_reasoning(
     limitations: list[str] = []
     trace: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
+    if progress_callback:
+        progress_callback(0, len(configured_priors))
 
     for index, configured in enumerate(configured_priors):
         prior = deepcopy(configured) if isinstance(configured, dict) else {}
@@ -83,6 +86,8 @@ def evaluate_physics_reasoning(
             evaluated.append(result)
             limitations.append(f"{prior_id}: {reason}")
             trace.append(_prior_trace(result))
+            if progress_callback:
+                progress_callback(index + 1, len(configured_priors))
             continue
 
         applicability = _evaluate_applicability(
@@ -103,6 +108,8 @@ def evaluate_physics_reasoning(
             )
             evaluated.append(result)
             trace.append(_prior_trace(result))
+            if progress_callback:
+                progress_callback(index + 1, len(configured_priors))
             continue
 
         response_configuration = _response_configuration(prior, evidence)
@@ -195,6 +202,8 @@ def evaluate_physics_reasoning(
         evaluated.append(result)
         limitations.extend(result["limitations"])
         trace.append(_prior_trace(result))
+        if progress_callback:
+            progress_callback(index + 1, len(configured_priors))
 
     applicable_ids = [item["id"] for item in evaluated if item["applicable"]]
     supporting_ids = [item["id"] for item in evaluated if item["status"] == "supported"]

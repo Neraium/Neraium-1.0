@@ -58,14 +58,21 @@ def build_data_conditions(
     baseline_analysis: dict[str, Any],
     provided_data_quality: dict[str, Any] | None,
     config: dict[str, Any],
+    progress_callback: Any | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    if progress_callback:
+        progress_callback(0, 2)
     configured_timestamp_profile = config.get("timestamp_profile")
     timestamp_profile = (
         dict(configured_timestamp_profile)
         if isinstance(configured_timestamp_profile, dict)
         else profile_timestamps(columns, matrix_rows, timestamp_column)
     )
+    if progress_callback:
+        progress_callback(1, 2)
     if isinstance(provided_data_quality, dict):
+        if progress_callback:
+            progress_callback(2, 2)
         return dict(provided_data_quality), timestamp_profile
 
     ingestion_report = config.get("ingestion_report")
@@ -126,4 +133,6 @@ def build_data_conditions(
             "normalization_report": normalization_report,
         },
     )
+    if progress_callback:
+        progress_callback(2, 2)
     return quality, timestamp_profile

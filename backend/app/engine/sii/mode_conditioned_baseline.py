@@ -37,6 +37,7 @@ def analyze_mode_conditioned_baseline(
     relationship_model: dict[str, Any] | None = None,
     operating_mode: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Select historical rows that match the recent explicit operating mode.
 
@@ -78,6 +79,9 @@ def analyze_mode_conditioned_baseline(
     selected_rows: list[dict[str, Any]] = []
     selected_indices: list[int] = []
     match_scores: list[float] = []
+    total_mode_rows = len(historical_rows) if target_features else 0
+    if progress_callback:
+        progress_callback(0, total_mode_rows)
     if target_features:
         for index, row in enumerate(historical_rows):
             descriptor = describe_mode([row], signals, references, timestamp_column)
@@ -91,6 +95,8 @@ def analyze_mode_conditioned_baseline(
                 selected_rows.append(row)
                 selected_indices.append(index)
                 match_scores.append(score)
+            if progress_callback:
+                progress_callback(index + 1, total_mode_rows)
 
     minimum_baseline = int(cfg["minimum_baseline_rows"])
     minimum_recent = int(cfg["minimum_recent_rows"])

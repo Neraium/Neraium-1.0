@@ -39,6 +39,7 @@ def fuse_evidence(
     analytical_evidence: dict[str, Any],
     physics_reasoning: dict[str, Any],
     processing_trace: dict[str, Any] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Organize canonical evidence without weighting, voting, or inference."""
 
@@ -58,12 +59,32 @@ def fuse_evidence(
         for module in module_order
     }
 
-    inventory = [
-        _module_evidence_item(module, source_payloads[module], source_trace)
-        for module in module_order
+    physics_prior_candidates = [
+        item for item in physics.get("evaluated_priors", []) if isinstance(item, dict)
     ]
-    physics_items = _physics_evidence_items(physics)
+    observation_candidates = [
+        item
+        for item in physics_prior_candidates
+        if item.get("applicable") and item.get("status") in {"supported", "contradicted"}
+    ]
+    total_candidates = len(module_order) + len(physics_prior_candidates) + len(observation_candidates)
+    completed_candidates = 0
+    if progress_callback:
+        progress_callback(0, total_candidates)
+    inventory = []
+    for module in module_order:
+        inventory.append(_module_evidence_item(module, source_payloads[module], source_trace))
+        completed_candidates += 1
+        if progress_callback:
+            progress_callback(completed_candidates, total_candidates)
+    physics_items = _physics_evidence_items(
+        physics,
+        progress_callback=progress_callback,
+        completed_offset=completed_candidates,
+        total_candidates=total_candidates,
+    )
     inventory.extend(physics_items)
+    completed_candidates += len(physics_prior_candidates)
     inventory = _unique_evidence(inventory)
 
     by_classification = {
@@ -85,8 +106,9 @@ def fuse_evidence(
     limiting_ids = [
         item["evidence_id"] for item in by_classification["Limiting"]
     ]
-    observations = [
-        _observation(
+    observations = []
+    for prior in observation_candidates:
+        observations.append(_observation(
             prior,
             inventory=inventory,
             limiting_ids=limiting_ids,
@@ -94,12 +116,10 @@ def fuse_evidence(
             ignored_priors=ignored_priors,
             uncertainty=evidence.get("uncertainty"),
             source_trace=source_trace,
-        )
-        for prior in physics.get("evaluated_priors", [])
-        if isinstance(prior, dict)
-        and prior.get("applicable")
-        and prior.get("status") in {"supported", "contradicted"}
-    ]
+        ))
+        completed_candidates += 1
+        if progress_callback:
+            progress_callback(completed_candidates, total_candidates)
 
     module_statuses = {
         module: _module_status(source_payloads[module])
@@ -172,11 +192,16 @@ def _module_evidence_item(
     }
 
 
-def _physics_evidence_items(physics: dict[str, Any]) -> list[dict[str, Any]]:
+def _physics_evidence_items(
+    physics: dict[str, Any],
+    *,
+    progress_callback: Any | None = None,
+    completed_offset: int = 0,
+    total_candidates: int = 0,
+) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    for prior in physics.get("evaluated_priors", []):
-        if not isinstance(prior, dict):
-            continue
+    candidates = [item for item in physics.get("evaluated_priors", []) if isinstance(item, dict)]
+    for prior_index, prior in enumerate(candidates, start=1):
         prior_id = str(prior.get("id") or "unknown")
         for field, classification in (
             ("supporting_evidence", "Supporting"),
@@ -209,6 +234,8 @@ def _physics_evidence_items(physics: dict[str, Any]) -> list[dict[str, Any]]:
                         },
                     }
                 )
+        if progress_callback:
+            progress_callback(completed_offset + prior_index, total_candidates)
     return items
 
 

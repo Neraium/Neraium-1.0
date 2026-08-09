@@ -217,12 +217,15 @@ def run_structural_analysis_pipeline(
         progress_reporter.report(
             stage="analysis",
             substage=step,
-            completed_units=0,
-            total_units=1,
-            unit_type="module",
-            message=f"Running {step.replace('_', ' ')}.",
+            completed_units=metadata.get("completed_units"),
+            total_units=metadata.get("total_units"),
+            unit_type=metadata.get("unit_type"),
+            message=(
+                str(metadata.get("message") or "").strip()
+                or f"Running {step.replace('_', ' ')}; measuring eligible work."
+            ),
             metadata=metadata,
-            force=True,
+            force=bool(metadata.get("operation_complete")),
         )
 
     sii_result = evaluate_sii(
@@ -411,9 +414,9 @@ def run_structural_analysis_pipeline(
             stage="ready",
             substage="finalize_analysis",
             completed_units=0,
-            total_units=1,
-            unit_type="operation",
-            message="Persisting analysis evidence and verifying the committed result.",
+            total_units=4,
+            unit_type="finalization_steps",
+            message="Preparing analysis evidence for durable finalization.",
             force=True,
         )
     latest_runner_state = runner_result.get("latest_state")

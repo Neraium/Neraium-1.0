@@ -52,11 +52,17 @@ def assess_operating_modes(
     timestamp_column: str | None = None,
     telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
     baseline_fraction: float = 0.7,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Compare baseline and recent operating context with deterministic rules."""
 
     if len(rows) < 2:
+        if progress_callback:
+            progress_callback(0, 0)
         return unavailable_operating_mode("Not enough rows were available to compare operating conditions.")
+
+    if progress_callback:
+        progress_callback(0, 2)
 
     split_index = max(1, min(len(rows) - 1, int(len(rows) * baseline_fraction)))
     baseline_population = rows[:split_index]
@@ -67,7 +73,11 @@ def assess_operating_modes(
     signals = context_signals(context_rows, timestamp_column, telemetry_signal_catalog)
     references = numeric_band_references(context_rows, signals)
     baseline = describe_mode(baseline_rows, signals, references, timestamp_column)
+    if progress_callback:
+        progress_callback(1, 2)
     recent = describe_mode(recent_rows, signals, references, timestamp_column)
+    if progress_callback:
+        progress_callback(2, 2)
     explicit_features = sorted(set(baseline["explicit_features"]) & set(recent["explicit_features"]))
 
     if not explicit_features:

@@ -422,6 +422,7 @@ def run_sii_runner(
     engine_result: dict[str, Any],
     processing_trace: dict[str, Any],
     telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     _try_import_runner()
     base_result: dict[str, Any] = {
@@ -446,6 +447,8 @@ def run_sii_runner(
     source_vector_count = len(vector_rows["vectors"])
     vector_rows = limit_runner_vectors(vector_rows)
     retained_vector_count = len(vector_rows["vectors"])
+    if progress_callback:
+        progress_callback(0, retained_vector_count)
     base_result["columns_used"] = vector_rows["columns_used"]
     base_result["columns_excluded"] = vector_rows.get("excluded_columns", [])
     base_result["sensor_vector_count"] = retained_vector_count
@@ -472,6 +475,8 @@ def run_sii_runner(
                 run_id=run_id,
             )
             states.append(to_plain_dict(state))
+            if progress_callback:
+                progress_callback(index + 1, retained_vector_count)
     except Exception as exc:
         base_result["errors"].append(f"{type(exc).__name__}: {exc}")
         return base_result

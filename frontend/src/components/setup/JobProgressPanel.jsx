@@ -167,7 +167,9 @@ export default function JobProgressPanel({ uploadJob, uploadTransfer = null }) {
               {operation.status === "completed"
                 ? "Complete"
                 : operation.percent_complete === null || operation.percent_complete === undefined
-                  ? titleCase(operation.status)
+                  ? ["processing", "retrying"].includes(operation.status)
+                    ? `Measuring work · ${titleCase(operation.status)}`
+                    : titleCase(operation.status)
                   : `${operation.percent_complete}% · ${titleCase(operation.status)}`}
             </small>
           </li>

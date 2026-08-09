@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
+from app.engine.sii_engine import evaluate_sii
 from app.main import create_app
 from app.services import upload_jobs
 from app.services.dataset_scope import build_dataset_scope, set_current_dataset_scope
@@ -81,6 +82,18 @@ def test_measurable_progress_is_exact_bounded_and_monotonic() -> None:
         message="A late counter update arrived.",
     )
     assert progress["completed_units"] == 62
+    assert progress["percent_complete"] == 62
+
+    progress = update_progress(
+        progress,
+        job_id="measurable-job",
+        workflow="create_baseline",
+        stage="validate",
+        substage="timestamp_quality",
+        message="Timestamp quality work is still active.",
+    )
+    assert progress["completed_units"] == 62
+    assert progress["total_units"] == 100
     assert progress["percent_complete"] == 62
 
     progress = update_progress(
@@ -244,6 +257,113 @@ def test_terminal_completion_is_exactly_one_hundred_percent() -> None:
     assert progress["status"] == "completed"
     assert progress["overall_percent_complete"] == 100
     assert all(item["status"] == "completed" for item in progress["operations"])
+
+
+def test_late_analysis_callbacks_publish_real_monotonic_work_units() -> None:
+    columns = ["timestamp", "pump_power", "flow", "pressure"]
+    rows = []
+    for index in range(80):
+        load = float(index % 20)
+        shift = 0.0 if index < 40 else float(index - 39) * 0.25
+        rows.append(
+            [
+                f"2026-01-01T{index // 4:02d}:{(index % 4) * 15:02d}:00",
+                20.0 + load + shift,
+                100.0 + load * 2.0 - shift,
+                45.0 + load * 0.5 + shift * 0.2,
+            ]
+        )
+
+    callbacks: list[tuple[str, dict]] = []
+    evaluate_sii(
+        columns=columns,
+        rows=rows,
+        numeric_profiles=[
+            {"column": column, "numeric_ratio": 1.0}
+            for column in columns
+            if column != "timestamp"
+        ],
+        timestamp_column="timestamp",
+        progress_callback=lambda step, _legacy_fraction, metadata: callbacks.append(
+            (step, metadata)
+        ),
+    )
+
+    late_operations = {
+        "relationship_analysis",
+        "operating_modes",
+        "data_conditions",
+        "sensor_health",
+        "empirical_thresholds",
+        "mode_conditioned_baseline",
+        "relationship_graph_analysis",
+        "fixed_persistence",
+        "adaptive_persistence",
+        "temporal_analysis",
+        "multiscale_analysis",
+        "covariance_analysis",
+        "physics_reasoning",
+        "behavioral_model",
+        "evidence_fusion",
+    }
+    progress = initialize_progress(job_id="late-stage-progress", workflow="legacy_analysis")
+    percentages: dict[str, list[int]] = {operation: [] for operation in late_operations}
+    indeterminate_seen: set[str] = set()
+
+    for operation, metadata in callbacks:
+        if operation not in late_operations:
+            continue
+        progress = update_progress(
+            progress,
+            job_id="late-stage-progress",
+            workflow="legacy_analysis",
+            stage="analysis",
+            substage=operation,
+            completed_units=metadata.get("completed_units"),
+            total_units=metadata.get("total_units"),
+            unit_type=metadata.get("unit_type"),
+            message=metadata.get("message") or f"Running {operation}.",
+        )
+        current = _operation(progress, operation)
+        completed_units = current.get("completed_units")
+        total_units = current.get("total_units")
+        if completed_units is not None and total_units is not None:
+            assert completed_units <= total_units
+        if current.get("percent_complete") is None:
+            indeterminate_seen.add(operation)
+        else:
+            percentages[operation].append(current["percent_complete"])
+
+    relationship_percentages = percentages["relationship_analysis"]
+    assert any(0 < value < 100 for value in relationship_percentages)
+    for operation, values in percentages.items():
+        assert values == sorted(values), operation
+    assert "physics_reasoning" in indeterminate_seen
+    assert _operation(progress, "physics_reasoning")["total_units"] is None
+
+    for completed_units in range(4):
+        progress = update_progress(
+            progress,
+            job_id="late-stage-progress",
+            workflow="legacy_analysis",
+            stage="ready",
+            substage="finalize_analysis",
+            completed_units=completed_units,
+            total_units=4,
+            unit_type="finalization_steps",
+            message=f"Completed {completed_units} of 4 finalization steps.",
+        )
+    progress = complete_progress(
+        progress,
+        job_id="late-stage-progress",
+        workflow="legacy_analysis",
+        message="Analysis ready.",
+    )
+
+    finalization = _operation(progress, "finalize_analysis")
+    assert finalization["completed_units"] == finalization["total_units"] == 4
+    assert finalization["percent_complete"] == 100
+    assert progress["overall_percent_complete"] == 100
 
 
 def test_late_progress_cannot_reopen_completed_contract_or_upload_status() -> None:

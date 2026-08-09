@@ -538,6 +538,7 @@ def _finalize_completed_upload(
     row_count_total: int,
     result: dict[str, Any],
     summary: dict[str, Any],
+    progress_reporter: ProgressReporter | None = None,
 ) -> None:
     finalized_result = dict(result)
     if str(finalized_result.get("workflow") or "") == WORKFLOW_ANALYZE_NEW_DATA:
@@ -553,12 +554,25 @@ def _finalize_completed_upload(
     finalized_result["report_finalization"] = dict(finalization)
     finalized_summary["report_finalization"] = dict(finalization)
 
+    def report_finalization(completed_units: int, message: str) -> None:
+        if progress_reporter:
+            progress_reporter.report(
+                stage="ready",
+                substage="finalize_analysis",
+                completed_units=completed_units,
+                total_units=4,
+                unit_type="finalization_steps",
+                message=message,
+                force=True,
+            )
+
     try:
         latest_sii = read_latest_sii_state()
         if isinstance(latest_sii, dict):
             _write_shared_state("latest_sii_state", latest_sii)
     except Exception as exc:
         finalization["errors"].append(f"latest_sii_state: {exc}")
+    report_finalization(1, "Synchronized the latest analysis state.")
 
     evidence_persisted = False
     try:
@@ -594,6 +608,7 @@ def _finalize_completed_upload(
 
     if not evidence_persisted:
         raise RuntimeError("evidence_persistence_failed")
+    report_finalization(2, "Persisted and verified the analysis evidence record.")
 
     finalization["completed_at"] = datetime.now(timezone.utc).isoformat()
     finalization["state"] = "complete" if not finalization["errors"] else "degraded"
@@ -612,6 +627,7 @@ def _finalize_completed_upload(
     missing_artifacts = _missing_sii_completion_artifacts(artifacts)
     if missing_artifacts:
         raise RuntimeError(f"sii_completion_artifacts_missing:{','.join(missing_artifacts)}")
+    report_finalization(3, "Verified the required completion artifacts; committing the terminal result.")
 
     processing_trace = finalized_result.get("processing_trace") if isinstance(finalized_result.get("processing_trace"), dict) else {}
     processing_trace = {**processing_trace, "sii_completed": True, "completed_at": finalization["completed_at"]}
@@ -644,8 +660,16 @@ def _finalize_completed_upload(
         "runner_errors": [],
     }
     finalized_summary.update(canonical_stage_payload(legacy_stage="complete", status="COMPLETE", progress=100, label="Analysis ready."))
+    current_job = read_job(job_id) or {}
+    existing_progress = (
+        finalized_summary.get("job_progress")
+        if isinstance(finalized_summary.get("job_progress"), dict)
+        else current_job.get("job_progress")
+        if isinstance(current_job.get("job_progress"), dict)
+        else None
+    )
     completed_progress = complete_progress(
-        finalized_summary.get("job_progress") if isinstance(finalized_summary.get("job_progress"), dict) else None,
+        existing_progress,
         job_id=job_id,
         workflow=str(finalized_summary.get("workflow") or WORKFLOW_LEGACY_ANALYSIS),
         message="Analysis ready.",
@@ -1607,6 +1631,7 @@ def _build_csv_result(
         row_count_total=row_count_total,
         result=result,
         summary=summary,
+        progress_reporter=progress_reporter,
     )
     return read_upload_status(job_id) or summary
 

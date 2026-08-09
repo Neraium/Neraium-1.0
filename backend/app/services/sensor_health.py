@@ -28,6 +28,7 @@ def assess_sensor_health(
     timestamp_profile: dict[str, Any] | None = None,
     relationship_model: dict[str, Any] | None = None,
     telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Extend existing quality evidence into qualitative signal-health conditions."""
 
@@ -48,6 +49,10 @@ def assess_sensor_health(
         if isinstance(item, dict) and item.get("signal_id")
     }
     condition_map: dict[str, list[dict[str, str]]] = {str(column): [] for column in numeric_columns}
+    total_checks = len(numeric_columns) + 3
+    completed_checks = 0
+    if progress_callback:
+        progress_callback(completed_checks, total_checks)
 
     for column in numeric_columns:
         profile = profile_by_column.get(column, {})
@@ -130,14 +135,26 @@ def assess_sensor_health(
                 "limitation",
                 "An abrupt level step was large relative to this signal's own typical adjacent movement; calibration history should be checked.",
             )
+        completed_checks += 1
+        if progress_callback:
+            progress_callback(completed_checks, total_checks)
 
     add_peer_drift_conditions(assessment_rows, relationship_model or {}, condition_map)
+    completed_checks += 1
+    if progress_callback:
+        progress_callback(completed_checks, total_checks)
     add_timestamp_alignment_conditions(assessment_rows, relationship_model or {}, condition_map)
+    completed_checks += 1
+    if progress_callback:
+        progress_callback(completed_checks, total_checks)
     source_conditions = source_health_conditions(
         ingestion_report=ingestion_report,
         timestamp_profile=timestamp_profile,
         timestamp_column=timestamp_column,
     )
+    completed_checks += 1
+    if progress_callback:
+        progress_callback(completed_checks, total_checks)
     signals = [
         {
             "signal": column,

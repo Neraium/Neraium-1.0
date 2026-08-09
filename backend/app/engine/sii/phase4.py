@@ -56,6 +56,7 @@ def evaluate_phase4(
     physics_reasoning: dict[str, Any],
     covariance_analysis: dict[str, Any],
     config: dict[str, Any] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Evaluate and persist Phase 4 after all Phase 1–3 evidence is available."""
 
@@ -75,6 +76,9 @@ def evaluate_phase4(
     snapshots: list[dict[str, Any]] = []
     prior_learning_decisions: list[dict[str, Any]] = []
     store: BehavioralModelStore | None = None
+    total_components = 12
+    if progress_callback:
+        progress_callback(0, total_components)
 
     if identity.get("memory_update_allowed"):
         configured_store = phase4_cfg.get("behavioral_model_store") or cfg.get("behavioral_model_store")
@@ -92,6 +96,8 @@ def evaluate_phase4(
     previous_snapshot = snapshots[-1] if snapshots else None
     long_term_reference = snapshots[0] if snapshots else None
     mode_id = active_operating_mode(operating_mode)
+    if progress_callback:
+        progress_callback(1, total_components)
 
     graph_comparison = compare_behavioral_graph(
         current_graph=relationship_graph,
@@ -101,6 +107,8 @@ def evaluate_phase4(
         operating_mode=mode_id,
         change_threshold=float(phase4_cfg.get("graph_change_threshold", 0.20)),
     )
+    if progress_callback:
+        progress_callback(2, total_components)
     expected_behavior = evaluate_expected_behavior(
         active_model=active_model,
         rows=rows,
@@ -111,6 +119,8 @@ def evaluate_phase4(
         evaluation_time=observed_at,
         config=phase4_cfg.get("expected_behavior_config") if isinstance(phase4_cfg.get("expected_behavior_config"), dict) else None,
     )
+    if progress_callback:
+        progress_callback(3, total_components)
     propagation = analyze_propagation(
         graph_comparison=graph_comparison,
         relationship_memory=(active_model or {}).get("relationship_memory", {}),
@@ -123,6 +133,8 @@ def evaluate_phase4(
         signal_change_times=phase4_cfg.get("signal_change_times") if isinstance(phase4_cfg.get("signal_change_times"), dict) else None,
         config=phase4_cfg.get("propagation_config") if isinstance(phase4_cfg.get("propagation_config"), dict) else None,
     )
+    if progress_callback:
+        progress_callback(4, total_components)
     evolution = evaluate_behavioral_evolution(
         active_model=active_model,
         snapshots=snapshots,
@@ -135,6 +147,8 @@ def evaluate_phase4(
         current_confidence=None,
         timestamp_column=timestamp_column,
     )
+    if progress_callback:
+        progress_callback(5, total_components)
     advanced = _advanced_modules(
         rows=rows,
         numeric_columns=numeric_columns,
@@ -143,10 +157,15 @@ def evaluate_phase4(
         active_model=active_model,
         graph_comparison=graph_comparison,
         phase4_config=phase4_cfg,
+        progress_callback=progress_callback,
+        completed_offset=5,
+        total_components=total_components,
     )
     bayesian = evaluate_bayesian_evidence(
         phase4_cfg.get("bayesian_evidence") if isinstance(phase4_cfg.get("bayesian_evidence"), dict) else None
     )
+    if progress_callback:
+        progress_callback(9, total_components)
 
     active_observations = phase4_cfg.get("active_observations") if isinstance(phase4_cfg.get("active_observations"), list) else []
     learning = evaluate_baseline_evolution(
@@ -168,6 +187,8 @@ def evaluate_phase4(
         prior_learning_decisions=prior_learning_decisions,
         config=phase4_cfg.get("baseline_evolution_config") if isinstance(phase4_cfg.get("baseline_evolution_config"), dict) else None,
     )
+    if progress_callback:
+        progress_callback(10, total_components)
     if not identity.get("memory_update_allowed"):
         learning = _override_learning(learning, "insufficient_evidence", "infrastructure_identity_inadequate")
     elif store is None:
@@ -214,6 +235,8 @@ def evaluate_phase4(
             training_time=observed_at,
             config=phase4_cfg.get("expected_behavior_config") if isinstance(phase4_cfg.get("expected_behavior_config"), dict) else None,
         )
+    if progress_callback:
+        progress_callback(11, total_components)
 
     persisted_model = active_model
     current_snapshot: dict[str, Any] | None = None
@@ -415,6 +438,8 @@ def evaluate_phase4(
         "changes": deepcopy(changes),
         "rollback_reference": current_snapshot.get("rollback_reference") if current_snapshot else None,
     }
+    if progress_callback:
+        progress_callback(12, total_components)
     return {
         "behavioral_model": model_output,
         "expected_behavior": expected_behavior,
@@ -483,6 +508,9 @@ def _advanced_modules(
     active_model: dict[str, Any] | None,
     graph_comparison: dict[str, Any],
     phase4_config: dict[str, Any],
+    progress_callback: Any | None = None,
+    completed_offset: int = 0,
+    total_components: int = 0,
 ) -> dict[str, dict[str, Any]]:
     outputs: dict[str, dict[str, Any]] = {}
     calls = {
@@ -506,12 +534,14 @@ def _advanced_modules(
             config=phase4_config.get("network_stability_config") if isinstance(phase4_config.get("network_stability_config"), dict) else None,
         ),
     }
-    for name, call in calls.items():
+    for component_index, (name, call) in enumerate(calls.items(), start=1):
         try:
             outputs[name] = call()
         except Exception as exc:
             reason = f"{type(exc).__name__}: {exc}"
             outputs[name] = {"status": "failed", "reason": reason, "limitations": [reason]}
+        if progress_callback:
+            progress_callback(completed_offset + component_index, total_components)
     return outputs
 
 

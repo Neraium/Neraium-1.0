@@ -39,6 +39,7 @@ def evaluate_adaptive_persistence(
     sensor_health: dict[str, Any] | None = None,
     operating_mode: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Evaluate elapsed-time support with conservative adaptive requirements."""
 
@@ -136,13 +137,20 @@ def evaluate_adaptive_persistence(
     }
     details = []
     persistent_columns = []
-    for drift in baseline_analysis.get("column_drift", []):
-        if not isinstance(drift, dict) or drift.get("drift_flag") == "normal":
-            continue
+    drift_candidates = [
+        drift
+        for drift in baseline_analysis.get("column_drift", [])
+        if isinstance(drift, dict) and drift.get("drift_flag") != "normal"
+    ]
+    if progress_callback:
+        progress_callback(0, len(drift_candidates))
+    for drift_index, drift in enumerate(drift_candidates, start=1):
         column = str(drift.get("column") or "")
         direction = str(drift.get("direction") or "flat")
         baseline_average = finite_number(drift.get("baseline_average"))
         if not column or direction not in {"up", "down"} or baseline_average is None:
+            if progress_callback:
+                progress_callback(drift_index, len(drift_candidates))
             continue
         fixed_threshold = max(0.01 * abs(baseline_average), 0.01)
         empirical = empirical_by_signal.get(column) if isinstance(empirical_by_signal, dict) else None
@@ -160,6 +168,8 @@ def evaluate_adaptive_persistence(
             )
             observations.append((supported, duration))
         if not observations:
+            if progress_callback:
+                progress_callback(drift_index, len(drift_candidates))
             continue
 
         adjustments = {
@@ -220,6 +230,8 @@ def evaluate_adaptive_persistence(
                 "persistent": persistent,
             }
         )
+        if progress_callback:
+            progress_callback(drift_index, len(drift_candidates))
 
     observed_duration = sum(weights)
     required_observations = max((item["required_observations"] for item in details), default=minimum_required)

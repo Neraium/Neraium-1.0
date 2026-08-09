@@ -83,7 +83,15 @@ def evaluate_sii(
     failures: list[dict[str, str]] = []
     module_statuses: dict[str, dict[str, str]] = {}
 
-    def notify(step: str, progress: float) -> None:
+    def notify(
+        step: str,
+        progress: float,
+        *,
+        completed_units: int | None = None,
+        total_units: int | None = None,
+        unit_type: str | None = None,
+        message: str | None = None,
+    ) -> None:
         if not progress_callback:
             return
         try:
@@ -95,10 +103,45 @@ def evaluate_sii(
                     "modules_completed": list(completed),
                     "modules_limited": list(limited),
                     "modules_failed": list(failed),
+                    "completed_units": completed_units,
+                    "total_units": total_units,
+                    "unit_type": unit_type,
+                    "message": message,
+                    "operation_complete": bool(
+                        total_units is not None
+                        and total_units > 0
+                        and completed_units == total_units
+                    ),
                 },
             )
         except Exception:
             pass
+
+    def unit_progress(
+        step: str,
+        *,
+        unit_type: str,
+        item_label: str,
+        verb: str = "Processed",
+    ):
+        def report(completed_units: int, total_units: int) -> None:
+            measurable_total = total_units if total_units > 0 else None
+            measurable_completed = completed_units if measurable_total is not None else None
+            message = (
+                f"{verb} {completed_units} of {total_units} {item_label}."
+                if total_units > 0
+                else f"No eligible {item_label} were available; completing the applicable checks."
+            )
+            notify(
+                step,
+                0.0,
+                completed_units=measurable_completed,
+                total_units=measurable_total,
+                unit_type=unit_type,
+                message=message,
+            )
+
+        return report
 
     def record(module: str, status: str, reason: str | None = None) -> None:
         normalized_status = status if status in {"complete", "limited", "failed"} else "failed"
@@ -158,7 +201,7 @@ def evaluate_sii(
             f"{type(exc).__name__}: {exc}",
         )
 
-    notify("relationship_analysis", 0.22)
+    notify("relationship_analysis", 0.22, message="Identifying eligible relationship pairs.")
     try:
         attempted.append("relationship_analysis")
         relationship_model = build_relationship_baseline(
@@ -167,6 +210,12 @@ def evaluate_sii(
             total_row_count=int(cfg.get("row_count_total") or len(dict_rows)),
             baseline_analysis=baseline_analysis,
             telemetry_signal_catalog=catalog,
+            progress_callback=unit_progress(
+                "relationship_analysis",
+                unit_type="relationship_pairs",
+                item_label="relationship pairs",
+                verb="Evaluated",
+            ),
         )
         relationship_status = "complete"
         if len(dict_rows) < 12 or int(relationship_model.get("relationship_columns_analyzed") or 0) < 2:
@@ -182,7 +231,7 @@ def evaluate_sii(
         relationship_model = failed_result(exc)
         record("relationship_analysis", "failed", relationship_model["reason"])
 
-    notify("operating_modes", 0.30)
+    notify("operating_modes", 0.30, message="Preparing baseline and recent operating-context windows.")
     try:
         attempted.append("operating_modes")
         operating_mode_result = (
@@ -192,6 +241,12 @@ def evaluate_sii(
                 dict_rows,
                 timestamp_column=timestamp_column,
                 telemetry_signal_catalog=catalog,
+                progress_callback=unit_progress(
+                    "operating_modes",
+                    unit_type="context_windows",
+                    item_label="operating-context windows",
+                    verb="Characterized",
+                ),
             )
         )
         mode_status = "complete" if operating_mode_result.get("match") != "unavailable" else "limited"
@@ -201,7 +256,7 @@ def evaluate_sii(
         operating_mode_result = failed_result(exc)
         record("operating_modes", "failed", operating_mode_result["reason"])
 
-    notify("data_conditions", 0.38)
+    notify("data_conditions", 0.38, message="Preparing timestamp and data-quality checks.")
     try:
         attempted.append("data_conditions")
         data_quality_result, timestamp_profile = build_data_conditions(
@@ -213,6 +268,12 @@ def evaluate_sii(
             baseline_analysis=baseline_analysis,
             provided_data_quality=data_quality if isinstance(data_quality, dict) else None,
             config=cfg,
+            progress_callback=unit_progress(
+                "data_conditions",
+                unit_type="quality_checks",
+                item_label="data-condition checks",
+                verb="Completed",
+            ),
         )
         data_quality_result["operating_mode"] = operating_mode_result
         record("data_conditions", "complete")
@@ -224,7 +285,7 @@ def evaluate_sii(
         timestamp_profile = cfg.get("timestamp_profile") if isinstance(cfg.get("timestamp_profile"), dict) else {}
         record("data_conditions", "failed", data_quality_result["warnings"][0])
 
-    notify("sensor_health", 0.46)
+    notify("sensor_health", 0.46, message="Identifying signal-health checks.")
     try:
         attempted.append("sensor_health")
         sensor_health_result = (
@@ -244,6 +305,12 @@ def evaluate_sii(
                 timestamp_profile=timestamp_profile,
                 relationship_model=relationship_model,
                 telemetry_signal_catalog=catalog,
+                progress_callback=unit_progress(
+                    "sensor_health",
+                    unit_type="health_checks",
+                    item_label="signal-health checks",
+                    verb="Completed",
+                ),
             )
         )
         data_quality_result["sensor_health"] = list(sensor_health_result.get("signals") or [])
@@ -274,7 +341,7 @@ def evaluate_sii(
         }
         record("sensor_health", "failed", sensor_health_result["reason"])
 
-    notify("empirical_thresholds", 0.50)
+    notify("empirical_thresholds", 0.50, message="Identifying threshold candidates.")
     try:
         attempted.append("empirical_thresholds")
         relationship_source_graph = relationship_model.get("relationship_graph") if isinstance(relationship_model, dict) else None
@@ -288,6 +355,12 @@ def evaluate_sii(
             numeric_columns=numeric_columns_used,
             relationship_columns=list(dict.fromkeys(relationship_fit_columns)),
             config=cfg.get("empirical_threshold_config") if isinstance(cfg.get("empirical_threshold_config"), dict) else None,
+            progress_callback=unit_progress(
+                "empirical_thresholds",
+                unit_type="threshold_candidates",
+                item_label="threshold candidates",
+                verb="Evaluated",
+            ),
         )
         record(
             "empirical_thresholds",
@@ -298,7 +371,7 @@ def evaluate_sii(
         empirical_thresholds = failed_result(exc)
         record("empirical_thresholds", "failed", empirical_thresholds["reason"])
 
-    notify("mode_conditioned_baseline", 0.54)
+    notify("mode_conditioned_baseline", 0.54, message="Selecting like-mode historical rows.")
     try:
         attempted.append("mode_conditioned_baseline")
         mode_conditioned = analyze_mode_conditioned_baseline(
@@ -309,6 +382,12 @@ def evaluate_sii(
             relationship_model=relationship_model,
             operating_mode=operating_mode_result,
             config=cfg.get("mode_conditioned_config") if isinstance(cfg.get("mode_conditioned_config"), dict) else None,
+            progress_callback=unit_progress(
+                "mode_conditioned_baseline",
+                unit_type="mode_rows",
+                item_label="historical mode rows",
+                verb="Compared",
+            ),
         )
         record(
             "mode_conditioned_baseline",
@@ -321,7 +400,7 @@ def evaluate_sii(
         mode_conditioned["fallback_reason"] = mode_conditioned["reason"]
         record("mode_conditioned_baseline", "failed", mode_conditioned["reason"])
 
-    notify("relationship_graph_analysis", 0.58)
+    notify("relationship_graph_analysis", 0.58, message="Identifying relationship edges for graph analysis.")
     try:
         attempted.append("relationship_graph_analysis")
         learned_relationship = empirical_thresholds.get("relationship_change") if isinstance(empirical_thresholds, dict) else None
@@ -341,6 +420,12 @@ def evaluate_sii(
             operating_mode=operating_mode_result,
             mode_conditioned_analysis=mode_conditioned,
             config=graph_config,
+            progress_callback=unit_progress(
+                "relationship_graph_analysis",
+                unit_type="relationship_edges",
+                item_label="relationship edges",
+                verb="Evaluated",
+            ),
         )
         record(
             "relationship_graph_analysis",
@@ -351,17 +436,27 @@ def evaluate_sii(
         dynamic_relationship_graph = failed_result(exc)
         record("relationship_graph_analysis", "failed", dynamic_relationship_graph["reason"])
 
-    notify("fixed_persistence", 0.62)
+    notify("fixed_persistence", 0.62, message="Identifying drifted signals for persistence checks.")
     try:
         attempted.append("fixed_persistence")
-        fixed_persistence = assess_persistence(column_names, matrix_rows, baseline_analysis)
+        fixed_persistence = assess_persistence(
+            column_names,
+            matrix_rows,
+            baseline_analysis,
+            progress_callback=unit_progress(
+                "fixed_persistence",
+                unit_type="signals",
+                item_label="drifted signals",
+                verb="Checked",
+            ),
+        )
         fixed_status = "limited" if fixed_persistence.get("status") == "limited" else "complete"
         record("fixed_persistence", fixed_status, (fixed_persistence.get("limitations") or [None])[0])
     except Exception as exc:
         fixed_persistence = failed_result(exc)
         record("fixed_persistence", "failed", fixed_persistence["reason"])
 
-    notify("adaptive_persistence", 0.66)
+    notify("adaptive_persistence", 0.66, message="Identifying signals for elapsed-time persistence checks.")
     try:
         attempted.append("adaptive_persistence")
         adaptive_config = (
@@ -380,6 +475,12 @@ def evaluate_sii(
             sensor_health=sensor_health_result,
             operating_mode=operating_mode_result,
             config=adaptive_config,
+            progress_callback=unit_progress(
+                "adaptive_persistence",
+                unit_type="signals",
+                item_label="adaptive-persistence signals",
+                verb="Checked",
+            ),
         )
         record(
             "adaptive_persistence",
@@ -390,7 +491,7 @@ def evaluate_sii(
         adaptive_persistence = failed_result(exc)
         record("adaptive_persistence", "failed", adaptive_persistence["reason"])
 
-    notify("temporal_analysis", 0.70)
+    notify("temporal_analysis", 0.70, message="Preparing deterministic temporal calculations.")
     try:
         attempted.append("temporal_analysis")
         temporal_config = cfg.get("temporal_config")
@@ -404,7 +505,19 @@ def evaluate_sii(
             numeric_profiles=profile_list,
             timestamp_column=timestamp_column,
             config=temporal_config,
-            progress_callback=None,
+            progress_callback=(
+                lambda step, completed_units, total_units, _timings: notify(
+                    "temporal_analysis",
+                    0.0,
+                    completed_units=completed_units,
+                    total_units=total_units,
+                    unit_type="temporal_calculations",
+                    message=(
+                        f"Completed {completed_units} of {total_units} temporal calculations; "
+                        f"latest: {step.replace('_', ' ')}."
+                    ),
+                )
+            ),
         )
         temporal_status = str(temporal_analysis.get("status") or "complete")
         record("temporal_analysis", temporal_status, temporal_analysis.get("reason"))
@@ -412,7 +525,7 @@ def evaluate_sii(
         temporal_analysis = failed_result(exc)
         record("temporal_analysis", "failed", temporal_analysis["reason"])
 
-    notify("multiscale_analysis", 0.76)
+    notify("multiscale_analysis", 0.76, message="Identifying safe elapsed-time or row-count scales.")
     try:
         attempted.append("multiscale_analysis")
         multiscale_config = dict(cfg.get("multiscale_config") or {}) if isinstance(cfg.get("multiscale_config"), dict) else {}
@@ -422,6 +535,12 @@ def evaluate_sii(
             timestamp_column=timestamp_column,
             empirical_thresholds=empirical_thresholds,
             config=multiscale_config,
+            progress_callback=unit_progress(
+                "multiscale_analysis",
+                unit_type="scales",
+                item_label="analysis scales",
+                verb="Evaluated",
+            ),
         )
         record(
             "multiscale_analysis",
@@ -501,7 +620,7 @@ def evaluate_sii(
                 f"{type(exc).__name__}: {exc}",
             )
 
-    notify("covariance_analysis", 0.84)
+    notify("covariance_analysis", 0.84, message="Preparing complete sensor vectors for covariance analysis.")
     try:
         attempted.append("covariance_analysis")
         runner_result = run_sii_runner(
@@ -526,6 +645,12 @@ def evaluate_sii(
                 else {}
             ),
             telemetry_signal_catalog=catalog,
+            progress_callback=unit_progress(
+                "covariance_analysis",
+                unit_type="sensor_vectors",
+                item_label="sensor vectors",
+                verb="Processed",
+            ),
         )
         covariance = covariance_section(runner_result)
         record("covariance_analysis", str(covariance.get("status") or "complete"), covariance.get("reason"))
@@ -618,7 +743,7 @@ def evaluate_sii(
         "uncertainty": phase_2_uncertainty,
     }
 
-    notify("physics_reasoning", 0.90)
+    notify("physics_reasoning", 0.90, message="Identifying configured engineering priors.")
     try:
         attempted.append("physics_reasoning")
         physics_config = (
@@ -644,6 +769,12 @@ def evaluate_sii(
             priors=configured_priors,
             analytical_evidence=phase_2_evidence,
             equipment_context=equipment_context,
+            progress_callback=unit_progress(
+                "physics_reasoning",
+                unit_type="rules",
+                item_label="engineering priors",
+                verb="Evaluated",
+            ),
         )
         record(
             "physics_reasoning",
@@ -664,7 +795,7 @@ def evaluate_sii(
         }
         record("physics_reasoning", "failed", physics_reasoning["reason"])
 
-    notify("behavioral_model", 0.94)
+    notify("behavioral_model", 0.94, message="Preparing behavioral-model components.")
     try:
         attempted.append("phase_4")
         phase_4 = evaluate_phase4(
@@ -684,6 +815,12 @@ def evaluate_sii(
             physics_reasoning=physics_reasoning,
             covariance_analysis=covariance,
             config=cfg,
+            progress_callback=unit_progress(
+                "behavioral_model",
+                unit_type="model_components",
+                item_label="behavioral-model components",
+                verb="Completed",
+            ),
         )
         phase_4_status = str((phase_4.get("behavioral_model") or {}).get("status") or "limited")
         record(
@@ -776,13 +913,19 @@ def evaluate_sii(
         "scales_used": list(multiscale_analysis.get("scales_used") or []) if isinstance(multiscale_analysis, dict) else [],
     }
 
-    notify("evidence_fusion", 0.98)
+    notify("evidence_fusion", 0.98, message="Identifying evidence candidates for deterministic organization.")
     try:
         attempted.append("evidence_fusion")
         evidence_fusion = fuse_evidence(
             analytical_evidence=fusion_inputs,
             physics_reasoning=physics_reasoning,
             processing_trace=preliminary_trace,
+            progress_callback=unit_progress(
+                "evidence_fusion",
+                unit_type="evidence_candidates",
+                item_label="evidence candidates",
+                verb="Organized",
+            ),
         )
         record(
             "evidence_fusion",

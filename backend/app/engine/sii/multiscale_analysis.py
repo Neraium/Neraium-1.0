@@ -47,6 +47,7 @@ def analyze_multiscale(
     timestamp_column: str | None,
     empirical_thresholds: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Compare recent elapsed-time horizons with strictly earlier telemetry."""
 
@@ -69,7 +70,11 @@ def analyze_multiscale(
             started=started,
             fallback_reason="timestamp_column_unavailable",
             timestamp_coverage=timestamp_coverage,
+            progress_callback=progress_callback,
         )
+
+    if progress_callback:
+        progress_callback(0, len(scale_specs))
 
     if timestamp_coverage < float(cfg["minimum_timestamp_coverage"]) or not monotonic:
         reason = (
@@ -88,13 +93,18 @@ def analyze_multiscale(
             output_metrics={"eligible_scale_count": 0, "configured_scale_count": len(scale_specs)},
             limitations=["Elapsed-time scales could not be constructed safely from the supplied timestamps."],
         )
+        unsupported_scales = []
+        for scale_index, spec in enumerate(scale_specs, start=1):
+            unsupported_scales.append(_unsupported_scale(spec, reason))
+            if progress_callback:
+                progress_callback(scale_index, len(scale_specs))
         return {
             **envelope,
             "method": "chronological_elapsed_horizon_comparison_v2",
             "analysis_basis": "unavailable",
             "timestamp_coverage": round(timestamp_coverage, 6),
             "used_row_fallback": False,
-            "scales": [_unsupported_scale(spec, reason) for spec in scale_specs],
+            "scales": unsupported_scales,
             "scales_used": [],
             "agreement": _empty_agreement(int(cfg["minimum_agreeing_scales"])),
             "cross_scale_interpretation": _cross_scale_interpretation([], _empty_agreement(int(cfg["minimum_agreeing_scales"])), minimum_scales=int(cfg["minimum_agreeing_scales"]), elapsed_time=True),
@@ -122,7 +132,7 @@ def analyze_multiscale(
     if len(selected_columns) < len(list(dict.fromkeys(numeric_columns))):
         limitations.append("Signal columns were bounded by the configured multiscale runtime limit.")
 
-    for spec in scale_specs:
+    for scale_index, spec in enumerate(scale_specs, start=1):
         cutoff = latest.timestamp() - float(spec["seconds"])
         current_indices = [
             index
@@ -149,6 +159,8 @@ def analyze_multiscale(
                     coverage_fraction=coverage_fraction,
                 )
             )
+            if progress_callback:
+                progress_callback(scale_index, len(scale_specs))
             continue
         if len(baseline_indices) < int(cfg["minimum_baseline_rows"]):
             scales.append(
@@ -161,6 +173,8 @@ def analyze_multiscale(
                     coverage_fraction=coverage_fraction,
                 )
             )
+            if progress_callback:
+                progress_callback(scale_index, len(scale_specs))
             continue
         if coverage_fraction < float(cfg["minimum_horizon_coverage"]):
             scales.append(
@@ -173,6 +187,8 @@ def analyze_multiscale(
                     coverage_fraction=coverage_fraction,
                 )
             )
+            if progress_callback:
+                progress_callback(scale_index, len(scale_specs))
             continue
         baseline_rows = [rows[index] for index in baseline_indices]
         current_rows = [rows[index] for index in current_indices]
@@ -213,6 +229,8 @@ def analyze_multiscale(
                 "score": round(scale_score, 6),
             }
         )
+        if progress_callback:
+            progress_callback(scale_index, len(scale_specs))
 
     eligible = [item for item in scales if item["status"] == "complete"]
     minimum_scales = int(cfg["minimum_agreeing_scales"])
@@ -295,6 +313,7 @@ def _row_fallback(
     started: float,
     fallback_reason: str,
     timestamp_coverage: float,
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     learned = empirical_thresholds.get("signal_thresholds", {}) if isinstance(empirical_thresholds, dict) else {}
     specs = _row_scale_specs(
@@ -304,15 +323,21 @@ def _row_fallback(
     scales = []
     activation: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
     relationship_columns = numeric_columns[: max(1, int(config["maximum_relationship_columns"]))]
-    for spec in specs:
+    if progress_callback:
+        progress_callback(0, len(specs))
+    for scale_index, spec in enumerate(specs, start=1):
         active_count = int(spec["rows"])
         active_rows = rows[-active_count:] if active_count <= len(rows) else list(rows)
         baseline_rows = rows[: max(0, len(rows) - len(active_rows))]
         if len(active_rows) < max(int(config["minimum_active_rows"]), active_count):
             scales.append(_unsupported_row_scale(spec, "insufficient_active_rows", len(baseline_rows), len(active_rows)))
+            if progress_callback:
+                progress_callback(scale_index, len(specs))
             continue
         if len(baseline_rows) < int(config["minimum_baseline_rows"]):
             scales.append(_unsupported_row_scale(spec, "insufficient_pre_window_baseline_rows", len(baseline_rows), len(active_rows)))
+            if progress_callback:
+                progress_callback(scale_index, len(specs))
             continue
         signal_metrics = _signal_metrics(
             baseline_rows,
@@ -346,6 +371,8 @@ def _row_fallback(
                 ),
             }
         )
+        if progress_callback:
+            progress_callback(scale_index, len(specs))
     eligible = [item for item in scales if item["status"] == "complete"]
     minimum_scales = int(config["minimum_agreeing_scales"])
     agreement = _agreement(

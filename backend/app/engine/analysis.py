@@ -209,6 +209,7 @@ def assess_persistence(
     columns: list[str],
     rows: list[list[str]],
     baseline_analysis: dict[str, Any],
+    progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     recent_window_rows = baseline_analysis["recent_window_rows"]
     audit_trace = [f"persistence.recent_window_rows:{recent_window_rows}"]
@@ -225,10 +226,15 @@ def assess_persistence(
     recent_rows = rows[-recent_window_rows:]
     details = []
     persistent_columns = []
+    drift_candidates = [
+        drift
+        for drift in baseline_analysis["column_drift"]
+        if drift["drift_flag"] != "normal" and not is_timestamp_like(drift["column"])
+    ]
+    if progress_callback:
+        progress_callback(0, len(drift_candidates))
 
-    for drift in baseline_analysis["column_drift"]:
-        if drift["drift_flag"] == "normal" or is_timestamp_like(drift["column"]):
-            continue
+    for drift_index, drift in enumerate(drift_candidates, start=1):
         column_index = columns.index(drift["column"])
         baseline_average = drift["baseline_average"]
         direction = drift["direction"]
@@ -242,6 +248,8 @@ def assess_persistence(
             if value is not None:
                 values.append(value)
         if not values:
+            if progress_callback:
+                progress_callback(drift_index, len(drift_candidates))
             continue
         if direction == "up":
             supporting_count = sum(value > baseline_average + threshold for value in values)
@@ -266,6 +274,8 @@ def assess_persistence(
         audit_trace.append(
             f"persistence.column:{drift['column']}:{supporting_count}/{len(values)}:{'persistent' if persistent else 'not_persistent'}"
         )
+        if progress_callback:
+            progress_callback(drift_index, len(drift_candidates))
 
     status = "persistent" if persistent_columns else "not_persistent"
     return {

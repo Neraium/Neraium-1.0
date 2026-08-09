@@ -323,6 +323,8 @@ def update_progress(
             break
         if item["status"] not in {"failed", "cancelled"}:
             item["status"] = "completed"
+            if item.get("total_units") is not None:
+                item["completed_units"] = item["total_units"]
             item["percent_complete"] = 100
             item["completed_at"] = item.get("completed_at") or _iso(now)
             item["updated_at"] = item.get("updated_at") or _iso(now)
@@ -334,20 +336,22 @@ def update_progress(
     total = _bounded_units(total_units)
     if prior_total is not None:
         total = prior_total
-    if prior_completed is not None and completed is not None:
-        completed = max(prior_completed, completed)
+    if prior_completed is not None:
+        completed = prior_completed if completed is None else max(prior_completed, completed)
     if total is not None and prior_completed is not None:
         total = max(total, prior_completed)
     if total is not None and completed is not None:
         completed = min(completed, total)
     operation_status = status if status in {"processing", "retrying", "completed", "failed", "cancelled"} else "processing"
+    if operation_status == "completed" and total is not None:
+        completed = total
     target.update({
         "stage": stage,
         "status": operation_status,
         "completed_units": completed,
         "total_units": total,
         "percent_complete": _unit_percent(completed, total, operation_status),
-        "unit_type": str(unit_type or "").strip() or None,
+        "unit_type": str(unit_type or target.get("unit_type") or "").strip() or None,
         "message": str(message or target.get("message") or "").strip() or None,
         "started_at": target.get("started_at") or _iso(now),
         "updated_at": _iso(now),
