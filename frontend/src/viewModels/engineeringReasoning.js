@@ -49,6 +49,15 @@ function sentence(value, maxLength = 180) {
   return `${first.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
+function sentences(value, maxSentences = 2, maxLength = 260) {
+  const clean = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+  const selected = clean.match(/[^.!?]+[.!?]?/g)?.map((item) => item.trim()).filter(Boolean).slice(0, maxSentences) ?? [clean];
+  const text = selected.join(" ");
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 function strengthLabel(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return "not available";
@@ -323,7 +332,7 @@ function buildFinding(raw, index, context) {
   const prior = raw?.engineering_prior ?? raw?.relationship_prior ?? raw?.prior_contribution ?? null;
   const interpretationLevel = prior && hasMappedContext ? 1 : specificRecommendation && hasMappedContext ? 2 : relationship ? 3 : 4;
   const recommendationAllowed = !["Deferred", "Withheld"].includes(tier) && interpretationLevel <= 2;
-  const whyItMatters = sentence(firstText(raw?.why_it_matters, raw?.potential_impact, raw?.behavior_interpretation, raw?.interpretation)) || "Neraium flagged a repeatable difference between the learned baseline and the current comparison.";
+  const whyItMatters = sentences(firstText(raw?.why_it_matters, raw?.potential_impact, raw?.behavior_interpretation, raw?.interpretation)) || "Neraium flagged a difference between the learned baseline and the current comparison.";
   const primaryLimitation = limitations[0] || plainLimitation(contradictions[0]) || "";
   const status = ["Deferred", "Withheld"].includes(tier) ? "Evidence insufficient" : "Change detected";
   const finding = {
@@ -333,7 +342,7 @@ function buildFinding(raw, index, context) {
     system: location.subsystem || location.system || context.siteLocation,
     location,
     relatedAreas: [],
-    observedChange: sentence(observedChange),
+    observedChange: sentences(observedChange),
     whyItMatters,
     tier,
     confidenceReason: confidenceReason(tier, primaryLimitation),
@@ -381,7 +390,7 @@ function buildFinding(raw, index, context) {
     persistence: raw?.persistence,
     relationshipEvidence: raw?.relationship_evidence ?? raw?.relationshipEvidence,
     investigationGuidance: raw?.investigation_guidance ?? raw?.investigationGuidance ?? [],
-    recommendedInvestigation: raw?.recommended_investigation ?? raw?.recommendedInvestigation ?? [],
+    recommendedInvestigation: raw?.recommended_investigation ?? raw?.recommendedInvestigation ?? raw?.next_checks ?? [],
     recommendedFirstAction: recommendationAllowed ? specificRecommendation : "",
     activityTimeline: asArray(raw?.timeline ?? raw?.activity_timeline ?? raw?.activityTimeline),
     sourceTimeRanges: asArray(raw?.source_time_ranges ?? raw?.sourceTimeRanges),

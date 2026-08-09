@@ -141,7 +141,7 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(screen.queryByRole("heading", { name: "Needs attention" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Recently resolved" })).toBeNull();
     expect(screen.queryByText("New findings")).toBeNull();
-    expect(screen.getByText("1 new unexplained change.")).toBeTruthy();
+    expect(screen.getByText("1 new finding for review.")).toBeTruthy();
   });
 
   it("keeps the alert scannable and progressively discloses evidence", () => {
@@ -183,7 +183,7 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
       affected_boundaries: ["Discharge boundary"],
       affected_signals: ["Pump power", "Flow", "Discharge pressure", "Pump speed"],
       localization: { system: "Pumping System", monitored_boundary: "Discharge boundary", likely_investigation_area: "Discharge boundary" },
-      trajectory: { state: "Strengthening", observed_for: "Observed for 18 days", corroboration_change: "Corroboration increased from 2 to 3 relationships", persistence: 0.85 },
+      trajectory: { state: "Strengthening", scope: "evidence_support", evidence_window_duration: "18 days", corroboration_change: "Corroboration increased from 2 to 3 relationships", persistence: 0.85 },
       corroboration: { corroboration_strength: "moderate", relationship_count: 3 },
       comparable_operation: { status: "supported", comparable_period_count: 18, normal_behavior: "Pressure increased with pump speed.", current_behavior: "Pressure response weakened." },
       supporting_relationships: supportingRelationships,
@@ -198,7 +198,7 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
       ],
       timeline: [
         { event_type: "condition_evidence_window", title: "Condition evidence observed", period_label: "Recent comparison window" },
-        { event_type: "trajectory_classified", title: "Trajectory: Strengthening", period_label: "Observed for 18 days" },
+        { event_type: "evidence_trend_classified", title: "Evidence trend: Strengthening", start: "2026-07-01T00:00:00Z", end: "2026-07-19T00:00:00Z" },
       ],
     };
     renderWorkspace({ result: analysisResult({ analysis: { conditions: [condition] } }) });
@@ -214,10 +214,67 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
 
     fireEvent.click(view.getByRole("button", { name: "Investigate" }));
     expect(window.location.pathname).toBe("/findings/condition-pump");
-    expect(screen.getByRole("heading", { name: "Trajectory" })).toBeTruthy();
+    expect(screen.getByText("Evidence trend")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
+    expect(screen.getByRole("heading", { name: "Evidence trend" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Comparable operation" })).toBeTruthy();
     expect(screen.getByText("18 comparable periods")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Condition timeline" })).toBeTruthy();
+  });
+
+  it("keeps context-limited finding review concise and semantically consistent", () => {
+    const condition = {
+      object_type: "condition",
+      condition_id: "condition-cooling",
+      headline: "Cooling Distribution response weakening",
+      status: "open",
+      confidence: "moderate",
+      confidence_score: 0.55,
+      classification: { type: "context_limited_relationship_change", confidence: "limited", reasons: ["Operating conditions differed from baseline."] },
+      data_confidence: { rating: "limited", summary: "Telemetry coverage limits comparison." },
+      operating_mode: { match: "weak", confidence: "limited" },
+      persistence: { persistent: false, status: "not_established", summary: "Persistence is not established by the available evidence windows." },
+      trajectory: { state: "Strengthening", scope: "evidence_support", evidence_window_duration: "20 days 19 hours 55 minutes", persistence: 0.35 },
+      corroboration: { corroboration_strength: "limited", relationship_count: 2 },
+      comparable_operation: { status: "unavailable", evidence_summary: "No historical windows matched the observed operating context with enough paired samples." },
+      affected_systems: ["Cooling Distribution"],
+      affected_signals: ["chw_return_temp_f", "chiller_power_kw", "chiller_amp"],
+      what_changed: "chw_return_temp_f / chiller_power_kw changed from strong to weak coupling. A second related relationship changed in the same evidence window.",
+      why_it_matters: "Two connected changes moved together. Evidence is strengthening, but like-for-like comparability is limited.",
+      supporting_relationships: [
+        { id: "rel-1", columns: ["chw_return_temp_f", "chiller_power_kw"], change_type: "weakened", baseline_strength: 0.88, current_strength: 0.2 },
+        { id: "rel-2", columns: ["chiller_power_kw", "chiller_amp"], change_type: "weakened", baseline_strength: 0.8, current_strength: 0.25 },
+      ],
+      supporting_evidence: [
+        "chw_return_temp_f / chiller_power_kw changed from strong to weak coupling.",
+        "2 corroborating relationships.",
+        "Recent operating conditions differed from baseline.",
+      ],
+      next_checks: [
+        "Verify return temperature, power, and amp data.",
+        "Review load and staging during the evidence window.",
+        "Compare operator logs and setpoint changes with the evidence window.",
+        "This fourth action must not appear.",
+      ],
+    };
+    renderWorkspace({ result: analysisResult({ analysis: { conditions: [condition] } }) });
+
+    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
+
+    expect(screen.getByText("Context-limited relationship change")).toBeTruthy();
+    expect(screen.getByText("Not established")).toBeTruthy();
+    expect(screen.getByText("Evidence trend")).toBeTruthy();
+    expect(screen.getByText("Strengthening")).toBeTruthy();
+    expect(screen.queryByText(/^Trajectory$/)).toBeNull();
+    expect(screen.queryByText(/Observed for 81 days/i)).toBeNull();
+    expect(screen.getByText("chw_return_temp_f / chiller_power_kw changed from strong to weak coupling.")).toBeTruthy();
+    expect(document.querySelectorAll(".case-sections--review .classification-guidance > li")).toHaveLength(3);
+    expect(screen.queryByText("This fourth action must not appear.")).toBeNull();
+    const headings = [...document.querySelectorAll(".case-sections--review > section > h2")].map((node) => node.textContent);
+    expect(headings).toEqual(["What changed", "Why it matters", "What to check first", "Key evidence"]);
+    for (const paragraph of document.querySelectorAll(".case-sections--review p")) {
+      expect(paragraph.textContent.length).toBeLessThanOrEqual(260);
+    }
   });
 
   it("moves an acknowledged investigation out of New without changing classification", async () => {
@@ -265,7 +322,7 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
     expect(window.location.pathname).toBe("/findings/finding-1");
     const headings = [...document.querySelectorAll(".case-sections--review > section > h2")].map((node) => node.textContent);
-    expect(headings).toEqual(["What changed", "Why it deserves attention", "What to check first", "Relationship timeline", "Key evidence"]);
+    expect(headings).toEqual(["What changed", "Why it matters", "What to check first", "Key evidence"]);
     expect(screen.getAllByRole("button", { name: "I’m checking this" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Open investigation" })).toBeTruthy();
   });
@@ -311,7 +368,7 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     const result = analysisResult({ analysis: { insights: [] }, result: { data_gaps: [], data_quality: { coverage_percent: 100, warnings: [] } } });
     renderWorkspace({ result });
     expect(screen.getByText("All monitored systems are within learned behavior.")).toBeTruthy();
-    expect(screen.getByText("No new unexplained changes require review.")).toBeTruthy();
+    expect(screen.getByText("No new findings require review.")).toBeTruthy();
     expect(screen.queryByText("Evidence insufficient")).toBeNull();
   });
 

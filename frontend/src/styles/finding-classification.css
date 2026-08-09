@@ -14,6 +14,7 @@
 }
 
 .finding-classification--known { --finding-accent: #76a9c8; }
+.finding-classification--context { --finding-accent: #8aa3b8; }
 .finding-classification--instrumentation { --finding-accent: #d6a15b; }
 .finding-classification--systemic { --finding-accent: #168cff; }
 .finding-classification--insufficient { --finding-accent: #758292; }

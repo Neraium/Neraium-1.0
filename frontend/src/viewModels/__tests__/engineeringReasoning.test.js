@@ -274,7 +274,8 @@ describe("engineering reasoning model", () => {
           },
           trajectory: {
             state: "Strengthening",
-            observed_for: "Observed for 18 days",
+            scope: "evidence_support",
+            evidence_window_duration: "18 days",
             corroboration_change: "Corroboration increased from 2 to 3 relationships",
             persistence: 0.85,
           },
@@ -295,7 +296,7 @@ describe("engineering reasoning model", () => {
             "Corroboration increased from 2 to 3 relationships.",
           ],
           next_checks: ["Verify source data and inspect the affected pressure boundary."],
-          timeline: [{ event_type: "trajectory_classified", title: "Trajectory: Strengthening", period_label: "Observed for 18 days" }],
+          timeline: [{ event_type: "evidence_trend_classified", title: "Evidence trend: Strengthening", start: "2026-07-01T00:00:00Z", end: "2026-07-19T00:00:00Z" }],
         }],
         insights: [{ id: "legacy-finding", title: "Relationship change detected", supporting_evidence: ["Legacy evidence"] }],
       },

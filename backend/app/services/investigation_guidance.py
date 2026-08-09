@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from app.services.finding_classification import (
+    CONTEXT_LIMITED_RELATIONSHIP_CHANGE,
     INSUFFICIENT_EVIDENCE,
     KNOWN_OPERATIONAL_CHANGE,
     POSSIBLE_INSTRUMENTATION_ISSUE,
@@ -93,7 +94,7 @@ def build_investigation_guidance(
             ),
             _item(
                 f"Verify the observed relationship behavior is expected for {recent_mode}.",
-                "The relationship shift aligns with a recorded mode difference, but expected behavior still requires human confirmation.",
+                "The relationship shift occurred with a recorded mode difference, but expected behavior still requires human confirmation.",
                 "controls",
             ),
             _item(
@@ -127,6 +128,26 @@ def build_investigation_guidance(
             _item(
                 "Escalate for engineering review only if the reviewed evidence continues to support concern.",
                 str(classification.get("certainty_limit") or "The classification describes a relationship change and does not establish a cause or exact outcome."),
+                "documentation",
+            ),
+        ]
+        return _rank(items)
+
+    if classification_type == CONTEXT_LIMITED_RELATIONSHIP_CHANGE:
+        items = [
+            _item(
+                f"Verify source data for {signal_phrase}.",
+                "Source validation confirms that the observed relationship change is present in the evidence window.",
+                "data_quality",
+            ),
+            _item(
+                "Review load and staging during the evidence window.",
+                _mode_reason(operating_mode, reasons),
+                "operating_context",
+            ),
+            _item(
+                "Compare operator logs and setpoint changes with the evidence window.",
+                "Recorded context can clarify the association without assuming causality.",
                 "documentation",
             ),
         ]
@@ -173,7 +194,7 @@ def _rank(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         seen.add(key)
         ranked.append({**item, "rank": len(ranked) + 1})
-    return ranked
+    return ranked[:3]
 
 
 def _normalize_existing(values: list[Any] | None) -> list[dict[str, Any]]:

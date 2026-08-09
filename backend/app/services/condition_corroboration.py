@@ -8,6 +8,7 @@ from typing import Any
 
 from app.services.change_trajectory import build_change_trajectory
 from app.services.finding_classification import (
+    CONTEXT_LIMITED_RELATIONSHIP_CHANGE,
     INSUFFICIENT_EVIDENCE,
     KNOWN_OPERATIONAL_CHANGE,
     UNEXPLAINED_SYSTEMIC_CHANGE,
@@ -208,18 +209,23 @@ class ConditionCorroborationService:
                 operating_mode=operating_mode,
                 baseline_analysis=baseline_analysis,
             )
+            evidence_interval = _condition_evidence_interval(support)
             trajectory = build_change_trajectory(
                 support,
                 rows=rows,
                 timestamp_column=timestamp_column,
                 baseline_trajectory=baseline_analysis.get("drift_trajectory"),
+                evidence_start=evidence_interval[0] if evidence_interval else None,
+                evidence_end=evidence_interval[1] if evidence_interval else None,
             )
             trajectory["operational_explanation"] = (
                 "No known operational explanation"
                 if classification.get("type") == UNEXPLAINED_SYSTEMIC_CHANGE
                 and str(operating_mode.get("match") or "").lower() == "strong"
-                else "Aligned with a known operating-context change"
+                else "A recorded operating-context change coincided with the evidence window"
                 if classification.get("type") == KNOWN_OPERATIONAL_CHANGE
+                else "Operating context was not comparable; attribution is not established"
+                if classification.get("type") == CONTEXT_LIMITED_RELATIONSHIP_CHANGE
                 else "Operational explanation not established"
             )
             comparable = self.comparable_service.retrieve(
@@ -246,6 +252,7 @@ class ConditionCorroborationService:
                 corroboration=corroboration,
                 trajectory=trajectory,
                 comparable=comparable,
+                operating_mode=operating_mode,
             )
             next_checks = _next_checks(localization, support)
             escalation = evaluate_condition_escalation(
@@ -313,14 +320,32 @@ class ConditionCorroborationService:
                     "recommended_check": next_checks[0] if next_checks else "",
                     "recommended_investigation": next_checks,
                     "activity_timeline": timeline,
+                    "source_time_ranges": _condition_source_time_ranges(
+                        primary,
+                        evidence_interval,
+                    ),
                     "supporting_evidence": [item["summary"] for item in evidence],
-                    "what_changed": evidence[0]["summary"] if evidence else corroboration.evidence_summary,
-                    "why_it_matters": _condition_importance(corroboration, trajectory),
+                    "what_changed": _condition_change_summary(support),
+                    "why_it_matters": _condition_importance(
+                        corroboration,
+                        trajectory,
+                        comparable,
+                        operating_mode,
+                    ),
                     "operating_mode": operating_mode,
                     "data_confidence": data_quality.get("data_confidence") or {},
                     "persistence": {
                         "persistent": float(trajectory.get("persistence") or 0.0) >= 0.6,
-                        "summary": trajectory.get("observed_for"),
+                        "status": (
+                            "persistent"
+                            if float(trajectory.get("persistence") or 0.0) >= 0.6
+                            else "not_established"
+                        ),
+                        "summary": (
+                            "Persistence is supported across available evidence windows."
+                            if float(trajectory.get("persistence") or 0.0) >= 0.6
+                            else "Persistence is not established by the available evidence windows."
+                        ),
                     },
                     "source_tags": corroboration.affected_signals,
                 }
@@ -449,7 +474,7 @@ def evaluate_condition_escalation(
         reasons.extend(
             [
                 f"{relationship_count} related relationships provide {strength} corroboration.",
-                f"The condition trajectory is {trajectory_state.lower()}.",
+                f"The evidence trend is {trajectory_state.lower()}.",
                 "Operating-mode and data-quality evidence support like-for-like comparison.",
                 "The monitored area is marked high criticality.",
             ]
@@ -459,7 +484,7 @@ def evaluate_condition_escalation(
         reasons.extend(
             [
                 f"{relationship_count} related relationships corroborate the condition.",
-                f"The trajectory is {trajectory_state.lower() or 'available for review'}.",
+                f"The evidence trend is {trajectory_state.lower() or 'available for review'}.",
                 f"Data quality is {quality}.",
             ]
         )
@@ -584,6 +609,17 @@ def _relationship_interval(item: dict[str, Any]) -> tuple[datetime, datetime] | 
                         value.get("current_end") or value.get("end"),
                     )
                 )
+    time_window = item.get("time_window")
+    if isinstance(time_window, dict):
+        candidates.append(
+            (
+                time_window.get("current_start") or time_window.get("start"),
+                time_window.get("current_end") or time_window.get("end"),
+            )
+        )
+    elif isinstance(time_window, str) and " to " in time_window:
+        raw_start, raw_end = time_window.split(" to ", 1)
+        candidates.append((raw_start, raw_end))
     candidates.append(
         (
             item.get("current_start") or item.get("start"),
@@ -606,9 +642,44 @@ def _relationship_interval(item: dict[str, Any]) -> tuple[datetime, datetime] | 
     for raw_start, raw_end in candidates:
         start = _datetime(raw_start)
         end = _datetime(raw_end)
-        if start and end:
-            return (min(start, end), max(start, end))
+        if start and end and end > start:
+            return (start, end)
     return None
+
+
+def _condition_evidence_interval(
+    relationships: list[dict[str, Any]],
+) -> tuple[datetime, datetime] | None:
+    intervals = [
+        interval
+        for item in relationships
+        if (interval := _relationship_interval(item)) is not None
+    ]
+    if not intervals:
+        return None
+    start = min(interval[0] for interval in intervals)
+    end = max(interval[1] for interval in intervals)
+    return (start, end) if end > start else None
+
+
+def _condition_source_time_ranges(
+    primary: dict[str, Any],
+    interval: tuple[datetime, datetime] | None,
+) -> list[dict[str, Any]]:
+    if not interval:
+        return []
+    time_window = primary.get("time_window")
+    baseline_start = time_window.get("baseline_start") if isinstance(time_window, dict) else None
+    baseline_end = time_window.get("baseline_end") if isinstance(time_window, dict) else None
+    return [
+        {
+            "label": "condition_evidence_window",
+            "baseline_start": baseline_start,
+            "baseline_end": baseline_end,
+            "current_start": interval[0].isoformat(),
+            "current_end": interval[1].isoformat(),
+        }
+    ]
 
 
 def _corroboration_result(
@@ -720,7 +791,11 @@ def _condition_classification(
     baseline_analysis: dict[str, Any],
 ) -> dict[str, Any]:
     explicit = (related_finding or {}).get("classification")
-    if isinstance(explicit, dict) and explicit.get("type"):
+    if (
+        isinstance(explicit, dict)
+        and explicit.get("type")
+        and explicit.get("type") != KNOWN_OPERATIONAL_CHANGE
+    ):
         return explicit
 
     primary = max(support, key=_relationship_rank)
@@ -742,22 +817,36 @@ def _condition_classification(
         if isinstance(trajectory, dict)
         else []
     )
-    persistent = bool(persistent_signals & affected) or all(
-        int(item.get("recent_sample_size") or 0) >= 6 for item in support
+    relationship_persistence = any(
+        item.get("persistent") is True
+        or str(item.get("persistence_status") or item.get("status") or "").lower()
+        in {"persistent", "confirmed", "sustained"}
+        or _score(item.get("persistence_score")) >= 0.6
+        for item in support
     )
+    persistent = bool(persistent_signals & affected) or relationship_persistence
     relationship_evidence = {
         "baseline_sample_size": primary.get("baseline_sample_size"),
         "recent_sample_size": primary.get("recent_sample_size"),
         "confidence_score": primary.get("confidence_score"),
         "correlation_delta": primary.get("correlation_delta"),
     }
-    return classify_finding(
+    classification = classify_finding(
         data_confidence=data_confidence,
         sensor_health=sensor_health,
         operating_mode=operating_mode,
-        persistence={"persistent": persistent, "summary": "The changed relationships persist in the available current window."},
+        persistence={
+            "persistent": persistent,
+            "status": "persistent" if persistent else "not_established",
+            "summary": (
+                "Persistence is supported by explicit persistence evidence."
+                if persistent
+                else "Persistence is not established by the available evidence."
+            ),
+        },
         relationship_evidence=relationship_evidence,
     )
+    return classification
 
 
 def _matching_finding(
@@ -798,15 +887,10 @@ def _condition_evidence(
     corroboration: ConditionCorroboration,
     trajectory: dict[str, Any],
     comparable: dict[str, Any],
+    operating_mode: dict[str, Any],
 ) -> list[dict[str, Any]]:
     primary = max(support, key=_relationship_rank)
     evidence = [
-        {
-            "type": "corroboration",
-            "summary": corroboration.evidence_summary,
-            "relationship_ids": [_relationship_id(item) for item in support],
-            "source_signals": corroboration.affected_signals,
-        },
         {
             "type": "relationship_change",
             "summary": _primary_relationship_summary(primary),
@@ -814,12 +898,24 @@ def _condition_evidence(
             "source_signals": primary["columns"],
         },
         {
-            "type": "trajectory",
-            "summary": f"Trajectory is {trajectory.get('state', 'unavailable').lower()}; {trajectory.get('corroboration_change', 'corroboration history is unavailable').lower()}.",
+            "type": "corroboration",
+            "summary": (
+                f"{corroboration.relationship_count} corroborating relationship"
+                f"{'s' if corroboration.relationship_count != 1 else ''}."
+            ),
             "relationship_ids": [_relationship_id(item) for item in support],
             "source_signals": corroboration.affected_signals,
         },
     ]
+    if str(operating_mode.get("match") or "").lower() in {"partial", "weak"}:
+        evidence.append(
+            {
+                "type": "operating_context",
+                "summary": "Recent operating conditions differed from baseline.",
+                "relationship_ids": [_relationship_id(primary)],
+                "source_signals": primary["columns"],
+            }
+        )
     if comparable.get("status") == "supported":
         evidence.append(
             {
@@ -829,6 +925,23 @@ def _condition_evidence(
                 "source_signals": primary["columns"],
             }
         )
+    else:
+        evidence.append(
+            {
+                "type": "comparable_operation",
+                "summary": "Like-for-like historical windows were unavailable.",
+                "relationship_ids": [_relationship_id(primary)],
+                "source_signals": primary["columns"],
+            }
+        )
+    evidence.append(
+        {
+            "type": "evidence_trend",
+            "summary": f"Evidence trend: {str(trajectory.get('state') or 'unavailable').lower()}.",
+            "relationship_ids": [_relationship_id(item) for item in support],
+            "source_signals": corroboration.affected_signals,
+        }
+    )
     if conflicts:
         evidence.append(
             {
@@ -879,11 +992,22 @@ def _condition_timeline(
         )
     timeline.append(
         {
-            "event_type": "trajectory_classified",
-            "title": f"Trajectory: {trajectory.get('state', 'Unavailable')}",
+            "event_type": "evidence_trend_classified",
+            "title": f"Evidence trend: {trajectory.get('state', 'Unavailable')}",
             "detail": trajectory.get("corroboration_change") or "Evidence evolution was classified from available windows.",
-            "period_label": trajectory.get("observed_for") or "Available comparison window",
-            "precision": "period",
+            **(
+                {
+                    "start": trajectory["evidence_window"]["start"],
+                    "end": trajectory["evidence_window"]["end"],
+                    "precision": "source_timestamp",
+                }
+                if trajectory.get("evidence_window", {}).get("start")
+                and trajectory.get("evidence_window", {}).get("end")
+                else {
+                    "period_label": "Available comparison window",
+                    "precision": "period",
+                }
+            ),
         }
     )
     if generated_at:
@@ -919,16 +1043,16 @@ def _condition_headline(
 def _condition_importance(
     corroboration: ConditionCorroboration,
     trajectory: dict[str, Any],
+    comparable: dict[str, Any],
+    operating_mode: dict[str, Any],
 ) -> str:
     if corroboration.relationship_count == 1:
         return "The relationship remains isolated evidence and should not be treated as a broader system condition."
-    trajectory_label = str(trajectory.get("state") or "developing").lower()
-    article = "an" if trajectory_label[:1] in {"a", "e", "i", "o", "u"} else "a"
-    return (
-        f"{corroboration.relationship_count} connected relationship changes form a "
-        f"{corroboration.corroboration_strength} evidence pattern with "
-        f"{article} {trajectory_label} trajectory."
-    )
+    first = f"{corroboration.relationship_count} connected changes moved together."
+    trend = str(trajectory.get("state") or "developing").lower()
+    if comparable.get("status") != "supported" or str(operating_mode.get("match") or "").lower() != "strong":
+        return f"{first} Evidence is {trend}, but like-for-like comparability is limited."
+    return f"{first} Like-for-like history is available, and the evidence trend is {trend}."
 
 
 def _next_checks(
@@ -936,21 +1060,12 @@ def _next_checks(
     relationships: list[dict[str, Any]],
 ) -> list[str]:
     signals = localization.get("signals_involved") or []
-    boundary = localization.get("monitored_boundary")
-    system = localization.get("system")
     checks = [
         f"Verify source data for {', '.join(signals[:3])}." if signals else "Verify the contributing source data.",
-        (
-            f"Inspect the monitored {boundary.lower()} and compare it with operator logs."
-            if boundary
-            else f"Inspect the monitored {system.lower()} boundary and compare it with operator logs."
-            if system
-            else "Review the monitored signal boundary and operator logs."
-        ),
-        "Confirm staging, setpoints, load, and operating mode during the evidence window.",
-        "Compare the next like-for-like operating period to determine whether corroboration strengthens or weakens.",
+        "Review load and staging during the evidence window.",
+        "Compare operator logs and setpoint changes with the evidence window.",
     ]
-    return _dedupe(checks)
+    return _dedupe(checks)[:3]
 
 
 def _condition_confidence(
@@ -1068,6 +1183,17 @@ def _primary_relationship_summary(item: dict[str, Any]) -> str:
     if baseline is not None and current is not None:
         return f"{label} changed from {_strength_label(baseline)} to {_strength_label(current)} coupling."
     return f"{label} is classified as {str(item.get('change_type') or 'changed').replace('_', ' ')}."
+
+
+def _condition_change_summary(relationships: list[dict[str, Any]]) -> str:
+    primary = max(relationships, key=_relationship_rank)
+    first = _primary_relationship_summary(primary)
+    related_count = max(0, len(relationships) - 1)
+    if related_count == 1:
+        return f"{first} A second related relationship changed in the same evidence window."
+    if related_count > 1:
+        return f"{first} {related_count} related relationships changed in the same evidence window."
+    return first
 
 
 def _strength_label(value: Any) -> str:

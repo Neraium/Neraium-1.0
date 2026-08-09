@@ -1,4 +1,5 @@
 from app.services.finding_classification import (
+    CONTEXT_LIMITED_RELATIONSHIP_CHANGE,
     INSUFFICIENT_EVIDENCE,
     KNOWN_OPERATIONAL_CHANGE,
     POSSIBLE_INSTRUMENTATION_ISSUE,
@@ -190,7 +191,7 @@ def test_normal_stage_change_classifies_as_known_operational_change() -> None:
     )
 
     assert classification["type"] == KNOWN_OPERATIONAL_CHANGE
-    assert "root cause" in classification["certainty_limit"]
+    assert "causality" in classification["certainty_limit"]
 
 
 def test_stuck_signal_classifies_as_possible_instrumentation_issue() -> None:
@@ -257,10 +258,10 @@ def test_weak_data_or_missing_mode_prevents_systemic_classification() -> None:
     )
 
     assert low_data["type"] == INSUFFICIENT_EVIDENCE
-    assert missing_mode["type"] == INSUFFICIENT_EVIDENCE
+    assert missing_mode["type"] == CONTEXT_LIMITED_RELATIONSHIP_CHANGE
 
 
-def test_partial_mode_match_caps_known_change_confidence() -> None:
+def test_partial_band_match_is_context_limited_without_direct_evidence() -> None:
     classification = classify_finding(
         data_confidence={"rating": "high", "reasons": []},
         sensor_health=_healthy_signals(),
@@ -274,8 +275,33 @@ def test_partial_mode_match_caps_known_change_confidence() -> None:
         relationship_evidence=_relationship_evidence(),
     )
 
-    assert classification["type"] == KNOWN_OPERATIONAL_CHANGE
+    assert classification["type"] == CONTEXT_LIMITED_RELATIONSHIP_CHANGE
     assert classification["confidence"] == "limited"
+
+
+def test_limited_data_and_weak_mode_require_separate_direct_context_evidence() -> None:
+    inputs = {
+        "data_confidence": {"rating": "limited", "reasons": ["Coverage is limited."]},
+        "sensor_health": _healthy_signals(),
+        "operating_mode": {
+            "match": "weak",
+            "confidence": "limited",
+            "known_operational_change": True,
+            "differences": [{"feature": "equipment_state", "reason": "Equipment state differed."}],
+        },
+        "persistence": {"persistent": False},
+        "relationship_evidence": _relationship_evidence(),
+    }
+
+    bounded = classify_finding(**inputs)
+    direct = classify_finding(
+        **inputs,
+        known_operational_evidence=["Operator log records a staging change in the evidence window."],
+    )
+
+    assert bounded["type"] == CONTEXT_LIMITED_RELATIONSHIP_CHANGE
+    assert direct["type"] == KNOWN_OPERATIONAL_CHANGE
+    assert direct["confidence"] == "limited"
 
 
 def test_maintenance_event_is_available_as_known_operational_context() -> None:
@@ -380,7 +406,7 @@ def test_explanation_layer_uses_classification_specific_cautious_wording() -> No
             {"rating": "high", "reasons": [], "affected_signals": []},
             _healthy_signals(),
             KNOWN_OPERATIONAL_CHANGE,
-            "consistent with the available operating context",
+            "recorded context change occurred in the same evidence window",
         ),
         (
             {"match": "strong", "confidence": "high", "reasons": ["Operating context matched."]},

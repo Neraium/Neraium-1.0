@@ -64,11 +64,11 @@ export default function OperationsBrief({ model, reviewRecords = {}, onReview, o
       {allQuiet ? (
         <section className="operations-quiet" aria-live="polite">
           <span className="operations-quiet__mark" aria-hidden="true" />
-          <div><h2>All monitored systems are within learned behavior.</h2><p>No new unexplained changes require review.</p></div>
+          <div><h2>All monitored systems are within learned behavior.</h2><p>No new findings require review.</p></div>
         </section>
       ) : (
         <section className="operations-answer" aria-live="polite">
-          <strong>{brief.newFindings.length ? `${brief.newFindings.length} new unexplained ${brief.newFindings.length === 1 ? "change" : "changes"}.` : "No new unexplained changes."}</strong>
+          <strong>{brief.newFindings.length ? `${brief.newFindings.length} new ${brief.newFindings.length === 1 ? "finding" : "findings"} for review.` : "No new findings for review."}</strong>
           <span>{brief.needsAttention.length ? `${brief.needsAttention.length} unresolved ${brief.needsAttention.length === 1 ? "finding needs" : "findings need"} attention.` : monitoringCount ? `${monitoringCount} ${monitoringCount === 1 ? "item is" : "items are"} being monitored.` : ""}</span>
         </section>
       )}
@@ -76,7 +76,7 @@ export default function OperationsBrief({ model, reviewRecords = {}, onReview, o
       {escalation ? (
         <section className="operations-escalation" aria-label="Prompt engineering review">
           <div><span>Prompt engineering review</span><strong>{escalation.title}</strong></div>
-          <p>{escalationState?.strengthening ? "A persistent relationship change is strengthening across related signals." : "A persistent relationship change is supported across related signals."}</p>
+          <p>{escalationState?.strengthening ? "Evidence for the persistent relationship change is strengthening across related signals." : "A persistent relationship change is supported across related signals."}</p>
           <ul><li>{escalation.classificationPresentation?.classificationConfidence ?? escalation.tier} confidence</li><li>Strong mode match</li><li>{escalation.classificationPresentation?.persistence?.label ?? "Persistent"}</li></ul>
           <button type="button" className="forensic-button" onClick={() => onReview?.(escalation)}>Review</button>
         </section>

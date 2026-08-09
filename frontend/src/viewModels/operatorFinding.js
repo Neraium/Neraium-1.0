@@ -461,7 +461,13 @@ export const FINDING_CLASSIFICATIONS = Object.freeze({
     label: "Known operational change",
     tone: "known",
     priority: "Informational review",
-    meaning: "The observed shift is explained by available operational context.",
+    meaning: "A directly observed operating-context change coincided with the relationship shift; causality is not established.",
+  },
+  context_limited_relationship_change: {
+    label: "Context-limited relationship change",
+    tone: "context",
+    priority: "Context review",
+    meaning: "The relationship changed, but differing operating context limits like-for-like interpretation.",
   },
   possible_instrumentation_issue: {
     label: "Possible instrumentation issue",
@@ -500,6 +506,8 @@ const TIMELINE_EVENT_TYPES = new Set([
   "operating_mode_event",
   "sensor_health_warning",
   "analysis_window",
+  "condition_evidence_window",
+  "evidence_trend_classified",
   "finding_generated",
 ]);
 
@@ -541,7 +549,7 @@ export function normalizeFindingPresentation(finding = {}) {
     : "This classification is bounded by the evidence recorded in the current analysis.");
   const dataRating = normalizeEvidenceLabel(rawDataConfidence.rating, "Unavailable");
   const modeMatch = normalizeModeMatch(rawOperatingMode.match);
-  const persistence = normalizePersistence(rawPersistence, finding.persistenceDuration ?? finding.persistence_duration);
+  const persistence = normalizePersistence(rawPersistence);
   const classificationConfidence = legacy
     ? "Unavailable"
     : normalizeEvidenceLabel(rawClassification.confidence, "Unavailable");
@@ -628,6 +636,7 @@ export function normalizeInvestigationGuidance(finding = {}, classificationReaso
 
   return normalized
     .sort((left, right) => left.rank - right.rank)
+    .slice(0, 3)
     .map((item, index) => ({ ...item, rank: index + 1 }));
 }
 
@@ -702,18 +711,22 @@ export function normalizeFindingTimeline(finding = {}) {
 }
 
 function normalizeTimelineEvent(item) {
-  const eventType = presentationText(item.event_type ?? item.eventType);
+  const rawEventType = presentationText(item.event_type ?? item.eventType);
+  const eventType = rawEventType === "trajectory_classified" ? "evidence_trend_classified" : rawEventType;
   const time = presentationText(item.time);
   const start = presentationText(item.start);
   const end = presentationText(item.end);
-  const periodLabel = presentationText(item.period_label ?? item.periodLabel)
+  let periodLabel = presentationText(item.period_label ?? item.periodLabel)
     || (!parseableDate(time) ? time : "");
+  if (rawEventType === "trajectory_classified" && /^observed for\b/i.test(periodLabel) && !start && !end) {
+    periodLabel = "";
+  }
   const exactTime = parseableDate(time) ? time : "";
   if (!eventType && !time && !start && !end && !periodLabel) return null;
   const normalizedType = TIMELINE_EVENT_TYPES.has(eventType) ? eventType : "analysis_window";
   return {
     eventType: normalizedType,
-    title: presentationText(item.title) || "Recorded evidence event",
+    title: (presentationText(item.title) || "Recorded evidence event").replace(/^Trajectory:/i, "Evidence trend:"),
     detail: presentationText(item.detail),
     time: exactTime,
     start,
@@ -739,18 +752,16 @@ function timelineRangeEvent({ eventType, title, detail, start, end }) {
   };
 }
 
-function normalizePersistence(value, durationValue) {
-  const duration = presentationText(value.duration ?? value.persistence_duration ?? value.persistenceDuration ?? durationValue);
+function normalizePersistence(value) {
   const status = presentationText(value.status).toLowerCase();
   const persistent = value.persistent === true || ["persistent", "confirmed", "sustained"].includes(status);
   let label = "Unavailable";
-  if (duration) label = persistent ? `Persistent for ${duration}` : duration;
-  else if (persistent) label = "Persistent";
-  else if (["limited", "unconfirmed"].includes(status) || value.persistent === false) label = "Not established";
+  if (persistent) label = "Persistent";
+  else if (["limited", "unconfirmed", "not_established"].includes(status) || value.persistent === false) label = "Not established";
   return {
     status: status || "unavailable",
     persistent,
-    duration,
+    duration: "",
     label,
     summary: presentationText(value.summary) || (persistent ? "Persistence is supported by the current evidence." : "Persistence evidence is unavailable or not established."),
     reasons: uniquePresentationText(value.reasons),

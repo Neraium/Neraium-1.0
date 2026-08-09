@@ -125,6 +125,21 @@ describe("operations brief grouping and ranking", () => {
     expect(brief.priorityExplanation).not.toMatch(/score|\d+/i);
   });
 
+  it("labels a strengthening trajectory as evidence rather than behavior direction", () => {
+    const finding = systemic("evidence-trend", "2026-07-25T05:00:00Z");
+    const brief = buildOperationsBrief({
+      findings: [finding],
+      result: {
+        analysis_explanation: {
+          insights: [{ id: finding.id, trajectory: { state: "Strengthening", scope: "evidence_support" } }],
+        },
+      },
+    }, {}, new Date("2026-07-26T06:00:00Z"));
+
+    expect(brief.priorityExplanation).toContain("strengthening evidence");
+    expect(brief.priorityExplanation).not.toContain("strengthening change");
+  });
+
   it("keeps recently resolved history restrained", () => {
     const findings = Array.from({ length: 7 }, (_, index) => systemic(`resolved-${index}`, "2026-07-20T05:00:00Z"));
     const records = Object.fromEntries(findings.map((finding, index) => [finding.id, { state: "explained", reviewedAt: index === 6 ? "2026-07-01T05:00:00Z" : `2026-07-2${index}T05:00:00Z` }]));

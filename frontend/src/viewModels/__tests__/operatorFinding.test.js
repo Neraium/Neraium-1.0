@@ -87,7 +87,7 @@ describe("normalizeFindingPresentation", () => {
     }]);
   });
 
-  it("preserves structured guidance and explicit persistence duration", () => {
+  it("preserves structured guidance without treating an unbounded duration as persistence", () => {
     const normalized = normalizeFindingPresentation({
       classification: { type: "unexplained_systemic_change", confidence: "high", reasons: ["Comparable modes matched."] },
       data_confidence: { rating: "high", summary: "Quality checks passed." },
@@ -97,7 +97,8 @@ describe("normalizeFindingPresentation", () => {
     });
 
     expect(normalized.label).toBe("Unexplained systemic change");
-    expect(normalized.persistence.label).toBe("Persistent for 18 days");
+    expect(normalized.persistence.label).toBe("Persistent");
+    expect(normalized.persistence.duration).toBe("");
     expect(normalized.investigationGuidance[0].reason).toBe("The change persisted.");
   });
 

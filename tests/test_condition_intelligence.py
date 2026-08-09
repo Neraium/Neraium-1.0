@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.services.change_trajectory import classify_trajectory
+from app.services.change_trajectory import build_change_trajectory, classify_trajectory
 from app.services.analysis_result_contract import build_analysis_result, is_canonical_analysis_result
 from app.services.condition_corroboration import (
     ConditionCorroborationService,
@@ -321,9 +321,93 @@ def test_condition_creation_includes_localization_timeline_and_next_checks() -> 
     assert condition["localization"]["monitored_boundary"] == "Discharge boundary"
     assert condition["affected_boundaries"] == ["Discharge boundary"]
     assert len(condition["timeline"]) == 3
-    assert condition["timeline"][1]["event_type"] == "trajectory_classified"
+    assert condition["timeline"][1]["event_type"] == "evidence_trend_classified"
     assert condition["next_checks"][0].startswith("Verify source data")
     assert condition["comparable_operation"]["status"] == "supported"
+
+
+def test_condition_duration_and_copy_use_the_relationship_evidence_window() -> None:
+    relationships = [
+        relationship("rel-1", "chw_return_temp_f", "chiller_power_kw", confidence=0.55),
+        relationship("rel-2", "chiller_power_kw", "chiller_amp", confidence=0.52),
+    ]
+    evidence_window = {
+        "baseline_start": "2026-06-01T00:00:00+00:00",
+        "baseline_end": "2026-06-30T23:55:00+00:00",
+        "current_start": "2026-07-11T04:00:00+00:00",
+        "current_end": "2026-07-31T23:55:00+00:00",
+    }
+    for item in relationships:
+        item["time_window"] = evidence_window
+
+    condition = ConditionCorroborationService().build_conditions(
+        relationships=relationships,
+        rows=historical_rows(2000),
+        timestamp_column="timestamp",
+        data_quality={"data_confidence": {"rating": "limited"}},
+        operating_mode={
+            "match": "weak",
+            "confidence": "limited",
+            "known_operational_change": True,
+            "differences": [{"feature": "load_band", "reason": "Load band differed."}],
+            "reasons": ["Operating conditions differed from baseline."],
+        },
+    )[0]
+
+    trajectory = condition["trajectory"]
+    assert trajectory["scope"] == "evidence_support"
+    assert trajectory["evidence_window"] == {
+        "start": "2026-07-11T04:00:00+00:00",
+        "end": "2026-07-31T23:55:00+00:00",
+    }
+    assert trajectory["evidence_window_duration_seconds"] == 1_799_700
+    assert trajectory["evidence_window_duration"] == "20 days 19 hours 55 minutes"
+    assert "observed_for" not in trajectory
+    assert condition["persistence"]["persistent"] is False
+    assert condition["persistence"]["status"] == "not_established"
+    assert "20 days" not in condition["persistence"]["summary"]
+    assert condition["classification"]["type"] == "context_limited_relationship_change"
+    assert condition["trajectory"]["operational_explanation"] == "Operating context was not comparable; attribution is not established"
+    assert condition["timeline"][0]["start"] == trajectory["evidence_window"]["start"]
+    assert condition["timeline"][0]["end"] == trajectory["evidence_window"]["end"]
+    assert condition["source_time_ranges"][0]["current_start"] == trajectory["evidence_window"]["start"]
+    assert condition["source_time_ranges"][0]["current_end"] == trajectory["evidence_window"]["end"]
+    assert condition["timeline"][1]["title"].startswith("Evidence trend:")
+    assert condition["supporting_evidence"][0] == "chw_return_temp_f / chiller_power_kw changed from strong to weak coupling."
+    assert len(condition["what_changed"].split(". ")) <= 2
+    assert len(condition["why_it_matters"].split(". ")) <= 2
+    assert len(condition["what_changed"]) <= 260
+    assert len(condition["why_it_matters"]) <= 260
+    assert len(condition["next_checks"]) == 3
+
+
+def test_evidence_duration_is_omitted_for_missing_or_inconsistent_bounds() -> None:
+    missing = build_change_trajectory([])
+    inconsistent = build_change_trajectory(
+        [],
+        evidence_start="2026-07-31T23:55:00+00:00",
+        evidence_end="2026-07-11T04:00:00+00:00",
+    )
+
+    assert missing["evidence_window_duration"] is None
+    assert inconsistent["evidence_window_duration"] is None
+
+    relationship_with_reversed_bounds = relationship(
+        "rel-reversed",
+        "chw_return_temp_f",
+        "chiller_power_kw",
+    )
+    relationship_with_reversed_bounds["time_window"] = {
+        "current_start": "2026-07-31T23:55:00+00:00",
+        "current_end": "2026-07-11T04:00:00+00:00",
+    }
+    condition = ConditionCorroborationService().build_conditions(
+        relationships=[relationship_with_reversed_bounds],
+        data_quality={"data_confidence": {"rating": "limited"}},
+        operating_mode={"match": "weak", "confidence": "limited"},
+    )[0]
+    assert condition["trajectory"]["evidence_window_duration"] is None
+    assert condition["source_time_ranges"] == []
 
 
 def test_localization_stops_at_telemetry_supported_boundary() -> None:
@@ -453,6 +537,10 @@ def test_persisted_evidence_record_keeps_condition_as_primary_object() -> None:
             "monitored_boundary": "Discharge boundary",
         },
         "trajectory": {"state": "Strengthening"},
+        "classification": {"type": "context_limited_relationship_change"},
+        "data_confidence": {"rating": "limited"},
+        "operating_mode": {"match": "weak"},
+        "persistence": {"persistent": False, "status": "not_established"},
         "corroboration": {
             "relationship_count": 3,
             "corroboration_strength": "moderate",
@@ -460,6 +548,8 @@ def test_persisted_evidence_record_keeps_condition_as_primary_object() -> None:
         "supporting_evidence": [
             "3 connected relationships changed in the same comparison window."
         ],
+        "what_changed": "Pump power / flow changed from strong to weak coupling.",
+        "source_time_ranges": [{"current_start": "2026-07-01T00:00:00Z", "current_end": "2026-07-02T00:00:00Z"}],
         "why_it_matters": "The evidence pattern is strengthening.",
     }
     record = build_evidence_record_from_result(
@@ -486,3 +576,7 @@ def test_persisted_evidence_record_keeps_condition_as_primary_object() -> None:
     assert record["evidence_summary"] == condition["supporting_evidence"]
     assert record["variables"] == condition["affected_signals"]
     assert record["condition"]["trajectory"]["state"] == "Strengthening"
+    assert record["condition"]["classification"]["type"] == "context_limited_relationship_change"
+    assert record["condition"]["persistence"]["status"] == "not_established"
+    assert record["condition"]["what_changed"] == condition["what_changed"]
+    assert record["condition"]["source_time_ranges"] == condition["source_time_ranges"]

@@ -4,6 +4,7 @@ from typing import Any
 
 from app.services.cumulative_counters import is_cumulative_counter_name
 from app.services.finding_classification import (
+    CONTEXT_LIMITED_RELATIONSHIP_CHANGE,
     INSUFFICIENT_EVIDENCE,
     KNOWN_OPERATIONAL_CHANGE,
     POSSIBLE_INSTRUMENTATION_ISSUE,
@@ -637,16 +638,19 @@ def ensure_finding_context(
                 "source_signals": source_signals,
             }
         )
+        evaluated_classification = classify_finding(
+            data_confidence=data_confidence,
+            sensor_health=sensor_health,
+            operating_mode=operating_mode,
+            persistence=persistence,
+            relationship_evidence=relationship_evidence,
+        )
+        existing_classification = item.get("classification")
         classification = (
-            item.get("classification")
-            if isinstance(item.get("classification"), dict)
-            else classify_finding(
-                data_confidence=data_confidence,
-                sensor_health=sensor_health,
-                operating_mode=operating_mode,
-                persistence=persistence,
-                relationship_evidence=relationship_evidence,
-            )
+            evaluated_classification
+            if not isinstance(existing_classification, dict)
+            or existing_classification.get("type") == KNOWN_OPERATIONAL_CHANGE
+            else existing_classification
         )
         existing_guidance = item.get("investigation_guidance")
         if not isinstance(existing_guidance, list) or not existing_guidance:
@@ -675,7 +679,7 @@ def ensure_finding_context(
             persistence=persistence,
         )
         source_ranges = item.get("source_time_ranges") if isinstance(item.get("source_time_ranges"), list) else []
-        updated.setdefault("classification", classification)
+        updated["classification"] = classification
         updated.setdefault("operating_mode", operating_mode)
         updated.setdefault("data_confidence", data_confidence)
         updated.setdefault("sensor_health", sensor_health)
@@ -833,6 +837,8 @@ def classification_title(system: str, classification: dict[str, Any]) -> str:
     classification_type = classification.get("type")
     if classification_type == KNOWN_OPERATIONAL_CHANGE:
         return f"{subject} operating-context change"
+    if classification_type == CONTEXT_LIMITED_RELATIONSHIP_CHANGE:
+        return f"{subject} context-limited relationship change"
     if classification_type == POSSIBLE_INSTRUMENTATION_ISSUE:
         return f"{subject} instrumentation review"
     if classification_type == UNEXPLAINED_SYSTEMIC_CHANGE:
@@ -856,14 +862,24 @@ def relationship_classification_narrative(
         return {
             "what_changed": (
                 f"The relationship between {pair} shifted during a transition from {baseline_label} "
-                f"to {recent_label}. The observed change is consistent with the available operating context."
+                f"to {recent_label}. A recorded context change occurred in the same evidence window."
             ),
             "why_classified": reasons or "Recorded operating context changed with the relationship.",
             "interpretation": (
-                "The evidence supports an operating-context explanation. It does not establish a root cause "
-                "or show that the physical system degraded."
+                "The operating-context change is directly observed in the same window. It may explain the "
+                "relationship shift, but the evidence does not establish causality."
             ),
             "why_it_matters": "Confirm the recorded staging, schedule, setpoint, or event context before escalating the relationship shift.",
+        }
+    if classification_type == CONTEXT_LIMITED_RELATIONSHIP_CHANGE:
+        return {
+            "what_changed": (
+                f"The relationship between {pair} changed. Operating context was not comparable to baseline, "
+                "so attribution is limited."
+            ),
+            "why_classified": reasons or "Operating context was not comparable enough for attribution.",
+            "interpretation": "The relationship change is observed; its operational explanation remains uncertain.",
+            "why_it_matters": "Validate source data and review load, staging, and operator records for the evidence window.",
         }
     if classification_type == POSSIBLE_INSTRUMENTATION_ISSUE:
         return {
@@ -916,9 +932,15 @@ def metric_classification_narrative(
     reasons = join_reason_clauses(classification.get("reasons", []), limit=3)
     if classification_type == KNOWN_OPERATIONAL_CHANGE:
         return {
-            "what_changed": f"{observed_change} The movement aligns with an available operating-context change.",
+            "what_changed": f"{observed_change} A recorded context change occurred in the same evidence window.",
             "why_classified": reasons,
             "why_it_matters": "Confirm the recorded operating change before treating this signal movement as an unexplained condition.",
+        }
+    if classification_type == CONTEXT_LIMITED_RELATIONSHIP_CHANGE:
+        return {
+            "what_changed": f"{observed_change} Operating context was not comparable, so attribution remains limited.",
+            "why_classified": reasons,
+            "why_it_matters": "Review source data and operating context before using this movement to guide action.",
         }
     if classification_type == POSSIBLE_INSTRUMENTATION_ISSUE:
         return {

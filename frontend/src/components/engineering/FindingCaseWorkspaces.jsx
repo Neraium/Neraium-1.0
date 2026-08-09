@@ -22,6 +22,16 @@ function sentence(value) {
   return /[.!?]$/.test(first) ? first : `${first}.`;
 }
 
+function sentenceList(value, limit = 2) {
+  const clean = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!clean) return [];
+  return (clean.match(/[^.!?]+[.!?]?/g) ?? [clean])
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, limit)
+    .map((item) => /[.!?]$/.test(item) ? item : `${item}.`);
+}
+
 function uniqueText(values) {
   return [...new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))];
 }
@@ -29,6 +39,19 @@ function uniqueText(values) {
 function displayLabel(value, fallback = "Unavailable") {
   const text = String(value ?? "").trim();
   return text ? text.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) : fallback;
+}
+
+function evidenceTrendPhrase(value) {
+  return ({
+    sudden: "Evidence increased suddenly",
+    gradual: "Evidence building gradually",
+    "stable shift": "Evidence stable",
+    strengthening: "Evidence strengthening",
+    weakening: "Evidence weakening",
+    recovering: "Evidence recovering",
+    recurring: "Evidence recurring",
+    intermittent: "Evidence intermittent",
+  })[String(value ?? "").trim().toLowerCase()] || `Evidence trend ${String(value ?? "unavailable").trim().toLowerCase()}`;
 }
 
 function timelineLabel(event) {
@@ -49,13 +72,13 @@ function CaseHeader({ eyebrow, finding, reviewRecord }) {
   );
 }
 
-function GuidanceList({ items, start = 1 }) {
-  return <ol className="classification-guidance" start={start}>{items.map((item, index) => <li key={`${item.rank}-${item.check}`}><span>{item.rank || start + index}</span><div><strong>{item.check}</strong>{item.reason ? <p>{sentence(item.reason)}</p> : null}<small>{displayLabel(item.category)}</small></div></li>)}</ol>;
+function GuidanceList({ items, start = 1, compact = false }) {
+  return <ol className="classification-guidance" start={start}>{items.map((item, index) => <li key={`${item.rank}-${item.check}`}><span>{item.rank || start + index}</span><div><strong>{item.check}</strong>{!compact && item.reason ? <p>{sentence(item.reason)}</p> : null}{!compact ? <small>{displayLabel(item.category)}</small> : null}</div></li>)}</ol>;
 }
 
 function RelationshipTimeline({ events }) {
   if (!events.length) return <p className="case-unavailable">No source-bounded timeline milestones were recorded.</p>;
-  return <ol className="classification-timeline">{events.map((event, index) => <li key={`${event.eventType}-${index}`}><time>{timelineLabel(event)}</time><strong>{event.title}</strong>{event.detail ? <p>{event.detail}</p> : null}</li>)}</ol>;
+  return <ol className="classification-timeline">{events.map((event, index) => <li key={`${event.eventType}-${index}`}><time>{timelineLabel(event)}</time><strong>{event.title}</strong>{event.detail ? <p>{sentence(event.detail)}</p> : null}</li>)}</ol>;
 }
 
 function ConditionEvolution({ finding }) {
@@ -66,9 +89,9 @@ function ConditionEvolution({ finding }) {
   return (
     <>
       <section>
-        <h2>Trajectory</h2>
-        <p className="case-lead">{displayLabel(trajectory.state, "Unavailable")}</p>
-        {trajectory.observed_for ? <p>{trajectory.observed_for}</p> : null}
+        <h2>Evidence trend</h2>
+        <p className="case-lead">{evidenceTrendPhrase(trajectory.state)}</p>
+        {trajectory.evidence_window_duration ? <p>Evidence window: {trajectory.evidence_window_duration}</p> : null}
         {trajectory.corroboration_change ? <p>{sentence(trajectory.corroboration_change)}</p> : null}
         {trajectory.operational_explanation ? <p>{sentence(trajectory.operational_explanation)}</p> : null}
       </section>
@@ -80,7 +103,7 @@ function ConditionEvolution({ finding }) {
             <li><strong>Normal behavior:</strong> {comparable.normal_behavior}</li>
             <li><strong>Current behavior:</strong> {comparable.current_behavior}</li>
           </ul>
-        ) : <p>{comparable.evidence_summary || "Comparable historical operation was not available."}</p>}
+        ) : <p>{sentence(comparable.evidence_summary || "Comparable historical operation was not available.")}</p>}
         {corroboration.relationship_count ? <small>{corroboration.relationship_count} supporting relationships · {displayLabel(corroboration.corroboration_strength)} corroboration</small> : null}
       </section>
     </>
@@ -109,8 +132,8 @@ export function FindingReviewWorkspace({ finding, reviewRecord, onReviewAction, 
   if (!finding) return <EmptyCase onBack={onBack} />;
   const presentation = finding.classificationPresentation ?? normalizeFindingPresentation(finding);
   const guidance = presentation.investigationGuidance.slice(0, 3);
-  const keyEvidence = finding.visibleSupporting?.slice(1, 3) ?? [];
-  const why = uniqueText([sentence(finding.whyItMatters), presentation.persistence.persistent ? presentation.persistence.summary : ""]);
+  const keyEvidence = finding.visibleSupporting?.slice(0, 3) ?? [];
+  const why = uniqueText([...sentenceList(finding.whyItMatters), presentation.persistence.persistent ? sentence(presentation.persistence.summary) : ""]);
   return (
     <div className="case-workspace finding-review-workspace" data-testid="finding-review">
       <button type="button" className="evidence-back" onClick={onBack}>Back to Operations Brief</button>
@@ -119,10 +142,8 @@ export function FindingReviewWorkspace({ finding, reviewRecord, onReviewAction, 
       <section className="case-quick-actions" aria-labelledby="finding-actions-title"><div><span className="forensic-kicker">Fast actions</span><h2 id="finding-actions-title">Set the review state</h2></div><FindingReviewActions finding={finding} reviewRecord={reviewRecord} onAction={onReviewAction} /></section>
       <div className="case-sections case-sections--review">
         <section><h2>What changed</h2><p className="case-lead">{finding.observedChange}</p></section>
-        <section><h2>Why it deserves attention</h2>{why.length ? <ul>{why.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No additional explanation was recorded.</p>}</section>
-        <ConditionEvolution finding={finding} />
-        <section><h2>What to check first</h2>{guidance.length ? <GuidanceList items={guidance} /> : <p>No evidence-linked check was recorded.</p>}</section>
-        <section><h2>{finding.objectType === "condition" ? "Condition timeline" : "Relationship timeline"}</h2><RelationshipTimeline events={presentation.timeline} /></section>
+        <section><h2>Why it matters</h2>{why.length ? <ul>{why.slice(0, 2).map((item) => <li key={item}>{item}</li>)}</ul> : <p>No additional explanation was recorded.</p>}</section>
+        <section><h2>What to check first</h2>{guidance.length ? <GuidanceList items={guidance} compact /> : <p>No evidence-linked check was recorded.</p>}</section>
         <section><h2>Key evidence</h2>{keyEvidence.length ? <ul>{keyEvidence.map((item) => <li key={item}>{item}</li>)}</ul> : <p>{finding.comparisonSummary || "Review the supporting relationship evidence."}</p>}</section>
       </div>
       <div className="case-primary-action"><div><span className="forensic-kicker">Need the full case?</span><strong>Open the relationship evidence and technical guidance.</strong></div><button type="button" className="forensic-button" onClick={() => onOpenInvestigation?.(finding)}>Open investigation</button></div>
@@ -149,7 +170,7 @@ export function InvestigationWorkspace({ model, finding, reviewRecord, escalated
         <ConditionEvolution finding={finding} />
         <section><h2>{finding.objectType === "condition" ? "Condition timeline" : "Relationship timeline"}</h2><RelationshipTimeline events={presentation.timeline} /></section>
         <section><h2>Supporting evidence</h2>{finding.supporting.length ? <ul>{finding.supporting.slice(0, 3).map((item) => <li key={item}>{item}</li>)}</ul> : <p>No supporting observation was supplied.</p>}{finding.supporting.length > 3 ? <details className="evidence-section__more"><summary>Show all supporting evidence</summary><ul>{finding.supporting.slice(3).map((item) => <li key={item}>{item}</li>)}</ul></details> : null}</section>
-        <section><h2>Investigation guidance</h2>{guidance.length ? <GuidanceList items={guidance.slice(0, 3)} /> : <p>No evidence-linked guidance was recorded.</p>}{guidance.length > 3 ? <details className="evidence-section__more"><summary>Show all checks</summary><GuidanceList items={guidance.slice(3)} start={4} /></details> : null}</section>
+        <section><h2>Investigation guidance</h2>{guidance.length ? <GuidanceList items={guidance.slice(0, 3)} compact /> : <p>No evidence-linked guidance was recorded.</p>}</section>
         <section><h2>Current review state</h2><ReviewStateBlock finding={finding} reviewRecord={reviewRecord} onReviewAction={onReviewAction} /></section>
       </div>
       <div className="engineering-investigation-disclosures" aria-label="Additional investigation detail">

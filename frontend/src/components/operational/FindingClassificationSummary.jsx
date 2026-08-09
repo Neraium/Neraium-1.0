@@ -37,6 +37,19 @@ function statusLabel(finding, presentation) {
   return "Open";
 }
 
+function evidenceTrendPhrase(value) {
+  return ({
+    sudden: "Evidence increased suddenly",
+    gradual: "Evidence building gradually",
+    "stable shift": "Evidence stable",
+    strengthening: "Evidence strengthening",
+    weakening: "Evidence weakening",
+    recovering: "Evidence recovering",
+    recurring: "Evidence recurring",
+    intermittent: "Evidence intermittent",
+  })[String(value ?? "").trim().toLowerCase()] || `Evidence ${String(value ?? "").trim().toLowerCase()}`;
+}
+
 function CompactSummary({ finding, presentation, ariaLabel }) {
   const confidence = confidenceLabel(finding, presentation);
   const status = statusLabel(finding, presentation);
@@ -60,7 +73,7 @@ function CompactSummary({ finding, presentation, ariaLabel }) {
         <li className="finding-classification__chip">
           <span className="sr-only">Confidence: </span>{confidence} confidence
         </li>
-        {trajectory ? <li className="finding-classification__chip"><span className="sr-only">Trajectory: </span>{trajectory}</li> : null}
+        {trajectory ? <li className="finding-classification__chip"><span className="sr-only">Evidence trend: </span>{evidenceTrendPhrase(trajectory)}</li> : null}
         {corroborationStrength ? <li className="finding-classification__chip"><span className="sr-only">Corroboration: </span>{corroborationStrength}{relationshipCount ? ` · ${relationshipCount}` : ""}</li> : null}
         <li className="finding-classification__chip">
           <span className="sr-only">Status: </span>{status}
@@ -95,12 +108,12 @@ export default function FindingClassificationSummary({ finding, presentation: su
         <strong>{presentation.label}</strong>
       </div>
       <dl className="finding-classification__facts">
-        <div><dt>Confidence</dt><dd>{detailedConfidenceLabel(finding, presentation)}</dd></div>
+        <div><dt>Evidence confidence</dt><dd>{detailedConfidenceLabel(finding, presentation)}</dd></div>
         <div><dt>Data confidence</dt><dd>{presentation.dataConfidence.rating}</dd></div>
         <div><dt>Mode match</dt><dd>{presentation.operatingMode.match}</dd></div>
         <div><dt>Persistence</dt><dd>{presentation.persistence.label}</dd></div>
         <div><dt>Operational state</dt><dd>{displayLabel(finding?.status)}</dd></div>
-        {finding?.trajectory?.state ? <div><dt>Trajectory</dt><dd>{displayLabel(finding.trajectory.state)}</dd></div> : null}
+        {finding?.trajectory?.state ? <div><dt>Evidence trend</dt><dd>{displayLabel(finding.trajectory.state)}</dd></div> : null}
         {finding?.corroboration?.corroboration_strength ? <div><dt>Corroboration</dt><dd>{displayLabel(finding.corroboration.corroboration_strength)} · {finding.corroboration.relationship_count ?? 0} relationships</dd></div> : null}
         {finding?.reviewStatus || finding?.review_status || finding?.hypothesisStatus ? <div><dt>Review state</dt><dd>{statusLabel(finding, presentation)}</dd></div> : null}
         <div><dt>Priority</dt><dd>{presentation.reviewPriority}</dd></div>

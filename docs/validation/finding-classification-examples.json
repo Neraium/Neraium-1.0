@@ -12,8 +12,8 @@
         "A concurrent instrumentation condition is not supported by available checks but cannot be excluded.",
         "A relationship change may remain after like-for-like operation resumes."
       ],
-      "certainty_limit": "The relationship shift aligns with available operating context; this classification does not establish a root cause or prove that the operational change is the only influence.",
-      "rule_version": "deterministic_finding_classification_v1"
+      "certainty_limit": "A directly observed operating-context change coincided with the relationship shift. This does not establish causality or prove that the context change is the only influence.",
+      "rule_version": "deterministic_finding_classification_v2"
     },
     "data_confidence": {
       "rating": "high",
@@ -77,10 +77,10 @@
         "current_end": "2026-07-18T23:59:00Z"
       }
     },
-    "certainty_limit": "The relationship shift aligns with available operating context; this classification does not establish a root cause or prove that the operational change is the only influence.",
+    "certainty_limit": "A directly observed operating-context change coincided with the relationship shift. This does not establish causality or prove that the context change is the only influence.",
     "engineer_wording": {
       "title": "Pumping System operating-context change",
-      "what_changed": "The relationship between Pump speed and Discharge pressure shifted during a transition from One-pump operation to Two-pump operation. The observed change is consistent with the available operating context.",
+      "what_changed": "The relationship between Pump speed and Discharge pressure shifted during a transition from One-pump operation to Two-pump operation. A recorded context change occurred in the same evidence window.",
       "why_classified": "Active pump count changed from 1 to 2 during the recent window",
       "why_it_matters": "Confirm the recorded staging, schedule, setpoint, or event context before escalating the relationship shift."
     },
@@ -94,7 +94,7 @@
       },
       {
         "check": "Verify the observed relationship behavior is expected for Two-pump operation.",
-        "reason": "The relationship shift aligns with a recorded mode difference, but expected behavior still requires human confirmation.",
+        "reason": "The relationship shift occurred with a recorded mode difference, but expected behavior still requires human confirmation.",
         "category": "controls",
         "editable": true,
         "rank": 2
@@ -120,7 +120,7 @@
       {
         "event_type": "analysis_window",
         "title": "Relationship comparison period",
-        "detail": "The relationship between Pump speed and Discharge pressure shifted during a transition from One-pump operation to Two-pump operation. The observed change is consistent with the available operating context.",
+        "detail": "The relationship between Pump speed and Discharge pressure shifted during a transition from One-pump operation to Two-pump operation. A recorded context change occurred in the same evidence window.",
         "start": "2026-07-01T00:00:00Z",
         "end": "2026-07-18T23:59:00Z",
         "precision": "range"
@@ -162,7 +162,7 @@
         "An undocumented operating or control change may also explain the pattern."
       ],
       "certainty_limit": "Signal-health evidence can identify an instrumentation possibility, but it does not confirm that a sensor or transmitter is faulty.",
-      "rule_version": "deterministic_finding_classification_v1"
+      "rule_version": "deterministic_finding_classification_v2"
     },
     "data_confidence": {
       "rating": "limited",
@@ -260,13 +260,6 @@
         "category": "data_quality",
         "editable": true,
         "rank": 3
-      },
-      {
-        "check": "Inspect the relevant monitored boundary or equipment only if validated signals still support the relationship change.",
-        "reason": "The current classification keeps instrumentation and telemetry checks ahead of any physical-system interpretation.",
-        "category": "physical_system",
-        "editable": true,
-        "rank": 4
       }
     ],
     "recommended_first_check": "Verify discharge pressure against an independent measurement or source.",
@@ -327,7 +320,7 @@
         "A load or environmental condition not represented in the uploaded signals."
       ],
       "certainty_limit": "This class describes a persistent relationship change under comparable conditions; it does not diagnose cause, predict a failure, or imply an emergency.",
-      "rule_version": "deterministic_finding_classification_v1"
+      "rule_version": "deterministic_finding_classification_v2"
     },
     "data_confidence": {
       "rating": "high",
@@ -413,13 +406,6 @@
         "category": "physical_system",
         "editable": true,
         "rank": 3
-      },
-      {
-        "check": "Escalate for engineering review only if the reviewed evidence continues to support concern.",
-        "reason": "This class describes a persistent relationship change under comparable conditions; it does not diagnose cause, predict a failure, or imply an emergency.",
-        "category": "documentation",
-        "editable": true,
-        "rank": 4
       }
     ],
     "recommended_first_check": "Verify source data and control-state context for pump speed and discharge pressure.",
@@ -474,7 +460,7 @@
         "More persistence evidence may change the supported classification."
       ],
       "certainty_limit": "Data quality or relationship support is insufficient to distinguish an operational, instrumentation, or physical-system explanation.",
-      "rule_version": "deterministic_finding_classification_v1"
+      "rule_version": "deterministic_finding_classification_v2"
     },
     "data_confidence": {
       "rating": "low",

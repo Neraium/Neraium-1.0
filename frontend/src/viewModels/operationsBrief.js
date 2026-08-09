@@ -69,13 +69,14 @@ function confidenceRank(finding, presentation) {
 }
 
 function classificationRank(presentation) {
-  if (presentation.legacy) return 4;
+  if (presentation.legacy) return 5;
   return {
     unexplained_systemic_change: 0,
     possible_instrumentation_issue: 1,
-    known_operational_change: 2,
-    insufficient_evidence: 3,
-  }[presentation.type] ?? 4;
+    context_limited_relationship_change: 2,
+    known_operational_change: 3,
+    insufficient_evidence: 4,
+  }[presentation.type] ?? 5;
 }
 
 function findingTimestamp(finding, model) {
@@ -148,11 +149,11 @@ function rankingExplanation(meta) {
   const descriptors = [];
   if (meta.isNew) descriptors.push("new and unreviewed");
   if (meta.persistent) descriptors.push("persistent");
-  if (meta.strengthening) descriptors.push("strengthening");
   if (meta.presentation.classificationConfidence === "High" || meta.presentation.dataConfidence.rating === "High" || ["Confirmed", "Qualified"].includes(meta.findingTier)) descriptors.push("high-confidence");
   if (!descriptors.length && meta.presentation.legacy) return "Historical finding without contextual classification; ordered conservatively.";
-  if (!descriptors.length) return "Unresolved finding with available supporting evidence.";
-  let explanation = `${descriptors.slice(0, 3).join(", ")} change`;
+  if (!descriptors.length && !meta.strengthening) return "Unresolved finding with available supporting evidence.";
+  let explanation = descriptors.length ? `${descriptors.slice(0, 3).join(", ")} change` : "Change";
+  if (meta.strengthening) explanation += " with strengthening evidence";
   if (meta.critical) explanation += " affecting a critical system";
   else if (meta.corroborated) explanation += " supported by related relationships";
   return `${explanation}.`.replace(/^./, (letter) => letter.toUpperCase());
@@ -231,7 +232,7 @@ export function deriveWorkspacePresentationState(model = {}) {
   if (!hasAnalysisOutput) return { key: "datasetReady", status: "Dataset Ready", headline: "Ready to learn normal behavior", body: "The historical dataset is ready for baseline analysis.", action: "Establish Initial Baseline" };
   if (model.status === "Evidence insufficient") return { key: "insufficientEvidence", status: "Insufficient Evidence", headline: "More evidence is needed", body: "Analysis completed, but the available data does not support a reliable finding.", action: "Review Evidence" };
   if (model.status === "Normal") return { key: "noMeaningfulChanges", status: "Monitoring", headline: "No meaningful changes", body: "Measured relationships remain within the learned baseline.", action: "View Monitoring" };
-  return { key: "analysisComplete", status: "Analysis Complete", headline: "Findings ready for review", body: "Review the highest-priority unexplained change first.", action: "Review Findings" };
+  return { key: "analysisComplete", status: "Analysis Complete", headline: "Findings ready for review", body: "Review the highest-priority finding first.", action: "Review Findings" };
 }
 
 export function buildOperationsBrief(model = {}, reviewRecords = {}, now = new Date()) {

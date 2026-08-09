@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from datetime import UTC, datetime
 from typing import Any
 
 from app.services.data_quality import parse_numeric_value, parse_timestamp
@@ -80,6 +81,8 @@ def build_change_trajectory(
     rows: list[dict[str, Any]] | None = None,
     timestamp_column: str | None = None,
     baseline_trajectory: dict[str, Any] | None = None,
+    evidence_start: Any = None,
+    evidence_end: Any = None,
 ) -> dict[str, Any]:
     relationship_history = _relationship_history(relationships, rows or [])
     counts = relationship_history["corroboration_history"]
@@ -105,7 +108,7 @@ def build_change_trajectory(
         confidence_trend=confidence,
         evidence_spread=spread,
     )
-    observed = _observed_duration(rows or [], timestamp_column)
+    evidence_window = _evidence_window(evidence_start, evidence_end)
     first_count = counts[0] if counts else len(relationships)
     last_count = counts[-1] if counts else len(relationships)
     corroboration_change = (
@@ -117,7 +120,7 @@ def build_change_trajectory(
     )
     evidence = [
         f"Persistence score {persistence_score:.2f}.",
-        f"Evidence-spread rate {rate:+.2f} across comparable recent windows.",
+        f"Evidence-trend rate {rate:+.2f} across available recent windows.",
         f"{corroboration_change}.",
     ]
     if confidence:
@@ -127,8 +130,11 @@ def build_change_trajectory(
     return {
         "state": state,
         "label": state,
-        "observed_for": observed["label"],
-        "observed_for_days": observed["days"],
+        "scope": "evidence_support",
+        "evidence_trend_state": state,
+        "evidence_window": evidence_window["bounds"],
+        "evidence_window_duration": evidence_window["label"],
+        "evidence_window_duration_seconds": evidence_window["seconds"],
         "persistence": round(persistence_score, 4),
         "rate_of_change": round(rate, 4),
         "corroboration_history": counts,
@@ -136,7 +142,7 @@ def build_change_trajectory(
         "confidence_trend": [round(value, 4) for value in confidence],
         "evidence_spread": [round(value, 4) for value in spread],
         "evidence": evidence,
-        "rule_version": "deterministic_condition_trajectory_v1",
+        "rule_version": "deterministic_condition_evidence_trend_v2",
     }
 
 
@@ -266,7 +272,9 @@ def _persistence_score(relationships: list[dict[str, Any]], counts: list[int]) -
     if counts:
         active_windows = sum(1 for value in counts if value > 0)
         return active_windows / len(counts)
-    return 0.65 if relationships and all(int(item.get("recent_sample_size") or 0) >= 6 for item in relationships) else 0.35
+    # A populated recent window establishes observation coverage, not persistence.
+    # Without explicit or multi-window evidence, keep persistence unestablished.
+    return 0.35
 
 
 def _trajectory_rate(values: list[float]) -> float:
@@ -276,22 +284,40 @@ def _trajectory_rate(values: list[float]) -> float:
     return max(-2.0, min(2.0, (values[-1] - values[0]) / denominator))
 
 
-def _observed_duration(rows: list[dict[str, Any]], timestamp_column: str | None) -> dict[str, Any]:
-    if not timestamp_column or len(rows) < 2:
-        return {"label": "Available comparison window", "days": None}
-    start_index = max(0, int(len(rows) * 0.55))
-    start_raw = rows[start_index].get(timestamp_column)
-    end_raw = rows[-1].get(timestamp_column)
-    start = parse_timestamp(str(start_raw)) if start_raw is not None else None
-    end = parse_timestamp(str(end_raw)) if end_raw is not None else None
+def _evidence_window(start_value: Any, end_value: Any) -> dict[str, Any]:
+    start = _timestamp(start_value)
+    end = _timestamp(end_value)
     if not start or not end or end <= start:
-        return {"label": "Available comparison window", "days": None}
-    seconds = (end - start).total_seconds()
-    days = max(1, int(round(seconds / 86400)))
-    if seconds < 86400:
-        hours = max(1, int(round(seconds / 3600)))
-        return {"label": f"Observed for {hours} hour{'s' if hours != 1 else ''}", "days": round(seconds / 86400, 3)}
-    return {"label": f"Observed for {days} day{'s' if days != 1 else ''}", "days": days}
+        return {"bounds": {}, "label": None, "seconds": None}
+    seconds = int((end - start).total_seconds())
+    return {
+        "bounds": {"start": start.isoformat(), "end": end.isoformat()},
+        "label": _duration_label(seconds),
+        "seconds": seconds,
+    }
+
+
+def _duration_label(seconds: int) -> str | None:
+    if seconds <= 0:
+        return None
+    remaining = seconds
+    parts: list[str] = []
+    for unit, width in (("day", 86400), ("hour", 3600), ("minute", 60)):
+        value, remaining = divmod(remaining, width)
+        if value:
+            parts.append(f"{value} {unit}{'s' if value != 1 else ''}")
+    if not parts:
+        parts.append(f"{seconds} second{'s' if seconds != 1 else ''}")
+    return " ".join(parts)
+
+
+def _timestamp(value: Any):
+    if value is None:
+        return None
+    parsed = value if isinstance(value, datetime) else parse_timestamp(str(value))
+    if parsed is None:
+        return None
+    return parsed.astimezone(UTC) if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 def _transitions(values: list[bool]) -> int:

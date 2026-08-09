@@ -4,12 +4,14 @@ from typing import Any
 
 
 KNOWN_OPERATIONAL_CHANGE = "known_operational_change"
+CONTEXT_LIMITED_RELATIONSHIP_CHANGE = "context_limited_relationship_change"
 POSSIBLE_INSTRUMENTATION_ISSUE = "possible_instrumentation_issue"
 UNEXPLAINED_SYSTEMIC_CHANGE = "unexplained_systemic_change"
 INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 
 _LABELS = {
     KNOWN_OPERATIONAL_CHANGE: "Known operational change",
+    CONTEXT_LIMITED_RELATIONSHIP_CHANGE: "Context-limited relationship change",
     POSSIBLE_INSTRUMENTATION_ISSUE: "Possible instrumentation issue",
     UNEXPLAINED_SYSTEMIC_CHANGE: "Unexplained systemic change",
     INSUFFICIENT_EVIDENCE: "Insufficient evidence",
@@ -19,6 +21,16 @@ _INSTRUMENTATION_CONDITIONS = {
     "possible_drift",
     "timestamp_misalignment",
     "invalid_range",
+}
+_DIRECT_CONTEXT_FEATURES = {
+    "active_unit_count",
+    "cleaning_cycle",
+    "equipment_state",
+    "maintenance_state",
+    "schedule_state",
+    "setpoint",
+    "special_event",
+    "valve_state",
 }
 
 
@@ -44,14 +56,21 @@ def classify_finding(
     persistent, persistence_reasons = persistence_support(persistence)
     instrumentation_reasons = instrumentation_evidence(sensor_health)
     mode_match = str(operating_mode.get("match") or "unavailable").lower()
-    known_change_reasons = [
-        *known_operational_evidence,
-        *[
+    mode_confidence = str(operating_mode.get("confidence") or "low").lower()
+    direct_context_evidence = [*known_operational_evidence]
+    if (
+        operating_mode.get("known_operational_change") is True
+        and data_rating == "high"
+        and mode_confidence == "high"
+    ):
+        direct_context_evidence.extend(
             str(item.get("reason"))
             for item in operating_mode.get("differences", [])
-            if isinstance(item, dict) and item.get("reason")
-        ],
-    ]
+            if isinstance(item, dict)
+            and str(item.get("feature") or "") in _DIRECT_CONTEXT_FEATURES
+            and item.get("reason")
+        )
+    direct_context_evidence = dedupe(direct_context_evidence)
 
     if data_rating == "low" or not evidence_sufficient:
         reasons = [
@@ -84,25 +103,40 @@ def classify_finding(
             ),
         )
 
-    if known_operational_evidence or (
-        operating_mode.get("known_operational_change") is True and mode_match in {"partial", "weak"}
-    ):
+    if direct_context_evidence:
         confidence = (
             "high"
-            if mode_match == "weak" and str(operating_mode.get("confidence") or "").lower() == "high"
+            if data_rating == "high" and mode_confidence == "high"
             else "limited"
         )
         return classification_payload(
             KNOWN_OPERATIONAL_CHANGE,
             confidence=confidence,
-            reasons=known_change_reasons or list_text(operating_mode.get("reasons")),
+            reasons=direct_context_evidence,
             alternative_explanations=[
                 "A concurrent instrumentation condition is not supported by available checks but cannot be excluded.",
                 "A relationship change may remain after like-for-like operation resumes.",
             ],
             certainty_limit=(
-                "The relationship shift aligns with available operating context; this classification does not "
-                "establish a root cause or prove that the operational change is the only influence."
+                "A directly observed operating-context change coincided with the relationship shift. This does "
+                "not establish causality or prove that the context change is the only influence."
+            ),
+        )
+
+    if mode_match in {"partial", "weak", "unavailable"}:
+        context_reasons = [
+            *list_text(operating_mode.get("reasons")),
+            *list_text(data_confidence.get("reasons")),
+            "Operating context was not comparable enough to attribute the observed relationship change.",
+        ]
+        return classification_payload(
+            CONTEXT_LIMITED_RELATIONSHIP_CHANGE,
+            confidence="limited",
+            reasons=context_reasons,
+            alternative_explanations=alternative_explanations(sensor_health, operating_mode),
+            certainty_limit=(
+                "The relationship change was observed, but differing or unavailable operating context limits "
+                "interpretation. The evidence does not establish that the context difference caused the change."
             ),
         )
 
@@ -214,7 +248,7 @@ def classification_payload(
         "reasons": dedupe(reasons),
         "alternative_explanations": dedupe(alternative_explanations),
         "certainty_limit": certainty_limit,
-        "rule_version": "deterministic_finding_classification_v1",
+        "rule_version": "deterministic_finding_classification_v2",
     }
 
 

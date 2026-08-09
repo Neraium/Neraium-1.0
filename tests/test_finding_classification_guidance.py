@@ -6,6 +6,7 @@ import pytest
 
 from app.services.analysis_explanations import ensure_finding_context
 from app.services.finding_classification import (
+    CONTEXT_LIMITED_RELATIONSHIP_CHANGE,
     INSUFFICIENT_EVIDENCE,
     classify_finding,
 )
@@ -49,6 +50,7 @@ def test_representative_classifications_and_guidance_are_valid(scenario: dict) -
     assert classification["reasons"]
     assert classification["alternative_explanations"]
     assert classification["certainty_limit"]
+    assert len(guidance) <= 3
     assert [item["rank"] for item in guidance] == list(range(1, len(guidance) + 1))
     assert all(item["check"] and item["reason"] for item in guidance)
     assert all(item["editable"] is True for item in guidance)
@@ -59,8 +61,8 @@ def test_representative_classifications_and_guidance_are_valid(scenario: dict) -
     ("classification_type", "expected_categories"),
     [
         ("known_operational_change", ["operating_context", "controls", "operating_context"]),
-        ("possible_instrumentation_issue", ["instrumentation", "instrumentation", "data_quality", "physical_system"]),
-        ("unexplained_systemic_change", ["data_quality", "operating_context", "physical_system", "documentation"]),
+        ("possible_instrumentation_issue", ["instrumentation", "instrumentation", "data_quality"]),
+        ("unexplained_systemic_change", ["data_quality", "operating_context", "physical_system"]),
         ("insufficient_evidence", ["data_quality", "data_quality", "operating_context"]),
     ],
 )
@@ -97,17 +99,17 @@ def test_low_data_and_weak_mode_each_block_systemic_classification() -> None:
     )
 
     assert low_data["type"] == INSUFFICIENT_EVIDENCE
-    assert weak_mode["type"] == INSUFFICIENT_EVIDENCE
+    assert weak_mode["type"] == CONTEXT_LIMITED_RELATIONSHIP_CHANGE
 
 
-def test_instrumentation_wording_is_cautious_and_physical_check_is_last() -> None:
+def test_instrumentation_wording_is_cautious_and_checks_are_capped() -> None:
     example = EXAMPLES["possible_instrumentation_issue"]
     wording = json.dumps(example).lower()
 
     assert "possible instrumentation issue" in wording
     assert "does not confirm that a sensor or transmitter is faulty" in wording
-    assert example["investigation_guidance"][-1]["category"] == "physical_system"
-    assert "only if validated signals still support" in example["investigation_guidance"][-1]["check"].lower()
+    assert len(example["investigation_guidance"]) == 3
+    assert example["investigation_guidance"][0]["category"] == "instrumentation"
 
 
 def test_legacy_findings_default_to_insufficient_evidence_with_structured_guidance() -> None:
@@ -140,6 +142,39 @@ def test_legacy_findings_default_to_insufficient_evidence_with_structured_guidan
     assert legacy["activity_timeline"][0]["period_label"] == "Historical comparison window"
 
 
+def test_stale_known_operational_classification_is_revalidated() -> None:
+    finding = ensure_finding_context(
+        [
+            {
+                "id": "stale-known",
+                "classification": {
+                    "type": "known_operational_change",
+                    "label": "Known operational change",
+                    "rule_version": "deterministic_finding_classification_v1",
+                },
+                "data_confidence": {"rating": "limited", "reasons": ["Coverage is limited."]},
+                "operating_mode": {
+                    "match": "weak",
+                    "confidence": "limited",
+                    "known_operational_change": True,
+                    "differences": [{"feature": "load_band", "reason": "Load band differed."}],
+                },
+                "persistence": {"persistent": False, "status": "not_established"},
+                "relationship_evidence": {
+                    "baseline_sample_size": 12,
+                    "recent_sample_size": 12,
+                    "confidence_score": 0.55,
+                    "correlation_delta": 0.6,
+                },
+            }
+        ],
+        {},
+    )[0]
+
+    assert finding["classification"]["type"] == CONTEXT_LIMITED_RELATIONSHIP_CHANGE
+    assert finding["classification"]["rule_version"] == "deterministic_finding_classification_v2"
+
+
 def test_examples_have_no_unsupported_failure_or_cause_claims() -> None:
     text = json.dumps(EXAMPLES).lower()
     unsupported = (
@@ -154,7 +189,7 @@ def test_examples_have_no_unsupported_failure_or_cause_claims() -> None:
 
     assert not any(re.search(pattern, text) for pattern in unsupported)
     assert EXAMPLES["insufficient_evidence"]["classification"]["confidence"] == "low"
-    assert "available operating context" in EXAMPLES["known_operational_change"]["engineer_wording"]["what_changed"]
+    assert "recorded context change" in EXAMPLES["known_operational_change"]["engineer_wording"]["what_changed"]
     assert "possible instrumentation issue" in EXAMPLES["possible_instrumentation_issue"]["engineer_wording"]["what_changed"]
 
 
