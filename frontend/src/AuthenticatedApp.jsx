@@ -149,6 +149,7 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
     loadLatestUploadState,
     allowPersistedLatest,
     setAllowPersistedLatest,
+    commitCompletedUploadState,
     clearUploadSessionState,
     domainMode,
   } = useFacilityRuntime({
@@ -205,6 +206,7 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
     loadLatestUploadState,
     allowPersistedLatest,
     setAllowPersistedLatest,
+    commitCompletedUploadState,
     clearUploadSessionState,
     setIsDemoMode,
     activeBaselineIdentity,

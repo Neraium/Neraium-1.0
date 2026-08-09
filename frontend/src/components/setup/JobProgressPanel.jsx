@@ -59,8 +59,9 @@ function progressStateLabel(progress, executionState, pollConnectionState) {
 export default function JobProgressPanel({ uploadJob, uploadTransfer = null }) {
   const progress = uploadJob?.job_progress;
   const transferAvailable = uploadTransfer && Number.isFinite(Number(uploadTransfer.percent));
+  const transferActive = transferAvailable && clampPercent(uploadTransfer.percent) < 100;
   if (!progress || progress.contract_version !== "job-progress.v1") {
-    if (!transferAvailable) return null;
+    if (!transferActive) return null;
     const transferPercent = clampPercent(uploadTransfer.percent);
     return (
       <section className="backend-progress" aria-label="File transfer progress">
@@ -111,7 +112,7 @@ export default function JobProgressPanel({ uploadJob, uploadTransfer = null }) {
         </div>
       </div>
 
-      {transferAvailable ? (
+      {transferActive ? (
         <div className="backend-progress__meter-row">
           <div><strong>File transfer</strong><span>{clampPercent(uploadTransfer.percent)}%</span></div>
           <div className="backend-progress__meter" role="progressbar" aria-label="File transfer" aria-valuemin="0" aria-valuemax="100" aria-valuenow={clampPercent(uploadTransfer.percent)}>

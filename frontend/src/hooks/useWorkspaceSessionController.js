@@ -59,6 +59,7 @@ export default function useWorkspaceSessionController({
   loadLatestUploadState,
   allowPersistedLatest,
   setAllowPersistedLatest,
+  commitCompletedUploadState,
   clearUploadSessionState,
   setIsDemoMode,
   activeBaselineIdentity = null,
@@ -233,6 +234,15 @@ export default function useWorkspaceSessionController({
       ?? (uploadStateView.hasFullUploadResult(completedPayload) ? completedPayload : null);
     const expectedJobId = uploadStateView.resolveCurrentUploadJobId(completedPayload)
       ?? (String(completedResult?.job_id ?? "").trim() || null);
+    const pendingSnapshot = expectedJobId
+      ? buildPendingUploadSnapshot({ completedPayload, completedResult, expectedJobId })
+      : null;
+    const completionStatus = normalizeUploadStatus(completedPayload?.status ?? completedPayload?.processing_state ?? completedPayload?.worker_state);
+    const terminalCompletion = completionStatus === "complete"
+      || completionStatus === "save_complete"
+      || completedPayload?.result_available === true
+      || completedPayload?.sii_completed === true
+      || completedPayload?.sii_reliable_enough_to_show === true;
     if (completedResult) {
       setCompletedUploadOverride(completedResult);
     } else {
@@ -240,7 +250,7 @@ export default function useWorkspaceSessionController({
     }
     if (expectedJobId) {
       setPostUploadExpectedJobId(expectedJobId);
-      setPostUploadPendingSnapshot(buildPendingUploadSnapshot({ completedPayload, completedResult, expectedJobId }));
+      setPostUploadPendingSnapshot(pendingSnapshot);
     } else {
       setPostUploadExpectedJobId(null);
       setPostUploadPendingSnapshot(null);
@@ -252,6 +262,12 @@ export default function useWorkspaceSessionController({
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY, "1");
     }
+    if (terminalCompletion && isCompletedAnalysisPayload({ result: completedResult, snapshot: pendingSnapshot })) {
+      commitCompletedUploadState?.({
+        latestResult: completedResult,
+        latestSnapshot: pendingSnapshot,
+      });
+    }
     console.info("[neraium] state hydration started", { jobId: expectedJobId });
     const latestRefresh = await loadLatestUploadState({ includePersisted: true, forceRefresh: true, returnPayload: true });
     console.info("[neraium] current upload refetch requested", {
@@ -260,13 +276,7 @@ export default function useWorkspaceSessionController({
       pendingJobId: pendingUploadJobId,
     });
     const refreshedResult = latestRefresh?.latestResult ?? completedResult;
-    const refreshedSnapshot = latestRefresh?.snapshot ?? buildPendingUploadSnapshot({ completedPayload, completedResult, expectedJobId });
-    const completionStatus = normalizeUploadStatus(completedPayload?.status ?? completedPayload?.processing_state ?? completedPayload?.worker_state);
-    const terminalCompletion = completionStatus === "complete"
-      || completionStatus === "save_complete"
-      || completedPayload?.result_available === true
-      || completedPayload?.sii_completed === true
-      || completedPayload?.sii_reliable_enough_to_show === true;
+    const refreshedSnapshot = latestRefresh?.snapshot ?? pendingSnapshot;
     const payloadValid = isCompletedAnalysisPayload({ result: refreshedResult, snapshot: refreshedSnapshot });
     console.info("[neraium] payload validation result", { jobId: expectedJobId, valid: payloadValid, terminal: terminalCompletion });
     if (terminalCompletion && !payloadValid) {
@@ -292,7 +302,7 @@ export default function useWorkspaceSessionController({
       payloadValid,
       facilityRefreshed,
     };
-  }, [canonicalLatestUploadJobId, loadFacilitySystems, loadLatestUploadState, pendingUploadJobId, setActiveWorkspace, setAllowPersistedLatest, setIsDemoMode]);
+  }, [canonicalLatestUploadJobId, commitCompletedUploadState, loadFacilitySystems, loadLatestUploadState, pendingUploadJobId, setActiveWorkspace, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleResumePreviousSession = useCallback(async () => {
     setResetGuardActive(false);
@@ -502,6 +512,7 @@ function buildPendingUploadSnapshot({ completedPayload = null, completedResult =
     status,
     processing_state: terminalCompletion ? "complete" : status,
     ...(terminalCompletion ? { job_state: "completed", terminal: true, result_available: true } : {}),
+    session_state: terminalCompletion ? "verified" : (completedPayload?.session_state ?? "processing"),
     progress_label: completedPayload?.progress_label ?? completedPayload?.message ?? (terminalCompletion ? "Analysis ready." : "Telemetry is available. Analysis has not started."),
     message: completedPayload?.message ?? completedPayload?.progress_label ?? (terminalCompletion ? "Analysis ready." : "Telemetry is available. Analysis has not started."),
     percent: terminalCompletion

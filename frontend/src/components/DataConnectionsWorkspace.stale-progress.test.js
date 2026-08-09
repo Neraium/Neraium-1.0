@@ -374,6 +374,45 @@ describe("backend state presentation", () => {
     expect(transfer.getByText("Sending telemetry 256 B of 1 KB")).toBeTruthy();
   });
 
+  it("removes file-transfer progress as soon as transfer reaches 100%", () => {
+    renderPanel({
+      uploadState: "processing",
+      selectedFiles: [selectedCsv("transferred.csv")],
+      uploadTransfer: {
+        percent: 100,
+        loaded: 1024,
+        total: 1024,
+        label: "Transfer complete",
+      },
+    });
+
+    expect(screen.queryByLabelText("File transfer progress")).toBeNull();
+    expect(screen.queryByRole("progressbar", { name: "File transfer" })).toBeNull();
+  });
+
+  it("keeps backend workflow and current operation visible after file transfer completes", () => {
+    renderPanel({
+      uploadState: "running_sii",
+      selectedFiles: [selectedCsv("backend-active.csv")],
+      uploadTransfer: {
+        percent: 100,
+        loaded: 1024,
+        total: 1024,
+        label: "Transfer complete",
+      },
+      uploadJob: {
+        job_id: "progress-job",
+        execution_state: "processing",
+        job_progress: backendProgress(),
+      },
+    });
+
+    const progress = within(screen.getByLabelText("Backend job progress"));
+    expect(progress.queryByRole("progressbar", { name: "File transfer" })).toBeNull();
+    expect(progress.getByRole("progressbar", { name: "Overall backend workflow" })).toBeTruthy();
+    expect(progress.getByRole("progressbar", { name: "Signal inventory" })).toBeTruthy();
+  });
+
   it("renders exact backend units and progress semantics", () => {
     renderPanel({
       uploadState: "running_sii",

@@ -3,9 +3,11 @@ import {
   deriveTelemetrySessionState,
   hasActiveTelemetrySnapshot,
   hasFullUploadResult,
+  isCompletedUploadState,
   resolveCurrentUploadJobId,
   resolveCurrentUploadResult,
 } from "./uploadState";
+import { isCompletedAnalysisPayload } from "./analysisHistory";
 
 export const FRONTEND_SESSION_STATES = Object.freeze({
   IDLE: "idle",
@@ -22,7 +24,13 @@ const BACKEND_TO_FRONTEND_STATE = Object.freeze({
   empty: FRONTEND_SESSION_STATES.EMPTY,
   queued: FRONTEND_SESSION_STATES.QUEUED,
   processing: FRONTEND_SESSION_STATES.PROCESSING,
+  complete: FRONTEND_SESSION_STATES.VERIFIED,
+  completed: FRONTEND_SESSION_STATES.VERIFIED,
+  save_complete: FRONTEND_SESSION_STATES.VERIFIED,
+  navigation_pending: FRONTEND_SESSION_STATES.VERIFIED,
+  success: FRONTEND_SESSION_STATES.VERIFIED,
   verified: FRONTEND_SESSION_STATES.VERIFIED,
+  exact_analysis: FRONTEND_SESSION_STATES.VERIFIED,
   restored: FRONTEND_SESSION_STATES.RESTORED,
   stale: FRONTEND_SESSION_STATES.STALE,
   error: FRONTEND_SESSION_STATES.ERROR,
@@ -123,4 +131,66 @@ export function resolveSessionStore({
     },
     { loaded: true },
   );
+}
+
+export function buildLatestUploadSessionState(payload, { loaded = true } = {}) {
+  const sessionStore = buildSessionStore(payload, { loaded });
+  return {
+    snapshot: sessionStore.latestUploadSnapshot,
+    latestResult: sessionStore.latestUploadResult,
+    sessionStore,
+  };
+}
+
+export function isValidTerminalUploadSessionState(state) {
+  const jobId = state?.sessionStore?.jobId ?? resolveCurrentUploadJobId({
+    snapshot: state?.snapshot,
+    latest_result: state?.latestResult,
+  });
+  return Boolean(
+    jobId
+    && (isCompletedUploadState(state?.snapshot) || state?.snapshot?.sii_completed === true)
+    && isCompletedAnalysisPayload({
+      result: state?.latestResult,
+      snapshot: state?.snapshot,
+    }),
+  );
+}
+
+/**
+ * Reconcile a latest-upload response at the canonical session boundary.
+ *
+ * A valid terminal result is sticky only for its own job attempt. Empty or
+ * non-terminal responses for that job are stale by definition after completion;
+ * an explicit different job id establishes a new attempt and may progress
+ * normally.
+ */
+export function reconcileLatestUploadSessionState({ incomingPayload, terminalState = null } = {}) {
+  const incomingState = buildLatestUploadSessionState(incomingPayload, { loaded: true });
+  const retainedTerminal = isValidTerminalUploadSessionState(terminalState) ? terminalState : null;
+  const incomingIsTerminal = isValidTerminalUploadSessionState(incomingState);
+  const incomingJobId = incomingState.sessionStore.jobId;
+  const terminalJobId = retainedTerminal?.sessionStore?.jobId ?? null;
+  const belongsToTerminalAttempt = Boolean(
+    retainedTerminal
+    && (!incomingJobId || String(incomingJobId) === String(terminalJobId)),
+  );
+
+  if (belongsToTerminalAttempt && !incomingIsTerminal) {
+    return {
+      ...retainedTerminal,
+      terminalState: retainedTerminal,
+      incomingIsTerminal: false,
+      retainedTerminal: true,
+    };
+  }
+
+  return {
+    ...incomingState,
+    terminalState: incomingIsTerminal
+      ? incomingState
+      : (incomingJobId && terminalJobId && String(incomingJobId) !== String(terminalJobId) ? null : retainedTerminal),
+    incomingIsTerminal,
+    retainedTerminal: false,
+  };
 }

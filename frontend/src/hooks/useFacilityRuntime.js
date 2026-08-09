@@ -10,7 +10,11 @@ import {
 import { clearLatestUploadStateCache, fetchLatestUploadState } from "../services/api/uploadApi";
 import { getCurrentWorkspaceId } from "../services/datasetSessionCache";
 import * as uploadStateView from "../viewModels/uploadState";
-import { buildEmptySessionStore, buildSessionStore } from "../viewModels/sessionState";
+import {
+  buildEmptySessionStore,
+  buildLatestUploadSessionState,
+  reconcileLatestUploadSessionState,
+} from "../viewModels/sessionState";
 import { normalizeErrorMessage } from "../viewModels/uploadFlow";
 
 const LIVE_REFRESH_INTERVAL_MS = 45000;
@@ -60,6 +64,11 @@ export default function useFacilityRuntime({
   const healthCheckAttemptsRef = useRef(0);
   const latestStabilityRef = useRef({ hasData: false, dataStreak: 0, emptyStreak: 0 });
   const latestUploadResultRef = useRef(null);
+  const latestUploadStateRef = useRef(buildLatestUploadSessionState({
+    snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(),
+    latest_result: null,
+  }, { loaded: false }));
+  const terminalUploadStateRef = useRef(null);
   const lastKnownGoodTelemetryRef = useRef({ latestResult: null, snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(), sessionStore: buildEmptySessionStore() });
   const apiStateRef = useRef("checking");
   const healthRequestInFlightRef = useRef(false);
@@ -67,17 +76,50 @@ export default function useFacilityRuntime({
   const latestUploadRequestInFlightRef = useRef(false);
   const latestUploadRequestVersionRef = useRef(0);
 
+  const applyLatestUploadSessionState = useCallback((nextState) => {
+    latestUploadStateRef.current = nextState;
+    latestUploadResultRef.current = nextState.latestResult;
+    setLatestUploadSnapshot(nextState.snapshot);
+    setLatestUploadResult(nextState.latestResult);
+    setSessionStore(nextState.sessionStore);
+  }, []);
+
   const clearUploadSessionState = useCallback(() => {
     latestUploadRequestVersionRef.current += 1;
     latestUploadRequestInFlightRef.current = false;
     clearLatestUploadStateCache();
-    setLatestUploadResult(null);
-    setLatestUploadSnapshot(uploadStateView.buildEmptyLatestUploadSnapshot());
-    setSessionStore(buildEmptySessionStore());
-    latestUploadResultRef.current = null;
-    lastKnownGoodTelemetryRef.current = { latestResult: null, snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(), sessionStore: buildEmptySessionStore() };
+    const emptyState = {
+      snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(),
+      latestResult: null,
+      sessionStore: buildEmptySessionStore(),
+    };
+    terminalUploadStateRef.current = null;
+    applyLatestUploadSessionState(emptyState);
+    lastKnownGoodTelemetryRef.current = emptyState;
     latestStabilityRef.current = { hasData: false, dataStreak: 0, emptyStreak: 0 };
-  }, []);
+  }, [applyLatestUploadSessionState]);
+
+  const commitCompletedUploadState = useCallback(({ latestResult = null, latestSnapshot = null } = {}) => {
+    const reconciliation = reconcileLatestUploadSessionState({
+      incomingPayload: {
+        snapshot: latestSnapshot,
+        latest_result: latestResult,
+        session_state: latestSnapshot?.session_state ?? "verified",
+      },
+      terminalState: terminalUploadStateRef.current,
+    });
+    if (!reconciliation.incomingIsTerminal) return false;
+    const nextState = {
+      snapshot: reconciliation.snapshot,
+      latestResult: reconciliation.latestResult,
+      sessionStore: reconciliation.sessionStore,
+    };
+    terminalUploadStateRef.current = reconciliation.terminalState;
+    applyLatestUploadSessionState(nextState);
+    lastKnownGoodTelemetryRef.current = nextState;
+    latestStabilityRef.current = { hasData: true, dataStreak: DATA_PROMOTION_STREAK_REQUIRED, emptyStreak: 0 };
+    return true;
+  }, [applyLatestUploadSessionState]);
 
   const checkApiHealth = useCallback(async (trigger = "scheduled") => {
     if (!hasAccess) return false;
@@ -177,8 +219,8 @@ export default function useFacilityRuntime({
     const latestReturn = (hasRuntimeData, payload = null) => returnPayload
       ? {
         hasRuntimeData: Boolean(hasRuntimeData),
-        snapshot: payload?.snapshot ?? latestUploadSnapshot,
-        latestResult: payload?.latestResult ?? latestUploadResultRef.current,
+        snapshot: payload?.snapshot ?? latestUploadStateRef.current.snapshot,
+        latestResult: payload?.latestResult ?? latestUploadStateRef.current.latestResult,
       }
       : Boolean(hasRuntimeData);
     if (!hasAccess) return latestReturn(false);
@@ -241,17 +283,29 @@ export default function useFacilityRuntime({
       }
 
       stability.hasData = nextHasData;
-      const nextSessionStore = buildSessionStore(payload, { loaded: true });
-      setLatestUploadSnapshot(payload.snapshot);
-      setLatestUploadResult(payload.latestResult);
-      setSessionStore(nextSessionStore);
-      latestUploadResultRef.current = payload.latestResult;
-      if (nextHasData && payload.snapshot?._neraiumTelemetryBoundary?.renderable !== false) {
-        lastKnownGoodTelemetryRef.current = { latestResult: payload.latestResult, snapshot: payload.snapshot, sessionStore: nextSessionStore };
+      const reconciliation = reconcileLatestUploadSessionState({
+        incomingPayload: payload,
+        terminalState: terminalUploadStateRef.current,
+      });
+      const nextState = {
+        snapshot: reconciliation.snapshot,
+        latestResult: reconciliation.latestResult,
+        sessionStore: reconciliation.sessionStore,
+      };
+      terminalUploadStateRef.current = reconciliation.terminalState;
+      applyLatestUploadSessionState(nextState);
+      if (reconciliation.retainedTerminal) {
+        console.info("[neraium] stale latest-upload snapshot ignored after terminal completion", {
+          jobId: nextState.sessionStore.jobId,
+          incomingStatus: payload?.snapshot?.status ?? payload?.snapshot?.processing_state ?? null,
+        });
       }
-      return latestReturn(Boolean(nextSessionStore.hasRuntimeData), payload);
+      if (nextState.sessionStore.hasRuntimeData && nextState.snapshot?._neraiumTelemetryBoundary?.renderable !== false) {
+        lastKnownGoodTelemetryRef.current = nextState;
+      }
+      return latestReturn(Boolean(nextState.sessionStore.hasRuntimeData), nextState);
     } catch (error) {
-      if (activeAnalysisIdentity?.analysisRunId || !shouldIncludePersisted) {
+      if (!shouldIncludePersisted) {
         clearUploadSessionState();
         return latestReturn(false);
       }
@@ -266,16 +320,24 @@ export default function useFacilityRuntime({
         requestCorrelationId: lastGood?.snapshot?._neraiumTelemetryBoundary?.requestCorrelationId ?? null,
       });
       return latestReturn(Boolean(lastGood?.sessionStore?.hasRuntimeData ?? latestUploadResultRef.current), {
-        snapshot: lastGood?.snapshot ?? latestUploadSnapshot,
+        snapshot: lastGood?.snapshot ?? latestUploadStateRef.current.snapshot,
         latestResult: lastGood?.latestResult ?? latestUploadResultRef.current,
       });
     } finally {
       if (latestUploadRequestVersionRef.current === requestVersion) latestUploadRequestInFlightRef.current = false;
     }
-  }, [accessCode, activeAnalysisIdentity, allowPersistedLatest, clearUploadSessionState, datasetScopeKey, hasAccess, latestUploadSnapshot]);
+  }, [accessCode, activeAnalysisIdentity, allowPersistedLatest, applyLatestUploadSessionState, clearUploadSessionState, datasetScopeKey, hasAccess]);
 
   useEffect(() => {
     if (!activeAnalysisIdentity?.analysisRunId) return;
+    const currentResult = latestUploadStateRef.current.latestResult;
+    const currentAnalysisId = String(
+      currentResult?.analysis_run_id
+      ?? currentResult?.run_id
+      ?? currentResult?.job_id
+      ?? "",
+    ).trim();
+    if (currentAnalysisId && currentAnalysisId === String(activeAnalysisIdentity.analysisRunId)) return;
     clearUploadSessionState();
   }, [activeAnalysisIdentity?.analysisRunId, clearUploadSessionState]);
 
@@ -370,6 +432,7 @@ export default function useFacilityRuntime({
     loadLatestUploadState,
     allowPersistedLatest,
     setAllowPersistedLatest: updateAllowPersistedLatest,
+    commitCompletedUploadState,
     clearUploadSessionState,
     retryBackendConnection,
   };
