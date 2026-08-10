@@ -205,7 +205,7 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
 
     const card = screen.getByTestId("compact-finding-card");
     const view = within(card);
-    expect(view.getByRole("heading", { name: "Pump response weakening in Rush Tower water system" })).toBeTruthy();
+    expect(view.getByRole("heading", { name: "Pumping System relationship weakening" })).toBeTruthy();
     expect(view.getByText("Pumping System")).toBeTruthy();
     expect(view.getByText("Evidence (6)").closest("details").open).toBe(false);
     expect(card.querySelectorAll(".operational-finding__evidence li")).toHaveLength(6);
@@ -259,6 +259,8 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     };
     renderWorkspace({ result: analysisResult({ analysis: { conditions: [condition] } }) });
 
+    expect(screen.getByRole("heading", { name: "Cooling Distribution relationship weakening" })).toBeTruthy();
+
     fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
 
     expect(screen.getByText("Context-limited relationship change")).toBeTruthy();
@@ -267,7 +269,7 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(screen.getByText("Strengthening")).toBeTruthy();
     expect(screen.queryByText(/^Trajectory$/)).toBeNull();
     expect(screen.queryByText(/Observed for 81 days/i)).toBeNull();
-    expect(screen.getByText("chw_return_temp_f / chiller_power_kw changed from strong to weak coupling.")).toBeTruthy();
+    expect(screen.getByText("Return temperature / Chiller power changed from strong to weak coupling.")).toBeTruthy();
     expect(document.querySelectorAll(".case-sections--review .classification-guidance > li")).toHaveLength(3);
     expect(screen.queryByText("This fourth action must not appear.")).toBeNull();
     const headings = [...document.querySelectorAll(".case-sections--review > section > h2")].map((node) => node.textContent);

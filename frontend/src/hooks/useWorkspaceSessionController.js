@@ -243,6 +243,7 @@ export default function useWorkspaceSessionController({
   const handleUploadAttemptStarted = useCallback(({ files = [], workflow = "create_baseline" } = {}) => {
     if (!files[0]) return null;
     const attempt = createUploadAttempt({ files, workflow });
+    clearUploadSessionState();
     setActiveUploadAttempt(attempt);
     setCompletedUploadOverride(null);
     setPostUploadPendingSnapshot(null);
@@ -251,7 +252,7 @@ export default function useWorkspaceSessionController({
     setGateUploadCompleteSeen(false);
     setSessionIntent("current");
     return attempt;
-  }, []);
+  }, [clearUploadSessionState]);
 
   const handleUploadAttemptIdentified = useCallback(({ attemptId = null, jobId = null, datasetId = null, workflow = null } = {}) => {
     setActiveUploadAttempt((current) => {

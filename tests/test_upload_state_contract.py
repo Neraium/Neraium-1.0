@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 import sqlite3
 
@@ -124,6 +125,82 @@ def test_upload_state_repository_latest_summary_write_preserves_matching_result(
     assert record is not None
     assert record["summary"]["job_id"] == job_id
     assert record["result"]["job_id"] == job_id
+
+
+def test_new_processing_attempt_never_inherits_the_previous_result_payload() -> None:
+    previous_job = "previous-complete-job"
+    current_job = "current-processing-job"
+    previous = {
+        **_persisted_result(previous_job, filename="previous.csv"),
+        "ingestion_trust": {"dataset_id": "previous-dataset", "readiness": {"outcome": "ready_with_limitations"}},
+        "analysis_result": {"insights": [{"id": "previous-finding", "title": "Previous finding"}]},
+        "evidence_count": 17,
+    }
+    write_latest_upload_result(previous_job, previous)
+
+    upload_state_repository.write_latest_upload_summary(
+        current_job,
+        {
+            "dataset_id": "current-dataset",
+            "status": "PROCESSING",
+            "processing_state": "processing",
+            "filename": "current.csv",
+        },
+    )
+
+    record = read_latest_upload_record()
+    assert record is not None
+    assert record["job_id"] == current_job
+    assert record["dataset_id"] == "current-dataset"
+    assert record["result"] is None
+    assert read_current_upload_result() is None
+    assert read_upload_result_by_job_id(previous_job)["analysis_result"]["insights"][0]["id"] == "previous-finding"
+
+    payload = TestClient(create_app()).get("/api/data/latest-upload?include_persisted=1").json()
+    assert payload["job_id"] == current_job
+    assert payload["latest_result"] is None
+    assert "previous-finding" not in json.dumps(payload)
+    assert "ready_with_limitations" not in json.dumps(payload)
+    assert '"evidence_count": 17' not in json.dumps(payload)
+
+
+def test_late_previous_job_events_cannot_replace_the_current_attempt() -> None:
+    previous_job = "late-previous-job"
+    current_job = "new-active-job"
+    previous = _persisted_result(previous_job, filename="previous.csv")
+    write_latest_upload_result(previous_job, previous)
+    upload_state_repository.write_latest_upload_summary(
+        current_job,
+        {
+            "dataset_id": "new-dataset",
+            "status": "PROCESSING",
+            "processing_state": "processing",
+            "filename": "new.csv",
+        },
+    )
+
+    upload_state_repository.write_upload_completion(
+        previous_job,
+        result=previous,
+        summary={
+            "job_id": previous_job,
+            "status": "COMPLETE",
+            "processing_state": "complete",
+            "filename": "previous.csv",
+            "result_available": True,
+        },
+    )
+    upload_state_repository.write_upload_status_progress(
+        previous_job,
+        {"status": "PROCESSING", "processing_state": "processing", "message": "Late worker callback"},
+    )
+
+    record = read_latest_upload_record()
+    assert record is not None
+    assert record["job_id"] == current_job
+    assert record["result"] is None
+    assert upload_state_repository.read_upload_status(previous_job)["processing_state"] == "complete"
+    assert read_upload_result_by_job_id(previous_job)["job_id"] == previous_job
 
 
 def test_upload_state_repository_write_upload_completion_persists_consistent_artifacts() -> None:

@@ -83,7 +83,7 @@ test.describe("Baseline-ready navigation", () => {
       filename: "commercial water system.csv",
       conditions: [{
         id: "condition-pumping-system-5c07679cd8",
-        headline: "Connected relationships strengthening in Pumping System",
+        headline: "Pumping System relationship strengthening",
         affected_signals: ["pump_vibration_mms", "ct_outlet_temp_f", "differential_pressure_psi"],
       }],
     };
@@ -129,6 +129,15 @@ test.describe("Baseline-ready navigation", () => {
     await expect(page.getByText("baseline-a.csv")).toHaveCount(0);
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Baseline Established", level: 3 })).toBeVisible();
+
+    await page.goBack({ waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\/baselines\/baseline-a\/ready$/);
+    await expect(page.getByText("baseline-a.csv")).toBeVisible();
+    await expect(page.getByText("baseline-b.csv")).toHaveCount(0);
+    await page.goForward({ waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\/baselines\/baseline-b\/ready$/);
+    await expect(page.getByText("baseline-b.csv")).toBeVisible();
+    await expect(page.getByText("baseline-a.csv")).toHaveCount(0);
 
     expect(errors).toEqual([]);
 

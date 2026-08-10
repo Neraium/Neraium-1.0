@@ -30,7 +30,7 @@ test("AWS-free chilled-water baseline and persistent pump degradation survive re
   await page.getByRole("button", { name: "Evaluate Against Baseline" }).click();
 
   await expect(page).toHaveURL(/\/analyses\/[^/]+$/, { timeout: 120_000 });
-  await expect(page.getByRole("heading", { name: /Pump response weakening in Pumping System/i }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Pump power \/ Chilled water flow coupling weakened/i }).first()).toBeVisible();
   await expect(page.getByText("1 item in review")).toBeVisible();
   await expect(page.getByText(/Evidence \(\d+\)/).first()).toBeVisible();
   const analysisUrl = page.url();
@@ -118,7 +118,7 @@ test("AWS-free chilled-water baseline and persistent pump degradation survive re
   await page.screenshot({ path: path.resolve(here, "../../../docs/screenshots/codex-cloud-pump-degradation.png"), fullPage: true });
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(analysisUrl);
-  await expect(page.getByRole("heading", { name: /Pump response weakening in Pumping System/i }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Pump power \/ Chilled water flow coupling weakened/i }).first()).toBeVisible();
   const restoredPackage = await (await page.request.get(`/api/data/analyses/${analysisId}/evidence-package`)).json();
   expect(restoredPackage).toEqual(firstPackage);
   expect(restoredPackage.id).toBe(firstPackage.id);

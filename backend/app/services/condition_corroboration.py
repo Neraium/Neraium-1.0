@@ -295,6 +295,12 @@ class ConditionCorroborationService:
                 {
                     "id": condition_id,
                     "title": condition["headline"],
+                    "title_scope": (
+                        "isolated_relationship"
+                        if corroboration.relationship_count == 1
+                        else "corroborated_relationships"
+                    ),
+                    "title_evidence_relationship_id": _relationship_id(primary),
                     "corroboration_strength": corroboration.corroboration_strength,
                     "relationship_count": corroboration.relationship_count,
                     "supporting_relationships": corroboration.supporting_relationships,
@@ -1027,17 +1033,31 @@ def _condition_headline(
     relationships: list[dict[str, Any]],
     localization: dict[str, Any],
 ) -> str:
-    orientation = _orientation(relationships[0])
-    signals = " ".join(column.lower().replace("_", " ") for item in relationships for column in item["columns"])
-    system = localization.get("system") or localization.get("monitored_boundary") or "monitored area"
-    site = str(localization.get("site") or "").strip()
-    area = f"{site} {system}".strip() if site and site.lower() not in str(system).lower() else system
-    if orientation == "weakening":
-        subject = "Pump response" if "pump" in signals and any(token in signals for token in ("flow", "pressure", "power", "current")) else f"{area} response"
-        return f"{subject} weakening in {area}" if subject.lower() != f"{area} response".lower() else f"{area} response weakening"
-    if orientation == "strengthening":
-        return f"Connected relationships strengthening in {area}"
-    return f"Connected behavior changing in {area}"
+    primary = max(relationships, key=_relationship_rank)
+    orientation = _orientation(primary)
+    direction = {
+        "weakening": "weakening",
+        "strengthening": "strengthening",
+        "disrupted": "shifted",
+        "changed": "shifted",
+    }.get(orientation, "shifted")
+    columns = [_display_signal_name(column) for column in primary["columns"]]
+    pair = " / ".join(column for column in columns if column) or "Measured signal"
+
+    # A single relationship never earns a system-wide title. Once connected
+    # evidence corroborates it, a supported shared system or boundary is useful
+    # context while the title still says exactly what changed: a relationship.
+    if len(relationships) == 1:
+        verb = {
+            "weakening": "weakened",
+            "strengthening": "strengthened",
+        }.get(orientation, "shifted")
+        return f"{pair} coupling {verb}"
+
+    area = str(localization.get("system") or localization.get("monitored_boundary") or "").strip()
+    if area:
+        return f"{area} relationship {direction}"
+    return f"{pair} coupling {direction}"
 
 
 def _condition_importance(
@@ -1049,10 +1069,9 @@ def _condition_importance(
     if corroboration.relationship_count == 1:
         return "The relationship remains isolated evidence and should not be treated as a broader system condition."
     first = f"{corroboration.relationship_count} connected changes moved together."
-    trend = str(trajectory.get("state") or "developing").lower()
     if comparable.get("status") != "supported" or str(operating_mode.get("match") or "").lower() != "strong":
-        return f"{first} Evidence is {trend}, but like-for-like comparability is limited."
-    return f"{first} Like-for-like history is available, and the evidence trend is {trend}."
+        return f"{first} Like-for-like comparability is limited."
+    return f"{first} Like-for-like history is available."
 
 
 def _next_checks(
@@ -1176,8 +1195,36 @@ def _shared_signals(relationships: list[dict[str, Any]]) -> list[str]:
     return [column for column, count in counts.items() if count >= 2]
 
 
+def _display_signal_name(value: Any) -> str:
+    tokens = [token for token in re.split(r"[_\-\s]+", str(value or "").strip().lower()) if token]
+    if not tokens:
+        return ""
+    if tokens[0] in {"chw", "chilledwater"} and any(token in tokens for token in {"return", "supply"}):
+        tokens = tokens[1:]
+    elif tokens[0] == "chw":
+        tokens = ["chilled", "water", *tokens[1:]]
+    if tokens and tokens[-1] in {
+        "a",
+        "c",
+        "f",
+        "gpm",
+        "hz",
+        "kpa",
+        "kw",
+        "pct",
+        "percent",
+        "psi",
+        "rpm",
+        "v",
+    }:
+        tokens = tokens[:-1]
+    aliases = {"temp": "temperature", "amps": "current", "amp": "current"}
+    words = [aliases.get(token, token) for token in tokens]
+    return " ".join(words).capitalize()
+
+
 def _primary_relationship_summary(item: dict[str, Any]) -> str:
-    label = " / ".join(item["columns"]) or "Primary relationship"
+    label = " / ".join(_display_signal_name(column) for column in item["columns"]) or "Primary relationship"
     baseline = item.get("baseline_strength")
     current = _first_defined(item.get("current_strength"), item.get("strength"))
     if baseline is not None and current is not None:

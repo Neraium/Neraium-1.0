@@ -430,7 +430,7 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
       setSelectedBaselineIdentity(baselineRoute);
       setComparisonBaselineIdentity(comparisonRoute);
       setSelectedAnalysisIdentity(analysisRoute);
-      if (baselineRoute ?? comparisonRoute ?? analysisRoute) setActiveBaselineIdentity(baselineRoute ?? comparisonRoute ?? analysisRoute);
+      setActiveBaselineIdentity(baselineRoute ?? comparisonRoute ?? analysisRoute ?? null);
       setActiveWorkspaceState(readInitialWorkspaceRoute());
     };
 

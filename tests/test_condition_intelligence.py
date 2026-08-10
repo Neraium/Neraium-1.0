@@ -316,7 +316,9 @@ def test_condition_creation_includes_localization_timeline_and_next_checks() -> 
     assert len(conditions) == 1
     condition = conditions[0]
     assert condition["object_type"] == "condition"
-    assert condition["headline"] == "Pump response weakening in Rush Tower Pumping System"
+    assert condition["headline"] == "Pumping System relationship weakening"
+    assert condition["title_scope"] == "corroborated_relationships"
+    assert condition["title_evidence_relationship_id"] == "rel-1"
     assert condition["localization"]["site"] == "Rush Tower"
     assert condition["localization"]["monitored_boundary"] == "Discharge boundary"
     assert condition["affected_boundaries"] == ["Discharge boundary"]
@@ -373,12 +375,54 @@ def test_condition_duration_and_copy_use_the_relationship_evidence_window() -> N
     assert condition["source_time_ranges"][0]["current_start"] == trajectory["evidence_window"]["start"]
     assert condition["source_time_ranges"][0]["current_end"] == trajectory["evidence_window"]["end"]
     assert condition["timeline"][1]["title"].startswith("Evidence trend:")
-    assert condition["supporting_evidence"][0] == "chw_return_temp_f / chiller_power_kw changed from strong to weak coupling."
+    assert condition["headline"] == "Pumping System relationship weakening"
+    assert condition["supporting_evidence"][0] == "Return temperature / Chiller power changed from strong to weak coupling."
+    assert condition["why_it_matters"] == "2 connected changes moved together. Like-for-like comparability is limited."
     assert len(condition["what_changed"].split(". ")) <= 2
     assert len(condition["why_it_matters"].split(". ")) <= 2
     assert len(condition["what_changed"]) <= 260
     assert len(condition["why_it_matters"]) <= 260
     assert len(condition["next_checks"]) == 3
+
+
+def test_isolated_condition_title_stays_on_the_observed_relationship() -> None:
+    condition = ConditionCorroborationService().build_conditions(
+        relationships=[
+            relationship(
+                "return-power",
+                "chw_return_temp_f",
+                "chiller_power_kw",
+                system="Cooling Distribution",
+                confidence=0.74,
+            )
+        ],
+        data_quality={"data_confidence": {"rating": "limited"}},
+        operating_mode={"match": "weak"},
+    )[0]
+
+    assert condition["headline"] == "Return temperature / Chiller power coupling weakened"
+    assert condition["title_scope"] == "isolated_relationship"
+    assert condition["title_evidence_relationship_id"] == "return-power"
+    assert "system" not in condition["headline"].lower()
+    assert "failure" not in condition["headline"].lower()
+    assert len(condition["what_changed"].split(". ")) <= 2
+    assert len(condition["why_it_matters"].split(". ")) <= 2
+
+
+def test_corroborated_title_uses_shared_boundary_without_claiming_failure() -> None:
+    conditions = ConditionCorroborationService().build_conditions(
+        relationships=[
+            relationship("supply-flow", "supply_temp_f", "flow_gpm", change_type="strengthened", system=""),
+            relationship("flow-power", "flow_gpm", "pump_power_kw", change_type="strengthened", system=""),
+        ],
+        data_quality={"data_confidence": {"rating": "high"}},
+        operating_mode={"match": "strong"},
+    )
+
+    assert len(conditions) == 1
+    assert conditions[0]["headline"] == "Supply boundary relationship strengthening"
+    assert conditions[0]["title_scope"] == "corroborated_relationships"
+    assert "failure" not in conditions[0]["headline"].lower()
 
 
 def test_evidence_duration_is_omitted_for_missing_or_inconsistent_bounds() -> None:

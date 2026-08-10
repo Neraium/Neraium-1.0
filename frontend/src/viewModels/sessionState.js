@@ -55,6 +55,10 @@ export function buildEmptySessionStore() {
     backendState: "empty",
     label: STATE_LABELS.idle,
     jobId: null,
+    runId: null,
+    uploadId: null,
+    datasetId: null,
+    workflow: null,
     latestUploadSnapshot: snapshot,
     latestUploadResult: null,
     telemetrySession: deriveTelemetrySessionState({
@@ -82,6 +86,11 @@ export function buildSessionStore(payload, { loaded = true } = {}) {
   const snapshot = sourcePayload.snapshot ?? sourcePayload ?? buildEmptyLatestUploadSnapshot();
   const latestUploadResult = resolveCurrentUploadResult(sourcePayload);
   const jobId = resolveCurrentUploadJobId(sourcePayload);
+  const identityPayload = latestUploadResult ?? snapshot?.current_upload ?? snapshot;
+  const runId = String(identityPayload?.run_id ?? snapshot?.run_id ?? jobId ?? "").trim() || null;
+  const uploadId = String(identityPayload?.upload_id ?? snapshot?.upload_id ?? jobId ?? "").trim() || null;
+  const datasetId = String(identityPayload?.dataset_id ?? identityPayload?.datasetId ?? snapshot?.dataset_id ?? snapshot?.datasetId ?? "").trim() || null;
+  const workflow = String(identityPayload?.workflow ?? snapshot?.workflow ?? "").trim() || null;
   const backendState = String(sourcePayload.session_state ?? snapshot.session_state ?? snapshot.status ?? "empty").toLowerCase();
   const uiState = loaded
     ? (BACKEND_TO_FRONTEND_STATE[backendState] ?? FRONTEND_SESSION_STATES.EMPTY)
@@ -98,6 +107,10 @@ export function buildSessionStore(payload, { loaded = true } = {}) {
     backendState,
     label: STATE_LABELS[uiState] ?? STATE_LABELS.empty,
     jobId,
+    runId,
+    uploadId,
+    datasetId,
+    workflow,
     latestUploadSnapshot: snapshot,
     latestUploadResult,
     telemetrySession,

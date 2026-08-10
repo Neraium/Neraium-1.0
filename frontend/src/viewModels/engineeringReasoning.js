@@ -98,6 +98,46 @@ function operationalTitleFromContext(values, system = "") {
   return "Measured behavior changed";
 }
 
+function displaySignalName(value) {
+  let tokens = String(value || "").trim().toLowerCase().split(/[_\-\s]+/).filter(Boolean);
+  if (["chw", "chilledwater"].includes(tokens[0]) && tokens.some((token) => ["return", "supply"].includes(token))) tokens = tokens.slice(1);
+  else if (tokens[0] === "chw") tokens = ["chilled", "water", ...tokens.slice(1)];
+  if (["a", "c", "f", "gpm", "hz", "kpa", "kw", "pct", "percent", "psi", "rpm", "v"].includes(tokens.at(-1))) tokens = tokens.slice(0, -1);
+  const aliases = { temp: "temperature", amp: "current", amps: "current" };
+  const label = tokens.map((token) => aliases[token] || token).join(" ");
+  return label ? label[0].toUpperCase() + label.slice(1) : "";
+}
+
+function readableRelationshipCopy(value, relationships = []) {
+  let text = String(value || "");
+  const signals = unique(relationships.flatMap((item) => [item?.source, item?.target])).sort((left, right) => right.length - left.length);
+  for (const signal of signals) {
+    const label = displaySignalName(signal);
+    if (!signal || !label || label === signal) continue;
+    const escaped = signal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    text = text.replace(new RegExp(`\\b${escaped}\\b`, "g"), label);
+  }
+  return text;
+}
+
+function evidenceBoundedRelationshipTitle(raw, relationship, system) {
+  if (!relationship) return "";
+  const count = Number(raw?.relationship_count ?? raw?.corroboration?.relationship_count ?? 1);
+  const change = String(relationship.changeType || "").toLowerCase();
+  const direction = /weaken|missing/.test(change)
+    ? "weakening"
+    : /strength|new|emerg/.test(change)
+      ? "strengthening"
+      : Number.isFinite(relationship.baseline) && Number.isFinite(relationship.current)
+        ? relationship.current < relationship.baseline ? "weakening" : relationship.current > relationship.baseline ? "strengthening" : "shifted"
+        : "shifted";
+  if (count > 1 && system) return `${String(system).replace(/\s*&\s*/g, " and ").trim()} relationship ${direction}`;
+  const pair = [displaySignalName(relationship.source), displaySignalName(relationship.target)].filter(Boolean).join(" / ");
+  if (!pair) return "";
+  const verb = direction === "weakening" ? "weakened" : direction === "strengthening" ? "strengthened" : "shifted";
+  return `${pair} coupling ${verb}`;
+}
+
 function mappedEvidenceSignal(text, contextSignals) {
   if (!/^chiller\s+(?:increased|decreased|changed)\b/i.test(text)) return text;
   const context = contextText(contextSignals);
@@ -254,6 +294,8 @@ function isActiveRawFinding(raw) {
 function specificFindingTitle(raw, observedChange, relationship, tier, system, contextValues = []) {
   if (["Deferred", "Withheld"].includes(tier)) return "Evidence insufficient for reliable interpretation";
   const supplied = stripPeriod(firstText(raw?.headline, raw?.title, raw?.finding_title));
+  const relationshipTitle = evidenceBoundedRelationshipTitle(raw, relationship, system);
+  if (raw?.object_type === "condition" && relationshipTitle && /\bresponse\b|^connected relationships?|connected behavior/i.test(supplied)) return relationshipTitle;
   if (raw?.object_type === "condition" && supplied && supplied.length <= 96 && !MALFORMED_FINDING_TITLE.test(supplied) && !OVERSTATED_FINDING_TITLE.test(supplied)) return supplied;
   const observed = stripPeriod(sentence(observedChange, 90));
   const fullContext = [contextValues, supplied, observed, relationship?.source, relationship?.target];
@@ -315,17 +357,20 @@ function buildFinding(raw, index, context) {
   const relationship = relatedRows[0] ?? context.relationships[0] ?? null;
   const evidenceRefs = unique(asArray(raw?.evidence_refs ?? raw?.evidenceRefs));
   const evidenceObjects = compact([...asArray(raw?.evidence ?? raw?.evidence_items), ...evidenceRefs.map((ref) => context.evidenceIndex?.[ref]), ...relatedRows.flatMap((row) => row.evidence)]);
-  const rawSupporting = unique([...asArray(raw?.supporting_evidence), ...asArray(raw?.observed_facts), ...evidenceObjects.map(evidenceText)].map(evidenceText));
+  const rawSupporting = unique([...asArray(raw?.supporting_evidence), ...asArray(raw?.observed_facts), ...evidenceObjects.map(evidenceText)]
+    .map(evidenceText)
+    .map((item) => raw?.object_type === "condition" ? readableRelationshipCopy(item, relatedRows) : item));
   if (!rawSupporting.length && relationship && ["changed", "emerging"].includes(relationship.state)) rawSupporting.push(relationship.label + " moved outside its learned range.");
   const technicalLimitations = collectTechnicalLimitations(raw, context.result, context.gaps);
   const limitations = materialLimitations(raw, technicalLimitations, context.gaps);
   const contradictions = collectContradictions(raw);
   const variables = unique([...asArray(raw?.variables), ...asArray(raw?.affected_variables), ...asArray(raw?.affected_signals), ...asArray(raw?.source_tags), ...asArray(raw?.supporting_signals), relationship?.source, relationship?.target]);
   const tier = deriveConfidenceTier({ explicit: raw?.confidence_tier ?? raw?.confidence ?? raw?.confidence_state, coverage: context.coverage, evidenceCount: rawSupporting.length + evidenceObjects.length, limitations, contradictions, processing: context.processing, baselineSufficient: raw?.baseline_sufficient === false ? false : context.baselineSufficient, reliable: isReliable(raw, context.result) });
-  const observedChange = firstText(raw?.what_changed, raw?.observed_change, raw?.whatHappened, raw?.summary, raw?.title) || (relationship ? relationship.label + " moved outside its learned behavior." : "The available comparison indicates a change in measured behavior.");
+  const rawObservedChange = firstText(raw?.what_changed, raw?.observed_change, raw?.whatHappened, raw?.summary, raw?.title) || (relationship ? relationship.label + " moved outside its learned behavior." : "The available comparison indicates a change in measured behavior.");
+  const observedChange = raw?.object_type === "condition" ? readableRelationshipCopy(rawObservedChange, relatedRows) : rawObservedChange;
   const location = deriveLocation(raw, context);
   const titleContext = [variables, rawSupporting, relatedRows.map((item) => [item.label, item.source, item.target])];
-  const title = specificFindingTitle(raw, observedChange, relationship, tier, location.subsystem || location.system, titleContext);
+  const title = specificFindingTitle(raw, observedChange, relationship, tier, location.system || location.subsystem, titleContext);
   const supporting = unique(rawSupporting.map((item) => formatPrimaryEvidence(item, titleContext)).filter(Boolean));
   const specificRecommendation = firstText(raw?.first_place_to_look, raw?.recommended_first_action, raw?.recommended_check, asArray(raw?.next_checks)[0], raw?.operator_check, raw?.recommended_action);
   const hasMappedContext = Boolean(location.system || location.subsystem || location.asset) && variables.length > 0;
@@ -369,6 +414,8 @@ function buildFinding(raw, index, context) {
     classification: raw?.classification,
     objectType: raw?.object_type ?? (raw?.condition_id ? "condition" : "finding"),
     conditionId: firstText(raw?.condition_id, raw?.id),
+    titleScope: firstText(raw?.title_scope),
+    titleEvidenceRelationshipId: firstText(raw?.title_evidence_relationship_id),
     confidence: raw?.confidence,
     confidenceScore: firstNumber(raw?.confidence_score),
     trajectory: raw?.trajectory ?? {},
@@ -390,7 +437,10 @@ function buildFinding(raw, index, context) {
     persistence: raw?.persistence,
     relationshipEvidence: raw?.relationship_evidence ?? raw?.relationshipEvidence,
     investigationGuidance: raw?.investigation_guidance ?? raw?.investigationGuidance ?? [],
-    recommendedInvestigation: raw?.recommended_investigation ?? raw?.recommendedInvestigation ?? raw?.next_checks ?? [],
+    recommendedInvestigation: (Array.isArray(raw?.recommended_investigation ?? raw?.recommendedInvestigation ?? raw?.next_checks)
+      ? (raw?.recommended_investigation ?? raw?.recommendedInvestigation ?? raw?.next_checks)
+      : compact([raw?.recommended_investigation ?? raw?.recommendedInvestigation ?? raw?.next_checks]))
+      .map((item) => sentence(item, 140)).filter(Boolean).slice(0, 3),
     recommendedFirstAction: recommendationAllowed ? specificRecommendation : "",
     activityTimeline: asArray(raw?.timeline ?? raw?.activity_timeline ?? raw?.activityTimeline),
     sourceTimeRanges: asArray(raw?.source_time_ranges ?? raw?.sourceTimeRanges),
@@ -449,7 +499,9 @@ function mergeFindingGroup(group) {
   const contradictions = unique(group.flatMap((finding) => finding.contradictions));
   const primaryLimitation = limitations[0] || plainLimitation(contradictions[0]) || "";
   const evidence = prioritizeEvidence(allSupporting);
-  const title = operationalTitleFromContext([variables, evidence.all, areas], inferredSystem);
+  const title = primary.objectType === "condition"
+    ? primary.title
+    : operationalTitleFromContext([variables, evidence.all, areas], inferredSystem);
   const relationships = uniqueObjects(group.flatMap((finding) => finding.relationships), (item) => item.id + "|" + item.label);
   const evidenceObjects = uniqueObjects(group.flatMap((finding) => finding.evidenceObjects), (item) => String(item?.id ?? item?.evidence_id ?? evidenceText(item)));
   const status = ["Deferred", "Withheld"].includes(tier) ? "Evidence insufficient" : "Change detected";

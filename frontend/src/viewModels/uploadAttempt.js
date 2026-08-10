@@ -42,7 +42,7 @@ export function createUploadAttempt({ files = [], workflow = "create_baseline" }
   uploadAttemptSequence += 1;
   const randomId = typeof crypto !== "undefined" ? crypto.randomUUID?.() : null;
   return {
-    attemptId: randomId ?? `upload-attempt-${Date.now()}-${uploadAttemptSequence}`,
+    attemptId: randomId ?? `upload-attempt-${uploadAttemptSequence}`,
     jobId: null,
     datasetId: null,
     filename: text(file?.name),

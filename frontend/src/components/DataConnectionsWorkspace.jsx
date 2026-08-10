@@ -423,6 +423,19 @@ export default function DataConnectionsWorkspace({
     [currentUser, datasetScopeKey],
   );
   const presentedUploadAttempt = activeUploadAttempt ?? localUploadAttempt;
+  const rememberedPresentationJobId = readRememberedUploadJobId();
+  const sessionPresentationJobId = String(sessionStore?.jobId ?? "").trim();
+  const restoredPresentationAttempt = !presentedUploadAttempt?.attemptId
+    && rememberedPresentationJobId
+    && rememberedPresentationJobId !== sessionPresentationJobId
+    ? {
+      attemptId: `restored-job:${rememberedPresentationJobId}`,
+      jobId: rememberedPresentationJobId,
+      workflow: currentWorkflow,
+      phase: "processing",
+    }
+    : null;
+  const presentationUploadAttempt = presentedUploadAttempt ?? restoredPresentationAttempt;
 
   const setUploadProcessingFlag = (active) => {
     if (typeof window !== "undefined") {
@@ -505,7 +518,7 @@ export default function DataConnectionsWorkspace({
     if (typeof window === "undefined" || selectedBaselineIdRef.current || presentedUploadAttempt?.attemptId || selectedFiles.length > 0) return;
     const sessionJobId = String(sessionStore?.jobId ?? "").trim();
     const rememberedJobId = readRememberedUploadJobId();
-    const candidateJobId = sessionJobId || rememberedJobId;
+    const candidateJobId = rememberedJobId || sessionJobId;
     if (!candidateJobId) return;
     const reconciliationKey = `${rememberedJobStorageKey}:${candidateJobId}`;
     if (reconciledJobRef.current === reconciliationKey) return;
@@ -513,7 +526,7 @@ export default function DataConnectionsWorkspace({
     reconcileAbortControllerRef.current?.abort();
     const controller = new AbortController();
     reconcileAbortControllerRef.current = controller;
-    const sourcePayload = sessionJobId
+    const sourcePayload = sessionJobId && sessionJobId === candidateJobId
       ? {
         ...(sessionStore?.latestUploadSnapshot ?? {}),
         latest_result: sessionStore?.latestUploadResult ?? null,
@@ -704,7 +717,7 @@ export default function DataConnectionsWorkspace({
     try {
       return String(
         window.localStorage.getItem(rememberedJobStorageKey)
-          ?? window.localStorage.getItem(LEGACY_LAST_UPLOAD_JOB_ID_STORAGE_KEY)
+          ?? (datasetScopeKey === "anonymous" ? window.localStorage.getItem(LEGACY_LAST_UPLOAD_JOB_ID_STORAGE_KEY) : null)
           ?? "",
       ).trim();
     } catch {
@@ -2022,10 +2035,10 @@ export default function DataConnectionsWorkspace({
         handleFileSelection={handleFileSelection}
         selectedFiles={selectedFiles}
         latestUploadSnapshot={latestUploadSnapshot}
-        activeUploadAttempt={presentedUploadAttempt ? {
-          ...presentedUploadAttempt,
-          jobId: uploadJob?.jobId ?? uploadJob?.job_id ?? localUploadAttempt?.jobId ?? presentedUploadAttempt.jobId ?? null,
-          datasetId: uploadJob?.datasetId ?? uploadJob?.dataset_id ?? localUploadAttempt?.datasetId ?? presentedUploadAttempt.datasetId ?? null,
+        activeUploadAttempt={presentationUploadAttempt ? {
+          ...presentationUploadAttempt,
+          jobId: uploadJob?.jobId ?? uploadJob?.job_id ?? localUploadAttempt?.jobId ?? presentationUploadAttempt.jobId ?? null,
+          datasetId: uploadJob?.datasetId ?? uploadJob?.dataset_id ?? localUploadAttempt?.datasetId ?? presentationUploadAttempt.datasetId ?? null,
         } : null}
         baselineResult={baselineResult}
         workflow={uploadJob?.workflow ?? currentWorkflow}

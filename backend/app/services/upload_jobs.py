@@ -47,7 +47,6 @@ from app.services.runtime_db import claim_next_upload_job, mark_queue_job_failed
 from app.services.upload_completion import build_partial_upload_artifacts
 from app.services.upload_evidence import build_evidence_record_from_result, build_traceability_packet
 from app.services.upload_pipeline import run_structural_analysis_pipeline
-from app.services.upload_persistence import project_result_for_transport
 from app.services.upload_persistence import read_upload_history as read_upload_history_from_runtime
 from app.services.upload_persistence import summarize_result as summarize_result_payload
 from app.services.upload_queue_lifecycle import UploadQueueLifecycleService
@@ -63,7 +62,6 @@ from app.services.job_progress import (
     update_progress,
 )
 from app.services.upload_state_repository import (
-    cache_latest_upload_payload,
     clear_reset_block_persisted,
     configure_runtime_dir as configure_runtime_state_dir,
     delete_upload_source,
@@ -417,7 +415,6 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
     while len(JOB_RUNTIME_DIRS) > UPLOAD_RUNTIME_STATE.max_cached_jobs:
         JOB_RUNTIME_DIRS.pop(next(iter(JOB_RUNTIME_DIRS)))
     repository_write_upload_status_progress(job_id, payload, latest_summary=payload, keep_result=False)
-    cache_latest_upload_payload("summary", payload)
     upsert_upload_job(payload)
     return payload
 
@@ -439,8 +436,6 @@ def _complete_with_partial_result(
     )
     repository_write_upload_completion(job_id, result=result, summary=summary)
     UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
-    cache_latest_upload_payload("result", project_result_for_transport(result) or result)
-    cache_latest_upload_payload("summary", {**summary, "transport_result_available": True})
 
     try:
         upsert_upload_job(summary)
@@ -460,8 +455,6 @@ def _persist_completed_upload(job_id: str, *, result: dict[str, Any], summary: d
     except Exception:
         pass
     UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
-    cache_latest_upload_payload("result", project_result_for_transport(result) or result)
-    cache_latest_upload_payload("summary", {**summary, "transport_result_available": True})
 
 
 
@@ -2205,7 +2198,6 @@ def write_job(*args) -> None:
             latest_summary=latest_summary,
             keep_result=status_text == "COMPLETE",
         )
-        cache_latest_upload_payload("summary", latest_summary)
     else:
         write_upload_status(job_id, payload)
     _persist_job_record(job_id, payload)

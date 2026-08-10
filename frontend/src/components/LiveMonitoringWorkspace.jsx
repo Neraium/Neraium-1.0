@@ -287,7 +287,7 @@ function evidenceDrawerRelationship(finding) {
   };
 }
 
-export default function LiveMonitoringWorkspace({ apiFetch, accessCode = "" }) {
+export default function LiveMonitoringWorkspace({ apiFetch, accessCode = "", datasetScopeKey = "anonymous" }) {
   const [snapshot, setSnapshot] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -297,15 +297,18 @@ export default function LiveMonitoringWorkspace({ apiFetch, accessCode = "" }) {
   const mountedRef = useRef(false);
   const requestRef = useRef(null);
   const snapshotRef = useRef(null);
+  const scopeRef = useRef(datasetScopeKey);
+  scopeRef.current = datasetScopeKey;
 
   const load = useCallback(async ({ manual = false } = {}) => {
-    if (requestRef.current) return requestRef.current;
+    const requestScope = datasetScopeKey;
+    if (requestRef.current?.scope === requestScope) return requestRef.current.request;
     if (manual) setRefreshing(true);
     const request = fetchLiveMonitoringSnapshot({ apiFetch, accessCode });
-    requestRef.current = request;
+    requestRef.current = { scope: requestScope, request };
     try {
       const next = await request;
-      if (!mountedRef.current) return next;
+      if (!mountedRef.current || scopeRef.current !== requestScope) return next;
       if (next.status === "error" && snapshotRef.current) {
         setRefreshNotice("Refresh failed. Previously loaded data remains visible.");
       } else {
@@ -315,16 +318,16 @@ export default function LiveMonitoringWorkspace({ apiFetch, accessCode = "" }) {
       }
       return next;
     } catch {
-      if (mountedRef.current) setRefreshNotice("Refresh failed. Retry when the service is available.");
+      if (mountedRef.current && scopeRef.current === requestScope) setRefreshNotice("Refresh failed. Retry when the service is available.");
       return null;
     } finally {
-      if (requestRef.current === request) requestRef.current = null;
-      if (mountedRef.current) {
+      if (requestRef.current?.request === request) requestRef.current = null;
+      if (mountedRef.current && scopeRef.current === requestScope) {
         setLoading(false);
         setRefreshing(false);
       }
     }
-  }, [accessCode, apiFetch]);
+  }, [accessCode, apiFetch, datasetScopeKey]);
 
   useEffect(() => {
     mountedRef.current = true;

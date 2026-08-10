@@ -61,6 +61,11 @@ export default function useFacilityRuntime({
   const [domainMode, setDomainModeState] = useState(null);
   const [domainModeResolved, setDomainModeResolved] = useState(false);
   const [domainDetection, setDomainDetection] = useState({ mode: null, source: "default", confidence: 0, evidence: [] });
+  const workspaceIdentityKey = `${datasetScopeKey}|portfolio:${String(getCurrentWorkspaceId() || "")}`;
+  const uploadIdentityKey = `${workspaceIdentityKey}|analysis:${String(activeAnalysisIdentity?.analysisRunId || "latest")}`;
+  const [systemsOwnerKey, setSystemsOwnerKey] = useState(workspaceIdentityKey);
+  const [latestUploadOwnerKey, setLatestUploadOwnerKey] = useState(uploadIdentityKey);
+  const [domainOwnerKey, setDomainOwnerKey] = useState(workspaceIdentityKey);
   const healthCheckAttemptsRef = useRef(0);
   const latestStabilityRef = useRef({ hasData: false, dataStreak: 0, emptyStreak: 0 });
   const latestUploadResultRef = useRef(null);
@@ -69,16 +74,22 @@ export default function useFacilityRuntime({
     latest_result: null,
   }, { loaded: false }));
   const terminalUploadStateRef = useRef(null);
-  const lastKnownGoodTelemetryRef = useRef({ latestResult: null, snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(), sessionStore: buildEmptySessionStore() });
+  const lastKnownGoodTelemetryRef = useRef({ latestResult: null, snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(), sessionStore: buildEmptySessionStore(), ownerKey: uploadIdentityKey });
   const apiStateRef = useRef("checking");
   const healthRequestInFlightRef = useRef(false);
-  const systemsRequestInFlightRef = useRef(false);
-  const latestUploadRequestInFlightRef = useRef(false);
+  const systemsRequestInFlightRef = useRef(null);
+  const systemsRequestVersionRef = useRef(0);
+  const latestUploadRequestInFlightRef = useRef(null);
   const latestUploadRequestVersionRef = useRef(0);
+  const workspaceIdentityRef = useRef(workspaceIdentityKey);
+  const uploadIdentityRef = useRef(uploadIdentityKey);
+  workspaceIdentityRef.current = workspaceIdentityKey;
+  uploadIdentityRef.current = uploadIdentityKey;
 
-  const applyLatestUploadSessionState = useCallback((nextState) => {
+  const applyLatestUploadSessionState = useCallback((nextState, ownerKey = uploadIdentityRef.current) => {
     latestUploadStateRef.current = nextState;
     latestUploadResultRef.current = nextState.latestResult;
+    setLatestUploadOwnerKey(ownerKey);
     setLatestUploadSnapshot(nextState.snapshot);
     setLatestUploadResult(nextState.latestResult);
     setSessionStore(nextState.sessionStore);
@@ -86,7 +97,7 @@ export default function useFacilityRuntime({
 
   const clearUploadSessionState = useCallback(() => {
     latestUploadRequestVersionRef.current += 1;
-    latestUploadRequestInFlightRef.current = false;
+    latestUploadRequestInFlightRef.current = null;
     clearLatestUploadStateCache();
     const emptyState = {
       snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(),
@@ -94,8 +105,8 @@ export default function useFacilityRuntime({
       sessionStore: buildEmptySessionStore(),
     };
     terminalUploadStateRef.current = null;
-    applyLatestUploadSessionState(emptyState);
-    lastKnownGoodTelemetryRef.current = emptyState;
+    applyLatestUploadSessionState(emptyState, uploadIdentityRef.current);
+    lastKnownGoodTelemetryRef.current = { ...emptyState, ownerKey: uploadIdentityRef.current };
     latestStabilityRef.current = { hasData: false, dataStreak: 0, emptyStreak: 0 };
   }, [applyLatestUploadSessionState]);
 
@@ -116,7 +127,7 @@ export default function useFacilityRuntime({
     };
     terminalUploadStateRef.current = reconciliation.terminalState;
     applyLatestUploadSessionState(nextState);
-    lastKnownGoodTelemetryRef.current = nextState;
+    lastKnownGoodTelemetryRef.current = { ...nextState, ownerKey: uploadIdentityRef.current };
     latestStabilityRef.current = { hasData: true, dataStreak: DATA_PROMOTION_STREAK_REQUIRED, emptyStreak: 0 };
     return true;
   }, [applyLatestUploadSessionState]);
@@ -171,16 +182,22 @@ export default function useFacilityRuntime({
 
   const loadFacilitySystems = useCallback(async ({ forceRefresh = false } = {}) => {
     if (!hasAccess) return false;
-    if (systemsRequestInFlightRef.current) return false;
-    systemsRequestInFlightRef.current = true;
+    const requestIdentityKey = workspaceIdentityKey;
+    if (systemsRequestInFlightRef.current === requestIdentityKey) return false;
+    const requestVersion = systemsRequestVersionRef.current + 1;
+    systemsRequestVersionRef.current = requestVersion;
+    systemsRequestInFlightRef.current = requestIdentityKey;
     if (isUploadInProgress() || isUploadJobLocked()) {
-      systemsRequestInFlightRef.current = false;
+      if (systemsRequestVersionRef.current === requestVersion) systemsRequestInFlightRef.current = null;
       return false;
     }
 
     try {
       const payload = await fetchSystemFacility({ apiFetch, accessCode, scopeKey: datasetScopeKey, portfolioId: getCurrentWorkspaceId(), domainMode, forceRefresh });
+      if (systemsRequestVersionRef.current !== requestVersion || workspaceIdentityRef.current !== requestIdentityKey) return false;
       const rawDomainMode = payload.domain_mode ?? null;
+      setSystemsOwnerKey(requestIdentityKey);
+      setDomainOwnerKey(requestIdentityKey);
       setSystems(payload.systems);
       setDomainDetection({
         mode: displayDomainMode(rawDomainMode),
@@ -194,6 +211,7 @@ export default function useFacilityRuntime({
       setBackendError(API_CONFIG_WARNING);
       return true;
     } catch (error) {
+      if (systemsRequestVersionRef.current !== requestVersion || workspaceIdentityRef.current !== requestIdentityKey) return false;
       if (error instanceof Response && (error.status === 401 || error.status === 403)) {
         const authMessage = await buildProtectedRequestMessage(error);
         setBackendError(authMessage);
@@ -210,28 +228,36 @@ export default function useFacilityRuntime({
       });
       return false;
     } finally {
-      systemsRequestInFlightRef.current = false;
+      if (systemsRequestVersionRef.current === requestVersion) systemsRequestInFlightRef.current = null;
     }
-  }, [accessCode, buildProtectedRequestMessage, datasetScopeKey, domainMode, hasAccess]);
+  }, [accessCode, buildProtectedRequestMessage, datasetScopeKey, domainMode, hasAccess, workspaceIdentityKey]);
 
   // Contract sentinel: const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => {
   const loadLatestUploadState = useCallback(async ({ includePersisted, forceRefresh = false, returnPayload = false } = {}) => {
+    const requestIdentityKey = uploadIdentityKey;
+    const currentIdentityOwnsState = latestUploadOwnerKey === requestIdentityKey;
+    const ownedSnapshot = currentIdentityOwnsState
+      ? latestUploadStateRef.current.snapshot
+      : uploadStateView.buildEmptyLatestUploadSnapshot();
+    const ownedResult = currentIdentityOwnsState ? latestUploadStateRef.current.latestResult : null;
     const latestReturn = (hasRuntimeData, payload = null) => returnPayload
       ? {
         hasRuntimeData: Boolean(hasRuntimeData),
-        snapshot: payload?.snapshot ?? latestUploadStateRef.current.snapshot,
-        latestResult: payload?.latestResult ?? latestUploadStateRef.current.latestResult,
+        snapshot: payload?.snapshot ?? ownedSnapshot,
+        latestResult: payload?.latestResult ?? ownedResult,
       }
       : Boolean(hasRuntimeData);
     if (!hasAccess) return latestReturn(false);
-    if (latestUploadRequestInFlightRef.current) return latestReturn(Boolean(latestUploadResultRef.current));
-    latestUploadRequestInFlightRef.current = true;
+    if (latestUploadRequestInFlightRef.current === requestIdentityKey) {
+      return latestReturn(currentIdentityOwnsState && Boolean(latestUploadResultRef.current));
+    }
     const requestVersion = latestUploadRequestVersionRef.current + 1;
     latestUploadRequestVersionRef.current = requestVersion;
+    latestUploadRequestInFlightRef.current = requestIdentityKey;
     const requestedPortfolioId = getCurrentWorkspaceId();
     if (isUploadInProgress() || isUploadJobLocked()) {
-      latestUploadRequestInFlightRef.current = false;
-      return latestReturn(Boolean(latestUploadResultRef.current));
+      if (latestUploadRequestVersionRef.current === requestVersion) latestUploadRequestInFlightRef.current = null;
+      return latestReturn(currentIdentityOwnsState && Boolean(latestUploadResultRef.current));
     }
     const shouldIncludePersisted = typeof includePersisted === "boolean" ? includePersisted : allowPersistedLatest;
     try {
@@ -243,11 +269,17 @@ export default function useFacilityRuntime({
         forceRefresh,
         exactAnalysisIdentity: activeAnalysisIdentity,
       });
-      if (latestUploadRequestVersionRef.current !== requestVersion || getCurrentWorkspaceId() !== requestedPortfolioId) {
-        return latestReturn(Boolean(latestUploadResultRef.current));
+      if (latestUploadRequestVersionRef.current !== requestVersion || uploadIdentityRef.current !== requestIdentityKey || getCurrentWorkspaceId() !== requestedPortfolioId) {
+        return latestReturn(false, {
+          snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(),
+          latestResult: null,
+        });
       }
       const boundaryMeta = payload.snapshot?._neraiumTelemetryBoundary ?? {};
-      if (boundaryMeta.renderable === false && lastKnownGoodTelemetryRef.current?.snapshot) {
+      const ownedLastGood = lastKnownGoodTelemetryRef.current?.ownerKey === requestIdentityKey
+        ? lastKnownGoodTelemetryRef.current
+        : null;
+      if (boundaryMeta.renderable === false && ownedLastGood?.snapshot) {
         console.warn("[neraium] latest telemetry rejected by workspace boundary", {
           referenceId: boundaryMeta.referenceId ?? null,
           workspaceId: boundaryMeta.workspaceId ?? "system-body",
@@ -256,9 +288,9 @@ export default function useFacilityRuntime({
           requestCorrelationId: boundaryMeta.requestCorrelationId ?? null,
           issues: boundaryMeta.issues ?? [],
         });
-        return latestReturn(Boolean(lastKnownGoodTelemetryRef.current.sessionStore?.hasRuntimeData), {
-          snapshot: lastKnownGoodTelemetryRef.current.snapshot,
-          latestResult: lastKnownGoodTelemetryRef.current.latestResult,
+        return latestReturn(Boolean(ownedLastGood.sessionStore?.hasRuntimeData), {
+          snapshot: ownedLastGood.snapshot,
+          latestResult: ownedLastGood.latestResult,
         });
       }
       const nextHasData = Boolean(
@@ -276,10 +308,10 @@ export default function useFacilityRuntime({
 
       const applyAntiFlapGate = !shouldIncludePersisted;
       if (applyAntiFlapGate && !stability.hasData && nextHasData && stability.dataStreak < DATA_PROMOTION_STREAK_REQUIRED) {
-        return latestReturn(Boolean(latestUploadResultRef.current));
+        return latestReturn(currentIdentityOwnsState && Boolean(latestUploadResultRef.current));
       }
       if (applyAntiFlapGate && stability.hasData && !nextHasData && stability.emptyStreak < EMPTY_DEMOTION_STREAK_REQUIRED) {
-        return latestReturn(Boolean(latestUploadResultRef.current));
+        return latestReturn(currentIdentityOwnsState && Boolean(latestUploadResultRef.current));
       }
 
       stability.hasData = nextHasData;
@@ -293,7 +325,7 @@ export default function useFacilityRuntime({
         sessionStore: reconciliation.sessionStore,
       };
       terminalUploadStateRef.current = reconciliation.terminalState;
-      applyLatestUploadSessionState(nextState);
+      applyLatestUploadSessionState(nextState, requestIdentityKey);
       if (reconciliation.retainedTerminal) {
         console.info("[neraium] stale latest-upload snapshot ignored after terminal completion", {
           jobId: nextState.sessionStore.jobId,
@@ -301,15 +333,29 @@ export default function useFacilityRuntime({
         });
       }
       if (nextState.sessionStore.hasRuntimeData && nextState.snapshot?._neraiumTelemetryBoundary?.renderable !== false) {
-        lastKnownGoodTelemetryRef.current = nextState;
+        lastKnownGoodTelemetryRef.current = { ...nextState, ownerKey: requestIdentityKey };
       }
       return latestReturn(Boolean(nextState.sessionStore.hasRuntimeData), nextState);
     } catch (error) {
+      if (latestUploadRequestVersionRef.current !== requestVersion || uploadIdentityRef.current !== requestIdentityKey) {
+        return latestReturn(false, {
+          snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(),
+          latestResult: null,
+        });
+      }
       if (!shouldIncludePersisted) {
         clearUploadSessionState();
         return latestReturn(false);
       }
-      const lastGood = lastKnownGoodTelemetryRef.current;
+      const lastGood = lastKnownGoodTelemetryRef.current?.ownerKey === requestIdentityKey
+        ? lastKnownGoodTelemetryRef.current
+        : null;
+      if (!lastGood) {
+        return latestReturn(false, {
+          snapshot: uploadStateView.buildEmptyLatestUploadSnapshot(),
+          latestResult: null,
+        });
+      }
       console.warn("[neraium] latest telemetry refresh failed; retaining last available state", {
         message: error?.message ?? "Latest telemetry refresh failed",
         status: error?.status ?? null,
@@ -319,14 +365,14 @@ export default function useFacilityRuntime({
         schemaVersion: lastGood?.snapshot?._neraiumTelemetryBoundary?.schemaVersion ?? null,
         requestCorrelationId: lastGood?.snapshot?._neraiumTelemetryBoundary?.requestCorrelationId ?? null,
       });
-      return latestReturn(Boolean(lastGood?.sessionStore?.hasRuntimeData ?? latestUploadResultRef.current), {
-        snapshot: lastGood?.snapshot ?? latestUploadStateRef.current.snapshot,
-        latestResult: lastGood?.latestResult ?? latestUploadResultRef.current,
+      return latestReturn(Boolean(lastGood.sessionStore?.hasRuntimeData), {
+        snapshot: lastGood.snapshot,
+        latestResult: lastGood.latestResult,
       });
     } finally {
-      if (latestUploadRequestVersionRef.current === requestVersion) latestUploadRequestInFlightRef.current = false;
+      if (latestUploadRequestVersionRef.current === requestVersion) latestUploadRequestInFlightRef.current = null;
     }
-  }, [accessCode, activeAnalysisIdentity, allowPersistedLatest, applyLatestUploadSessionState, clearUploadSessionState, datasetScopeKey, hasAccess]);
+  }, [accessCode, activeAnalysisIdentity, allowPersistedLatest, applyLatestUploadSessionState, clearUploadSessionState, datasetScopeKey, hasAccess, latestUploadOwnerKey, uploadIdentityKey]);
 
   useEffect(() => {
     if (!activeAnalysisIdentity?.analysisRunId) return;
@@ -337,13 +383,30 @@ export default function useFacilityRuntime({
       ?? currentResult?.job_id
       ?? "",
     ).trim();
-    if (currentAnalysisId && currentAnalysisId === String(activeAnalysisIdentity.analysisRunId)) return;
+    if (currentAnalysisId && currentAnalysisId === String(activeAnalysisIdentity.analysisRunId)) {
+      setLatestUploadOwnerKey(uploadIdentityKey);
+      return;
+    }
     clearUploadSessionState();
-  }, [activeAnalysisIdentity?.analysisRunId, clearUploadSessionState]);
+  }, [activeAnalysisIdentity?.analysisRunId, clearUploadSessionState, uploadIdentityKey]);
 
   useEffect(() => {
     latestUploadResultRef.current = latestUploadResult;
   }, [latestUploadResult]);
+
+  useEffect(() => {
+    systemsRequestVersionRef.current += 1;
+    systemsRequestInFlightRef.current = null;
+    setSystemsOwnerKey(workspaceIdentityKey);
+    setSystems([]);
+    setSystemsState("loading");
+    setIntelligenceStatus(uploadStateView.buildEmptyIntelligenceStatus());
+    setDomainOwnerKey(workspaceIdentityKey);
+    setDomainDetection({ mode: null, source: "default", confidence: 0, evidence: [] });
+    setDomainModeState(null);
+    setDomainModeResolved(false);
+    clearUploadSessionState();
+  }, [clearUploadSessionState, workspaceIdentityKey]);
 
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
@@ -371,10 +434,12 @@ export default function useFacilityRuntime({
       return undefined;
     }
     let cancelled = false;
+    const requestIdentityKey = workspaceIdentityKey;
     fetchDomainMode({ apiFetch, accessCode })
       .then((payload) => {
-        if (cancelled) return;
+        if (cancelled || workspaceIdentityRef.current !== requestIdentityKey) return;
         const rawDomainMode = payload.mode ?? null;
+        setDomainOwnerKey(requestIdentityKey);
         setDomainDetection({
           mode: displayDomainMode(rawDomainMode),
           source: payload.source ?? "default",
@@ -385,12 +450,12 @@ export default function useFacilityRuntime({
       })
       .catch(() => {})
       .finally(() => {
-        if (!cancelled) setDomainModeResolved(true);
+        if (!cancelled && workspaceIdentityRef.current === requestIdentityKey) setDomainModeResolved(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [accessCode, hasAccess]);
+  }, [accessCode, hasAccess, workspaceIdentityKey]);
 
   useEffect(() => {
     if (!hasAccess || !domainModeResolved) return;
@@ -415,14 +480,14 @@ export default function useFacilityRuntime({
 
   return {
     apiStatus,
-    systems,
-    systemsState,
-    intelligenceStatus,
+    systems: systemsOwnerKey === workspaceIdentityKey ? systems : [],
+    systemsState: systemsOwnerKey === workspaceIdentityKey ? systemsState : "loading",
+    intelligenceStatus: systemsOwnerKey === workspaceIdentityKey ? intelligenceStatus : uploadStateView.buildEmptyIntelligenceStatus(),
     backendError,
-    latestUploadResult,
-    latestUploadSnapshot,
-    sessionStore,
-    domainDetection,
+    latestUploadResult: latestUploadOwnerKey === uploadIdentityKey ? latestUploadResult : null,
+    latestUploadSnapshot: latestUploadOwnerKey === uploadIdentityKey ? latestUploadSnapshot : uploadStateView.buildEmptyLatestUploadSnapshot(),
+    sessionStore: latestUploadOwnerKey === uploadIdentityKey ? sessionStore : buildEmptySessionStore(),
+    domainDetection: domainOwnerKey === workspaceIdentityKey ? domainDetection : { mode: null, source: "default", confidence: 0, evidence: [] },
     demoScenario,
     setDemoScenario,
     isDemoMode,

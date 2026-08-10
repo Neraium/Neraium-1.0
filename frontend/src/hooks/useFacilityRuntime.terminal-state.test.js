@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import useFacilityRuntime from "./useFacilityRuntime";
 import useWorkspaceSessionController from "./useWorkspaceSessionController";
 import { fetchLatestUploadState } from "../services/api/uploadApi";
+import { fetchFacilitySystems } from "../services/api/systemApi";
 
 const h = React.createElement;
 const formatClockTime = () => "now";
@@ -142,6 +143,25 @@ function RuntimeHandoffHarness() {
   return h(ResultsWorkspace, { controller, runtime });
 }
 
+function RuntimeScopeHarness() {
+  const [scope, setScope] = useState("scope-a");
+  const runtime = useFacilityRuntime({
+    hasAccess: true,
+    accessCode: "",
+    formatClockTime,
+    formatEndpoint,
+    buildProtectedRequestMessage,
+    datasetScopeKey: scope,
+  });
+  return h("section", {},
+    h("span", { "data-testid": "runtime-job" }, runtime.latestUploadResult?.job_id ?? "none"),
+    h("span", { "data-testid": "runtime-system" }, runtime.systems[0]?.name ?? "none"),
+    h("button", { type: "button", onClick: () => void runtime.loadLatestUploadState({ includePersisted: true, forceRefresh: true }) }, "Load latest"),
+    h("button", { type: "button", onClick: () => void runtime.loadFacilitySystems({ forceRefresh: true }) }, "Load systems"),
+    h("button", { type: "button", onClick: () => setScope("scope-b") }, "Switch scope"),
+  );
+}
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
@@ -178,5 +198,43 @@ describe("terminal latest-upload runtime ownership", () => {
     expect(screen.getByTestId("canonical-ui-state").textContent).toBe("verified");
     expect(screen.getByTestId("canonical-processing").textContent).toBe("false");
     expect(screen.getByTestId("gate-processing").textContent).toBe("false");
+  });
+
+  it("rejects late latest-result and facility responses from the previous scope", async () => {
+    let resolveOldLatest;
+    let resolveOldSystems;
+    fetchLatestUploadState.mockImplementation(({ scopeKey }) => scopeKey === "scope-a"
+      ? new Promise((resolve) => { resolveOldLatest = resolve; })
+      : Promise.resolve({
+        snapshot: { job_id: "job-b", status: "PROCESSING", processing_state: "processing", session_state: "processing", current_upload: { job_id: "job-b" } },
+        latestResult: null,
+      }));
+    fetchFacilitySystems.mockImplementation(({ scopeKey }) => scopeKey === "scope-a"
+      ? new Promise((resolve) => { resolveOldSystems = resolve; })
+      : Promise.resolve({ systems: [{ name: "System B" }], domain_mode: null, intelligence_status: {} }));
+    render(h(RuntimeScopeHarness));
+
+    fireEvent.click(screen.getByRole("button", { name: "Load latest" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load systems" }));
+    await waitFor(() => expect(resolveOldLatest).toBeTypeOf("function"));
+    await waitFor(() => expect(resolveOldSystems).toBeTypeOf("function"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch scope" }));
+    expect(screen.getByTestId("runtime-job").textContent).toBe("none");
+    expect(screen.getByTestId("runtime-system").textContent).toBe("none");
+    fireEvent.click(screen.getByRole("button", { name: "Load latest" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load systems" }));
+    await waitFor(() => expect(screen.getByTestId("runtime-system").textContent).toBe("System B"));
+
+    await act(async () => {
+      resolveOldLatest({
+        snapshot: { job_id: "job-a", status: "COMPLETE", processing_state: "complete", session_state: "verified", current_upload: { job_id: "job-a" } },
+        latestResult: { job_id: "job-a", completed_at: "2026-08-01T00:00:00Z", analysis_result: { fingerprint: {}, insights: [{ title: "Old finding" }] } },
+      });
+      resolveOldSystems({ systems: [{ name: "System A" }], domain_mode: null, intelligence_status: {} });
+    });
+
+    expect(screen.getByTestId("runtime-job").textContent).toBe("none");
+    expect(screen.getByTestId("runtime-system").textContent).toBe("System B");
   });
 });

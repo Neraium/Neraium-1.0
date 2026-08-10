@@ -48,9 +48,18 @@ _SCOPED_LATEST_NAMES = {
     "latest_upload_summary",
 }
 
+_TERMINAL_UPLOAD_STATES = {"cancelled", "complete", "completed", "error", "failed", "success", "timeout"}
+_ACTIVE_UPLOAD_STATES = {"accepted", "pending", "processing", "queued", "running", "running_sii", "uploading"}
+
 
 def _is_scope_bound_state(raw_name: str) -> bool:
     return raw_name in _SCOPED_LATEST_NAMES or raw_name.startswith(("upload_status_", "upload_result_"))
+
+
+def _upload_state_value(payload: dict[str, Any] | None) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    return str(payload.get("processing_state") or payload.get("status") or payload.get("job_state") or "").strip().lower()
 
 
 def _state_scope(*, scope: DatasetScope | None = None, payload: dict[str, Any] | None = None) -> DatasetScope:
@@ -827,10 +836,14 @@ def write_upload_status_progress(
 ) -> dict[str, Any]:
     normalized_payload = dict(payload or {}) if isinstance(payload, dict) else {}
     normalized_payload["job_id"] = str(job_id)
+    existing_job_status = read_upload_status(str(job_id))
+    if _upload_state_value(existing_job_status) in _TERMINAL_UPLOAD_STATES and _upload_state_value(normalized_payload) not in _TERMINAL_UPLOAD_STATES:
+        return existing_job_status
     write_upload_status(str(job_id), normalized_payload)
     summary_payload = dict(latest_summary or normalized_payload)
-    write_latest_upload_summary_payload(summary_payload)
-    persist_latest_upload_state(summary=summary_payload, result=None, keep_result=keep_result)
+    record = persist_latest_upload_state(summary=summary_payload, result=None, keep_result=keep_result)
+    if identity_matches(record, str(job_id)):
+        write_latest_upload_summary_payload(summary_payload)
     return summary_payload
 
 
@@ -879,9 +892,10 @@ def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dic
     write_upload_result(job_id, normalized_result)
     write_upload_status(job_id, normalized_summary)
     transport_result = project_result_for_transport(normalized_result) or normalized_result
-    write_latest_upload_result_payload(transport_result)
-    write_latest_upload_summary_payload(normalized_summary)
-    persist_latest_upload_state(summary=normalized_summary, result=transport_result)
+    record = persist_latest_upload_state(summary=normalized_summary, result=transport_result)
+    if identity_matches(record, str(job_id)):
+        write_latest_upload_result_payload(transport_result)
+        write_latest_upload_summary_payload(normalized_summary)
 
 
 def write_latest_upload_record(record: dict[str, Any] | None) -> dict[str, Any]:
@@ -937,6 +951,38 @@ def _record_identity_values(record: dict[str, Any] | None) -> set[str]:
 def identity_matches(record: dict[str, Any] | None, requested_id: str | None) -> bool:
     requested = str(requested_id or "").strip()
     return bool(requested) and requested in _record_identity_values(record)
+
+
+def _identity_field(payload: dict[str, Any] | None, key: str) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    direct = str(payload.get(key) or "").strip()
+    if direct:
+        return direct
+    session_scope = payload.get("session_scope") if isinstance(payload.get("session_scope"), dict) else {}
+    return str(session_scope.get(key) or "").strip()
+
+
+def _payloads_share_attempt(
+    active: dict[str, Any] | None,
+    candidate: dict[str, Any] | None,
+) -> bool:
+    """Return whether candidate data is safe to attach to the active attempt.
+
+    Job identity is authoritative. Older payloads without a job ID may only be
+    reconciled through another shared immutable identifier; timestamps and
+    "latest successful" ordering are deliberately not used.
+    """
+    if not isinstance(active, dict) or not isinstance(candidate, dict):
+        return False
+    active_job_id = _identity_field(active, "job_id")
+    if active_job_id:
+        return _identity_field(candidate, "job_id") == active_job_id
+    for key in ("upload_id", "run_id", "dataset_id"):
+        active_id = _identity_field(active, key)
+        if active_id:
+            return _identity_field(candidate, key) == active_id
+    return False
 
 
 def resolve_upload_artifacts(job_id: str | None = None) -> dict[str, Any]:
@@ -1002,11 +1048,31 @@ def persist_latest_upload_state(
     keep_result: bool = True,
 ) -> dict[str, Any]:
     scope = _state_scope(payload=result or summary)
+    incoming = result if isinstance(result, dict) else summary
+    incoming_state_payload = summary if isinstance(summary, dict) else incoming
+    incoming_job_id = _identity_field(incoming, "job_id")
+    existing_record = read_latest_upload_record()
+    existing_job_id = _identity_field(existing_record, "job_id")
+    if (
+        incoming_job_id
+        and existing_job_id
+        and incoming_job_id != existing_job_id
+        and _upload_state_value(existing_record) in _ACTIVE_UPLOAD_STATES
+        and _upload_state_value(incoming_state_payload) in _TERMINAL_UPLOAD_STATES
+    ):
+        logger.info(
+            "stale_upload_terminal_ignored active_job_id=%s stale_job_id=%s",
+            existing_job_id,
+            incoming_job_id,
+        )
+        return existing_record
     retained_result = result
     if keep_result and retained_result is None:
         cached_result = _cache_get("result", scope=scope)
         retained_result = cached_result if isinstance(cached_result, dict) else read_latest_upload_result()
     if isinstance(retained_result, dict) and not payload_matches_dataset_scope(retained_result, scope):
+        retained_result = None
+    if isinstance(summary, dict) and isinstance(retained_result, dict) and not _payloads_share_attempt(summary, retained_result):
         retained_result = None
     evidence_record = None
     job_id, _, _ = normalize_upload_identity(retained_result or summary)
@@ -1147,15 +1213,17 @@ def write_latest_upload_result(*args) -> None:
     if payload.get("job_id"):
         write_upload_result(str(payload["job_id"]), payload)
     transport_payload = project_result_for_transport(payload) or payload
-    write_latest_upload_result_payload(transport_payload)
 
     if payload.get("job_id"):
         latest_summary = summarize_result_payload(payload)
         latest_summary["transport_result_available"] = True
-        write_latest_upload_summary_payload(latest_summary)
         write_upload_status(str(payload["job_id"]), latest_summary)
-        persist_latest_upload_state(summary=latest_summary, result=transport_payload)
+        record = persist_latest_upload_state(summary=latest_summary, result=transport_payload)
+        if identity_matches(record, str(payload["job_id"])):
+            write_latest_upload_result_payload(transport_payload)
+            write_latest_upload_summary_payload(latest_summary)
     else:
+        write_latest_upload_result_payload(transport_payload)
         _invalidate_router_latest_cache()
 
 
@@ -1190,12 +1258,14 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
         result = project_result_for_transport(raw_result)
         if isinstance(result, dict):
             payload["transport_result_available"] = True
-    write_latest_upload_summary_payload(payload)
     if payload.get("job_id"):
         write_upload_status(str(payload["job_id"]), payload)
-        persist_latest_upload_state(summary=payload, result=result, keep_result=True)
+        record = persist_latest_upload_state(summary=payload, result=result, keep_result=True)
+        if identity_matches(record, str(payload["job_id"])):
+            write_latest_upload_summary_payload(payload)
     else:
         persist_latest_upload_state(summary=payload, result=None, keep_result=True)
+        write_latest_upload_summary_payload(payload)
 
 
 def _clear_latest_cache_for_scope(state: UploadRuntimeState, scope: DatasetScope) -> None:

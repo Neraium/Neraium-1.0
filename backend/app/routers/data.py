@@ -1828,7 +1828,27 @@ async def latest_upload(include_persisted: bool = Query(True), request: Request 
     if not isinstance(current_result, dict):
         current_upload = payload.get("current_upload") if isinstance(payload, dict) else None
         current_result = (current_upload or {}).get("result") if isinstance(current_upload, dict) else None
-    if selected_baseline_id:
+    current_upload = payload.get("current_upload") if isinstance(payload, dict) and isinstance(payload.get("current_upload"), dict) else {}
+    current_attempt_id = str(
+        (payload or {}).get("job_id")
+        or current_upload.get("job_id")
+        or ((current_upload.get("session_scope") or {}).get("job_id") if isinstance(current_upload.get("session_scope"), dict) else "")
+        or ""
+    ).strip()
+    current_attempt_state = str(
+        (payload or {}).get("processing_state")
+        or (payload or {}).get("status")
+        or current_upload.get("processing_state")
+        or current_upload.get("status")
+        or ""
+    ).strip().lower()
+    unresolved_current_attempt = bool(current_attempt_id) and not isinstance(current_result, dict) and current_attempt_state not in {
+        "",
+        "baseline_ready",
+        "empty",
+        "waiting_for_comparison",
+    }
+    if selected_baseline_id and not unresolved_current_attempt:
         try:
             validate_completed_analysis(
                 current_result,

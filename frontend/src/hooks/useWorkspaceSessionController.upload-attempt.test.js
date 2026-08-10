@@ -21,6 +21,12 @@ function completedResult(jobId, datasetId, readiness) {
       readiness: { outcome: readiness, limitations: [] },
       summary: { signal_counts: { detected: jobId === "previous-job" ? 26 : 31 } },
     },
+    conditions: [{
+      id: `${jobId}-finding`,
+      headline: jobId === "previous-job" ? "Previous relationship weakening" : "Current relationship weakening",
+      supporting_evidence: [jobId === "previous-job" ? "Previous evidence" : "Current evidence"],
+    }],
+    result_summary: { finding_count: jobId === "previous-job" ? 7 : 2, evidence_count: jobId === "previous-job" ? 19 : 5 },
   };
 }
 
@@ -65,11 +71,16 @@ function AttemptHarness({ previousResult, currentResult }) {
     setIsDemoMode: vi.fn(),
   });
   const visibleTrust = controller.effectiveLatestUploadResult?.ingestion_trust ?? null;
+  const visibleCondition = controller.effectiveLatestUploadResult?.conditions?.[0] ?? null;
+  const visibleCounts = controller.effectiveLatestUploadResult?.result_summary ?? null;
   const previousRecord = controller.analysisHistory.find((record) => record.jobId === previousResult.job_id);
 
   return h("section", {},
     h("span", { "data-testid": "visible-job" }, controller.effectiveLatestUploadResult?.job_id ?? "none"),
     h("span", { "data-testid": "visible-trust" }, visibleTrust?.readiness?.outcome ?? "none"),
+    h("span", { "data-testid": "visible-finding" }, visibleCondition?.headline ?? "none"),
+    h("span", { "data-testid": "visible-evidence" }, visibleCondition?.supporting_evidence?.[0] ?? "none"),
+    h("span", { "data-testid": "visible-counts" }, visibleCounts ? `${visibleCounts.finding_count}/${visibleCounts.evidence_count}` : "none"),
     h("span", { "data-testid": "visible-status" }, controller.effectiveLatestUploadSnapshot?.status ?? "none"),
     h("span", { "data-testid": "processing-active" }, String(controller.gateProcessing.active)),
     h("span", { "data-testid": "attempt-id" }, controller.activeUploadAttempt?.attemptId ?? "none"),
@@ -133,6 +144,9 @@ describe("workspace upload-attempt presentation ownership", () => {
 
     await waitFor(() => expect(screen.getByTestId("visible-job").textContent).toBe("previous-job"));
     expect(screen.getByTestId("visible-trust").textContent).toBe("ready_with_limitations");
+    expect(screen.getByTestId("visible-finding").textContent).toBe("Previous relationship weakening");
+    expect(screen.getByTestId("visible-evidence").textContent).toBe("Previous evidence");
+    expect(screen.getByTestId("visible-counts").textContent).toBe("7/19");
     expect(screen.getByTestId("processing-active").textContent).toBe("false");
 
     fireEvent.click(screen.getByRole("button", { name: "Start new upload" }));
@@ -140,12 +154,18 @@ describe("workspace upload-attempt presentation ownership", () => {
     expect(screen.getByTestId("attempt-id").textContent).not.toBe("none");
     expect(screen.getByTestId("visible-job").textContent).toBe("none");
     expect(screen.getByTestId("visible-trust").textContent).toBe("none");
+    expect(screen.getByTestId("visible-finding").textContent).toBe("none");
+    expect(screen.getByTestId("visible-evidence").textContent).toBe("none");
+    expect(screen.getByTestId("visible-counts").textContent).toBe("none");
     expect(screen.getByTestId("visible-status").textContent).toBe("uploading");
     expect(screen.getByTestId("processing-active").textContent).toBe("true");
 
     fireEvent.click(screen.getByRole("button", { name: "Apply delayed previous hydration" }));
     expect(screen.getByTestId("visible-job").textContent).toBe("none");
     expect(screen.getByTestId("visible-trust").textContent).toBe("none");
+    expect(screen.getByTestId("visible-finding").textContent).toBe("none");
+    expect(screen.getByTestId("visible-evidence").textContent).toBe("none");
+    expect(screen.getByTestId("visible-counts").textContent).toBe("none");
     expect(screen.getByTestId("processing-active").textContent).toBe("true");
 
     fireEvent.click(screen.getByRole("button", { name: "Apply delayed previous completion" }));
@@ -162,6 +182,9 @@ describe("workspace upload-attempt presentation ownership", () => {
     });
     await waitFor(() => expect(screen.getByTestId("visible-job").textContent).toBe("current-job"));
     expect(screen.getByTestId("visible-trust").textContent).toBe("ready");
+    expect(screen.getByTestId("visible-finding").textContent).toBe("Current relationship weakening");
+    expect(screen.getByTestId("visible-evidence").textContent).toBe("Current evidence");
+    expect(screen.getByTestId("visible-counts").textContent).toBe("2/5");
     expect(screen.getByTestId("processing-active").textContent).toBe("false");
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Open previous historical upload" }).disabled).toBe(false));

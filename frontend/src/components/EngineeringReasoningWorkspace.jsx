@@ -192,8 +192,11 @@ const FIRST_BASELINE_STORAGE_PREFIX = "neraium.first-baseline.dismissed";
 const REVIEW_STATE_STORAGE_PREFIX = "neraium.operations-brief.review-state";
 const LEGACY_ACKNOWLEDGED_STORAGE_PREFIX = "neraium.shift-brief.acknowledged";
 
-function storageScopeFor(user) {
-  return String(user?.email ?? user?.id ?? "operator").trim().toLowerCase().replace(/[^a-z0-9@._-]+/g, "-");
+function storageScopeFor(user, datasetScopeKey = "anonymous") {
+  return `${String(user?.email ?? user?.id ?? "operator")}:${String(datasetScopeKey)}`
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9@._-]+/g, "-");
 }
 
 function readStorageValue(key, fallback) {
@@ -220,7 +223,7 @@ function writeStorageValue(key, value) {
   }
 }
 
-export default function EngineeringReasoningWorkspace({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection, apiFetch, comparisonAnalysisId = null, onWorkspaceNavigate, onSignOut, signOutPending = false, currentUser }) {
+export default function EngineeringReasoningWorkspace({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection, apiFetch, comparisonAnalysisId = null, datasetScopeKey = "anonymous", onWorkspaceNavigate, onSignOut, signOutPending = false, currentUser }) {
   const [route, setRoute] = useState(routeFromLocation);
   const [selectedFindingId, setSelectedFindingId] = useState(() => pathIdentity(["findings", "evidence", "investigations"]));
   const [selectedSystemName, setSelectedSystemName] = useState(() => pathIdentity(["systems"]));
@@ -231,7 +234,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const restoreScrollRef = useRef(0);
   const [selectedSiteId, setSelectedSiteId] = useState(() => pathIdentity(["sites"]) || null);
   const [portfolioRuns, setPortfolioRuns] = useState([]);
-  const storageScope = storageScopeFor(currentUser);
+  const storageScope = storageScopeFor(currentUser, datasetScopeKey);
   const firstBaselineStorageKey = FIRST_BASELINE_STORAGE_PREFIX + "." + storageScope;
   const reviewStorageKey = REVIEW_STATE_STORAGE_PREFIX + "." + storageScope;
   const legacyAcknowledgedStorageKey = LEGACY_ACKNOWLEDGED_STORAGE_PREFIX + "." + storageScope;
@@ -279,12 +282,13 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
 
   useEffect(() => {
     let cancelled = false;
+    setPortfolioRuns([]);
     Promise.resolve(apiFetch?.("/api/evidence/runs?limit=100"))
       .then((response) => response?.ok ? response.json() : null)
       .then((payload) => { if (!cancelled && Array.isArray(payload?.runs)) setPortfolioRuns(payload.runs); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [apiFetch]);
+  }, [apiFetch, datasetScopeKey]);
 
   useEffect(() => {
     const onPop = (event) => {

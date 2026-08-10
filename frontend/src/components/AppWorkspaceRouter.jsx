@@ -115,6 +115,20 @@ export default function AppWorkspaceRouter({
   resultsNavigationKey = 0,
 }) {
   const errorContext = extractTelemetryBoundaryMeta(effectiveLatestUploadSnapshot, effectiveLatestUploadResult);
+  const currentResultIdentity = String(
+    effectiveLatestUploadResult?.dataset_id
+      ?? effectiveLatestUploadResult?.job_id
+      ?? effectiveLatestUploadResult?.run_id
+      ?? effectiveLatestUploadSnapshot?.dataset_id
+      ?? effectiveLatestUploadSnapshot?.job_id
+      ?? "empty",
+  );
+  const presentationIdentityKey = [
+    datasetScopeKey,
+    activeUploadAttempt?.attemptId ?? "no-attempt",
+    selectedAnalysisIdentity?.analysisRunId ?? currentResultIdentity,
+    resultsNavigationKey,
+  ].join(":");
 
   if (activeWorkspace === "home") {
     return (
@@ -141,7 +155,7 @@ export default function AppWorkspaceRouter({
         onHelp={() => setActiveWorkspace("help-changelog")}
       >
         <Suspense fallback={renderLoadingPanel("Opening Live Monitoring", "Loading telemetry, rolling analysis, and finding state...")}>
-          <LiveMonitoringWorkspace apiFetch={apiFetch} accessCode={accessCode} />
+          <LiveMonitoringWorkspace key={`live:${datasetScopeKey}`} apiFetch={apiFetch} accessCode={accessCode} datasetScopeKey={datasetScopeKey} />
         </Suspense>
       </WorkspaceWithBackControl>
     );
@@ -210,6 +224,7 @@ export default function AppWorkspaceRouter({
       >
         <Suspense fallback={renderLoadingPanel("Loading investigation record", "Preparing analysis history, evidence, and diagnostics...")}>
           <SystemStoryWorkspace
+            key={`story:${presentationIdentityKey}`}
             apiFetch={apiFetch}
             accessCode={accessCode}
             expertMode={true}
@@ -290,8 +305,10 @@ export default function AppWorkspaceRouter({
       >
         <Suspense fallback={renderLoadingPanel("Loading investigation", "Prioritizing findings and preparing evidence...")}>
           <ObservationCenterWorkspace
+            key={`insights:${datasetScopeKey}`}
             apiFetch={apiFetch}
             accessCode={accessCode}
+            datasetScopeKey={datasetScopeKey}
             canonicalFinding={canonicalFinding}
             currentSession={currentSession}
             onBackToGate={() => setActiveWorkspace("system-body")}
@@ -329,6 +346,7 @@ export default function AppWorkspaceRouter({
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
         <Suspense fallback={renderLoadingPanel("Opening engineering workspace", "Preparing site evidence and relationship context...")}>
           <EngineeringReasoningWorkspace
+            key={`engineering:${presentationIdentityKey}`}
             liveOps={{
               ...liveOps,
               replayOverlay: historianReplayState.frame ?? null,
@@ -344,6 +362,8 @@ export default function AppWorkspaceRouter({
             domainDetection={domainDetection}
             gateProcessing={gateProcessing}
             resultsNavigationKey={resultsNavigationKey}
+            activeUploadAttempt={activeUploadAttempt}
+            datasetScopeKey={datasetScopeKey}
             comparisonAnalysisId={selectedAnalysisIdentity?.analysisRunId ?? null}
             onWorkspaceNavigate={setActiveWorkspace}
             onSignOut={handleSignOut}
@@ -383,6 +403,7 @@ export default function AppWorkspaceRouter({
               initialSelectedFiles={pendingUploadFiles}
               autoStartInitialFiles={true}
               headless={true}
+              datasetScopeKey={datasetScopeKey}
             />
           ) : null}
         </Suspense>

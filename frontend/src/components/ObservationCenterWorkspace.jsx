@@ -50,10 +50,14 @@ function loadJsonStorage(key, fallback) {
   }
 }
 
-function loadAliasStorage() {
+function scopedObservationStorageKey(base, datasetScopeKey) {
+  return `${base}.${String(datasetScopeKey || "anonymous").replace(/[^a-z0-9._-]+/gi, "-")}`;
+}
+
+function loadAliasStorage(datasetScopeKey) {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(VARIABLE_ALIAS_STORAGE_KEY);
+    const raw = window.localStorage.getItem(scopedObservationStorageKey(VARIABLE_ALIAS_STORAGE_KEY, datasetScopeKey));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -247,19 +251,19 @@ function IssueBriefingList({ title, items }) {
   );
 }
 
-function readPendingObservationRunId() {
+function readPendingObservationRunId(datasetScopeKey) {
   if (typeof window === "undefined") return "";
   try {
-    return window.localStorage.getItem(PENDING_OBSERVATION_STORAGE_KEY) || "";
+    return window.localStorage.getItem(scopedObservationStorageKey(PENDING_OBSERVATION_STORAGE_KEY, datasetScopeKey)) || "";
   } catch {
     return "";
   }
 }
 
-function clearPendingObservationRunId() {
+function clearPendingObservationRunId(datasetScopeKey) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.removeItem(PENDING_OBSERVATION_STORAGE_KEY);
+    window.localStorage.removeItem(scopedObservationStorageKey(PENDING_OBSERVATION_STORAGE_KEY, datasetScopeKey));
   } catch {
     // ignore local storage failures
   }
@@ -281,6 +285,7 @@ function lineChartPoints(values, width = 420, height = 120) {
 export default function ObservationCenterWorkspace({
   apiFetch,
   accessCode,
+  datasetScopeKey = "anonymous",
   canonicalFinding = null,
   currentSession = null,
   onReviewEvidence = null,
@@ -310,7 +315,7 @@ export default function ObservationCenterWorkspace({
     quietStart: "22:00",
     quietEnd: "06:00",
   }));
-  const [aliases, setAliases] = useState(loadAliasStorage);
+  const [aliases, setAliases] = useState(() => loadAliasStorage(datasetScopeKey));
   const [facilityContext, setFacilityContext] = useState(null);
   const [selectedAliasVariable, setSelectedAliasVariable] = useState("");
   const [aliasDraft, setAliasDraft] = useState("");
@@ -330,9 +335,9 @@ export default function ObservationCenterWorkspace({
   useEffect(() => {
     aliasesRef.current = aliases;
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(VARIABLE_ALIAS_STORAGE_KEY, JSON.stringify(aliases));
+      window.localStorage.setItem(scopedObservationStorageKey(VARIABLE_ALIAS_STORAGE_KEY, datasetScopeKey), JSON.stringify(aliases));
     }
-  }, [aliases]);
+  }, [aliases, datasetScopeKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -350,7 +355,7 @@ export default function ObservationCenterWorkspace({
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [accessCode, apiFetch]);
+  }, [accessCode, apiFetch, datasetScopeKey]);
 
   useEffect(() => {
     runsRef.current = runs;
@@ -380,9 +385,9 @@ export default function ObservationCenterWorkspace({
         const nextRuns = Array.isArray(payload?.runs) ? payload.runs : [];
         console.info("[neraium] insights fetch status", { count: nextRuns.length, background });
         const newestRun = nextRuns[0]?.run_id ?? "";
-        const pendingRunId = readPendingObservationRunId();
+        const pendingRunId = readPendingObservationRunId(datasetScopeKey);
         if (latestSeenRunId.current && newestRun && newestRun !== latestSeenRunId.current) {
-          maybeNotifyForObservation(nextRuns[0], notificationPrefsRef.current, aliasesRef.current);
+          maybeNotifyForObservation(nextRuns[0], notificationPrefsRef.current, aliasesRef.current, datasetScopeKey);
         }
         latestSeenRunId.current = newestRun;
         const freshPagination = {
@@ -409,7 +414,7 @@ export default function ObservationCenterWorkspace({
         setSelectedRunId((current) => {
           const preferred = current || pendingRunId || newestRun || "";
           if (pendingRunId && nextRuns.some((run) => run.run_id === pendingRunId)) {
-            clearPendingObservationRunId();
+            clearPendingObservationRunId(datasetScopeKey);
             return pendingRunId;
           }
           return preferred;
@@ -437,7 +442,7 @@ export default function ObservationCenterWorkspace({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [accessCode, apiFetch]);
+  }, [accessCode, apiFetch, datasetScopeKey]);
 
   const persistedRunIds = useMemo(
     () => new Set(runs.map((run) => String(run?.run_id ?? "")).filter(Boolean)),
@@ -1103,7 +1108,7 @@ export default function ObservationCenterWorkspace({
   );
 }
 
-function maybeNotifyForObservation(run, prefs, aliases) {
+function maybeNotifyForObservation(run, prefs, aliases, datasetScopeKey) {
   if (!prefs?.enabled || !notificationAllowed() || Notification.permission !== "granted") return;
   if (insideQuietHours(prefs.quietStart, prefs.quietEnd)) return;
   const variables = (run?.variables ?? []).slice(0, 2).map((item) => displayVariable(item, aliases)).join(" | ");
@@ -1113,7 +1118,7 @@ function maybeNotifyForObservation(run, prefs, aliases) {
   const notification = new Notification("Neraium insight", { body });
   notification.onclick = () => {
     try {
-      window.localStorage.setItem(PENDING_OBSERVATION_STORAGE_KEY, String(run?.run_id ?? ""));
+      window.localStorage.setItem(scopedObservationStorageKey(PENDING_OBSERVATION_STORAGE_KEY, datasetScopeKey), String(run?.run_id ?? ""));
       window.focus?.();
     } catch {
       // ignore local storage failures

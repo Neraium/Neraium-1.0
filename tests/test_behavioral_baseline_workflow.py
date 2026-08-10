@@ -20,7 +20,7 @@ from app.services.behavioral_model_repository import (
     read_baseline_result,
 )
 from app.services.evidence_store import read_evidence_run
-from app.services.upload_state_repository import write_upload_result
+from app.services.upload_state_repository import write_latest_upload_summary, write_upload_result
 from app.services.upload_status_contract import normalize_upload_status_payload
 
 
@@ -562,6 +562,33 @@ def test_new_baseline_hides_stale_findings_until_its_own_comparison_exists() -> 
     assert latest["latest_result"] is None
     assert latest["current_upload"] is None
     assert latest["history"] == []
+
+
+def test_active_comparison_identity_is_not_replaced_by_baseline_ready_fallback() -> None:
+    client = TestClient(create_app())
+    baseline_job = _post(client, "create_baseline", "baseline.csv", approval_required=False).json()
+    _wait(client, baseline_job["status_url"])
+    baseline = client.get(baseline_job["baseline_result_url"]).json()
+    comparison_job_id = "comparison-processing-current"
+    write_latest_upload_summary(
+        comparison_job_id,
+        {
+            "dataset_id": "comparison-dataset-current",
+            "workflow": "analyze_new_data",
+            "active_baseline_model_id": baseline["baselineId"],
+            "status": "PROCESSING",
+            "processing_state": "processing",
+            "message": "Evaluating comparison data.",
+        },
+    )
+
+    latest = client.get("/api/data/latest-upload?include_persisted=1").json()
+
+    assert latest["job_id"] == comparison_job_id
+    assert latest["dataset_id"] == "comparison-dataset-current"
+    assert latest["processing_state"] == "processing"
+    assert latest["latest_result"] is None
+    assert "baseline_ready" not in latest
 
 
 def test_second_comparison_creates_a_separate_analysis_without_overwriting_baseline() -> None:

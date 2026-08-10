@@ -829,6 +829,49 @@ describe("completion and recovery", () => {
     expect(await screen.findByRole("heading", { name: "Ready with documented limitations" })).toBeTruthy();
     expect(screen.getByLabelText("Ingestion trust summary").textContent).toContain("26");
   });
+
+  it("prefers a remembered active job over a restored previous completion without flashing prior trust", async () => {
+    const previousResult = learnedBaseline({
+      job_id: "previous-complete-job",
+      dataset_id: "previous-complete-dataset",
+      ingestion_trust: ingestionTrust("previous-complete-dataset", { detected: 26, mapped: 22, review: 14 }),
+    });
+    window.localStorage.setItem("neraium.upload_job.remembered.v2:engineer-1:anonymous", "restored-active-job");
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).includes("/upload-status/restored-active-job")) {
+        return jsonResponse({
+          job_id: "restored-active-job",
+          dataset_id: "restored-active-dataset",
+          workflow: "create_baseline",
+          status: "PROCESSING",
+          processing_state: "baseline_relationship_learning",
+          status_url: "/api/data/upload-status/restored-active-job",
+        });
+      }
+      return jsonResponse({});
+    });
+
+    renderWorkspace({
+      apiFetch,
+      latestUploadResult: previousResult,
+      latestUploadSnapshot: { job_id: "previous-complete-job", status: "COMPLETE", latest_result: previousResult },
+      sessionStore: {
+        jobId: "previous-complete-job",
+        uiState: "verified",
+        latestUploadSnapshot: { job_id: "previous-complete-job", status: "COMPLETE", latest_result: previousResult },
+        latestUploadResult: previousResult,
+      },
+    });
+
+    expect(screen.queryByLabelText("Ingestion trust summary")).toBeNull();
+    expect(screen.queryByText("26")).toBeNull();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith(
+      "/api/data/upload-status/restored-active-job",
+      expect.any(Object),
+    ));
+    expect(screen.queryByLabelText("Ingestion trust summary")).toBeNull();
+    expect(screen.queryByText("26")).toBeNull();
+  });
 });
 
 describe("exact baseline selection regression", () => {

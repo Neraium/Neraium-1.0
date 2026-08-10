@@ -179,7 +179,7 @@ describe("engineering reasoning model", () => {
 
     expect(models).toHaveLength(1);
     expect(models[0].selectedFinding.objectType).toBe("condition");
-    expect(models[0].selectedFinding.title).toBe("Pump response weakening in Rush Tower Pumping System");
+    expect(models[0].selectedFinding.title).toBe("Pumping System relationship weakening");
     expect(models[0].selectedFinding.corroboration.relationship_count).toBe(3);
   });
 
@@ -304,7 +304,7 @@ describe("engineering reasoning model", () => {
 
     expect(model.findings).toHaveLength(1);
     expect(model.selectedFinding.objectType).toBe("condition");
-    expect(model.selectedFinding.title).toBe("Pump response weakening in Rush Tower water system");
+    expect(model.selectedFinding.title).toBe("Pumping System relationship weakening");
     expect(model.selectedFinding.trajectory.state).toBe("Strengthening");
     expect(model.selectedFinding.corroboration.relationship_count).toBe(3);
     expect(model.selectedFinding.location.likelyInvestigationArea).toBe("Discharge boundary");
