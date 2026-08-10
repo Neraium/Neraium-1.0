@@ -5,6 +5,7 @@ import { deriveCurrentSession, deriveSessionActivity } from "../viewModels/curre
 import { deriveCanonicalFinding } from "../viewModels/operatorFinding";
 import { normalizeUploadStatus, uploadStateMessage } from "../viewModels/uploadFlow";
 import { isUploadProcessingStatus, uploadStageLabel } from "../viewModels/uploadContract";
+import { createUploadAttempt, uploadAttemptOwnsPayload } from "../viewModels/uploadAttempt";
 import {
   createAnalysisRecord,
   deleteAnalysisRecord,
@@ -74,6 +75,7 @@ export default function useWorkspaceSessionController({
   const [errorBoundaryResetKey, setErrorBoundaryResetKey] = useState(0);
   const [analysisHistory, setAnalysisHistory] = useState(() => readAnalysisHistory());
   const [restoredAnalysisOverride, setRestoredAnalysisOverride] = useState(null);
+  const [activeUploadAttempt, setActiveUploadAttempt] = useState(null);
 
   useEffect(() => {
     setSessionIntent(readStoredSessionIntent());
@@ -84,6 +86,7 @@ export default function useWorkspaceSessionController({
     setPostUploadExpectedJobId(null);
     setGateUploadCompleteSeen(false);
     setRestoredAnalysisOverride(null);
+    setActiveUploadAttempt(null);
     setAnalysisHistory(readAnalysisHistory());
   }, [datasetScopeKey]);
 
@@ -97,13 +100,26 @@ export default function useWorkspaceSessionController({
   // comparison run linked to this exact portfolio and baseline.
   const candidateLatestUploadResult = completedUploadOverride ?? restoredAnalysisResult ?? sessionStore?.latestUploadResult ?? null;
   const selectedBaselineRejectsCandidate = Boolean(activeBaselineIdentity?.baselineId)
+    && (!activeUploadAttempt || activeUploadAttempt.workflow === "analyze_new_data")
     && !analysisBelongsToBaseline(candidateLatestUploadResult, activeBaselineIdentity);
-  const guardedLatestUploadResult = resetGuardActive || selectedBaselineRejectsCandidate
+  const uploadAttemptRejectsCandidate = Boolean(activeUploadAttempt)
+    && !uploadAttemptOwnsPayload(activeUploadAttempt, candidateLatestUploadResult);
+  const candidateLatestUploadSnapshot = postUploadPendingSnapshot
+    ?? restoredAnalysisSnapshot
+    ?? sessionStore?.latestUploadSnapshot
+    ?? uploadStateView.buildEmptyLatestUploadSnapshot();
+  const uploadAttemptRejectsSnapshot = Boolean(activeUploadAttempt)
+    && !uploadAttemptOwnsPayload(activeUploadAttempt, candidateLatestUploadSnapshot);
+  const guardedLatestUploadResult = resetGuardActive || selectedBaselineRejectsCandidate || uploadAttemptRejectsCandidate
     ? null
     : candidateLatestUploadResult;
-  const guardedLatestUploadSnapshot = resetGuardActive || selectedBaselineRejectsCandidate
+  const guardedLatestUploadSnapshot = resetGuardActive
     ? uploadStateView.buildEmptyLatestUploadSnapshot()
-    : (postUploadPendingSnapshot ?? restoredAnalysisSnapshot ?? sessionStore?.latestUploadSnapshot ?? uploadStateView.buildEmptyLatestUploadSnapshot());
+    : activeUploadAttempt && (uploadAttemptRejectsSnapshot || selectedBaselineRejectsCandidate)
+      ? buildActiveUploadAttemptSnapshot(activeUploadAttempt)
+      : selectedBaselineRejectsCandidate
+        ? uploadStateView.buildEmptyLatestUploadSnapshot()
+        : scopeSnapshotToUploadAttempt(candidateLatestUploadSnapshot, activeUploadAttempt);
 
   const observableTelemetrySession = useMemo(
     () => uploadStateView.deriveTelemetrySessionState({
@@ -224,16 +240,67 @@ export default function useWorkspaceSessionController({
     setHistorianReplayState((current) => ({ ...current, enabled }));
   }, []);
 
+  const handleUploadAttemptStarted = useCallback(({ files = [], workflow = "create_baseline" } = {}) => {
+    if (!files[0]) return null;
+    const attempt = createUploadAttempt({ files, workflow });
+    setActiveUploadAttempt(attempt);
+    setCompletedUploadOverride(null);
+    setPostUploadPendingSnapshot(null);
+    setPostUploadExpectedJobId(null);
+    setRestoredAnalysisOverride(null);
+    setGateUploadCompleteSeen(false);
+    setSessionIntent("current");
+    return attempt;
+  }, []);
+
+  const handleUploadAttemptIdentified = useCallback(({ attemptId = null, jobId = null, datasetId = null, workflow = null } = {}) => {
+    setActiveUploadAttempt((current) => {
+      if (!current || (attemptId && current.attemptId !== attemptId)) return current;
+      return {
+        ...current,
+        ...(jobId ? { jobId: String(jobId) } : {}),
+        ...(datasetId ? { datasetId: String(datasetId) } : {}),
+        ...(workflow ? { workflow: String(workflow) } : {}),
+        phase: jobId ? "processing" : current.phase,
+      };
+    });
+  }, []);
+
+  const handleUploadAttemptCleared = useCallback(() => {
+    setActiveUploadAttempt(null);
+  }, []);
+
   const handleGateUploadComplete = useCallback(async (completedPayload = null, options = {}) => {
+    const completedResult = uploadStateView.resolveCurrentUploadResult(completedPayload)
+      ?? (uploadStateView.hasFullUploadResult(completedPayload) ? completedPayload : null);
+    const expectedJobId = uploadStateView.resolveCurrentUploadJobId(completedPayload)
+      ?? (String(completedResult?.job_id ?? "").trim() || null);
+    const completedDatasetId = completedResult?.dataset_id
+      ?? completedResult?.datasetId
+      ?? completedPayload?.dataset_id
+      ?? completedPayload?.datasetId
+      ?? null;
+    const completionAttemptId = String(options.attemptId ?? "").trim() || null;
+    const completionMatchesActiveAttempt = !activeUploadAttempt
+      || (completionAttemptId && completionAttemptId === activeUploadAttempt.attemptId)
+      || (activeUploadAttempt.jobId && expectedJobId && String(activeUploadAttempt.jobId) === String(expectedJobId));
+    if (!completionMatchesActiveAttempt) {
+      console.info("[neraium] stale upload completion ignored", {
+        activeAttemptId: activeUploadAttempt.attemptId,
+        completionAttemptId,
+        activeJobId: activeUploadAttempt.jobId ?? null,
+        completionJobId: expectedJobId,
+      });
+      return { ignored: true, jobId: expectedJobId };
+    }
     setResetGuardActive(false);
     setIsDemoMode(false);
     setAllowPersistedLatest(true);
     setGateUploadCompleteSeen(true);
     setRestoredAnalysisOverride(null);
-    const completedResult = uploadStateView.resolveCurrentUploadResult(completedPayload)
-      ?? (uploadStateView.hasFullUploadResult(completedPayload) ? completedPayload : null);
-    const expectedJobId = uploadStateView.resolveCurrentUploadJobId(completedPayload)
-      ?? (String(completedResult?.job_id ?? "").trim() || null);
+    const completionAttempt = expectedJobId
+      ? { ...(activeUploadAttempt ?? {}), jobId: expectedJobId, datasetId: completedDatasetId ?? activeUploadAttempt?.datasetId ?? null }
+      : activeUploadAttempt;
     const pendingSnapshot = expectedJobId
       ? buildPendingUploadSnapshot({ completedPayload, completedResult, expectedJobId })
       : null;
@@ -249,6 +316,12 @@ export default function useWorkspaceSessionController({
       setCompletedUploadOverride(null);
     }
     if (expectedJobId) {
+      setActiveUploadAttempt((current) => current ? {
+        ...current,
+        jobId: expectedJobId,
+        ...(completedDatasetId ? { datasetId: String(completedDatasetId) } : {}),
+        phase: terminalCompletion ? "complete" : "processing",
+      } : current);
       setPostUploadExpectedJobId(expectedJobId);
       setPostUploadPendingSnapshot(pendingSnapshot);
     } else {
@@ -275,8 +348,12 @@ export default function useWorkspaceSessionController({
       canonicalJobId: canonicalLatestUploadJobId,
       pendingJobId: pendingUploadJobId,
     });
-    const refreshedResult = latestRefresh?.latestResult ?? completedResult;
-    const refreshedSnapshot = latestRefresh?.snapshot ?? pendingSnapshot;
+    const refreshedResult = uploadAttemptOwnsPayload(completionAttempt, latestRefresh?.latestResult)
+      ? latestRefresh.latestResult
+      : completedResult;
+    const refreshedSnapshot = uploadAttemptOwnsPayload(completionAttempt, latestRefresh?.snapshot)
+      ? latestRefresh.snapshot
+      : pendingSnapshot;
     const payloadValid = isCompletedAnalysisPayload({ result: refreshedResult, snapshot: refreshedSnapshot });
     console.info("[neraium] payload validation result", { jobId: expectedJobId, valid: payloadValid, terminal: terminalCompletion });
     if (terminalCompletion && !payloadValid) {
@@ -302,9 +379,10 @@ export default function useWorkspaceSessionController({
       payloadValid,
       facilityRefreshed,
     };
-  }, [canonicalLatestUploadJobId, commitCompletedUploadState, loadFacilitySystems, loadLatestUploadState, pendingUploadJobId, setActiveWorkspace, setAllowPersistedLatest, setIsDemoMode]);
+  }, [activeUploadAttempt, canonicalLatestUploadJobId, commitCompletedUploadState, loadFacilitySystems, loadLatestUploadState, pendingUploadJobId, setActiveWorkspace, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleResumePreviousSession = useCallback(async () => {
+    setActiveUploadAttempt(null);
     setResetGuardActive(false);
     setRestoredAnalysisOverride(null);
     setAllowPersistedLatest(true);
@@ -327,6 +405,7 @@ export default function useWorkspaceSessionController({
     const record = analysisHistory.find((item) => item.id === recordId);
     if (!record) return;
     setResetGuardActive(false);
+    setActiveUploadAttempt(null);
     setRestoredAnalysisOverride(record);
     setCompletedUploadOverride(null);
     setPostUploadPendingSnapshot(null);
@@ -372,6 +451,7 @@ export default function useWorkspaceSessionController({
     }
 
     setResetGuardActive(true);
+    setActiveUploadAttempt(null);
     setSessionIntent("neutral");
     setIsDemoMode(false);
     setAllowPersistedLatest(false);
@@ -464,8 +544,12 @@ export default function useWorkspaceSessionController({
     persistedLatestUpload,
     previousUploadHistory,
     analysisHistory,
+    activeUploadAttempt,
     handleReplayFrameChange,
     handleReplayModeChange,
+    handleUploadAttemptStarted,
+    handleUploadAttemptIdentified,
+    handleUploadAttemptCleared,
     handleGateUploadComplete,
     handleResumePreviousSession,
     handleReopenHistoricalAnalysis,
@@ -495,6 +579,43 @@ function buildPersistedLatestUpload({ latestUploadResult = null, latestUploadSna
     processedAt: result?.completed_at ?? latestUploadSnapshot?.last_processed_at ?? latestUploadSnapshot?.last_upload_at ?? null,
     result,
     snapshot: latestUploadSnapshot,
+  };
+}
+
+function buildActiveUploadAttemptSnapshot(attempt) {
+  if (!attempt) return uploadStateView.buildEmptyLatestUploadSnapshot();
+  return {
+    ...uploadStateView.buildEmptyLatestUploadSnapshot(),
+    status: "uploading",
+    processing_state: "uploading",
+    session_state: "processing",
+    state_available: true,
+    client_attempt_id: attempt.attemptId,
+    job_id: attempt.jobId ?? null,
+    dataset_id: attempt.datasetId ?? null,
+    last_filename: attempt.filename ?? null,
+    progress_label: "Preparing the selected dataset for upload.",
+    message: "Preparing the selected dataset for upload.",
+    current_upload: {
+      client_attempt_id: attempt.attemptId,
+      job_id: attempt.jobId ?? null,
+      dataset_id: attempt.datasetId ?? null,
+      filename: attempt.filename ?? null,
+      result: null,
+    },
+  };
+}
+
+function scopeSnapshotToUploadAttempt(snapshot, attempt) {
+  if (!attempt || !snapshot) return snapshot;
+  const nestedResult = uploadStateView.resolveCurrentUploadResult(snapshot);
+  if (!nestedResult || uploadAttemptOwnsPayload(attempt, nestedResult)) return snapshot;
+  return {
+    ...snapshot,
+    latest_result: null,
+    current_upload: snapshot.current_upload
+      ? { ...snapshot.current_upload, result: null }
+      : snapshot.current_upload,
   };
 }
 

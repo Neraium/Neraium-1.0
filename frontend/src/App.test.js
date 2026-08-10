@@ -132,11 +132,14 @@ vi.mock("./components/ObservationCenterWorkspace", () => ({
 }));
 
 vi.mock("./components/DataConnectionsWorkspace", () => ({
-  default: ({ onUploadComplete, onResetDemo, initialSelectedFiles = [], autoStartInitialFiles = false }) => h(
+  default: ({ onUploadComplete, onResetDemo, initialSelectedFiles = [], autoStartInitialFiles = false, activeUploadAttempt = null, latestUploadResult = null, latestUploadSnapshot = null }) => h(
     "div",
     { "data-testid": "telemetry-workspace" },
     h("span", { "data-testid": "telemetry-initial-file-count" }, String(initialSelectedFiles.length)),
     h("span", { "data-testid": "telemetry-auto-start" }, String(Boolean(autoStartInitialFiles))),
+    h("span", { "data-testid": "telemetry-attempt" }, activeUploadAttempt?.attemptId ?? "none"),
+    h("span", { "data-testid": "telemetry-visible-job" }, latestUploadResult?.job_id ?? "none"),
+    h("span", { "data-testid": "telemetry-visible-status" }, latestUploadSnapshot?.status ?? "none"),
     h("button", {
       type: "button",
       onClick: () => onUploadComplete({
@@ -378,6 +381,41 @@ it("routes Operations Brief CSV selections into the visible auto-start upload wo
   expect(screen.queryByTestId("gate-workspace")).toBeNull();
   expect(screen.getByTestId("telemetry-initial-file-count").textContent).toBe("1");
   expect(screen.getByTestId("telemetry-auto-start").textContent).toBe("true");
+});
+
+it("establishes a new attempt before routing and rejects delayed previous-result hydration", async () => {
+  runtimeState.latestUploadResult = {
+    job_id: "previous-job",
+    dataset_id: "previous-dataset",
+    status: "complete",
+    data_quality: { readiness: "ready" },
+    ingestion_trust: { dataset_id: "previous-dataset", readiness: { outcome: "ready_with_limitations" } },
+  };
+  runtimeState.latestUploadSnapshot = {
+    job_id: "previous-job",
+    status: "complete",
+    session_state: "verified",
+    state_available: true,
+    current_upload: { job_id: "previous-job", result: runtimeState.latestUploadResult },
+    latest_result: runtimeState.latestUploadResult,
+  };
+  const view = render(h(App));
+  await launchWorkspace();
+
+  const file = new File(["timestamp,flow\n2026-08-10,1"], "current.csv", { type: "text/csv" });
+  fireEvent.change(screen.getByTestId("mock-overview-csv-upload-input"), { target: { files: [file] } });
+
+  await waitFor(() => expect(screen.getByTestId("telemetry-workspace")).toBeTruthy());
+  expect(screen.getByTestId("telemetry-attempt").textContent).not.toBe("none");
+  expect(screen.getByTestId("telemetry-visible-job").textContent).toBe("none");
+  expect(screen.getByTestId("telemetry-visible-status").textContent).toBe("uploading");
+
+  runtimeState.latestUploadResult = { ...runtimeState.latestUploadResult };
+  runtimeState.latestUploadSnapshot = { ...runtimeState.latestUploadSnapshot };
+  view.rerender(h(App));
+
+  expect(screen.getByTestId("telemetry-visible-job").textContent).toBe("none");
+  expect(screen.getByTestId("telemetry-visible-status").textContent).toBe("uploading");
 });
 
 it("automatically restores a completed persisted latest analysis", async () => {

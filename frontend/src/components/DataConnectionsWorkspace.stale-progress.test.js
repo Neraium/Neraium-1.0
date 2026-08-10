@@ -16,6 +16,9 @@ vi.mock("../services/api/uploadApi", () => ({
   LARGE_UPLOAD_MAX_BYTES: 512 * 1024 * 1024,
   uploadTelemetryFileWithProgress: vi.fn(),
   retryUploadAnalysisJob: vi.fn(),
+  fetchHistoricalIngestionProfile: vi.fn(() => new Promise(() => {})),
+  fetchUploadJobProgress: vi.fn(() => new Promise(() => {})),
+  submitHistoricalIngestionReview: vi.fn(() => new Promise(() => {})),
 }));
 
 function selectedCsv(name = "plant-history.csv") {
@@ -76,8 +79,8 @@ function learnedBaseline(overrides = {}) {
   };
 }
 
-function renderPanel(overrides = {}) {
-  return render(h(IntakeFlowPanel, {
+function panelElement(overrides = {}) {
+  return h(IntakeFlowPanel, {
     handleUpload: vi.fn((event) => event?.preventDefault?.()),
     uploadInputRef: { current: null },
     handleFileSelection: vi.fn(),
@@ -110,7 +113,33 @@ function renderPanel(overrides = {}) {
     onOpenBaseline: vi.fn(),
     onImportComparisonDataset: vi.fn(),
     ...overrides,
-  }));
+  });
+}
+
+function renderPanel(overrides = {}) {
+  return render(panelElement(overrides));
+}
+
+function ingestionTrust(datasetId, { detected, mapped, review, outcome = "ready_with_limitations" }) {
+  return {
+    dataset_id: datasetId,
+    summary: {
+      signal_counts: {
+        detected,
+        confidently_mapped: mapped,
+        need_review: review,
+        excluded: 0,
+        unit_conflicts: 0,
+        duplicate_candidates: 0,
+        timestamp_gaps: 0,
+        configuration_boundaries: 0,
+      },
+    },
+    readiness: { outcome, limitations: [] },
+    signal_profiles: [],
+    trust_dimensions: [],
+    review: { items: [] },
+  };
 }
 
 function backendProgress(overrides = {}) {
@@ -716,6 +745,89 @@ describe("completion and recovery", () => {
     });
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
     expect(screen.queryByText("Baseline Established")).toBeNull();
+  });
+
+  it("scopes Historical Data Trust to the active upload attempt", async () => {
+    const previousResult = learnedBaseline({
+      job_id: "previous-job",
+      dataset_id: "previous-dataset",
+      ingestion_trust: ingestionTrust("previous-dataset", { detected: 26, mapped: 22, review: 14 }),
+    });
+    const selectedFile = selectedCsv("new-attempt.csv");
+    const selectingAttempt = {
+      attemptId: "attempt-new",
+      jobId: null,
+      datasetId: null,
+      filename: selectedFile.name,
+      workflow: "create_baseline",
+      phase: "selected",
+    };
+    const view = renderPanel({
+      uploadState: "complete",
+      selectedFiles: [selectedFile],
+      selectedFileSize: "37 B",
+      baselineResult: previousResult,
+      uploadJob: { ...previousResult, job_id: "previous-job", dataset_id: "previous-dataset" },
+      activeUploadAttempt: selectingAttempt,
+    });
+
+    expect(screen.queryByRole("heading", { name: "Ready with documented limitations" })).toBeNull();
+    expect(screen.queryByLabelText("Ingestion trust summary")).toBeNull();
+    expect(screen.getByRole("region", { name: /Initial baseline processing/i })).toBeTruthy();
+    expect(screen.getByText("new-attempt.csv")).toBeTruthy();
+
+    view.rerender(panelElement({
+      uploadState: "complete",
+      selectedFiles: [selectedFile],
+      selectedFileSize: "37 B",
+      baselineResult: previousResult,
+      uploadJob: { ...previousResult, job_id: "previous-job", dataset_id: "previous-dataset" },
+      latestUploadSnapshot: {
+        status: "complete",
+        current_upload: { job_id: "previous-job", result: previousResult },
+        latest_result: previousResult,
+      },
+      activeUploadAttempt: selectingAttempt,
+    }));
+
+    expect(screen.queryByRole("heading", { name: "Ready with documented limitations" })).toBeNull();
+    expect(screen.getByRole("region", { name: /Initial baseline processing/i })).toBeTruthy();
+
+    const currentResult = learnedBaseline({
+      job_id: "current-job",
+      dataset_id: "current-dataset",
+      ingestion_trust: ingestionTrust("current-dataset", { detected: 31, mapped: 29, review: 2, outcome: "ready" }),
+    });
+    view.rerender(panelElement({
+      uploadState: "complete",
+      selectedFiles: [selectedFile],
+      selectedFileSize: "37 B",
+      baselineResult: currentResult,
+      uploadJob: { ...currentResult, job_id: "current-job", dataset_id: "current-dataset" },
+      activeUploadAttempt: { ...selectingAttempt, jobId: "current-job", datasetId: "current-dataset", phase: "complete" },
+      apiFetch: vi.fn(() => new Promise(() => {})),
+    }));
+
+    expect(await screen.findByRole("heading", { name: "Ready for analysis" })).toBeTruthy();
+    expect(screen.getByLabelText("Ingestion trust summary").textContent).toContain("31");
+    expect(screen.getByLabelText("Ingestion trust summary").textContent).not.toContain("26");
+  });
+
+  it("restores a legitimate completed trust assessment when no new attempt exists", async () => {
+    const previousResult = learnedBaseline({
+      job_id: "restored-job",
+      dataset_id: "restored-dataset",
+      ingestion_trust: ingestionTrust("restored-dataset", { detected: 26, mapped: 22, review: 14 }),
+    });
+    renderPanel({
+      uploadState: "complete",
+      baselineResult: previousResult,
+      uploadJob: { ...previousResult, job_id: "restored-job", dataset_id: "restored-dataset" },
+      apiFetch: vi.fn(() => new Promise(() => {})),
+    });
+
+    expect(await screen.findByRole("heading", { name: "Ready with documented limitations" })).toBeTruthy();
+    expect(screen.getByLabelText("Ingestion trust summary").textContent).toContain("26");
   });
 });
 

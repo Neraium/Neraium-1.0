@@ -90,6 +90,9 @@ export default function AppWorkspaceRouter({
   handleBackToGate,
   handleRetryWorkspace,
   handleGateUploadComplete,
+  activeUploadAttempt = null,
+  handleUploadAttemptStarted = () => null,
+  handleUploadAttemptIdentified = () => {},
   handleResetDemo,
   handleResumePreviousSession,
   handleReopenHistoricalAnalysis,
@@ -169,6 +172,9 @@ export default function AppWorkspaceRouter({
             hasRealSiiOutput={hasRealSiiOutput}
             roomContext={roomContext}
             onUploadComplete={handleGateUploadComplete}
+            activeUploadAttempt={activeUploadAttempt}
+            onUploadAttemptStarted={handleUploadAttemptStarted}
+            onUploadAttemptIdentified={handleUploadAttemptIdentified}
             onOpenBaseline={(identity, options = {}) => onBaselineSelected(identity, { replace: options.replace === true })}
             onCloseBaseline={onBaselineClosedForComparison}
             onReturnToPortfolio={() => setActiveWorkspace("system-body")}
@@ -345,6 +351,7 @@ export default function AppWorkspaceRouter({
             currentUser={currentUser}
             apiFetch={apiFetch}
             onCsvSelected={(files) => {
+              handleUploadAttemptStarted({ files, workflow: "create_baseline" });
               setPendingUploadFiles(files);
               setActiveWorkspace("data-connections");
             }}
@@ -366,6 +373,9 @@ export default function AppWorkspaceRouter({
               hasRealSiiOutput={hasRealSiiOutput}
               roomContext={roomContext}
               onUploadComplete={handleGateUploadComplete}
+              activeUploadAttempt={activeUploadAttempt}
+              onUploadAttemptStarted={handleUploadAttemptStarted}
+              onUploadAttemptIdentified={handleUploadAttemptIdentified}
               sessionStore={liveOps.session}
               onResetDemo={handleResetDemo}
               formatClockTime={formatClockTime}

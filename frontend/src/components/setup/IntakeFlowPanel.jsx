@@ -6,6 +6,7 @@ import {
   uploadErrorPresentation,
 } from "../../viewModels/uploadFlow";
 import { jobStateLabel } from "../../viewModels/uploadJobState";
+import { assessmentBelongsToUploadAttempt } from "../../viewModels/uploadAttempt";
 import { Panel } from "../workspacePrimitives";
 import JobProgressPanel from "./JobProgressPanel";
 import "../../styles/operational-workflow.css";
@@ -769,6 +770,7 @@ export default function IntakeFlowPanel({
   handleFileSelection,
   selectedFiles,
   latestUploadSnapshot,
+  activeUploadAttempt = null,
   analysisResult: suppliedAnalysisResult = null,
   baselineResult = null,
   workflow = "create_baseline",
@@ -813,11 +815,27 @@ export default function IntakeFlowPanel({
   const rawViewState = uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing });
   const analysisResult = suppliedAnalysisResult ?? finalAnalysisResult(latestUploadSnapshot, uploadJob);
   const baselineCompletion = Boolean(baselineResult?.baselineId ?? baselineResult?.candidate_model);
-  const viewState = rawViewState === "complete" && !analysisResult && !baselineCompletion ? "finalizing" : rawViewState;
+  const candidateIngestionProfile = baselineResult?.ingestion_trust
+    ?? uploadJob?.ingestion_trust
+    ?? latestUploadSnapshot?.latest_result?.ingestion_trust
+    ?? latestUploadSnapshot?.current_upload?.result?.ingestion_trust
+    ?? null;
+  const completedPresentationBelongsToAttempt = assessmentBelongsToUploadAttempt({
+    attempt: activeUploadAttempt,
+    result: baselineResult,
+    job: uploadJob,
+    profile: candidateIngestionProfile,
+  });
+  const attemptScopedUploadJob = activeUploadAttempt && !completedPresentationBelongsToAttempt ? null : uploadJob;
+  const attemptScopedLatestUploadSnapshot = activeUploadAttempt && !completedPresentationBelongsToAttempt ? null : latestUploadSnapshot;
+  const attemptScopedViewState = activeUploadAttempt && rawViewState === "complete" && !completedPresentationBelongsToAttempt
+    ? "processing"
+    : rawViewState;
+  const viewState = attemptScopedViewState === "complete" && !analysisResult && !baselineCompletion ? "finalizing" : attemptScopedViewState;
   const showProgress = ["uploading", "processing", "finalizing"].includes(viewState);
   const processingStage = resolveBaselineProcessingStage({
     viewState,
-    uploadJob,
+    uploadJob: attemptScopedUploadJob,
     uploadState,
     uploadTransfer,
     comparison,
@@ -843,11 +861,7 @@ export default function IntakeFlowPanel({
   const subtitle = comparison
     ? "Upload verified operating history to evaluate it against Neraium's active learned model. This workflow does not automatically redefine normal."
     : "Upload representative historical operating data so Neraium can learn how the system normally behaves.";
-  const ingestionProfile = baselineResult?.ingestion_trust
-    ?? uploadJob?.ingestion_trust
-    ?? latestUploadSnapshot?.latest_result?.ingestion_trust
-    ?? latestUploadSnapshot?.current_upload?.result?.ingestion_trust
-    ?? null;
+  const ingestionProfile = completedPresentationBelongsToAttempt ? candidateIngestionProfile : null;
   const ingestionDatasetId = baselineResult?.datasetId
     ?? baselineResult?.dataset_id
     ?? uploadJob?.datasetId
@@ -958,15 +972,15 @@ export default function IntakeFlowPanel({
         {showProgress ? (
           <ProcessingPanel
             comparison={comparison}
-            dataset={uploadJob?.filename || selectedFileLabel || "Previously selected dataset"}
+            dataset={attemptScopedUploadJob?.filename || activeUploadAttempt?.filename || selectedFileLabel || "Previously selected dataset"}
             stage={processingStage}
-            uploadJob={uploadJob}
+            uploadJob={attemptScopedUploadJob}
             uploadState={uploadState}
             uploadTransfer={uploadTransfer}
             propagationLabel={propagationLabel}
             queuedWorkerDetail={queuedWorkerDetail}
             latestMessage={normalizeStatusText(latestMessage) === normalizeStatusText(processingStage.description) ? "" : latestMessage}
-            latestUploadSnapshot={latestUploadSnapshot}
+            latestUploadSnapshot={attemptScopedLatestUploadSnapshot}
             onResumeJob={onResumeJob}
             onStartAnotherUpload={onStartAnotherUpload}
           />

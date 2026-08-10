@@ -186,8 +186,12 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
     persistedLatestUpload,
     previousUploadHistory,
     analysisHistory,
+    activeUploadAttempt,
     handleReplayFrameChange,
     handleReplayModeChange,
+    handleUploadAttemptStarted,
+    handleUploadAttemptIdentified,
+    handleUploadAttemptCleared,
     handleGateUploadComplete,
     handleResumePreviousSession,
     handleReopenHistoricalAnalysis,
@@ -211,6 +215,11 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
     setIsDemoMode,
     activeBaselineIdentity,
   });
+
+  const handleHistoricalBaselineSelected = useCallback((identity, options) => {
+    handleUploadAttemptCleared();
+    return handleBaselineSelected(identity, options);
+  }, [handleBaselineSelected, handleUploadAttemptCleared]);
 
   const liveOps = useMemo(() => {
     const intelligence = effectiveLatestUploadResult?.sii_intelligence ?? null;
@@ -346,6 +355,7 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
 
   const handleTelemetryAnalysisComplete = useCallback(async (completedPayload = null, options = {}) => {
     const outcome = await handleGateUploadComplete(completedPayload, options);
+    if (outcome?.ignored) return outcome;
     setPendingUploadFiles([]);
     if (options.navigateToGate !== false) {
       const result = outcome?.latestResult ?? null;
@@ -362,6 +372,7 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
       }
       setResultsNavigationKey((current) => current + 1);
     }
+    return outcome;
   }, [activeBaselineIdentity, handleGateUploadComplete]);
 
   useEffect(() => {
@@ -454,6 +465,9 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         handleGateUploadComplete={handleTelemetryAnalysisComplete}
+        activeUploadAttempt={activeUploadAttempt}
+        handleUploadAttemptStarted={handleUploadAttemptStarted}
+        handleUploadAttemptIdentified={handleUploadAttemptIdentified}
         handleResumePreviousSession={handleResumePreviousSession}
         handleReopenHistoricalAnalysis={handleReopenHistoricalAnalysis}
         handleDeleteHistoricalAnalysis={handleDeleteHistoricalAnalysis}
@@ -469,7 +483,7 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
         selectedAnalysisIdentity={selectedAnalysisIdentity}
         activeBaselineIdentity={activeBaselineIdentity}
         datasetScopeKey={datasetScopeKey}
-        onBaselineSelected={handleBaselineSelected}
+        onBaselineSelected={handleHistoricalBaselineSelected}
         onBaselineClosedForComparison={handleBaselineClosedForComparison}
         pendingUploadFiles={pendingUploadFiles}
         setPendingUploadFiles={setPendingUploadFiles}

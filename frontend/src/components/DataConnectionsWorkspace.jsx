@@ -13,6 +13,7 @@ import {
   uploadStateMessage,
 } from "../viewModels/uploadFlow";
 import * as uploadStateView from "../viewModels/uploadState";
+import { createUploadAttempt } from "../viewModels/uploadAttempt";
 import { LARGE_UPLOAD_MAX_BYTES, retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { clearBaselineResultCache, fetchBaselineResultById, recoverBaselineCreation } from "../services/api/baselineApi";
 import { normalizeBaselineCreationResponse } from "../contracts/baselineCreation";
@@ -331,6 +332,9 @@ export default function DataConnectionsWorkspace({
   hasResumedSession = false,
   sessionStore,
   onUploadComplete,
+  activeUploadAttempt = null,
+  onUploadAttemptStarted = null,
+  onUploadAttemptIdentified = null,
   initialSelectedFiles = [],
   onInitialSelectedFilesConsumed,
   autoStartInitialFiles = false,
@@ -353,6 +357,8 @@ export default function DataConnectionsWorkspace({
   const [completionError, setCompletionError] = useState("");
   const [uploadResult, setUploadResult] = useState(latestUploadResult);
   const [uploadJob, setUploadJob] = useState(null);
+  const [localUploadAttempt, setLocalUploadAttempt] = useState(() => activeUploadAttempt
+    ?? (seededSelectedFiles[0] ? createUploadAttempt({ files: seededSelectedFiles, workflow: comparisonMode ? "analyze_new_data" : "create_baseline" }) : null));
   const [recentJob, setRecentJob] = useState(null);
   const [reconciliationMessage, setReconciliationMessage] = useState("");
   const initialWorkflow = comparisonMode ? "analyze_new_data" : "create_baseline";
@@ -402,6 +408,7 @@ export default function DataConnectionsWorkspace({
   const completedBaselineIdentityRef = useRef(null);
   const openCompletedBaselineRef = useRef(null);
   const terminalJobIdRef = useRef(null);
+  const uploadAttemptIdRef = useRef(localUploadAttempt?.attemptId ?? null);
   const flowOwnerRef = useRef(`${String(currentUser?.email ?? currentUser?.id ?? "")}:${String(datasetScopeKey)}`);
   const flowSessionRef = useRef(0);
   const selectedBaselineIdRef = useRef(String(selectedBaselineIdentity?.baselineId ?? "").trim() || null);
@@ -415,6 +422,7 @@ export default function DataConnectionsWorkspace({
     () => uploadJobStorageKey("ignored", datasetScopeKey, currentUser),
     [currentUser, datasetScopeKey],
   );
+  const presentedUploadAttempt = activeUploadAttempt ?? localUploadAttempt;
 
   const setUploadProcessingFlag = (active) => {
     if (typeof window !== "undefined") {
@@ -453,12 +461,25 @@ export default function DataConnectionsWorkspace({
   }, [onInitialSelectedFilesConsumed, seededSelectedFiles.length]);
 
   useEffect(() => {
+    if (!activeUploadAttempt?.attemptId) return;
+    uploadAttemptIdRef.current = activeUploadAttempt.attemptId;
+    setLocalUploadAttempt(activeUploadAttempt);
+  }, [activeUploadAttempt]);
+
+  useEffect(() => {
     if (!autoStartInitialFiles || seededSelectedFiles.length === 0) return;
     const signature = seededSelectedFiles
       .map((file) => [file?.name ?? "", file?.size ?? "", file?.lastModified ?? ""].join(":"))
       .join("|");
     if (!signature || signature === autoStartedSignatureRef.current) return;
     autoStartedSignatureRef.current = signature;
+    if (!activeUploadAttempt?.attemptId && typeof onUploadAttemptStarted === "function") {
+      const attempt = onUploadAttemptStarted({ files: seededSelectedFiles, workflow: initialWorkflow });
+      if (attempt?.attemptId) {
+        uploadAttemptIdRef.current = attempt.attemptId;
+        setLocalUploadAttempt(attempt);
+      }
+    }
     resetTelemetryStageLogs();
     completionNavigationEligibleRef.current = false;
     clearCompletionNavigationTimer();
@@ -471,7 +492,7 @@ export default function DataConnectionsWorkspace({
     completedBaselineIdentityRef.current = null;
     terminalJobIdRef.current = null;
     setUploadState("validated");
-  }, [autoStartInitialFiles, seededSelectedFiles]);
+  }, [activeUploadAttempt?.attemptId, autoStartInitialFiles, initialWorkflow, onUploadAttemptStarted, seededSelectedFiles]);
 
   useEffect(() => {
     uploadStateRef.current = uploadState;
@@ -481,7 +502,7 @@ export default function DataConnectionsWorkspace({
   // endpoint must confirm it in the current authenticated scope before the UI is
   // allowed to enter a blocking/progress state.
   useEffect(() => {
-    if (typeof window === "undefined" || selectedBaselineIdRef.current) return;
+    if (typeof window === "undefined" || selectedBaselineIdRef.current || presentedUploadAttempt?.attemptId || selectedFiles.length > 0) return;
     const sessionJobId = String(sessionStore?.jobId ?? "").trim();
     const rememberedJobId = readRememberedUploadJobId();
     const candidateJobId = sessionJobId || rememberedJobId;
@@ -529,7 +550,7 @@ export default function DataConnectionsWorkspace({
     return () => controller.abort();
   // Polling owns changes after the one job-specific reconciliation request.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessCode, apiFetch, rememberedJobStorageKey, sessionStore?.jobId, sessionStore?.uiState]);
+  }, [accessCode, apiFetch, presentedUploadAttempt?.attemptId, rememberedJobStorageKey, selectedFiles.length, sessionStore?.jobId, sessionStore?.uiState]);
 
   useEffect(() => {
     if (selectedFiles.length > 0 || hasResumedSession || uploadJobIdRef.current) return;
@@ -555,6 +576,8 @@ export default function DataConnectionsWorkspace({
     setUploadTransfer(null);
     setUploadJob(null);
     setUploadResult(null);
+    setLocalUploadAttempt(null);
+    uploadAttemptIdRef.current = null;
     setRecentJob(null);
     setReconciliationMessage("");
     completedBaselineIdentityRef.current = null;
@@ -582,9 +605,9 @@ export default function DataConnectionsWorkspace({
   }, []);
 
   useEffect(() => {
-    if (selectedBaselineIdRef.current || uploadResult?.candidate_model) return;
+    if (selectedBaselineIdRef.current || presentedUploadAttempt?.attemptId || selectedFiles.length > 0 || uploadResult?.candidate_model) return;
     setUploadResult(latestUploadResult);
-  }, [latestUploadResult, uploadResult?.candidate_model]);
+  }, [latestUploadResult, presentedUploadAttempt?.attemptId, selectedFiles.length, uploadResult?.candidate_model]);
 
   useEffect(() => {
     const routeBaselineId = String(selectedBaselineIdentity?.baselineId ?? "").trim();
@@ -884,6 +907,8 @@ export default function DataConnectionsWorkspace({
     setUploadTransfer(null);
     setUploadJob(null);
     setUploadResult(null);
+    setLocalUploadAttempt(null);
+    uploadAttemptIdRef.current = null;
     if (nextWorkflow !== "analyze_new_data") completedBaselineIdentityRef.current = null;
     terminalJobIdRef.current = null;
     setUploadError("");
@@ -1114,6 +1139,18 @@ export default function DataConnectionsWorkspace({
       }, identitySource);
       if (!identity) throw new Error("The completed baseline identifiers were unavailable.");
       uploadJobIdRef.current = identity.jobId ?? jobId;
+      setLocalUploadAttempt((current) => current ? {
+        ...current,
+        jobId: identity.jobId ?? String(jobId),
+        ...(identity.datasetId ? { datasetId: identity.datasetId } : {}),
+        phase: "complete",
+      } : current);
+      onUploadAttemptIdentified?.({
+        attemptId: uploadAttemptIdRef.current,
+        jobId: identity.jobId ?? jobId,
+        datasetId: identity.datasetId,
+        workflow: completedWorkflow,
+      });
       completedBaselineIdentityRef.current = identity;
       clearBaselineResultCache({ scopeKey: datasetScopeKey, portfolioId: identity.portfolioId, baselineId: identity.baselineId });
       persistBaselineSelection(identity);
@@ -1182,7 +1219,7 @@ export default function DataConnectionsWorkspace({
 
     try {
       const hydration = typeof onUploadComplete === "function"
-        ? await onUploadComplete(completedPayload, { navigateToGate: false })
+        ? await onUploadComplete(completedPayload, { navigateToGate: false, attemptId: uploadAttemptIdRef.current })
         : null;
       logTelemetryStage("save response received", { jobId });
       const hydratedResult = hydration?.latestResult ?? savedResult ?? uploadStateView.resolveCurrentUploadResult(hydration?.latestSnapshot) ?? null;
@@ -1558,6 +1595,7 @@ export default function DataConnectionsWorkspace({
       if (flowSessionRef.current !== flowSessionId) return;
       const payload = uploadResponse.payload;
       const jobId = String(payload?.jobId ?? payload?.job_id ?? "").trim() || null;
+      const datasetId = String(payload?.datasetId ?? payload?.dataset_id ?? "").trim() || null;
       console.info("[neraium] analysis job response received", {
         jobId: jobId ?? null,
         filename: file.name,
@@ -1579,6 +1617,19 @@ export default function DataConnectionsWorkspace({
         });
         return;
       }
+      setLocalUploadAttempt((current) => current ? {
+        ...current,
+        jobId,
+        ...(datasetId ? { datasetId } : {}),
+        workflow: selectedWorkflow,
+        phase: "processing",
+      } : current);
+      onUploadAttemptIdentified?.({
+        attemptId: uploadAttemptIdRef.current,
+        jobId,
+        datasetId,
+        workflow: selectedWorkflow,
+      });
       logTelemetryStageOnce("parsing started", { filename: file.name, jobId });
       const initialPayload = normalizeStatusPayload(payload, jobId);
       logTelemetryStatusProgress(initialPayload.status ?? initialPayload.processing_state, initialPayload);
@@ -1669,6 +1720,12 @@ export default function DataConnectionsWorkspace({
     clearCompletionNavigationTimer();
     if (files[0]) {
       logTelemetryStage("file selected", { filename: files[0].name, size: files[0].size });
+      const fallbackAttempt = createUploadAttempt({ files, workflow: currentWorkflowRef.current });
+      const attempt = typeof onUploadAttemptStarted === "function"
+        ? onUploadAttemptStarted({ files, workflow: currentWorkflowRef.current }) ?? fallbackAttempt
+        : fallbackAttempt;
+      uploadAttemptIdRef.current = attempt.attemptId;
+      setLocalUploadAttempt(attempt);
     }
     stopUploadPolling("file_selection_changed");
     uploadJobIdRef.current = null;
@@ -1724,7 +1781,7 @@ export default function DataConnectionsWorkspace({
       message: "Opening Results",
     }));
     try {
-      await onUploadComplete(payload, { navigateToGate: true });
+      await onUploadComplete(payload, { navigateToGate: true, attemptId: uploadAttemptIdRef.current });
       setUploadState("complete");
     } catch (error) {
       const message = "Results were saved, but the results view could not be loaded.";
@@ -1965,6 +2022,11 @@ export default function DataConnectionsWorkspace({
         handleFileSelection={handleFileSelection}
         selectedFiles={selectedFiles}
         latestUploadSnapshot={latestUploadSnapshot}
+        activeUploadAttempt={presentedUploadAttempt ? {
+          ...presentedUploadAttempt,
+          jobId: uploadJob?.jobId ?? uploadJob?.job_id ?? localUploadAttempt?.jobId ?? presentedUploadAttempt.jobId ?? null,
+          datasetId: uploadJob?.datasetId ?? uploadJob?.dataset_id ?? localUploadAttempt?.datasetId ?? presentedUploadAttempt.datasetId ?? null,
+        } : null}
         baselineResult={baselineResult}
         workflow={uploadJob?.workflow ?? currentWorkflow}
         pendingUploadKind={pendingUploadKind}
