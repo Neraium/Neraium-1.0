@@ -20,6 +20,7 @@ import { normalizeBaselineCreationResponse } from "../contracts/baselineCreation
 import { baselineIdentityFromResult, baselineRoutePath, persistBaselineSelection, readPersistedBaselineSelection } from "../viewModels/baselineSelection";
 import { getCurrentWorkspaceId } from "../services/datasetSessionCache";
 import { authoritativeJobState, isPollableJobState } from "../viewModels/uploadJobState";
+import { isCompletedAnalysisPayload } from "../viewModels/analysisHistory";
 import IntakeFlowPanel from "./setup/IntakeFlowPanel";
 
 const MAX_UPLOAD_BYTES = LARGE_UPLOAD_MAX_BYTES;
@@ -33,7 +34,6 @@ const RESULT_AVAILABILITY_GRACE_MS = 5000;
 const RESULT_FETCH_RETRY_INTERVAL_MS = 250;
 const STATUS_ENDPOINT_FAILURE_BASE_DELAY_MS = 1000;
 const STATUS_POLL_INTERVAL_MS = 1000;
-const COMPLETION_HOLD_MS = 2500;
 const PARSING_COMPLETE_STATUSES = new Set([
   "validating_schema",
   "processing",
@@ -168,7 +168,7 @@ export function queuedWorkerMessage(uploadJob, now = Date.now()) {
 }
 
 function isActiveUploadProgressState(uploadState) {
-  return ["uploading", "queued", "claimed", "running_sii", "processing", "waiting", "stalled", "saving_results", "save_complete", "navigation_pending", "completion_error", "complete"].includes(String(uploadState || "").toLowerCase());
+  return ["uploading", "queued", "claimed", "running_sii", "processing", "waiting", "stalled", "saving_results"].includes(String(uploadState || "").toLowerCase());
 }
 
 function uploadFailureDiagnosticsFrom(value = {}) {
@@ -214,17 +214,66 @@ function isFinalAnalysisResult(value) {
   );
 }
 
-function resolveFinalAnalysisResult(...candidates) {
-  for (const candidate of candidates) {
-    const result = candidate?.analysis_result
-      ?? candidate?.latest_result?.analysis_result
-      ?? candidate?.current_upload?.result?.analysis_result
-      ?? candidate?.result?.analysis_result
-      ?? candidate?.result;
-    if (isFinalAnalysisResult(result)) return result;
-    if (isFinalAnalysisResult(candidate)) return candidate;
+function uploadPayloadJobId(payload = null) {
+  if (!payload || typeof payload !== "object") return null;
+  return String(
+    uploadStateView.resolveCurrentUploadJobId(payload)
+      ?? payload?.jobId
+      ?? payload?.job_id
+      ?? payload?.run_id
+      ?? payload?.upload_id
+      ?? "",
+  ).trim() || null;
+}
+
+function completedResultCandidates(payload = null) {
+  if (!payload || typeof payload !== "object") return [];
+  const currentUpload = payload?.current_upload ?? payload?.snapshot?.current_upload ?? null;
+  return [
+    currentUpload?.result,
+    payload?.latest_result,
+    payload?.latestResult,
+    payload?.baseline_result,
+    payload?.result,
+    payload,
+  ].filter((candidate, index, candidates) => candidate && candidates.indexOf(candidate) === index);
+}
+
+function isCanonicalCompletedResult(result, snapshot = null) {
+  if (!result || typeof result !== "object") return false;
+  if (result?.candidate_model) {
+    const resultState = canonicalJobState(result);
+    if (["completed", "completed_compatibility"].includes(resultState)) return true;
+  }
+  if (isCompletedAnalysisPayload({ result, snapshot })) return true;
+  return isFinalAnalysisResult(result?.analysis_result ?? result);
+}
+
+function resolveCompletedResultForJob(expectedJobId, ...payloads) {
+  const requestedJobId = String(expectedJobId ?? "").trim() || null;
+  for (const payload of payloads) {
+    const payloadJobId = uploadPayloadJobId(payload);
+    for (const candidate of completedResultCandidates(payload)) {
+      const candidateJobId = uploadPayloadJobId(candidate) ?? payloadJobId;
+      if (requestedJobId && candidateJobId !== requestedJobId) continue;
+      if (isCanonicalCompletedResult(candidate, payload?.snapshot ?? payload)) return candidate;
+    }
   }
   return null;
+}
+
+function completedSessionSeed(sessionStore, latestUploadResult) {
+  const snapshot = sessionStore?.latestUploadSnapshot ?? null;
+  const jobId = String(sessionStore?.jobId ?? uploadPayloadJobId(snapshot) ?? "").trim() || null;
+  if (!jobId || (authoritativeJobState(snapshot ?? {}) !== "completed" && !uploadStateView.isCompletedUploadState(snapshot))) {
+    return { terminal: false, jobId: null, snapshot: null, result: null };
+  }
+  return {
+    terminal: true,
+    jobId,
+    snapshot,
+    result: resolveCompletedResultForJob(jobId, sessionStore?.latestUploadResult, latestUploadResult, snapshot),
+  };
 }
 
 
@@ -323,6 +372,15 @@ function logBaselineNavigation(event, identity, targetRoute, reason = null) {
 
 const BaselineDetailView = lazy(() => import("./BaselineDetailView"));
 
+function CompletedResultTransition({ navigationPending = false }) {
+  return (
+    <section className="baseline-detail-route" data-testid="completed-result-transition" role="status" aria-live="polite" aria-busy="true">
+      <h2>{navigationPending ? "Opening completed results" : "Preparing completed results"}</h2>
+      <p>The analysis is complete. Loading the canonical saved result…</p>
+    </section>
+  );
+}
+
 export default function DataConnectionsWorkspace({
   accessCode,
   apiFetch,
@@ -350,13 +408,35 @@ export default function DataConnectionsWorkspace({
   datasetScopeKey = "anonymous",
 }) {
   const seededSelectedFiles = useMemo(() => (Array.isArray(initialSelectedFiles) ? initialSelectedFiles : []), [initialSelectedFiles]);
+  const sessionSeed = completedSessionSeed(sessionStore, latestUploadResult);
+  const initialTerminalSeed = seededSelectedFiles.length === 0 ? sessionSeed : { terminal: false, jobId: null, snapshot: null, result: null };
+  const initialTerminalIdentity = initialTerminalSeed.result
+    ? baselineIdentityFromResult(initialTerminalSeed.result, {}, String(sessionStore?.uiState ?? "") === "restored" ? "cache" : "hydration")
+    : null;
+  const initialTerminalJob = initialTerminalSeed.terminal
+    ? {
+      ...normalizeUploadJob({ ...(initialTerminalSeed.snapshot ?? {}), jobId: initialTerminalSeed.jobId }),
+      ...(initialTerminalSeed.result?.candidate_model ? { baseline_result: initialTerminalSeed.result } : {}),
+      ...(initialTerminalIdentity ? {
+        baselineId: initialTerminalIdentity.baselineId,
+        portfolioId: initialTerminalIdentity.portfolioId,
+        systemId: initialTerminalIdentity.systemId,
+        state_source: initialTerminalIdentity.stateSource,
+      } : {}),
+    }
+    : null;
+  const initialTerminalIsBaseline = isBaselineWorkflow(initialTerminalJob?.workflow ?? initialTerminalSeed.result?.workflow);
   const [selectedFiles, setSelectedFiles] = useState(() => seededSelectedFiles);
   const [pendingUploadKind, setPendingUploadKind] = useState("csv");
-  const [uploadState, setUploadState] = useState(() => seededSelectedFiles.length ? "validated" : "idle");
+  const [uploadState, setUploadState] = useState(() => seededSelectedFiles.length
+    ? "validated"
+    : initialTerminalSeed.terminal
+      ? (initialTerminalSeed.result ? (initialTerminalIsBaseline ? "save_complete" : "navigation_pending") : "resolving_result")
+      : "idle");
   const [uploadError, setUploadError] = useState("");
   const [completionError, setCompletionError] = useState("");
-  const [uploadResult, setUploadResult] = useState(latestUploadResult);
-  const [uploadJob, setUploadJob] = useState(null);
+  const [uploadResult, setUploadResult] = useState(() => initialTerminalSeed.terminal ? initialTerminalSeed.result : latestUploadResult);
+  const [uploadJob, setUploadJob] = useState(() => initialTerminalJob);
   const [localUploadAttempt, setLocalUploadAttempt] = useState(() => activeUploadAttempt
     ?? (seededSelectedFiles[0] ? createUploadAttempt({ files: seededSelectedFiles, workflow: comparisonMode ? "analyze_new_data" : "create_baseline" }) : null));
   const [recentJob, setRecentJob] = useState(null);
@@ -395,19 +475,18 @@ export default function DataConnectionsWorkspace({
   const statusEndpointFailureCountRef = useRef(0);
   const uploadStatusPathRef = useRef(null);
   const uploadInputRef = useRef(null);
-  const uploadStateRef = useRef("idle");
+  const uploadStateRef = useRef(uploadState);
   const pollSessionRef = useRef(0);
   const uploadInFlightRef = useRef(false);
   const telemetryStageLogRef = useRef(new Set());
   const autoStartedSignatureRef = useRef("");
   const reconciledJobRef = useRef("");
   const reconcileAbortControllerRef = useRef(null);
-  const completionNavigationTimerRef = useRef(null);
-  const completionNavigationEligibleRef = useRef(false);
+  const terminalNavigationStartedRef = useRef(false);
   const baselineNavigationPendingRef = useRef(false);
-  const completedBaselineIdentityRef = useRef(null);
+  const completedBaselineIdentityRef = useRef(initialTerminalIdentity);
   const openCompletedBaselineRef = useRef(null);
-  const terminalJobIdRef = useRef(null);
+  const terminalJobIdRef = useRef(initialTerminalSeed.terminal ? initialTerminalSeed.jobId : null);
   const uploadAttemptIdRef = useRef(localUploadAttempt?.attemptId ?? null);
   const flowOwnerRef = useRef(`${String(currentUser?.email ?? currentUser?.id ?? "")}:${String(datasetScopeKey)}`);
   const flowSessionRef = useRef(0);
@@ -494,8 +573,7 @@ export default function DataConnectionsWorkspace({
       }
     }
     resetTelemetryStageLogs();
-    completionNavigationEligibleRef.current = false;
-    clearCompletionNavigationTimer();
+    terminalNavigationStartedRef.current = false;
     setSelectedFiles(seededSelectedFiles);
     setUploadError("");
     setCompletionError("");
@@ -531,12 +609,23 @@ export default function DataConnectionsWorkspace({
         ...(sessionStore?.latestUploadSnapshot ?? {}),
         latest_result: sessionStore?.latestUploadResult ?? null,
         job_id: sessionJobId,
+        workflow: sessionStore?.latestUploadSnapshot?.workflow ?? sessionStore?.workflow ?? null,
       }
       : null;
     const identitySource = String(sessionStore?.uiState ?? "") === "restored" ? "cache" : "hydration";
     const normalizedSource = sourcePayload ? normalizeStatusPayload(sourcePayload, sessionJobId) : null;
-    if (normalizedSource && authoritativeJobState(normalizedSource) === "completed") {
-      const sessionResult = sessionStore?.latestUploadResult ?? null;
+    if (normalizedSource && (authoritativeJobState(normalizedSource) === "completed" || uploadStateView.isCompletedUploadState(normalizedSource))) {
+      const sessionResult = resolveCompletedResultForJob(
+        sessionJobId,
+        sessionStore?.latestUploadResult,
+        latestUploadResult,
+        sourcePayload,
+      );
+      if (!sessionResult) {
+        beginTerminalResultResolution(sessionJobId, normalizedSource);
+        void reconcileRememberedJob(candidateJobId, { sourcePayload, identitySource, signal: controller.signal });
+        return () => controller.abort();
+      }
       const hydratedIdentity = baselineIdentityFromResult(sessionResult ?? normalizedSource, {}, identitySource);
       if (hydratedIdentity) {
         completedBaselineIdentityRef.current = hydratedIdentity;
@@ -555,7 +644,11 @@ export default function DataConnectionsWorkspace({
       uploadJobIdRef.current = sessionJobId;
       uploadStatusPathRef.current = normalizeUploadStatusPath(normalizedSource?.status_url, sessionJobId);
       setUploadResult(sessionResult);
-      setUploadState("complete");
+      setSelectedFiles([]);
+      setUploadTransfer(null);
+      setReconciliationMessage("");
+      clearStoredUploadJobId(sessionJobId);
+      setUploadState(isBaselineWorkflow(normalizedSource?.workflow ?? sessionResult?.workflow) ? "save_complete" : "navigation_pending");
       setUploadProcessingFlag(false);
       return;
     }
@@ -595,6 +688,7 @@ export default function DataConnectionsWorkspace({
     setReconciliationMessage("");
     completedBaselineIdentityRef.current = null;
     terminalJobIdRef.current = null;
+    terminalNavigationStartedRef.current = false;
     setUploadError("");
     setCompletionError("");
     setUploadState("idle");
@@ -611,7 +705,6 @@ export default function DataConnectionsWorkspace({
     uploadInFlightRef.current = false;
     pollSessionRef.current += 1;
     clearPollDelay();
-    clearCompletionNavigationTimer();
     pollTimerRef.current = null;
     pollInFlightRef.current = null;
     pollOwnerJobIdRef.current = null;
@@ -619,8 +712,15 @@ export default function DataConnectionsWorkspace({
 
   useEffect(() => {
     if (selectedBaselineIdRef.current || presentedUploadAttempt?.attemptId || selectedFiles.length > 0 || uploadResult?.candidate_model) return;
+    const terminalJobId = String(terminalJobIdRef.current ?? "").trim() || null;
+    if (terminalJobId) {
+      const terminalResult = resolveCompletedResultForJob(terminalJobId, latestUploadResult, latestUploadSnapshot);
+      if (!terminalResult) return;
+      setUploadResult(terminalResult);
+      return;
+    }
     setUploadResult(latestUploadResult);
-  }, [latestUploadResult, presentedUploadAttempt?.attemptId, selectedFiles.length, uploadResult?.candidate_model]);
+  }, [latestUploadResult, latestUploadSnapshot, presentedUploadAttempt?.attemptId, selectedFiles.length, uploadResult?.candidate_model]);
 
   useEffect(() => {
     const routeBaselineId = String(selectedBaselineIdentity?.baselineId ?? "").trim();
@@ -688,29 +788,16 @@ export default function DataConnectionsWorkspace({
   }, [accessCode, apiFetch, baselineDetailReloadKey, datasetScopeKey, selectedBaselineIdentity]);
 
   useEffect(() => {
-    if (headless || uploadState !== "save_complete" || typeof onUploadComplete !== "function") return undefined;
-    if (!completionNavigationEligibleRef.current) return undefined;
-    const hasResults = Boolean(resolveFinalAnalysisResult(uploadJob, uploadResult, latestUploadResult, latestUploadSnapshot));
-    if (!hasResults) return undefined;
-
-    clearCompletionNavigationTimer();
-    completionNavigationTimerRef.current = window.setTimeout(() => {
-      completionNavigationTimerRef.current = null;
-      void viewCompletedResults();
-    }, COMPLETION_HOLD_MS);
-
-    return () => {
-      clearCompletionNavigationTimer();
-    };
+    if (headless || uploadState !== "navigation_pending" || typeof onUploadComplete !== "function") return;
+    if (isBaselineWorkflow(uploadJob?.workflow ?? uploadResult?.workflow)) return;
+    if (terminalNavigationStartedRef.current) return;
+    const jobId = String(uploadJob?.jobId ?? uploadJob?.job_id ?? uploadJobIdRef.current ?? "").trim() || null;
+    if (!jobId || !resolveCompletedResultForJob(jobId, uploadResult, uploadJob, latestUploadResult, latestUploadSnapshot)) return;
+    terminalNavigationStartedRef.current = true;
+    void viewCompletedResults();
+  // Completion navigation is intentionally a one-shot terminal handoff.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headless, latestUploadResult, latestUploadSnapshot, onUploadComplete, uploadJob, uploadResult, uploadState]);
-
-  function clearCompletionNavigationTimer() {
-    if (completionNavigationTimerRef.current && typeof window !== "undefined") {
-      window.clearTimeout(completionNavigationTimerRef.current);
-    }
-    completionNavigationTimerRef.current = null;
-  }
 
   function readRememberedUploadJobId() {
     if (typeof window === "undefined") return "";
@@ -805,6 +892,10 @@ export default function DataConnectionsWorkspace({
       const payload = await readJsonPayload(response, { route: path, phase: "poll" });
       if (signal?.aborted) return null;
       if (response.status === 404) {
+        if (terminalJobIdRef.current === requestedJobId) {
+          markCompletionResolutionFailed(requestedJobId, { message: "The completed job could not be reconciled." });
+          return null;
+        }
         clearStoredUploadJobId(requestedJobId);
         clearIgnoredUploadJobId(requestedJobId);
         restoreUsableUploadControls("The previous processing job no longer exists. You can start a new upload.");
@@ -831,7 +922,7 @@ export default function DataConnectionsWorkspace({
         return normalized;
       }
 
-      const cachedResult = sourcePayload?.latest_result ?? null;
+      const cachedResult = resolveCompletedResultForJob(requestedJobId, sourcePayload?.latest_result, sourcePayload);
       const hydratedIdentity = baselineIdentityFromResult(cachedResult ?? normalized, {}, identitySource);
       if (hydratedIdentity) {
         completedBaselineIdentityRef.current = hydratedIdentity;
@@ -865,12 +956,11 @@ export default function DataConnectionsWorkspace({
       }
       if (state === "completed") {
         terminalJobIdRef.current = requestedJobId;
-        setUploadProcessingFlag(false);
+        const handoffFlowSessionId = flowSessionRef.current;
+        beginTerminalResultResolution(requestedJobId, normalized);
         if (normalized?.result_available === true && (!isBaselineWorkflow(normalized?.workflow) || normalized?.baseline_result_available === true)) {
-          setUploadState("saving_results");
-          await completeUploadHandoff(normalized, requestedJobId, identitySource);
+          await completeUploadHandoff(normalized, requestedJobId, identitySource, handoffFlowSessionId);
         } else {
-          setUploadState("saving_results");
           void pollUploadStatus(requestedJobId, normalized?.status_url);
         }
         return normalized;
@@ -886,6 +976,15 @@ export default function DataConnectionsWorkspace({
     } catch (error) {
       if (signal?.aborted || error?.name === "AbortError") return null;
       const classified = classifyUploadError(error, "poll");
+      if (terminalJobIdRef.current === requestedJobId) {
+        markCompletionResolutionFailed(requestedJobId, classified);
+        console.warn("[neraium] completed upload result resolution failed", {
+          jobId: requestedJobId,
+          status: classified.responseStatus ?? null,
+          errorType: classified.errorType ?? null,
+        });
+        return null;
+      }
       if (classified.errorType === "job_identity_mismatch") {
         clearStoredUploadJobId(requestedJobId);
         clearIgnoredUploadJobId(requestedJobId);
@@ -931,8 +1030,7 @@ export default function DataConnectionsWorkspace({
     currentWorkflowRef.current = nextWorkflow;
     setCurrentWorkflow(nextWorkflow);
     setBatchResults([]);
-    completionNavigationEligibleRef.current = false;
-    clearCompletionNavigationTimer();
+    terminalNavigationStartedRef.current = false;
     clearStoredUploadJobId();
     if (uploadInputRef.current) uploadInputRef.current.value = "";
     if (typeof window !== "undefined") {
@@ -1063,6 +1161,59 @@ export default function DataConnectionsWorkspace({
     }
   }
 
+  function beginTerminalResultResolution(jobId, terminalPayload = null) {
+    const resolvedJobId = String(jobId ?? terminalPayload?.jobId ?? terminalPayload?.job_id ?? "").trim() || null;
+    if (resolvedJobId) terminalJobIdRef.current = resolvedJobId;
+    setUploadProcessingFlag(false);
+    setSelectedFiles([]);
+    setUploadTransfer(null);
+    setRecentJob(null);
+    setReconciliationMessage("");
+    setUploadError("");
+    setCompletionError("");
+    setUploadState("resolving_result");
+  }
+
+  function terminalHandoffIsCurrent(jobId, flowSessionId) {
+    return flowSessionRef.current === flowSessionId
+      && String(uploadJobIdRef.current ?? "") === String(jobId ?? "")
+      && String(terminalJobIdRef.current ?? "") === String(jobId ?? "");
+  }
+
+  function publishResolvedTerminalClientState(jobId) {
+    setSelectedFiles([]);
+    setUploadTransfer(null);
+    setRecentJob(null);
+    setReconciliationMessage("");
+    setUploadError("");
+    setCompletionError("");
+    setLocalUploadAttempt((current) => current ? { ...current, jobId: String(jobId), phase: "complete" } : current);
+    clearStoredUploadJobId(jobId);
+    if (uploadInputRef.current) uploadInputRef.current.value = "";
+  }
+
+  function markCompletionResolutionFailed(jobId, error = null) {
+    const message = "Processing completed, but the saved result could not be opened.";
+    stopUploadPolling("completion_resolution_failed");
+    setUploadProcessingFlag(false);
+    setSelectedFiles([]);
+    setUploadTransfer(null);
+    setUploadError("");
+    setCompletionError(message);
+    setUploadJob((current) => ({
+      ...(current ?? {}),
+      job_id: jobId ?? current?.job_id ?? null,
+      job_state: "completed",
+      status: "COMPLETE",
+      processing_state: "completion_error",
+      progress_label: message,
+      message,
+      error: error?.message ?? current?.error ?? null,
+      request_id: error?.requestId ?? error?.request_id ?? current?.request_id ?? null,
+    }));
+    setUploadState("completion_error");
+  }
+
   function markUploadFailed({ message, errorType = null, jobId = null, keepStoredJobId = false, diagnostics = null }) {
     stopUploadPolling("upload_failed");
     const safeMessage = normalizeErrorMessage(message || "Telemetry analysis failed.");
@@ -1115,7 +1266,7 @@ export default function DataConnectionsWorkspace({
     }
   }
 
-  async function completeUploadHandoff(completedPayload, requestedJobId, identitySource = "completion_response") {
+  async function completeUploadHandoff(completedPayload, requestedJobId, identitySource = "completion_response", flowSessionId = flowSessionRef.current) {
     const jobId = completedPayload?.jobId ?? completedPayload?.job_id ?? requestedJobId ?? uploadJobIdRef.current ?? null;
     terminalJobIdRef.current = String(jobId ?? "").trim() || terminalJobIdRef.current;
     const datasetId = completedPayload?.datasetId ?? completedPayload?.dataset_id ?? null;
@@ -1145,6 +1296,7 @@ export default function DataConnectionsWorkspace({
       if (returnedJobId && String(jobId) !== returnedJobId) {
         throw new Error("The completed baseline did not match the requested import job.");
       }
+      if (!terminalHandoffIsCurrent(jobId, flowSessionId)) return null;
       const identity = baselineIdentityFromResult(baselineResult, {
         jobId,
         uploadId: completedPayload?.uploadId ?? completedPayload?.upload_id ?? jobId,
@@ -1186,7 +1338,7 @@ export default function DataConnectionsWorkspace({
 
       const activationState = baselineResult?.activation?.state ?? baselineResult?.candidate_model?.status;
       setUploadProcessingFlag(false);
-      setCompletionError("");
+      publishResolvedTerminalClientState(jobId);
       setUploadResult(baselineResult);
       setUploadJob({
         ...completedPayload,
@@ -1208,60 +1360,70 @@ export default function DataConnectionsWorkspace({
         progress_label: activationState === "active" ? "Behavioral Baseline Active" : "Baseline Candidate Ready",
         message: activationState === "active" ? "Behavioral Baseline Active" : "Baseline Candidate Ready",
       });
-      completionNavigationEligibleRef.current = false;
       setUploadState("save_complete");
       return { ...completedPayload, ...identity, baseline_result: baselineResult };
     }
-    const savedResult = uploadStateView.resolveCurrentUploadResult(completedPayload) ?? (uploadStateView.hasFullUploadResult(completedPayload) ? completedPayload : null);
+    const savedResult = resolveCompletedResultForJob(jobId, completedPayload);
+    const navigationRequested = typeof onUploadComplete === "function" && !headless;
     setUploadProcessingFlag(false);
-    setCompletionError("");
     setUploadResult(savedResult ?? completedPayload ?? null);
     setUploadJob((current) => ({
       ...(current ?? {}),
       ...(completedPayload ?? {}),
       job_id: jobId,
       status: "COMPLETE",
-      processing_state: "saving_results",
+      processing_state: "resolving_result",
       percent: 100,
       progress: 100,
-      progress_label: "Persisting Behavior Baseline",
-      message: "Persisting Behavior Baseline",
+      progress_label: navigationRequested ? "Opening completed results" : "Resolving completed results",
+      message: navigationRequested ? "Opening completed results" : "Resolving completed results",
     }));
-    setUploadState("saving_results");
-    logTelemetryStage("save request started", { jobId });
+    if (navigationRequested) terminalNavigationStartedRef.current = true;
+    setUploadState(navigationRequested ? "navigation_pending" : "resolving_result");
+    logTelemetryStage("result hydration started", { jobId });
 
     try {
       const hydration = typeof onUploadComplete === "function"
-        ? await onUploadComplete(completedPayload, { navigateToGate: false, attemptId: uploadAttemptIdRef.current })
+        ? await onUploadComplete(completedPayload, { navigateToGate: !headless, attemptId: uploadAttemptIdRef.current })
         : null;
-      logTelemetryStage("save response received", { jobId });
-      const hydratedResult = hydration?.latestResult ?? savedResult ?? uploadStateView.resolveCurrentUploadResult(hydration?.latestSnapshot) ?? null;
-      const hydratedSnapshot = hydration?.latestSnapshot ?? latestUploadSnapshot ?? null;
-      const payloadValid = Boolean(resolveFinalAnalysisResult(completedPayload, hydratedResult, hydratedSnapshot, uploadResult, latestUploadResult, latestUploadSnapshot));
+      logTelemetryStage("result hydration response received", { jobId });
+      const hydratedResult = resolveCompletedResultForJob(
+        jobId,
+        hydration?.latestResult,
+        hydration?.latestSnapshot,
+        savedResult,
+        completedPayload,
+      );
+      const hydratedSnapshot = uploadPayloadJobId(hydration?.latestSnapshot) === String(jobId)
+        ? hydration.latestSnapshot
+        : null;
+      const payloadValid = Boolean(hydratedResult);
       logTelemetryStage("payload validation result", { jobId, valid: payloadValid });
       if (!payloadValid) {
         throw new Error("The saved analysis result could not be opened. Refresh and retry.");
       }
-      const finalResult = hydratedResult ?? savedResult ?? completedPayload;
+      if (!terminalHandoffIsCurrent(jobId, flowSessionId)) return null;
+      const finalResult = hydratedResult;
+      publishResolvedTerminalClientState(jobId);
       setUploadResult(finalResult);
       setUploadJob((current) => ({
         ...(current ?? {}),
         latest_result: finalResult,
+        ...(hydratedSnapshot ? { canonical_snapshot: hydratedSnapshot } : {}),
         status: "COMPLETE",
-        processing_state: "save_complete",
+        processing_state: navigationRequested ? "navigation_pending" : "save_complete",
         percent: 100,
         progress: 100,
-        progress_label: "Behavior Baseline Established",
-        message: "Behavior Baseline Established",
+        progress_label: navigationRequested ? "Opening completed results" : "Completed results ready",
+        message: navigationRequested ? "Opening completed results" : "Completed results ready",
       }));
       logTelemetryStage("state hydration completed", { jobId });
-      completionNavigationEligibleRef.current = true;
-      setUploadState("save_complete");
+      setUploadState(navigationRequested ? "navigation_pending" : "save_complete");
       return completedPayload;
     } catch (error) {
+      if (!terminalHandoffIsCurrent(jobId, flowSessionId)) return null;
       const message = "Results were saved, but the results view could not be loaded.";
       logTelemetryStage("exception", { jobId, message: error?.message || String(error) });
-      completionNavigationEligibleRef.current = false;
       setCompletionError(message);
       setUploadError("");
       setUploadJob((current) => ({
@@ -1287,6 +1449,7 @@ export default function DataConnectionsWorkspace({
     }
     if (pollInFlightRef.current && pollOwnerJobIdRef.current === requestedJobId) return pollInFlightRef.current;
     const pollSessionId = pollSessionRef.current + 1;
+    const handoffFlowSessionId = flowSessionRef.current;
     pollSessionRef.current = pollSessionId;
     pollFailureCountRef.current = 0;
     missingStatusCooldownUntilRef.current = 0;
@@ -1406,15 +1569,14 @@ export default function DataConnectionsWorkspace({
             const completePayload = {
               ...normalizedPayload,
               status: "COMPLETE",
-              processing_state: "saving_results",
+              processing_state: "resolving_result",
               percent: 100,
               progress: 100,
-              progress_label: "Persisting Behavior Baseline",
-              message: "Persisting Behavior Baseline",
+              progress_label: "Resolving completed results",
+              message: "Resolving completed results",
             };
             setUploadJob(completePayload);
-            completionNavigationEligibleRef.current = false;
-            setUploadState("saving_results");
+            beginTerminalResultResolution(requestedJobId, completePayload);
             stopUploadPolling("terminal_complete");
             return completePayload;
           }
@@ -1425,6 +1587,7 @@ export default function DataConnectionsWorkspace({
           }
           if (terminalSuccess && !resultAvailable) {
             terminalWithoutResultAt ??= Date.now();
+            beginTerminalResultResolution(requestedJobId, normalizedPayload);
             if (Date.now() - terminalWithoutResultAt >= RESULT_AVAILABILITY_GRACE_MS) {
               throw Object.assign(new Error("Processing completed, but the committed result is not retrievable."), {
                 name: "UploadRequestError",
@@ -1437,16 +1600,15 @@ export default function DataConnectionsWorkspace({
                 datasetId: normalizedPayload?.datasetId ?? normalizedPayload?.dataset_id ?? null,
                 requestId: normalizedPayload?.request_id ?? null,
                 technicalMessage: "Terminal job state remained visible without result availability.",
-                terminalJobFailure: true,
+                completedResultFailure: true,
               });
             }
             setUploadJob({
               ...normalizedPayload,
               result_commit_state: "waiting",
-              progress_label: "Waiting for the committed baseline result...",
-              message: "Waiting for the committed baseline result...",
+              progress_label: "Waiting for the committed result...",
+              message: "Waiting for the committed result...",
             });
-            setUploadState("saving_results");
           } else {
             terminalWithoutResultAt = null;
             setUploadState(authoritativeState);
@@ -1480,12 +1642,16 @@ export default function DataConnectionsWorkspace({
     pollInFlightRef.current = runPoll()
       .then((completedPayload) => {
         if (!completedPayload) return completedPayload;
-        return completeUploadHandoff(completedPayload, requestedJobId);
+        return completeUploadHandoff(completedPayload, requestedJobId, "completion_response", handoffFlowSessionId);
       })
       .catch((error) => {
         if (error?.name === "AbortError") return null;
         const classified = classifyUploadError(error, "poll");
         logUploadFailureDiagnostics(classified);
+        if (terminalJobIdRef.current === requestedJobId || error?.completedResultFailure === true) {
+          markCompletionResolutionFailed(requestedJobId, classified);
+          return null;
+        }
         if (Number(classified.responseStatus ?? error?.status ?? 0) === 404) {
           clearStoredUploadJobId(requestedJobId);
           clearIgnoredUploadJobId(requestedJobId);
@@ -1729,8 +1895,7 @@ export default function DataConnectionsWorkspace({
     const files = Array.from(event?.target?.files ?? event?.dataTransfer?.files ?? []);
     flowSessionRef.current += 1;
     resetTelemetryStageLogs();
-    completionNavigationEligibleRef.current = false;
-    clearCompletionNavigationTimer();
+    terminalNavigationStartedRef.current = false;
     if (files[0]) {
       logTelemetryStage("file selected", { filename: files[0].name, size: files[0].size });
       const fallbackAttempt = createUploadAttempt({ files, workflow: currentWorkflowRef.current });
@@ -1772,12 +1937,12 @@ export default function DataConnectionsWorkspace({
 
   async function viewCompletedResults() {
     if (typeof onUploadComplete !== "function") return;
-    completionNavigationEligibleRef.current = false;
-    clearCompletionNavigationTimer();
+    terminalNavigationStartedRef.current = true;
     stopUploadPolling("results_navigation");
-    const payload = uploadJob ?? uploadResult ?? latestUploadResult ?? latestUploadSnapshot ?? null;
-    const hasResults = Boolean(resolveFinalAnalysisResult(uploadJob, uploadResult, latestUploadResult, latestUploadSnapshot));
-    if (!payload || !hasResults) {
+    const jobId = String(uploadJob?.jobId ?? uploadJob?.job_id ?? uploadJobIdRef.current ?? "").trim() || null;
+    const completedResult = resolveCompletedResultForJob(jobId, uploadJob, uploadResult, latestUploadResult, latestUploadSnapshot);
+    const payload = uploadJob ?? completedResult ?? null;
+    if (!jobId || !payload || !completedResult) {
       setCompletionError("Results were saved, but the results view could not be loaded.");
       setUploadError("");
       setUploadState("completion_error");
@@ -1795,7 +1960,9 @@ export default function DataConnectionsWorkspace({
     }));
     try {
       await onUploadComplete(payload, { navigateToGate: true, attemptId: uploadAttemptIdRef.current });
-      setUploadState("complete");
+      if (String(terminalJobIdRef.current ?? "") === jobId) {
+        publishResolvedTerminalClientState(jobId);
+      }
     } catch (error) {
       const message = "Results were saved, but the results view could not be loaded.";
       logTelemetryStage("exception", { jobId: payload?.job_id ?? payload?.current_upload?.job_id ?? uploadJobIdRef.current ?? null, message: error?.message || String(error) });
@@ -2024,6 +2191,14 @@ export default function DataConnectionsWorkspace({
     );
   }
 
+  if (["resolving_result", "navigation_pending"].includes(uploadState)) {
+    return (
+      <div className="data-connections-workspace" data-testid="upload-workspace">
+        <CompletedResultTransition navigationPending={uploadState === "navigation_pending"} />
+      </div>
+    );
+  }
+
   return (
     <div className="data-connections-workspace" data-testid="upload-workspace">
       <IntakeFlowPanel
@@ -2061,7 +2236,7 @@ export default function DataConnectionsWorkspace({
         onResetWorkspace={dismissCurrentJob}
         onChooseAnotherFile={chooseAnotherFile}
         onViewResults={() => { void viewCompletedResults(); }}
-        onOpenBaseline={() => { void openCompletedBaseline(); }}
+        onOpenBaseline={isBaselineWorkflow(uploadJob?.workflow ?? currentWorkflow) ? () => { void openCompletedBaseline(); } : null}
         onReturnToPortfolio={onReturnToPortfolio}
         baselineNavigationPending={baselineNavigationPending}
         onImportComparisonDataset={() => { void beginComparisonDataset(); }}
