@@ -152,13 +152,19 @@ def _comparison_relationship_changes(
         parsed_columns[column] = parsed
         return parsed
 
-    eligible_edges = 0
-    deeply_analyzed_edges = 0
+    considered_pairs = {
+        tuple(sorted((str(edge.get("source") or ""), str(edge.get("target") or ""))))
+        for edge in edges
+        if isinstance(edge, dict) and edge.get("source") and edge.get("target")
+    }
+    eligible_pairs: set[tuple[str, str]] = set()
+    deeply_analyzed_pairs: set[tuple[str, str]] = set()
     for edge in edges:
         if not isinstance(edge, dict) or edge.get("mode_id") != "all_operation":
             continue
-        eligible_edges += 1
         source, target = str(edge.get("source") or ""), str(edge.get("target") or "")
+        pair_key = tuple(sorted((source, target)))
+        eligible_pairs.add(pair_key)
         pairs = [
             (left, right)
             for left, right in zip(values(source), values(target))
@@ -166,7 +172,7 @@ def _comparison_relationship_changes(
         ]
         if len(pairs) < 20:
             continue
-        deeply_analyzed_edges += 1
+        deeply_analyzed_pairs.add(pair_key)
         left = [pair[0] for pair in pairs]
         right = [pair[1] for pair in pairs]
         left_mean, right_mean = sum(left) / len(left), sum(right) / len(right)
@@ -208,9 +214,9 @@ def _comparison_relationship_changes(
             {
                 "baseline_artifacts_reused": 1,
                 "baseline_relationship_graphs_reused": 1 if edges else 0,
-                "relationship_pairs_considered": len(edges),
-                "relationship_pairs_eligible": eligible_edges,
-                "relationship_pairs_deeply_analyzed": deeply_analyzed_edges,
+                "relationship_pairs_considered": len(considered_pairs),
+                "relationship_pairs_eligible": len(eligible_pairs),
+                "relationship_pairs_deeply_analyzed": len(deeply_analyzed_pairs),
                 "cache_hits": cache_hits,
             }
         )

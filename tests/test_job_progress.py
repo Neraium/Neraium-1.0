@@ -133,18 +133,18 @@ def test_relationship_pair_progress_keeps_operation_stage_and_overall_models_con
         stage="learn",
         substage="learn_relationships",
         completed_units=100,
-        total_units=1_710,
+        total_units=190,
         unit_type="relationship_pairs",
-        message="Evaluated 100 of 1,710 eligible relationship pairs.",
+        message="Evaluated 100 of 190 eligible relationship pairs.",
     )
 
     operation = _operation(progress, "learn_relationships")
     stage = next(item for item in progress["workflow_steps"] if item["id"] == "learn")
-    assert progress["percent_complete"] == operation["percent_complete"] == 5
+    assert progress["percent_complete"] == operation["percent_complete"] == 52
     assert progress["completed_units"] == operation["completed_units"] == 100
-    assert progress["total_units"] == operation["total_units"] == 1_710
-    assert stage["percent_complete"] == 50
-    assert progress["overall_percent_complete"] == 82
+    assert progress["total_units"] == operation["total_units"] == 190
+    assert stage["percent_complete"] == 58
+    assert progress["overall_percent_complete"] == 84
 
     progress = update_progress(
         progress,
@@ -152,19 +152,19 @@ def test_relationship_pair_progress_keeps_operation_stage_and_overall_models_con
         workflow="create_baseline",
         stage="learn",
         substage="learn_relationships",
-        completed_units=775,
-        total_units=1_710,
+        completed_units=250,
+        total_units=190,
         unit_type="relationship_pairs",
-        message="Evaluated 775 of 1,710 eligible relationship pairs.",
+        message="A late pair counter exceeded the authoritative total.",
     )
 
     operation = _operation(progress, "learn_relationships")
     stage = next(item for item in progress["workflow_steps"] if item["id"] == "learn")
-    assert progress["percent_complete"] == operation["percent_complete"] == 45
-    assert progress["completed_units"] == operation["completed_units"] == 775
-    assert progress["total_units"] == operation["total_units"] == 1_710
-    assert stage["percent_complete"] == 57
-    assert progress["overall_percent_complete"] == 83
+    assert progress["percent_complete"] == operation["percent_complete"] == 100
+    assert progress["completed_units"] == operation["completed_units"] == 190
+    assert progress["total_units"] == operation["total_units"] == 190
+    assert stage["percent_complete"] == 66
+    assert progress["overall_percent_complete"] == 86
 
     stale_projection = {
         **progress,
@@ -173,9 +173,57 @@ def test_relationship_pair_progress_keeps_operation_stage_and_overall_models_con
         "percent_complete": 5,
     }
     projected = enrich_progress_timing(stale_projection)
-    assert projected["completed_units"] == 775
-    assert projected["total_units"] == 1_710
-    assert projected["percent_complete"] == 45
+    assert projected["completed_units"] == 190
+    assert projected["total_units"] == 190
+    assert projected["percent_complete"] == 100
+
+
+def test_relationship_accounting_basis_migrates_legacy_group_expanded_total() -> None:
+    legacy = update_progress(
+        None,
+        job_id="relationship-basis-migration",
+        workflow="create_baseline",
+        stage="learn",
+        substage="learn_relationships",
+        completed_units=150,
+        total_units=1_710,
+        unit_type="relationship_pairs",
+        message="Legacy group-expanded progress.",
+    )
+
+    corrected = update_progress(
+        legacy,
+        job_id="relationship-basis-migration",
+        workflow="create_baseline",
+        stage="learn",
+        substage="learn_relationships",
+        completed_units=25,
+        total_units=190,
+        unit_type="relationship_pairs",
+        message="Evaluated 150 of 190 eligible relationship pairs.",
+        metadata={"unit_accounting_basis": "unique_unordered_signal_pairs.v1"},
+    )
+    operation = _operation(corrected, "learn_relationships")
+
+    assert corrected["completed_units"] == operation["completed_units"] == 150
+    assert corrected["total_units"] == operation["total_units"] == 190
+    assert corrected["completed_units"] <= corrected["total_units"]
+    assert corrected["percent_complete"] == 78
+    assert operation["metadata"]["unit_accounting_basis"] == "unique_unordered_signal_pairs.v1"
+
+    stale = update_progress(
+        corrected,
+        job_id="relationship-basis-migration",
+        workflow="create_baseline",
+        stage="learn",
+        substage="learn_relationships",
+        completed_units=100,
+        total_units=1_710,
+        unit_type="relationship_pairs",
+        message="A stale legacy callback arrived.",
+    )
+    assert stale["completed_units"] == 150
+    assert stale["total_units"] == 190
 
 
 def test_late_callback_cannot_move_progress_back_to_an_earlier_substage() -> None:

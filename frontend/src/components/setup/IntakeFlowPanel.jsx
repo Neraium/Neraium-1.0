@@ -497,19 +497,16 @@ function ProcessingPanel({
             })}
           </ol>
         </div>
-        <JobProgressPanel uploadJob={uploadJob} uploadTransfer={uploadTransfer} />
+        <JobProgressPanel uploadJob={uploadJob} uploadTransfer={uploadTransfer} statusDetail={queuedWorkerDetail} />
       </div>
-      {!comparison ? (
-        <p className="baseline-processing-panel__policy">
-          Continuous learning starts from this model. Temporary abnormalities never redefine normal without persistent, verified operating history.
-        </p>
+      {!uploadJob?.job_progress ? (
+        <div className="upload-job-status" role="status" aria-label="Backend job status">
+          <span>Job status</span>
+          <strong>{jobStateLabel(executionState)}</strong>
+          {queuedWorkerDetail ? <p>{queuedWorkerDetail}</p> : null}
+          {propagationLabel ? <p><span>Current operation:</span> {propagationLabel}</p> : null}
+        </div>
       ) : null}
-      <div className="upload-job-status" role="status" aria-label="Backend job status">
-        <span>Job status</span>
-        <strong>{jobStateLabel(executionState)}</strong>
-        {queuedWorkerDetail ? <p>{queuedWorkerDetail}</p> : null}
-        {propagationLabel ? <p><span>Current operation:</span> {propagationLabel}</p> : null}
-      </div>
       <div className="upload-job-actions" aria-label="Processing job actions">
         {["waiting", "stalled"].includes(String(uploadJob?.execution_state ?? "").toLowerCase()) || uploadJob?.poll_connection_state === "interrupted" ? (
           <button type="button" className="command-button" onClick={onResumeJob}>Resume/view processing status</button>
@@ -579,7 +576,7 @@ function AdvancedDetails({
   return (
     <details className="upload-advanced-details">
       <summary>
-        <span className="upload-advanced-details__summary-label"><i aria-hidden="true" />Processing details</span>
+        <span className="upload-advanced-details__summary-label"><i aria-hidden="true" />Technical details</span>
         <span className="upload-advanced-details__chevron" aria-hidden="true" />
       </summary>
       {rows.length ? (

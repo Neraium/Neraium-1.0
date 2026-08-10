@@ -475,7 +475,10 @@ describe("backend state presentation", () => {
     expect(progress.getByRole("progressbar", { name: "Overall backend workflow" }).getAttribute("aria-valuenow")).toBe("32");
     expect(progress.getByRole("progressbar", { name: "Signal inventory" }).getAttribute("aria-valuenow")).toBe("60");
     expect(progress.getByText("6 / 10 signals")).toBeTruthy();
-    expect(progress.getByRole("list", { name: "Overall workflow steps" }).textContent).toContain("42% · processing");
+    const detailsToggle = progress.getByRole("button", { name: "Processing details" });
+    expect(detailsToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(progress.queryByRole("list", { name: "Detailed backend operations" })).toBeNull();
+    fireEvent.click(detailsToggle);
     expect(progress.getByRole("list", { name: "Detailed backend operations" }).textContent).toContain("Semantic mappingPending");
   });
 
@@ -495,6 +498,7 @@ describe("backend state presentation", () => {
           percent_complete: 5,
           unit_type: "relationship_pairs",
           overall_percent_complete: 83,
+          message: "Evaluated 150 of 190 eligible relationship pairs.",
           workflow_steps: [
             { id: "upload", label: "Upload", status: "completed", completed_work_units: 2, total_work_units: 2, percent_complete: 100 },
             { id: "validate", label: "Validate", status: "completed", completed_work_units: 13, total_work_units: 13, percent_complete: 100 },
@@ -509,9 +513,9 @@ describe("backend state presentation", () => {
               stage: "learn",
               label: "Learn relationships",
               status: "processing",
-              completed_units: 775,
-              total_units: 1_710,
-              percent_complete: 45,
+              completed_units: 150,
+              total_units: 190,
+              percent_complete: 78,
               unit_type: "relationship_pairs",
             },
           ],
@@ -521,11 +525,13 @@ describe("backend state presentation", () => {
 
     const progress = within(screen.getByLabelText("Backend job progress"));
     expect(progress.getByRole("progressbar", { name: "Overall backend workflow" }).getAttribute("aria-valuenow")).toBe("83");
-    expect(progress.getByRole("progressbar", { name: "Learn relationships" }).getAttribute("aria-valuenow")).toBe("45");
-    expect(progress.getByText("775 / 1,710 relationship pairs")).toBeTruthy();
-    expect(progress.getByRole("list", { name: "Overall workflow steps" }).textContent).toContain("Learn57% · processing");
-    expect(progress.getByRole("list", { name: "Detailed backend operations" }).textContent).toContain("Learn relationships45% · Processing");
-    expect(container.textContent).not.toContain("100 / 1,710 relationship pairs");
+    expect(progress.getByRole("progressbar", { name: "Learn relationships" }).getAttribute("aria-valuenow")).toBe("78");
+    expect(progress.getByText("Evaluated 150 of 190 eligible relationship pairs.")).toBeTruthy();
+    expect(progress.getByText("150 / 190 relationship pairs")).toBeTruthy();
+    expect(progress.getByText("2 of 3 operations complete · Learn relationships in progress")).toBeTruthy();
+    fireEvent.click(progress.getByRole("button", { name: "Processing details" }));
+    expect(progress.getByRole("list", { name: "Detailed backend operations" }).textContent).toContain("Learn relationships78% · Processing");
+    expect(container.textContent).not.toContain("1,710 relationship pairs");
   });
 
   it("keeps unknown totals indeterminate without generating a percentage", () => {
@@ -692,7 +698,7 @@ describe("completion and recovery", () => {
       },
     });
 
-    const detail = within(screen.getByLabelText("Detailed backend operations"));
+    const detail = within(screen.getByRole("list", { name: "Detailed backend operations" }));
     expect(detail.getByText("Parse source").closest("li").textContent).toContain("Complete");
     expect(detail.getByText("Semantic mapping").closest("li").textContent).toContain("40% · Failed");
     expect(detail.getByText("Canonical dataset build").closest("li").textContent).toContain("Pending");
@@ -946,7 +952,7 @@ describe("exact baseline selection regression", () => {
       { replace: true },
     ));
 
-    fireEvent.click(screen.getByText("Processing details"));
+    fireEvent.click(screen.getByText("Technical details"));
     expect(screen.getByText("Selected baseline ID")).toBeTruthy();
     expect(screen.getByText("baseline-a")).toBeTruthy();
     expect(screen.getByText("completion response")).toBeTruthy();
@@ -1973,7 +1979,7 @@ describe("upload and polling behavior", () => {
     expect(await screen.findByRole("heading", { name: "Baseline Established" })).toBeTruthy();
     expect(apiFetch).toHaveBeenCalledWith("/api/data/upload-status/poll-job", expect.any(Object));
     expect(apiFetch.mock.calls.some(([path]) => String(path).includes("upload-status/stored-dataset"))).toBe(false);
-    fireEvent.click(screen.getByText("Processing details"));
+    fireEvent.click(screen.getByText("Technical details"));
     expect(screen.getByText("poll-job")).toBeTruthy();
     expect(screen.getByText("stored-dataset")).toBeTruthy();
   });
@@ -2086,9 +2092,9 @@ describe("upload and polling behavior", () => {
     expect(screen.getAllByText("The uploaded telemetry did not contain stable learnable relationships.").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Retry Processing" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Choose Another File" })).toBeTruthy();
-    const processingDetails = screen.getByText("Processing details").closest("details");
+    const processingDetails = screen.getByText("Technical details").closest("details");
     expect(processingDetails?.hasAttribute("open")).toBe(false);
-    fireEvent.click(screen.getByText("Processing details"));
+    fireEvent.click(screen.getByText("Technical details"));
     expect(processingDetails?.hasAttribute("open")).toBe(true);
     expect(screen.getByText("ArithmeticError: singular relationship matrix")).toBeTruthy();
   });

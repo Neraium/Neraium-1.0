@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import JobProgressPanel from "./JobProgressPanel";
 
@@ -76,5 +76,65 @@ describe("JobProgressPanel operation progress", () => {
     expect(screen.getAllByRole("progressbar")).toHaveLength(2);
     expect(screen.getByRole("progressbar", { name: "Evidence generation" }).getAttribute("aria-valuenow")).toBe("40");
     expect(screen.getByText("8 / 20 evidence candidates")).toBeTruthy();
+  });
+
+  it("keeps the current operation visible and the detailed checklist collapsed by default", () => {
+    const current = {
+      id: "timestamp_quality",
+      label: "Timestamp quality",
+      status: "processing",
+      completed_units: 0,
+      total_units: 52_129,
+      percent_complete: 0,
+      unit_type: "rows",
+      message: "Profiling timestamp and row quality.",
+    };
+    const job = uploadJob(current);
+    job.job_progress.operations = [
+      { id: "receiving", label: "Receiving file", status: "completed", percent_complete: 100 },
+      current,
+      { id: "signal_inventory", label: "Signal inventory", status: "pending", percent_complete: null },
+    ];
+
+    const { container } = render(React.createElement(JobProgressPanel, { uploadJob: job }));
+    const panel = within(container);
+
+    expect(panel.getAllByText("Timestamp quality").length).toBeGreaterThan(0);
+    expect(panel.getByText("Profiling timestamp and row quality.")).toBeTruthy();
+    const toggle = panel.getByRole("button", { name: "Processing details" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-controls")).toBeTruthy();
+    expect(panel.getByText("1 of 3 operations complete · Timestamp quality in progress")).toBeTruthy();
+    expect(panel.queryByRole("list", { name: "Detailed backend operations" })).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    const detail = panel.getByRole("list", { name: "Detailed backend operations" });
+    expect(within(detail).getByText("Receiving file").closest("li").textContent).toContain("Complete");
+    expect(within(detail).getByText("Signal inventory").closest("li").textContent).toContain("Pending");
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("automatically exposes a failed operation", () => {
+    const failed = {
+      id: "learn_relationships",
+      label: "Learn relationships",
+      status: "failed",
+      completed_units: 75,
+      total_units: 190,
+      percent_complete: 39,
+      unit_type: "relationship_pairs",
+      message: "Relationship learning could not continue.",
+    };
+
+    const { container } = render(React.createElement(JobProgressPanel, { uploadJob: uploadJob(failed) }));
+    const panel = within(container);
+
+    const toggle = panel.getByRole("button", { name: "Processing details" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(panel.getByRole("list", { name: "Detailed backend operations" })).toBeTruthy();
+    expect(panel.getByText("0 of 1 operations complete · Learn relationships failed")).toBeTruthy();
   });
 });

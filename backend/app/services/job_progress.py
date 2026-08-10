@@ -334,6 +334,21 @@ def update_progress(
     prior_total = _bounded_units(target.get("total_units"))
     completed = _bounded_units(completed_units)
     total = _bounded_units(total_units)
+    prior_metadata = dict(target.get("metadata") or {})
+    incoming_metadata = dict(metadata or {})
+    prior_accounting_basis = str(prior_metadata.get("unit_accounting_basis") or "").strip()
+    incoming_accounting_basis = str(incoming_metadata.get("unit_accounting_basis") or "").strip()
+    accounting_basis_changed = bool(
+        incoming_accounting_basis
+        and incoming_accounting_basis != prior_accounting_basis
+        and (prior_completed is not None or prior_total is not None)
+    )
+    # Totals are immutable within one accounting basis. A versioned producer may
+    # explicitly migrate a legacy basis (for example group-expanded relationship
+    # evaluations to unique unordered pairs); preserve prior observed work, then
+    # clamp it to the new authoritative denominator.
+    if accounting_basis_changed:
+        prior_total = None
     if prior_total is not None:
         total = prior_total
     if prior_completed is not None:
@@ -356,7 +371,7 @@ def update_progress(
         "started_at": target.get("started_at") or _iso(now),
         "updated_at": _iso(now),
         "completed_at": _iso(now) if operation_status == "completed" else None,
-        "metadata": {**dict(target.get("metadata") or {}), **dict(metadata or {})},
+        "metadata": {**prior_metadata, **incoming_metadata},
     })
     if operation_status in {"failed", "cancelled"}:
         for item in operations[target_index + 1 :]:

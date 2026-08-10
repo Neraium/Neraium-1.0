@@ -18,6 +18,7 @@ from app.services.behavioral_baseline import (
     _identify_modes,
     _learn_distributions,
     _learn_relationship_graph,
+    _relationship_learning_plan,
     build_behavioral_baseline,
 )
 from app.services.baseline_contracts import BASELINE_ARTIFACT_CONTRACT_VERSION
@@ -118,6 +119,69 @@ def test_job_local_baseline_cache_is_semantically_equivalent() -> None:
         uncached_graph,
         membership,
     )
+
+
+@pytest.mark.parametrize(
+    ("signal_count", "expected_pairs"),
+    [(2, 1), (3, 3), (10, 45)],
+)
+def test_baseline_relationship_plan_counts_unique_unordered_pairs(
+    signal_count: int,
+    expected_pairs: int,
+) -> None:
+    numeric_columns = [f"signal_{index}" for index in range(signal_count)]
+    rows = [
+        {column: float(row_index + column_index) for column_index, column in enumerate(numeric_columns)}
+        for row_index in range(12)
+    ]
+
+    plan = _relationship_learning_plan(rows, numeric_columns, [], {})
+
+    assert plan["candidate_pair_count"] == expected_pairs
+    assert plan["eligible_unique_pair_count"] == expected_pairs
+    assert plan["repeated_context_evaluation_count"] == expected_pairs
+
+
+def test_baseline_relationship_progress_does_not_count_operating_contexts_as_pairs() -> None:
+    numeric_columns = [f"signal_{index:02d}" for index in range(26)]
+    rows = [
+        {column: float(row_index + column_index) for column_index, column in enumerate(numeric_columns)}
+        for row_index in range(40)
+    ]
+    modes = [{"mode_id": f"mode_{index}"} for index in range(1, 9)]
+    membership = {
+        mode["mode_id"]: list(range((index - 1) * 5, index * 5))
+        for index, mode in enumerate(modes, start=1)
+    }
+    progress: list[tuple[int, int]] = []
+    counts: dict[str, int] = {}
+
+    plan = _relationship_learning_plan(rows, numeric_columns, modes, membership)
+    graph = _learn_relationship_graph(
+        rows,
+        numeric_columns,
+        modes,
+        membership,
+        progress_callback=lambda completed, total: progress.append((completed, total)),
+        cache=_BaselineComputationCache(rows),
+        performance_counts=counts,
+        work_plan=plan,
+    )
+
+    assert plan["candidate_pair_count"] == 325
+    assert plan["raw_signal_count"] == 26
+    assert plan["raw_numeric_signal_count"] == 26
+    assert plan["relationship_eligible_signal_count"] == 20
+    assert plan["eligible_unique_pair_count"] == 190
+    assert plan["eligible_context_count"] == 9
+    assert plan["repeated_context_evaluation_count"] == 1_710
+    assert graph["relationships_evaluated"] == 190
+    assert progress[-1] == (190, 190)
+    assert [completed for completed, _total in progress] == sorted(completed for completed, _total in progress)
+    assert all(completed <= total == 190 for completed, total in progress)
+    assert counts["relationship_pairs_considered"] == 325
+    assert counts["relationship_pairs_eligible"] == 190
+    assert counts["relationship_pair_context_evaluations"] == 1_710
 
 
 def test_baseline_job_persists_versioned_artifacts_and_stage_report() -> None:
@@ -271,7 +335,15 @@ def test_baseline_artifact_reuse_is_versioned_and_reports_cache_reuse() -> None:
                     "target": "process_signal_01",
                     "correlation": 0.95,
                     "sample_count": 60,
-                }
+                },
+                {
+                    "edge_id": "mode_1:a:b",
+                    "mode_id": "mode_1",
+                    "source": "process_signal_00",
+                    "target": "process_signal_01",
+                    "correlation": 0.95,
+                    "sample_count": 30,
+                },
             ]
         },
     }
@@ -282,6 +354,7 @@ def test_baseline_artifact_reuse_is_versioned_and_reports_cache_reuse() -> None:
     assert first == second
     assert counts["baseline_artifacts_reused"] == 1
     assert counts["relationship_pairs_considered"] == 1
+    assert counts["relationship_pairs_eligible"] == 1
     incompatible = {**model, "artifact_contract_version": "behavioral-baseline-artifacts.v999"}
     with pytest.raises(ValueError, match="incompatible_baseline_artifacts"):
         _comparison_relationship_changes(incompatible, rows)

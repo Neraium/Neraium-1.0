@@ -18,6 +18,8 @@ _MAX_TOTAL_COUNTERS = {
     "relationship_pairs_considered",
     "relationship_pairs_eligible",
     "relationship_pairs_deeply_analyzed",
+    "relationship_pair_context_evaluations",
+    "relationship_pair_window_evaluations",
 }
 
 
@@ -264,6 +266,8 @@ def compact_performance_summary(report: dict[str, Any], *, stage_limit: int = 8)
         ("signals_processed", "Signals"),
         ("relationship_pairs_considered", "Pairs considered"),
         ("relationship_pairs_deeply_analyzed", "Pairs deeply analyzed"),
+        ("relationship_pair_context_evaluations", "Pair/context evaluations"),
+        ("relationship_pair_window_evaluations", "Pair/window evaluations"),
         ("temporal_pairs", "Temporal pairs"),
         ("multiscale_pairs", "Multiscale pairs"),
         ("lags_evaluated", "Lags evaluated"),

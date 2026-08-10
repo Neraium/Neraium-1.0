@@ -41,7 +41,7 @@ test("queued baseline reconciles truthfully after refresh and leaves a recoverab
   });
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.locator(".baseline-processing-panel")).toBeVisible({ timeout: 30000 });
-  await expect(page.locator(".upload-job-status").getByText("Queued · waiting for worker claim")).toBeVisible();
+  await expect(page.locator(".backend-progress").getByText("Queued · waiting for worker claim")).toBeVisible();
   expect(calls.sessions).toBe(1);
   expect(calls.completions).toBe(1);
 
@@ -55,8 +55,9 @@ test("queued baseline reconciles truthfully after refresh and leaves a recoverab
 
   await expect(page.locator(".baseline-processing-panel")).toBeVisible();
   await expect(page.locator(".baseline-processing-panel__dataset").getByText("production-baseline.csv", { exact: true })).toBeVisible();
-  await expect(page.locator(".upload-job-status").getByText("Queued · waiting for worker claim")).toBeVisible();
-  await expect(page.locator(".upload-job-status")).toContainText("Current operation: Baseline construction queued");
+  const restoredProgress = page.locator(".backend-progress");
+  await expect(restoredProgress.getByText("Queued · waiting for worker claim")).toBeVisible();
+  await expect(restoredProgress.getByText("Signal inventory", { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/Analysis active/i)).toHaveCount(0);
   expect(await page.getByTestId("csv-upload-input").evaluate((input) => input.files?.length ?? -1)).toBe(0);
   await expect.poll(() => calls.statusPolls).toBeGreaterThan(pollsBeforeRefresh);
