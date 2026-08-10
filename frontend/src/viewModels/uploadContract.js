@@ -39,7 +39,6 @@ export const UPLOAD_PROCESSING_STATUSES = Object.freeze([
   "cognition_ready",
   "saving_result",
   "saving_results",
-  "navigation_pending",
 ]);
 
 export const UPLOAD_STAGE_LABELS = Object.freeze({

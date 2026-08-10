@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasSupportedSiiClaims, normalizeUploadJob } from "../uploadContract";
+import { hasSupportedSiiClaims, isUploadProcessingStatus, normalizeUploadJob } from "../uploadContract";
 
 describe("upload reliability contract", () => {
   it("preserves cleaning, runtime, evidence, and display reliability fields", () => {
@@ -51,6 +51,10 @@ describe("upload reliability contract", () => {
     expect(job.progress).toBe(37);
     expect(job.contract_progress).toBe(37);
     expect(job.message).toBe("Discovering the row total.");
+  });
+
+  it.each(["complete", "save_complete", "navigation_pending"])("does not treat terminal presentation state %s as active upload processing", (status) => {
+    expect(isUploadProcessingStatus(status)).toBe(false);
   });
 });
 

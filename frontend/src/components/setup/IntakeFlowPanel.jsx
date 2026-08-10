@@ -6,7 +6,7 @@ import {
   uploadErrorPresentation,
 } from "../../viewModels/uploadFlow";
 import { jobStateLabel } from "../../viewModels/uploadJobState";
-import { assessmentBelongsToUploadAttempt } from "../../viewModels/uploadAttempt";
+import { assessmentBelongsToUploadAttempt, uploadAttemptOwnsPayload } from "../../viewModels/uploadAttempt";
 import { Panel } from "../workspacePrimitives";
 import JobProgressPanel from "./JobProgressPanel";
 import "../../styles/operational-workflow.css";
@@ -158,7 +158,8 @@ function uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing }) 
   if (normalized === "completion_error") return "completion_error";
   if (["failed", "error", "validation_error", "cancelled", "timeout"].includes(normalized)) return "failed";
   if (["save_complete", "complete"].includes(normalized)) return "complete";
-  if (["saving_results", "navigation_pending"].includes(normalized)) return "finalizing";
+  if (["resolving_result", "navigation_pending"].includes(normalized)) return "terminal_loading";
+  if (normalized === "saving_results") return "finalizing";
   if (normalized === "uploading") return "uploading";
   if (isUploadProcessing(uploadState)) return "processing";
   if (hasSelectedFiles || normalized === "validated") return "fileSelected";
@@ -813,12 +814,10 @@ export default function IntakeFlowPanel({
     ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`)
     : "No file selected";
   const rawViewState = uploadViewState({ uploadState, hasSelectedFiles, isUploadProcessing });
-  const analysisResult = suppliedAnalysisResult ?? finalAnalysisResult(latestUploadSnapshot, uploadJob);
-  const baselineCompletion = Boolean(baselineResult?.baselineId ?? baselineResult?.candidate_model);
   const candidateIngestionProfile = baselineResult?.ingestion_trust
     ?? uploadJob?.ingestion_trust
-    ?? latestUploadSnapshot?.latest_result?.ingestion_trust
-    ?? latestUploadSnapshot?.current_upload?.result?.ingestion_trust
+    ?? (!activeUploadAttempt ? latestUploadSnapshot?.latest_result?.ingestion_trust : null)
+    ?? (!activeUploadAttempt ? latestUploadSnapshot?.current_upload?.result?.ingestion_trust : null)
     ?? null;
   const completedPresentationBelongsToAttempt = assessmentBelongsToUploadAttempt({
     attempt: activeUploadAttempt,
@@ -827,7 +826,14 @@ export default function IntakeFlowPanel({
     profile: candidateIngestionProfile,
   });
   const attemptScopedUploadJob = activeUploadAttempt && !completedPresentationBelongsToAttempt ? null : uploadJob;
-  const attemptScopedLatestUploadSnapshot = activeUploadAttempt && !completedPresentationBelongsToAttempt ? null : latestUploadSnapshot;
+  const attemptScopedLatestUploadSnapshot = activeUploadAttempt && !uploadAttemptOwnsPayload(activeUploadAttempt, latestUploadSnapshot)
+    ? null
+    : latestUploadSnapshot;
+  const analysisResult = completedPresentationBelongsToAttempt
+    ? suppliedAnalysisResult ?? finalAnalysisResult(attemptScopedLatestUploadSnapshot, attemptScopedUploadJob)
+    : null;
+  const baselineCompletion = completedPresentationBelongsToAttempt
+    && Boolean(baselineResult?.baselineId ?? baselineResult?.candidate_model);
   const attemptScopedViewState = activeUploadAttempt && rawViewState === "complete" && !completedPresentationBelongsToAttempt
     ? "processing"
     : rawViewState;
@@ -858,6 +864,13 @@ export default function IntakeFlowPanel({
   });
   const submitWorkflow = comparison ? "analyze_new_data" : "create_baseline";
   const title = comparison ? "Import Comparison Dataset" : "Establish Initial Baseline";
+  const presentationTitle = viewState === "complete"
+    ? (comparison ? "Comparison Result" : "Baseline Result")
+    : viewState === "completion_error"
+      ? "Completed Result Recovery"
+      : viewState === "terminal_loading"
+        ? "Completed Result"
+        : title;
   const subtitle = comparison
     ? "Upload verified operating history to evaluate it against Neraium's active learned model. This workflow does not automatically redefine normal."
     : "Upload representative historical operating data so Neraium can learn how the system normally behaves.";
@@ -887,27 +900,29 @@ export default function IntakeFlowPanel({
   }
 
   return (
-    <Panel title={title} className="span-7 upload-ops-panel upload-ops-panel--command">
+    <Panel title={presentationTitle} className="span-7 upload-ops-panel upload-ops-panel--command">
       <form
         className={`intake-flow intake-flow--simple intake-flow--${viewState}${comparison ? " intake-flow--comparison" : ""}`}
         onSubmit={(event) => handleUpload(event, submitWorkflow)}
         aria-busy={showProgress}
       >
-        <p className="intake-flow__subtitle">{subtitle}</p>
+        {!["complete", "completion_error", "terminal_loading"].includes(viewState) ? <p className="intake-flow__subtitle">{subtitle}</p> : null}
         {reconciliationMessage ? <p className="upload-reconciliation-message" role="status">{reconciliationMessage}</p> : null}
-        <input
-          data-testid="csv-upload-input"
-          ref={uploadInputRef}
-          accept=".csv,text/csv"
-          id="csv-upload"
-          type="file"
-          multiple
-          className="intake-flow__input"
-          style={hiddenFileInputStyle}
-          aria-label="Choose historical operating dataset CSV files"
-          tabIndex={-1}
-          onChange={handleFileSelection}
-        />
+        {!["complete", "completion_error", "terminal_loading"].includes(viewState) ? (
+          <input
+            data-testid="csv-upload-input"
+            ref={uploadInputRef}
+            accept=".csv,text/csv"
+            id="csv-upload"
+            type="file"
+            multiple
+            className="intake-flow__input"
+            style={hiddenFileInputStyle}
+            aria-label="Choose historical operating dataset CSV files"
+            tabIndex={-1}
+            onChange={handleFileSelection}
+          />
+        ) : null}
 
         {!comparison && ["noFile", "fileSelected"].includes(viewState) ? <BaselineWorkflow /> : null}
 
@@ -986,6 +1001,13 @@ export default function IntakeFlowPanel({
           />
         ) : null}
 
+        {viewState === "terminal_loading" ? (
+          <section className="baseline-detail-route" role="status" aria-live="polite" aria-busy="true">
+            <h3>Preparing completed results</h3>
+            <p>The analysis is complete. Loading the canonical saved result…</p>
+          </section>
+        ) : null}
+
         {viewState === "complete" ? (
           <>
             {ingestionProfile && ingestionDatasetId ? (
@@ -1008,7 +1030,7 @@ export default function IntakeFlowPanel({
               onViewResults={onViewResults}
               onResetWorkspace={onResetWorkspace}
               onReturnToPortfolio={onReturnToPortfolio ?? onResetWorkspace}
-              latestUploadSnapshot={latestUploadSnapshot}
+              latestUploadSnapshot={attemptScopedLatestUploadSnapshot}
               uploadJob={uploadJob}
               uploadState={uploadState}
               uploadTransfer={uploadTransfer}

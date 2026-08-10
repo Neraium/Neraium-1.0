@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DataConnectionsWorkspace, { formatAnalysisUpdateTime, frontendPollingTiming, queuedWorkerMessage, resolveOpenBaselineIdentity } from "./DataConnectionsWorkspace";
 import IntakeFlowPanel, { baselineCompletionSummary, failedImportStageRows, resolveBaselineProcessingStage } from "./setup/IntakeFlowPanel";
@@ -75,6 +75,23 @@ function learnedBaseline(overrides = {}) {
     },
     baseline_suitability: { decision: "suitable", score: 91, eligible_for_activation: true },
     activation: { state: "awaiting_approval" },
+    ...overrides,
+  };
+}
+
+function completedAnalysis(jobId, filename, overrides = {}) {
+  return {
+    job_id: jobId,
+    dataset_id: `${jobId}-dataset`,
+    workflow: "analyze_new_data",
+    filename,
+    status: "COMPLETE",
+    processing_state: "complete",
+    analysis_result: {
+      systems: [{ id: `${jobId}-system`, name: "Current chilled water system" }],
+      insights: [{ id: `${jobId}-insight`, summary: `${filename} completed insight` }],
+    },
+    data_quality: { readiness: "ready", analysis_gate_state: "READY" },
     ...overrides,
   };
 }
@@ -1014,6 +1031,249 @@ describe("upload and polling behavior", () => {
     expect(onUploadComplete).not.toHaveBeenCalled();
   });
 
+  it("crosses PROCESSING to canonical baseline completion without leaking intake, progress, or a previous result", async () => {
+    const previousBaseline = namedBaseline({
+      id: "previous-baseline",
+      jobId: "previous-job",
+      filename: "previous-session.csv",
+    });
+    const currentBaseline = namedBaseline({
+      id: "current-baseline",
+      jobId: "atomic-job",
+      filename: "current-session.csv",
+    });
+    let resolveStatus;
+    let resolveResult;
+    const statusResponse = new Promise((resolve) => { resolveStatus = resolve; });
+    const resultResponse = new Promise((resolve) => { resolveResult = resolve; });
+    uploadTelemetryFileWithProgress.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: {
+        job_id: "atomic-job",
+        dataset_id: "atomic-job-dataset",
+        workflow: "create_baseline",
+        status: "PROCESSING",
+        processing_state: "baseline_relationship_learning",
+        status_url: "/api/data/upload-status/atomic-job",
+      },
+    });
+    const apiFetch = vi.fn((path) => {
+      if (String(path).includes("/upload-status/atomic-job")) return statusResponse;
+      if (String(path).includes("/baselines/jobs/atomic-job")) return resultResponse;
+      return Promise.resolve(jsonResponse({}));
+    });
+
+    const { container } = renderWorkspace({
+      apiFetch,
+      latestUploadResult: previousBaseline,
+      latestUploadSnapshot: {
+        job_id: "previous-job",
+        status: "COMPLETE",
+        latest_result: previousBaseline,
+      },
+    });
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("current-session.csv")] } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByLabelText(/Initial baseline processing/i)).toBeTruthy();
+    expect(screen.getByText("current-session.csv")).toBeTruthy();
+
+    await act(async () => {
+      resolveStatus(jsonResponse({
+        job_id: "atomic-job",
+        dataset_id: "atomic-job-dataset",
+        workflow: "create_baseline",
+        job_state: "completed",
+        status: "COMPLETED",
+        processing_state: "complete",
+        result_available: true,
+        baseline_result_available: true,
+        baseline_result_url: "/api/data/baselines/jobs/atomic-job",
+      }));
+    });
+
+    expect(await screen.findByTestId("completed-result-transition")).toBeTruthy();
+    expect(container.querySelector(".baseline-processing-panel")).toBeNull();
+    expect(container.querySelector(".upload-analysis-card")).toBeNull();
+    expect(container.querySelector('[role="progressbar"]')).toBeNull();
+    expect(screen.queryByTestId("csv-upload-input")).toBeNull();
+    expect(screen.queryByText("current-session.csv")).toBeNull();
+    expect(screen.queryByText("previous-session.csv")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Baseline Established" })).toBeNull();
+
+    await act(async () => {
+      resolveResult(jsonResponse(currentBaseline));
+    });
+
+    expect(await screen.findByRole("heading", { name: "Baseline Established" })).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "Baseline Established" })).toHaveLength(1);
+    expect(container.querySelectorAll(".baseline-success")).toHaveLength(1);
+    expect(container.querySelector(".baseline-processing-panel")).toBeNull();
+    expect(container.querySelector(".upload-analysis-card")).toBeNull();
+    expect(screen.queryByTestId("csv-upload-input")).toBeNull();
+    expect(screen.getByText("current-session.csv")).toBeTruthy();
+    expect(screen.queryByText("previous-session.csv")).toBeNull();
+    expect(window.localStorage.getItem("neraium.upload_job.remembered.v2:engineer-1:anonymous")).toBeNull();
+  });
+
+  it("navigates a completed analysis once and keeps a neutral terminal view during the handoff", async () => {
+    const previousResult = completedAnalysis("previous-analysis", "previous-analysis.csv");
+    const currentResult = completedAnalysis("current-analysis", "current-analysis.csv");
+    let resolveStatus;
+    let resolveNavigation;
+    const statusResponse = new Promise((resolve) => { resolveStatus = resolve; });
+    const navigationResponse = new Promise((resolve) => { resolveNavigation = resolve; });
+    uploadTelemetryFileWithProgress.mockResolvedValue({
+      ok: true,
+      status: 202,
+      payload: {
+        job_id: "current-analysis",
+        dataset_id: "current-analysis-dataset",
+        workflow: "analyze_new_data",
+        status: "PROCESSING",
+        processing_state: "structural_scoring",
+        status_url: "/api/data/upload-status/current-analysis",
+      },
+    });
+    const apiFetch = vi.fn((path) => String(path).includes("/upload-status/current-analysis")
+      ? statusResponse
+      : Promise.resolve(jsonResponse({})));
+    const onUploadComplete = vi.fn(() => navigationResponse);
+    const { container } = renderWorkspace({
+      apiFetch,
+      onUploadComplete,
+      comparisonMode: true,
+      activeBaselineIdentity: { baselineId: "active-baseline", portfolioId: "default", systemId: "default" },
+      latestUploadResult: previousResult,
+      latestUploadSnapshot: {
+        job_id: "previous-analysis",
+        status: "COMPLETE",
+        current_upload: { job_id: "previous-analysis", result: previousResult },
+        latest_result: previousResult,
+      },
+    });
+    fireEvent.change(screen.getByTestId("csv-upload-input"), { target: { files: [selectedCsv("current-analysis.csv")] } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate Against Baseline" }));
+    expect(await screen.findByLabelText(/Comparison dataset processing/i)).toBeTruthy();
+
+    await act(async () => {
+      resolveStatus(jsonResponse({
+        job_id: "current-analysis",
+        dataset_id: "current-analysis-dataset",
+        workflow: "analyze_new_data",
+        job_state: "completed",
+        status: "COMPLETED",
+        processing_state: "complete",
+        result_available: true,
+      }));
+    });
+
+    expect(await screen.findByRole("heading", { name: "Opening completed results" })).toBeTruthy();
+    expect(onUploadComplete).toHaveBeenCalledTimes(1);
+    expect(onUploadComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ job_id: "current-analysis" }),
+      expect.objectContaining({ navigateToGate: true }),
+    );
+    expect(container.querySelector(".baseline-processing-panel")).toBeNull();
+    expect(container.querySelector(".upload-analysis-card")).toBeNull();
+    expect(screen.queryByText("previous-analysis.csv")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Comparison Dataset Ready" })).toBeNull();
+
+    await act(async () => {
+      resolveNavigation({
+        latestResult: currentResult,
+        latestSnapshot: {
+          job_id: "current-analysis",
+          status: "COMPLETE",
+          current_upload: { job_id: "current-analysis", result: currentResult },
+          latest_result: currentResult,
+        },
+      });
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+    expect(onUploadComplete).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("completed-result-transition")).toBeTruthy();
+    expect(container.querySelector(".baseline-processing-panel")).toBeNull();
+    expect(container.querySelector(".upload-analysis-card")).toBeNull();
+    expect(screen.queryByText("previous-analysis.csv")).toBeNull();
+  });
+
+  it("hydrates a completed session on its first render and ignores a stale processing regression", async () => {
+    const resumedBaseline = namedBaseline({
+      id: "resumed-baseline",
+      jobId: "resumed-job",
+      filename: "resumed-current.csv",
+    });
+    const completedProps = {
+      hasActiveSession: true,
+      hasResumedSession: true,
+      latestUploadResult: resumedBaseline,
+      latestUploadSnapshot: {
+        job_id: "resumed-job",
+        status: "COMPLETE",
+        processing_state: "complete",
+        job_state: "completed",
+        workflow: "create_baseline",
+        current_upload: { job_id: "resumed-job", result: resumedBaseline },
+        latest_result: resumedBaseline,
+      },
+      sessionStore: {
+        jobId: "resumed-job",
+        workflow: "create_baseline",
+        uiState: "verified",
+        latestUploadSnapshot: {
+          job_id: "resumed-job",
+          status: "COMPLETE",
+          processing_state: "complete",
+          job_state: "completed",
+          workflow: "create_baseline",
+          current_upload: { job_id: "resumed-job", result: resumedBaseline },
+          latest_result: resumedBaseline,
+        },
+        latestUploadResult: resumedBaseline,
+      },
+    };
+    window.localStorage.setItem("neraium.upload_job.remembered.v2:engineer-1:anonymous", "resumed-job");
+    const view = renderWorkspace(completedProps);
+
+    expect(screen.getAllByRole("heading", { name: "Baseline Established" })).toHaveLength(1);
+    expect(view.container.querySelector(".upload-analysis-card")).toBeNull();
+    expect(view.container.querySelector(".baseline-processing-panel")).toBeNull();
+    expect(view.container.querySelector('[role="progressbar"]')).toBeNull();
+    expect(screen.queryByTestId("csv-upload-input")).toBeNull();
+
+    view.rerender(workspaceElement({
+      ...completedProps,
+      latestUploadResult: null,
+      latestUploadSnapshot: {
+        job_id: "resumed-job",
+        status: "PROCESSING",
+        processing_state: "baseline_relationship_learning",
+        workflow: "create_baseline",
+      },
+      sessionStore: {
+        jobId: "resumed-job",
+        workflow: "create_baseline",
+        uiState: "processing",
+        latestUploadSnapshot: {
+          job_id: "resumed-job",
+          status: "PROCESSING",
+          processing_state: "baseline_relationship_learning",
+          workflow: "create_baseline",
+        },
+        latestUploadResult: null,
+      },
+    }));
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+    expect(screen.getAllByRole("heading", { name: "Baseline Established" })).toHaveLength(1);
+    expect(view.container.querySelector(".upload-analysis-card")).toBeNull();
+    expect(view.container.querySelector(".baseline-processing-panel")).toBeNull();
+    expect(screen.getByText("resumed-current.csv")).toBeTruthy();
+  });
+
   it("cleans up an outstanding polling delay when the workspace unmounts", async () => {
     uploadTelemetryFileWithProgress.mockResolvedValue({
       ok: true,
@@ -1542,6 +1802,7 @@ describe("upload and polling behavior", () => {
 
   it("restores a completed baseline from the canonical terminal snapshot after refresh", async () => {
     const onOpenBaseline = vi.fn(() => true);
+    const result = namedBaseline({ id: "refresh-baseline", jobId: "refresh-job", filename: "refresh.csv" });
     const snapshot = {
       status: "COMPLETE",
       processing_state: "complete",
@@ -1556,7 +1817,18 @@ describe("upload and polling behavior", () => {
       createdAt: "2026-07-30T00:00:00Z",
       filename: "refresh.csv",
     };
+    const apiFetch = vi.fn(async (path) => {
+      if (String(path).includes("/upload-status/refresh-job")) return jsonResponse({
+        ...snapshot,
+        result_available: true,
+        baseline_result_available: true,
+        baseline_result_url: "/api/data/baselines/jobs/refresh-job",
+      });
+      if (String(path).includes("/baselines/jobs/refresh-job")) return jsonResponse(result);
+      return jsonResponse({});
+    });
     renderWorkspace({
+      apiFetch,
       onOpenBaseline,
       autoOpenBaselineReady: true,
       hasActiveSession: false,
@@ -1570,6 +1842,8 @@ describe("upload and polling behavior", () => {
       },
     });
 
+    expect(screen.getByTestId("completed-result-transition")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Baseline Established" })).toBeNull();
     await waitFor(() => expect(onOpenBaseline).toHaveBeenCalledWith(
       expect.objectContaining({ baselineId: "refresh-baseline" }),
       { replace: true },
