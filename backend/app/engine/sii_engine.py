@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from typing import Any
 
 from app.engine.analysis import assess_persistence
@@ -28,9 +29,11 @@ from app.engine.sii import (
     limited_phase4,
 )
 from app.engine.sii_inputs import build_data_conditions, normalize_rows, numeric_columns
+from app.engine.sii.common import NumericRowCache
 from app.engine.temporal_math import TemporalMathConfig, evaluate_temporal_math
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.operating_modes import apply_operating_mode_context, assess_operating_modes
+from app.services.performance_instrumentation import PerformanceTracker
 from app.services.relationship_baselines import build_relationship_baseline
 from app.services.sensor_health import (
     apply_sensor_health_context,
@@ -68,6 +71,7 @@ def evaluate_sii(
 
     started = time.perf_counter()
     cfg = dict(config) if isinstance(config, dict) else {}
+    performance_caches_enabled = not bool(cfg.get("disable_performance_caches"))
     column_names = [str(column) for column in columns]
     profile_list = [dict(item) for item in numeric_profiles if isinstance(item, dict)]
     dict_rows, matrix_rows = normalize_rows(column_names, rows)
@@ -75,6 +79,15 @@ def evaluate_sii(
         columns=column_names,
         numeric_profiles=profile_list,
         configured_columns=cfg.get("numeric_columns"),
+    )
+    seed_stages = cfg.get("performance_seed_stages")
+    profiler = PerformanceTracker(
+        rows=len(dict_rows),
+        signals=len(numeric_columns_used),
+        seed_stages=seed_stages if isinstance(seed_stages, list) else None,
+        seed_peak_memory_bytes=cfg.get("performance_seed_peak_memory_bytes"),
+        seed_wall_seconds=float(cfg.get("performance_seed_wall_seconds") or 0.0),
+        seed_cpu_seconds=float(cfg.get("performance_seed_cpu_seconds") or 0.0),
     )
     attempted: list[str] = []
     completed: list[str] = []
@@ -125,6 +138,7 @@ def evaluate_sii(
         verb: str = "Processed",
     ):
         def report(completed_units: int, total_units: int) -> None:
+            profiler.progress(completed_units, total_units, unit_type)
             measurable_total = total_units if total_units > 0 else None
             measurable_completed = completed_units if measurable_total is not None else None
             message = (
@@ -158,6 +172,11 @@ def evaluate_sii(
             failures.append(failure)
             module_statuses[module]["reason"] = failure["reason"]
 
+    profiler.start_stage(
+        "prepare_inputs",
+        rows_processed=len(dict_rows),
+        signals_processed=len(numeric_columns_used),
+    )
     notify("prepare_inputs", 0.02)
 
     try:
@@ -175,6 +194,7 @@ def evaluate_sii(
         catalog = telemetry_signal_catalog or {}
         record("telemetry_catalog", "failed", f"{type(exc).__name__}: {exc}")
 
+    profiler.start_stage("signal_drift", rows_processed=len(matrix_rows), signals_processed=len(numeric_columns_used))
     notify("signal_drift", 0.10)
     try:
         attempted.append("signal_drift")
@@ -201,9 +221,11 @@ def evaluate_sii(
             f"{type(exc).__name__}: {exc}",
         )
 
+    profiler.start_stage("relationship_analysis", rows_processed=len(dict_rows), signals_processed=len(numeric_columns_used))
     notify("relationship_analysis", 0.22, message="Identifying eligible relationship pairs.")
     try:
         attempted.append("relationship_analysis")
+        relationship_performance: dict[str, int] = {}
         relationship_model = build_relationship_baseline(
             dict_rows,
             numeric_columns_used,
@@ -216,8 +238,10 @@ def evaluate_sii(
                 item_label="relationship pairs",
                 verb="Evaluated",
             ),
+            performance_counts=relationship_performance,
         )
         relationship_status = "complete"
+        profiler.update(**relationship_performance)
         if len(dict_rows) < 12 or int(relationship_model.get("relationship_columns_analyzed") or 0) < 2:
             relationship_status = "limited"
         record(
@@ -231,6 +255,7 @@ def evaluate_sii(
         relationship_model = failed_result(exc)
         record("relationship_analysis", "failed", relationship_model["reason"])
 
+    profiler.start_stage("operating_mode_analysis", rows_processed=len(dict_rows), signals_processed=len(numeric_columns_used))
     notify("operating_modes", 0.30, message="Preparing baseline and recent operating-context windows.")
     try:
         attempted.append("operating_modes")
@@ -256,6 +281,7 @@ def evaluate_sii(
         operating_mode_result = failed_result(exc)
         record("operating_modes", "failed", operating_mode_result["reason"])
 
+    profiler.start_stage("data_condition_checks", rows_processed=len(matrix_rows), signals_processed=len(numeric_columns_used))
     notify("data_conditions", 0.38, message="Preparing timestamp and data-quality checks.")
     try:
         attempted.append("data_conditions")
@@ -285,6 +311,7 @@ def evaluate_sii(
         timestamp_profile = cfg.get("timestamp_profile") if isinstance(cfg.get("timestamp_profile"), dict) else {}
         record("data_conditions", "failed", data_quality_result["warnings"][0])
 
+    profiler.start_stage("sensor_health", rows_processed=len(dict_rows), signals_processed=len(numeric_columns_used))
     notify("sensor_health", 0.46, message="Identifying signal-health checks.")
     try:
         attempted.append("sensor_health")
@@ -311,6 +338,7 @@ def evaluate_sii(
                     item_label="signal-health checks",
                     verb="Completed",
                 ),
+                use_numeric_cache=performance_caches_enabled,
             )
         )
         data_quality_result["sensor_health"] = list(sensor_health_result.get("signals") or [])
@@ -325,11 +353,15 @@ def evaluate_sii(
             )
         }
         data_quality_result["data_confidence"] = build_data_confidence(data_quality_result, sensor_health_result)
+        sensor_health_performance: dict[str, int] = {}
         relationship_model = apply_sensor_health_context(
             relationship_model,
             sensor_health=sensor_health_result,
             data_quality=data_quality_result,
+            performance_counts=sensor_health_performance,
+            use_cache=performance_caches_enabled,
         )
+        profiler.update(**sensor_health_performance)
         record("sensor_health", "complete")
     except Exception as exc:
         sensor_health_result = failed_result(exc)
@@ -341,9 +373,11 @@ def evaluate_sii(
         }
         record("sensor_health", "failed", sensor_health_result["reason"])
 
+    profiler.start_stage("empirical_thresholds", rows_processed=len(dict_rows), signals_processed=len(numeric_columns_used))
     notify("empirical_thresholds", 0.50, message="Identifying threshold candidates.")
     try:
         attempted.append("empirical_thresholds")
+        empirical_numeric_cache = NumericRowCache() if performance_caches_enabled else None
         relationship_source_graph = relationship_model.get("relationship_graph") if isinstance(relationship_model, dict) else None
         relationship_fit_columns = [
             str(node.get("source_column"))
@@ -361,7 +395,9 @@ def evaluate_sii(
                 item_label="threshold candidates",
                 verb="Evaluated",
             ),
+            numeric_cache=empirical_numeric_cache,
         )
+        profiler.update(cache_hits=empirical_numeric_cache.hits if empirical_numeric_cache else 0)
         record(
             "empirical_thresholds",
             str(empirical_thresholds.get("status") or "limited"),
@@ -371,6 +407,7 @@ def evaluate_sii(
         empirical_thresholds = failed_result(exc)
         record("empirical_thresholds", "failed", empirical_thresholds["reason"])
 
+    profiler.start_stage("mode_conditioned_baseline_comparison", rows_processed=len(dict_rows), signals_processed=len(numeric_columns_used))
     notify("mode_conditioned_baseline", 0.54, message="Selecting like-mode historical rows.")
     try:
         attempted.append("mode_conditioned_baseline")
@@ -400,6 +437,7 @@ def evaluate_sii(
         mode_conditioned["fallback_reason"] = mode_conditioned["reason"]
         record("mode_conditioned_baseline", "failed", mode_conditioned["reason"])
 
+    profiler.start_stage("relationship_graph_analysis")
     notify("relationship_graph_analysis", 0.58, message="Identifying relationship edges for graph analysis.")
     try:
         attempted.append("relationship_graph_analysis")
@@ -436,6 +474,7 @@ def evaluate_sii(
         dynamic_relationship_graph = failed_result(exc)
         record("relationship_graph_analysis", "failed", dynamic_relationship_graph["reason"])
 
+    profiler.start_stage("fixed_persistence", rows_processed=len(matrix_rows))
     notify("fixed_persistence", 0.62, message="Identifying drifted signals for persistence checks.")
     try:
         attempted.append("fixed_persistence")
@@ -456,6 +495,7 @@ def evaluate_sii(
         fixed_persistence = failed_result(exc)
         record("fixed_persistence", "failed", fixed_persistence["reason"])
 
+    profiler.start_stage("adaptive_persistence", rows_processed=len(dict_rows))
     notify("adaptive_persistence", 0.66, message="Identifying signals for elapsed-time persistence checks.")
     try:
         attempted.append("adaptive_persistence")
@@ -491,6 +531,7 @@ def evaluate_sii(
         adaptive_persistence = failed_result(exc)
         record("adaptive_persistence", "failed", adaptive_persistence["reason"])
 
+    profiler.start_stage("temporal_lag_analysis", rows_processed=len(matrix_rows), signals_processed=len(numeric_columns_used))
     notify("temporal_analysis", 0.70, message="Preparing deterministic temporal calculations.")
     try:
         attempted.append("temporal_analysis")
@@ -499,6 +540,12 @@ def evaluate_sii(
             temporal_config = TemporalMathConfig(**temporal_config)
         if not isinstance(temporal_config, TemporalMathConfig):
             temporal_config = None
+        if not performance_caches_enabled:
+            temporal_config = replace(
+                temporal_config or TemporalMathConfig(),
+                use_specialized_histogram=False,
+            )
+        effective_temporal_config = temporal_config or TemporalMathConfig()
         temporal_analysis = evaluate_temporal_math(
             columns=column_names,
             rows=matrix_rows,
@@ -519,15 +566,32 @@ def evaluate_sii(
                 )
             ),
         )
+        temporal_counts = temporal_analysis.get("performance_counts") if isinstance(temporal_analysis, dict) else {}
+        if isinstance(temporal_counts, dict):
+            profiler.update(**temporal_counts)
+        temporal_feature_count = len(temporal_analysis.get("columns_used") or [])
+        temporal_active_rows = int(temporal_analysis.get("active_rows") or 0)
+        profiler.update(
+            relationship_pairs_deeply_analyzed=1 if temporal_feature_count >= 2 else 0,
+            temporal_pairs=1 if temporal_feature_count >= 2 else 0,
+            lags_evaluated=(
+                2 * ((2 * effective_temporal_config.max_lag) + 1)
+                if temporal_feature_count >= 2
+                else 0
+            ),
+            windows_evaluated=temporal_active_rows * (3 if temporal_feature_count >= 2 else 2),
+        )
         temporal_status = str(temporal_analysis.get("status") or "complete")
         record("temporal_analysis", temporal_status, temporal_analysis.get("reason"))
     except Exception as exc:
         temporal_analysis = failed_result(exc)
         record("temporal_analysis", "failed", temporal_analysis["reason"])
 
+    profiler.start_stage("multiscale_analysis", rows_processed=len(dict_rows), signals_processed=len(numeric_columns_used))
     notify("multiscale_analysis", 0.76, message="Identifying safe elapsed-time or row-count scales.")
     try:
         attempted.append("multiscale_analysis")
+        multiscale_numeric_cache = NumericRowCache() if performance_caches_enabled else None
         multiscale_config = dict(cfg.get("multiscale_config") or {}) if isinstance(cfg.get("multiscale_config"), dict) else {}
         multiscale_analysis = analyze_multiscale(
             rows=dict_rows,
@@ -541,6 +605,16 @@ def evaluate_sii(
                 item_label="analysis scales",
                 verb="Evaluated",
             ),
+            numeric_cache=multiscale_numeric_cache,
+        )
+        profiler.update(
+            scales_evaluated=len(multiscale_analysis.get("scales_used") or []),
+            multiscale_pairs=sum(
+                len(item.get("relationship_metrics") or [])
+                for item in multiscale_analysis.get("scales") or []
+                if isinstance(item, dict)
+            ),
+            cache_hits=multiscale_numeric_cache.hits if multiscale_numeric_cache else 0,
         )
         record(
             "multiscale_analysis",
@@ -552,6 +626,7 @@ def evaluate_sii(
         multiscale_analysis["scales_used"] = []
         record("multiscale_analysis", "failed", multiscale_analysis["reason"])
 
+    profiler.start_stage("compatibility_context")
     compatibility_payload = {
         "engine_result": cfg.get("engine_result") if isinstance(cfg.get("engine_result"), dict) else {},
         "driver_attribution": cfg.get("driver_attribution") if isinstance(cfg.get("driver_attribution"), dict) else {},
@@ -620,6 +695,7 @@ def evaluate_sii(
                 f"{type(exc).__name__}: {exc}",
             )
 
+    profiler.start_stage("covariance_analysis", rows_processed=len(matrix_rows), signals_processed=len(numeric_columns_used))
     notify("covariance_analysis", 0.84, message="Preparing complete sensor vectors for covariance analysis.")
     try:
         attempted.append("covariance_analysis")
@@ -743,6 +819,7 @@ def evaluate_sii(
         "uncertainty": phase_2_uncertainty,
     }
 
+    profiler.start_stage("physics_reasoning")
     notify("physics_reasoning", 0.90, message="Identifying configured engineering priors.")
     try:
         attempted.append("physics_reasoning")
@@ -795,6 +872,7 @@ def evaluate_sii(
         }
         record("physics_reasoning", "failed", physics_reasoning["reason"])
 
+    profiler.start_stage("behavioral_modeling", rows_processed=len(dict_rows), signals_processed=len(numeric_columns_used))
     notify("behavioral_model", 0.94, message="Preparing behavioral-model components.")
     try:
         attempted.append("phase_4")
@@ -913,6 +991,7 @@ def evaluate_sii(
         "scales_used": list(multiscale_analysis.get("scales_used") or []) if isinstance(multiscale_analysis, dict) else [],
     }
 
+    profiler.start_stage("evidence_fusion")
     notify("evidence_fusion", 0.98, message="Identifying evidence candidates for deterministic organization.")
     try:
         attempted.append("evidence_fusion")
@@ -951,6 +1030,7 @@ def evaluate_sii(
         }
         record("evidence_fusion", "failed", evidence_fusion["reason"])
 
+    profiler.start_stage("finalization")
     uncertainty = uncertainty_section(
         data_quality=data_quality_result,
         sensor_health=sensor_health_result,
@@ -1005,6 +1085,11 @@ def evaluate_sii(
     runner_trace = runner_result.get("processing_trace") if isinstance(runner_result, dict) else None
     if isinstance(runner_trace, dict):
         processing_trace = {**runner_trace, **processing_trace}
+
+    processing_trace["performance"] = profiler.report(
+        rows_processed=rows_received,
+        signals_processed=len(numeric_columns_used),
+    )
 
     notify("complete", 1.0)
     result = {

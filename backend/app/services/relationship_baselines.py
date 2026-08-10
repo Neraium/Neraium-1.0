@@ -428,6 +428,7 @@ def build_relationship_baseline(
     baseline_analysis: dict[str, Any] | None = None,
     telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
     progress_callback: Any | None = None,
+    performance_counts: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     signal_catalog = telemetry_catalog_by_column(telemetry_signal_catalog)
     cumulative_counters = detect_cumulative_counters_from_rows(rows, numeric_columns)
@@ -467,7 +468,16 @@ def build_relationship_baseline(
         relationship_numeric_columns,
         max_relationship_columns=max_relationship_columns,
     )
+    candidate_pairs = len(numeric_columns) * max(0, len(numeric_columns) - 1) // 2
     total_pairs = len(selected_numeric_columns) * max(0, len(selected_numeric_columns) - 1) // 2
+    if performance_counts is not None:
+        performance_counts.update(
+            {
+                "relationship_pairs_considered": candidate_pairs,
+                "relationship_pairs_eligible": total_pairs,
+                "relationship_pairs_deeply_analyzed": 0,
+            }
+        )
     if progress_callback:
         progress_callback(0, total_pairs)
     if len(rows) < 12 or len(selected_numeric_columns) < 2:
@@ -673,6 +683,8 @@ def build_relationship_baseline(
         column_limited=column_limited,
         telemetry_signal_catalog=signal_catalog,
     )
+    if performance_counts is not None:
+        performance_counts["relationship_pairs_deeply_analyzed"] = len(graph_edges)
     return {
         "top_relationship_changes": candidates[:5],
         "baseline_relationships": candidates,

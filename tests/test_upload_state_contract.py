@@ -236,9 +236,22 @@ def test_upload_jobs_write_job_delegates_progress_persistence_to_repository(monk
     calls: list[tuple[str, dict, dict, bool]] = []
     original = upload_jobs.repository_write_upload_status_progress
 
-    def _record(job_id: str, payload: dict, *, latest_summary: dict | None = None, keep_result: bool = False) -> dict:
+    def _record(
+        job_id: str,
+        payload: dict,
+        *,
+        latest_summary: dict | None = None,
+        keep_result: bool = False,
+        existing_status: dict | None | object = None,
+    ) -> dict:
         calls.append((job_id, dict(payload), dict(latest_summary or {}), keep_result))
-        return original(job_id, payload, latest_summary=latest_summary, keep_result=keep_result)
+        return original(
+            job_id,
+            payload,
+            latest_summary=latest_summary,
+            keep_result=keep_result,
+            existing_status=existing_status,
+        )
 
     monkeypatch.setattr(upload_jobs, "repository_write_upload_status_progress", _record)
 

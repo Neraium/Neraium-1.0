@@ -14,6 +14,10 @@ from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE
 from app.services.telemetry_confidence import apply_telemetry_confidence_adjustment
 from app.services.job_progress import ProgressReporter
+from app.services.performance_instrumentation import (
+    compact_performance_summary,
+    ingestion_performance_stages,
+)
 
 
 UPLOAD_TEMPORAL_MAX_ROWS = 2048
@@ -240,6 +244,26 @@ def run_structural_analysis_pipeline(
             "header_present": bool(ingestion_report.get("header_present", True)),
             "ingestion_report": ingestion_report,
             "normalization_report": normalization_report,
+            "performance_seed_stages": ingestion_performance_stages(
+                ingestion_report.get("performance"),
+                rows=row_count_total,
+                signals=len(numeric_columns),
+            ),
+            "performance_seed_peak_memory_bytes": (
+                (ingestion_report.get("performance") or {}).get("peak_process_rss_bytes")
+                if isinstance(ingestion_report.get("performance"), dict)
+                else None
+            ),
+            "performance_seed_wall_seconds": (
+                (ingestion_report.get("performance") or {}).get("total_ingestion_to_readiness_seconds", 0.0)
+                if isinstance(ingestion_report.get("performance"), dict)
+                else 0.0
+            ),
+            "performance_seed_cpu_seconds": (
+                (ingestion_report.get("performance") or {}).get("total_ingestion_cpu_seconds", 0.0)
+                if isinstance(ingestion_report.get("performance"), dict)
+                else 0.0
+            ),
             "temporal_config": {"max_rows": UPLOAD_TEMPORAL_MAX_ROWS},
             "additional_warnings": [
                 *list(ingestion_report.get("warnings") or []),
@@ -371,6 +395,10 @@ def run_structural_analysis_pipeline(
         max(0.0, time.perf_counter() - (processing_started_at or time.perf_counter())),
         6,
     )
+    performance_report = (sii_result.get("processing_trace") or {}).get("performance")
+    if isinstance(performance_report, dict):
+        performance_report["total_wall_seconds"] = processing_time_seconds
+        performance_report["compact_summary"] = compact_performance_summary(performance_report)
     processing_trace = {
         **dict(sii_result.get("processing_trace") or {}),
         "sii_pipeline_ran": True,

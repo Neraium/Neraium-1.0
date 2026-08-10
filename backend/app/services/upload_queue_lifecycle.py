@@ -171,6 +171,39 @@ class UploadQueueLifecycleService:
             dataset_scope = dataset_scope_from_queue_routing(queue_entry)
         except ValueError as exc:
             reason = str(exc) or "upload_queue_routing_invalid"
+            # A legacy queue row may lack routing even though the current
+            # scoped status is still safely readable. Publish that complete
+            # structured failure before the queue mirror becomes terminal.
+            try:
+                current = self.read_job(job_id)
+                if isinstance(current, dict):
+                    safe_message = "This queued upload could not be routed to its workspace. Retry the import."
+                    self.write_job(
+                        {
+                            **current,
+                            **build_upload_error_payload(
+                                "server_unavailable",
+                                message=safe_message,
+                                failed_stage="worker_bootstrap",
+                                retryable=True,
+                                legacy_error_type="upload_queue_routing_failed",
+                                job_id=job_id,
+                                dataset_id=current.get("dataset_id") or job_id,
+                                request_id=current.get("request_id"),
+                                technical_message=f"UploadQueueRoutingError: {reason}",
+                                exception_type="UploadQueueRoutingError",
+                                file_stored=bool(current.get("shared_upload_source_key") or current.get("file_path")),
+                                transfer_succeeded=bool(current.get("shared_upload_source_key") or current.get("file_path")),
+                                retry_url=f"/api/data/upload/{job_id}/retry",
+                            ),
+                            "result_available": False,
+                        }
+                    )
+            except Exception:
+                self.logger.exception(
+                    "upload_queue_routing_status_write_failed job_id=%s",
+                    job_id,
+                )
             mark_queue_job_failed(job_id, reason)
             self.logger.error(
                 "upload_queue_job_routing_failed job_id=%s reason=%s",

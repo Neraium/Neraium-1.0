@@ -22,6 +22,7 @@ CANONICAL_WORKFLOWS = (
 
 BASELINE_RESULT_CONTRACT_VERSION = "baseline-suitability.v1"
 BEHAVIORAL_MODEL_CONTRACT_VERSION = "behavioral-digital-model.v1"
+BASELINE_ARTIFACT_CONTRACT_VERSION = "behavioral-baseline-artifacts.v1"
 
 BASELINE_STATES = (
     "queued",

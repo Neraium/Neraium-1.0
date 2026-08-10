@@ -41,6 +41,32 @@ def test_clear_stale_processing_queue_jobs_marks_processing_as_failed() -> None:
     assert "Retry the analysis" in recovered_job["message"]
 
 
+def test_stale_queue_recovery_preserves_an_already_completed_job() -> None:
+    job_id = "completed-status-stale-queue"
+    write_job(
+        {
+            "job_id": job_id,
+            "dataset_id": job_id,
+            "status": "COMPLETE",
+            "processing_state": "complete",
+            "message": "Analysis ready.",
+        }
+    )
+    with db_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO upload_queue (job_id, status, attempts, last_error, created_at, updated_at, locked_at)
+            VALUES (?, 'processing', 1, NULL, '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00')
+            """,
+            (job_id,),
+        )
+
+    assert clear_stale_processing_queue_jobs() == 1
+    queue_record = read_upload_queue_job(job_id)
+    assert queue_record["status"] == "completed"
+    assert read_job(job_id)["status"] == "COMPLETE"
+
+
 def test_process_next_queued_upload_job_marks_missing_file_failed() -> None:
     with db_connection() as connection:
         connection.execute("DELETE FROM upload_queue")
@@ -100,11 +126,25 @@ class _FakeS3Body:
         return self._payload
 
 
+class _FakeS3PreconditionFailed(Exception):
+    response = {"Error": {"Code": "PreconditionFailed"}}
+
+
 class _FakeS3Client:
     def __init__(self) -> None:
         self.objects: dict[tuple[str, str], bytes] = {}
 
-    def put_object(self, *, Bucket: str, Key: str, Body: bytes, ContentType: str | None = None) -> None:
+    def put_object(
+        self,
+        *,
+        Bucket: str,
+        Key: str,
+        Body: bytes,
+        ContentType: str | None = None,
+        IfNoneMatch: str | None = None,
+    ) -> None:
+        if IfNoneMatch == "*" and (Bucket, Key) in self.objects:
+            raise _FakeS3PreconditionFailed()
         self.objects[(Bucket, Key)] = Body
 
     def upload_fileobj(self, Fileobj, Bucket: str, Key: str, ExtraArgs: dict | None = None) -> None:

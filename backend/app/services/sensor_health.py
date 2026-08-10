@@ -29,6 +29,7 @@ def assess_sensor_health(
     relationship_model: dict[str, Any] | None = None,
     telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
     progress_callback: Any | None = None,
+    use_numeric_cache: bool = True,
 ) -> dict[str, Any]:
     """Extend existing quality evidence into qualitative signal-health conditions."""
 
@@ -49,6 +50,7 @@ def assess_sensor_health(
         if isinstance(item, dict) and item.get("signal_id")
     }
     condition_map: dict[str, list[dict[str, str]]] = {str(column): [] for column in numeric_columns}
+    parsed_columns: dict[str, list[float | None]] | None = {} if use_numeric_cache else None
     total_checks = len(numeric_columns) + 3
     completed_checks = 0
     if progress_callback:
@@ -58,7 +60,7 @@ def assess_sensor_health(
         profile = profile_by_column.get(column, {})
         integrity = integrity_by_signal.get(column, {})
         classification = signal_classification(column, catalog)
-        values = numeric_series(assessment_rows, column)
+        values = numeric_series(assessment_rows, column, parsed_columns=parsed_columns)
         state_signal = bool(classification.get("is_state_signal"))
 
         if profile.get("constant_or_stuck") and not state_signal:
@@ -139,11 +141,21 @@ def assess_sensor_health(
         if progress_callback:
             progress_callback(completed_checks, total_checks)
 
-    add_peer_drift_conditions(assessment_rows, relationship_model or {}, condition_map)
+    add_peer_drift_conditions(
+        assessment_rows,
+        relationship_model or {},
+        condition_map,
+        parsed_columns=parsed_columns,
+    )
     completed_checks += 1
     if progress_callback:
         progress_callback(completed_checks, total_checks)
-    add_timestamp_alignment_conditions(assessment_rows, relationship_model or {}, condition_map)
+    add_timestamp_alignment_conditions(
+        assessment_rows,
+        relationship_model or {},
+        condition_map,
+        parsed_columns=parsed_columns,
+    )
     completed_checks += 1
     if progress_callback:
         progress_callback(completed_checks, total_checks)
@@ -181,11 +193,12 @@ def build_data_confidence(
 ) -> dict[str, Any]:
     """Apply a qualitative certainty ceiling using existing reliability evidence."""
 
+    affected_set = set(affected_signals) if affected_signals else None
     profiles = [
         item
         for item in sensor_health.get("signals", [])
         if isinstance(item, dict)
-        and (not affected_signals or str(item.get("signal")) in set(affected_signals))
+        and (affected_set is None or str(item.get("signal")) in affected_set)
     ]
     source_conditions = [
         item for item in sensor_health.get("source_conditions", []) if isinstance(item, dict)
@@ -252,6 +265,8 @@ def apply_sensor_health_context(
     *,
     sensor_health: dict[str, Any],
     data_quality: dict[str, Any],
+    performance_counts: dict[str, int] | None = None,
+    use_cache: bool = True,
 ) -> dict[str, Any]:
     """Attach relevant health and confidence while preserving relationship math."""
 
@@ -259,19 +274,34 @@ def apply_sensor_health_context(
     model["sensor_health"] = sensor_health
     model["data_confidence"] = build_data_confidence(data_quality, sensor_health)
 
+    enrichment_cache: dict[tuple[str, ...], tuple[list[dict[str, Any]], dict[str, Any]]] = {}
+    cache_hits = 0
+
     def enrich(item: Any) -> Any:
+        nonlocal cache_hits
         if not isinstance(item, dict):
             return item
         columns = relationship_columns(item)
-        relevant = relevant_signal_health(sensor_health, columns)
+        cache_key = tuple(columns)
+        cached = enrichment_cache.get(cache_key) if use_cache else None
+        if cached is None:
+            cached = (
+                relevant_signal_health(sensor_health, columns),
+                build_data_confidence(
+                    data_quality,
+                    sensor_health,
+                    affected_signals=columns,
+                ),
+            )
+            if use_cache:
+                enrichment_cache[cache_key] = cached
+        else:
+            cache_hits += 1
+        relevant, confidence = cached
         return {
             **item,
             "sensor_health": relevant,
-            "data_confidence": build_data_confidence(
-                data_quality,
-                sensor_health,
-                affected_signals=columns,
-            ),
+            "data_confidence": confidence,
         }
 
     for key in ("top_relationship_changes", "baseline_relationships"):
@@ -292,6 +322,8 @@ def apply_sensor_health_context(
             if isinstance(graph.get(key), list):
                 graph[key] = [enrich(item) for item in graph[key]]
         model["relationship_graph"] = graph
+    if performance_counts is not None:
+        performance_counts["cache_hits"] = cache_hits
     return model
 
 
@@ -334,6 +366,8 @@ def add_peer_drift_conditions(
     rows: list[dict[str, Any]],
     relationship_model: dict[str, Any],
     condition_map: dict[str, list[dict[str, str]]],
+    *,
+    parsed_columns: dict[str, list[float | None]] | None = None,
 ) -> None:
     split = max(1, min(len(rows) - 1, int(len(rows) * 0.7))) if len(rows) > 1 else 0
     if split < 6 or len(rows) - split < 6:
@@ -341,8 +375,20 @@ def add_peer_drift_conditions(
     for left, right, baseline_correlation in relationship_pairs(relationship_model):
         if abs(baseline_correlation) < 0.8:
             continue
-        baseline_pairs = paired_values(rows[:split], left, right)
-        recent_pairs = paired_values(rows[split:], left, right)
+        baseline_pairs = paired_values(
+            rows,
+            left,
+            right,
+            parsed_columns=parsed_columns,
+            end=split,
+        )
+        recent_pairs = paired_values(
+            rows,
+            left,
+            right,
+            parsed_columns=parsed_columns,
+            start=split,
+        )
         if len(baseline_pairs) < 6 or len(recent_pairs) < 6:
             continue
         slope, intercept = linear_fit([pair[0] for pair in baseline_pairs], [pair[1] for pair in baseline_pairs])
@@ -369,15 +415,22 @@ def add_timestamp_alignment_conditions(
     rows: list[dict[str, Any]],
     relationship_model: dict[str, Any],
     condition_map: dict[str, list[dict[str, str]]],
+    *,
+    parsed_columns: dict[str, list[float | None]] | None = None,
 ) -> None:
     split = max(1, min(len(rows) - 1, int(len(rows) * 0.7))) if len(rows) > 1 else 0
-    recent = rows[split:]
-    if len(recent) < 10:
+    if len(rows) - split < 10:
         return
     for left, right, baseline_correlation in relationship_pairs(relationship_model):
         if abs(baseline_correlation) < 0.7:
             continue
-        pairs = paired_values(recent, left, right)
+        pairs = paired_values(
+            rows,
+            left,
+            right,
+            parsed_columns=parsed_columns,
+            start=split,
+        )
         if len(pairs) < 10:
             continue
         left_values = [pair[0] for pair in pairs]
@@ -497,17 +550,53 @@ def shared_measurement_family(left: str, right: str) -> bool:
     return any(family in left_text and family in right_text for family in families)
 
 
-def numeric_series(rows: list[dict[str, Any]], column: str) -> list[float]:
-    return [
-        parsed
-        for row in rows
-        if (parsed := number(row.get(column))) is not None
-    ]
+def numeric_series(
+    rows: list[dict[str, Any]],
+    column: str,
+    *,
+    parsed_columns: dict[str, list[float | None]] | None = None,
+) -> list[float]:
+    if parsed_columns is None:
+        return [
+            parsed
+            for row in rows
+            if (parsed := number(row.get(column))) is not None
+        ]
+    values = parsed_columns.get(column)
+    if values is None:
+        values = [number(row.get(column)) for row in rows]
+        parsed_columns[column] = values
+    return [value for value in values if value is not None]
 
 
-def paired_values(rows: list[dict[str, Any]], left: str, right: str) -> list[tuple[float, float]]:
+def paired_values(
+    rows: list[dict[str, Any]],
+    left: str,
+    right: str,
+    *,
+    parsed_columns: dict[str, list[float | None]] | None = None,
+    start: int = 0,
+    end: int | None = None,
+) -> list[tuple[float, float]]:
+    if parsed_columns is not None:
+        left_values = parsed_columns.get(left)
+        if left_values is None:
+            left_values = [number(row.get(left)) for row in rows]
+            parsed_columns[left] = left_values
+        right_values = parsed_columns.get(right)
+        if right_values is None:
+            right_values = [number(row.get(right)) for row in rows]
+            parsed_columns[right] = right_values
+        return [
+            (left_value, right_value)
+            for left_value, right_value in zip(
+                left_values[start:end],
+                right_values[start:end],
+            )
+            if left_value is not None and right_value is not None
+        ]
     pairs = []
-    for row in rows:
+    for row in rows[start:end]:
         left_value = number(row.get(left))
         right_value = number(row.get(right))
         if left_value is not None and right_value is not None:

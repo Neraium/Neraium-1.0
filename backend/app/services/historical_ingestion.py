@@ -1534,6 +1534,7 @@ def build_historical_ingestion(
     progress_callback: Callable[..., Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     started = time.perf_counter()
+    started_cpu = time.process_time()
 
     def report(*, substage: str, status: str = "processing", force: bool = False, **values: Any) -> None:
         if progress_callback is None:
@@ -1583,10 +1584,14 @@ def build_historical_ingestion(
         force=True,
     )
     parsing_started = time.perf_counter()
+    parsing_cpu_started = time.process_time()
+    raw_preservation_cpu_seconds = max(0.0, parsing_cpu_started - started_cpu)
     delimiter, header_present, columns, column_count = _read_delimited_header(source_path)
     parsing_seconds = time.perf_counter() - parsing_started
+    parsing_cpu_seconds = time.process_time() - parsing_cpu_started
 
     schema_started = time.perf_counter()
+    schema_cpu_started = time.process_time()
     sample_rows: list[list[str]] = []
     candidate_rows = 0
     malformed_counts: Counter[str] = Counter()
@@ -1640,6 +1645,7 @@ def build_historical_ingestion(
     }
     identity_index = next((index for index, column in enumerate(columns) if _tokens(column) & IDENTITY_NAME_TOKENS and index != timestamp_index), None)
     schema_seconds = time.perf_counter() - schema_started
+    schema_cpu_seconds = time.process_time() - schema_cpu_started
     report(
         substage="timestamp_detection",
         status="completed",
@@ -1651,6 +1657,7 @@ def build_historical_ingestion(
     )
 
     quality_started = time.perf_counter()
+    quality_cpu_started = time.process_time()
     sample_stride = max(1, math.ceil(candidate_rows / MAX_PROFILE_SAMPLES))
     accumulators = [SignalAccumulator(column, index) for index, column in enumerate(columns) if index not in timestamp_context_indexes]
     accumulator_by_index = {item.source_column_index: item for item in accumulators}
@@ -1767,6 +1774,7 @@ def build_historical_ingestion(
     )
 
     mapping_started = time.perf_counter()
+    mapping_cpu_started = time.process_time()
     signal_profiles: list[dict[str, Any]] = []
     decisions = decisions or {}
     prepared_signals: list[tuple[SignalAccumulator, dict[str, Any], dict[str, Any]]] = []
@@ -1877,6 +1885,8 @@ def build_historical_ingestion(
         force=True,
     )
     mapping_seconds = time.perf_counter() - mapping_started
+    mapping_cpu_seconds = time.process_time() - mapping_cpu_started
+    quality_cpu_seconds = max(0.0, mapping_cpu_started - quality_cpu_started)
 
     duplicate_findings = _duplicate_channels(signal_profiles, accumulators)
     included_columns = [item["source_column"] for item in signal_profiles if item.get("included_for_analysis")]
@@ -1884,6 +1894,7 @@ def build_historical_ingestion(
     timestamp_column = str(selected_timestamp["source_column"]) if selected_timestamp else None
 
     canonical_started = time.perf_counter()
+    canonical_cpu_started = time.process_time()
     source_was_reordered = bool(timestamp_profile.get("out_of_order_count"))
 
     identity_payload = {
@@ -2081,6 +2092,7 @@ def build_historical_ingestion(
         force=True,
     )
     canonical_persistence_started = time.perf_counter()
+    canonical_persistence_cpu_started = time.process_time()
     canonical_sha256 = file_sha256(canonical_path)
     report(
         substage="canonical_dataset_build",
@@ -2098,6 +2110,7 @@ def build_historical_ingestion(
         content_type="application/x-ndjson",
     )
     canonical_persistence_seconds = time.perf_counter() - canonical_persistence_started
+    canonical_persistence_cpu_seconds = time.process_time() - canonical_persistence_cpu_started
     report(
         substage="canonical_dataset_build",
         status="completed",
@@ -2130,6 +2143,7 @@ def build_historical_ingestion(
                 "rule_version": UNIT_VERSION,
             })
     canonical_seconds = time.perf_counter() - canonical_started
+    canonical_cpu_seconds = time.process_time() - canonical_cpu_started
     report(
         substage="configuration_awareness",
         completed_units=0,
@@ -2163,6 +2177,7 @@ def build_historical_ingestion(
     review = _review_summary(timestamp_profile, signal_profiles, duplicate_findings, configuration, history)
     trust_dimensions = _trust_dimensions(timestamp_profile, signal_profiles, configuration, readiness)
     total_seconds = time.perf_counter() - started
+    total_cpu_seconds = time.process_time() - started_cpu
     record = {
         "contract_version": CONTRACT_VERSION,
         "canonical_contract_version": CANONICAL_VERSION,
@@ -2234,6 +2249,15 @@ def build_historical_ingestion(
             "canonical_normalization_seconds": round(canonical_seconds, 6),
             "canonical_persistence_seconds": round(canonical_persistence_seconds, 6),
             "total_ingestion_to_readiness_seconds": round(total_seconds, 6),
+            "validation_cpu_seconds": round(
+                raw_preservation_cpu_seconds + parsing_cpu_seconds + quality_cpu_seconds,
+                6,
+            ),
+            "schema_timestamp_cpu_seconds": round(schema_cpu_seconds, 6),
+            "mapping_cpu_seconds": round(mapping_cpu_seconds, 6),
+            "canonical_cpu_seconds": round(canonical_cpu_seconds, 6),
+            "canonical_persistence_cpu_seconds": round(canonical_persistence_cpu_seconds, 6),
+            "total_ingestion_cpu_seconds": round(total_cpu_seconds, 6),
             "peak_process_rss_bytes": int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) * 1024,
             "profile_sample_limit_per_signal": MAX_PROFILE_SAMPLES,
             "near_duplicate_comparison_limit": MAX_NEAR_DUPLICATE_COMPARISONS,

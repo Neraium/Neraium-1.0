@@ -1178,9 +1178,9 @@ def mark_queue_job_failed(job_id: str, reason: str) -> None:
         )
 
 
-def _publish_interrupted_upload_status(queue_records: list[dict[str, Any]]) -> None:
+def _publish_interrupted_upload_status(queue_records: list[dict[str, Any]]) -> dict[str, str]:
     if not queue_records:
-        return
+        return {}
     # Lazy imports avoid a module cycle: the upload-state repository uses this
     # runtime store for its durable payload backend.
     from app.services.evidence_store import read_evidence_run, upsert_evidence_run
@@ -1193,6 +1193,7 @@ def _publish_interrupted_upload_status(queue_records: list[dict[str, Any]]) -> N
     )
 
     recovered_at = now_iso()
+    terminal_outcomes: dict[str, str] = {}
     for record in queue_records:
         job_id = str(record.get("job_id") or "").strip()
         if not job_id:
@@ -1218,6 +1219,13 @@ def _publish_interrupted_upload_status(queue_records: list[dict[str, Any]]) -> N
             canonical_summary = canonical.get("summary") if isinstance(canonical.get("summary"), dict) else {}
             canonical_job_id = str(canonical.get("job_id") or canonical_summary.get("job_id") or "")
             current = read_upload_status(job_id) or read_upload_job(job_id) or {"job_id": job_id}
+            current_state = str(current.get("processing_state") or current.get("status") or "").strip().lower()
+            if current_state in {"complete", "completed", "completed_compatibility", "success"}:
+                terminal_outcomes[job_id] = "completed"
+                continue
+            if current_state in {"cancelled", "error", "failed", "failure", "timeout", "validation_error"}:
+                terminal_outcomes[job_id] = "failed"
+                continue
             failed = {
                 **current,
                 "job_id": job_id,
@@ -1262,8 +1270,27 @@ def _publish_interrupted_upload_status(queue_records: list[dict[str, Any]]) -> N
                         "propagation_progress": overall_progress,
                     }
                 )
+            published = write_upload_status(job_id, failed)
+            published_state = str(
+                published.get("processing_state")
+                or published.get("status")
+                or ""
+            ).strip().lower()
+            if published_state in {"complete", "completed", "completed_compatibility", "success"}:
+                terminal_outcomes[job_id] = "completed"
+                upsert_upload_job(published)
+                continue
+            if published_state not in {
+                "cancelled",
+                "error",
+                "failed",
+                "failure",
+                "timeout",
+                "validation_error",
+            }:
+                continue
+            failed = published
             upsert_upload_job(failed)
-            write_upload_status(job_id, failed)
 
             evidence = read_evidence_run(job_id)
             if isinstance(evidence, dict) and str(evidence.get("status") or "").lower() not in {"completed", "failed"}:
@@ -1283,6 +1310,8 @@ def _publish_interrupted_upload_status(queue_records: list[dict[str, Any]]) -> N
 
             if job_id == canonical_job_id:
                 persist_latest_upload_state(summary=failed, result=None, keep_result=False)
+            terminal_outcomes[job_id] = "failed"
+    return terminal_outcomes
 
 
 def clear_stale_processing_queue_jobs() -> int:
@@ -1290,20 +1319,26 @@ def clear_stale_processing_queue_jobs() -> int:
     if backend == "s3":
         _ensure_shared_upload_queue_backend()
         processing_jobs = _list_s3_queue_jobs(statuses={"processing"})
+        terminal_outcomes = _publish_interrupted_upload_status(processing_jobs)
         for record in processing_jobs:
+            job_id = str(record.get("job_id") or "")
+            terminal_status = terminal_outcomes.get(job_id)
+            if terminal_status is None:
+                continue
             _write_s3_queue_job(
                 {
                     **record,
-                    "status": "failed",
-                    "last_error": "stale_processing_job_recovered",
+                    "status": terminal_status,
+                    "last_error": (
+                        "stale_processing_job_recovered"
+                        if terminal_status == "failed"
+                        else None
+                    ),
                     "updated_at": now_iso(),
                     "locked_at": None,
                 }
             )
-        stale_job_ids = [str(record.get("job_id") or "") for record in processing_jobs]
-        stale_job_ids = [job_id for job_id in stale_job_ids if job_id]
-        _publish_interrupted_upload_status(processing_jobs)
-        return len(stale_job_ids)
+        return len(terminal_outcomes)
 
     init_runtime_db()
     with db_connection() as connection:
@@ -1311,17 +1346,36 @@ def clear_stale_processing_queue_jobs() -> int:
             "SELECT job_id FROM upload_queue WHERE status = 'processing'"
         ).fetchall()
         stale_job_ids = [row["job_id"] for row in rows]
-        if stale_job_ids:
+    terminal_outcomes = _publish_interrupted_upload_status(
+        [{"job_id": job_id} for job_id in stale_job_ids]
+    )
+    if terminal_outcomes:
+        with db_connection() as connection:
             connection.executemany(
                 """
                 UPDATE upload_queue
                 SET status='failed', last_error=?, updated_at=?, locked_at=NULL
                 WHERE job_id = ?
                 """,
-                [("stale_processing_job_recovered", now_iso(), job_id) for job_id in stale_job_ids],
+                [
+                    ("stale_processing_job_recovered", now_iso(), job_id)
+                    for job_id, status in terminal_outcomes.items()
+                    if status == "failed"
+                ],
             )
-    _publish_interrupted_upload_status([{"job_id": job_id} for job_id in stale_job_ids])
-    return len(stale_job_ids)
+            connection.executemany(
+                """
+                UPDATE upload_queue
+                SET status='completed', last_error=NULL, updated_at=?, locked_at=NULL
+                WHERE job_id = ?
+                """,
+                [
+                    (now_iso(), job_id)
+                    for job_id, status in terminal_outcomes.items()
+                    if status == "completed"
+                ],
+            )
+    return len(terminal_outcomes)
 
 
 def complete_upload_queue_job(job_id: str, status: str, last_error: str | None = None) -> None:

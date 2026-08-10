@@ -32,6 +32,10 @@ class _FakeS3Body:
         return self._payload
 
 
+class _FakeS3PreconditionFailed(Exception):
+    response = {"Error": {"Code": "PreconditionFailed"}}
+
+
 class _FakeS3Client:
     def __init__(self) -> None:
         self.objects: dict[tuple[str, str], bytes] = {}
@@ -43,9 +47,11 @@ class _FakeS3Client:
         Key: str,
         Body: bytes,
         ContentType: str | None = None,
-        **_kwargs,
+        IfNoneMatch: str | None = None,
     ) -> None:
         del ContentType
+        if IfNoneMatch == "*" and (Bucket, Key) in self.objects:
+            raise _FakeS3PreconditionFailed()
         self.objects[(Bucket, Key)] = Body
 
     def get_object(self, *, Bucket: str, Key: str) -> dict[str, _FakeS3Body]:

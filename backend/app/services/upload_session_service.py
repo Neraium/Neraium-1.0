@@ -188,6 +188,8 @@ def _with_worker_visibility(payload: dict[str, Any], job_id: str | None) -> dict
     status_text = str(enriched.get("status") or "").upper()
     processing_state = str(enriched.get("processing_state") or "").lower()
     queue_status = str((queue_entry or {}).get("status") or "").lower() if isinstance(queue_entry, dict) else ""
+    visible_queue_state = queue_status or None
+    terminal_publication_pending = False
     job_state = str(enriched.get("job_state") or "").lower()
     terminal_completed = job_state in {"completed", "completed_compatibility"} or status_text in {"COMPLETE", "COMPLETED", "SUCCESS"}
     terminal_failed = job_state in {"failed", "cancelled"} or status_text in {"FAILED", "FAILURE", "ERROR", "TIMEOUT", "CANCELLED"}
@@ -210,32 +212,14 @@ def _with_worker_visibility(payload: dict[str, Any], job_id: str | None) -> dict
         execution_state = "failed"
         worker_state = "idle"
     elif queue_status == "failed":
-        execution_state = "failed"
+        # Queue state is a dispatch mirror, not the polling authority. A queue
+        # failure can become visible before a separate status-store read has
+        # observed its complete structured failure envelope. Keep the public
+        # lifecycle nonterminal until that envelope is authoritative.
+        terminal_publication_pending = True
+        visible_queue_state = "processing" if processing_state not in {"queued", "pending"} else "pending"
+        execution_state = "processing" if visible_queue_state == "processing" else "queued"
         worker_state = "idle"
-        queue_failure = str((queue_entry or {}).get("last_error") or "").strip()
-        routing_failure = queue_failure.startswith("upload_queue_")
-        failure_message = (
-            "This queued upload could not be routed to its workspace. Retry the import."
-            if routing_failure
-            else "The upload worker stopped before processing could finish. Retry the import."
-        )
-        enriched.update(
-            {
-                "status": "FAILED",
-                "processing_state": "failed",
-                "job_state": "failed",
-                "terminal": True,
-                "session_state": SESSION_STATE_ERROR,
-                "analysis_state": "failed",
-                "result_available": False,
-                "retryable": True,
-                "error_type": "upload_queue_routing_failed" if routing_failure else "upload_worker_failed",
-                "failed_stage": "worker_bootstrap" if routing_failure else "processing",
-                "error": failure_message,
-                "message": failure_message,
-                "progress_label": failure_message,
-            }
-        )
     elif queue_status == "pending":
         execution_state = "queued"
         worker_state = "queued"
@@ -262,7 +246,8 @@ def _with_worker_visibility(payload: dict[str, Any], job_id: str | None) -> dict
         worker_state = "idle"
 
     enriched.update({
-        "queue_state": queue_status or None,
+        "queue_state": visible_queue_state,
+        "terminal_publication_pending": terminal_publication_pending,
         "worker_state": worker_state,
         "worker_claimed": queue_claimed,
         "worker_claimed_at": (queue_entry or {}).get("locked_at") if queue_claimed else None,

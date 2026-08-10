@@ -6,10 +6,12 @@ from statistics import median
 from typing import Any
 
 from app.engine.sii.common import (
+    NumericRowCache,
     clamp,
     finite_number,
     median_absolute_deviation,
     module_envelope,
+    numeric_values,
     parse_timestamps,
     paired_values,
     pearson,
@@ -48,6 +50,7 @@ def analyze_multiscale(
     empirical_thresholds: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
     progress_callback: Any | None = None,
+    numeric_cache: NumericRowCache | None = None,
 ) -> dict[str, Any]:
     """Compare recent elapsed-time horizons with strictly earlier telemetry."""
 
@@ -71,6 +74,7 @@ def analyze_multiscale(
             fallback_reason="timestamp_column_unavailable",
             timestamp_coverage=timestamp_coverage,
             progress_callback=progress_callback,
+            numeric_cache=numeric_cache,
         )
 
     if progress_callback:
@@ -198,11 +202,17 @@ def analyze_multiscale(
             selected_columns,
             learned=learned,
             config=cfg,
+            numeric_cache=numeric_cache,
         )
         for item in signal_metrics:
             if item["active"]:
                 activation[item["column"]][item["direction"]].append(str(spec["name"]))
-        relationship_metrics = _relationship_metrics(baseline_rows, current_rows, relationship_columns)
+        relationship_metrics = _relationship_metrics(
+            baseline_rows,
+            current_rows,
+            relationship_columns,
+            numeric_cache=numeric_cache,
+        )
         scale_score = (
             sum(float(item["score"]) for item in signal_metrics) / len(signal_metrics)
             if signal_metrics
@@ -314,6 +324,7 @@ def _row_fallback(
     fallback_reason: str,
     timestamp_coverage: float,
     progress_callback: Any | None = None,
+    numeric_cache: NumericRowCache | None = None,
 ) -> dict[str, Any]:
     learned = empirical_thresholds.get("signal_thresholds", {}) if isinstance(empirical_thresholds, dict) else {}
     specs = _row_scale_specs(
@@ -345,6 +356,7 @@ def _row_fallback(
             numeric_columns,
             learned=learned,
             config=config,
+            numeric_cache=numeric_cache,
         )
         for item in signal_metrics:
             if item["active"]:
@@ -361,7 +373,12 @@ def _row_fallback(
                 "active_start_index": len(baseline_rows),
                 "active_end_index": len(rows) - 1,
                 "signal_metrics": signal_metrics,
-                "relationship_metrics": _relationship_metrics(baseline_rows, active_rows, relationship_columns),
+                "relationship_metrics": _relationship_metrics(
+                    baseline_rows,
+                    active_rows,
+                    relationship_columns,
+                    numeric_cache=numeric_cache,
+                ),
                 "active_signal_count": sum(item["active"] for item in signal_metrics),
                 "score": round(
                     sum(float(item["score"]) for item in signal_metrics) / len(signal_metrics)
@@ -441,15 +458,12 @@ def _signal_metrics(
     *,
     learned: dict[str, Any],
     config: dict[str, Any],
+    numeric_cache: NumericRowCache | None = None,
 ) -> list[dict[str, Any]]:
     output = []
     for column in columns:
-        baseline_values = [
-            value for row in baseline_rows if (value := finite_number(row.get(column))) is not None
-        ]
-        current_values = [
-            value for row in current_rows if (value := finite_number(row.get(column))) is not None
-        ]
+        baseline_values = numeric_values(baseline_rows, column, cache=numeric_cache)
+        current_values = numeric_values(current_rows, column, cache=numeric_cache)
         if len(baseline_values) < int(config["minimum_baseline_rows"]) or len(current_values) < int(config["minimum_active_rows"]):
             continue
         baseline_center = float(median(baseline_values))
@@ -565,13 +579,17 @@ def _unsupported_row_scale(
 
 
 def _relationship_metrics(
-    baseline_rows: list[dict[str, Any]], current_rows: list[dict[str, Any]], columns: list[str]
+    baseline_rows: list[dict[str, Any]],
+    current_rows: list[dict[str, Any]],
+    columns: list[str],
+    *,
+    numeric_cache: NumericRowCache | None = None,
 ) -> list[dict[str, Any]]:
     output = []
     for index, left in enumerate(columns):
         for right in columns[index + 1 :]:
-            baseline_pairs = paired_values(baseline_rows, left, right)
-            current_pairs = paired_values(current_rows, left, right)
+            baseline_pairs = paired_values(baseline_rows, left, right, cache=numeric_cache)
+            current_pairs = paired_values(current_rows, left, right, cache=numeric_cache)
             baseline = pearson(baseline_pairs)
             current = pearson(current_pairs)
             if baseline is None or current is None:
