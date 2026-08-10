@@ -422,18 +422,23 @@ def _relationship_edge(
     }
 
 
-def _learn_relationship_graph(
+MAX_BASELINE_RELATIONSHIP_SIGNALS = 20
+
+
+def _unique_pair_count(signal_count: int) -> int:
+    count = max(0, int(signal_count))
+    return count * max(0, count - 1) // 2
+
+
+def _relationship_learning_plan(
     rows: list[dict[str, Any]],
     numeric_columns: list[str],
     modes: list[dict[str, Any]],
     membership: dict[str, list[int]],
-    progress_callback: Callable[[int, int], None] | None = None,
-    cache: _BaselineComputationCache | None = None,
-    performance_counts: dict[str, int] | None = None,
+    *,
+    raw_signal_count: int | None = None,
 ) -> dict[str, Any]:
-    selected = numeric_columns[:20]
-    cache_hits_started = cache.hits if cache is not None else 0
-    edges: list[dict[str, Any]] = []
+    selected = numeric_columns[:MAX_BASELINE_RELATIONSHIP_SIGNALS]
     row_groups = {"all_operation": (rows, None)}
     row_groups.update(
         {
@@ -449,12 +454,65 @@ def _learn_relationship_graph(
         for mode_id, (mode_rows, indexes) in row_groups.items()
         if len(mode_rows) >= 4
     ]
-    pairs_per_group = len(selected) * max(0, len(selected) - 1) // 2
-    total_pairs = len(eligible_groups) * pairs_per_group
+    candidate_pair_count = _unique_pair_count(len(numeric_columns))
+    eligible_pair_count = _unique_pair_count(len(selected)) if eligible_groups else 0
+    return {
+        "unit_accounting_basis": "unique_unordered_signal_pairs.v1",
+        "selected": selected,
+        "eligible_groups": eligible_groups,
+        "raw_signal_count": max(0, int(raw_signal_count)) if raw_signal_count is not None else len(numeric_columns),
+        "raw_numeric_signal_count": len(numeric_columns),
+        "relationship_eligible_signal_count": len(selected),
+        "derived_relationship_signal_count": 0,
+        "candidate_pair_count": candidate_pair_count,
+        "eligible_unique_pair_count": eligible_pair_count,
+        "eligible_context_count": len(eligible_groups),
+        "repeated_context_evaluation_count": eligible_pair_count * len(eligible_groups),
+        "signal_limit": MAX_BASELINE_RELATIONSHIP_SIGNALS,
+        "signal_limit_applied": len(selected) < len(numeric_columns),
+    }
+
+
+def _relationship_progress_metadata(plan: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: plan[key]
+        for key in (
+            "unit_accounting_basis",
+            "raw_signal_count",
+            "raw_numeric_signal_count",
+            "relationship_eligible_signal_count",
+            "derived_relationship_signal_count",
+            "candidate_pair_count",
+            "eligible_unique_pair_count",
+            "eligible_context_count",
+            "repeated_context_evaluation_count",
+            "signal_limit",
+            "signal_limit_applied",
+        )
+    }
+
+
+def _learn_relationship_graph(
+    rows: list[dict[str, Any]],
+    numeric_columns: list[str],
+    modes: list[dict[str, Any]],
+    membership: dict[str, list[int]],
+    progress_callback: Callable[[int, int], None] | None = None,
+    cache: _BaselineComputationCache | None = None,
+    performance_counts: dict[str, int] | None = None,
+    work_plan: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    plan = work_plan or _relationship_learning_plan(rows, numeric_columns, modes, membership)
+    selected = plan["selected"]
+    eligible_groups = plan["eligible_groups"]
+    total_pairs = int(plan["eligible_unique_pair_count"])
+    cache_hits_started = cache.hits if cache is not None else 0
+    edges: list[dict[str, Any]] = []
     completed_pairs = 0
-    for mode_id, mode_rows, row_indexes in eligible_groups:
-        for left_index, left in enumerate(selected):
-            for right in selected[left_index + 1 :]:
+    deeply_analyzed_pairs: set[tuple[str, str]] = set()
+    for left_index, left in enumerate(selected if eligible_groups else []):
+        for right in selected[left_index + 1 :]:
+            for mode_id, mode_rows, row_indexes in eligible_groups:
                 edge = _relationship_edge(
                     mode_rows,
                     left,
@@ -465,16 +523,19 @@ def _learn_relationship_graph(
                 )
                 if edge:
                     edges.append(edge)
-                completed_pairs += 1
-                if progress_callback and (completed_pairs % 25 == 0 or completed_pairs == total_pairs):
-                    progress_callback(completed_pairs, total_pairs)
+                    deeply_analyzed_pairs.add((left, right))
+            completed_pairs += 1
+            if progress_callback and (completed_pairs % 25 == 0 or completed_pairs == total_pairs):
+                progress_callback(completed_pairs, total_pairs)
     edges.sort(key=lambda item: (-item["strength"], item["edge_id"]))
     if performance_counts is not None:
         performance_counts.update(
             {
-                "relationship_pairs_considered": total_pairs,
+                "relationship_pairs_considered": int(plan["candidate_pair_count"]),
                 "relationship_pairs_eligible": total_pairs,
-                "relationship_pairs_deeply_analyzed": len(edges),
+                "relationship_pairs_deeply_analyzed": len(deeply_analyzed_pairs),
+                "relationship_pair_context_evaluations": int(plan["repeated_context_evaluation_count"]),
+                "relationship_contexts_eligible": int(plan["eligible_context_count"]),
                 "lags_evaluated": len(edges) * 13,
                 "cache_hits": (cache.hits - cache_hits_started) if cache is not None else 0,
             }
@@ -488,6 +549,7 @@ def _learn_relationship_graph(
         "mode_conditioned": True,
         "construction_method": "empirical_mode_conditioned_correlation_v1",
         "relationships_evaluated": completed_pairs,
+        "relationship_pair_accounting": _relationship_progress_metadata(plan),
     }
 
 
@@ -851,19 +913,30 @@ def build_behavioral_baseline(
             message=f"Computed baseline statistics for {len(numeric_columns[:50]):,} signals.",
             force=True,
         )
-        selected_count = len(numeric_columns[:20])
-        pairs_per_group = selected_count * max(0, selected_count - 1) // 2
-        eligible_groups = int(len(rows) >= 4) + sum(
-            len(membership.get(mode["mode_id"], [])) >= 4 for mode in operating_modes
+        relationship_work_plan = _relationship_learning_plan(
+            rows,
+            numeric_columns,
+            operating_modes,
+            membership,
+            raw_signal_count=sum(column != timestamp_column for column in columns),
         )
         progress_reporter.report(
             stage="learn",
             substage="learn_relationships",
             completed_units=0,
-            total_units=pairs_per_group * eligible_groups,
+            total_units=relationship_work_plan["eligible_unique_pair_count"],
             unit_type="relationship_pairs",
             message="Evaluating eligible signal relationships.",
+            metadata=_relationship_progress_metadata(relationship_work_plan),
             force=True,
+        )
+    else:
+        relationship_work_plan = _relationship_learning_plan(
+            rows,
+            numeric_columns,
+            operating_modes,
+            membership,
+            raw_signal_count=sum(column != timestamp_column for column in columns),
         )
     profiler.start_stage(
         "relationship_learning",
@@ -889,6 +962,7 @@ def build_behavioral_baseline(
         ),
         cache=computation_cache,
         performance_counts=relationship_performance,
+        work_plan=relationship_work_plan,
     )
     profiler.update(**relationship_performance)
     if progress_reporter:
@@ -901,7 +975,10 @@ def build_behavioral_baseline(
             total_units=relationship_total,
             unit_type="relationship_pairs",
             message=f"Evaluated {relationship_total:,} eligible relationship pairs.",
-            metadata={"relationships_retained": len(relationship_graph.get("edges", []))},
+            metadata={
+                **_relationship_progress_metadata(relationship_work_plan),
+                "relationships_retained": len(relationship_graph.get("edges", [])),
+            },
             force=True,
         )
 

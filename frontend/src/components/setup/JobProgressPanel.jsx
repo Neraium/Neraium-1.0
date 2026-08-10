@@ -1,3 +1,5 @@
+import { useEffect, useId, useState } from "react";
+
 function clampPercent(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
@@ -39,9 +41,12 @@ function formatProgressCount(progress) {
     : Number(progress.total_units);
   if (completed === null || !Number.isFinite(completed)) return "";
   const unit = String(progress?.unit_type || "work units").replaceAll("_", " ");
+  const boundedCompleted = Number.isFinite(total) && total >= 0
+    ? Math.min(completed, total)
+    : completed;
   return Number.isFinite(total) && total >= 0
-    ? `${completed.toLocaleString()} / ${total.toLocaleString()} ${unit}`
-    : `${completed.toLocaleString()} ${unit} processed`;
+    ? `${boundedCompleted.toLocaleString()} / ${total.toLocaleString()} ${unit}`
+    : `${boundedCompleted.toLocaleString()} ${unit} processed`;
 }
 
 function progressStateLabel(progress, executionState, pollConnectionState) {
@@ -56,8 +61,28 @@ function progressStateLabel(progress, executionState, pollConnectionState) {
   })[executionState || progress?.status] || titleCase(progress?.status || executionState || "Processing");
 }
 
-export default function JobProgressPanel({ uploadJob, uploadTransfer = null }) {
+function operationActivityLabel(operation, progressStatus) {
+  if (!operation) return progressStatus === "completed" ? "All operations complete" : "Waiting for the current operation";
+  const state = String(operation.status || "processing").toLowerCase();
+  if (state === "completed") return `${operation.label} complete`;
+  if (state === "failed") return `${operation.label} failed`;
+  if (state === "pending") return `${operation.label} pending`;
+  if (state === "queued") return `${operation.label} queued`;
+  if (state === "waiting") return `${operation.label} waiting`;
+  if (state === "retrying") return `${operation.label} retrying`;
+  return `${operation.label} in progress`;
+}
+
+export default function JobProgressPanel({ uploadJob, uploadTransfer = null, statusDetail = "" }) {
   const progress = uploadJob?.job_progress;
+  const operations = Array.isArray(progress?.operations) ? progress.operations : [];
+  const failedOperation = operations.find((operation) => operation.status === "failed");
+  const detailsId = useId();
+  const [detailsExpanded, setDetailsExpanded] = useState(Boolean(failedOperation));
+  const failedOperationId = failedOperation?.id ?? null;
+  useEffect(() => {
+    if (failedOperationId) setDetailsExpanded(true);
+  }, [failedOperationId]);
   const transferAvailable = uploadTransfer && Number.isFinite(Number(uploadTransfer.percent));
   const transferActive = transferAvailable && clampPercent(uploadTransfer.percent) < 100;
   if (!progress || progress.contract_version !== "job-progress.v1") {
@@ -76,8 +101,8 @@ export default function JobProgressPanel({ uploadJob, uploadTransfer = null }) {
   const overallPercent = clampPercent(progress.overall_percent_complete);
   const pollConnectionState = String(uploadJob?.poll_connection_state || "").toLowerCase();
   const stateLabel = progressStateLabel(progress, uploadJob?.execution_state, pollConnectionState);
-  const currentOperation = progress.operations?.find((operation) => operation.id === progress.substage)
-    ?? progress.operations?.find((operation) => ["processing", "retrying", "failed"].includes(operation.status));
+  const currentOperation = operations.find((operation) => operation.id === progress.substage)
+    ?? operations.find((operation) => ["processing", "retrying", "failed"].includes(operation.status));
   const operationModel = currentOperation ? { ...progress, ...currentOperation } : progress;
   const operationPercent = Number(operationModel.percent_complete);
   const measurable = operationModel.percent_complete !== null
@@ -87,7 +112,17 @@ export default function JobProgressPanel({ uploadJob, uploadTransfer = null }) {
   const message = pollConnectionState === "retrying"
     ? uploadJob?.message
     : progress.visibility_message || currentOperation?.message || progress.message;
+  const compactStatusDetail = String(statusDetail || "").trim();
+  const showStatusDetail = compactStatusDetail
+    && compactStatusDetail.toLowerCase() !== String(message || "").trim().toLowerCase();
   const visualState = pollConnectionState === "retrying" ? "retrying" : uploadJob?.execution_state || progress.status;
+  const completedOperationCount = operations.filter((operation) => operation.status === "completed").length;
+  const detailOperation = failedOperation ?? currentOperation;
+  const detailState = operationActivityLabel(detailOperation, progress.status);
+  const detailsSummary = `${completedOperationCount} of ${operations.length} operations complete · ${detailState}`;
+  const heartbeatAge = Number(progress.seconds_since_worker_heartbeat);
+  const heartbeatHealthy = Number.isFinite(heartbeatAge) && !progress.stalled;
+  const showHeartbeat = Boolean(progress.last_worker_heartbeat_at);
 
   return (
     <section className="backend-progress" aria-label="Backend job progress">
@@ -95,6 +130,7 @@ export default function JobProgressPanel({ uploadJob, uploadTransfer = null }) {
         <span className={`backend-progress__state backend-progress__state--${String(visualState)}`}>{stateLabel}</span>
         <strong>{currentOperation?.label || titleCase(progress.substage) || "Waiting for worker"}</strong>
         {message ? <p>{message}</p> : null}
+        {showStatusDetail ? <p className="backend-progress__status-detail">{compactStatusDetail}</p> : null}
       </div>
 
       <div className="backend-progress__meter-row">
@@ -145,36 +181,52 @@ export default function JobProgressPanel({ uploadJob, uploadTransfer = null }) {
       <dl className="backend-progress__timing">
         <div><dt>Elapsed</dt><dd>{formatDuration(progress.elapsed_seconds)}</dd></div>
         <div><dt>Last update</dt><dd><time dateTime={progress.updated_at} title={`${formatUtcTimestamp(progress.updated_at)} UTC`}>{formatDuration(progress.seconds_since_update)} ago</time></dd></div>
-        <div><dt>Worker heartbeat</dt><dd>{progress.last_worker_heartbeat_at ? <time dateTime={progress.last_worker_heartbeat_at} title={`${formatUtcTimestamp(progress.last_worker_heartbeat_at)} UTC`}>{formatDuration(progress.seconds_since_worker_heartbeat)} ago</time> : "Not received"}</dd></div>
+        {showHeartbeat ? (
+          <div>
+            <dt>Worker</dt>
+            <dd>
+              {heartbeatHealthy ? "Healthy · " : "Heartbeat · "}
+              <time dateTime={progress.last_worker_heartbeat_at} title={`${formatUtcTimestamp(progress.last_worker_heartbeat_at)} UTC`}>{formatDuration(progress.seconds_since_worker_heartbeat)} ago</time>
+            </dd>
+          </div>
+        ) : null}
       </dl>
 
-      <ol className="backend-progress__workflow" aria-label="Overall workflow steps">
-        {(progress.workflow_steps || []).map((step) => (
-          <li key={step.id} className={`backend-progress__workflow-step backend-progress__workflow-step--${step.status}`}>
-            <span aria-hidden="true">{step.status === "completed" ? "✓" : step.status === "failed" ? "!" : "•"}</span>
-            <strong>{step.label}</strong>
-            <small>{step.status === "completed" ? "100%" : `${step.percent_complete}% · ${step.status}`}</small>
-          </li>
-        ))}
-      </ol>
-
-      <ol className="backend-progress__operations" aria-label="Detailed backend operations">
-        {(progress.operations || []).map((operation) => (
-          <li key={operation.id} className={`backend-progress__operation backend-progress__operation--${operation.status}`}>
-            <span aria-hidden="true">{operation.status === "completed" ? "✓" : operation.status === "failed" ? "!" : operation.status === "pending" ? "–" : "•"}</span>
-            <strong>{operation.label}</strong>
-            <small>
-              {operation.status === "completed"
-                ? "Complete"
-                : operation.percent_complete === null || operation.percent_complete === undefined
-                  ? ["processing", "retrying"].includes(operation.status)
-                    ? `Measuring work · ${titleCase(operation.status)}`
-                    : titleCase(operation.status)
-                  : `${operation.percent_complete}% · ${titleCase(operation.status)}`}
-            </small>
-          </li>
-        ))}
-      </ol>
+      {operations.length ? (
+        <section className={`backend-progress__details${failedOperation ? " backend-progress__details--failed" : ""}`}>
+          <button
+            type="button"
+            className="backend-progress__details-toggle"
+            aria-expanded={detailsExpanded}
+            aria-controls={detailsId}
+            aria-describedby={`${detailsId}-summary`}
+            onClick={() => setDetailsExpanded((expanded) => !expanded)}
+          >
+            <span>Processing details</span>
+            <i aria-hidden="true" />
+          </button>
+          <p id={`${detailsId}-summary`} className="backend-progress__details-summary">{detailsSummary}</p>
+          <div id={detailsId} hidden={!detailsExpanded}>
+            <ol className="backend-progress__operations" aria-label="Detailed backend operations">
+              {operations.map((operation) => (
+                <li key={operation.id} className={`backend-progress__operation backend-progress__operation--${operation.status}`}>
+                  <span aria-hidden="true">{operation.status === "completed" ? "✓" : operation.status === "failed" ? "!" : operation.status === "pending" ? "–" : "•"}</span>
+                  <strong>{operation.label}</strong>
+                  <small>
+                    {operation.status === "completed"
+                      ? "Complete"
+                      : operation.percent_complete === null || operation.percent_complete === undefined
+                        ? ["processing", "retrying"].includes(operation.status)
+                          ? `Measuring work · ${titleCase(operation.status)}`
+                          : titleCase(operation.status)
+                        : `${operation.percent_complete}% · ${titleCase(operation.status)}`}
+                  </small>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+      ) : null}
     </section>
   );
 }

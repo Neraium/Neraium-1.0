@@ -40,6 +40,10 @@ test.describe("Initial baseline upload regression", () => {
     await expect(page.getByRole("progressbar", { name: "Validate, stage 2 of 4" })).toBeVisible();
     await expect(page.getByRole("progressbar", { name: "Signal inventory" })).toHaveAttribute("aria-valuenow", "60");
     await expect(page.getByText("6 / 10 signals")).toBeVisible();
+    const processingDetails = page.getByRole("button", { name: "Processing details" });
+    await expect(processingDetails).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("list", { name: "Detailed backend operations" })).toBeHidden();
+    await processingDetails.click();
     await expect(page.getByRole("list", { name: "Detailed backend operations" }).getByText("Unit normalization")).toBeVisible();
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
     expect(calls.sessions).toBe(1);

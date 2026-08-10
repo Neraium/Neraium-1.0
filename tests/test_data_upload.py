@@ -2642,6 +2642,51 @@ def test_relationship_baseline_reports_sampling_metadata() -> None:
         assert "sampled_for_baseline" in result["top_relationship_changes"][0]
 
 
+def test_relationship_baseline_counts_filtering_and_derived_counter_rates_explicitly() -> None:
+    from app.services.relationship_baselines import build_relationship_baseline
+
+    rows = [
+        {
+            "meter_total": float(index * 10),
+            "flow_gpm": float(50 + index),
+            "pressure_psi": float(15 + index / 2),
+            "sensor_id": float(index),
+        }
+        for index in range(20)
+    ]
+    progress: list[tuple[int, int]] = []
+    counts: dict[str, int] = {}
+
+    result = build_relationship_baseline(
+        rows,
+        ["meter_total", "flow_gpm", "pressure_psi", "sensor_id"],
+        progress_callback=lambda completed, total: progress.append((completed, total)),
+        performance_counts=counts,
+    )
+    accounting = result["relationship_pair_accounting"]
+
+    assert accounting["raw_signal_count"] == 4
+    assert accounting["raw_numeric_signal_count"] == 4
+    assert accounting["raw_candidate_pair_count"] == 6
+    assert accounting["relationship_candidate_signal_count"] == 3
+    assert accounting["relationship_candidate_pair_count"] == 3
+    assert accounting["relationship_eligible_signal_count"] == 3
+    assert accounting["derived_relationship_candidate_signal_count"] == 1
+    assert accounting["derived_relationship_candidate_signals"] == ["meter_total_delta"]
+    assert accounting["derived_relationship_signal_count"] == 1
+    assert accounting["derived_relationship_signals"] == ["meter_total_delta"]
+    assert accounting["excluded_raw_signal_count"] == 2
+    assert accounting["eligible_unique_pair_count"] == 3
+    assert accounting["relationship_pair_window_evaluations"] == 6
+    assert accounting["pairs_evaluated"] == 3
+    assert progress[0] == (0, 3)
+    assert progress[-1] == (3, 3)
+    assert all(completed <= total for completed, total in progress)
+    assert counts["relationship_pairs_considered"] == 6
+    assert counts["relationship_pairs_eligible"] == 3
+    assert counts["relationship_pair_window_evaluations"] == 6
+
+
 def test_worker_does_not_report_running_before_queue_claim(monkeypatch, tmp_path) -> None:
     settings = Settings(app_env="development", backend_host="127.0.0.1", backend_port=8001, cors_origins=["*"], runtime_dir=tmp_path)
     create_app(settings)

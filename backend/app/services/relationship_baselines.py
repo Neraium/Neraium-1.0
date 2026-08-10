@@ -73,6 +73,11 @@ def _select_numeric_columns_for_relationships(
     return numeric_columns[:max_relationship_columns], True
 
 
+def _unique_pair_count(signal_count: int) -> int:
+    count = max(0, int(signal_count))
+    return count * max(0, count - 1) // 2
+
+
 
 def _source_row_anchor(row: dict[str, Any] | None, window: str) -> dict[str, Any]:
     row = row or {}
@@ -422,6 +427,7 @@ def build_relationship_baseline(
     numeric_columns: list[str],
     *,
     total_row_count: int | None = None,
+    raw_signal_count: int | None = None,
     baseline_window_limit: int = 12000,
     recent_window_limit: int = 6000,
     max_relationship_columns: int = 32,
@@ -468,14 +474,47 @@ def build_relationship_baseline(
         relationship_numeric_columns,
         max_relationship_columns=max_relationship_columns,
     )
-    candidate_pairs = len(numeric_columns) * max(0, len(numeric_columns) - 1) // 2
-    total_pairs = len(selected_numeric_columns) * max(0, len(selected_numeric_columns) - 1) // 2
+    derived_relationship_candidate_signals = [
+        str(item["derived_rate_feature"])
+        for item in cumulative_counters
+        if item.get("derived_rate_feature_analyzed")
+    ]
+    derived_candidate_set = set(derived_relationship_candidate_signals)
+    derived_relationship_signals = [
+        column for column in selected_numeric_columns if column in derived_candidate_set
+    ]
+    for counter in cumulative_counters:
+        derived = str(counter.get("derived_rate_feature") or "")
+        counter["derived_rate_feature_relationship_eligible"] = derived in selected_numeric_columns
+        counter["derived_rate_feature_analyzed"] = derived in selected_numeric_columns
+    candidate_pairs = _unique_pair_count(len(numeric_columns))
+    relationship_candidate_pairs = _unique_pair_count(len(relationship_numeric_columns))
+    selected_signal_pairs = _unique_pair_count(len(selected_numeric_columns))
+    total_pairs = selected_signal_pairs if len(rows) >= 12 else 0
+    relationship_pair_accounting = {
+        "raw_signal_count": max(0, int(raw_signal_count)) if raw_signal_count is not None else len(numeric_columns),
+        "raw_numeric_signal_count": len(numeric_columns),
+        "raw_candidate_pair_count": candidate_pairs,
+        "relationship_candidate_signal_count": len(relationship_numeric_columns),
+        "relationship_candidate_pair_count": relationship_candidate_pairs,
+        "relationship_eligible_signal_count": len(selected_numeric_columns),
+        "derived_relationship_candidate_signal_count": len(derived_relationship_candidate_signals),
+        "derived_relationship_candidate_signals": derived_relationship_candidate_signals,
+        "derived_relationship_signal_count": len(derived_relationship_signals),
+        "derived_relationship_signals": derived_relationship_signals,
+        "excluded_raw_signal_count": len(excluded_structural_columns),
+        "eligible_unique_pair_count": total_pairs,
+        "relationship_pair_window_evaluations": total_pairs * 2,
+        "signal_limit": max_relationship_columns,
+        "signal_limit_applied": column_limited,
+    }
     if performance_counts is not None:
         performance_counts.update(
             {
                 "relationship_pairs_considered": candidate_pairs,
                 "relationship_pairs_eligible": total_pairs,
                 "relationship_pairs_deeply_analyzed": 0,
+                "relationship_pair_window_evaluations": total_pairs * 2,
             }
         )
     if progress_callback:
@@ -505,6 +544,7 @@ def build_relationship_baseline(
             "relationship_columns_limited": column_limited,
             "excluded_cumulative_counters": cumulative_counters,
             "excluded_structural_columns": excluded_structural_columns,
+            "relationship_pair_accounting": relationship_pair_accounting,
         }
 
     baseline_count = max(6, int(len(rows) * 0.7))
@@ -695,6 +735,11 @@ def build_relationship_baseline(
         "relationship_columns_limited": column_limited,
         "excluded_cumulative_counters": cumulative_counters,
         "excluded_structural_columns": excluded_structural_columns,
+        "relationship_pair_accounting": {
+            **relationship_pair_accounting,
+            "pairs_deeply_analyzed": len(graph_edges),
+            "pairs_evaluated": processed_pairs,
+        },
     }
 
 

@@ -85,7 +85,7 @@ Baseline jobs then expose:
 | learn | `select_usable_signals` | source columns evaluated; selected signal count is metadata |
 | learn | `build_operating_context` | analysis rows |
 | learn | `compute_baseline_statistics` | usable signals |
-| learn | `learn_relationships` | eligible signal pairs across eligible operating-mode groups |
+| learn | `learn_relationships` | unique unordered pairs of the selected relationship-eligible signals |
 | learn | `fit_expected_models` | retained relationship candidates evaluated |
 | learn | `persistence_checks` | candidate write and readback checks |
 | ready | `finalize_baseline` | finalization operation |
@@ -100,6 +100,29 @@ orchestrator: `prepare_inputs`, `signal_drift`, `relationship_analysis`,
 Each engine module is a 0/1 module work unit. The engine's old fractional
 callback values are deliberately ignored because they are lifecycle markers,
 not measurements.
+
+Relationship-pair progress always counts a unique unordered signal pair once.
+Mode-conditioned, baseline/recent-window, lag, or multi-scale calculations over
+the same pair are separate diagnostic work counts and never enlarge
+`total_units` for an operation whose `unit_type` is `relationship_pairs`.
+Baseline-learning metadata distinguishes raw numeric signals and their candidate
+pairs from the bounded relationship-eligible signal set, eligible unique pairs,
+and repeated operating-context evaluations. Comparison relationship metadata
+also identifies derived counter-rate signals and repeated baseline/recent-window
+evaluations explicitly.
+
+Initial baseline learning currently keeps at most 20 numeric signals in its
+relationship-eligible set. For example, 26 usable numeric signals produce 325
+raw candidate pairs, 20 selected relationship signals, and 190 eligible unique
+pairs. Evaluating those 190 pairs in an all-operation context plus eight
+operating modes produces 1,710 pair/context evaluations, but the job-progress
+denominator remains 190.
+
+The relationship producer stamps this definition as
+`unique_unordered_signal_pairs.v1`. This lets a resumed legacy operation replace
+an older group-expanded denominator once, while retaining and bounding its
+observed completed count. Within the same accounting basis, totals remain
+immutable and completed units remain monotonic.
 
 ## Persistence, isolation, and resume behavior
 

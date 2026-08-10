@@ -230,6 +230,7 @@ def evaluate_sii(
             dict_rows,
             numeric_columns_used,
             total_row_count=int(cfg.get("row_count_total") or len(dict_rows)),
+            raw_signal_count=sum(column != timestamp_column for column in column_names),
             baseline_analysis=baseline_analysis,
             telemetry_signal_catalog=catalog,
             progress_callback=unit_progress(
@@ -572,7 +573,6 @@ def evaluate_sii(
         temporal_feature_count = len(temporal_analysis.get("columns_used") or [])
         temporal_active_rows = int(temporal_analysis.get("active_rows") or 0)
         profiler.update(
-            relationship_pairs_deeply_analyzed=1 if temporal_feature_count >= 2 else 0,
             temporal_pairs=1 if temporal_feature_count >= 2 else 0,
             lags_evaluated=(
                 2 * ((2 * effective_temporal_config.max_lag) + 1)

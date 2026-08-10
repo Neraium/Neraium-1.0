@@ -26,7 +26,8 @@ test("active initial learning remains readable and contained on narrow mobile", 
   await expect(page.locator(".baseline-processing-panel__header").getByText("Verifying dataset integrity, timestamps, signal consistency, and data quality.", { exact: true })).toBeVisible();
   await expect(page.getByRole("progressbar", { name: "Validate, stage 2 of 4" })).toHaveAttribute("aria-valuenow", "2");
   await expect(page.getByRole("progressbar", { name: "Signal inventory" })).toHaveAttribute("aria-valuenow", "60");
-  await expect(page.getByRole("list", { name: "Overall workflow steps" })).toContainText("Baseline Ready");
+  await expect(page.getByRole("button", { name: "Processing details" })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("list", { name: "Detailed backend operations" })).toBeHidden();
 
   const metrics = await page.evaluate(() => {
     const root = document.documentElement;
