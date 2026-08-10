@@ -85,6 +85,7 @@ from app.services.upload_state_repository import (
     restore_upload_source,
     reset_upload_state,
     shared_state_configured,
+    upload_job_publication_lock,
     upload_state_backend,
     warm_latest_upload_cache,
     write_upload_completion as repository_write_upload_completion,
@@ -454,13 +455,15 @@ def _set_status(job_id: str, status: str, progress: int = 0, message: str = "") 
         dataset_id=dataset_id,
     )
     payload = attach_dataset_scope(payload, scope=scope, dataset_id=dataset_id)
-    UPLOAD_RUNTIME_STATE.cache_job(job_id, payload)
-    JOB_RUNTIME_DIRS[job_id] = RUNTIME_DIR
-    while len(JOB_RUNTIME_DIRS) > UPLOAD_RUNTIME_STATE.max_cached_jobs:
-        JOB_RUNTIME_DIRS.pop(next(iter(JOB_RUNTIME_DIRS)))
-    repository_write_upload_status_progress(job_id, payload, latest_summary=payload, keep_result=False)
-    upsert_upload_job(payload)
-    return payload
+    canonical = repository_write_upload_status_progress(
+        job_id,
+        payload,
+        latest_summary=payload,
+        keep_result=False,
+    )
+    _cache_job_payload(job_id, canonical)
+    upsert_upload_job(canonical)
+    return canonical
 
 
 def _complete_with_partial_result(
@@ -478,27 +481,29 @@ def _complete_with_partial_result(
         snapshot=snapshot,
         build_traceability_packet=build_traceability_packet,
     )
-    repository_write_upload_completion(job_id, result=result, summary=summary)
-    UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
+    canonical = repository_write_upload_completion(job_id, result=result, summary=summary)
+    UPLOAD_RUNTIME_STATE.cache_job(job_id, canonical)
 
     try:
-        upsert_upload_job(summary)
+        upsert_upload_job(canonical)
     except Exception:
         pass
 
-    return summary
+    return canonical
 
 
 def _persist_completed_upload(job_id: str, *, result: dict[str, Any], summary: dict[str, Any]) -> None:
     # write_upload_completion already publishes the job status, latest summary,
     # result, and canonical record. Repeating write_upload_status_progress here
     # doubled the largest persistence payload and added avoidable commits.
-    repository_write_upload_completion(job_id, result=result, summary=summary)
-    try:
-        complete_upload_queue_job(job_id, "completed")
-    except Exception:
-        pass
-    UPLOAD_RUNTIME_STATE.cache_job(job_id, summary)
+    canonical = repository_write_upload_completion(job_id, result=result, summary=summary)
+    canonical_state = str(canonical.get("processing_state") or canonical.get("status") or "").strip().lower()
+    if canonical_state in {"complete", "completed", "success"}:
+        try:
+            complete_upload_queue_job(job_id, "completed")
+        except Exception:
+            pass
+    UPLOAD_RUNTIME_STATE.cache_job(job_id, canonical)
 
 
 
@@ -750,8 +755,11 @@ def _finalize_completed_upload(
                 performance_report
             )
     persistence_started = time.perf_counter()
-    _persist_completed_upload(job_id, result=finalized_result, summary=finalized_summary)
+    # The durable analysis artifact is part of completion readiness. Publish
+    # it before the terminal upload envelope so polling cannot announce a
+    # completed job whose saved analysis is still missing.
     persist_completed_analysis(finalized_result)
+    _persist_completed_upload(job_id, result=finalized_result, summary=finalized_summary)
     completion_write_ms = (time.perf_counter() - persistence_started) * 1000
     completed_timings = _finish_job_timing(job_id, completion_write_ms=completion_write_ms)
     logger.info(
@@ -1980,24 +1988,138 @@ def _normalize_job_write_args(args: tuple[Any, ...]) -> tuple[str, dict[str, Any
     return job_id, payload
 
 
-def _scope_job_payload(job_id: str, payload: dict[str, Any]) -> tuple[dict[str, Any], Any]:
+def _scope_job_payload(job_id: str, payload: dict[str, Any]) -> tuple[dict[str, Any], Any, dict[str, Any] | None]:
     existing = repository_read_upload_status(job_id) or {}
     scope = dataset_scope_from_payload(payload) or dataset_scope_from_payload(existing) or current_dataset_scope()
-    existing_complete = str(existing.get("status") or "").strip().upper() in {"COMPLETE", "COMPLETED", "SUCCESS"}
-    incoming_complete = str(payload.get("status") or "").strip().upper() in {"COMPLETE", "COMPLETED", "SUCCESS"}
+    terminal_statuses = {
+        "CANCELLED",
+        "COMPLETE",
+        "COMPLETED",
+        "COMPLETED_COMPATIBILITY",
+        "ERROR",
+        "FAILED",
+        "FAILURE",
+        "SUCCESS",
+        "TIMEOUT",
+        "VALIDATION_ERROR",
+    }
+    incoming_status = str(payload.get("status") or "").strip().upper()
+    persisted_completion_result = (
+        read_upload_result_by_job_id(job_id)
+        if incoming_status in {"COMPLETE", "COMPLETED", "SUCCESS"}
+        and payload.get("result_available") is True
+        else None
+    )
+    expected_attempt_id = str(payload.get("attempt_id") or existing.get("attempt_id") or job_id)
+    persisted_result_attempt_id = str(
+        (persisted_completion_result or {}).get("attempt_id") or job_id
+    )
+    completion_result_ready = bool(
+        isinstance(persisted_completion_result, dict)
+        and persisted_result_attempt_id == expected_attempt_id
+    )
+    completion_artifacts = (
+        payload.get("sii_completion_artifacts")
+        if isinstance(payload.get("sii_completion_artifacts"), dict)
+        else ((payload.get("result_summary") or {}).get("sii_completion_artifacts") or {})
+        if isinstance(payload.get("result_summary"), dict)
+        else {}
+    )
+    self_contained_completion_contract = bool(
+        any(
+            key in payload
+            for key in ("sii_completed", "sii_completion_artifacts", "runner_used")
+        )
+        or completion_artifacts.get("final_result_persisted") is True
+    )
+    if (
+        incoming_status in {"COMPLETE", "COMPLETED", "SUCCESS"}
+        and payload.get("result_available") is True
+        and not is_baseline_workflow(payload.get("workflow") or existing.get("workflow"))
+        and not completion_result_ready
+        and not self_contained_completion_contract
+    ):
+        # Compatibility callers may announce completion immediately before
+        # writing the result. Keep that handoff nonterminal; the result writer
+        # publishes the complete envelope after durable result persistence.
+        payload.update(
+            {
+                "status": "PROCESSING",
+                "processing_state": "saving_result",
+                "job_state": "processing",
+                "terminal": False,
+                "result_available": False,
+                "first_usable_available": False,
+            }
+        )
+    existing_terminal = str(existing.get("status") or "").strip().upper() in terminal_statuses
+    incoming_terminal = str(payload.get("status") or "").strip().upper() in terminal_statuses
     existing_progress = existing.get("job_progress") if isinstance(existing.get("job_progress"), dict) else {}
     incoming_progress = payload.get("job_progress") if isinstance(payload.get("job_progress"), dict) else {}
     existing_progress_workflow = str(existing_progress.get("workflow") or "").strip().lower()
     incoming_progress_workflow = str(incoming_progress.get("workflow") or "").strip().lower()
+    existing_progress_started_at = str(existing_progress.get("started_at") or "").strip()
+    incoming_progress_started_at = str(incoming_progress.get("started_at") or "").strip()
     starts_historical_review = (
         incoming_progress_workflow == "historical_review"
-        and existing_progress_workflow != "historical_review"
+        and (
+            existing_progress_workflow != "historical_review"
+            or not existing_progress_started_at
+            or incoming_progress_started_at != existing_progress_started_at
+        )
     )
-    if existing_complete and not incoming_complete and not starts_historical_review:
-        # COMPLETE is monotonic for an upload/evaluation attempt. Ignore a
-        # stale stage notifier or progress callback instead of publishing a
-        # contradictory PROCESSING envelope around terminal progress.
-        return dict(existing), scope
+    existing_attempt_id = str(existing.get("attempt_id") or job_id)
+    incoming_explicit_attempt_id = str(payload.get("attempt_id") or "").strip()
+    incoming_retry_requested_at = str(payload.get("retry_requested_at") or "").strip()
+    existing_retry_requested_at = str(existing.get("retry_requested_at") or "").strip()
+    starts_retry_attempt = bool(
+        incoming_retry_requested_at
+        and incoming_retry_requested_at != existing_retry_requested_at
+    )
+    if starts_retry_attempt:
+        payload["attempt_id"] = f"{job_id}:retry:{incoming_retry_requested_at}"
+    elif starts_historical_review:
+        historical_started_at = str(incoming_progress.get("started_at") or payload.get("updated_at") or "historical_review")
+        payload["attempt_id"] = f"{job_id}:historical_review:{historical_started_at}"
+    else:
+        payload.setdefault("attempt_id", existing_attempt_id)
+    if starts_retry_attempt or starts_historical_review:
+        # Retry payloads commonly start by copying the prior terminal status.
+        # Do not let its immutable publication metadata or derived job_state
+        # make the new attempt look terminal before it has started.
+        for key in (
+            "terminal_state_contract_version",
+            "terminal_published_at",
+            "terminal_result_contract_version",
+            "terminal_result_digest",
+            "terminal_result_ref",
+        ):
+            payload.pop(key, None)
+        payload["terminal"] = False
+        payload["job_state"] = (
+            "queued"
+            if str(payload.get("processing_state") or "").lower() in {"queued", "pending"}
+            else "processing"
+        )
+    same_attempt = str(payload.get("attempt_id") or job_id) == existing_attempt_id
+    if (
+        existing
+        and incoming_explicit_attempt_id
+        and not same_attempt
+        and not starts_retry_attempt
+        and not starts_historical_review
+    ):
+        logger.info(
+            "stale_upload_attempt_write_prevented job_id=%s active_attempt_id=%s stale_attempt_id=%s",
+            job_id,
+            existing_attempt_id,
+            incoming_explicit_attempt_id,
+        )
+        return dict(existing), scope, existing
+    if existing_terminal and not incoming_terminal and same_attempt and not starts_historical_review:
+        # Terminal state is monotonic within an attempt. Ignore a stale stage
+        # notifier or progress callback instead of reopening the job.
+        return dict(existing), scope, existing
     clear_reset_block_persisted(scope)
     payload["run_id"] = job_id
     payload["upload_id"] = job_id
@@ -2028,7 +2150,12 @@ def _scope_job_payload(job_id: str, payload: dict[str, Any]) -> tuple[dict[str, 
     progress_workflow = str(progress.get("workflow") or workflow)
     status_text = str(payload.get("status") or "").upper()
     processing_state = str(payload.get("processing_state") or "").lower()
-    if status_text in {"FAILED", "FAILURE", "ERROR", "TIMEOUT"} or processing_state in {"failed", "error", "timeout"}:
+    if status_text in {"FAILED", "FAILURE", "ERROR", "TIMEOUT", "VALIDATION_ERROR"} or processing_state in {
+        "failed",
+        "error",
+        "timeout",
+        "validation_error",
+    }:
         progress = fail_progress(
             progress,
             job_id=job_id,
@@ -2058,7 +2185,7 @@ def _scope_job_payload(job_id: str, payload: dict[str, Any]) -> tuple[dict[str, 
         dataset_scope=scope,
         dataset_id=dataset_id,
     )
-    return attach_dataset_scope(payload, scope=scope, dataset_id=dataset_id), scope
+    return attach_dataset_scope(payload, scope=scope, dataset_id=dataset_id), scope, existing or None
 
 
 def _persist_job_progress(
@@ -2289,32 +2416,47 @@ def _persist_job_record(job_id: str, payload: dict[str, Any]) -> None:
     try:
         upsert_upload_job(payload)
     except Exception:
-        pass
+        logger.warning("upload_job_mirror_write_failed backend=runtime_db job_id=%s", job_id)
     JOB_DIR.mkdir(parents=True, exist_ok=True)
-    (JOB_DIR / f"{job_id}.json").write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    (JOB_DIR / f"{job_id}.json").write_text(
+        json.dumps(payload, indent=2, default=str),
+        encoding="utf-8",
+    )
 
 
 def write_job(*args) -> None:
     job_id, payload = _normalize_job_write_args(args)
-    payload, scope = _scope_job_payload(job_id, payload)
-    _cache_job_payload(job_id, payload)
-    status_text = str(payload.get("status") or "").upper()
-    processing_state = str(payload.get("processing_state") or "").lower()
-    if is_baseline_workflow(payload.get("workflow")):
-        # Baseline construction has its own latest-candidate/active-model state.
-        # Its progress must never replace the latest SII analysis snapshot.
-        write_upload_status(job_id, payload)
-    elif _job_updates_latest(status_text, processing_state):
-        latest_summary = _latest_job_summary(job_id, payload, scope, status_text, processing_state)
-        repository_write_upload_status_progress(
-            job_id,
-            payload,
-            latest_summary=latest_summary,
-            keep_result=status_text == "COMPLETE",
-        )
-    else:
-        write_upload_status(job_id, payload)
-    _persist_job_record(job_id, payload)
+    with upload_job_publication_lock(job_id):
+        payload, scope, existing_status = _scope_job_payload(job_id, payload)
+        status_text = str(payload.get("status") or "").upper()
+        processing_state = str(payload.get("processing_state") or "").lower()
+        if is_baseline_workflow(payload.get("workflow")):
+            # Baseline construction has its own latest-candidate/active-model state.
+            # Its progress must never replace the latest SII analysis snapshot.
+            canonical = write_upload_status(
+                job_id,
+                payload,
+                _existing_status=existing_status,
+            )
+        elif _job_updates_latest(status_text, processing_state):
+            latest_summary = _latest_job_summary(job_id, payload, scope, status_text, processing_state)
+            canonical = repository_write_upload_status_progress(
+                job_id,
+                payload,
+                latest_summary=latest_summary,
+                keep_result=status_text == "COMPLETE",
+                existing_status=existing_status,
+            )
+        else:
+            canonical = write_upload_status(
+                job_id,
+                payload,
+                _existing_status=existing_status,
+            )
+        # Caches and legacy job mirrors are deliberately last. Polling cannot
+        # observe them as terminal before the authoritative envelope exists.
+        _cache_job_payload(job_id, canonical)
+        _persist_job_record(job_id, canonical)
 
 
 def read_job(job_id: str) -> dict[str, Any] | None:

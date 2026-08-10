@@ -771,7 +771,13 @@ def test_upload_processing_persists_intermediate_progress_states(monkeypatch) ->
         return original(job_id, payload, *args, **kwargs)
 
     def record_completion(job_id, *, result, summary):
-        record_progress(job_id, summary)
+        progress_events.append({
+            "stage": summary.get("propagation_stage"),
+            "progress": summary.get("progress"),
+            "label": summary.get("progress_label") or summary.get("message"),
+            "status": summary.get("status"),
+            "backend_substage": (summary.get("job_progress") or {}).get("substage"),
+        })
         return original_completion(job_id, result=result, summary=summary)
 
     monkeypatch.setattr(upload_jobs, "repository_write_upload_status_progress", record_progress)

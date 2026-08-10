@@ -5,9 +5,12 @@ import json
 import os
 import logging
 import re
+import threading
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any
+from typing import Any, Iterator
 
 from app.core.path_safety import ensure_storage_root, safe_upload_suffix
 from app.services.dataset_scope import (
@@ -48,18 +51,84 @@ _SCOPED_LATEST_NAMES = {
     "latest_upload_summary",
 }
 
-_TERMINAL_UPLOAD_STATES = {"cancelled", "complete", "completed", "error", "failed", "success", "timeout"}
+_TERMINAL_UPLOAD_STATES = {
+    "cancelled",
+    "complete",
+    "completed",
+    "completed_compatibility",
+    "error",
+    "failed",
+    "failure",
+    "success",
+    "timeout",
+    "validation_error",
+}
+_SUCCESS_UPLOAD_STATES = {"complete", "completed", "completed_compatibility", "success"}
 _ACTIVE_UPLOAD_STATES = {"accepted", "pending", "processing", "queued", "running", "running_sii", "uploading"}
+_TERMINAL_STATE_CONTRACT_VERSION = "upload-terminal-state.v1"
+_TERMINAL_RESULT_CONTRACT_VERSION = "upload-terminal-result.v1"
+_UPLOAD_PUBLICATION_LOCKS = tuple(threading.RLock() for _ in range(64))
+_UNSET_UPLOAD_STATUS = object()
 
 
 def _is_scope_bound_state(raw_name: str) -> bool:
-    return raw_name in _SCOPED_LATEST_NAMES or raw_name.startswith(("upload_status_", "upload_result_"))
+    return raw_name in _SCOPED_LATEST_NAMES or raw_name.startswith(
+        ("upload_status_", "upload_result_", "upload_terminal_")
+    )
 
 
 def _upload_state_value(payload: dict[str, Any] | None) -> str:
     if not isinstance(payload, dict):
         return ""
-    return str(payload.get("processing_state") or payload.get("status") or payload.get("job_state") or "").strip().lower()
+    values = [
+        str(payload.get(field) or "").strip().lower()
+        for field in ("processing_state", "status", "job_state")
+    ]
+    # Treat any explicit terminal field as terminal even if a stale
+    # compatibility field still says "processing".
+    return next(
+        (value for value in values if value in _TERMINAL_UPLOAD_STATES),
+        next((value for value in values if value), ""),
+    )
+
+
+def _is_terminal_upload_state(payload: dict[str, Any] | None) -> bool:
+    return _upload_state_value(payload) in _TERMINAL_UPLOAD_STATES
+
+
+def _upload_attempt_id(job_id: str, payload: dict[str, Any] | None = None) -> str:
+    if isinstance(payload, dict):
+        explicit = str(payload.get("attempt_id") or "").strip()
+        if explicit:
+            return explicit
+    return str(job_id)
+
+
+def _terminal_state_name(job_id: str, payload: dict[str, Any] | None = None) -> str:
+    attempt_digest = hashlib.sha256(_upload_attempt_id(job_id, payload).encode("utf-8")).hexdigest()[:24]
+    return f"upload_terminal_{job_id}_{attempt_digest}"
+
+
+def _terminal_result_digest(payload: dict[str, Any]) -> str:
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    return hashlib.sha256(serialized).hexdigest()
+
+
+def _terminal_result_state_name(
+    job_id: str,
+    payload: dict[str, Any] | None,
+) -> str:
+    attempt_digest = hashlib.sha256(_upload_attempt_id(job_id, payload).encode("utf-8")).hexdigest()[:24]
+    return f"upload_terminal_result_{job_id}_{attempt_digest}"
+
+
+@contextmanager
+def upload_job_publication_lock(job_id: str) -> Iterator[None]:
+    """Serialize same-process publication without retaining one lock per job."""
+    digest = hashlib.sha256(str(job_id).encode("utf-8")).digest()
+    lock = _UPLOAD_PUBLICATION_LOCKS[int.from_bytes(digest[:4], "big") % len(_UPLOAD_PUBLICATION_LOCKS)]
+    with lock:
+        yield
 
 
 def _state_scope(*, scope: DatasetScope | None = None, payload: dict[str, Any] | None = None) -> DatasetScope:
@@ -786,11 +855,17 @@ def insert_shared_state_strict(
         return inserted, canonical
 
     if _runtime_db_latest_write_enabled():
-        inserted, canonical = insert_latest_payload_if_absent(_shared_key(storage_name), normalized)
-        if not isinstance(canonical, dict):
-            raise RuntimeError("shared_state_existing_value_invalid")
-        write_local_json(f"{storage_name}.json", canonical, scope=scope)
-        return inserted, canonical
+        try:
+            inserted, canonical = insert_latest_payload_if_absent(_shared_key(storage_name), normalized)
+            if not isinstance(canonical, dict):
+                raise RuntimeError("shared_state_existing_value_invalid")
+            write_local_json(f"{storage_name}.json", canonical, scope=scope)
+            return inserted, canonical
+        except Exception:
+            # A no-bucket deployment already uses the local runtime directory
+            # as its fallback authority. Preserve atomic create semantics there
+            # if the optional latest-payload database is unavailable.
+            logger.warning("shared_state_conditional_write_fallback backend=local")
 
     path = runtime_state().runtime_dir / _local_state_name(storage_name, scope=scope, payload=normalized)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -821,10 +896,326 @@ def write_upload_result(job_id: str, payload: dict[str, Any]) -> None:
     write_shared_state(f"upload_result_{job_id}", normalized)
 
 
-def write_upload_status(job_id: str, payload: dict[str, Any]) -> None:
+def _write_upload_result_strict(
+    job_id: str,
+    result: dict[str, Any],
+    summary: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Persist one immutable completion bundle before publishing terminal status."""
+    normalized_result = attach_dataset_scope(
+        dict(result or {}),
+        dataset_id=result.get("dataset_id") or job_id,
+    )
+    normalized_summary = attach_dataset_scope(
+        dict(summary or {}),
+        scope=_state_scope(payload=normalized_result),
+        dataset_id=summary.get("dataset_id") or normalized_result.get("dataset_id") or job_id,
+    )
+    result_digest = _terminal_result_digest(normalized_result)
+    state_name = _terminal_result_state_name(str(job_id), normalized_summary)
+    normalized_summary.update(
+        {
+            "terminal_result_contract_version": _TERMINAL_RESULT_CONTRACT_VERSION,
+            "terminal_result_digest": result_digest,
+            "terminal_result_ref": state_name,
+        }
+    )
+    bundle = attach_dataset_scope(
+        {
+            "job_id": str(job_id),
+            "attempt_id": _upload_attempt_id(str(job_id), normalized_summary),
+            "terminal_result_contract_version": _TERMINAL_RESULT_CONTRACT_VERSION,
+            "terminal_result_digest": result_digest,
+            "result": normalized_result,
+            "summary": normalized_summary,
+        },
+        scope=_state_scope(payload=normalized_summary),
+        dataset_id=normalized_summary.get("dataset_id") or job_id,
+    )
+    try:
+        _, canonical_bundle = insert_shared_state_strict(
+            state_name,
+            bundle,
+            scope=_state_scope(payload=normalized_summary),
+        )
+    except Exception:
+        canonical_bundle = read_shared_state(
+            state_name,
+            scope=_state_scope(payload=normalized_summary),
+        )
+        if not isinstance(canonical_bundle, dict):
+            raise
+        logger.warning(
+            "terminal_result_secondary_persistence_failed job_id=%s attempt_id=%s",
+            job_id,
+            _upload_attempt_id(str(job_id), normalized_summary),
+        )
+    canonical_result = canonical_bundle.get("result") if isinstance(canonical_bundle, dict) else None
+    canonical_summary = canonical_bundle.get("summary") if isinstance(canonical_bundle, dict) else None
+    canonical_digest = str((canonical_bundle or {}).get("terminal_result_digest") or "")
+    canonical_scope = _state_scope(payload=normalized_summary)
+    expected_attempt = _upload_attempt_id(str(job_id), normalized_summary)
+    if (
+        not isinstance(canonical_result, dict)
+        or not isinstance(canonical_summary, dict)
+        or canonical_digest != _terminal_result_digest(canonical_result)
+        or not payload_matches_dataset_scope(canonical_bundle, canonical_scope)
+        or not payload_matches_dataset_scope(canonical_result, canonical_scope)
+        or not payload_matches_dataset_scope(canonical_summary, canonical_scope)
+        or str(canonical_bundle.get("job_id") or "") != str(job_id)
+        or str(canonical_result.get("job_id") or "") != str(job_id)
+        or str(canonical_summary.get("job_id") or "") != str(job_id)
+        or _upload_attempt_id(str(job_id), canonical_bundle) != expected_attempt
+        or _upload_attempt_id(str(job_id), canonical_result) != expected_attempt
+        or _upload_attempt_id(str(job_id), canonical_summary) != expected_attempt
+    ):
+        raise RuntimeError("terminal_result_existing_value_invalid")
+    return canonical_result, canonical_summary
+
+
+def _read_terminal_upload_result(
+    job_id: str,
+    terminal: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not isinstance(terminal, dict):
+        return None
+    result_digest = str(terminal.get("terminal_result_digest") or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", result_digest):
+        return None
+    scope = _state_scope(payload=terminal)
+    name = _terminal_result_state_name(str(job_id), terminal)
+    terminal_ref = str(terminal.get("terminal_result_ref") or "").strip()
+    if terminal_ref and terminal_ref != name:
+        return None
+    bundle = read_shared_state(name, scope=scope)
+    if not isinstance(bundle, dict):
+        bundle = read_local_json(f"{name}.json", scope=scope)
+    result = bundle.get("result") if isinstance(bundle, dict) else None
+    if (
+        not isinstance(bundle, dict)
+        or not isinstance(result, dict)
+        or not payload_matches_dataset_scope(bundle, scope)
+        or not payload_matches_dataset_scope(result, scope)
+        or str(bundle.get("job_id") or "") != str(job_id)
+        or str(result.get("job_id") or "") != str(job_id)
+        or str(bundle.get("attempt_id") or "") != _upload_attempt_id(str(job_id), terminal)
+        or str(bundle.get("terminal_result_digest") or "").lower() != result_digest
+        or _terminal_result_digest(result) != result_digest
+    ):
+        return None
+    return result
+
+
+def _write_upload_status_mirror(job_id: str, payload: dict[str, Any]) -> None:
     normalized = attach_dataset_scope(dict(payload or {}), dataset_id=payload.get("dataset_id") or job_id)
     write_local_json(f"upload_status_{job_id}.json", normalized)
     write_shared_state(f"upload_status_{job_id}", normalized)
+
+
+def _write_upload_attempt_transition_strict(job_id: str, payload: dict[str, Any]) -> None:
+    """Durably move the mutable status pointer to an explicit new attempt."""
+    normalized = attach_dataset_scope(dict(payload or {}), dataset_id=payload.get("dataset_id") or job_id)
+    write_local_json(f"upload_status_{job_id}.json", normalized)
+    try:
+        write_shared_state_strict(f"upload_status_{job_id}", normalized)
+    except Exception:
+        if shared_state_configured():
+            raise
+        logger.warning(
+            "upload_attempt_transition_shared_write_fallback backend=local job_id=%s",
+            job_id,
+        )
+
+
+def _read_terminal_upload_state(job_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    scope = _state_scope(payload=payload)
+    name = _terminal_state_name(str(job_id), payload)
+    expected_attempt = _upload_attempt_id(str(job_id), payload)
+    persisted = read_shared_state(name, scope=scope)
+    if (
+        isinstance(persisted, dict)
+        and payload_matches_dataset_scope(persisted, scope)
+        and str(persisted.get("job_id") or "") == str(job_id)
+        and _upload_attempt_id(str(job_id), persisted) == expected_attempt
+    ):
+        return persisted
+    local = read_local_json(f"{name}.json", scope=scope)
+    return (
+        local
+        if isinstance(local, dict)
+        and payload_matches_dataset_scope(local, scope)
+        and str(local.get("job_id") or "") == str(job_id)
+        and _upload_attempt_id(str(job_id), local) == expected_attempt
+        else None
+    )
+
+
+def write_upload_status(
+    job_id: str,
+    payload: dict[str, Any],
+    *,
+    _existing_status: dict[str, Any] | None | object = _UNSET_UPLOAD_STATUS,
+) -> dict[str, Any]:
+    """Publish upload state, using an immutable envelope for terminal attempts."""
+    normalized = attach_dataset_scope(dict(payload or {}), dataset_id=payload.get("dataset_id") or job_id)
+    normalized["job_id"] = str(job_id)
+
+    with upload_job_publication_lock(str(job_id)):
+        existing = (
+            _read_upload_status_mirror(str(job_id))
+            if _existing_status is _UNSET_UPLOAD_STATUS
+            else _existing_status
+        )
+        existing = existing if isinstance(existing, dict) else None
+        normalized.setdefault("attempt_id", _upload_attempt_id(str(job_id), existing))
+        existing_attempt = _upload_attempt_id(str(job_id), existing)
+        incoming_attempt = _upload_attempt_id(str(job_id), normalized)
+        retry_transition = bool(
+            normalized.get("retry_requested_at")
+            and normalized.get("retry_requested_at") != (existing or {}).get("retry_requested_at")
+        )
+        incoming_progress = normalized.get("job_progress") if isinstance(normalized.get("job_progress"), dict) else {}
+        existing_progress = existing.get("job_progress") if isinstance((existing or {}).get("job_progress"), dict) else {}
+        historical_review_transition = bool(
+            str(incoming_progress.get("workflow") or "").lower() == "historical_review"
+            and (
+                str(existing_progress.get("workflow") or "").lower() != "historical_review"
+                or str(incoming_progress.get("started_at") or "")
+                != str(existing_progress.get("started_at") or "")
+            )
+        )
+        published_terminal = (
+            existing
+            if _existing_status is not _UNSET_UPLOAD_STATUS
+            and _is_terminal_upload_state(existing)
+            and existing_attempt == incoming_attempt
+            else _read_terminal_upload_state(str(job_id), normalized)
+            if _existing_status is _UNSET_UPLOAD_STATUS
+            else None
+        )
+
+        if (
+            _is_terminal_upload_state(normalized)
+            and isinstance(existing, dict)
+            and incoming_attempt != existing_attempt
+        ):
+            logger.info(
+                "stale_upload_attempt_terminal_prevented job_id=%s active_attempt_id=%s stale_attempt_id=%s",
+                job_id,
+                existing_attempt,
+                incoming_attempt,
+            )
+            return existing
+
+        if not _is_terminal_upload_state(normalized):
+            if (
+                isinstance(existing, dict)
+                and incoming_attempt != existing_attempt
+                and not retry_transition
+                and not historical_review_transition
+            ):
+                logger.info(
+                    "stale_upload_attempt_write_prevented job_id=%s active_attempt_id=%s stale_attempt_id=%s",
+                    job_id,
+                    existing_attempt,
+                    incoming_attempt,
+                )
+                return existing
+            if isinstance(published_terminal, dict):
+                logger.info(
+                    "terminal_state_regression_prevented job_id=%s attempt_id=%s incoming_state=%s",
+                    job_id,
+                    incoming_attempt,
+                    _upload_state_value(normalized),
+                )
+                return published_terminal
+            if (
+                _is_terminal_upload_state(existing)
+                and existing_attempt == incoming_attempt
+            ):
+                logger.info(
+                    "terminal_state_regression_prevented job_id=%s attempt_id=%s incoming_state=%s",
+                    job_id,
+                    incoming_attempt,
+                    _upload_state_value(normalized),
+                )
+                return existing
+            if retry_transition or historical_review_transition:
+                _write_upload_attempt_transition_strict(str(job_id), normalized)
+            else:
+                _write_upload_status_mirror(str(job_id), normalized)
+            # A terminal writer in another process may win immediately after
+            # this write. Readers prefer its immutable envelope, and a repeat
+            # finalization repairs this secondary mirror.
+            return normalized
+
+        if isinstance(published_terminal, dict):
+            canonical = published_terminal
+            inserted = False
+        else:
+            logger.info(
+                "terminal_state_publication_attempt job_id=%s attempt_id=%s state=%s",
+                job_id,
+                incoming_attempt,
+                _upload_state_value(normalized),
+            )
+            seed = normalized
+            # A pre-v1 terminal record is already externally valid. Preserve it
+            # when the first v1 retry establishes the immutable envelope.
+            if _is_terminal_upload_state(existing) and existing_attempt == incoming_attempt:
+                seed = existing
+            seed = {
+                **seed,
+                "job_id": str(job_id),
+                "attempt_id": incoming_attempt,
+                "terminal_state_contract_version": _TERMINAL_STATE_CONTRACT_VERSION,
+            }
+            seed.setdefault(
+                "terminal_published_at",
+                str(seed.get("completed_at") or seed.get("updated_at") or datetime.now(timezone.utc).isoformat()),
+            )
+            try:
+                inserted, canonical = insert_shared_state_strict(
+                    _terminal_state_name(str(job_id), seed),
+                    seed,
+                    scope=_state_scope(payload=seed),
+                )
+            except Exception:
+                # S3 may have accepted the conditional create before a local
+                # compatibility mirror failed. If the authority can read the
+                # envelope back, finalization succeeded and is retryable.
+                canonical = _read_terminal_upload_state(str(job_id), seed)
+                if not isinstance(canonical, dict):
+                    raise
+                inserted = False
+                logger.warning(
+                    "terminal_state_secondary_persistence_failed job_id=%s attempt_id=%s",
+                    job_id,
+                    incoming_attempt,
+                )
+
+        if _upload_state_value(canonical) != _upload_state_value(normalized):
+            logger.warning(
+                "terminal_state_conflict_prevented job_id=%s attempt_id=%s published_state=%s rejected_state=%s",
+                job_id,
+                incoming_attempt,
+                _upload_state_value(canonical),
+                _upload_state_value(normalized),
+            )
+        # Keep the mutable status object as the attempt pointer/progress
+        # snapshot. Writing a terminal value back into it after the envelope
+        # is visible could race with an immediately requested retry and restore
+        # the prior attempt. Readers resolve the immutable envelope for the
+        # pointer's attempt instead.
+        log_publication = logger.info if inserted else logger.debug
+        log_publication(
+            "terminal_state_published job_id=%s attempt_id=%s state=%s publication=%s",
+            job_id,
+            incoming_attempt,
+            _upload_state_value(canonical),
+            "created" if inserted else "reused",
+        )
+        return canonical
 
 
 def write_upload_status_progress(
@@ -833,18 +1224,71 @@ def write_upload_status_progress(
     *,
     latest_summary: dict[str, Any] | None = None,
     keep_result: bool = False,
+    existing_status: dict[str, Any] | None | object = _UNSET_UPLOAD_STATUS,
 ) -> dict[str, Any]:
     normalized_payload = dict(payload or {}) if isinstance(payload, dict) else {}
     normalized_payload["job_id"] = str(job_id)
-    existing_job_status = read_upload_status(str(job_id))
-    if _upload_state_value(existing_job_status) in _TERMINAL_UPLOAD_STATES and _upload_state_value(normalized_payload) not in _TERMINAL_UPLOAD_STATES:
-        return existing_job_status
-    write_upload_status(str(job_id), normalized_payload)
-    summary_payload = dict(latest_summary or normalized_payload)
-    record = persist_latest_upload_state(summary=summary_payload, result=None, keep_result=keep_result)
-    if identity_matches(record, str(job_id)):
-        write_latest_upload_summary_payload(summary_payload)
-    return summary_payload
+    with upload_job_publication_lock(str(job_id)):
+        existing_job_status = (
+            read_upload_status(str(job_id))
+            if existing_status is _UNSET_UPLOAD_STATUS
+            else existing_status
+        )
+        existing_job_status = existing_job_status if isinstance(existing_job_status, dict) else None
+        normalized_payload.setdefault(
+            "attempt_id",
+            _upload_attempt_id(str(job_id), existing_job_status),
+        )
+        if (
+            _is_terminal_upload_state(existing_job_status)
+            and _upload_attempt_id(str(job_id), existing_job_status)
+            == _upload_attempt_id(str(job_id), normalized_payload)
+            and not _is_terminal_upload_state(normalized_payload)
+        ):
+            return existing_job_status
+        summary_payload = dict(latest_summary or normalized_payload)
+        summary_payload.setdefault("attempt_id", normalized_payload["attempt_id"])
+        if _is_terminal_upload_state(normalized_payload):
+            if (
+                _is_terminal_upload_state(existing_job_status)
+                and _upload_attempt_id(str(job_id), existing_job_status)
+                == normalized_payload["attempt_id"]
+            ):
+                canonical = write_upload_status(
+                    str(job_id),
+                    normalized_payload,
+                    _existing_status=existing_job_status,
+                )
+                record = persist_latest_upload_state(
+                    summary=canonical,
+                    result=None,
+                    keep_result=_upload_state_value(canonical) in _SUCCESS_UPLOAD_STATES,
+                )
+                if identity_matches(record, str(job_id)):
+                    write_latest_upload_summary_payload(canonical)
+                return canonical
+            # Latest/canonical records are derived mirrors, but publish their
+            # complete payload before making the per-job terminal state visible.
+            record = persist_latest_upload_state(summary=summary_payload, result=None, keep_result=keep_result)
+            if identity_matches(record, str(job_id)):
+                write_latest_upload_summary_payload(summary_payload)
+            return write_upload_status(
+                str(job_id),
+                normalized_payload,
+                _existing_status=existing_job_status,
+            )
+
+        canonical = write_upload_status(
+            str(job_id),
+            normalized_payload,
+            _existing_status=existing_job_status,
+        )
+        if _is_terminal_upload_state(canonical):
+            return canonical
+        record = persist_latest_upload_state(summary=summary_payload, result=None, keep_result=keep_result)
+        if identity_matches(record, str(job_id)):
+            write_latest_upload_summary_payload(summary_payload)
+        return canonical
 
 
 def write_latest_upload_result_payload(payload: dict[str, Any]) -> None:
@@ -863,7 +1307,36 @@ def write_latest_upload_summary_payload(payload: dict[str, Any]) -> None:
     _cache_set("summary", normalized, scope=scope)
 
 
-def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dict[str, Any]) -> None:
+def _repair_upload_completion_mirrors(
+    job_id: str,
+    *,
+    result: dict[str, Any],
+    summary: dict[str, Any],
+) -> None:
+    """Best-effort compatibility mirrors after authoritative publication."""
+    try:
+        write_upload_result(str(job_id), result)
+    except Exception:
+        logger.warning("terminal_completion_result_mirror_write_failed job_id=%s", job_id)
+    try:
+        transport_result = project_result_for_transport(result) or result
+        record = persist_latest_upload_state(summary=summary, result=transport_result)
+        if identity_matches(record, str(job_id)):
+            write_latest_upload_result_payload(transport_result)
+            write_latest_upload_summary_payload(summary)
+    except Exception:
+        logger.warning("terminal_completion_latest_mirror_write_failed job_id=%s", job_id)
+
+
+def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dict[str, Any]) -> dict[str, Any]:
+    for value in (result, summary):
+        explicit_job_id = str((value or {}).get("job_id") or "").strip()
+        if explicit_job_id and explicit_job_id != str(job_id):
+            raise ValueError("upload_completion_identity_mismatch")
+    result_scope = dataset_scope_from_payload(result)
+    summary_scope = dataset_scope_from_payload(summary)
+    if result_scope is not None and summary_scope is not None and result_scope != summary_scope:
+        raise ValueError("upload_completion_scope_mismatch")
     scope = _state_scope(payload=result or summary)
     dataset_id = (result or {}).get("dataset_id") or (summary or {}).get("dataset_id") or job_id
     normalized_result = attach_dataset_scope(dict(result or {}) if isinstance(result, dict) else {}, scope=scope, dataset_id=dataset_id)
@@ -889,13 +1362,82 @@ def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dic
         dataset_id=dataset_id,
     )
     normalized_summary["transport_result_available"] = True
-    write_upload_result(job_id, normalized_result)
-    write_upload_status(job_id, normalized_summary)
-    transport_result = project_result_for_transport(normalized_result) or normalized_result
-    record = persist_latest_upload_state(summary=normalized_summary, result=transport_result)
-    if identity_matches(record, str(job_id)):
-        write_latest_upload_result_payload(transport_result)
-        write_latest_upload_summary_payload(normalized_summary)
+
+    with upload_job_publication_lock(str(job_id)):
+        existing_status = read_upload_status(str(job_id))
+        existing_scope = dataset_scope_from_payload(existing_status)
+        if existing_scope is not None and existing_scope != scope:
+            raise ValueError("upload_completion_scope_mismatch")
+        attempt_source = (
+            normalized_summary
+            if normalized_summary.get("attempt_id")
+            else normalized_result
+            if normalized_result.get("attempt_id")
+            else existing_status
+        )
+        attempt_id = _upload_attempt_id(str(job_id), attempt_source)
+        normalized_result["attempt_id"] = attempt_id
+        normalized_summary["attempt_id"] = attempt_id
+        existing_terminal = _read_terminal_upload_state(str(job_id), normalized_summary)
+        if (
+            not isinstance(existing_terminal, dict)
+            and _is_terminal_upload_state(existing_status)
+            and _upload_attempt_id(str(job_id), existing_status) == attempt_id
+        ):
+            # Upgrade a valid pre-v1 terminal record into the immutable model
+            # before deciding whether completion may write a result.
+            existing_terminal = write_upload_status(str(job_id), existing_status)
+        if isinstance(existing_terminal, dict):
+            # Duplicate finalization never overwrites the committed result.
+            persisted_result = _read_terminal_upload_result(str(job_id), existing_terminal)
+            if not isinstance(persisted_result, dict):
+                persisted_result = read_upload_result_by_job_id(str(job_id))
+            if _upload_state_value(existing_terminal) in _SUCCESS_UPLOAD_STATES and isinstance(persisted_result, dict):
+                _repair_upload_completion_mirrors(
+                    str(job_id),
+                    result=persisted_result,
+                    summary=existing_terminal,
+                )
+            write_upload_status(str(job_id), existing_terminal)
+            logger.info(
+                "terminal_state_finalization_retry job_id=%s attempt_id=%s state=%s",
+                job_id,
+                attempt_id,
+                _upload_state_value(existing_terminal),
+            )
+            return existing_terminal
+
+        canonical_result, canonical_summary = _write_upload_result_strict(
+            job_id,
+            normalized_result,
+            normalized_summary,
+        )
+        # The immutable bundle has already selected the canonical publisher,
+        # so these mirrors can be prepared without duplicate-finalizer
+        # contamination. Publish the terminal envelope only after normal
+        # latest/result readers can resolve the completed job.
+        _repair_upload_completion_mirrors(
+            str(job_id),
+            result=canonical_result,
+            summary=canonical_summary,
+        )
+        canonical = write_upload_status(job_id, canonical_summary)
+        if _upload_state_value(canonical) in _SUCCESS_UPLOAD_STATES:
+            published_result = _read_terminal_upload_result(str(job_id), canonical)
+            if not isinstance(published_result, dict):
+                logger.error(
+                    "terminal_completion_result_read_failed job_id=%s attempt_id=%s",
+                    job_id,
+                    _upload_attempt_id(str(job_id), canonical),
+                )
+                return canonical
+        else:
+            # A competing terminal publisher won. Restore derived mirrors to
+            # the authoritative terminal state rather than leaving completion
+            # metadata visible alongside a failure/cancellation envelope.
+            persist_latest_upload_state(summary=canonical, result=None, keep_result=False)
+            write_latest_upload_summary_payload(canonical)
+        return canonical
 
 
 def write_latest_upload_record(record: dict[str, Any] | None) -> dict[str, Any]:
@@ -975,6 +1517,10 @@ def _payloads_share_attempt(
     """
     if not isinstance(active, dict) or not isinstance(candidate, dict):
         return False
+    active_attempt_id = str(active.get("attempt_id") or "").strip()
+    candidate_attempt_id = str(candidate.get("attempt_id") or "").strip()
+    if active_attempt_id or candidate_attempt_id:
+        return bool(active_attempt_id and candidate_attempt_id and active_attempt_id == candidate_attempt_id)
     active_job_id = _identity_field(active, "job_id")
     if active_job_id:
         return _identity_field(candidate, "job_id") == active_job_id
@@ -1129,6 +1675,17 @@ def read_latest_upload_summary() -> dict[str, Any] | None:
 
 def read_upload_result_by_job_id(job_id: str) -> dict[str, Any] | None:
     scope = current_dataset_scope()
+    terminal = read_upload_status(str(job_id))
+    if (
+        isinstance(terminal, dict)
+        and terminal.get("terminal_state_contract_version") == _TERMINAL_STATE_CONTRACT_VERSION
+        and _is_terminal_upload_state(terminal)
+    ):
+        immutable_result = _read_terminal_upload_result(str(job_id), terminal)
+        if isinstance(immutable_result, dict):
+            return immutable_result
+        if _upload_state_value(terminal) not in _SUCCESS_UPLOAD_STATES:
+            return None
     name = f"upload_result_{job_id}"
     persisted = read_shared_state(name, scope=scope)
     if isinstance(persisted, dict) and payload_matches_dataset_scope(persisted, scope):
@@ -1140,23 +1697,32 @@ def read_upload_result_by_job_id(job_id: str) -> dict[str, Any] | None:
     return legacy if payload_matches_dataset_scope(legacy, scope) else None
 
 
-def read_upload_status(job_id: str) -> dict[str, Any] | None:
+def _read_upload_status_mirror(job_id: str) -> dict[str, Any] | None:
     scope = current_dataset_scope()
     name = f"upload_status_{job_id}"
     persisted = read_shared_state(name, scope=scope)
     if isinstance(persisted, dict) and payload_matches_dataset_scope(persisted, scope):
-        runtime_state().cache_job(job_id, persisted)
         return persisted
-    cached = runtime_state().jobs.get(job_id)
-    if isinstance(cached, dict) and payload_matches_dataset_scope(cached, scope):
-        return cached
     local = read_local_json(f"{name}.json", scope=scope)
     if isinstance(local, dict) and payload_matches_dataset_scope(local, scope):
         return local
+    cached = runtime_state().jobs.get(job_id)
+    if isinstance(cached, dict) and payload_matches_dataset_scope(cached, scope):
+        return cached
     legacy = _read_legacy_unscoped_state(name)
     if not isinstance(legacy, dict):
         legacy = _read_legacy_unscoped_local(name)
     return legacy if payload_matches_dataset_scope(legacy, scope) else None
+
+
+def read_upload_status(job_id: str) -> dict[str, Any] | None:
+    """Read the current attempt, preferring its immutable terminal envelope."""
+    mirror = _read_upload_status_mirror(str(job_id))
+    terminal = _read_terminal_upload_state(str(job_id), mirror)
+    canonical = terminal or mirror
+    if isinstance(canonical, dict):
+        runtime_state().cache_job(str(job_id), canonical)
+    return canonical
 
 
 def clear_reset_block_persisted(scope: DatasetScope | None = None) -> None:
@@ -1210,18 +1776,16 @@ def write_latest_upload_result(*args) -> None:
     payload = attach_dataset_scope(payload, scope=scope, dataset_id=payload.get("dataset_id") or payload.get("job_id"))
     payload = _attach_traceability(payload)
 
-    if payload.get("job_id"):
-        write_upload_result(str(payload["job_id"]), payload)
     transport_payload = project_result_for_transport(payload) or payload
 
     if payload.get("job_id"):
         latest_summary = summarize_result_payload(payload)
         latest_summary["transport_result_available"] = True
-        write_upload_status(str(payload["job_id"]), latest_summary)
-        record = persist_latest_upload_state(summary=latest_summary, result=transport_payload)
-        if identity_matches(record, str(payload["job_id"])):
-            write_latest_upload_result_payload(transport_payload)
-            write_latest_upload_summary_payload(latest_summary)
+        write_upload_completion(
+            str(payload["job_id"]),
+            result=payload,
+            summary=latest_summary,
+        )
     else:
         write_latest_upload_result_payload(transport_payload)
         _invalidate_router_latest_cache()
@@ -1253,16 +1817,52 @@ def write_latest_upload_summary(*args, **kwargs) -> None:
         payload["status_url"] = f"/api/data/upload-status/{payload['job_id']}"
 
     result = None
+    raw_result = None
     if payload.get("job_id"):
         raw_result = read_upload_result_by_job_id(str(payload["job_id"]))
         result = project_result_for_transport(raw_result)
         if isinstance(result, dict):
             payload["transport_result_available"] = True
     if payload.get("job_id"):
-        write_upload_status(str(payload["job_id"]), payload)
+        if isinstance(raw_result, dict) and _upload_state_value(payload) in _SUCCESS_UPLOAD_STATES:
+            write_upload_completion(
+                str(payload["job_id"]),
+                result=raw_result,
+                summary=payload,
+            )
+            return
+        existing_status = read_upload_status(str(payload["job_id"]))
+        payload.setdefault(
+            "attempt_id",
+            _upload_attempt_id(str(payload["job_id"]), existing_status),
+        )
+        if (
+            _is_terminal_upload_state(existing_status)
+            and _upload_attempt_id(str(payload["job_id"]), existing_status)
+            == _upload_attempt_id(str(payload["job_id"]), payload)
+        ):
+            canonical = write_upload_status(
+                str(payload["job_id"]),
+                payload,
+                _existing_status=existing_status,
+            )
+            retained_result = (
+                result
+                if _upload_state_value(canonical) in _SUCCESS_UPLOAD_STATES
+                else None
+            )
+            record = persist_latest_upload_state(
+                summary=canonical,
+                result=retained_result,
+                keep_result=retained_result is not None,
+            )
+            if identity_matches(record, str(payload["job_id"])):
+                write_latest_upload_summary_payload(canonical)
+            return
         record = persist_latest_upload_state(summary=payload, result=result, keep_result=True)
         if identity_matches(record, str(payload["job_id"])):
             write_latest_upload_summary_payload(payload)
+        write_upload_status(str(payload["job_id"]), payload)
     else:
         persist_latest_upload_state(summary=payload, result=None, keep_result=True)
         write_latest_upload_summary_payload(payload)
