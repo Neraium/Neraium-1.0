@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from app.services.baseline_contracts import (
     BASELINE_RESULT_CONTRACT_VERSION,
+    BASELINE_ARTIFACT_CONTRACT_VERSION,
     BEHAVIORAL_MODEL_CONTRACT_VERSION,
     WORKFLOW_CREATE_BASELINE,
     WORKFLOW_EXTEND_BASELINE,
@@ -25,9 +26,56 @@ from app.services.sensor_health import assess_sensor_health, build_data_confiden
 from app.services.telemetry_classification import build_telemetry_signal_catalog
 from app.services.telemetry_normalization import build_normalization_report
 from app.services.job_progress import ProgressReporter
+from app.services.performance_instrumentation import (
+    PerformanceTracker,
+    ingestion_performance_stages,
+)
 
 
 StageNotifier = Callable[..., None]
+
+
+class _BaselineComputationCache:
+    """Per-job numeric parsing cache; never shared across datasets or attempts."""
+
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self._rows = rows
+        self._columns: dict[str, list[float | None]] = {}
+        self.hits = 0
+
+    def column(self, column: str) -> list[float | None]:
+        cached = self._columns.get(column)
+        if cached is not None:
+            self.hits += 1
+            return cached
+        values = [_number(row.get(column)) for row in self._rows]
+        self._columns[column] = values
+        return values
+
+    def series(self, column: str, indexes: list[int] | None = None) -> list[float]:
+        values = self.column(column)
+        source = values if indexes is None else (values[index] for index in indexes)
+        return [value for value in source if value is not None]
+
+    def paired(
+        self,
+        left: str,
+        right: str,
+        indexes: list[int] | None = None,
+    ) -> tuple[list[float], list[float]]:
+        left_values = self.column(left)
+        right_values = self.column(right)
+        source = (
+            zip(left_values, right_values)
+            if indexes is None
+            else ((left_values[index], right_values[index]) for index in indexes)
+        )
+        pairs = [
+            (left_value, right_value)
+            for left_value, right_value in source
+            if left_value is not None and right_value is not None
+        ]
+        return [item[0] for item in pairs], [item[1] for item in pairs]
 
 
 def _notify(
@@ -303,14 +351,19 @@ def _learn_distributions(
     modes: list[dict[str, Any]],
     membership: dict[str, list[int]],
     progress_callback: Callable[[int, int], None] | None = None,
+    cache: _BaselineComputationCache | None = None,
 ) -> dict[str, dict[str, Any]]:
     learned: dict[str, dict[str, Any]] = {}
     selected_columns = numeric_columns[:50]
     for index, column in enumerate(selected_columns, start=1):
-        characteristics = _signal_characteristics(_series(rows, column))
+        characteristics = _signal_characteristics(
+            cache.series(column) if cache is not None else _series(rows, column)
+        )
         characteristics["mode_conditioned"] = {
             mode["mode_id"]: _signal_characteristics(
-                _series([rows[index] for index in membership.get(mode["mode_id"], [])], column)
+                cache.series(column, membership.get(mode["mode_id"], []))
+                if cache is not None
+                else _series([rows[index] for index in membership.get(mode["mode_id"], [])], column)
             )
             for mode in modes
             if len(membership.get(mode["mode_id"], [])) >= 3
@@ -327,8 +380,14 @@ def _relationship_edge(
     right: str,
     *,
     mode_id: str,
+    cache: _BaselineComputationCache | None = None,
+    row_indexes: list[int] | None = None,
 ) -> dict[str, Any] | None:
-    left_values, right_values = _paired_series(rows, left, right)
+    left_values, right_values = (
+        cache.paired(left, right, row_indexes)
+        if cache is not None
+        else _paired_series(rows, left, right)
+    )
     correlation = _correlation(left_values, right_values)
     if correlation is None or abs(correlation) < 0.3:
         return None
@@ -369,30 +428,57 @@ def _learn_relationship_graph(
     modes: list[dict[str, Any]],
     membership: dict[str, list[int]],
     progress_callback: Callable[[int, int], None] | None = None,
+    cache: _BaselineComputationCache | None = None,
+    performance_counts: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     selected = numeric_columns[:20]
+    cache_hits_started = cache.hits if cache is not None else 0
     edges: list[dict[str, Any]] = []
-    row_groups = {"all_operation": rows}
+    row_groups = {"all_operation": (rows, None)}
     row_groups.update(
         {
-            mode["mode_id"]: [rows[index] for index in membership.get(mode["mode_id"], [])]
+            mode["mode_id"]: (
+                [rows[index] for index in membership.get(mode["mode_id"], [])],
+                membership.get(mode["mode_id"], []),
+            )
             for mode in modes
         }
     )
-    eligible_groups = [(mode_id, mode_rows) for mode_id, mode_rows in row_groups.items() if len(mode_rows) >= 4]
+    eligible_groups = [
+        (mode_id, mode_rows, indexes)
+        for mode_id, (mode_rows, indexes) in row_groups.items()
+        if len(mode_rows) >= 4
+    ]
     pairs_per_group = len(selected) * max(0, len(selected) - 1) // 2
     total_pairs = len(eligible_groups) * pairs_per_group
     completed_pairs = 0
-    for mode_id, mode_rows in eligible_groups:
+    for mode_id, mode_rows, row_indexes in eligible_groups:
         for left_index, left in enumerate(selected):
             for right in selected[left_index + 1 :]:
-                edge = _relationship_edge(mode_rows, left, right, mode_id=mode_id)
+                edge = _relationship_edge(
+                    mode_rows,
+                    left,
+                    right,
+                    mode_id=mode_id,
+                    cache=cache,
+                    row_indexes=row_indexes,
+                )
                 if edge:
                     edges.append(edge)
                 completed_pairs += 1
                 if progress_callback and (completed_pairs % 25 == 0 or completed_pairs == total_pairs):
                     progress_callback(completed_pairs, total_pairs)
     edges.sort(key=lambda item: (-item["strength"], item["edge_id"]))
+    if performance_counts is not None:
+        performance_counts.update(
+            {
+                "relationship_pairs_considered": total_pairs,
+                "relationship_pairs_eligible": total_pairs,
+                "relationship_pairs_deeply_analyzed": len(edges),
+                "lags_evaluated": len(edges) * 13,
+                "cache_hits": (cache.hits - cache_hits_started) if cache is not None else 0,
+            }
+        )
     return {
         "nodes": [
             {"signal": column, "type": "telemetry_signal"}
@@ -408,8 +494,14 @@ def _learn_relationship_graph(
 def _fit_linear_model(
     rows: list[dict[str, Any]],
     edge: dict[str, Any],
+    cache: _BaselineComputationCache | None = None,
+    row_indexes: list[int] | None = None,
 ) -> dict[str, Any] | None:
-    left, right = _paired_series(rows, edge["source"], edge["target"])
+    left, right = (
+        cache.paired(edge["source"], edge["target"], row_indexes)
+        if cache is not None
+        else _paired_series(rows, edge["source"], edge["target"])
+    )
     if len(left) < 8:
         return None
     split = max(4, min(len(left) - 2, int(len(left) * 0.8)))
@@ -457,15 +549,20 @@ def _fit_expected_models(
     relationship_graph: dict[str, Any],
     membership: dict[str, list[int]],
     progress_callback: Callable[[int, int], None] | None = None,
+    cache: _BaselineComputationCache | None = None,
 ) -> list[dict[str, Any]]:
     models = []
     selected_edges = relationship_graph.get("edges", [])[:50]
     for index, edge in enumerate(selected_edges, start=1):
         mode_id = str(edge.get("mode_id"))
-        model_rows = rows if mode_id == "all_operation" else [
-            rows[index] for index in membership.get(mode_id, [])
-        ]
-        model = _fit_linear_model(model_rows, edge)
+        row_indexes = None if mode_id == "all_operation" else membership.get(mode_id, [])
+        model_rows = rows if row_indexes is None else [rows[index] for index in row_indexes]
+        model = _fit_linear_model(
+            model_rows,
+            edge,
+            cache=cache,
+            row_indexes=row_indexes,
+        )
         if model:
             models.append(model)
         if progress_callback and (index % 10 == 0 or index == len(selected_edges)):
@@ -575,7 +672,30 @@ def build_behavioral_baseline(
     started = time.perf_counter()
     dataset_id = str(dataset_id or job_id)
     ingestion_report = ingestion_report or {}
+    ingestion_performance = (
+        ingestion_report.get("performance")
+        if isinstance(ingestion_report.get("performance"), dict)
+        else {}
+    )
+    profiler = PerformanceTracker(
+        rows=row_count_total,
+        signals=len(numeric_columns),
+        seed_stages=ingestion_performance_stages(
+            ingestion_performance,
+            rows=row_count_total,
+            signals=len(numeric_columns),
+        ),
+        seed_peak_memory_bytes=ingestion_performance.get("peak_process_rss_bytes"),
+        seed_wall_seconds=float(ingestion_performance.get("total_ingestion_to_readiness_seconds") or 0.0),
+        seed_cpu_seconds=float(ingestion_performance.get("total_ingestion_cpu_seconds") or 0.0),
+    )
+    profiler.start_stage(
+        "select_usable_signals",
+        rows_processed=len(rows),
+        signals_processed=len(numeric_columns),
+    )
     matrix_rows = [[str(row.get(column, "")) for column in columns] for row in rows]
+    computation_cache = _BaselineComputationCache(rows)
     if progress_reporter:
         progress_reporter.report(
             stage="learn",
@@ -598,6 +718,11 @@ def build_behavioral_baseline(
             force=True,
         )
 
+    profiler.start_stage(
+        "operating_context_construction",
+        rows_processed=len(rows),
+        signals_processed=len(numeric_columns),
+    )
     _notify(stage_notifier, job_id, stage="baseline_validating", progress=42, label="Validating and normalizing telemetry...")
     timestamp_profile = profile_timestamps(columns, matrix_rows, timestamp_column)
     telemetry_signal_catalog = telemetry_signal_catalog or build_telemetry_signal_catalog(
@@ -679,6 +804,11 @@ def build_behavioral_baseline(
             force=True,
         )
 
+    profiler.start_stage(
+        "baseline_statistics",
+        rows_processed=len(rows),
+        signals_processed=len(numeric_columns[:50]),
+    )
     _notify(stage_notifier, job_id, stage="baseline_relationship_learning", progress=78, label="Learning distributions and mode-conditioned relationships...")
     if progress_reporter:
         progress_reporter.report(
@@ -690,6 +820,7 @@ def build_behavioral_baseline(
             message="Computing per-signal baseline statistics.",
             force=True,
         )
+    distribution_cache_hits_started = computation_cache.hits
     signal_characteristics = _learn_distributions(
         rows,
         numeric_columns,
@@ -706,7 +837,9 @@ def build_behavioral_baseline(
             )
             if progress_reporter else None
         ),
+        cache=computation_cache,
     )
+    profiler.update(cache_hits=computation_cache.hits - distribution_cache_hits_started)
     if progress_reporter:
         progress_reporter.report(
             stage="learn",
@@ -732,6 +865,12 @@ def build_behavioral_baseline(
             message="Evaluating eligible signal relationships.",
             force=True,
         )
+    profiler.start_stage(
+        "relationship_learning",
+        rows_processed=len(rows),
+        signals_processed=len(numeric_columns[:20]),
+    )
+    relationship_performance: dict[str, int] = {}
     relationship_graph = _learn_relationship_graph(
         rows,
         numeric_columns,
@@ -748,7 +887,10 @@ def build_behavioral_baseline(
             )
             if progress_reporter else None
         ),
+        cache=computation_cache,
+        performance_counts=relationship_performance,
     )
+    profiler.update(**relationship_performance)
     if progress_reporter:
         relationship_total = int(relationship_graph.get("relationships_evaluated") or 0)
         progress_reporter.report(
@@ -763,6 +905,11 @@ def build_behavioral_baseline(
             force=True,
         )
 
+    profiler.start_stage(
+        "expected_model_fitting",
+        rows_processed=len(rows),
+        models_evaluated=len(relationship_graph.get("edges", [])[:50]),
+    )
     _notify(stage_notifier, job_id, stage="baseline_model_fitting", progress=88, label="Fitting and validating expected behavior...")
     model_total = len(relationship_graph.get("edges", [])[:50])
     if progress_reporter:
@@ -775,6 +922,7 @@ def build_behavioral_baseline(
             message="Fitting and validating expected-behavior models.",
             force=True,
         )
+    model_cache_hits_started = computation_cache.hits
     expected_behavior_models = _fit_expected_models(
         rows,
         relationship_graph,
@@ -790,7 +938,9 @@ def build_behavioral_baseline(
             )
             if progress_reporter else None
         ),
+        cache=computation_cache,
     )
+    profiler.update(cache_hits=computation_cache.hits - model_cache_hits_started)
     if progress_reporter:
         progress_reporter.report(
             stage="learn",
@@ -803,6 +953,7 @@ def build_behavioral_baseline(
             metadata={"models_retained": len(expected_behavior_models)},
             force=True,
         )
+    profiler.start_stage("finalization")
     suitability = _suitability_report(
         row_count=row_count_total,
         numeric_columns=numeric_columns,
@@ -826,6 +977,7 @@ def build_behavioral_baseline(
     scope = current_dataset_scope()
     model = {
         "contract_version": BEHAVIORAL_MODEL_CONTRACT_VERSION,
+        "artifact_contract_version": BASELINE_ARTIFACT_CONTRACT_VERSION,
         "model_id": model_id,
         "baseline_id": model_id,
         "baseline_candidate_id": model_id,
@@ -861,6 +1013,15 @@ def build_behavioral_baseline(
         "signal_characteristics": signal_characteristics,
         "relationship_graph": relationship_graph,
         "expected_behavior_models": expected_behavior_models,
+        "reusable_artifacts": {
+            "contract_version": BASELINE_ARTIFACT_CONTRACT_VERSION,
+            "dataset_id": dataset_id,
+            "signal_inventory_field": "telemetry_schema.numeric_columns",
+            "signal_statistics_field": "signal_characteristics",
+            "relationship_metrics_field": "relationship_graph",
+            "operating_modes_field": "operating_modes",
+            "expected_models_field": "expected_behavior_models",
+        },
         "suitability": suitability,
         "activation": {
             "eligible": eligible,
@@ -901,6 +1062,10 @@ def build_behavioral_baseline(
             "evidence_pipeline_invoked": False,
             "replay_generated": False,
             "processing_time_seconds": round(time.perf_counter() - started, 6),
+            "performance": profiler.report(
+                rows_processed=row_count_total,
+                signals_processed=len(numeric_columns),
+            ),
         },
     }
     assert_baseline_output_contract(result)

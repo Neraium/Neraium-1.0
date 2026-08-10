@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import log
+from math import isfinite, log
 from typing import Any
 
 import numpy as np
@@ -14,6 +14,7 @@ class TemporalMathConfig:
     max_rows: int = 5000
     max_lag: int = 8
     evidence_trigger: float = 0.15
+    use_specialized_histogram: bool = True
 
 
 def evaluate_temporal_math(
@@ -59,7 +60,11 @@ def evaluate_temporal_math(
     mark("state_drift", 2)
     variance_growth_series = _variance_growth_series(baseline, active)
     mark("variance_growth", 3)
-    entropy_growth_series = _entropy_growth_series(baseline, active)
+    entropy_growth_series = _entropy_growth_series(
+        baseline,
+        active,
+        use_specialized_histogram=cfg.use_specialized_histogram,
+    )
     mark("entropy_growth", 4)
     rate_metrics = _rate_of_change(state_drift_series)
     mark("rate_of_change", 5)
@@ -215,23 +220,74 @@ def _variance_growth_series(baseline: np.ndarray, active: np.ndarray) -> np.ndar
     return np.asarray(out, dtype=float)
 
 
-def _entropy_growth_series(baseline: np.ndarray, active: np.ndarray) -> np.ndarray:
-    baseline_entropy = np.mean([_column_entropy(baseline[:, i]) for i in range(baseline.shape[1])])
+def _entropy_growth_series(
+    baseline: np.ndarray,
+    active: np.ndarray,
+    *,
+    use_specialized_histogram: bool = True,
+) -> np.ndarray:
+    baseline_entropy = np.mean(
+        [
+            _column_entropy(
+                baseline[:, i],
+                use_specialized_histogram=use_specialized_histogram,
+            )
+            for i in range(baseline.shape[1])
+        ]
+    )
     baseline_entropy = max(baseline_entropy, 1e-6)
     out = []
     window = max(6, min(24, active.shape[0] // 3))
     for i in range(active.shape[0]):
         s = max(0, i - window + 1)
         w = active[s : i + 1]
-        e = np.mean([_column_entropy(w[:, j]) for j in range(w.shape[1])])
+        e = np.mean(
+            [
+                _column_entropy(
+                    w[:, j],
+                    use_specialized_histogram=use_specialized_histogram,
+                )
+                for j in range(w.shape[1])
+            ]
+        )
         out.append(float(np.clip(max(e - baseline_entropy, 0.0) / (baseline_entropy + 1.0), 0.0, 1.0)))
     return np.asarray(out, dtype=float)
 
 
-def _column_entropy(series: np.ndarray, bins: int = 12) -> float:
+def _column_entropy(
+    series: np.ndarray,
+    bins: int = 12,
+    *,
+    use_specialized_histogram: bool = True,
+) -> float:
     if series.size < 3:
         return 0.0
-    hist, _ = np.histogram(series, bins=bins, density=False)
+    if not use_specialized_histogram:
+        hist, _ = np.histogram(series, bins=bins, density=False)
+        p = hist.astype(float)
+        s = np.sum(p)
+        if s <= 0:
+            return 0.0
+        p = p / s
+        return -sum(float(pi * log(pi + 1e-12, 2)) for pi in p if pi > 0)
+    first_edge = float(np.min(series))
+    last_edge = float(np.max(series))
+    if not isfinite(first_edge) or not isfinite(last_edge):
+        hist, _ = np.histogram(series, bins=bins, density=False)
+    else:
+        if first_edge == last_edge:
+            first_edge -= 0.5
+            last_edge += 0.5
+        bin_edges = np.linspace(first_edge, last_edge, bins + 1, endpoint=True)
+        values = series.astype(bin_edges.dtype, copy=False)
+        fractional = ((values - first_edge) / (last_edge - first_edge)) * bins
+        indexes = fractional.astype(np.intp)
+        indexes[indexes == bins] -= 1
+        decrement = values < bin_edges[indexes]
+        indexes[decrement] -= 1
+        increment = (values >= bin_edges[indexes + 1]) & (indexes != bins - 1)
+        indexes[increment] += 1
+        hist = np.bincount(indexes, minlength=bins)
     p = hist.astype(float)
     s = np.sum(p)
     if s <= 0:

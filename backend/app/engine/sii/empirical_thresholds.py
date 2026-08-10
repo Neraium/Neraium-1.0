@@ -6,6 +6,7 @@ from itertools import combinations
 from typing import Any
 
 from app.engine.sii.common import (
+    NumericRowCache,
     median_absolute_deviation,
     module_envelope,
     numeric_values,
@@ -33,6 +34,7 @@ def estimate_empirical_thresholds(
     relationship_columns: list[str] | None = None,
     config: dict[str, Any] | None = None,
     progress_callback: Any | None = None,
+    numeric_cache: NumericRowCache | None = None,
 ) -> dict[str, Any]:
     """Fit deterministic, conservative thresholds on historical rows only.
 
@@ -56,7 +58,7 @@ def estimate_empirical_thresholds(
 
     signal_thresholds: dict[str, dict[str, Any]] = {}
     for signal_index, column in enumerate(numeric_columns, start=1):
-        values = numeric_values(baseline_rows, column)
+        values = numeric_values(baseline_rows, column, cache=numeric_cache)
         if len(values) < int(cfg["minimum_signal_values"]):
             signal_thresholds[column] = {
                 "status": "fallback",
@@ -103,6 +105,7 @@ def estimate_empirical_thresholds(
             if progress_callback
             else None
         ),
+        numeric_cache=numeric_cache,
     )
     for pair_windows in relationship_windows.values():
         for left, right in zip(pair_windows, pair_windows[1:]):
@@ -200,6 +203,7 @@ def _relationship_window_correlations(
     *,
     window_rows: int,
     progress_callback: Any | None = None,
+    numeric_cache: NumericRowCache | None = None,
 ) -> dict[tuple[str, str], list[float]]:
     output: dict[tuple[str, str], list[float]] = {}
     if window_rows < 3:
@@ -216,7 +220,7 @@ def _relationship_window_correlations(
         correlations = [
             correlation
             for window in windows
-            if (correlation := pearson(paired_values(window, left, right))) is not None
+            if (correlation := pearson(paired_values(window, left, right, cache=numeric_cache))) is not None
             and math.isfinite(correlation)
         ]
         if correlations:

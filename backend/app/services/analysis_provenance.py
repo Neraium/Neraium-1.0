@@ -9,6 +9,7 @@ from app.engine.sii_contract import ENGINE_NAME, ENGINE_VERSION
 from app.services.analysis_result_contract import CONTRACT_VERSION as ANALYSIS_CONTRACT_VERSION
 from app.services.engine_identity import git_commit
 from app.services.mode_aware_authority import POLICY_VERSION as MODE_AUTHORITY_POLICY_VERSION
+from app.services.performance_instrumentation import PERFORMANCE_CONTRACT_VERSION
 from app.water_intelligence.priors import WATER_PRIORS
 
 
@@ -129,6 +130,11 @@ def _without_runtime_noise(value: Any) -> Any:
             str(key): _without_runtime_noise(child)
             for key, child in value.items()
             if str(key) not in volatile_keys
+            and not (
+                str(key) == "performance"
+                and isinstance(child, dict)
+                and child.get("contract_version") == PERFORMANCE_CONTRACT_VERSION
+            )
         }
     if isinstance(value, list):
         return [_without_runtime_noise(child) for child in value]

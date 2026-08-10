@@ -11,6 +11,29 @@ from app.services.data_quality import parse_numeric_value, parse_timestamp
 EPSILON = 1e-12
 
 
+class NumericRowCache:
+    """Per-analysis cache for deterministic numeric projections of row subsets."""
+
+    def __init__(self) -> None:
+        self._datasets: dict[int, tuple[list[dict[str, Any]], dict[str, list[float | None]]]] = {}
+        self.hits = 0
+
+    def column(self, rows: list[dict[str, Any]], column: str) -> list[float | None]:
+        identity = id(rows)
+        cached_dataset = self._datasets.get(identity)
+        if cached_dataset is None or cached_dataset[0] is not rows:
+            cached_dataset = (rows, {})
+            self._datasets[identity] = cached_dataset
+        columns = cached_dataset[1]
+        values = columns.get(column)
+        if values is not None:
+            self.hits += 1
+            return values
+        values = [finite_number(row.get(column)) for row in rows]
+        columns[column] = values
+        return values
+
+
 def clamp(value: float, lower: float = 0.0, upper: float = 1.0) -> float:
     return max(lower, min(upper, float(value)))
 
@@ -25,11 +48,33 @@ def finite_number(value: Any) -> float | None:
     return number if number is not None and math.isfinite(number) else None
 
 
-def numeric_values(rows: list[dict[str, Any]], column: str) -> list[float]:
+def numeric_values(
+    rows: list[dict[str, Any]],
+    column: str,
+    *,
+    cache: NumericRowCache | None = None,
+) -> list[float]:
+    if cache is not None:
+        return [number for number in cache.column(rows, column) if number is not None]
     return [number for row in rows if (number := finite_number(row.get(column))) is not None]
 
 
-def paired_values(rows: list[dict[str, Any]], left: str, right: str) -> list[tuple[float, float]]:
+def paired_values(
+    rows: list[dict[str, Any]],
+    left: str,
+    right: str,
+    *,
+    cache: NumericRowCache | None = None,
+) -> list[tuple[float, float]]:
+    if cache is not None:
+        return [
+            (left_value, right_value)
+            for left_value, right_value in zip(
+                cache.column(rows, left),
+                cache.column(rows, right),
+            )
+            if left_value is not None and right_value is not None
+        ]
     pairs: list[tuple[float, float]] = []
     for row in rows:
         left_value = finite_number(row.get(left))

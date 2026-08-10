@@ -17,6 +17,8 @@ from app.services.analysis_provenance import canonical_digest, file_digest
 from app.services.analysis_result_contract import attach_analysis_result, build_normalized_telemetry
 from app.services.condition_corroboration import ConditionCorroborationService
 from app.services.baseline_contracts import (
+    BASELINE_ARTIFACT_CONTRACT_VERSION,
+    BEHAVIORAL_MODEL_CONTRACT_VERSION,
     WORKFLOW_ANALYZE_NEW_DATA,
     WORKFLOW_LEGACY_ANALYSIS,
     is_baseline_workflow,
@@ -60,6 +62,10 @@ from app.services.job_progress import (
     initialize_progress,
     retry_progress,
     update_progress,
+)
+from app.services.performance_instrumentation import (
+    append_performance_stage,
+    compact_performance_summary,
 )
 from app.services.upload_state_repository import (
     clear_reset_block_persisted,
@@ -118,21 +124,48 @@ logger = logging.getLogger(__name__)
 def _comparison_relationship_changes(
     active_model: dict[str, Any] | None,
     rows: list[dict[str, Any]],
+    *,
+    performance_counts: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Compare current correlations with the exact persisted behavioral model."""
-    edges = ((active_model or {}).get("relationship_graph") or {}).get("edges") or []
+    if not isinstance(active_model, dict):
+        return []
+    artifact_version = str(active_model.get("artifact_contract_version") or "")
+    model_version = str(active_model.get("contract_version") or "")
+    if artifact_version and artifact_version != BASELINE_ARTIFACT_CONTRACT_VERSION:
+        raise ValueError("incompatible_baseline_artifacts")
+    if not artifact_version and model_version != BEHAVIORAL_MODEL_CONTRACT_VERSION:
+        raise ValueError("incompatible_baseline_artifacts")
+    edges = (active_model.get("relationship_graph") or {}).get("edges") or []
     changes: list[dict[str, Any]] = []
+    parsed_columns: dict[str, list[float | None]] = {}
+    cache_hits = 0
+
+    def values(column: str) -> list[float | None]:
+        nonlocal cache_hits
+        cached = parsed_columns.get(column)
+        if cached is not None:
+            cache_hits += 1
+            return cached
+        parsed = [parse_numeric_value(row.get(column)) for row in rows]
+        parsed_columns[column] = parsed
+        return parsed
+
+    eligible_edges = 0
+    deeply_analyzed_edges = 0
     for edge in edges:
         if not isinstance(edge, dict) or edge.get("mode_id") != "all_operation":
             continue
+        eligible_edges += 1
         source, target = str(edge.get("source") or ""), str(edge.get("target") or "")
         pairs = [
-            (parse_numeric_value(row.get(source)), parse_numeric_value(row.get(target)))
-            for row in rows
+            (left, right)
+            for left, right in zip(values(source), values(target))
+            if left is not None and right is not None
         ]
-        pairs = [(left, right) for left, right in pairs if left is not None and right is not None]
         if len(pairs) < 20:
             continue
+        deeply_analyzed_edges += 1
         left = [pair[0] for pair in pairs]
         right = [pair[1] for pair in pairs]
         left_mean, right_mean = sum(left) / len(left), sum(right) / len(right)
@@ -169,6 +202,17 @@ def _comparison_relationship_changes(
     # One physical degradation can disturb several correlated signals. Surface
     # the strongest independent relationship rather than duplicating one event
     # into multiple operator findings.
+    if performance_counts is not None:
+        performance_counts.update(
+            {
+                "baseline_artifacts_reused": 1,
+                "baseline_relationship_graphs_reused": 1 if edges else 0,
+                "relationship_pairs_considered": len(edges),
+                "relationship_pairs_eligible": eligible_edges,
+                "relationship_pairs_deeply_analyzed": deeply_analyzed_edges,
+                "cache_hits": cache_hits,
+            }
+        )
     return sorted(changes, key=lambda item: item["correlation_delta"], reverse=True)[:1]
 
 
@@ -532,6 +576,7 @@ def _finalize_completed_upload(
     result: dict[str, Any],
     summary: dict[str, Any],
     progress_reporter: ProgressReporter | None = None,
+    processing_started_at: float | None = None,
 ) -> None:
     finalized_result = dict(result)
     if str(finalized_result.get("workflow") or "") == WORKFLOW_ANALYZE_NEW_DATA:
@@ -568,6 +613,8 @@ def _finalize_completed_upload(
     report_finalization(1, "Synchronized the latest analysis state.")
 
     evidence_persisted = False
+    evidence_persistence_started = time.perf_counter()
+    evidence_persistence_cpu_started = time.process_time()
     try:
         from app.services.evidence_store import read_evidence_run, upsert_evidence_run
 
@@ -601,6 +648,17 @@ def _finalize_completed_upload(
 
     if not evidence_persisted:
         raise RuntimeError("evidence_persistence_failed")
+    performance_report = (
+        (finalized_result.get("processing_trace") or {}).get("performance")
+        if isinstance(finalized_result.get("processing_trace"), dict)
+        else None
+    )
+    append_performance_stage(
+        performance_report,
+        stage="evidence_persistence",
+        wall_seconds=time.perf_counter() - evidence_persistence_started,
+        cpu_seconds=time.process_time() - evidence_persistence_cpu_started,
+    )
     report_finalization(2, "Persisted and verified the analysis evidence record.")
 
     finalization["completed_at"] = datetime.now(timezone.utc).isoformat()
@@ -678,6 +736,19 @@ def _finalize_completed_upload(
     processing_stats = dict(finalized_result.get("processing_stats") or {})
     processing_stats["timings"] = {**dict(processing_stats.get("timings") or {}), **timing_snapshot}
     finalized_result["processing_stats"] = processing_stats
+    if processing_started_at is not None:
+        final_processing_seconds = round(
+            max(0.0, time.perf_counter() - processing_started_at),
+            6,
+        )
+        finalized_result["processing_time_seconds"] = final_processing_seconds
+        processing_stats["processing_time_seconds"] = final_processing_seconds
+        finalized_summary["processing_time_seconds"] = final_processing_seconds
+        if isinstance(performance_report, dict):
+            performance_report["total_wall_seconds"] = final_processing_seconds
+            performance_report["compact_summary"] = compact_performance_summary(
+                performance_report
+            )
     persistence_started = time.perf_counter()
     _persist_completed_upload(job_id, result=finalized_result, summary=finalized_summary)
     persist_completed_analysis(finalized_result)
@@ -1272,6 +1343,10 @@ def _build_csv_result(
         stage_notifier=_set_propagation_stage,
         progress_reporter=progress_reporter,
     )
+    result_finalization_started = time.perf_counter()
+    result_finalization_cpu_started = time.process_time()
+    baseline_reuse_wall_seconds = 0.0
+    baseline_reuse_cpu_seconds = 0.0
     sii_result = pipeline["sii_result"]
     replay = pipeline["replay"]
     frame_count = pipeline["frame_count"]
@@ -1337,7 +1412,23 @@ def _build_csv_result(
         else None
     )
     if workflow == WORKFLOW_ANALYZE_NEW_DATA and isinstance(active_baseline_model, dict):
-        exact_baseline_changes = _comparison_relationship_changes(active_baseline_model, rows)
+        baseline_reuse_started = time.perf_counter()
+        baseline_reuse_cpu_started = time.process_time()
+        baseline_reuse_counts: dict[str, int] = {}
+        exact_baseline_changes = _comparison_relationship_changes(
+            active_baseline_model,
+            rows,
+            performance_counts=baseline_reuse_counts,
+        )
+        baseline_reuse_wall_seconds = time.perf_counter() - baseline_reuse_started
+        baseline_reuse_cpu_seconds = time.process_time() - baseline_reuse_cpu_started
+        append_performance_stage(
+            processing_trace.get("performance"),
+            stage="baseline_artifact_reuse",
+            wall_seconds=baseline_reuse_wall_seconds,
+            cpu_seconds=baseline_reuse_cpu_seconds,
+            counters=baseline_reuse_counts,
+        )
         if exact_baseline_changes:
             relationship_model = {
                 **(relationship_model if isinstance(relationship_model, dict) else {}),
@@ -1583,6 +1674,28 @@ def _build_csv_result(
     result["analysis"] = result["analysis_explanation"]
     result = attach_analysis_result(result, normalized_telemetry=normalized_telemetry)
 
+    result_finalization_wall_seconds = max(
+        0.0,
+        (time.perf_counter() - result_finalization_started) - baseline_reuse_wall_seconds,
+    )
+    result_finalization_cpu_seconds = max(
+        0.0,
+        (time.process_time() - result_finalization_cpu_started) - baseline_reuse_cpu_seconds,
+    )
+    processing_time_seconds = round(
+        max(0.0, time.perf_counter() - (processing_started_at or time.perf_counter())),
+        6,
+    )
+    append_performance_stage(
+        processing_trace.get("performance"),
+        stage="result_finalization",
+        wall_seconds=result_finalization_wall_seconds,
+        cpu_seconds=result_finalization_cpu_seconds,
+        total_wall_seconds=processing_time_seconds,
+    )
+    result["processing_time_seconds"] = processing_time_seconds
+    result["processing_stats"]["processing_time_seconds"] = processing_time_seconds
+
     result["sii_reliable_enough_to_show"] = bool(baseline_reliable)
     result["report_finalization"] = {
         "state": "pending",
@@ -1625,6 +1738,7 @@ def _build_csv_result(
         result=result,
         summary=summary,
         progress_reporter=progress_reporter,
+        processing_started_at=processing_started_at,
     )
     return read_upload_status(job_id) or summary
 
@@ -2367,6 +2481,7 @@ def process_csv_file(path: str | os.PathLike[str], **kwargs) -> dict[str, Any]:
                 "input_hash": input_hash,
                 "historical_trust_dataset_identity": ingestion_trust.get("dataset_identity"),
                 "historical_trust_readiness": (ingestion_trust.get("readiness") or {}).get("outcome"),
+                "performance": dict(ingestion_trust.get("performance") or {}),
             },
             processing_started_at,
             ingestion_trust,
