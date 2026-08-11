@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reviewRecordFromFinding } from "../findingReviewState";
+import { reviewRecordFromFinding, reviewRecordFromWorkflow } from "../findingReviewState";
 
 
 describe("finding workflow state", () => {
@@ -32,6 +32,20 @@ describe("finding workflow state", () => {
       reviewedAt: "2026-07-20T09:00:00Z",
       owner: "engineer@example.com",
       persisted: true,
+    });
+  });
+
+  it("retains the server workflow status and version for subsequent protected edits", () => {
+    expect(reviewRecordFromWorkflow({
+      findingId: "canonical-1",
+      version: 7,
+      status: "investigating",
+      effectivePriority: "high",
+    })).toMatchObject({
+      state: "investigating",
+      status: "investigating",
+      version: 7,
+      workflowFindingId: "canonical-1",
     });
   });
 });

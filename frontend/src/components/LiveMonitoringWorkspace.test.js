@@ -154,6 +154,53 @@ describe("Live Monitoring workspace", () => {
     expect(screen.getByText("1 created · 0 updated · 0 resolved")).toBeTruthy();
   });
 
+  it("uses finding-sidecar lifecycle state instead of stale live-analysis state", async () => {
+    fetchLiveMonitoringSnapshot.mockResolvedValue(HEALTHY_SNAPSHOT);
+    const apiFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        findings: [{
+          finding_id: "finding-open",
+          source: { kind: "live_finding", id: "finding-open", finding_key: "finding-open" },
+          evidence: {},
+          workflow: {
+            version: 2,
+            status: "resolved",
+            recommended_priority: "high",
+            user_priority: null,
+            effective_priority: "high",
+            assignment: { target_type: "team", label: "Mechanical" },
+            due_at: null,
+            manager_note: null,
+            work_order_reference: null,
+            external_reference: null,
+            validation_outcome: "issue_found",
+            validation_note: null,
+            latest_feedback: null,
+            resolution: { outcome: "issue_found", note: "Seal leak confirmed." },
+            updated_at: "2026-08-01T12:11:00Z",
+            updated_by: "operator@example.com",
+          },
+          activity: { count: 2, latest_event_at: "2026-08-01T12:11:00Z", url: "/api/findings/finding-open/activity" },
+        }],
+        limit: 100,
+        offset: 0,
+        has_more: false,
+        next_offset: null,
+      }),
+    });
+    render(React.createElement(LiveMonitoringWorkspace, { apiFetch }));
+
+    await screen.findByRole("heading", { name: "Live Monitoring", level: 1 });
+    const activePanel = screen.getByRole("heading", { name: "Active findings", level: 2 }).closest("section");
+    const resolvedPanel = screen.getByRole("heading", { name: "Recently resolved findings", level: 2 }).closest("section");
+    await waitFor(() => expect(within(activePanel).getByText("No active findings")).toBeTruthy());
+    expect(within(resolvedPanel).getByText("Unexplained systemic change")).toBeTruthy();
+    expect(within(resolvedPanel).getAllByText("Resolved").length).toBeGreaterThanOrEqual(2);
+    expect(within(resolvedPanel).getByText("Mechanical")).toBeTruthy();
+  });
+
   it("opens backend-supplied supporting evidence in the shared evidence drawer", async () => {
     fetchLiveMonitoringSnapshot.mockResolvedValue(HEALTHY_SNAPSHOT);
     render(React.createElement(LiveMonitoringWorkspace, { apiFetch: vi.fn() }));

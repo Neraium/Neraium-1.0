@@ -52,10 +52,15 @@ Routes, package UUID, schema version, revision, and legacy finding projection ar
 unchanged. New lifecycle events are accepted through the package-scoped event
 route and appear through the existing analysis and Evidence Package reads.
 
+## Finding-level workflow
+
+The package lifecycle remains the compatibility contract for package-scoped acknowledgement and resolution. The additive finding-level assignment, inspection, feedback, and validation sidecar is documented in [Finding Workflow v1](FINDING_WORKFLOW_V1.md). Its compatibility writer projects unambiguous single-finding run-level changes without duplicating events. Historical multi-finding run assignments remain package scoped because there is no reliable basis for choosing a finding.
+
 ## Deferred roadmap
 
-Lifecycle v1 does not add investigation progress, parts waiting, closure,
-reopening, false-positive, duplicate, or deferred states. It also does not add
-recurrence classification, parent-child packages, CMMS/work orders, technician feedback,
-interventions, validation, hypotheses, topology, or governance. Those remain
-future roadmap work and must not be inferred from lifecycle metadata.
+Package Lifecycle v1 itself does not add investigation progress, parts waiting,
+reopening, duplicate, or deferred states. Finding Workflow v1 adds only the
+lightweight finding-scoped fields described in its contract. Recurrence
+classification, parent-child packages, CMMS records, parts and labor, scheduling,
+hypotheses, topology, and governance remain future roadmap work and must not be
+inferred from lifecycle or workflow metadata.

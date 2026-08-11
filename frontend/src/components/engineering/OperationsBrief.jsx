@@ -76,7 +76,7 @@ export default function OperationsBrief({ model, reviewRecords = {}, onReview, o
       {escalation ? (
         <section className="operations-escalation" aria-label="Prompt engineering review">
           <div><span>Prompt engineering review</span><strong>{escalation.title}</strong></div>
-          <p>{escalationState?.strengthening ? "Evidence for the persistent relationship change is strengthening across related signals." : "A persistent relationship change is supported across related signals."}</p>
+          <p>{escalationState?.strengthening ? "Evidence support for the persistent relationship change is increasing across related signals." : "A persistent relationship change is supported across related signals."}</p>
           <ul><li>{escalation.classificationPresentation?.classificationConfidence ?? escalation.tier} confidence</li><li>Strong mode match</li><li>{escalation.classificationPresentation?.persistence?.label ?? "Persistent"}</li></ul>
           <button type="button" className="forensic-button" onClick={() => onReview?.(escalation)}>Review</button>
         </section>

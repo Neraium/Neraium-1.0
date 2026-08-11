@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import useStableInterval from "../hooks/useStableInterval";
+import { fetchFinding, fetchFindings, normalizeFindingWorkflow, patchFindingWorkflow, postFindingFeedback, resolveFinding } from "../services/api/findingsApi";
 import { fetchLiveMonitoringSnapshot } from "../services/api/liveMonitoringApi";
 import "../styles/engineering-reasoning.css";
 import "../styles/live-monitoring.css";
 import EvidenceDrawer from "./engineering/EvidenceDrawer";
+import FindingWorkflowPanel, { FindingWorkflowSummary } from "./engineering/FindingWorkflow";
 import ReadOnlyIndicator from "./engineering/ReadOnlyIndicator";
 import WorkspaceLoadingState from "./WorkspaceLoadingState";
 
@@ -85,6 +87,21 @@ function findingTitle(finding) {
       ?? finding?.relationship_identity
       ?? "",
   ).trim() || "Classification unavailable";
+}
+
+function findingSystemLabel(finding, configurations = []) {
+  const explicit = String(finding?.equipment_label ?? finding?.asset_name ?? finding?.system_name ?? finding?.system_label ?? "").trim();
+  if (explicit) return explicit;
+  const configured = configurations.find((item) => String(item?.system_id ?? "") === String(finding?.system_id ?? ""));
+  return String(configured?.display_name ?? configured?.name ?? configured?.system_name ?? "").trim() || "Mapped system";
+}
+
+function findingLifecycleBucket(finding, workflow) {
+  const status = String(workflow?.status ?? "").trim().toLowerCase();
+  if (["resolved", "dismissed"].includes(status)) return "resolved";
+  if (status === "monitoring") return "observing";
+  if (["open", "acknowledged", "investigating"].includes(status)) return "open";
+  return String(finding?.current_state ?? "").trim().toLowerCase();
 }
 
 function telemetrySummary(configurations, health, unavailable) {
@@ -184,14 +201,15 @@ function SystemStatusList({ configurations, ingestionHealth, analysisHealth, con
   );
 }
 
-function FindingCard({ finding, onEvidence }) {
+function FindingCard({ finding, configurations, workflow, onEvidence }) {
   const score = formatScore(finding.severity_score);
   const hasEvidence = finding.latest_evidence && typeof finding.latest_evidence === "object" && Object.keys(finding.latest_evidence).length > 0;
+  const lifecycleStatus = workflow?.status ?? finding.current_state;
   return (
     <article className="live-finding-card">
       <div className="live-finding-card__heading">
-        <div><h3>{findingTitle(finding)}</h3><span>{finding.system_id || "System unavailable"}</span></div>
-        <StatusBadge value={finding.current_state} label={finding.current_state === "open" ? "Active" : sentenceCase(finding.current_state)} />
+        <div><h3>{findingTitle(finding)}</h3><span>{findingSystemLabel(finding, configurations)}</span></div>
+        <StatusBadge value={lifecycleStatus} label={lifecycleStatus === "open" ? "Active" : sentenceCase(lifecycleStatus)} />
       </div>
       <dl className="live-definition-grid live-definition-grid--finding">
         <div><dt>First detected</dt><dd>{formatTimestamp(finding.first_detected_at)}</dd></div>
@@ -199,16 +217,17 @@ function FindingCard({ finding, onEvidence }) {
         <div><dt>Persistence</dt><dd>{persistenceText(finding.persistence_state)}</dd></div>
         {score !== null ? <div><dt>Severity score</dt><dd>{score}</dd></div> : null}
       </dl>
+      <FindingWorkflowSummary workflow={workflow ?? { status: finding.current_state }} compact />
       {hasEvidence ? <button type="button" className="live-evidence-button" onClick={() => onEvidence(finding)}>View evidence</button> : <span className="live-evidence-unavailable">Evidence unavailable</span>}
     </article>
   );
 }
 
-function FindingPanel({ title, subtitle, findings, emptyTitle, emptyBody, unavailable, onEvidence }) {
+function FindingPanel({ title, subtitle, findings, configurations, workflows, emptyTitle, emptyBody, unavailable, onEvidence }) {
   return (
     <Panel title={title} subtitle={subtitle}>
       {unavailable ? <EmptyState title="Findings unavailable" body="Finding data could not be loaded in this refresh." />
-        : findings.length ? <div className="live-finding-list">{findings.map((finding) => <FindingCard key={finding.finding_id} finding={finding} onEvidence={onEvidence} />)}</div>
+        : findings.length ? <div className="live-finding-list">{findings.map((finding) => <FindingCard key={finding.finding_id} finding={finding} configurations={configurations} workflow={workflows[finding.finding_id] ?? normalizeFindingWorkflow(finding)} onEvidence={onEvidence} />)}</div>
           : <EmptyState title={emptyTitle} body={emptyBody} />}
     </Panel>
   );
@@ -293,6 +312,7 @@ export default function LiveMonitoringWorkspace({ apiFetch, accessCode = "", dat
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNotice, setRefreshNotice] = useState("");
   const [selectedFinding, setSelectedFinding] = useState(null);
+  const [findingWorkflows, setFindingWorkflows] = useState({});
   const [pageVisible, setPageVisible] = useState(() => typeof document === "undefined" || document.visibilityState !== "hidden");
   const mountedRef = useRef(false);
   const requestRef = useRef(null);
@@ -351,11 +371,11 @@ export default function LiveMonitoringWorkspace({ apiFetch, accessCode = "", dat
   const configurations = snapshot?.configurations ?? [];
   const ingestionHealth = snapshot?.ingestionHealth ?? [];
   const analysisHealth = snapshot?.analysisHealth ?? [];
-  const findings = snapshot?.findings ?? [];
+  const findings = useMemo(() => snapshot?.findings ?? [], [snapshot?.findings]);
   const runs = snapshot?.runs ?? [];
-  const activeFindings = findings.filter((finding) => finding.current_state === "open");
-  const observingFindings = findings.filter((finding) => finding.current_state === "observing");
-  const resolvedFindings = findings.filter((finding) => finding.current_state === "resolved");
+  const activeFindings = findings.filter((finding) => findingLifecycleBucket(finding, findingWorkflows[finding.finding_id]) === "open");
+  const observingFindings = findings.filter((finding) => findingLifecycleBucket(finding, findingWorkflows[finding.finding_id]) === "observing");
+  const resolvedFindings = findings.filter((finding) => findingLifecycleBucket(finding, findingWorkflows[finding.finding_id]) === "resolved");
   const configurationUnavailable = hasOwn(snapshot?.errors, "configurations");
   const findingsUnavailable = hasOwn(snapshot?.errors, "findings");
   const telemetryUnavailable = hasOwn(snapshot?.errors, "ingestionHealth");
@@ -363,6 +383,24 @@ export default function LiveMonitoringWorkspace({ apiFetch, accessCode = "", dat
   const runsUnavailable = hasOwn(snapshot?.errors, "runs");
   const telemetryState = telemetrySummary(configurations, ingestionHealth, telemetryUnavailable);
   const analysisState = analysisSummary(configurations, analysisHealth, analysisUnavailable);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!findings.length || typeof apiFetch !== "function") return () => { cancelled = true; };
+    fetchFindings({ apiFetch, sourceKind: "live_finding" })
+      .then((payload) => {
+        if (cancelled) return;
+        const workflows = {};
+        for (const item of payload.findings) {
+          const sourceId = String(item.workflow.source?.id ?? item.workflow.source?.finding_key ?? item.workflow.findingId);
+          const match = findings.find((finding) => String(finding.finding_id) === sourceId || String(finding.workflow_finding_id) === item.workflow.findingId);
+          if (match) workflows[match.finding_id] = item.workflow;
+        }
+        setFindingWorkflows(workflows);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [apiFetch, datasetScopeKey, findings]);
 
   if (loading && !snapshot) {
     return <WorkspaceLoadingState label="Opening Live Monitoring" detail="Loading telemetry, rolling analysis, and finding state." />;
@@ -380,6 +418,33 @@ export default function LiveMonitoringWorkspace({ apiFetch, accessCode = "", dat
   const enabledCount = configurations.filter((item) => item.enabled).length;
   const drawerFinding = selectedFinding ? evidenceDrawerFinding(selectedFinding) : null;
   const drawerRelationship = selectedFinding ? evidenceDrawerRelationship(selectedFinding) : null;
+  const selectedWorkflow = selectedFinding ? findingWorkflows[selectedFinding.finding_id] ?? normalizeFindingWorkflow(selectedFinding) : null;
+
+  async function saveSelectedWorkflow({ findingId, expectedVersion, changes }) {
+    const result = await patchFindingWorkflow({ apiFetch, findingId, expectedVersion, changes });
+    setFindingWorkflows((current) => ({ ...current, [selectedFinding.finding_id]: result.workflow }));
+    return result;
+  }
+
+  async function resolveSelectedWorkflow({ findingId, expectedVersion, outcome, note }) {
+    const result = await resolveFinding({ apiFetch, findingId, expectedVersion, outcome, note });
+    setFindingWorkflows((current) => ({ ...current, [selectedFinding.finding_id]: result.workflow }));
+    return result;
+  }
+
+  async function feedbackForSelectedWorkflow({ findingId, expectedVersion, category, note, actionTaken }) {
+    const result = await postFindingFeedback({ apiFetch, findingId, expectedVersion, category, note, actionTaken });
+    setFindingWorkflows((current) => ({ ...current, [selectedFinding.finding_id]: result.workflow }));
+    return result;
+  }
+
+  async function reloadSelectedWorkflow() {
+    const findingId = selectedWorkflow?.findingId;
+    if (!findingId) return null;
+    const result = await fetchFinding({ apiFetch, findingId });
+    setFindingWorkflows((current) => ({ ...current, [selectedFinding.finding_id]: result.workflow }));
+    return result;
+  }
 
   return (
     <div className="live-monitoring" data-testid="live-monitoring-workspace">
@@ -404,11 +469,11 @@ export default function LiveMonitoringWorkspace({ apiFetch, accessCode = "", dat
       </Panel>
 
       <section className="live-two-column" aria-label="Current live findings">
-        <FindingPanel title="Active findings" subtitle="Persistent findings in the open state." findings={activeFindings} emptyTitle="No active findings" emptyBody="No live finding is currently open." unavailable={findingsUnavailable} onEvidence={setSelectedFinding} />
-        <FindingPanel title="Observing" subtitle="Findings whose backend persistence state remains observing." findings={observingFindings} emptyTitle="No observing findings" emptyBody="No live finding is currently under observation." unavailable={findingsUnavailable} onEvidence={setSelectedFinding} />
+        <FindingPanel title="Active findings" subtitle="Persistent findings in the open state." findings={activeFindings} configurations={configurations} workflows={findingWorkflows} emptyTitle="No active findings" emptyBody="No live finding is currently open." unavailable={findingsUnavailable} onEvidence={setSelectedFinding} />
+        <FindingPanel title="Observing" subtitle="Findings whose backend persistence state remains observing." findings={observingFindings} configurations={configurations} workflows={findingWorkflows} emptyTitle="No observing findings" emptyBody="No live finding is currently under observation." unavailable={findingsUnavailable} onEvidence={setSelectedFinding} />
       </section>
 
-      <FindingPanel title="Recently resolved findings" subtitle="Resolved findings returned by the live finding API." findings={resolvedFindings.slice(0, 8)} emptyTitle="No recently resolved findings" emptyBody="No resolved live finding is available." unavailable={findingsUnavailable} onEvidence={setSelectedFinding} />
+      <FindingPanel title="Recently resolved findings" subtitle="Resolved findings returned by the live finding API." findings={resolvedFindings.slice(0, 8)} configurations={configurations} workflows={findingWorkflows} emptyTitle="No recently resolved findings" emptyBody="No resolved live finding is available." unavailable={findingsUnavailable} onEvidence={setSelectedFinding} />
 
       <section className="live-health-boundary" aria-labelledby="monitoring-health-title">
         <header><div><span className="forensic-kicker">Service health</span><h2 id="monitoring-health-title">Telemetry and analysis health</h2></div><p>Transport and analysis status only. These states are not equipment findings.</p></header>
@@ -420,7 +485,7 @@ export default function LiveMonitoringWorkspace({ apiFetch, accessCode = "", dat
 
       <Panel title="Recent analysis runs" subtitle="Latest backend-recorded rolling windows and outcomes."><RunList runs={runs} unavailable={runsUnavailable} /></Panel>
 
-      {selectedFinding ? <div className="live-evidence-layer"><button type="button" className="live-evidence-scrim" aria-label="Dismiss evidence overlay" onClick={() => setSelectedFinding(null)} /><div className="live-evidence-layer__drawer"><EvidenceDrawer open finding={drawerFinding} relationship={drawerRelationship} result={selectedFinding.latest_evidence} record={selectedFinding.latest_evidence} strictMissingValues onClose={() => setSelectedFinding(null)} /></div></div> : null}
+      {selectedFinding ? <div className="live-evidence-layer"><button type="button" className="live-evidence-scrim" aria-label="Dismiss evidence overlay" onClick={() => setSelectedFinding(null)} /><div className="live-evidence-layer__drawer"><div className="live-evidence-layer__scroll"><FindingWorkflowPanel finding={{ id: selectedFinding.finding_id, title: findingTitle(selectedFinding) }} workflow={selectedWorkflow ?? { status: selectedFinding.current_state }} onSave={saveSelectedWorkflow} onFeedback={feedbackForSelectedWorkflow} onResolve={resolveSelectedWorkflow} onReload={reloadSelectedWorkflow} /><EvidenceDrawer open finding={drawerFinding} relationship={drawerRelationship} result={selectedFinding.latest_evidence} record={{ ...selectedFinding.latest_evidence, finding_id: selectedFinding.finding_id, system_id: selectedFinding.system_id }} strictMissingValues onClose={() => setSelectedFinding(null)} /></div></div></div> : null}
     </div>
   );
 }

@@ -7,6 +7,7 @@ from app.services.finding_classification import (
     CONTEXT_LIMITED_RELATIONSHIP_CHANGE,
     INSUFFICIENT_EVIDENCE,
     KNOWN_OPERATIONAL_CHANGE,
+    OBSERVED_CHANGE_UNDER_REVIEW,
     POSSIBLE_INSTRUMENTATION_ISSUE,
     UNEXPLAINED_SYSTEMIC_CHANGE,
 )
@@ -148,6 +149,26 @@ def build_investigation_guidance(
             _item(
                 "Compare operator logs and setpoint changes with the evidence window.",
                 "Recorded context can clarify the association without assuming causality.",
+                "documentation",
+            ),
+        ]
+        return _rank(items)
+
+    if classification_type == OBSERVED_CHANGE_UNDER_REVIEW:
+        items = [
+            _item(
+                f"Verify source data for {signal_phrase}.",
+                "Source validation confirms that the measured change is present before persistence is interpreted.",
+                "data_quality",
+            ),
+            _item(
+                "Compare the next like-for-like operating window with the learned relationship.",
+                "A subsequent comparable window can establish whether the measured change persists or clears.",
+                "operating_context",
+            ),
+            _item(
+                "Record relevant operator, setpoint, staging, or maintenance context during the observation window.",
+                "Contemporaneous context can bound later attribution without assuming a cause.",
                 "documentation",
             ),
         ]

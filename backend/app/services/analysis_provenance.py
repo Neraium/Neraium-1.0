@@ -14,7 +14,7 @@ from app.water_intelligence.priors import WATER_PRIORS
 
 
 PROVENANCE_SCHEMA_VERSION = "analysis-provenance.v1"
-FINDING_RULE_VERSION = "deterministic_finding_classification_v2"
+FINDING_RULE_VERSION = "deterministic_finding_classification_v3"
 CONDITION_RULE_VERSION = "deterministic_condition_escalation_v1"
 
 

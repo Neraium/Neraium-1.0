@@ -41,15 +41,54 @@ function cleanText(value) {
 }
 
 function normalizedState(value) {
-  const state = cleanText(value).toLowerCase().replace(/[ -]+/g, "_");
+  const raw = cleanText(value).toLowerCase().replace(/[ -]+/g, "_");
+  const state = ({ open: "new", resolved: "closed", dismissed: "not_useful" })[raw] ?? raw;
   return Object.hasOwn(REVIEW_STATE_LABELS, state) ? state : "";
+}
+
+function normalizedAssignment(value = {}) {
+  if (!value || typeof value !== "object") return { kind: "", label: "", externalReference: "" };
+  return {
+    kind: cleanText(value.kind ?? value.targetType ?? value.target_type ?? value.type),
+    label: cleanText(value.label ?? value.name),
+    externalReference: cleanText(value.externalReference ?? value.external_ref ?? value.external_reference),
+  };
+}
+
+function normalizedResolution(value = {}) {
+  if (!value || typeof value !== "object") return { outcome: "", note: "", resolvedAt: "" };
+  return {
+    outcome: cleanText(value.outcome),
+    note: cleanText(value.note),
+    resolvedAt: cleanText(value.resolvedAt ?? value.resolved_at),
+  };
+}
+
+function workflowFields(record = {}) {
+  return {
+    status: cleanText(record.status ?? record.workflowStatus ?? record.workflow_status),
+    version: Number.isInteger(Number(record.version)) ? Number(record.version) : 0,
+    priority: cleanText(record.priority ?? record.effectivePriority ?? record.effective_priority),
+    recommendedPriority: cleanText(record.recommendedPriority ?? record.recommended_priority),
+    userPriority: cleanText(record.userPriority ?? record.user_priority),
+    dueDate: cleanText(record.dueDate ?? record.due_at),
+    managerNote: cleanText(record.managerNote ?? record.manager_note),
+    assignment: normalizedAssignment(record.assignment),
+    workOrderReference: cleanText(record.workOrderReference ?? record.work_order_reference),
+    externalReference: cleanText(record.externalReference ?? record.external_reference),
+    validationOutcome: cleanText(record.validationOutcome ?? record.validation_outcome),
+    validationNote: cleanText(record.validationNote ?? record.validation_note),
+    resolution: normalizedResolution(record.resolution),
+    workflowFindingId: cleanText(record.workflowFindingId ?? record.findingId ?? record.finding_id),
+    source: record.source && typeof record.source === "object" ? record.source : {},
+  };
 }
 
 export function normalizeReviewRecords(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).flatMap(([id, record]) => {
     if (!record || typeof record !== "object") return [];
-    const state = normalizedState(record.state);
+    const state = normalizedState(record.status ?? record.state);
     if (!state) return [];
     return [[String(id), {
       state,
@@ -58,6 +97,7 @@ export function normalizeReviewRecords(value) {
       reviewedAt: cleanText(record.reviewedAt ?? record.reviewed_at),
       owner: cleanText(record.owner ?? record.actor),
       persisted: record.persisted === true,
+      ...workflowFields(record),
     }]];
   }));
 }
@@ -104,9 +144,24 @@ export function reviewRecordFromFinding(finding = {}) {
   };
 }
 
+export function reviewRecordFromWorkflow(workflow = {}) {
+  if (!workflow || typeof workflow !== "object") return null;
+  const state = normalizedState(workflow.status ?? workflow.state);
+  if (!state) return null;
+  return {
+    state,
+    reason: cleanText(workflow.resolution?.outcome),
+    note: cleanText(workflow.managerNote ?? workflow.manager_note ?? workflow.resolution?.note),
+    reviewedAt: cleanText(workflow.updatedAt ?? workflow.updated_at ?? workflow.resolution?.resolvedAt ?? workflow.resolution?.resolved_at),
+    owner: cleanText(workflow.updatedBy ?? workflow.updated_by),
+    persisted: true,
+    ...workflowFields(workflow),
+  };
+}
+
 export function reviewRecordFor(finding, records = {}) {
   const id = String(finding?.id ?? "");
-  return records[id] ?? reviewRecordFromFinding(finding) ?? { state: "new", reason: "", note: "", reviewedAt: "", owner: "", persisted: false };
+  return records[id] ?? reviewRecordFromWorkflow(finding?.workflow) ?? reviewRecordFromFinding(finding) ?? { state: "new", reason: "", note: "", reviewedAt: "", owner: "", persisted: false, ...workflowFields() };
 }
 
 export function reviewStateLabel(recordOrState) {

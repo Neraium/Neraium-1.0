@@ -150,11 +150,12 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     const finding = within(card);
     expect(finding.getByText("Cooling system")).toBeTruthy();
     expect(finding.getByRole("heading", { name: "Condenser-side behavior changed" })).toBeTruthy();
-    expect(finding.getByText("System")).toBeTruthy();
-    expect(finding.getByText("Confidence")).toBeTruthy();
-    const evidence = finding.getByText("Evidence (4)").closest("details");
+    expect(finding.getByText("Equipment / system")).toBeTruthy();
+    expect(finding.getByText("Requested next action")).toBeTruthy();
+    for (const label of ["Priority", "Assignment", "Due", "Workflow"]) expect(finding.getByText(label)).toBeTruthy();
+    const evidence = finding.getByText("Investigation evidence (4)").closest("details");
     expect(evidence.open).toBe(false);
-    fireEvent.click(finding.getByText("Evidence (4)"));
+    fireEvent.click(finding.getByText("Investigation evidence (4)"));
     expect(evidence.open).toBe(true);
     expect(finding.getByText("Condenser approach temperature increased 15.3%.")).toBeTruthy();
     expect(finding.getByText("Compressor current increased 5.5%.")).toBeTruthy();
@@ -205,18 +206,18 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
 
     const card = screen.getByTestId("compact-finding-card");
     const view = within(card);
-    expect(view.getByRole("heading", { name: "Pumping System relationship weakening" })).toBeTruthy();
+    expect(view.getByRole("heading", { name: "Pumping System relationship decreased" })).toBeTruthy();
     expect(view.getByText("Pumping System")).toBeTruthy();
-    expect(view.getByText("Evidence (6)").closest("details").open).toBe(false);
+    expect(view.getByText("Investigation evidence (6)").closest("details").open).toBe(false);
     expect(card.querySelectorAll(".operational-finding__evidence li")).toHaveLength(6);
     expect(view.getByRole("button", { name: "Investigate" })).toBeTruthy();
     expect(view.getByText("Actions")).toBeTruthy();
 
     fireEvent.click(view.getByRole("button", { name: "Investigate" }));
     expect(window.location.pathname).toBe("/findings/condition-pump");
-    expect(screen.getByText("Evidence trend")).toBeTruthy();
+    expect(screen.getAllByText("Support trend").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
-    expect(screen.getByRole("heading", { name: "Evidence trend" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Support trend" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Comparable operation" })).toBeTruthy();
     expect(screen.getByText("18 comparable periods")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Condition timeline" })).toBeTruthy();
@@ -259,17 +260,18 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     };
     renderWorkspace({ result: analysisResult({ analysis: { conditions: [condition] } }) });
 
-    expect(screen.getByRole("heading", { name: "Cooling Distribution relationship weakening" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Cooling Distribution relationship decreased" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
 
     expect(screen.getByText("Context-limited relationship change")).toBeTruthy();
-    expect(screen.getByText("Not established")).toBeTruthy();
-    expect(screen.getByText("Evidence trend")).toBeTruthy();
-    expect(screen.getByText("Strengthening")).toBeTruthy();
+    expect(screen.getAllByText("Not established").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Support trend").length).toBeGreaterThan(0);
+    expect(screen.getByText("Increasing")).toBeTruthy();
+    expect(screen.getByText("Evidence support is increasing, but like-for-like comparability is limited.")).toBeTruthy();
     expect(screen.queryByText(/^Trajectory$/)).toBeNull();
     expect(screen.queryByText(/Observed for 81 days/i)).toBeNull();
-    expect(screen.getByText("Return temperature / Chiller power changed from strong to weak coupling.")).toBeTruthy();
+    expect(screen.getByText("Return temperature signal / Power signal changed from strong to weak coupling.")).toBeTruthy();
     expect(document.querySelectorAll(".case-sections--review .classification-guidance > li")).toHaveLength(3);
     expect(screen.queryByText("This fourth action must not appear.")).toBeNull();
     const headings = [...document.querySelectorAll(".case-sections--review > section > h2")].map((node) => node.textContent);
@@ -349,7 +351,9 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(window.location.pathname).toBe("/evidence/finding-1");
     expect(screen.getByTestId("evidence-record")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Source lineage" })).toBeTruthy();
-    expect(screen.getByText("Baseline relationship value")).toBeTruthy();
+    expect(screen.getByText("Metric")).toBeTruthy();
+    expect(screen.getByText("Signed change")).toBeTruthy();
+    expect(screen.getByText("Absolute change")).toBeTruthy();
   });
 
   it("supports direct workflow navigation and keyboard search", () => {

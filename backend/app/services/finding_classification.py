@@ -2,11 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.finding_confidence import (
+    build_finding_confidence,
+    normalize_persistence_status,
+    reconcile_alternative_explanations,
+)
+
 
 KNOWN_OPERATIONAL_CHANGE = "known_operational_change"
 CONTEXT_LIMITED_RELATIONSHIP_CHANGE = "context_limited_relationship_change"
 POSSIBLE_INSTRUMENTATION_ISSUE = "possible_instrumentation_issue"
 UNEXPLAINED_SYSTEMIC_CHANGE = "unexplained_systemic_change"
+OBSERVED_CHANGE_UNDER_REVIEW = "observed_change_under_review"
 INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 
 _LABELS = {
@@ -14,6 +21,7 @@ _LABELS = {
     CONTEXT_LIMITED_RELATIONSHIP_CHANGE: "Context-limited relationship change",
     POSSIBLE_INSTRUMENTATION_ISSUE: "Possible instrumentation issue",
     UNEXPLAINED_SYSTEMIC_CHANGE: "Unexplained systemic change",
+    OBSERVED_CHANGE_UNDER_REVIEW: "Observed change under review",
     INSUFFICIENT_EVIDENCE: "Insufficient evidence",
 }
 _INSTRUMENTATION_CONDITIONS = {
@@ -71,35 +79,63 @@ def classify_finding(
             and item.get("reason")
         )
     direct_context_evidence = dedupe(direct_context_evidence)
+    normalized_persistence = normalize_persistence_status(persistence)["status"]
+
+    def build_payload(
+        classification_type: str,
+        *,
+        confidence: str,
+        reasons: list[str],
+        certainty_limit: str,
+    ) -> dict[str, Any]:
+        alternatives = reconcile_alternative_explanations(
+            classification_type=classification_type,
+            sensor_health=sensor_health,
+            operating_mode=operating_mode,
+            persistence=persistence,
+        )
+        payload = classification_payload(
+            classification_type,
+            confidence=confidence,
+            reasons=reasons,
+            alternative_explanations=alternatives,
+            certainty_limit=certainty_limit,
+        )
+        payload["finding_confidence_v1"] = build_finding_confidence(
+            classification_type=classification_type,
+            classification_confidence=confidence,
+            classification_reason=first_text(payload["reasons"], certainty_limit),
+            data_confidence=data_confidence,
+            sensor_health=sensor_health,
+            operating_mode=operating_mode,
+            persistence=persistence,
+            relationship_evidence=relationship_evidence,
+        )
+        return payload
+
+    if instrumentation_reasons:
+        return build_payload(
+            POSSIBLE_INSTRUMENTATION_ISSUE,
+            confidence="limited",
+            reasons=instrumentation_reasons,
+            certainty_limit=(
+                "Signal-health evidence can identify an instrumentation possibility, but it does not confirm "
+                "that a sensor or transmitter is faulty."
+            ),
+        )
 
     if data_rating == "low" or not evidence_sufficient:
         reasons = [
             *list_text(data_confidence.get("reasons")),
             *evidence_reasons,
         ]
-        return classification_payload(
+        return build_payload(
             INSUFFICIENT_EVIDENCE,
             confidence="low",
             reasons=reasons or ["Available evidence did not clear the minimum certainty gates."],
-            alternative_explanations=alternative_explanations(sensor_health, operating_mode),
             certainty_limit=(
                 "Data quality or relationship support is insufficient to distinguish an operational, "
                 "instrumentation, or physical-system explanation."
-            ),
-        )
-
-    if instrumentation_reasons:
-        return classification_payload(
-            POSSIBLE_INSTRUMENTATION_ISSUE,
-            confidence="limited",
-            reasons=instrumentation_reasons,
-            alternative_explanations=[
-                "A physical-system relationship change remains possible.",
-                "An undocumented operating or control change may also explain the pattern.",
-            ],
-            certainty_limit=(
-                "Signal-health evidence can identify an instrumentation possibility, but it does not confirm "
-                "that a sensor or transmitter is faulty."
             ),
         )
 
@@ -109,14 +145,10 @@ def classify_finding(
             if data_rating == "high" and mode_confidence == "high"
             else "limited"
         )
-        return classification_payload(
+        return build_payload(
             KNOWN_OPERATIONAL_CHANGE,
             confidence=confidence,
             reasons=direct_context_evidence,
-            alternative_explanations=[
-                "A concurrent instrumentation condition is not supported by available checks but cannot be excluded.",
-                "A relationship change may remain after like-for-like operation resumes.",
-            ],
             certainty_limit=(
                 "A directly observed operating-context change coincided with the relationship shift. This does "
                 "not establish causality or prove that the context change is the only influence."
@@ -129,11 +161,10 @@ def classify_finding(
             *list_text(data_confidence.get("reasons")),
             "Operating context was not comparable enough to attribute the observed relationship change.",
         ]
-        return classification_payload(
+        return build_payload(
             CONTEXT_LIMITED_RELATIONSHIP_CHANGE,
             confidence="limited",
             reasons=context_reasons,
-            alternative_explanations=alternative_explanations(sensor_health, operating_mode),
             certainty_limit=(
                 "The relationship change was observed, but differing or unavailable operating context limits "
                 "interpretation. The evidence does not establish that the context difference caused the change."
@@ -149,7 +180,7 @@ def classify_finding(
             and relationship_confidence >= 0.75
             else "limited"
         )
-        return classification_payload(
+        return build_payload(
             UNEXPLAINED_SYSTEMIC_CHANGE,
             confidence=confidence,
             reasons=[
@@ -157,16 +188,32 @@ def classify_finding(
                 *list_text(operating_mode.get("reasons")),
                 "No available operating-context or signal-health evidence explains the relationship shift.",
             ],
-            alternative_explanations=[
-                "An undocumented staging, schedule, setpoint, or maintenance change.",
-                "An instrumentation condition not detectable from the available telemetry.",
-                "A load or environmental condition not represented in the uploaded signals.",
-            ],
             certainty_limit=(
                 "This class describes a persistent relationship change under comparable conditions; it does not "
                 "diagnose cause, predict a failure, or imply an emergency."
             ),
         )
+
+    if mode_match == "strong" and normalized_persistence in {"not_assessed", "observing"}:
+        payload = build_payload(
+            OBSERVED_CHANGE_UNDER_REVIEW,
+            confidence="limited",
+            reasons=[
+                *persistence_reasons,
+                *list_text(operating_mode.get("reasons")),
+                "The measured relationship change is supported, but persistence is still being established.",
+            ],
+            certainty_limit=(
+                "The baseline/current comparison supports a measured change, but the available evidence does not "
+                "yet establish whether it persists or what explains it."
+            ),
+        )
+        payload["legacy_classification"] = {
+            "type": INSUFFICIENT_EVIDENCE,
+            "label": _LABELS[INSUFFICIENT_EVIDENCE],
+            "confidence": "low",
+        }
+        return payload
 
     reasons = [
         *persistence_reasons,
@@ -176,11 +223,10 @@ def classify_finding(
         reasons.append("The available persistence evidence does not support a sustained systemic claim.")
     if mode_match != "strong":
         reasons.append("Operating conditions were not matched strongly enough for a systemic interpretation.")
-    return classification_payload(
+    return build_payload(
         INSUFFICIENT_EVIDENCE,
         confidence="low",
         reasons=reasons,
-        alternative_explanations=alternative_explanations(sensor_health, operating_mode),
         certainty_limit=(
             "Additional like-for-like operation, persistence, or context evidence is needed before the "
             "relationship shift can be interpreted reliably."
@@ -248,21 +294,8 @@ def classification_payload(
         "reasons": dedupe(reasons),
         "alternative_explanations": dedupe(alternative_explanations),
         "certainty_limit": certainty_limit,
-        "rule_version": "deterministic_finding_classification_v2",
+        "rule_version": "deterministic_finding_classification_v3",
     }
-
-
-def alternative_explanations(
-    sensor_health: list[dict[str, Any]],
-    operating_mode: dict[str, Any],
-) -> list[str]:
-    alternatives = []
-    if not sensor_health:
-        alternatives.append("Signal-health evidence was unavailable.")
-    if str(operating_mode.get("match") or "unavailable") != "strong":
-        alternatives.append("Different or unobserved operating conditions may explain the pattern.")
-    alternatives.append("More persistence evidence may change the supported classification.")
-    return alternatives
 
 
 def list_text(value: Any) -> list[str]:
@@ -277,6 +310,16 @@ def score(value: Any) -> float:
     if numeric > 1.0 and numeric <= 100.0:
         numeric /= 100.0
     return max(0.0, min(1.0, numeric))
+
+
+def first_text(*values: Any) -> str:
+    for value in values:
+        candidates = value if isinstance(value, list) else [value]
+        for candidate in candidates:
+            text = str(candidate or "").strip()
+            if text:
+                return text
+    return ""
 
 
 def integer(value: Any) -> int:

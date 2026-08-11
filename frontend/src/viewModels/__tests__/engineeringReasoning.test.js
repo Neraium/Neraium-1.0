@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildEngineeringReasoningModel,
   buildEngineeringReasoningModelsFromEvidenceRuns,
+  buildFacilityLabelContext,
   deriveConfidenceTier,
   formatPrimaryEvidence,
 } from "../engineeringReasoning";
@@ -46,6 +47,7 @@ describe("engineering reasoning model", () => {
     const finding = model.selectedFinding;
     expect(finding.status).toBe("Evidence insufficient");
     expect(finding.tier).toBe("Withheld");
+    expect(finding.observedChange).toBe("Flow response decreased under comparable demand.");
     expect(finding.recommendationAllowed).toBe(false);
     expect(finding.firstPlaceToLook).toBe("");
     expect(finding.primaryLimitation).toBe("Missing telemetry limits the conclusion.");
@@ -104,9 +106,38 @@ describe("engineering reasoning model", () => {
 
     expect(model.sites).toHaveLength(1);
     expect(model.findings).toHaveLength(1);
-    expect(model.relationships[0]).toMatchObject({ source: "Chiller-03", target: "Flow-01", state: "changed" });
+    expect(model.relationships[0]).toMatchObject({ source: "Signal A", target: "Flow signal", rawSource: "Chiller-03", rawTarget: "Flow-01", state: "changed" });
     expect(model.selectedFinding.location.asset).toBe("");
-    expect(model.searchItems.some((item) => item.label === "Chiller-03")).toBe(true);
+    expect(model.searchItems.some((item) => item.label === "Chiller-03")).toBe(false);
+    expect(model.searchItems.some((item) => item.label === "Signal A")).toBe(true);
+  });
+
+  it("uses persisted aliases in maintenance labels while retaining exact source tags", () => {
+    const labelContext = buildFacilityLabelContext({
+      systems: [{ system_id: "chw_loop_01", name: "Chilled-water loop" }],
+      equipment: [{ equipment_id: "pump_02", name: "Primary chilled-water pump" }],
+      signal_mappings: [
+        { raw_tag: "chw_flow_01", normalized_name: "flow", alias: "Primary chilled-water flow", equipment_id: "pump_02" },
+        { raw_tag: "p_discharge_02", normalized_name: "pressure", alias: "Pump discharge pressure", equipment_id: "pump_02" },
+      ],
+    });
+    const model = buildEngineeringReasoningModel({
+      labelContext,
+      result: {
+        facility_name: "One Site",
+        data_quality: { coverage_percent: 100 },
+        analysis_explanation: {
+          fingerprint: { status: "Established" },
+          relationships: [{ id: "rel-1", columns: ["chw_flow_01", "p_discharge_02"], change_type: "changed", baseline_strength: 0.8, current_strength: 0.3 }],
+          insights: [{ id: "finding-1", variables: ["chw_flow_01", "p_discharge_02"], supporting_evidence: ["Mapped observation"] }],
+        },
+      },
+    });
+
+    expect(model.relationships[0]).toMatchObject({ source: "Primary chilled-water flow", target: "Pump discharge pressure", rawSource: "chw_flow_01", rawTarget: "p_discharge_02" });
+    expect(labelContext).toMatchObject({ systemLabels: { chw_loop_01: "Chilled-water loop" }, equipmentLabels: { pump_02: "Primary chilled-water pump" } });
+    expect(model.selectedFinding.rawVariables).toEqual(["chw_flow_01", "p_discharge_02"]);
+    expect(model.searchItems.some((item) => item.label === "chw_flow_01")).toBe(false);
   });
 
   it("uses the explicit unassigned dataset state instead of a fake current site", () => {
@@ -179,7 +210,7 @@ describe("engineering reasoning model", () => {
 
     expect(models).toHaveLength(1);
     expect(models[0].selectedFinding.objectType).toBe("condition");
-    expect(models[0].selectedFinding.title).toBe("Pumping System relationship weakening");
+    expect(models[0].selectedFinding.title).toBe("Pumping System relationship shifted");
     expect(models[0].selectedFinding.corroboration.relationship_count).toBe(3);
   });
 
@@ -304,11 +335,76 @@ describe("engineering reasoning model", () => {
 
     expect(model.findings).toHaveLength(1);
     expect(model.selectedFinding.objectType).toBe("condition");
-    expect(model.selectedFinding.title).toBe("Pumping System relationship weakening");
+    expect(model.selectedFinding.title).toBe("Pumping System relationship decreased");
     expect(model.selectedFinding.trajectory.state).toBe("Strengthening");
     expect(model.selectedFinding.corroboration.relationship_count).toBe(3);
     expect(model.selectedFinding.location.likelyInvestigationArea).toBe("Discharge boundary");
     expect(model.selectedFinding.location.asset).toBe("");
     expect(model.selectedFinding.comparableOperation.comparable_period_count).toBe(18);
+  });
+
+  it("keeps relationship direction separate from evidence support and exposes every confidence dimension", () => {
+    const confidence = {
+      schema_version: "finding-confidence-v1",
+      change_detection: { level: "high", reason: "The measured comparison supports a change." },
+      interpretation: { level: "low", attribution_status: "unattributed", reason: "Attribution is not established." },
+      persistence: { status: "observing", reason: "A follow-up window is required.", evidence_refs: [] },
+      operating_context: { level: "high", reason: "Recorded operating context matched." },
+      evidence_quality: { level: "medium", reason: "Coverage is usable but bounded." },
+      support_trend: "increasing",
+      relationship_comparison: {
+        metric: "pearson_correlation",
+        baseline_value: 0.8,
+        current_value: 0.2,
+        signed_change: -0.6,
+        absolute_change: 0.6,
+        direction: "decreased",
+      },
+    };
+    const model = buildEngineeringReasoningModel({ result: {
+      facility_name: "North Plant",
+      data_quality: { coverage_percent: 90 },
+      analysis_result: {
+        fingerprint: { status: "Established" },
+        systems: [{ name: "Pumping System" }],
+        conditions: [{
+          object_type: "condition",
+          condition_id: "condition-1",
+          headline: "Connected relationships changed",
+          classification: { type: "observed_change_under_review", confidence: "limited", finding_confidence_v1: confidence },
+          finding_confidence_v1: confidence,
+          affected_systems: ["Pumping System"],
+          affected_signals: ["Flow", "Pressure"],
+          trajectory: { scope: "evidence_support", state: "Strengthening" },
+          supporting_relationships: [{
+            id: "rel-1",
+            columns: ["Flow", "Pressure"],
+            change_type: "weakened",
+            relationship_comparison: confidence.relationship_comparison,
+          }],
+          supporting_evidence: ["The Flow / Pressure relationship changed."],
+        }],
+      },
+    } });
+
+    const finding = model.selectedFinding;
+    expect(finding.title).toBe("Flow / Pressure relationship decreased");
+    expect(finding.relationshipDirection).toBe("decreased");
+    expect(finding.supportTrend).toBe("increasing");
+    expect(finding.comparison).toMatchObject({
+      baselineValue: 0.8,
+      currentValue: 0.2,
+      signedChange: -0.6,
+      absoluteChange: 0.6,
+      direction: "decreased",
+    });
+    expect(finding.confidenceDimensions).toEqual({
+      changeDetection: confidence.change_detection,
+      interpretation: confidence.interpretation,
+      operatingContext: confidence.operating_context,
+      evidenceQuality: confidence.evidence_quality,
+    });
+    expect(finding.persistence).toEqual(confidence.persistence);
+    expect(finding.classificationPresentation.persistence.label).toBe("Observing");
   });
 });

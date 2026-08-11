@@ -16,6 +16,14 @@ def test_facility_context_is_shared_through_the_scoped_api() -> None:
                 "equipment_ids": ["pump-1", "hx-1"],
             }
         ],
+        "equipment": [
+            {
+                "equipment_id": "pump-1",
+                "name": "Primary chilled-water pump",
+                "system_id": "chw-loop-1",
+                "equipment_type": "pump",
+            }
+        ],
         "signal_mappings": [
             {
                 "raw_tag": "BAS.CHW.P1.SPD",
@@ -45,4 +53,5 @@ def test_facility_context_is_shared_through_the_scoped_api() -> None:
     assert stored.status_code == 200
     assert stored.json()["site_id"] == "central-plant"
     assert stored.json()["systems"][0]["system_id"] == "chw-loop-1"
+    assert stored.json()["equipment"] == payload["equipment"]
     assert stored.json()["signal_mappings"][0]["alias"] == "Primary pump speed"

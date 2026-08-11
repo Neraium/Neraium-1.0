@@ -399,6 +399,14 @@
   margin-top: 13px;
 }
 
+.live-finding-card .finding-workflow-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 13px;
+  border: 1px solid var(--fr-line);
+}
+
+.live-finding-card .finding-workflow-summary > div { background: rgba(11, 18, 27, .78); }
+
 .live-evidence-unavailable {
   display: block;
   margin-top: 13px;
@@ -525,10 +533,15 @@
   box-shadow: -24px 0 60px rgba(0, 0, 0, 0.58);
 }
 
+.live-evidence-layer__scroll { height: 100%; overflow-y: auto; }
+.live-evidence-layer__scroll > .finding-workflow { margin: 14px; }
+.live-evidence-layer__scroll > .finding-workflow form { grid-template-columns: 1fr; }
+.live-evidence-layer__scroll > .finding-workflow .finding-workflow__wide { grid-column: auto; }
+
 .live-evidence-layer__drawer .evidence-drawer {
   position: static;
   top: auto;
-  height: 100%;
+  height: auto;
 }
 
 .evidence-drawer__confidence > strong {

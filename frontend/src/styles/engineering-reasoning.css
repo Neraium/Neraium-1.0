@@ -82,8 +82,8 @@
 .forensic-window span { display: block; color: var(--fr-faint); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
 .forensic-window strong { display: block; margin-top: 6px; font-size: 12px; font-weight: 500; }
 .forensic-muted { color: var(--fr-muted); }
-.forensic-button { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0 16px; border: 1px solid #4d9ae4; border-radius: 3px; background: #276ba7; color: #f5f9ff; font-size: 11px; font-weight: 620; letter-spacing: .03em; cursor: pointer; }
-.forensic-button:hover { background: #307bbb; }
+.forensic-button { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0 16px; border: 1px solid #3f8fd9; border-radius: 3px; background: #125f9c; color: #ffffff; font-size: 11px; font-weight: 620; letter-spacing: .03em; cursor: pointer; }
+.forensic-button:hover { background: #166bac; }
 .forensic-button:disabled { opacity: .45; cursor: not-allowed; }
 .forensic-button--secondary { background: transparent; border-color: var(--fr-line-strong); color: #b9c7d7; }
 .forensic-button--secondary:hover { background: rgba(255,255,255,.04); }
@@ -1023,8 +1023,8 @@
 .forensic-button,
 .forensic-icon-button,
 .forensic-link-button { border-radius: var(--radius-control); transition: transform 120ms var(--ease-product), color 140ms var(--ease-product), background-color 140ms var(--ease-product), border-color 140ms var(--ease-product), box-shadow 140ms var(--ease-product); }
-.forensic-button { min-height: 40px; padding-inline: 15px; border-color: #2d93e8; background: #1674be; font-size: 11px; }
-.forensic-button:hover { background: #1c83d3; box-shadow: 0 8px 24px rgba(22, 140, 255, 0.18); }
+.forensic-button { min-height: 40px; padding-inline: 15px; border-color: #2f86d1; background: #125f9c; color: #ffffff; font-size: 11px; }
+.forensic-button:hover { background: #166bac; box-shadow: 0 8px 24px rgba(18, 95, 156, 0.22); }
 .forensic-button:active { transform: translateY(1px); }
 .forensic-button--secondary { border-color: var(--fr-line-strong); background: rgba(255, 255, 255, 0.015); }
 .forensic-button--secondary:hover { border-color: rgba(46, 168, 255, 0.48); background: rgba(22, 140, 255, 0.08); box-shadow: none; }
@@ -1248,8 +1248,17 @@
 .operational-finding__identity { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 15px 0; }
 .operational-finding__identity > div:first-child { min-width: 0; display: grid; gap: 3px; }
 .operational-finding__identity > div:first-child strong { overflow: hidden; color: #b7c6d5; font-size: 10px; font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
+.operational-finding__identity > div:first-child small { color: var(--fr-faint); font-size: 9px; }
+.operational-finding__status { padding: 4px 8px; border: 1px solid var(--fr-line-strong); border-radius: 999px; color: #b7c6d5; font-size: 8px; text-transform: capitalize; }
 .operational-finding__what { padding: 8px 15px 0; }
+.operational-finding__what > span,
+.operational-finding__next > span,
+.finding-confidence-strip span,
+.finding-workflow-summary dt { color: var(--fr-faint); font-size: 8px; font-weight: 680; letter-spacing: .1em; text-transform: uppercase; }
 .operational-finding__what h3 { max-width: 50ch; margin: 0; font-size: 18px; line-height: 1.25; font-weight: 560; letter-spacing: -.01em; }
+.operational-finding__what p { max-width: 76ch; margin: 7px 0 0; color: #c0ccd8; font-size: 11px; line-height: 1.5; }
+.operational-finding__next { display: grid; gap: 5px; margin-top: 11px; padding: 10px 15px; border-top: 1px solid var(--fr-line); border-bottom: 1px solid var(--fr-line); }
+.operational-finding__next p { margin: 0; color: #d1dbe5; font-size: 11px; line-height: 1.45; }
 .operational-finding__brief { display: grid; grid-template-columns: repeat(2, 1fr); margin-top: 11px; border-top: 1px solid var(--fr-line); border-bottom: 1px solid var(--fr-line); }
 .operational-finding__brief p { min-width: 0; display: grid; gap: 5px; margin: 0; padding: 11px 15px; color: #c0ccd8; font-size: 10px; line-height: 1.45; }
 .operational-finding__brief p + p { border-left: 1px solid var(--fr-line); }
@@ -1263,6 +1272,16 @@
 .operational-finding__relationship-detail ul { margin: 8px 0 0; padding-left: 17px; }
 .operational-finding__relationship-detail li { line-height: 1.45; }
 .operational-finding__ranking { display: grid; gap: 4px; margin: 0; padding: 10px 15px; color: var(--fr-muted); font-size: 9px; line-height: 1.45; border-bottom: 1px solid var(--fr-line); }
+.finding-workflow-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0; padding: 0; border-bottom: 1px solid var(--fr-line); background: var(--fr-line); }
+.finding-workflow-summary > div { min-width: 0; display: grid; align-content: start; gap: 5px; padding: 10px 12px; background: #0b121b; }
+.finding-workflow-summary dd { margin: 0; color: #c9d5df; font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
+.finding-workflow-summary dd small { display: block; margin-top: 3px; color: var(--fr-faint); font-size: 8px; }
+.finding-workflow-summary [data-due-tone="overdue"] dd { color: #efaaa7; }
+.finding-workflow-summary [data-due-tone="today"] dd,
+.finding-workflow-summary [data-due-tone="soon"] dd { color: #e4c38f; }
+.finding-confidence-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; padding: 0; border-bottom: 1px solid var(--fr-line); background: var(--fr-line); }
+.finding-confidence-strip > div { min-width: 0; display: grid; align-content: center; gap: 5px; padding: 8px 12px; background: rgba(7,13,20,.98); }
+.finding-confidence-strip strong { color: #aebdca; font-size: 9px; font-weight: 560; overflow-wrap: anywhere; }
 .operational-finding__action { align-items: center; gap: 8px; padding: 10px 14px 12px; }
 .operational-finding__action .forensic-button { min-height: 36px; padding: 0 13px; }
 .operational-finding__more { min-width: 0; }
@@ -1305,8 +1324,8 @@
 .case-primary-action { min-height: 70px; display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 12px; padding: 13px 15px; border: 1px solid rgba(77,163,255,.3); background: rgba(77,163,255,.045); }
 .case-primary-action > div { display: grid; gap: 5px; }
 .case-primary-action strong { font-size: 12px; font-weight: 560; }
-.case-primary-action > .forensic-button { background: #1268aa; }
-.case-primary-action > .forensic-button:hover { background: #176ba8; }
+.case-primary-action > .forensic-button { background: #125f9c; }
+.case-primary-action > .forensic-button:hover { background: #166bac; }
 .case-primary-action--top { margin-top: 12px; }
 .case-sections { display: grid; margin-top: 12px; border: 1px solid var(--fr-line); background: var(--fr-surface); }
 .case-sections > section { min-width: 0; padding: 18px; border-bottom: 1px solid var(--fr-line); }
@@ -1322,6 +1341,32 @@
 .case-review-state dl > div { min-width: 130px; display: grid; gap: 4px; padding: 9px 11px; border: 1px solid var(--fr-line); }
 .case-review-state dt { color: var(--fr-faint); font-size: 8px; text-transform: uppercase; }
 .case-review-state dd { margin: 0; color: #c5d0dc; font-size: 10px; overflow-wrap: anywhere; }
+.finding-workflow { display: grid; gap: 0; margin-top: 12px; border: 1px solid var(--fr-line); background: var(--fr-surface); }
+.finding-workflow > header { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 15px; border-bottom: 1px solid var(--fr-line); }
+.finding-workflow > header h2 { margin: 4px 0 0; font-size: 15px; font-weight: 560; }
+.finding-workflow > header > span { color: var(--fr-faint); font-size: 9px; }
+.finding-workflow__notice { margin: 0; padding: 11px 14px; border-bottom: 1px solid var(--fr-line); color: #c8b990; font-size: 10px; line-height: 1.5; }
+.finding-workflow__editor,
+.finding-workflow__feedback,
+.finding-workflow__resolution { border-bottom: 1px solid var(--fr-line); }
+.finding-workflow__editor > summary,
+.finding-workflow__feedback > summary,
+.finding-workflow__resolution > summary { min-height: 44px; display: flex; align-items: center; padding: 0 14px; color: #b6c7d7; cursor: pointer; font-size: 10px; font-weight: 600; }
+.finding-workflow__editor[open] > summary,
+.finding-workflow__feedback[open] > summary,
+.finding-workflow__resolution[open] > summary { border-bottom: 1px solid var(--fr-line); }
+.finding-workflow form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px; }
+.finding-workflow label { min-width: 0; display: grid; gap: 5px; color: var(--fr-muted); font-size: 9px; }
+.finding-workflow input,
+.finding-workflow select,
+.finding-workflow textarea { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--fr-line-strong); border-radius: var(--radius-control); background: #080e16; color: var(--fr-text); font: inherit; }
+.finding-workflow textarea { min-height: 72px; resize: vertical; }
+.finding-workflow input:disabled { opacity: .5; }
+.finding-workflow__wide { grid-column: span 2; }
+.finding-workflow__buttons { display: flex; align-items: end; gap: 7px; }
+.finding-workflow__resolution form { grid-template-columns: minmax(180px, .6fr) minmax(240px, 1.4fr) auto; align-items: end; }
+.finding-workflow__status { min-height: 28px; margin: 0; padding: 7px 14px; color: var(--fr-muted); font-size: 9px; }
+.finding-workflow__status.is-error { color: #efaaa7; }
 .case-escalation { display: grid; gap: 5px; margin-top: 12px; padding: 13px 15px; border: 1px solid rgba(77,163,255,.4); border-left: 3px solid var(--fr-blue); background: rgba(77,163,255,.05); }
 .case-escalation span { color: var(--fr-blue); font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .case-escalation strong { font-size: 13px; }
@@ -1360,6 +1405,8 @@
   .operations-escalation { grid-template-columns: minmax(0, 1fr) auto; }
   .operations-escalation p, .operations-escalation ul { grid-column: 1 / -1; }
   .finding-review-actions__explanation { grid-template-columns: 1fr; }
+  .finding-workflow form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .finding-workflow__resolution form { grid-template-columns: 1fr; }
   .finding-classification__facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
@@ -1393,6 +1440,10 @@
   .operations-escalation p, .operations-escalation ul { grid-column: auto; }
   .operations-escalation .forensic-button { width: 100%; }
   .operations-sections { gap: 8px; margin-top: 8px; }
+  .finding-workflow-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .finding-confidence-strip { grid-template-columns: 1fr; }
+  .finding-workflow form { grid-template-columns: 1fr; }
+  .finding-workflow__wide { grid-column: auto; }
   .operations-section > header { min-height: 42px; }
   .operational-finding__alert { grid-template-columns: 1fr; gap: 12px; padding: 12px; }
   .operational-finding__alert h3 { font-size: 16px; overflow-wrap: anywhere; }

@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { buildEngineeringReasoningModel, buildEngineeringReasoningModelsFromEvidenceRuns } from "../viewModels/engineeringReasoning";
+import { buildEngineeringReasoningModel, buildEngineeringReasoningModelsFromEvidenceRuns, buildFacilityLabelContext } from "../viewModels/engineeringReasoning";
 import { analysisBelongsToBaseline } from "../viewModels/baselineSelection";
 import { deriveEscalationReadiness, deriveWorkspacePresentationState } from "../viewModels/operationsBrief";
-import { feedbackForReviewAction, normalizeReviewRecords, reviewRecordFor } from "../viewModels/findingReviewState";
+import { feedbackForReviewAction, normalizeReviewRecords, reviewRecordFor, reviewRecordFromWorkflow } from "../viewModels/findingReviewState";
+import { fetchFinding, fetchFindings, isFindingApiUnavailable, patchFindingWorkflow, postFindingFeedback, resolveFinding } from "../services/api/findingsApi";
 import FirstBaselineExperience, { SupportedFormats, WorkflowSteps } from "./FirstBaselineExperience";
 import ConfidenceTierChip from "./engineering/ConfidenceTierChip";
 import EvidencePackageExport from "./engineering/EvidencePackageExport";
@@ -234,6 +235,8 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const restoreScrollRef = useRef(0);
   const [selectedSiteId, setSelectedSiteId] = useState(() => pathIdentity(["sites"]) || null);
   const [portfolioRuns, setPortfolioRuns] = useState([]);
+  const [facilityLabelContext, setFacilityLabelContext] = useState({});
+  const [findingWorkflowRecords, setFindingWorkflowRecords] = useState({});
   const storageScope = storageScopeFor(currentUser, datasetScopeKey);
   const firstBaselineStorageKey = FIRST_BASELINE_STORAGE_PREFIX + "." + storageScope;
   const reviewStorageKey = REVIEW_STATE_STORAGE_PREFIX + "." + storageScope;
@@ -252,18 +255,19 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
       ? effectiveLatestUploadResult
       : null
   ), [comparisonAnalysisId, effectiveLatestUploadResult]);
-  const currentModel = useMemo(() => buildEngineeringReasoningModel({ liveOps: {}, canonicalFinding: verifiedComparisonResult ? canonicalFinding : null, currentSession: {}, result: verifiedComparisonResult ?? {}, snapshot: effectiveLatestUploadSnapshot, domainDetection }), [canonicalFinding, domainDetection, effectiveLatestUploadSnapshot, verifiedComparisonResult]);
+  const currentModel = useMemo(() => buildEngineeringReasoningModel({ liveOps: {}, canonicalFinding: verifiedComparisonResult ? canonicalFinding : null, currentSession: {}, result: verifiedComparisonResult ?? {}, snapshot: effectiveLatestUploadSnapshot, domainDetection, labelContext: facilityLabelContext }), [canonicalFinding, domainDetection, effectiveLatestUploadSnapshot, facilityLabelContext, verifiedComparisonResult]);
   const portfolioModels = useMemo(() => {
-    const persisted = buildEngineeringReasoningModelsFromEvidenceRuns(portfolioRuns);
+    const persisted = buildEngineeringReasoningModelsFromEvidenceRuns(portfolioRuns, facilityLabelContext);
     const currentName = currentModel.site.name.trim().toLowerCase();
     const withoutCurrent = persisted.filter((item) => item.site.id !== currentModel.site.id && item.site.name.trim().toLowerCase() !== currentName);
     if (currentModel.hasAnalysis) return [currentModel, ...withoutCurrent];
     return persisted.length ? persisted : [currentModel];
-  }, [currentModel, portfolioRuns]);
+  }, [currentModel, facilityLabelContext, portfolioRuns]);
   const portfolioSites = useMemo(() => portfolioModels.map((item) => item.site), [portfolioModels]);
   const model = portfolioModels.find((item) => item.site.id === selectedSiteId) ?? currentModel;
   const selectedFinding = selectedFindingId === "__overview__" ? null : model.findings.find((finding) => finding.id === selectedFindingId) ?? model.selectedFinding;
-  const selectedReviewRecord = selectedFinding ? reviewRecordFor(selectedFinding, reviewRecords) : null;
+  const effectiveReviewRecords = useMemo(() => ({ ...reviewRecords, ...findingWorkflowRecords }), [findingWorkflowRecords, reviewRecords]);
+  const selectedReviewRecord = selectedFinding ? reviewRecordFor(selectedFinding, effectiveReviewRecords) : null;
   const selectedSystem = model.subsystems.find((system) => system.name === selectedSystemName) ?? null;
   const presentationState = useMemo(() => deriveWorkspacePresentationState(model), [model]);
   const showFirstBaseline = presentationState.key === "noDataset" && !firstBaselineDismissed;
@@ -289,6 +293,37 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
       .catch(() => {});
     return () => { cancelled = true; };
   }, [apiFetch, datasetScopeKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setFacilityLabelContext({});
+    Promise.resolve(apiFetch?.("/api/facility/context"))
+      .then((response) => response?.ok ? response.json() : null)
+      .then((payload) => { if (!cancelled && payload) setFacilityLabelContext(buildFacilityLabelContext(payload)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [apiFetch, datasetScopeKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const runId = runIdentity(model, model.selectedFinding);
+    setFindingWorkflowRecords({});
+    if (!runId || !model.findings.length || typeof apiFetch !== "function") return () => { cancelled = true; };
+    fetchFindings({ apiFetch, sourceKind: "evidence_run", sourceRunId: runId })
+      .then((payload) => {
+        if (cancelled) return;
+        const records = {};
+        for (const item of payload.findings) {
+          const sourceKey = String(item.workflow.source?.finding_key ?? "");
+          const finding = model.findings.find((candidate) => candidate.sourceFindingKey === sourceKey || candidate.id === sourceKey || candidate.mergedFindingIds?.includes(sourceKey));
+          const record = reviewRecordFromWorkflow(item.workflow);
+          if (finding && record) records[finding.id] = record;
+        }
+        setFindingWorkflowRecords(records);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [apiFetch, datasetScopeKey, model]);
 
   useEffect(() => {
     const onPop = (event) => {
@@ -433,9 +468,63 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     navigate("data-connections");
   }
 
+  function storeFindingWorkflow(analyticalId, workflow) {
+    const record = reviewRecordFromWorkflow(workflow);
+    if (!record) return;
+    setFindingWorkflowRecords((current) => ({ ...current, [String(analyticalId)]: record }));
+  }
+
+  async function handleWorkflowSave({ findingId, expectedVersion, changes }) {
+    const result = await patchFindingWorkflow({ apiFetch, findingId, expectedVersion, changes });
+    storeFindingWorkflow(selectedFinding?.id ?? findingId, result.workflow);
+    return result;
+  }
+
+  async function handleWorkflowResolve({ findingId, expectedVersion, outcome, note }) {
+    const result = await resolveFinding({ apiFetch, findingId, expectedVersion, outcome, note });
+    storeFindingWorkflow(selectedFinding?.id ?? findingId, result.workflow);
+    return result;
+  }
+
+  async function handleWorkflowFeedback({ findingId, expectedVersion, category, note, actionTaken }) {
+    const result = await postFindingFeedback({ apiFetch, findingId, expectedVersion, category, note, actionTaken });
+    storeFindingWorkflow(selectedFinding?.id ?? findingId, result.workflow);
+    return result;
+  }
+
+  async function reloadSelectedFindingWorkflow() {
+    const findingId = selectedReviewRecord?.workflowFindingId ?? selectedReviewRecord?.findingId ?? selectedFinding?.workflowFindingId;
+    if (!findingId) return null;
+    const result = await fetchFinding({ apiFetch, findingId });
+    storeFindingWorkflow(selectedFinding?.id ?? findingId, result.workflow);
+    return result;
+  }
+
   async function handleFindingReviewAction(finding, action) {
     const id = String(finding?.id ?? "");
     if (!id) return { persisted: false };
+    const existingWorkflow = effectiveReviewRecords[id];
+    const workflowFindingId = existingWorkflow?.workflowFindingId;
+    if (workflowFindingId && existingWorkflow?.persisted && typeof apiFetch === "function") {
+      try {
+        const caseState = action.state === "new" ? "open"
+          : action.state === "not_useful" ? "dismissed"
+            : action.state;
+        const result = action.state === "explained" || action.state === "closed"
+          ? await resolveFinding({
+            apiFetch,
+            findingId: workflowFindingId,
+            expectedVersion: existingWorkflow.version,
+            outcome: action.reason === "known_sensor_issue" ? "sensor_issue" : action.reason === "maintenance_activity" ? "maintenance_performed" : "operational_change",
+            note: action.note || feedbackForReviewAction(action)?.note || "Known operational explanation recorded.",
+          })
+          : await patchFindingWorkflow({ apiFetch, findingId: workflowFindingId, expectedVersion: existingWorkflow.version, changes: { status: caseState } });
+        storeFindingWorkflow(id, result.workflow);
+        return { persisted: true };
+      } catch (error) {
+        if (!isFindingApiUnavailable(error)) throw error;
+      }
+    }
     const record = {
       state: action.state,
       reason: action.reason ?? "",
@@ -516,22 +605,22 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
             onClick={() => setMobileNavOpen((value) => !value)}
           ><span className="forensic-mobile-menu__label">Menu</span><svg className="forensic-mobile-menu__icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
           <GlobalAssetSearch items={model.searchItems} onSelect={handleSearch} />
-          <div className="forensic-topbar__site"><span>{model.site.name}</span><ConfidenceTierChip tier={model.evidenceQuality} /></div>
+          <div className="forensic-topbar__site"><span>{model.site.name}</span>{model.selectedFinding?.confidenceContract && Object.keys(model.selectedFinding.confidenceContract).length ? null : <ConfidenceTierChip tier={model.evidenceQuality} />}</div>
         </header>
         <main id="forensic-main" aria-label="Neraium operational workspace" tabIndex={-1} data-route={effectiveRoute}>
           {showFirstBaseline ? <FirstBaselineExperience onImport={beginFirstBaseline} onExit={dismissFirstBaseline} />
             : ["noDataset", "datasetReady", "analysisRunning"].includes(presentationState.key) ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
-              : effectiveRoute === "finding" ? <FindingReviewWorkspace model={model} finding={selectedFinding} reviewRecord={selectedReviewRecord} onReviewAction={handleFindingReviewAction} onOpenInvestigation={openInvestigation} onBack={() => goBack("site")} />
+              : effectiveRoute === "finding" ? <FindingReviewWorkspace model={model} finding={selectedFinding} reviewRecord={selectedReviewRecord} onReviewAction={handleFindingReviewAction} onWorkflowSave={handleWorkflowSave} onWorkflowFeedback={handleWorkflowFeedback} onWorkflowResolve={handleWorkflowResolve} onWorkflowReload={reloadSelectedFindingWorkflow} onOpenInvestigation={openInvestigation} onBack={() => goBack("site")} />
                 : effectiveRoute === "investigation" ? <InvestigationWorkspace model={model} finding={selectedFinding} reviewRecord={selectedReviewRecord} escalated={deriveEscalationReadiness(selectedFinding, model.result).serious} onReviewAction={handleFindingReviewAction} onOpenEvidence={openEvidence} onTrace={() => navigate("trace")} onBack={() => goBack("findings")} />
                   : effectiveRoute === "evidence" ? <EvidenceRecordWorkspace model={model} finding={selectedFinding} reviewRecord={selectedReviewRecord} apiFetch={apiFetch} onTrace={() => navigate("trace")} onBack={() => goBack("investigations")} />
                     : effectiveRoute === "trace" ? <TraceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onBack={() => goBack("investigations")} />
                       : effectiveRoute === "portfolio" ? <PortfolioWorkspace sites={portfolioSites} onSelectSite={handleSelectSite} />
                         : effectiveRoute === "systems" ? <SystemsOverview model={model} onSystem={openSystem} />
-                          : effectiveRoute === "findings" ? <FindingsOverview model={model} reviewRecords={reviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} />
-                            : effectiveRoute === "investigations" ? <EvidenceOutcomesOverview model={model} reviewRecords={reviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} />
-                            : effectiveRoute === "system" ? <SystemOverview model={model} system={selectedSystem} reviewRecords={reviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} onEvidence={openEvidence} />
+                          : effectiveRoute === "findings" ? <FindingsOverview model={model} reviewRecords={effectiveReviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} />
+                            : effectiveRoute === "investigations" ? <EvidenceOutcomesOverview model={model} reviewRecords={effectiveReviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} />
+                            : effectiveRoute === "system" ? <SystemOverview model={model} system={selectedSystem} reviewRecords={effectiveReviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} onEvidence={openEvidence} />
                               : ["insufficientEvidence", "legacyAnalysis"].includes(presentationState.key) ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
-                                : <SiteOverview model={model} reviewRecords={reviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} />}
+                                : <SiteOverview model={model} reviewRecords={effectiveReviewRecords} onReview={openFinding} onReviewAction={handleFindingReviewAction} />}
         </main>
       </div>
     </div>

@@ -9,6 +9,7 @@ const cases = [
   ["context_limited_relationship_change", "Context-limited relationship change", "context", "Context review"],
   ["possible_instrumentation_issue", "Possible instrumentation issue", "instrumentation", "Verify instrumentation"],
   ["unexplained_systemic_change", "Unexplained systemic change", "systemic", "Engineering review"],
+  ["observed_change_under_review", "Observed change under review", "context", "Monitoring review"],
   ["insufficient_evidence", "Insufficient evidence", "insufficient", "Evidence review"],
 ];
 
@@ -53,8 +54,34 @@ describe("FindingClassificationSummary", () => {
     }));
 
     expect(screen.getByText("Not established")).toBeTruthy();
-    expect(screen.getByText("Evidence trend")).toBeTruthy();
+    expect(screen.getByText("Support trend")).toBeTruthy();
+    expect(screen.getByText("Increasing")).toBeTruthy();
     expect(screen.queryByText("81 days")).toBeNull();
     expect(screen.queryByText(/^Trajectory$/)).toBeNull();
+  });
+
+  it("renders independent maintenance confidence dimensions without a vague aggregate", () => {
+    render(React.createElement(FindingClassificationSummary, {
+      finding: {
+        classification: { type: "observed_change_under_review", confidence: "limited" },
+        confidence: "limited",
+        confidenceDimensions: {
+          changeDetection: { level: "high" },
+          interpretation: { level: "low", attribution_status: "unattributed" },
+          operatingContext: { level: "high" },
+          evidenceQuality: { level: "medium" },
+        },
+        persistence: { status: "observing", reason: "A follow-up window is required." },
+        supportTrend: "increasing",
+      },
+    }));
+
+    expect(screen.getAllByText("High", { selector: "dd" })).toHaveLength(2);
+    expect(screen.getByText("Low · Unattributed")).toBeTruthy();
+    expect(screen.getByText("Medium")).toBeTruthy();
+    expect(screen.getByText("Observing")).toBeTruthy();
+    expect(screen.getByText("Increasing")).toBeTruthy();
+    expect(screen.queryByText("Limited · 0%")).toBeNull();
+    expect(screen.queryByText("Limited confidence")).toBeNull();
   });
 });

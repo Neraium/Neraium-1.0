@@ -188,6 +188,7 @@ Fingerprint summarizes canonical signal, relationship, persistence, covariance, 
 Finding fields are additive. Current `insights[]` may include:
 
 - `classification`: deterministic `type`, display `label`, classification `confidence`, evidence-linked `reasons`, `alternative_explanations`, `certainty_limit`, and `rule_version`.
+- `finding_confidence_v1`: independent confidence in change detection, interpretation/attribution, operating-context comparability, and evidence quality, plus a separate persistence status. Dimension levels are `high`, `medium`, `low`, or `unknown`; they are not probabilities and must not be collapsed into a single maintenance-facing label.
 - `data_confidence`: qualitative rating, summary, limitations, and affected signals.
 - `sensor_health[]`: per-signal health plus evidence-backed conditions.
 - `operating_mode`: baseline/recent labels, match strength, confidence, recorded differences, and reasons.
@@ -195,11 +196,16 @@ Finding fields are additive. Current `insights[]` may include:
 - `persistence`: fixed, adaptive, and temporal persistence status, support flags, supporting signals, elapsed-time or row-count basis, and summary.
 - `multiscale`: eligible scales, agreeing and conflicting signals, cross-scale classification, and interpretation.
 - `relationship_evidence`: paired sample support, relationship-change measurements, graph-level structural metrics, and evidence refs.
+- `relationship_comparison`: a named comparison with `metric`, `baseline_value`, `current_value`, `signed_change`, `absolute_change`, `formula`, and neutral `direction`. This is the preferred interpretation of legacy `relationship_delta` values.
 - `investigation_guidance[]`: ordered, frontend-safe checks with `rank`, `check`, evidence-linked `reason`, `category`, and `editable`.
 - `activity_timeline[]`: source-bounded evidence events. Events use source `time`, `start`/`end`, or an explicit `period_label`; consumers must not infer missing dates.
 - `certainty_limit`, `alternative_explanations`, and `data_limitations`.
 
-Canonical classification types are `known_operational_change`, `possible_instrumentation_issue`, `unexplained_systemic_change`, and `insufficient_evidence`. Supported guidance categories are `instrumentation`, `controls`, `operating_context`, `physical_system`, `data_quality`, and `documentation`.
+Canonical classification types are `known_operational_change`, `context_limited_relationship_change`, `possible_instrumentation_issue`, `unexplained_systemic_change`, `observed_change_under_review`, and `insufficient_evidence`. `observed_change_under_review` retains a legacy `insufficient_evidence` projection for older clients. Supported guidance categories are `instrumentation`, `controls`, `operating_context`, `physical_system`, `data_quality`, and `documentation`.
+
+Relationship direction and evidential support are different concepts. `relationship_comparison.direction` describes whether the measured relationship increased, decreased, or otherwise shifted. `support_trend` describes whether evidence for an interpretation is increasing, stable, or decreasing. Clients must not describe these as “relationship weakening” versus “evidence strengthening,” because those phrases conflate the measured quantity with support for a conclusion.
+
+Sensor-health evidence, data limitations, operating-context comparability, persistence, and attribution are retained as separate inputs. A sensor hypothesis may be the leading interpretation when concrete sensor evidence exists, but it remains a hypothesis and does not assert that a physical equipment change occurred. Missing sensor checks and completed checks with no supported sensor issue must also remain distinguishable.
 
 `recommended_investigation[]` and `recommended_first_action` remain populated as text compatibility views of `investigation_guidance`. Clients should prefer `investigation_guidance` when present.
 
