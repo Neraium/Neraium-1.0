@@ -43,6 +43,14 @@ HISTORICAL_INGESTION_OPERATIONS = {
     ("get", "/api/data/ingestion/v1/datasets/{dataset_id}/canonical"): "getHistoricalCanonicalDatasetV1",
     ("patch", "/api/data/ingestion/v1/datasets/{dataset_id}/review"): "reviewHistoricalIngestionDatasetV1",
 }
+FINDING_WORKFLOW_OPERATIONS = {
+    ("get", "/api/findings"),
+    ("get", "/api/findings/{finding_id}"),
+    ("get", "/api/findings/{finding_id}/activity"),
+    ("patch", "/api/findings/{finding_id}/workflow"),
+    ("post", "/api/findings/{finding_id}/feedback"),
+    ("post", "/api/findings/{finding_id}/resolution"),
+}
 UPLOAD_PROGRESS_OPERATION = (
     "get",
     "/api/data/upload-status/{job_id}",
@@ -55,6 +63,7 @@ EXPECTED_OPENAPI_OPERATION_COUNT = (
     + len(FINGERPRINT_OPERATIONS)
     + len(CORRELATION_OPERATIONS)
     + len(HISTORICAL_INGESTION_OPERATIONS)
+    + len(FINDING_WORKFLOW_OPERATIONS)
 )
 
 
@@ -249,6 +258,20 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
         }
         assert "require_api_access" in dependency_names
         if method == "patch":
+            assert "require_operator_role" in dependency_names
+    for method, path in FINDING_WORKFLOW_OPERATIONS:
+        operation = schema["paths"][path][method]
+        assert operation["tags"] == ["findings"]
+        matching_routes = [
+            route for route in runtime_operations
+            if route.path == path and route.methods == {method.upper()}
+        ]
+        assert len(matching_routes) == 1
+        dependency_names = {
+            dependency.call.__name__ for dependency in matching_routes[0].dependant.dependencies
+        }
+        assert "require_api_access" in dependency_names
+        if method in {"patch", "post"}:
             assert "require_operator_role" in dependency_names
     progress_method, progress_path, progress_operation_id, progress_model = UPLOAD_PROGRESS_OPERATION
     progress_operation = schema["paths"][progress_path][progress_method]

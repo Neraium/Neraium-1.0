@@ -5,6 +5,7 @@ import FindingClassificationSummary from "../operational/FindingClassificationSu
 import EvidenceLineage from "./EvidenceLineage";
 import EvidencePackageExport from "./EvidencePackageExport";
 import FindingReviewActions from "./FindingReviewActions";
+import FindingWorkflowPanel from "./FindingWorkflow";
 import RelatedEvidencePackages from "./RelatedEvidencePackages";
 
 function runIdentity(model, finding) {
@@ -43,15 +44,18 @@ function displayLabel(value, fallback = "Unavailable") {
 
 function evidenceTrendPhrase(value) {
   return ({
+    increasing: "Evidence support increasing",
+    stable: "Evidence support stable",
+    decreasing: "Evidence support decreasing",
     sudden: "Evidence increased suddenly",
     gradual: "Evidence building gradually",
     "stable shift": "Evidence stable",
-    strengthening: "Evidence strengthening",
-    weakening: "Evidence weakening",
+    strengthening: "Evidence support increasing",
+    weakening: "Evidence support decreasing",
     recovering: "Evidence recovering",
     recurring: "Evidence recurring",
     intermittent: "Evidence intermittent",
-  })[String(value ?? "").trim().toLowerCase()] || `Evidence trend ${String(value ?? "unavailable").trim().toLowerCase()}`;
+  })[String(value ?? "").trim().toLowerCase()] || `Support trend: ${String(value ?? "unavailable").trim().toLowerCase()}`;
 }
 
 function timelineLabel(event) {
@@ -89,8 +93,8 @@ function ConditionEvolution({ finding }) {
   return (
     <>
       <section>
-        <h2>Evidence trend</h2>
-        <p className="case-lead">{evidenceTrendPhrase(trajectory.state)}</p>
+        <h2>Support trend</h2>
+        <p className="case-lead">{evidenceTrendPhrase(finding.supportTrend || trajectory.state)}</p>
         {trajectory.evidence_window_duration ? <p>Evidence window: {trajectory.evidence_window_duration}</p> : null}
         {trajectory.corroboration_change ? <p>{sentence(trajectory.corroboration_change)}</p> : null}
         {trajectory.operational_explanation ? <p>{sentence(trajectory.operational_explanation)}</p> : null}
@@ -118,9 +122,34 @@ function ReviewStateBlock({ finding, reviewRecord, onReviewAction, showActions =
         {reviewRecord?.reviewedAt ? <div><dt>Last reviewed</dt><dd>{reviewRecord.reviewedAt}</dd></div> : null}
         {reviewRecord?.owner ? <div><dt>Owner</dt><dd>{reviewRecord.owner}</dd></div> : null}
         {reviewRecord?.reason ? <div><dt>Known condition</dt><dd>{displayLabel(reviewRecord.reason)}</dd></div> : null}
+        {reviewRecord?.priority ? <div><dt>Priority</dt><dd>{displayLabel(reviewRecord.priority)}</dd></div> : null}
+        {reviewRecord?.assignment?.label ? <div><dt>Assignment</dt><dd>{reviewRecord.assignment.label}</dd></div> : null}
+        {reviewRecord?.dueDate ? <div><dt>Due</dt><dd>{reviewRecord.dueDate}</dd></div> : null}
+        {reviewRecord?.validationOutcome ? <div><dt>Validation</dt><dd>{displayLabel(reviewRecord.validationOutcome)}</dd></div> : null}
       </dl>
       {showActions ? <FindingReviewActions finding={finding} reviewRecord={reviewRecord} onAction={onReviewAction} /> : null}
     </div>
+  );
+}
+
+function TechnicalAnalysisMetadata({ finding }) {
+  const relationship = finding.relationships?.[0] ?? {};
+  const metric = finding.comparison?.metric || relationship.metric || "Relationship coefficient";
+  const identity = finding.technicalIdentity ?? {};
+  return (
+    <dl className="classification-detail-grid classification-detail-grid--mode">
+      <div><dt>Metric</dt><dd>{metric}</dd></div>
+      <div><dt>Baseline</dt><dd>{finding.comparison.baselineValue ?? "Not supplied"}</dd></div>
+      <div><dt>Current</dt><dd>{finding.comparison.currentValue ?? "Not supplied"}</dd></div>
+      <div><dt>Signed change</dt><dd>{finding.comparison.signedChange ?? "Not supplied"}</dd></div>
+      <div><dt>Absolute change</dt><dd>{finding.comparison.absoluteChange ?? "Not supplied"}</dd></div>
+      <div><dt>Evidence records</dt><dd>{finding.evidenceObjects.length}</dd></div>
+      <div><dt>Finding identity</dt><dd>{identity.findingId || finding.id}</dd></div>
+      <div><dt>Workflow identity</dt><dd>{identity.workflowFindingId || "Not linked"}</dd></div>
+      <div><dt>System identity</dt><dd>{identity.systemId || "Not supplied"}</dd></div>
+      <div><dt>Asset identity</dt><dd>{identity.assetId || "Not supplied"}</dd></div>
+      <div><dt>Source signals</dt><dd>{finding.rawVariables?.join(" / ") || [relationship.rawSource, relationship.rawTarget].filter(Boolean).join(" / ") || "Not supplied"}</dd></div>
+    </dl>
   );
 }
 
@@ -128,17 +157,20 @@ function EmptyCase({ onBack }) {
   return <div className="case-workspace"><button type="button" className="evidence-back" onClick={onBack}>Back to Operations Brief</button><section className="normal-summary"><span>Finding</span><h1>No active finding is available.</h1><p>All monitored relationships remain within the current review boundary.</p></section></div>;
 }
 
-export function FindingReviewWorkspace({ finding, reviewRecord, onReviewAction, onOpenInvestigation, onBack }) {
+export function FindingReviewWorkspace({ finding, reviewRecord, onReviewAction, onWorkflowSave, onWorkflowFeedback, onWorkflowResolve, onWorkflowReload, onOpenInvestigation, onBack }) {
   if (!finding) return <EmptyCase onBack={onBack} />;
   const presentation = finding.classificationPresentation ?? normalizeFindingPresentation(finding);
   const guidance = presentation.investigationGuidance.slice(0, 3);
   const keyEvidence = finding.visibleSupporting?.slice(0, 3) ?? [];
   const why = uniqueText([...sentenceList(finding.whyItMatters), presentation.persistence.persistent ? sentence(presentation.persistence.summary) : ""]);
+  const supportTrend = finding.supportTrend ? evidenceTrendPhrase(finding.supportTrend) : "";
   return (
     <div className="case-workspace finding-review-workspace" data-testid="finding-review">
       <button type="button" className="evidence-back" onClick={onBack}>Back to Operations Brief</button>
       <CaseHeader eyebrow="Finding review" finding={finding} reviewRecord={reviewRecord} />
       <FindingClassificationSummary finding={finding} presentation={presentation} showDefinition={false} />
+      <FindingWorkflowPanel finding={finding} workflow={reviewRecord} onSave={onWorkflowSave} onFeedback={onWorkflowFeedback} onResolve={onWorkflowResolve} onReload={onWorkflowReload} />
+      {supportTrend ? <section className="case-quick-actions"><div><span className="forensic-kicker">Support trend</span><p>{supportTrend}</p></div></section> : null}
       <section className="case-quick-actions" aria-labelledby="finding-actions-title"><div><span className="forensic-kicker">Fast actions</span><h2 id="finding-actions-title">Set the review state</h2></div><FindingReviewActions finding={finding} reviewRecord={reviewRecord} onAction={onReviewAction} /></section>
       <div className="case-sections case-sections--review">
         <section><h2>What changed</h2><p className="case-lead">{finding.observedChange}</p></section>
@@ -182,7 +214,7 @@ export function InvestigationWorkspace({ model, finding, reviewRecord, escalated
         <details><summary>Source lineage</summary><EvidenceLineage finding={finding} relationship={relationship} result={model.result} /><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Baseline window</dt><dd>{finding.comparison.baseline}</dd></div><div><dt>Current window</dt><dd>{finding.comparison.current}</dd></div><div><dt>Evidence run</dt><dd>{runId ?? "Not persisted"}</dd></div><div><dt>Generated</dt><dd>{finding.generatedAt || "Not supplied"}</dd></div></dl></details>
         <details><summary>Audit and replay information</summary><dl className="classification-detail-grid"><div><dt>Evidence run</dt><dd>{runId ?? "Not persisted"}</dd></div><div><dt>Review outcome</dt><dd>{finding.outcome ? JSON.stringify(finding.outcome) : "No persisted review outcome"}</dd></div></dl><button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open trace mode</button></details>
         <details><summary>Full classification reasoning</summary><p>{presentation.meaning}</p><ul>{presentation.reasons.map((item) => <li key={item}>{item}</li>)}</ul></details>
-        <details><summary>Technical analysis metadata</summary><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Baseline relationship value</dt><dd>{finding.comparison.baselineValue ?? "Not supplied"}</dd></div><div><dt>Current relationship value</dt><dd>{finding.comparison.currentValue ?? "Not supplied"}</dd></div><div><dt>Relationship delta</dt><dd>{finding.comparison.delta ?? "Not supplied"}</dd></div><div><dt>Evidence records</dt><dd>{finding.evidenceObjects.length}</dd></div></dl></details>
+        <details><summary>Technical analysis metadata</summary><TechnicalAnalysisMetadata finding={finding} /></details>
         {finding.objectType === "condition" ? <details><summary>Relationship details</summary>{finding.relationships.length ? <ul>{finding.relationships.map((item) => <li key={item.id || item.label}>{item.label}</li>)}</ul> : <p>No supporting relationship detail was recorded.</p>}{finding.conflictingRelationships.length ? <><h3>Conflicting evidence</h3><ul>{finding.conflictingRelationships.map((item) => <li key={item.relationship_id || item.id}>{(item.signals || item.columns || []).join(" / ")}</li>)}</ul></> : null}{finding.uncertainRelationships.length ? <><h3>Uncertain evidence</h3><ul>{finding.uncertainRelationships.map((item) => <li key={item.relationship_id || item.id}>{(item.signals || item.columns || []).join(" / ")}</li>)}</ul></> : null}</details> : null}
       </div>
     </div>
@@ -202,7 +234,7 @@ export function EvidenceRecordWorkspace({ model, finding, reviewRecord, apiFetch
         <section><h2>Supporting evidence</h2>{finding.supporting.length ? <ul>{finding.supporting.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No supporting observation was supplied.</p>}</section>
         <section><h2>Source lineage</h2><EvidenceLineage finding={finding} relationship={relationship} result={model.result} /></section>
         <section><h2>Record context</h2><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Baseline window</dt><dd>{finding.comparison.baseline}</dd></div><div><dt>Current window</dt><dd>{finding.comparison.current}</dd></div><div><dt>Evidence run</dt><dd>{runId ?? "Not persisted"}</dd></div><div><dt>Generated</dt><dd>{finding.generatedAt || "Not supplied"}</dd></div></dl></section>
-        <section><h2>Technical values</h2><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Baseline relationship value</dt><dd>{finding.comparison.baselineValue ?? "Not supplied"}</dd></div><div><dt>Current relationship value</dt><dd>{finding.comparison.currentValue ?? "Not supplied"}</dd></div><div><dt>Relationship delta</dt><dd>{finding.comparison.delta ?? "Not supplied"}</dd></div><div><dt>Evidence records</dt><dd>{finding.evidenceObjects.length}</dd></div></dl></section>
+        <section><h2>Technical values</h2><TechnicalAnalysisMetadata finding={finding} /></section>
       </div>
       <RelatedEvidencePackages packageId={packageId} apiFetch={apiFetch} />
       <section className="evidence-record-actions"><EvidencePackageExport runId={runId} apiFetch={apiFetch} disabled={!runId} /><button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open trace mode</button></section>

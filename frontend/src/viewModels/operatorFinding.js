@@ -481,6 +481,12 @@ export const FINDING_CLASSIFICATIONS = Object.freeze({
     priority: "Engineering review",
     meaning: "A persistent relationship change remains during comparable operating conditions and is not explained by available context.",
   },
+  observed_change_under_review: {
+    label: "Observed change under review",
+    tone: "context",
+    priority: "Monitoring review",
+    meaning: "The baseline/current comparison supports a measured change, while persistence and attribution remain under review.",
+  },
   insufficient_evidence: {
     label: "Insufficient evidence",
     tone: "insufficient",
@@ -757,13 +763,18 @@ function normalizePersistence(value) {
   const persistent = value.persistent === true || ["persistent", "confirmed", "sustained"].includes(status);
   let label = "Unavailable";
   if (persistent) label = "Persistent";
+  else if (status === "observing") label = "Observing";
+  else if (status === "not_assessed") label = "Not assessed";
+  else if (status === "not_persistent") label = "Not persistent";
+  else if (status === "intermittent") label = "Intermittent";
+  else if (status === "no_longer_observed") label = "No longer observed";
   else if (["limited", "unconfirmed", "not_established"].includes(status) || value.persistent === false) label = "Not established";
   return {
     status: status || "unavailable",
     persistent,
     duration: "",
     label,
-    summary: presentationText(value.summary) || (persistent ? "Persistence is supported by the current evidence." : "Persistence evidence is unavailable or not established."),
+    summary: presentationText(value.summary ?? value.reason) || (persistent ? "Persistence is supported by the current evidence." : "Persistence evidence is unavailable or not established."),
     reasons: uniquePresentationText(value.reasons),
   };
 }

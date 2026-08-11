@@ -164,6 +164,7 @@ def submit_evidence_feedback(request: Request, run_id: RunIdPath, payload: Opera
             action_taken=payload.action_taken,
             intervention_at=payload.intervention_at,
             followup_at=payload.followup_at,
+            idempotency_key=auth_context.get("request_id"),
         )
     except ValueError as error:
         detail = str(error)
@@ -204,6 +205,7 @@ def update_finding_status(request: Request, run_id: RunIdPath, payload: FindingS
             owner=payload.owner,
             assignee=payload.assignee,
             work_order_reference=payload.work_order_reference,
+            idempotency_key=auth_context.get("request_id"),
         )
     except ValueError as error:
         if str(error) == "evidence_run_not_found":

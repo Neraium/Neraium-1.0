@@ -9,10 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import get_settings
+from app.services.finding_workflow import (
+    compatibility_write_feedback,
+    compatibility_write_status,
+    materialize_evidence_finding_cases,
+)
 from app.services.runtime_db import (
     append_evidence_audit_tag_event_db,
-    append_finding_status_event_db,
-    append_operator_feedback_event_db,
     hydrate_evidence_event_history_db,
     list_evidence_runs_db,
     read_latest_payload,
@@ -103,10 +106,12 @@ def latest_evidence_run() -> dict[str, Any] | None:
 
 
 def upsert_evidence_run(record: dict[str, Any]) -> dict[str, Any]:
+    record = dict(record)
     raw_items = _load_raw_evidence_runs(limit=500)
     prior_items = [item for item in raw_items if str(item.get("run_id") or "") != str(record.get("run_id") or "")]
     persisted = _annotate_evidence_record(record, prior_items)
     upsert_evidence_run_db(persisted)
+    materialize_evidence_finding_cases(persisted)
     path = evidence_runs_path()
     items = [item for item in raw_items if str(item.get("run_id") or "") != str(record.get("run_id") or "")]
     updated = [persisted, *items]
@@ -133,6 +138,7 @@ def record_operator_feedback(
     action_taken: str | None = None,
     intervention_at: str | None = None,
     followup_at: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     if category not in FEEDBACK_CATEGORIES:
         raise ValueError("invalid_feedback_category")
@@ -149,7 +155,13 @@ def record_operator_feedback(
         "recorded_at": recorded_at,
     }
 
-    append_operator_feedback_event_db(run_id, feedback_entry)
+    compatibility_write_feedback(
+        run_id,
+        feedback=feedback_entry,
+        actor=actor,
+        recorded_at=recorded_at,
+        idempotency_key=idempotency_key,
+    )
     updated_record = read_evidence_run(run_id)
     if updated_record is None:
         raise ValueError("evidence_run_not_found")
@@ -166,19 +178,21 @@ def record_finding_status(
     owner: str | None = None,
     assignee: str | None = None,
     work_order_reference: str | None = None,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     if read_evidence_run(run_id) is None:
         raise ValueError("evidence_run_not_found")
-    event = {
-        "state": state,
-        "actor": actor,
-        "recorded_at": recorded_at,
-        "note": (note or "").strip() or None,
-        "owner": (owner or "").strip() or actor,
-        "assignee": (assignee or "").strip() or None,
-        "work_order_reference": (work_order_reference or "").strip() or None,
-    }
-    append_finding_status_event_db(run_id, event)
+    compatibility_write_status(
+        run_id,
+        state=state,
+        actor=actor,
+        recorded_at=recorded_at,
+        note=note,
+        owner=owner,
+        assignee=assignee,
+        work_order_reference=work_order_reference,
+        idempotency_key=idempotency_key,
+    )
     updated_record = read_evidence_run(run_id)
     if updated_record is None:
         raise ValueError("evidence_run_not_found")

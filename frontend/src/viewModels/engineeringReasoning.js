@@ -23,6 +23,7 @@ const firstNumber = (...values) => {
 const unique = (items) => [...new Set(compact(items).map((item) => String(item).trim()).filter(Boolean))];
 const humanize = (value) => String(value ?? "").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const stripPeriod = (value) => String(value ?? "").trim().replace(/[.。]+$/, "");
+const rawText = (value) => String(value ?? "").trim();
 
 const UNSUPPORTED_LOCATION = /^(current site|uploaded telemetry|not established|mapped infrastructure|mapped system|unknown|n\/?a|observed subsystem behavior (?:changed|shifted))$/i;
 const LOCATION_AS_FINDING = /\b(?:behavior|relationship|performance)\b.*\b(?:changed|shifted|degrading|degraded|detected)\b/i;
@@ -108,34 +109,108 @@ function displaySignalName(value) {
   return label ? label[0].toUpperCase() + label.slice(1) : "";
 }
 
+function isOpaqueIdentity(value) {
+  const text = rawText(value);
+  return Boolean(text) && (/[_-]/.test(text) || /\d/.test(text)) && !/\s/.test(text);
+}
+
+function roleSignalLabel(value, index = 0) {
+  const text = rawText(value).toLowerCase().replace(/[_-]+/g, " ");
+  const roles = [
+    [/approach.*temp|temp.*approach/, "Approach temperature signal"],
+    [/return.*temp|temp.*return/, "Return temperature signal"],
+    [/supply.*temp|temp.*supply/, "Supply temperature signal"],
+    [/temperature|\btemp\b/, "Temperature signal"],
+    [/pressure|\bpsi\b|\bkpa\b/, "Pressure signal"],
+    [/flow|\bgpm\b/, "Flow signal"],
+    [/current|\bamp|amper/, "Current signal"],
+    [/power|\bkw\b/, "Power signal"],
+    [/speed|\brpm\b|frequency|\bhz\b/, "Speed signal"],
+    [/valve|position|command/, "Control signal"],
+    [/turbidity|chlor|conductivity|\borp\b|\bph\b/, "Water-quality signal"],
+  ];
+  return roles.find(([pattern]) => pattern.test(text))?.[1] ?? `Signal ${String.fromCharCode(65 + Math.min(index, 25))}`;
+}
+
+export function buildFacilityLabelContext(payload = {}) {
+  const signalLabels = {};
+  const systemLabels = {};
+  const equipmentLabels = {};
+  for (const system of asArray(payload?.systems)) {
+    const id = rawText(system?.system_id);
+    const name = rawText(system?.display_name ?? system?.name ?? system?.label);
+    if (id && name) systemLabels[id] = name;
+  }
+  for (const equipment of asArray(payload?.equipment)) {
+    const id = rawText(equipment?.equipment_id);
+    const name = rawText(equipment?.display_name ?? equipment?.name ?? equipment?.alias ?? equipment?.label);
+    if (id && name) equipmentLabels[id] = name;
+  }
+  for (const mapping of asArray(payload?.signal_mappings)) {
+    const alias = rawText(mapping?.alias);
+    const rawTag = rawText(mapping?.raw_tag);
+    const normalizedName = rawText(mapping?.normalized_name);
+    if (alias) {
+      if (rawTag) signalLabels[rawTag] = alias;
+      if (normalizedName) signalLabels[normalizedName] = alias;
+    }
+    const equipmentId = rawText(mapping?.equipment_id);
+    const subsystem = rawText(mapping?.subsystem);
+    if (equipmentId && subsystem && !equipmentLabels[equipmentId]) equipmentLabels[equipmentId] = subsystem;
+  }
+  return { signalLabels, systemLabels, equipmentLabels };
+}
+
+function signalDisplayLabel(raw, explicit, labelContext, index) {
+  const rawValue = rawText(raw);
+  const mapped = rawText(explicit) || rawText(labelContext?.signalLabels?.[rawValue]);
+  if (mapped && mapped !== rawValue) return mapped;
+  if (rawValue && !isOpaqueIdentity(rawValue)) return rawValue;
+  return roleSignalLabel(rawValue, index);
+}
+
+function mappedLocationLabel(value, labels = {}) {
+  const rawValue = rawText(value);
+  if (!rawValue) return "";
+  return rawText(labels?.[rawValue]) || (!isOpaqueIdentity(rawValue) ? rawValue : "");
+}
+
 function readableRelationshipCopy(value, relationships = []) {
   let text = String(value || "");
-  const signals = unique(relationships.flatMap((item) => [item?.source, item?.target])).sort((left, right) => right.length - left.length);
-  for (const signal of signals) {
-    const label = displaySignalName(signal);
-    if (!signal || !label || label === signal) continue;
+  const byRawSignal = new Map(relationships.flatMap((item) => [[item?.rawSource, item?.source], [item?.rawTarget, item?.target]])
+    .filter(([signal, label]) => signal && label && signal !== label));
+  const signals = [...byRawSignal.entries()].sort(([left], [right]) => right.length - left.length);
+  for (const [signal, label] of signals) {
     const escaped = signal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     text = text.replace(new RegExp(`\\b${escaped}\\b`, "g"), label);
   }
-  return text;
+  return maintenanceRelationshipLanguage(text);
+}
+
+function maintenanceRelationshipLanguage(value) {
+  let text = String(value || "");
+  text = text.replace(/\bevidence(?: support)? is strengthening\b/gi, "Evidence support is increasing");
+  text = text.replace(/\bevidence(?: support)? is weakening\b/gi, "Evidence support is decreasing");
+  const replacements = {
+    strengthened: "increased",
+    strengthening: "increasing",
+    weakened: "decreased",
+    weakening: "decreasing",
+  };
+  return text.replace(/\b(strengthened|strengthening|weakened|weakening)\b/gi, (match) => {
+    const replacement = replacements[match.toLowerCase()];
+    return /^[A-Z]/.test(match) ? replacement[0].toUpperCase() + replacement.slice(1) : replacement;
+  });
 }
 
 function evidenceBoundedRelationshipTitle(raw, relationship, system) {
   if (!relationship) return "";
   const count = Number(raw?.relationship_count ?? raw?.corroboration?.relationship_count ?? 1);
-  const change = String(relationship.changeType || "").toLowerCase();
-  const direction = /weaken|missing/.test(change)
-    ? "weakening"
-    : /strength|new|emerg/.test(change)
-      ? "strengthening"
-      : Number.isFinite(relationship.baseline) && Number.isFinite(relationship.current)
-        ? relationship.current < relationship.baseline ? "weakening" : relationship.current > relationship.baseline ? "strengthening" : "shifted"
-        : "shifted";
+  const direction = relationship.relationshipDirection || "shifted";
   if (count > 1 && system) return `${String(system).replace(/\s*&\s*/g, " and ").trim()} relationship ${direction}`;
   const pair = [displaySignalName(relationship.source), displaySignalName(relationship.target)].filter(Boolean).join(" / ");
   if (!pair) return "";
-  const verb = direction === "weakening" ? "weakened" : direction === "strengthening" ? "strengthened" : "shifted";
-  return `${pair} coupling ${verb}`;
+  return `${pair} relationship ${direction}`;
 }
 
 function mappedEvidenceSignal(text, contextSignals) {
@@ -159,7 +234,7 @@ export function formatPrimaryEvidence(value, contextSignals = []) {
   text = mappedEvidenceSignal(text, contextSignals);
   text = text.replace(/^.*?operating coupling\s+(?:changed|shifted|strengthened|weakened)?\s*from\s+(weak|moderate|strong)\s+to\s+(weak|moderate|strong)\.?$/i, "Their learned relationship changed from $1 to $2.");
   text = text.replace(/^the relationship moved outside its learned range\.?$/i, "Their learned relationship changed.");
-  return sentence(text);
+  return sentence(maintenanceRelationshipLanguage(text));
 }
 
 export function deriveConfidenceTier({ explicit, coverage, evidenceCount, limitations = [], contradictions = [], processing = false, baselineSufficient = null, reliable = true }) {
@@ -207,9 +282,8 @@ export function deriveDataGaps(result = {}, coverage = null) {
   return gaps;
 }
 
-function relationshipLabel(row, index) {
-  const columns = unique([...asArray(row?.columns), ...asArray(row?.display_columns), row?.source_label, row?.target_label, row?.source, row?.target]);
-  return firstText(row?.label, row?.name, row?.relationship, row?.description, columns.length >= 2 ? `${columns[0]} and ${columns[1]}` : "", `Relationship ${index + 1}`);
+function relationshipLabel(row, index, source, target) {
+  return firstText(row?.label, row?.name, row?.relationship, row?.description, source && target ? `${source} and ${target}` : "", `Relationship ${index + 1}`);
 }
 
 function edgeState(row) {
@@ -221,21 +295,47 @@ function edgeState(row) {
   return "normal";
 }
 
-function normalizeRelationship(row, index, evidenceIndex = {}) {
-  const columns = unique([...asArray(row?.columns), ...asArray(row?.display_columns), row?.source_label, row?.target_label, row?.source, row?.target]);
-  const source = columns[0] || "";
-  const target = columns[1] || "";
-  const evidenceRefs = unique(asArray(row?.evidence_refs ?? row?.evidenceRefs));
-  const evidence = compact([row?.evidence, ...evidenceRefs.map((ref) => evidenceIndex?.[ref])]).filter((item) => typeof item === "object");
-  return { id: String(row?.id ?? row?.relationship_id ?? `relationship-${index}`), label: relationshipLabel(row, index), source, target, state: edgeState(row), changeType: firstText(row?.change_type, row?.state, row?.status, row?.relationship_state).toLowerCase(), baseline: firstNumber(row?.baseline_strength, row?.baseline, row?.statistics?.baseline_strength), current: firstNumber(row?.current_strength, row?.current, row?.statistics?.current_strength), delta: firstNumber(row?.calculated_delta, row?.correlation_delta, row?.delta, row?.statistics?.correlation_delta), evidence, confidence: firstText(row?.confidence, evidence[0]?.confidence), windows: asArray(row?.source_time_ranges ?? evidence[0]?.source_time_ranges) };
+function supportTrend(value, trajectory = {}) {
+  const explicit = firstText(value).toLowerCase();
+  if (["increasing", "stable", "decreasing"].includes(explicit)) return explicit;
+  if (firstText(trajectory?.scope).toLowerCase() !== "evidence_support") return "";
+  return ({ strengthening: "increasing", increasing: "increasing", stable: "stable", steady: "stable", weakening: "decreasing", decreasing: "decreasing" })[firstText(trajectory?.support_trend, trajectory?.state).toLowerCase()] ?? "";
 }
 
-function collectRelationships(result, analysis) {
+function relationshipDirection(signedChange, absoluteChange, explicit) {
+  const normalized = firstText(explicit).toLowerCase();
+  if (["increased", "decreased", "shifted"].includes(normalized)) return normalized;
+  if (signedChange !== null) return signedChange > 0 ? "increased" : signedChange < 0 ? "decreased" : "";
+  return absoluteChange !== null && absoluteChange > 0 ? "shifted" : "";
+}
+
+function normalizeRelationship(row, index, evidenceIndex = {}, labelContext = {}) {
+  const rawColumns = asArray(row?.columns);
+  const displayColumns = asArray(row?.display_columns);
+  const rawSource = rawText(row?.source ?? row?.source_tag ?? row?.source_id ?? rawColumns[0]);
+  const rawTarget = rawText(row?.target ?? row?.target_tag ?? row?.target_id ?? rawColumns[1]);
+  const source = signalDisplayLabel(rawSource, row?.source_display_name ?? row?.source_alias ?? row?.source_label ?? displayColumns[0], labelContext, 0);
+  const target = signalDisplayLabel(rawTarget, row?.target_display_name ?? row?.target_alias ?? row?.target_label ?? displayColumns[1], labelContext, 1);
+  const evidenceRefs = unique(asArray(row?.evidence_refs ?? row?.evidenceRefs));
+  const evidence = compact([row?.evidence, ...evidenceRefs.map((ref) => evidenceIndex?.[ref])]).filter((item) => typeof item === "object");
+  const comparison = row?.relationship_comparison ?? row?.relationshipComparison ?? {};
+  const baseline = firstNumber(comparison?.baseline_value, row?.baseline_value, row?.baseline_strength, row?.baseline_correlation, row?.baseline, row?.statistics?.baseline_strength);
+  const current = firstNumber(comparison?.current_value, row?.current_value, row?.current_strength, row?.current_correlation, row?.recent_correlation, row?.current, row?.statistics?.current_strength);
+  let signedChange = firstNumber(comparison?.signed_change, row?.signed_change, row?.signed_correlation_delta, row?.statistics?.signed_change);
+  if (signedChange === null && baseline !== null && current !== null) signedChange = current - baseline;
+  let absoluteChange = firstNumber(comparison?.absolute_change, row?.absolute_change, row?.absolute_correlation_delta, row?.absolute_correlation_change, row?.calculated_delta, row?.correlation_delta, row?.delta, row?.statistics?.correlation_delta);
+  if (signedChange !== null) absoluteChange = Math.abs(signedChange);
+  else if (absoluteChange !== null) absoluteChange = Math.abs(absoluteChange);
+  const direction = relationshipDirection(signedChange, absoluteChange, comparison?.direction ?? row?.relationship_direction);
+  return { id: String(row?.id ?? row?.relationship_id ?? `relationship-${index}`), label: relationshipLabel(row, index, source, target), source, target, rawSource, rawTarget, metric: firstText(comparison?.metric, comparison?.metric_name, row?.metric_name, row?.metric, row?.statistic, "Relationship coefficient"), state: edgeState(row), changeType: firstText(row?.change_type, row?.state, row?.status, row?.relationship_state).toLowerCase(), baseline, current, signedChange, absoluteChange, relationshipDirection: direction, delta: absoluteChange, evidence, confidence: firstText(row?.confidence, evidence[0]?.confidence), supportTrend: supportTrend(row?.support_trend, row?.trajectory), windows: asArray(row?.source_time_ranges ?? evidence[0]?.source_time_ranges) };
+}
+
+function collectRelationships(result, analysis, labelContext) {
   const graphEdges = asArray(analysis?.relationship_graph?.edges ?? result?.relationship_model?.relationship_graph?.edges);
   const rows = [...asArray(analysis?.relationships), ...asArray(result?.baseline_analysis?.relationship_drift), ...graphEdges];
   const evidenceIndex = analysis?.evidence_index ?? {};
   const seen = new Set();
-  return rows.map((row, index) => normalizeRelationship(row, index, evidenceIndex)).filter((row) => { const key = row.id || row.label; if (seen.has(key)) return false; seen.add(key); return true; });
+  return rows.map((row, index) => normalizeRelationship(row, index, evidenceIndex, labelContext)).filter((row) => { const key = row.id || row.label; if (seen.has(key)) return false; seen.add(key); return true; });
 }
 
 function evidenceText(item) {
@@ -320,10 +420,12 @@ function deriveLocation(raw, context) {
     ...rawRelationships.flatMap((item) => [...asArray(item?.columns), ...asArray(item?.display_columns), item?.source, item?.target]),
   ];
   const inferredSystem = inferredOperationalArea(signalContext);
-  const system = supportedLocationText(localization?.system, raw?.system, raw?.system_name, raw?.location?.system, asArray(raw?.affected_systems)[0], context.primarySystem) || inferredSystem;
+  const rawSystem = rawText(localization?.system ?? raw?.system ?? raw?.system_id ?? raw?.system_name ?? raw?.location?.system ?? asArray(raw?.affected_systems)[0] ?? context.primarySystem);
+  const system = supportedLocationText(mappedLocationLabel(rawSystem, context.labelContext?.systemLabels), raw?.system_display_name, raw?.system_name) || inferredSystem || "Mapped system";
   const boundary = supportedLocationText(localization?.monitored_boundary, asArray(raw?.affected_boundaries)[0]);
   const subsystem = supportedLocationText(localization?.subsystem, raw?.subsystem, raw?.subsystem_name, raw?.location?.subsystem, boundary);
-  const asset = raw?.object_type === "condition" ? "" : supportedLocationText(raw?.asset, raw?.asset_name, raw?.equipment, raw?.equipment_name, raw?.mapped_asset, raw?.location?.asset);
+  const rawAsset = rawText(raw?.asset_id ?? raw?.equipment_id ?? raw?.asset ?? raw?.equipment ?? raw?.mapped_asset ?? raw?.location?.asset);
+  const asset = raw?.object_type === "condition" ? "" : supportedLocationText(raw?.asset_name, raw?.equipment_name, mappedLocationLabel(rawAsset, context.labelContext?.equipmentLabels));
   const normalizedSubsystem = subsystem && subsystem !== system ? subsystem : "";
   const normalizedAsset = asset && asset !== normalizedSubsystem && asset !== system ? asset : "";
   const supportedHierarchy = unique([
@@ -334,7 +436,7 @@ function deriveLocation(raw, context) {
     normalizedAsset,
   ]);
   const hierarchy = supportedHierarchy.length > 1 ? supportedHierarchy : [...supportedHierarchy, "Asset not identified"];
-  return { site: context.siteLocation, system, subsystem: normalizedSubsystem, boundary, asset: normalizedAsset, likelyInvestigationArea: localization?.likely_investigation_area ?? boundary ?? normalizedSubsystem ?? system, hierarchy, label: hierarchy.join(" · ") };
+  return { site: context.siteLocation, system, subsystem: normalizedSubsystem, boundary, asset: normalizedAsset, likelyInvestigationArea: localization?.likely_investigation_area ?? boundary ?? normalizedSubsystem ?? system, hierarchy, label: hierarchy.join(" · "), rawSystem, rawAsset };
 }
 function comparisonSummary(relationship) {
   if (!relationship) return "A readable baseline comparison is not available.";
@@ -353,7 +455,7 @@ function confidenceReason(tier, primaryLimitation) {
 }
 
 function buildFinding(raw, index, context) {
-  const relatedRows = asArray(raw?.supporting_relationships ?? raw?.contributing_relationships ?? raw?.relationships).map((row, rowIndex) => normalizeRelationship(row, rowIndex, context.evidenceIndex));
+  const relatedRows = asArray(raw?.supporting_relationships ?? raw?.contributing_relationships ?? raw?.relationships).map((row, rowIndex) => normalizeRelationship(row, rowIndex, context.evidenceIndex, context.labelContext));
   const relationship = relatedRows[0] ?? context.relationships[0] ?? null;
   const evidenceRefs = unique(asArray(raw?.evidence_refs ?? raw?.evidenceRefs));
   const evidenceObjects = compact([...asArray(raw?.evidence ?? raw?.evidence_items), ...evidenceRefs.map((ref) => context.evidenceIndex?.[ref]), ...relatedRows.flatMap((row) => row.evidence)]);
@@ -364,10 +466,11 @@ function buildFinding(raw, index, context) {
   const technicalLimitations = collectTechnicalLimitations(raw, context.result, context.gaps);
   const limitations = materialLimitations(raw, technicalLimitations, context.gaps);
   const contradictions = collectContradictions(raw);
-  const variables = unique([...asArray(raw?.variables), ...asArray(raw?.affected_variables), ...asArray(raw?.affected_signals), ...asArray(raw?.source_tags), ...asArray(raw?.supporting_signals), relationship?.source, relationship?.target]);
+  const rawVariables = unique([...asArray(raw?.variables), ...asArray(raw?.affected_variables), ...asArray(raw?.affected_signals), ...asArray(raw?.source_tags), ...asArray(raw?.supporting_signals), relationship?.rawSource, relationship?.rawTarget]);
+  const variables = rawVariables.map((value, variableIndex) => signalDisplayLabel(value, "", context.labelContext, variableIndex));
   const tier = deriveConfidenceTier({ explicit: raw?.confidence_tier ?? raw?.confidence ?? raw?.confidence_state, coverage: context.coverage, evidenceCount: rawSupporting.length + evidenceObjects.length, limitations, contradictions, processing: context.processing, baselineSufficient: raw?.baseline_sufficient === false ? false : context.baselineSufficient, reliable: isReliable(raw, context.result) });
   const rawObservedChange = firstText(raw?.what_changed, raw?.observed_change, raw?.whatHappened, raw?.summary, raw?.title) || (relationship ? relationship.label + " moved outside its learned behavior." : "The available comparison indicates a change in measured behavior.");
-  const observedChange = raw?.object_type === "condition" ? readableRelationshipCopy(rawObservedChange, relatedRows) : rawObservedChange;
+  const observedChange = maintenanceRelationshipLanguage(raw?.object_type === "condition" ? readableRelationshipCopy(rawObservedChange, relatedRows) : rawObservedChange);
   const location = deriveLocation(raw, context);
   const titleContext = [variables, rawSupporting, relatedRows.map((item) => [item.label, item.source, item.target])];
   const title = specificFindingTitle(raw, observedChange, relationship, tier, location.system || location.subsystem, titleContext);
@@ -377,11 +480,16 @@ function buildFinding(raw, index, context) {
   const prior = raw?.engineering_prior ?? raw?.relationship_prior ?? raw?.prior_contribution ?? null;
   const interpretationLevel = prior && hasMappedContext ? 1 : specificRecommendation && hasMappedContext ? 2 : relationship ? 3 : 4;
   const recommendationAllowed = !["Deferred", "Withheld"].includes(tier) && interpretationLevel <= 2;
-  const whyItMatters = sentences(firstText(raw?.why_it_matters, raw?.potential_impact, raw?.behavior_interpretation, raw?.interpretation)) || "Neraium flagged a difference between the learned baseline and the current comparison.";
+  const whyItMatters = sentences(maintenanceRelationshipLanguage(firstText(raw?.why_it_matters, raw?.potential_impact, raw?.behavior_interpretation, raw?.interpretation))) || "Neraium flagged a difference between the learned baseline and the current comparison.";
   const primaryLimitation = limitations[0] || plainLimitation(contradictions[0]) || "";
   const status = ["Deferred", "Withheld"].includes(tier) ? "Evidence insufficient" : "Change detected";
+  const confidenceContract = raw?.finding_confidence_v1 ?? raw?.classification?.finding_confidence_v1 ?? {};
+  const evidenceSupportTrend = supportTrend(confidenceContract?.support_trend ?? raw?.support_trend, raw?.trajectory);
+  const analyticalId = rawText(raw?.id ?? raw?.finding_id ?? "finding-" + index);
   const finding = {
-    id: String(raw?.id ?? raw?.finding_id ?? "finding-" + index),
+    id: analyticalId,
+    workflowFindingId: rawText(raw?.workflow_finding_id ?? raw?.canonical_finding_id),
+    sourceFindingKey: rawText(raw?.source_finding_key ?? raw?.finding_key ?? analyticalId),
     title,
     status,
     system: location.subsystem || location.system || context.siteLocation,
@@ -404,6 +512,13 @@ function buildFinding(raw, index, context) {
     comparisonSummary: comparisonSummary(relationship),
     relationships: relatedRows.length ? relatedRows : (relationship ? [relationship] : []),
     variables,
+    rawVariables,
+    technicalIdentity: {
+      findingId: analyticalId,
+      workflowFindingId: rawText(raw?.workflow_finding_id ?? raw?.canonical_finding_id),
+      systemId: location.rawSystem,
+      assetId: location.rawAsset,
+    },
     engineeringPrior: prior,
     interpretationLevel,
     recommendationAllowed,
@@ -418,6 +533,15 @@ function buildFinding(raw, index, context) {
     titleEvidenceRelationshipId: firstText(raw?.title_evidence_relationship_id),
     confidence: raw?.confidence,
     confidenceScore: firstNumber(raw?.confidence_score),
+    confidenceContract,
+    confidenceDimensions: {
+      changeDetection: confidenceContract?.change_detection ?? null,
+      interpretation: confidenceContract?.interpretation ?? null,
+      operatingContext: confidenceContract?.operating_context ?? null,
+      evidenceQuality: confidenceContract?.evidence_quality ?? null,
+    },
+    supportTrend: evidenceSupportTrend,
+    relationshipDirection: relationship?.relationshipDirection ?? "",
     trajectory: raw?.trajectory ?? {},
     corroboration: raw?.corroboration ?? {
       corroboration_strength: raw?.corroboration_strength,
@@ -434,7 +558,7 @@ function buildFinding(raw, index, context) {
     certaintyLimit: firstText(raw?.certainty_limit, raw?.certaintyLimit),
     alternativeExplanations: raw?.alternative_explanations ?? raw?.alternativeExplanations ?? [],
     dataLimitations: raw?.data_limitations ?? raw?.dataLimitations ?? [],
-    persistence: raw?.persistence,
+    persistence: raw?.persistence ?? confidenceContract?.persistence,
     relationshipEvidence: raw?.relationship_evidence ?? raw?.relationshipEvidence,
     investigationGuidance: raw?.investigation_guidance ?? raw?.investigationGuidance ?? [],
     recommendedInvestigation: (Array.isArray(raw?.recommended_investigation ?? raw?.recommendedInvestigation ?? raw?.next_checks)
@@ -541,7 +665,15 @@ function consolidateFindings(findings) {
 
 function deriveComparison(raw, relationship, result) {
   const window = asArray(raw?.source_time_ranges)[0] ?? relationship?.windows?.[0] ?? {};
-  return { baseline: firstText(window?.baseline_label, joinWindow(window?.baseline_start, window?.baseline_end), result?.baseline_window, "Learned baseline"), current: firstText(window?.current_label, joinWindow(window?.current_start, window?.current_end), result?.comparison_window, "Current comparison"), baselineValue: relationship?.baseline ?? null, currentValue: relationship?.current ?? null, delta: relationship?.delta ?? null };
+  const named = raw?.relationship_comparison ?? raw?.finding_confidence_v1?.relationship_comparison ?? raw?.classification?.finding_confidence_v1?.relationship_comparison ?? {};
+  const baselineValue = firstNumber(named?.baseline_value, relationship?.baseline);
+  const currentValue = firstNumber(named?.current_value, relationship?.current);
+  let signedChange = firstNumber(named?.signed_change, relationship?.signedChange);
+  if (signedChange === null && baselineValue !== null && currentValue !== null) signedChange = currentValue - baselineValue;
+  let absoluteChange = firstNumber(named?.absolute_change, relationship?.absoluteChange, relationship?.delta);
+  if (signedChange !== null) absoluteChange = Math.abs(signedChange);
+  const direction = relationshipDirection(signedChange, absoluteChange, named?.direction ?? relationship?.relationshipDirection);
+  return { baseline: firstText(window?.baseline_label, joinWindow(window?.baseline_start, window?.baseline_end), result?.baseline_window, "Learned baseline"), current: firstText(window?.current_label, joinWindow(window?.current_start, window?.current_end), result?.comparison_window, "Current comparison"), metric: firstText(named?.metric), baselineValue, currentValue, signedChange, absoluteChange, direction, formula: firstText(named?.formula), delta: absoluteChange };
 }
 function joinWindow(start, end) { if (!start && !end) return ""; return [start, end].filter(Boolean).join(" to "); }
 function canonicalAsRaw(canonicalFinding) {
@@ -580,13 +712,13 @@ function deriveSiteStatus(findings, hasAnalysis, baselineSufficient, coverage) {
   return "Normal";
 }
 
-export function buildEngineeringReasoningModel({ liveOps = {}, canonicalFinding = null, currentSession = null, result: explicitResult = null, snapshot = null, domainDetection = null } = {}) {
+export function buildEngineeringReasoningModel({ liveOps = {}, canonicalFinding = null, currentSession = null, result: explicitResult = null, snapshot = null, domainDetection = null, labelContext = {} } = {}) {
   const result = explicitResult ?? liveOps?.latestUploadResult ?? currentSession?.latestUploadResult ?? {};
   const resolvedSnapshot = snapshot ?? liveOps?.latestUploadSnapshot ?? {};
   const analysis = result?.analysis_explanation ?? result?.analysis_result ?? result?.analysis ?? {};
   const coverage = deriveEvidenceCoverage(result, resolvedSnapshot);
   const gaps = deriveDataGaps(result, coverage);
-  const relationships = collectRelationships(result, analysis);
+  const relationships = collectRelationships(result, analysis, labelContext);
   const baselineSufficient = deriveBaselineSufficiency(result, analysis, relationships);
   const siteIdentity = assignedSite(result, resolvedSnapshot, currentSession, liveOps);
   const analysisConditions = asArray(analysis?.conditions);
@@ -595,8 +727,9 @@ export function buildEngineeringReasoningModel({ liveOps = {}, canonicalFinding 
   const canonicalRaw = canonicalAsRaw(canonicalFinding);
   const findingsSource = rawConditions.length ? rawConditions : rawFindings.length ? rawFindings : (canonicalRaw ? [canonicalRaw] : []);
   const processing = /process|pending|queue|analyz/.test(firstText(resolvedSnapshot?.status, currentSession?.status).toLowerCase());
-  const primarySystem = supportedLocationText(result?.system_name, analysis?.systems?.[0]?.name, liveOps?.primaryWindow?.label);
-  const context = { result, evidenceIndex: analysis?.evidence_index ?? {}, relationships, coverage, gaps, processing, primarySystem, baselineSufficient, siteLocation: siteIdentity.location };
+  const rawPrimarySystem = rawText(result?.system_id ?? analysis?.systems?.[0]?.id);
+  const primarySystem = supportedLocationText(result?.system_name, analysis?.systems?.[0]?.name, mappedLocationLabel(rawPrimarySystem, labelContext?.systemLabels), liveOps?.primaryWindow?.label);
+  const context = { result, evidenceIndex: analysis?.evidence_index ?? {}, relationships, coverage, gaps, processing, primarySystem, baselineSufficient, siteLocation: siteIdentity.location, labelContext };
   const findings = rawConditions.length
     ? findingsSource.map((raw, index) => buildFinding(raw, index, context))
     : consolidateFindings(findingsSource.map((raw, index) => buildFinding(raw, index, context)));
@@ -621,7 +754,7 @@ function buildSearchItems(site, subsystems, findings, nodes, evidenceIndex = {})
   ];
 }
 
-export function buildEngineeringReasoningModelsFromEvidenceRuns(runs = []) {
+export function buildEngineeringReasoningModelsFromEvidenceRuns(runs = [], labelContext = {}) {
   const latestBySite = new Map();
   for (const run of asArray(runs)) {
     if (!run || typeof run !== "object") continue;
@@ -639,6 +772,6 @@ export function buildEngineeringReasoningModelsFromEvidenceRuns(runs = []) {
       ? { ...run.condition, observation_status: run?.observation_status, finding_status_history: asArray(run?.finding_status_history), supporting_evidence: asArray(run.condition.supporting_evidence).length ? run.condition.supporting_evidence : evidence, operator_feedback_history: asArray(run?.operator_feedback_history) }
       : null;
     const result = { ...run, job_id: run?.run_id, facility_name: firstText(run?.site_name, run?.room), site_id: siteKey === "unassigned-dataset" ? undefined : siteKey, data_quality: { coverage, warnings: [...asArray(run?.warnings), ...asArray(run?.data_conditions)] }, analysis_explanation: { fingerprint: { status: run?.baseline_status }, systems: compact([{ id: run?.system_id, name: firstText(run?.system_name, run?.system_id) }]), conditions: active && persistedCondition ? [persistedCondition] : [], insights: active && !persistedCondition && evidence.length ? [{ id: `evidence-${run.run_id}`, title: firstText(run?.finding_title, run?.historical_fact, evidence[0]), what_changed: evidence[0], why_it_matters: firstText(run?.potential_impact, run?.historical_fact), confidence_tier: run?.confidence_tier, system: firstText(run?.system_name, run?.system_id), subsystem: run?.subsystem_name, asset: run?.asset_name, variables: asArray(run?.variables), supporting_evidence: evidence, limitations: [...asArray(run?.warnings), ...asArray(run?.data_conditions)], operator_feedback_history: asArray(run?.operator_feedback_history) }] : [] } };
-    return buildEngineeringReasoningModel({ result });
+    return buildEngineeringReasoningModel({ result, labelContext });
   });
 }

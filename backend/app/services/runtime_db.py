@@ -136,6 +136,35 @@ def init_runtime_db() -> None:
                 FOREIGN KEY(run_id) REFERENCES evidence_runs(run_id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS finding_cases (
+                finding_id TEXT PRIMARY KEY,
+                source_kind TEXT NOT NULL CHECK (source_kind IN ('evidence_run', 'live_finding')),
+                source_id TEXT NOT NULL,
+                source_finding_key TEXT NOT NULL,
+                scope_storage_id TEXT,
+                dataset_scope_json TEXT CHECK (dataset_scope_json IS NULL OR json_valid(dataset_scope_json)),
+                source_snapshot_json TEXT NOT NULL CHECK (json_valid(source_snapshot_json)),
+                created_at TEXT NOT NULL,
+                UNIQUE (source_kind, source_id, source_finding_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS finding_workflow_events (
+                event_id TEXT PRIMARY KEY,
+                finding_id TEXT NOT NULL,
+                version INTEGER NOT NULL CHECK (version > 0),
+                event_type TEXT NOT NULL CHECK (event_type IN (
+                    'workflow_updated', 'feedback_recorded', 'resolution_recorded',
+                    'legacy_status_imported', 'legacy_feedback_imported'
+                )),
+                recorded_at TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                idempotency_key TEXT,
+                payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
+                FOREIGN KEY(finding_id) REFERENCES finding_cases(finding_id) ON DELETE RESTRICT,
+                UNIQUE (finding_id, version),
+                UNIQUE (finding_id, idempotency_key)
+            );
+
             CREATE TABLE IF NOT EXISTS evidence_audit_tag_events (
                 event_id TEXT PRIMARY KEY,
                 run_id TEXT NOT NULL,
@@ -204,6 +233,8 @@ def init_runtime_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_evidence_runs_status_created ON evidence_runs(status, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_feedback_events_run_time ON operator_feedback_events(run_id, recorded_at DESC);
             CREATE INDEX IF NOT EXISTS idx_finding_status_events_run_time ON finding_status_events(run_id, recorded_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_finding_cases_source ON finding_cases(source_kind, source_id, source_finding_key);
+            CREATE INDEX IF NOT EXISTS idx_finding_workflow_events_finding_version ON finding_workflow_events(finding_id, version DESC);
             CREATE INDEX IF NOT EXISTS idx_evidence_audit_tags_run_time ON evidence_audit_tag_events(run_id, recorded_at DESC);
             CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_latest_payloads_updated_at ON latest_payloads(updated_at DESC);
@@ -225,6 +256,8 @@ RUNTIME_SCHEMA_MIGRATIONS = (
     "004_append_only_finding_events",
     "005_live_telemetry_ingestion",
     "006_live_analysis_orchestration",
+    "007_finding_workflow_sidecar",
+    "008_finding_workflow_scope",
 )
 
 
@@ -643,6 +676,104 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
         connection.execute(
             "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
             ("006_live_analysis_orchestration", now_iso()),
+        )
+
+    if "007_finding_workflow_sidecar" not in applied:
+        for statement in (
+            """
+            CREATE TABLE IF NOT EXISTS finding_cases (
+                finding_id TEXT PRIMARY KEY,
+                source_kind TEXT NOT NULL CHECK (source_kind IN ('evidence_run', 'live_finding')),
+                source_id TEXT NOT NULL,
+                source_finding_key TEXT NOT NULL,
+                scope_storage_id TEXT,
+                dataset_scope_json TEXT CHECK (dataset_scope_json IS NULL OR json_valid(dataset_scope_json)),
+                source_snapshot_json TEXT NOT NULL CHECK (json_valid(source_snapshot_json)),
+                created_at TEXT NOT NULL,
+                UNIQUE (source_kind, source_id, source_finding_key)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS finding_workflow_events (
+                event_id TEXT PRIMARY KEY,
+                finding_id TEXT NOT NULL,
+                version INTEGER NOT NULL CHECK (version > 0),
+                event_type TEXT NOT NULL CHECK (event_type IN (
+                    'workflow_updated', 'feedback_recorded', 'resolution_recorded',
+                    'legacy_status_imported', 'legacy_feedback_imported'
+                )),
+                recorded_at TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                idempotency_key TEXT,
+                payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
+                FOREIGN KEY(finding_id) REFERENCES finding_cases(finding_id) ON DELETE RESTRICT,
+                UNIQUE (finding_id, version),
+                UNIQUE (finding_id, idempotency_key)
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_finding_cases_source ON finding_cases(source_kind, source_id, source_finding_key)",
+            "CREATE INDEX IF NOT EXISTS idx_finding_cases_scope_created ON finding_cases(scope_storage_id, created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_finding_workflow_events_finding_version ON finding_workflow_events(finding_id, version DESC)",
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_finding_cases_source_immutable
+            BEFORE UPDATE OF source_kind, source_id, source_finding_key, scope_storage_id,
+                             dataset_scope_json, source_snapshot_json
+            ON finding_cases
+            BEGIN SELECT RAISE(ABORT, 'finding_case_source_immutable'); END
+            """,
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_finding_cases_no_delete
+            BEFORE DELETE ON finding_cases
+            BEGIN SELECT RAISE(ABORT, 'finding_cases_preserve_identity'); END
+            """,
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_finding_workflow_events_no_update
+            BEFORE UPDATE ON finding_workflow_events
+            BEGIN SELECT RAISE(ABORT, 'finding_workflow_events_append_only'); END
+            """,
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_finding_workflow_events_no_delete
+            BEFORE DELETE ON finding_workflow_events
+            BEGIN SELECT RAISE(ABORT, 'finding_workflow_events_append_only'); END
+            """,
+        ):
+            connection.execute(statement)
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("007_finding_workflow_sidecar", now_iso()),
+        )
+
+    if "008_finding_workflow_scope" not in applied:
+        finding_case_columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(finding_cases)").fetchall()
+        }
+        if "scope_storage_id" not in finding_case_columns:
+            connection.execute("ALTER TABLE finding_cases ADD COLUMN scope_storage_id TEXT")
+        if "dataset_scope_json" not in finding_case_columns:
+            connection.execute(
+                "ALTER TABLE finding_cases ADD COLUMN dataset_scope_json TEXT "
+                "CHECK (dataset_scope_json IS NULL OR json_valid(dataset_scope_json))"
+            )
+        for statement in (
+            "CREATE INDEX IF NOT EXISTS idx_finding_cases_scope_created ON finding_cases(scope_storage_id, created_at DESC)",
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_finding_cases_source_immutable
+            BEFORE UPDATE OF source_kind, source_id, source_finding_key, scope_storage_id,
+                             dataset_scope_json, source_snapshot_json
+            ON finding_cases
+            BEGIN SELECT RAISE(ABORT, 'finding_case_source_immutable'); END
+            """,
+            """
+            CREATE TRIGGER IF NOT EXISTS trg_finding_cases_no_delete
+            BEFORE DELETE ON finding_cases
+            BEGIN SELECT RAISE(ABORT, 'finding_cases_preserve_identity'); END
+            """,
+        ):
+            connection.execute(statement)
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("008_finding_workflow_scope", now_iso()),
         )
 
 
@@ -1899,8 +2030,26 @@ def hydrate_evidence_event_history_db(records: list[dict[str, Any]]) -> list[dic
     for source in records:
         record = dict(source)
         events = event_sets.get(str(record.get("run_id") or ""), {})
-        feedback = [*events.get("feedback", []), *list(record.get("operator_feedback_history") or [])]
-        statuses = [*events.get("status", []), *list(record.get("finding_status_history") or [])]
+        # New writes for an unambiguous one-finding run live only in the
+        # canonical sidecar. Historical run-level events remain in their legacy
+        # tables and are not copied back, preventing compatibility duplicates.
+        from app.services.finding_workflow import (
+            compatibility_events_for_run,
+            materialize_evidence_finding_cases,
+        )
+
+        materialize_evidence_finding_cases(record)
+        compatibility = compatibility_events_for_run(str(record.get("run_id") or ""))
+        feedback = [
+            *compatibility.get("feedback", []),
+            *events.get("feedback", []),
+            *list(record.get("operator_feedback_history") or []),
+        ]
+        statuses = [
+            *compatibility.get("status", []),
+            *events.get("status", []),
+            *list(record.get("finding_status_history") or []),
+        ]
         audit_tags = [*events.get("audit", []), *list(record.get("audit_tags") or [])]
         record["operator_feedback_history"] = feedback
         record["finding_status_history"] = statuses

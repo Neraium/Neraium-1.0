@@ -469,9 +469,12 @@ def test_canonical_result_preserves_new_finding_fields_and_legacy_fields() -> No
     )
     analysis = build_analysis_result(result)
     insight = analysis["insights"][0]
+    relationship = analysis["relationships"][0]
 
     assert set(insight) >= {
         "classification",
+        "finding_confidence_v1",
+        "relationship_comparison",
         "operating_mode",
         "data_confidence",
         "sensor_health",
@@ -486,5 +489,15 @@ def test_canonical_result_preserves_new_finding_fields_and_legacy_fields() -> No
         "evidence_refs",
     }
     assert insight["investigation_guidance"]
+    assert insight["finding_confidence_v1"]["schema_version"] == "finding-confidence-v1"
+    assert insight["relationship_comparison"] == insight["finding_confidence_v1"]["relationship_comparison"]
+    assert insight["relationship_comparison"]["baseline_value"] == 0.9
+    assert insight["relationship_comparison"]["current_value"] == 0.18
+    assert round(insight["relationship_comparison"]["signed_change"], 6) == -0.72
+    assert round(insight["relationship_comparison"]["absolute_change"], 6) == 0.72
+    assert relationship["relationship_comparison"] == insight["relationship_comparison"]
+    assert round(relationship["signed_change"], 6) == -0.72
+    assert round(relationship["absolute_change"], 6) == 0.72
+    assert relationship["relationship_direction"] == "decreased"
     assert insight["recommended_first_action"] == insight["investigation_guidance"][0]["check"]
     assert all(item["reason"] and item["category"] and item["editable"] is True for item in insight["investigation_guidance"])

@@ -294,6 +294,7 @@ class EvidenceRunResponse(BaseModel):
     portfolio_id: str | None = None
     site_id: str | None = None
     dataset_id: str | None = None
+    dataset_scope: dict[str, Any] | None = None
     baseline_id: str | None = None
     baseline_dataset_id: str | None = None
     baseline_version: int | str | None = None
@@ -340,6 +341,7 @@ class EvidenceRunResponse(BaseModel):
     subsystem_name: str | None = None
     potential_impact: str | None = None
     condition: dict[str, Any] = Field(default_factory=dict)
+    finding_identity_snapshot: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class OperatorFeedbackRequest(ContractModel):
@@ -368,12 +370,114 @@ class FindingStatusRequest(ContractModel):
     work_order_reference: Annotated[str, StringConstraints(max_length=200)] | None = None
 
 
+class FindingAssignment(ContractModel):
+    target_type: Literal["person", "team"]
+    label: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    external_ref: Annotated[str, StringConstraints(max_length=200)] | None = None
+
+
+class FindingWorkflowUpdateRequest(ContractModel):
+    expected_version: int = Field(ge=0)
+    idempotency_key: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = None
+    status: Literal["open", "acknowledged", "investigating", "monitoring", "resolved", "dismissed"] | None = None
+    user_priority: Literal["low", "medium", "high", "critical"] | None = None
+    assignment: FindingAssignment | None = None
+    due_at: str | None = None
+    manager_note: OptionalNote | None = None
+    work_order_reference: Annotated[str, StringConstraints(max_length=200)] | None = None
+    external_reference: Annotated[str, StringConstraints(max_length=500)] | None = None
+    validation_outcome: Annotated[str, StringConstraints(max_length=200)] | None = None
+    validation_note: OptionalNote | None = None
+
+    @field_validator("due_at")
+    @classmethod
+    def due_at_is_utc(cls, value: str | None) -> str | None:
+        return validate_utc_timestamp(value)
+
+
+class FindingFeedbackRequest(OperatorFeedbackRequest):
+    expected_version: int = Field(ge=0)
+    idempotency_key: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = None
+
+
+class FindingResolutionRequest(ContractModel):
+    expected_version: int = Field(ge=0)
+    idempotency_key: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = None
+    outcome: Literal[
+        "issue_found", "no_issue_found", "operational_change", "sensor_issue",
+        "maintenance_performed",
+    ]
+    note: OptionalNote | None = None
+
+
+class FindingSourceResponse(BaseModel):
+    kind: Literal["evidence_run", "live_finding"]
+    id: str
+    finding_key: str
+    run_id: str | None = None
+
+
+class FindingWorkflowResponse(BaseModel):
+    version: int
+    status: Literal["open", "acknowledged", "investigating", "monitoring", "resolved", "dismissed"]
+    recommended_priority: Literal["low", "medium", "high", "critical"] | None = None
+    user_priority: Literal["low", "medium", "high", "critical"] | None = None
+    effective_priority: Literal["low", "medium", "high", "critical"] | None = None
+    assignment: FindingAssignment | None = None
+    due_at: str | None = None
+    manager_note: str | None = None
+    work_order_reference: str | None = None
+    external_reference: str | None = None
+    validation_outcome: str | None = None
+    validation_note: str | None = None
+    latest_feedback: dict[str, Any] | None = None
+    resolution: dict[str, Any] | None = None
+    updated_at: str | None = None
+    updated_by: str | None = None
+
+
+class FindingActivitySummaryResponse(BaseModel):
+    count: int
+    latest_event_at: str | None = None
+    url: str
+
+
+class FindingCaseResponse(BaseModel):
+    finding_id: str
+    source: FindingSourceResponse
+    evidence: dict[str, Any]
+    workflow: FindingWorkflowResponse
+    activity: FindingActivitySummaryResponse
+    created_at: str
+
+
+class FindingCasesListResponse(BaseModel):
+    findings: list[FindingCaseResponse] = Field(default_factory=list)
+    limit: int = 50
+    offset: int = 0
+    has_more: bool = False
+    next_offset: int | None = None
+
+
+class FindingActivityResponse(BaseModel):
+    finding_id: str
+    events: list[dict[str, Any]] = Field(default_factory=list)
+    version: int
+
+
 class FacilitySystemContext(ContractModel):
     system_id: Identifier
     name: ShortText
     system_type: ShortText
     parent_system_id: Identifier | None = None
     equipment_ids: list[Identifier] = Field(default_factory=list, max_length=200)
+
+
+class FacilityEquipmentContext(ContractModel):
+    equipment_id: Identifier
+    name: ShortText
+    system_id: Identifier
+    equipment_type: ShortText | None = None
 
 
 class FacilitySignalMapping(ContractModel):
@@ -392,6 +496,7 @@ class FacilityContextRequest(ContractModel):
     site_name: ShortText
     timezone: Annotated[str, StringConstraints(min_length=1, max_length=64)] = "UTC"
     systems: list[FacilitySystemContext] = Field(default_factory=list, max_length=200)
+    equipment: list[FacilityEquipmentContext] = Field(default_factory=list, max_length=1000)
     signal_mappings: list[FacilitySignalMapping] = Field(default_factory=list, max_length=2000)
 
 

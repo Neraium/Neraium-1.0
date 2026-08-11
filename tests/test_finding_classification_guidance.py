@@ -172,7 +172,7 @@ def test_stale_known_operational_classification_is_revalidated() -> None:
     )[0]
 
     assert finding["classification"]["type"] == CONTEXT_LIMITED_RELATIONSHIP_CHANGE
-    assert finding["classification"]["rule_version"] == "deterministic_finding_classification_v2"
+    assert finding["classification"]["rule_version"] == "deterministic_finding_classification_v3"
 
 
 def test_examples_have_no_unsupported_failure_or_cause_claims() -> None:

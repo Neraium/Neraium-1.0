@@ -22,6 +22,8 @@ function EvidenceRecordContext({ record }) {
         <div><dt>Window end</dt><dd>{evidenceValue(timestamps.upload_end)}</dd></div>
         <div><dt>Rows accepted</dt><dd>{evidenceValue(record.rows_accepted)}</dd></div>
         <div><dt>Evidence hash</dt><dd>{evidenceValue(record.evidence_hash)}</dd></div>
+        {record.finding_id ? <div><dt>Finding identity</dt><dd>{record.finding_id}</dd></div> : null}
+        {record.system_id ? <div><dt>System identity</dt><dd>{record.system_id}</dd></div> : null}
       </dl>
     </section>
   );

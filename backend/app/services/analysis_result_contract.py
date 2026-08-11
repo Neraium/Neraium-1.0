@@ -350,6 +350,11 @@ def build_analysis_result(
                     "baseline_strength": item.get("baseline_strength"),
                     "current_strength": first_present(item.get("current_strength"), item.get("strength")),
                     "correlation_delta": item.get("correlation_delta"),
+                    "relationship_comparison": item.get("relationship_comparison"),
+                    "baseline_value": item.get("baseline_value"),
+                    "current_value": item.get("current_value"),
+                    "signed_change": item.get("signed_change"),
+                    "absolute_change": item.get("absolute_change"),
                     "change_percent": first_present(item.get("change_percent"), item.get("change_percentage")),
                     "change_type": item.get("change_type"),
                 },
@@ -379,6 +384,12 @@ def build_analysis_result(
                     "baseline_correlation": number_or_none(item.get("baseline_correlation")),
                     "current_correlation": number_or_none(first_present(item.get("current_correlation"), item.get("recent_correlation"))),
                     "correlation_delta": number_or_none(item.get("correlation_delta")),
+                    "relationship_comparison": item.get("relationship_comparison"),
+                    "baseline_value": number_or_none(item.get("baseline_value")),
+                    "current_value": number_or_none(item.get("current_value")),
+                    "signed_change": number_or_none(item.get("signed_change")),
+                    "absolute_change": number_or_none(item.get("absolute_change")),
+                    "relationship_direction": item.get("relationship_direction"),
                     "relationship_importance_score": number_or_none(item.get("relationship_importance_score")),
                     "relationship_importance_rationale": item.get("relationship_importance_rationale"),
                     "ranking_factors": item.get("ranking_factors"),
@@ -441,6 +452,13 @@ def build_analysis_result(
                     "confidence_rationale": item.get("confidence_rationale"),
                     "confidence_and_uncertainty": item.get("confidence_and_uncertainty"),
                     "classification": item.get("classification"),
+                    "finding_confidence_v1": first_present(
+                        item.get("finding_confidence_v1"),
+                        (item.get("classification") or {}).get("finding_confidence_v1")
+                        if isinstance(item.get("classification"), dict)
+                        else None,
+                    ),
+                    "relationship_comparison": item.get("relationship_comparison"),
                     "data_confidence": item.get("data_confidence"),
                     "sensor_health": item.get("sensor_health"),
                     "certainty_limit": item.get("certainty_limit"),
@@ -714,6 +732,19 @@ def build_condition_contracts(
                     "headline": first_present(item.get("headline"), item.get("title"), "Monitored condition changed"),
                     "title": first_present(item.get("headline"), item.get("title"), "Monitored condition changed"),
                     "classification": classification,
+                    "finding_confidence_v1": first_present(
+                        item.get("finding_confidence_v1"),
+                        classification.get("finding_confidence_v1"),
+                    ),
+                    "relationship_comparison": first_present(
+                        item.get("relationship_comparison"),
+                        (item.get("finding_confidence_v1") or {}).get("relationship_comparison")
+                        if isinstance(item.get("finding_confidence_v1"), dict)
+                        else None,
+                        (classification.get("finding_confidence_v1") or {}).get("relationship_comparison")
+                        if isinstance(classification.get("finding_confidence_v1"), dict)
+                        else None,
+                    ),
                     "trajectory": trajectory,
                     "corroboration": corroboration,
                     "corroboration_strength": first_present(

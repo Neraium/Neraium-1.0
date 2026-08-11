@@ -3,10 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.cumulative_counters import is_cumulative_counter_name
+from app.services.finding_confidence import build_relationship_comparison
 from app.services.finding_classification import (
     CONTEXT_LIMITED_RELATIONSHIP_CHANGE,
     INSUFFICIENT_EVIDENCE,
     KNOWN_OPERATIONAL_CHANGE,
+    OBSERVED_CHANGE_UNDER_REVIEW,
     POSSIBLE_INSTRUMENTATION_ISSUE,
     UNEXPLAINED_SYSTEMIC_CHANGE,
     classify_finding,
@@ -273,6 +275,7 @@ def build_insights(
             persistence=persistence_info,
             relationship_evidence=relationship_evidence,
         )
+        confidence_contract = classification.get("finding_confidence_v1", {})
         has_certainty_context = finding_has_certainty_context(primary, data_quality)
         classification_narrative = relationship_classification_narrative(
             classification=classification,
@@ -313,6 +316,8 @@ def build_insights(
                     else confidence_rationale_for_relationship(primary, confidence_score)
                 ),
                 "classification": classification,
+                "finding_confidence_v1": confidence_contract,
+                "relationship_comparison": confidence_contract.get("relationship_comparison"),
                 "operating_mode": operating_mode,
                 "data_confidence": data_confidence,
                 "sensor_health": sensor_health,
@@ -442,6 +447,7 @@ def build_insights(
             persistence=persistence_info,
             relationship_evidence=metric_evidence,
         )
+        confidence_contract = classification.get("finding_confidence_v1", {})
         has_certainty_context = bool(data_quality.get("data_confidence"))
         metric_narrative = metric_classification_narrative(
             classification=classification,
@@ -465,6 +471,8 @@ def build_insights(
                         else confidence_rationale_for_metric(item, persistence_detail, confidence_score)
                     ),
                     "classification": classification,
+                    "finding_confidence_v1": confidence_contract,
+                    "relationship_comparison": confidence_contract.get("relationship_comparison"),
                     "operating_mode": operating_mode,
                     "data_confidence": data_confidence,
                     "sensor_health": sensor_health,
@@ -635,6 +643,11 @@ def ensure_finding_context(
                 "recent_sample_size": baseline.get("recent_window_rows"),
                 "confidence_score": item.get("confidence_score"),
                 "correlation_delta": item.get("correlation_delta"),
+                "signed_correlation_delta": item.get("signed_correlation_delta"),
+                "baseline_correlation": item.get("baseline_correlation"),
+                "recent_correlation": item.get("recent_correlation"),
+                "evidence_refs": item.get("evidence_refs"),
+                "trajectory": item.get("trajectory"),
                 "source_signals": source_signals,
             }
         )
@@ -651,6 +664,11 @@ def ensure_finding_context(
             if not isinstance(existing_classification, dict)
             or existing_classification.get("type") == KNOWN_OPERATIONAL_CHANGE
             else existing_classification
+        )
+        confidence_contract = (
+            classification.get("finding_confidence_v1")
+            if isinstance(classification.get("finding_confidence_v1"), dict)
+            else evaluated_classification.get("finding_confidence_v1", {})
         )
         existing_guidance = item.get("investigation_guidance")
         if not isinstance(existing_guidance, list) or not existing_guidance:
@@ -680,6 +698,8 @@ def ensure_finding_context(
         )
         source_ranges = item.get("source_time_ranges") if isinstance(item.get("source_time_ranges"), list) else []
         updated["classification"] = classification
+        updated.setdefault("finding_confidence_v1", confidence_contract)
+        updated.setdefault("relationship_comparison", confidence_contract.get("relationship_comparison"))
         updated.setdefault("operating_mode", operating_mode)
         updated.setdefault("data_confidence", data_confidence)
         updated.setdefault("sensor_health", sensor_health)
@@ -812,9 +832,12 @@ def relationship_evidence_context(item: dict[str, Any]) -> dict[str, Any]:
             "baseline_correlation": item.get("baseline_correlation"),
             "recent_correlation": item.get("recent_correlation"),
             "correlation_delta": item.get("correlation_delta"),
+            "signed_correlation_delta": item.get("signed_correlation_delta"),
             "baseline_sample_size": item.get("baseline_sample_size"),
             "recent_sample_size": item.get("recent_sample_size"),
             "confidence_score": item.get("confidence_score"),
+            "evidence_refs": item.get("evidence_refs"),
+            "trajectory": item.get("trajectory"),
             "supporting_metric_pairs": item.get("supporting_metric_pairs"),
             "time_window": item.get("time_window"),
         }
@@ -843,6 +866,8 @@ def classification_title(system: str, classification: dict[str, Any]) -> str:
         return f"{subject} instrumentation review"
     if classification_type == UNEXPLAINED_SYSTEMIC_CHANGE:
         return f"{subject} relationship change"
+    if classification_type == OBSERVED_CHANGE_UNDER_REVIEW:
+        return f"{subject} change under review"
     return f"{subject} evidence review"
 
 
@@ -905,6 +930,13 @@ def relationship_classification_narrative(
             ),
             "why_it_matters": "Engineering review can determine whether the persistent relationship shift warrants further investigation.",
         }
+    if classification_type == OBSERVED_CHANGE_UNDER_REVIEW:
+        return {
+            "what_changed": f"The relationship between {pair} changed from its learned baseline.",
+            "why_classified": reasons or "The baseline/current comparison supports a change while persistence remains under observation.",
+            "interpretation": "The measured relationship change is under review; its persistence and operational explanation are not established.",
+            "why_it_matters": "Continue source-bounded review until persistence is established or the observation clears.",
+        }
     limitations = join_reason_clauses(data_confidence.get("reasons", []), limit=2)
     limitation_detail = (
         f"the available evidence prevents a reliable interpretation because: {limitations}"
@@ -953,6 +985,12 @@ def metric_classification_narrative(
             "what_changed": f"{observed_change} The movement persisted during comparable operating conditions.",
             "why_classified": reasons,
             "why_it_matters": "The persistent change warrants engineering review, without implying a diagnosed cause or exact failure.",
+        }
+    if classification_type == OBSERVED_CHANGE_UNDER_REVIEW:
+        return {
+            "what_changed": f"{observed_change} Persistence remains under observation.",
+            "why_classified": reasons or "The signal movement is measured, but persistence is not yet established.",
+            "why_it_matters": "Continue source validation and observation before treating the movement as persistent.",
         }
     return {
         "what_changed": f"{observed_change} Available evidence is insufficient for a reliable interpretation.",
@@ -1221,6 +1259,7 @@ def build_relationships(
             [*columns, *display_columns],
             possible_operational_causes(system, [*columns, *display_columns]),
         )
+        relationship_comparison = build_relationship_comparison(relationship_evidence_context(item))
         relationships.append(
             compact_dict(
                 {
@@ -1238,6 +1277,12 @@ def build_relationships(
                     "recent_correlation": item.get("recent_correlation"),
                     "correlation_delta": item.get("correlation_delta"),
                     "signed_correlation_delta": item.get("signed_correlation_delta"),
+                    "relationship_comparison": relationship_comparison,
+                    "baseline_value": relationship_comparison.get("baseline_value"),
+                    "current_value": relationship_comparison.get("current_value"),
+                    "signed_change": relationship_comparison.get("signed_change"),
+                    "absolute_change": relationship_comparison.get("absolute_change"),
+                    "relationship_direction": relationship_comparison.get("direction"),
                     "change_percentage": item.get("change_percentage"),
                     "direction": item.get("direction"),
                     "coupling_strength": item.get("coupling_strength"),
@@ -2172,6 +2217,7 @@ def column_evidence_items(
 
 def relationship_contribution(item: dict[str, Any], index: int, columns: list[str]) -> dict[str, Any]:
     display_columns = relationship_display_columns(item)
+    relationship_comparison = build_relationship_comparison(relationship_evidence_context(item))
     return compact_dict(
         {
             "id": f"relationship-{index}",
@@ -2183,6 +2229,16 @@ def relationship_contribution(item: dict[str, Any], index: int, columns: list[st
             "strength": item.get("strength"),
             "baseline_strength": item.get("baseline_strength"),
             "current_strength": item.get("current_strength"),
+            "baseline_correlation": item.get("baseline_correlation"),
+            "recent_correlation": item.get("recent_correlation"),
+            "correlation_delta": item.get("correlation_delta"),
+            "signed_correlation_delta": item.get("signed_correlation_delta"),
+            "relationship_comparison": relationship_comparison,
+            "baseline_value": relationship_comparison.get("baseline_value"),
+            "current_value": relationship_comparison.get("current_value"),
+            "signed_change": relationship_comparison.get("signed_change"),
+            "absolute_change": relationship_comparison.get("absolute_change"),
+            "relationship_direction": relationship_comparison.get("direction"),
             "change_percentage": item.get("change_percentage"),
             "confidence_score": item.get("confidence_score"),
             "relationship_importance_score": item.get("relationship_importance_score"),

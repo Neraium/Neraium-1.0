@@ -488,6 +488,7 @@ def build_evidence_record_from_result(
         "site_id": provenance.get("site_id"),
         "system_id": provenance.get("system_id"),
         "dataset_id": provenance.get("dataset_id"),
+        "dataset_scope": result.get("dataset_scope"),
         "baseline_id": provenance.get("baseline_id"),
         "baseline_dataset_id": provenance.get("baseline_dataset_id"),
         "baseline_version": provenance.get("baseline_version"),
@@ -530,6 +531,19 @@ def build_evidence_record_from_result(
         "subsystem_name": (primary_condition.get("localization") or {}).get("monitored_boundary") if isinstance(primary_condition.get("localization"), dict) else None,
         "potential_impact": primary_condition.get("why_it_matters"),
         "condition": _evidence_condition_record(primary_condition),
+        "finding_identity_snapshot": [
+            {
+                "source_finding_id": str(
+                    condition.get("condition_id")
+                    or condition.get("finding_id")
+                    or condition.get("id")
+                    or f"condition-{index}"
+                ),
+                "finding": _evidence_condition_record(condition),
+            }
+            for index, condition in enumerate(conditions)
+            if isinstance(condition, dict)
+        ],
         "phase_2_supporting_evidence": _phase2_supporting_evidence_from_result(result),
         "water_intelligence": water_intelligence,
         "water_prior_versions": water_prior_versions,
@@ -555,6 +569,9 @@ def _evidence_condition_record(condition: dict[str, Any]) -> dict[str, Any]:
             "headline": condition.get("headline"),
             "status": condition.get("status"),
             "classification": condition.get("classification"),
+            "recommended_priority": condition.get("recommended_priority"),
+            "priority": condition.get("priority"),
+            "severity": condition.get("severity"),
             "data_confidence": condition.get("data_confidence"),
             "operating_mode": condition.get("operating_mode"),
             "persistence": condition.get("persistence"),

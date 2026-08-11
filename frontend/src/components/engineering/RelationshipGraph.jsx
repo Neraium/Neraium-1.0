@@ -2,7 +2,7 @@ import React from "react";
 
 const EDGE_LABELS = {
   stable: "Stable learned relationship",
-  weakening: "Weakening or drifting relationship",
+  weakening: "Decreasing or shifting relationship",
   emerging: "Emerging relationship",
   insufficient: "Insufficient evidence",
   historical: "Historical-only relationship",
