@@ -416,7 +416,7 @@ export function buildPendingState(reviewReadiness) {
   if (reviewReadiness === "quality_gate") {
     return {
       title: "Insights are not ready.",
-      subtitle: "The current telemetry does not yet meet the reliability threshold for operator review.",
+      subtitle: "The current telemetry does not yet meet the reliability requirements for operator review.",
       detail: "Import a more complete dataset or correct the data-quality warnings, then run the analysis again.",
     };
   }

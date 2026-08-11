@@ -149,16 +149,12 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     const card = screen.getByTestId("compact-finding-card");
     const finding = within(card);
     expect(finding.getByText("Cooling system")).toBeTruthy();
-    expect(finding.getByRole("heading", { name: "Condenser-side behavior changed" })).toBeTruthy();
+    expect(finding.getByRole("heading", { name: "Chiller 03 changed" })).toBeTruthy();
     expect(finding.getByText("Equipment / system")).toBeTruthy();
     expect(finding.getByText("Requested next action")).toBeTruthy();
     for (const label of ["Priority", "Assignment", "Due", "Workflow"]) expect(finding.getByText(label)).toBeTruthy();
-    const evidence = finding.getByText("Investigation evidence (4)").closest("details");
-    expect(evidence.open).toBe(false);
-    fireEvent.click(finding.getByText("Investigation evidence (4)"));
-    expect(evidence.open).toBe(true);
-    expect(finding.getByText("Condenser approach temperature increased 15.3%.")).toBeTruthy();
-    expect(finding.getByText("Compressor current increased 5.5%.")).toBeTruthy();
+    expect(finding.queryByText("Condenser approach temperature increased 15.3%.")).toBeNull();
+    expect(finding.queryByText("Compressor current increased 5.5%.")).toBeNull();
     expect(finding.getByRole("button", { name: "Review" })).toBeTruthy();
     expect(finding.getByText("More actions")).toBeTruthy();
     expect(card.querySelector(".operational-finding__more").open).toBe(false);
@@ -206,10 +202,10 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
 
     const card = screen.getByTestId("compact-finding-card");
     const view = within(card);
-    expect(view.getByRole("heading", { name: "Pumping System relationship decreased" })).toBeTruthy();
+    expect(view.getByRole("heading", { name: "Discharge boundary changed" })).toBeTruthy();
     expect(view.getByText("Pumping System")).toBeTruthy();
-    expect(view.getByText("Investigation evidence (6)").closest("details").open).toBe(false);
-    expect(card.querySelectorAll(".operational-finding__evidence li")).toHaveLength(6);
+    expect(view.queryByText(/relationship decreased/i)).toBeNull();
+    expect(card.querySelector(".operational-finding__evidence")).toBeNull();
     expect(view.getByRole("button", { name: "Investigate" })).toBeTruthy();
     expect(view.getByText("Actions")).toBeTruthy();
 
@@ -260,7 +256,7 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     };
     renderWorkspace({ result: analysisResult({ analysis: { conditions: [condition] } }) });
 
-    expect(screen.getByRole("heading", { name: "Cooling Distribution relationship decreased" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Cooling Distribution changed" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
 

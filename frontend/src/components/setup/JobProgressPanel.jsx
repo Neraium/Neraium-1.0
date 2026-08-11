@@ -12,6 +12,24 @@ function titleCase(value) {
   return text.replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+const CUSTOMER_OPERATION_LABELS = {
+  empirical_thresholds: "Behavioral reference bounds",
+};
+
+const CUSTOMER_UNIT_LABELS = {
+  threshold_candidates: "reference candidates",
+};
+
+function customerFacingProgressText(value) {
+  return String(value || "")
+    .replace(/empirical thresholds/gi, "Behavioral reference bounds")
+    .replace(/threshold candidates?/gi, (match) => match.toLowerCase().endsWith("s") ? "reference candidates" : "reference candidate");
+}
+
+function operationLabel(operation) {
+  return CUSTOMER_OPERATION_LABELS[operation?.id] || customerFacingProgressText(operation?.label);
+}
+
 function formatUtcTimestamp(value) {
   const date = new Date(String(value || ""));
   if (!Number.isFinite(date.getTime())) return "";
@@ -40,7 +58,8 @@ function formatProgressCount(progress) {
     ? null
     : Number(progress.total_units);
   if (completed === null || !Number.isFinite(completed)) return "";
-  const unit = String(progress?.unit_type || "work units").replaceAll("_", " ");
+  const unitType = String(progress?.unit_type || "work_units");
+  const unit = CUSTOMER_UNIT_LABELS[unitType] || unitType.replaceAll("_", " ");
   const boundedCompleted = Number.isFinite(total) && total >= 0
     ? Math.min(completed, total)
     : completed;
@@ -63,14 +82,15 @@ function progressStateLabel(progress, executionState, pollConnectionState) {
 
 function operationActivityLabel(operation, progressStatus) {
   if (!operation) return progressStatus === "completed" ? "All operations complete" : "Waiting for the current operation";
+  const label = operationLabel(operation);
   const state = String(operation.status || "processing").toLowerCase();
-  if (state === "completed") return `${operation.label} complete`;
-  if (state === "failed") return `${operation.label} failed`;
-  if (state === "pending") return `${operation.label} pending`;
-  if (state === "queued") return `${operation.label} queued`;
-  if (state === "waiting") return `${operation.label} waiting`;
-  if (state === "retrying") return `${operation.label} retrying`;
-  return `${operation.label} in progress`;
+  if (state === "completed") return `${label} complete`;
+  if (state === "failed") return `${label} failed`;
+  if (state === "pending") return `${label} pending`;
+  if (state === "queued") return `${label} queued`;
+  if (state === "waiting") return `${label} waiting`;
+  if (state === "retrying") return `${label} retrying`;
+  return `${label} in progress`;
 }
 
 export default function JobProgressPanel({ uploadJob, uploadTransfer = null, statusDetail = "" }) {
@@ -109,10 +129,10 @@ export default function JobProgressPanel({ uploadJob, uploadTransfer = null, sta
     && operationModel.percent_complete !== undefined
     && Number.isFinite(operationPercent);
   const count = formatProgressCount(operationModel);
-  const message = pollConnectionState === "retrying"
+  const message = customerFacingProgressText(pollConnectionState === "retrying"
     ? uploadJob?.message
-    : progress.visibility_message || currentOperation?.message || progress.message;
-  const compactStatusDetail = String(statusDetail || "").trim();
+    : progress.visibility_message || currentOperation?.message || progress.message);
+  const compactStatusDetail = customerFacingProgressText(statusDetail).trim();
   const showStatusDetail = compactStatusDetail
     && compactStatusDetail.toLowerCase() !== String(message || "").trim().toLowerCase();
   const visualState = pollConnectionState === "retrying" ? "retrying" : uploadJob?.execution_state || progress.status;
@@ -128,7 +148,7 @@ export default function JobProgressPanel({ uploadJob, uploadTransfer = null, sta
     <section className="backend-progress" aria-label="Backend job progress">
       <div className="backend-progress__status" role="status" aria-live="polite" aria-atomic="true">
         <span className={`backend-progress__state backend-progress__state--${String(visualState)}`}>{stateLabel}</span>
-        <strong>{currentOperation?.label || titleCase(progress.substage) || "Waiting for worker"}</strong>
+        <strong>{operationLabel(currentOperation) || customerFacingProgressText(titleCase(progress.substage)) || "Waiting for worker"}</strong>
         {message ? <p>{message}</p> : null}
         {showStatusDetail ? <p className="backend-progress__status-detail">{compactStatusDetail}</p> : null}
       </div>
@@ -159,14 +179,14 @@ export default function JobProgressPanel({ uploadJob, uploadTransfer = null, sta
 
       <div className="backend-progress__meter-row">
         <div>
-          <strong>{currentOperation?.label || "Current operation"}</strong>
+          <strong>{operationLabel(currentOperation) || "Current operation"}</strong>
           <span>{measurable ? `${clampPercent(operationPercent)}%` : "Measuring work"}</span>
         </div>
         {measurable ? (
           <div
             className="backend-progress__meter"
             role="progressbar"
-            aria-label={currentOperation?.label || "Current backend operation"}
+            aria-label={operationLabel(currentOperation) || "Current backend operation"}
             aria-valuemin="0"
             aria-valuemax="100"
             aria-valuenow={clampPercent(operationPercent)}
@@ -211,7 +231,7 @@ export default function JobProgressPanel({ uploadJob, uploadTransfer = null, sta
               {operations.map((operation) => (
                 <li key={operation.id} className={`backend-progress__operation backend-progress__operation--${operation.status}`}>
                   <span aria-hidden="true">{operation.status === "completed" ? "✓" : operation.status === "failed" ? "!" : operation.status === "pending" ? "–" : "•"}</span>
-                  <strong>{operation.label}</strong>
+                  <strong>{operationLabel(operation)}</strong>
                   <small>
                     {operation.status === "completed"
                       ? "Complete"

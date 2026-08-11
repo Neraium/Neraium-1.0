@@ -128,9 +128,9 @@ export default function InfrastructureHealthDashboard({ apiFetch, accessCode, Pa
           </div>
           <StatusBadge status={health?.overall_status} />
         </div>
-        {isQuiet ? <p className="infra-quiet-state">All monitored production subsystems are within their persistence and latency thresholds.</p> : null}
+        {isQuiet ? <p className="infra-quiet-state">All monitored production subsystems are within their persistence and latency limits.</p> : null}
         {error ? <p className="auth-error" role="alert">{error}</p> : null}
-        {pending.length ? <p className="infra-validation-note">{pending.length} signal{pending.length === 1 ? " is" : "s are"} being validated against persistence thresholds. No alert has been sent yet.</p> : null}
+        {pending.length ? <p className="infra-validation-note">{pending.length} signal{pending.length === 1 ? " is" : "s are"} being validated for persistence. No alert has been sent yet.</p> : null}
         <div className="infra-subsystem-grid">
           {Object.entries(SUBSYSTEM_LABELS).map(([key, label]) => {
             const subsystem = health?.subsystems?.[key] || {};

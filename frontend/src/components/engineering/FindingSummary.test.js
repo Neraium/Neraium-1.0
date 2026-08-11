@@ -12,14 +12,14 @@ describe("finding summary maintenance hierarchy", () => {
       id: "source_finding_982",
       workflowFindingId: "canonical_73",
       title: "Pump response changed",
-      observedChange: "Discharge response no longer matches comparable operation.",
-      firstPlaceToLook: "Inspect the discharge pressure boundary.",
+      observedChange: "pressure_signal_04 / flow_signal_09 relationship weakening.",
+      firstPlaceToLook: "Review coupling and context review for pressure_signal_04.",
       status: "Change detected",
       objectType: "finding",
       tier: "Qualified",
       location: { asset: "Booster pump 2", system: "Pressure distribution", rawAsset: "pump_asset_02", rawSystem: "sys_pressure_01" },
-      supporting: ["Measured relationship changed."],
-      relationships: [{ label: "Flow and pressure" }],
+      supporting: ["pressure_signal_04 / flow_signal_09 coupling weakened."],
+      relationships: [{ label: "pressure_signal_04 relationship weakening" }],
       confidenceDimensions: {
         changeDetection: { level: "high" }, interpretation: { level: "low" }, operatingContext: { level: "high" },
       },
@@ -32,13 +32,19 @@ describe("finding summary maintenance hierarchy", () => {
       rankingExplanation: "Persistent change.",
     }));
     const card = screen.getByTestId("compact-finding-card");
-    const labels = ["Equipment / system", "What changed", "Requested next action", "Priority", "Assignment", "Due", "Workflow", "Change", "Interpretation", "Persistence", "Context"];
+    const labels = ["Equipment / system", "What changed", "Requested next action", "Priority", "Assignment", "Due", "Workflow", "Change confidence"];
     for (const label of labels) expect(within(card).getByText(label)).toBeTruthy();
     expect(within(card).getByText("Booster pump 2")).toBeTruthy();
     expect(within(card).getByText("Pressure distribution")).toBeTruthy();
     expect(card.textContent).not.toContain("source_finding_982");
     expect(card.textContent).not.toContain("pump_asset_02");
     expect(card.textContent).not.toContain("sys_pressure_01");
+    expect(card.textContent).not.toMatch(/relationship|coupling|context review/i);
+    expect(within(card).getByText("Booster pump 2 changed")).toBeTruthy();
+    expect(within(card).getByText("Investigate this equipment change.")).toBeTruthy();
+    expect(within(card).queryByText("Interpretation")).toBeNull();
+    expect(within(card).queryByText("Persistence")).toBeNull();
+    expect(within(card).queryByText("Context")).toBeNull();
     expect(within(card).queryByText("Finding confidence")).toBeNull();
   });
 });

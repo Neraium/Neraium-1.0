@@ -53,7 +53,7 @@ describe("FindingClassificationSummary", () => {
       },
     }));
 
-    expect(screen.getByText("Not established")).toBeTruthy();
+    expect(screen.getAllByText("Not established").length).toBeGreaterThan(0);
     expect(screen.getByText("Support trend")).toBeTruthy();
     expect(screen.getByText("Increasing")).toBeTruthy();
     expect(screen.queryByText("81 days")).toBeNull();
@@ -76,12 +76,32 @@ describe("FindingClassificationSummary", () => {
       },
     }));
 
-    expect(screen.getAllByText("High", { selector: "dd" })).toHaveLength(2);
-    expect(screen.getByText("Low · Unattributed")).toBeTruthy();
+    expect(screen.getByText("High", { selector: "dd" })).toBeTruthy();
+    expect(screen.getByText("Cause")).toBeTruthy();
+    expect(screen.getByText("Not established")).toBeTruthy();
+    expect(screen.getByText("Comparable")).toBeTruthy();
     expect(screen.getByText("Medium")).toBeTruthy();
     expect(screen.getByText("Observing")).toBeTruthy();
     expect(screen.getByText("Increasing")).toBeTruthy();
     expect(screen.queryByText("Limited · 0%")).toBeNull();
     expect(screen.queryByText("Limited confidence")).toBeNull();
+  });
+
+  it("renders a historical low operating-context dimension as a factual comparability status", () => {
+    render(React.createElement(FindingClassificationSummary, {
+      finding: {
+        classification: { type: "context_limited_relationship_change", confidence: "limited" },
+        confidenceDimensions: {
+          changeDetection: { level: "high" },
+          interpretation: { level: "low", attribution_status: "unattributed" },
+          operatingContext: { level: "low" },
+          evidenceQuality: { level: "high" },
+        },
+      },
+    }));
+
+    expect(screen.getByText("Different From Baseline")).toBeTruthy();
+    expect(screen.getByText("Not established")).toBeTruthy();
+    expect(screen.queryByText("Low · Unattributed")).toBeNull();
   });
 });

@@ -137,4 +137,28 @@ describe("JobProgressPanel operation progress", () => {
     expect(panel.getByRole("list", { name: "Detailed backend operations" })).toBeTruthy();
     expect(panel.getByText("0 of 1 operations complete · Learn relationships failed")).toBeTruthy();
   });
+
+  it("presents empirical-threshold progress as learned behavioral reference work", () => {
+    const operation = {
+      id: "empirical_thresholds",
+      label: "Empirical thresholds",
+      status: "processing",
+      completed_units: 87,
+      total_units: 326,
+      percent_complete: 27,
+      unit_type: "threshold_candidates",
+      message: "Evaluated 87 of 326 threshold candidates.",
+    };
+
+    const { container } = render(React.createElement(JobProgressPanel, { uploadJob: uploadJob(operation) }));
+    const panel = within(container);
+
+    expect(panel.getAllByText("Behavioral reference bounds").length).toBeGreaterThan(0);
+    expect(panel.getByText("Evaluated 87 of 326 reference candidates.")).toBeTruthy();
+    expect(panel.getByText("87 / 326 reference candidates")).toBeTruthy();
+    expect(panel.getByRole("progressbar", { name: "Behavioral reference bounds" })).toBeTruthy();
+    fireEvent.click(panel.getByRole("button", { name: "Processing details" }));
+    expect(panel.getByRole("list", { name: "Detailed backend operations" }).textContent).toContain("Behavioral reference bounds");
+    expect(container.textContent).not.toMatch(/empirical thresholds|threshold candidates/i);
+  });
 });

@@ -23,7 +23,7 @@ export const DEMO_STEPS = [
   },
   {
     title: "Change Detected",
-    message: "Relationship movement begins before alarms or threshold failures.",
+    message: "Relationship movement begins before conventional fixed-limit alarms.",
     workspace: "system-body",
   },
   {

@@ -1,4 +1,5 @@
 from app.services.finding_classification import (
+    CONTEXT_LIMITED_RELATIONSHIP_CHANGE,
     OBSERVED_CHANGE_UNDER_REVIEW,
     POSSIBLE_INSTRUMENTATION_ISSUE,
     UNEXPLAINED_SYSTEMIC_CHANGE,
@@ -94,7 +95,7 @@ def test_measured_change_still_observing_has_maintenance_class_and_legacy_mappin
     assert contract["persistence"]["status"] == "observing"
     assert contract["change_detection"]["level"] == "high"
     assert contract["interpretation"]["attribution_status"] == "unattributed"
-    assert contract["interpretation"]["level"] == "low"
+    assert contract["interpretation"]["level"] == "unknown"
 
 
 def test_confidence_dimensions_and_named_relationship_values_are_independent() -> None:
@@ -113,8 +114,9 @@ def test_confidence_dimensions_and_named_relationship_values_are_independent() -
     assert result["type"] == UNEXPLAINED_SYSTEMIC_CHANGE
     assert contract["schema_version"] == "finding-confidence-v1"
     assert contract["change_detection"]["level"] == "high"
-    assert contract["interpretation"]["level"] == "medium"
-    assert contract["operating_context"]["level"] == "high"
+    assert contract["interpretation"]["level"] == "unknown"
+    assert contract["interpretation"]["attribution_status"] == "unattributed"
+    assert contract["operating_context"]["status"] == "comparable"
     assert contract["evidence_quality"]["level"] == "high"
     assert contract["persistence"]["status"] == "persistent"
     assert comparison["metric"] == "pearson_correlation"
@@ -130,6 +132,28 @@ def test_confidence_dimensions_and_named_relationship_values_are_independent() -
     # how the body of evidence is changing. They may move in opposite directions.
     assert comparison["direction"] == "decreased"
     assert contract["support_trend"] == "increasing"
+
+
+def test_high_confidence_change_with_different_context_keeps_change_and_cause_separate() -> None:
+    result = classify_finding(
+        data_confidence={"rating": "high", "summary": "Recorded quality checks passed."},
+        sensor_health=_healthy_signals(),
+        operating_mode={
+            "match": "weak",
+            "confidence": "high",
+            "reasons": ["Recent demand differed from the baseline period."],
+        },
+        persistence={"status": "persistent", "persistent": True},
+        relationship_evidence=_relationship_evidence(),
+    )
+
+    contract = result["finding_confidence_v1"]
+    assert result["type"] == CONTEXT_LIMITED_RELATIONSHIP_CHANGE
+    assert contract["change_detection"]["level"] == "high"
+    assert contract["operating_context"]["status"] == "different_from_baseline"
+    assert "level" not in contract["operating_context"]
+    assert contract["interpretation"]["level"] == "unknown"
+    assert contract["interpretation"]["attribution_status"] == "unattributed"
 
 
 def test_alternative_reconciliation_distinguishes_unavailable_and_clear_sensor_checks() -> None:

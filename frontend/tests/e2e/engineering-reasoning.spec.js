@@ -121,28 +121,25 @@ test.describe("Daily engineering workflows", () => {
     await expect(page.getByText("No new findings for review.")).toBeVisible();
     const card = page.locator(".operational-finding");
     await expect(card).toHaveCount(1);
-    await expect(card.getByRole("heading", { name: "Pump demand no longer matches flow" })).toBeVisible();
-    await expect(card.getByText("Flow & Pressure")).toBeVisible();
+    await expect(card.getByRole("heading", { name: "Flow & Pressure changed" })).toBeVisible();
+    await expect(card.getByText("Flow & Pressure", { exact: true })).toBeVisible();
     await expect(card.getByText("Equipment / system")).toBeVisible();
     await expect(card.getByText("What changed")).toBeVisible();
-    await expect(card.getByText("Flow response decreased under comparable demand.")).toBeVisible();
     await expect(card.getByText("Requested next action")).toBeVisible();
     const workflow = card.locator(".finding-workflow-summary");
     await expect(workflow.getByText("High")).toBeVisible();
     await expect(workflow.getByText("Mechanical")).toBeVisible();
     await expect(workflow.getByText("Investigating")).toBeVisible();
     const confidence = card.locator(".finding-confidence-strip");
-    await expect(confidence).toContainText("ChangeHigh");
-    await expect(confidence).toContainText("InterpretationMedium");
-    await expect(confidence).toContainText("PersistencePersistent");
-    await expect(confidence).toContainText("ContextStrong / High");
+    await expect(confidence).toContainText("Change confidenceHigh");
+    await expect(confidence).not.toContainText("Interpretation");
+    await expect(confidence).not.toContainText("Persistence");
+    await expect(confidence).not.toContainText("Context");
     await expect(card.getByText("Finding confidence")).toHaveCount(0);
-    const evidence = card.locator(".operational-finding__evidence");
-    await expect(evidence).not.toHaveAttribute("open", "");
-    await expect(evidence.getByText("Flow response decreased 12.4%.")).toBeHidden();
-    await evidence.locator("summary").click();
-    await expect(evidence.getByText("Flow response decreased 12.4%.")).toBeVisible();
-    await expect(evidence.getByText("Pump demand increased 6.1%.")).toBeVisible();
+    await expect(card).not.toContainText("Chiller-03");
+    await expect(card).not.toContainText("Flow-01");
+    await expect(card).not.toContainText("relationship");
+    await expect(card).not.toContainText("coupling");
     await expect(card.getByRole("button", { name: "Review" })).toBeVisible();
     await expect(card.getByText("More actions")).toBeVisible();
 
@@ -157,6 +154,9 @@ test.describe("Daily engineering workflows", () => {
     await expect(page.getByText("Investigation guidance")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Current review state" })).toBeVisible();
     await expect(page.getByText("Technical analysis metadata").locator("..")).not.toHaveAttribute("open", "");
+    await page.getByText("Technical analysis metadata").click();
+    await expect(page.getByText("Chiller-03 / Flow-01")).toBeVisible();
+    await expect(page.getByText("Signed change", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Open evidence record" }).click();
     await expect(page).toHaveURL(/\/evidence\/flow-response$/);
     await expect(page.getByRole("heading", { name: "Source lineage" })).toBeVisible();
@@ -175,7 +175,6 @@ test.describe("Daily engineering workflows", () => {
       const nextAction = node.querySelector(".operational-finding__next")?.getBoundingClientRect();
       const workflow = node.querySelector(".finding-workflow-summary")?.getBoundingClientRect();
       const confidence = node.querySelector(".finding-confidence-strip")?.getBoundingClientRect();
-      const evidence = node.querySelector(".operational-finding__evidence")?.getBoundingClientRect();
       const action = node.querySelector(".operational-finding__action")?.getBoundingClientRect();
       const cardBox = node.getBoundingClientRect();
       return {
@@ -183,17 +182,15 @@ test.describe("Daily engineering workflows", () => {
         headerBeforeWorkflow: Boolean(header && workflow && header.bottom <= workflow.top + 1),
         nextActionBeforeWorkflow: Boolean(nextAction && workflow && nextAction.bottom <= workflow.top + 1),
         workflowBeforeConfidence: Boolean(workflow && confidence && workflow.bottom <= confidence.top + 1),
-        confidenceBeforeEvidence: Boolean(confidence && evidence && confidence.bottom <= evidence.top + 1),
-        evidenceBeforeAction: Boolean(evidence && action && evidence.bottom <= action.top + 1),
-        contentFitsCard: [header, nextAction, workflow, confidence, evidence, action].every((rect) => rect && rect.left >= cardBox.left - 1 && rect.right <= cardBox.right + 1),
+        confidenceBeforeAction: Boolean(confidence && action && confidence.bottom <= action.top + 1),
+        contentFitsCard: [header, nextAction, workflow, confidence, action].every((rect) => rect && rect.left >= cardBox.left - 1 && rect.right <= cardBox.right + 1),
       };
     });
     expect(metrics.overflow).toBeLessThanOrEqual(1);
     expect(metrics.headerBeforeWorkflow).toBe(true);
     expect(metrics.nextActionBeforeWorkflow).toBe(true);
     expect(metrics.workflowBeforeConfidence).toBe(true);
-    expect(metrics.confidenceBeforeEvidence).toBe(true);
-    expect(metrics.evidenceBeforeAction).toBe(true);
+    expect(metrics.confidenceBeforeAction).toBe(true);
     expect(metrics.contentFitsCard).toBe(true);
   });
 
@@ -213,7 +210,7 @@ test.describe("Daily engineering workflows", () => {
     expect(metrics.root).toBeLessThanOrEqual(metrics.viewport + 1);
     expect(metrics.body).toBeLessThanOrEqual(metrics.viewport + 1);
     await expect(page.getByText(longSystem).first()).toBeVisible();
-    await expect(page.locator(".operational-finding__evidence summary")).toBeVisible();
+    await expect(page.locator(".finding-confidence-strip")).toContainText("Change confidence");
   });
 
   test("back navigation restores Operations Brief context", async ({ page }) => {

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { KNOWN_CONDITIONS, reviewStateLabel } from "../../viewModels/findingReviewState";
 
-export default function FindingReviewActions({ finding, reviewRecord, onAction, compact = false }) {
+export default function FindingReviewActions({ finding, reviewRecord, onAction, compact = false, accessibleName = "" }) {
   const [explanationOpen, setExplanationOpen] = useState(false);
   const [reason, setReason] = useState(KNOWN_CONDITIONS[0].value);
   const [note, setNote] = useState("");
@@ -29,7 +29,7 @@ export default function FindingReviewActions({ finding, reviewRecord, onAction, 
 
   return (
     <div className={`finding-review-actions${compact ? " finding-review-actions--compact" : ""}`}>
-      <div className="finding-review-actions__buttons" aria-label={`Quick review actions for ${finding?.title ?? "finding"}`}>
+      <div className="finding-review-actions__buttons" aria-label={`Quick review actions for ${accessibleName || finding?.title || "finding"}`}>
         <button type="button" className="forensic-button forensic-button--secondary" aria-pressed={currentState === "investigating"} disabled={status.state === "saving"} onClick={() => apply({ state: "investigating" })}>I’m checking this</button>
         <button type="button" className="forensic-button forensic-button--secondary" aria-expanded={explanationOpen} aria-pressed={currentState === "explained"} disabled={status.state === "saving"} onClick={() => setExplanationOpen((value) => !value)}>Known or explained</button>
         <button type="button" className="forensic-button forensic-button--secondary" aria-pressed={currentState === "not_useful"} disabled={status.state === "saving"} onClick={() => apply({ state: "not_useful" })}>Not useful</button>

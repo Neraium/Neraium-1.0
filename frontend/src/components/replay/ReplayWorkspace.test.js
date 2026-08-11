@@ -210,7 +210,7 @@ describe("Analysis Details workspace", () => {
     }));
 
     await waitFor(() => expect(screen.getByText("Insights are not ready because the analysis is still being verified.")).toBeTruthy());
-    expect(screen.getAllByText(/does not yet meet the reliability threshold/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/does not yet meet the reliability requirements/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/complete dataset|data-quality warnings|run the analysis again/i).length).toBeGreaterThan(0);
   });
 

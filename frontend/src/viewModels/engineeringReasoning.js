@@ -484,6 +484,13 @@ function buildFinding(raw, index, context) {
   const primaryLimitation = limitations[0] || plainLimitation(contradictions[0]) || "";
   const status = ["Deferred", "Withheld"].includes(tier) ? "Evidence insufficient" : "Change detected";
   const confidenceContract = raw?.finding_confidence_v1 ?? raw?.classification?.finding_confidence_v1 ?? {};
+  const legacyOperatingContext = confidenceContract?.operating_context ?? null;
+  const operatingContextStatus = legacyOperatingContext?.status ?? ({
+    high: "comparable",
+    medium: "partially_comparable",
+    low: "different_from_baseline",
+    unknown: "not_enough_context",
+  }[String(legacyOperatingContext?.level ?? "").toLowerCase()] || null);
   const evidenceSupportTrend = supportTrend(confidenceContract?.support_trend ?? raw?.support_trend, raw?.trajectory);
   const analyticalId = rawText(raw?.id ?? raw?.finding_id ?? "finding-" + index);
   const finding = {
@@ -537,7 +544,7 @@ function buildFinding(raw, index, context) {
     confidenceDimensions: {
       changeDetection: confidenceContract?.change_detection ?? null,
       interpretation: confidenceContract?.interpretation ?? null,
-      operatingContext: confidenceContract?.operating_context ?? null,
+      operatingContext: legacyOperatingContext ? { ...legacyOperatingContext, status: operatingContextStatus } : null,
       evidenceQuality: confidenceContract?.evidence_quality ?? null,
     },
     supportTrend: evidenceSupportTrend,

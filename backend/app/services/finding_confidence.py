@@ -272,25 +272,24 @@ def _evidence_quality_dimension(data_confidence: dict[str, Any]) -> dict[str, An
 
 def _operating_context_dimension(operating_mode: dict[str, Any]) -> dict[str, Any]:
     match = str(operating_mode.get("match") or "unavailable").strip().lower()
-    confidence = str(operating_mode.get("confidence") or "").strip().lower()
-    if match == "strong" and confidence in {"high", "strong"}:
-        level = "high"
-    elif match == "strong" or match in {"partial", "moderate"}:
-        level = "medium"
-    elif match in {"weak", "mismatch", "different"}:
-        level = "low"
+    if match in {"strong", "comparable", "matched"}:
+        status = "comparable"
+    elif match in {"partial", "moderate", "partially_comparable"}:
+        status = "partially_comparable"
+    elif match in {"weak", "mismatch", "different", "different_from_baseline"}:
+        status = "different_from_baseline"
     else:
-        level = "unknown"
+        status = "not_enough_context"
     reason = _first_text(
         operating_mode.get("reasons"),
         f"Recorded operating-context match is {match}." if match != "unavailable" else "Operating-context evidence was unavailable.",
     )
-    return _dimension(
-        level,
-        reason,
-        method="recorded_operating_mode_comparison",
-        evidence_refs=_evidence_refs(operating_mode),
-    )
+    return {
+        "status": status,
+        "reason": reason,
+        "method": "recorded_operating_mode_comparison",
+        "evidence_refs": _evidence_refs(operating_mode),
+    }
 
 
 def _interpretation_dimension(
@@ -312,19 +311,13 @@ def _interpretation_dimension(
         level = "medium" if any(item.get("health") == "suspect" for item in sensor_health) else "low"
     elif classification_type == "unexplained_systemic_change":
         attribution_status = "unattributed"
-        level = (
-            "medium"
-            if evidence_quality["level"] == "high"
-            and operating_context["level"] == "high"
-            and persistence_status["status"] == "persistent"
-            else "low"
-        )
+        level = "unknown"
     elif classification_type == "observed_change_under_review":
         attribution_status = "unattributed"
-        level = "low"
+        level = "unknown"
     elif classification_type == "context_limited_relationship_change":
         attribution_status = "unattributed"
-        level = "low"
+        level = "unknown"
     else:
         attribution_status = "withheld"
         level = "low" if evidence_quality["level"] != "unknown" else "unknown"
