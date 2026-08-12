@@ -11,3 +11,8 @@
 
 - In a fresh Codex environment, run `cd frontend && npm run setup:codex` before browser or end-to-end tests.
 - Use the repository locked dependencies; do not use ad hoc `npm exec` fallbacks when dependencies are missing.
+
+## Review guidelines
+
+- Prioritize correctness, security, regressions, and missing verification.
+- Keep review findings focused and actionable.
