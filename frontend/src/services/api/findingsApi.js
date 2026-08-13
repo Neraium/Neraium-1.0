@@ -100,11 +100,17 @@ export function normalizeFindingWorkflow(payload, fallback = {}) {
       label: cleanText(assignment.label ?? assignment.name ?? raw.assignment_label ?? raw.assignee_label ?? raw.owner ?? fallback.assignment?.label),
       externalReference: cleanText(assignment.external_ref ?? assignment.external_reference ?? assignment.externalReference ?? fallback.assignment?.externalReference),
     },
+    assignedBy: cleanText(raw.assigned_by ?? raw.assignedBy ?? fallback.assignedBy),
+    assignmentHistory: Array.isArray(raw.assignment_history ?? raw.assignmentHistory)
+      ? (raw.assignment_history ?? raw.assignmentHistory)
+      : [],
     workOrderReference: cleanText(raw.work_order_reference ?? fallback.workOrderReference),
     externalReference: cleanText(raw.external_reference ?? fallback.externalReference),
     validationOutcome: cleanText(raw.validation_outcome ?? fallback.validationOutcome),
     validationNote: cleanText(raw.validation_note ?? fallback.validationNote),
     latestFeedback: raw.latest_feedback && typeof raw.latest_feedback === "object" ? raw.latest_feedback : null,
+    latestFieldReport: raw.latest_field_report && typeof raw.latest_field_report === "object" ? raw.latest_field_report : null,
+    fieldReports: Array.isArray(raw.field_reports) ? raw.field_reports : [],
     resolution: {
       outcome: cleanText(resolution.outcome ?? raw.resolution_outcome ?? fallback.resolution?.outcome),
       note: cleanText(resolution.note ?? raw.resolution_note ?? fallback.resolution?.note),
@@ -153,12 +159,40 @@ export async function fetchFinding({ apiFetch, findingId, signal } = {}) {
   return { payload, workflow };
 }
 
-export async function fetchFindings({ apiFetch, sourceKind, sourceRunId, status, limit = 100, offset = 0, signal } = {}) {
+export async function fetchFindings({
+  apiFetch,
+  sourceKind,
+  sourceRunId,
+  status,
+  priority,
+  system,
+  assignee,
+  assignedToMe = false,
+  unassigned = false,
+  overdue = false,
+  inProgress = false,
+  awaitingReview = false,
+  recentlyResolved = false,
+  active = false,
+  limit = 100,
+  offset = 0,
+  signal,
+} = {}) {
   requireClient(apiFetch);
   const params = new URLSearchParams();
   if (cleanText(sourceKind)) params.set("source_kind", cleanText(sourceKind));
   if (cleanText(sourceRunId)) params.set("source_run_id", cleanText(sourceRunId));
   if (cleanText(status)) params.set("status", cleanText(status));
+  if (cleanText(priority)) params.set("priority", cleanText(priority));
+  if (cleanText(system)) params.set("system", cleanText(system));
+  if (cleanText(assignee)) params.set("assignee", cleanText(assignee));
+  if (assignedToMe) params.set("assigned_to_me", "true");
+  if (unassigned) params.set("unassigned", "true");
+  if (overdue) params.set("overdue", "true");
+  if (inProgress) params.set("in_progress", "true");
+  if (awaitingReview) params.set("awaiting_review", "true");
+  if (recentlyResolved) params.set("recently_resolved", "true");
+  if (active) params.set("active", "true");
   params.set("limit", String(limit));
   params.set("offset", String(offset));
   const response = await apiFetch(`/api/findings?${params.toString()}`, { cache: "no-store", signal });
@@ -176,6 +210,19 @@ export async function fetchFindingActivity({ apiFetch, findingId, signal } = {})
   const response = await apiFetch(`/api/findings/${encodeURIComponent(id)}/activity`, { cache: "no-store", signal });
   const payload = await checkedPayload(response, "Finding activity could not be loaded.");
   return Array.isArray(payload) ? payload : Array.isArray(payload?.activity) ? payload.activity : Array.isArray(payload?.events) ? payload.events : [];
+}
+
+export async function fetchFindingMembers({ apiFetch, signal } = {}) {
+  requireClient(apiFetch);
+  const response = await apiFetch("/api/findings/members", { cache: "no-store", signal });
+  const payload = await checkedPayload(response, "Team members could not be loaded.");
+  if (!Array.isArray(payload?.members)) throw new FindingApiError("Team member response was not recognized.", { status: Number(response?.status ?? 0), payload });
+  return payload.members.map((member) => ({
+    memberId: cleanText(member.member_id ?? member.memberId),
+    displayName: cleanText(member.display_name ?? member.displayName ?? member.member_id),
+    role: cleanText(member.role),
+    active: member.is_active !== false,
+  })).filter((member) => member.memberId && member.active);
 }
 
 function assignmentBody(assignment) {
@@ -260,5 +307,46 @@ export async function postFindingFeedback({ apiFetch, findingId, expectedVersion
   const payload = await checkedPayload(response, "Finding feedback could not be saved.");
   const workflow = normalizeFindingWorkflow(payload, { findingId: id });
   if (!workflow) throw new FindingApiError("Finding feedback response was not recognized.", { status: Number(response?.status ?? 0), code: "finding_api_unavailable", payload });
+  return { payload, workflow };
+}
+
+export async function postFindingFieldReport({
+  apiFetch,
+  findingId,
+  expectedVersion,
+  note = "",
+  inspected = "",
+  found = "",
+  actionTaken = "",
+  problemFound = "uncertain",
+  needsEscalation = false,
+  investigationComplete = false,
+  idempotencyKey: suppliedKey = "",
+  signal,
+} = {}) {
+  requireClient(apiFetch);
+  const id = requireIdentity(findingId);
+  const version = requireVersion(expectedVersion);
+  const normalizedProblem = cleanText(problemFound).toLowerCase();
+  if (!["yes", "no", "uncertain"].includes(normalizedProblem)) throw new TypeError("problemFound must be yes, no, or uncertain.");
+  const response = await apiFetch(`/api/findings/${encodeURIComponent(id)}/field-reports`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "If-Match": String(version) },
+    body: JSON.stringify({
+      expected_version: version,
+      idempotency_key: idempotencyKey(suppliedKey, id, version, "field-report"),
+      note: optionalText(note),
+      inspected: optionalText(inspected),
+      found: optionalText(found),
+      action_taken: optionalText(actionTaken),
+      problem_found: normalizedProblem,
+      needs_escalation: Boolean(needsEscalation),
+      investigation_complete: Boolean(investigationComplete),
+    }),
+    signal,
+  });
+  const payload = await checkedPayload(response, "Field report could not be saved.");
+  const workflow = normalizeFindingWorkflow(payload, { findingId: id });
+  if (!workflow) throw new FindingApiError("Field report response was not recognized.", { status: Number(response?.status ?? 0), code: "finding_api_unavailable", payload });
   return { payload, workflow };
 }

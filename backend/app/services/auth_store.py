@@ -1116,6 +1116,42 @@ def list_users(*, include_inactive: bool = True) -> list[dict[str, Any]]:
     return [sanitize_user_record(user) for user in backend.list_users(include_inactive=include_inactive)]
 
 
+def workflow_member(member_id: str, *, include_inactive: bool = False) -> dict[str, Any] | None:
+    """Return the assignment-safe projection of one auth account.
+
+    Auth email is already the stable account subject in the current deployment
+    model.  Do not expose password/session/admin metadata through workflow APIs.
+    """
+    normalized_id = _normalize_email(member_id)
+    if not normalized_id:
+        return None
+    user = _get_backend().read_user(normalized_id)
+    if user is None or (not include_inactive and not bool(user.get("is_active", True))):
+        return None
+    sanitized = sanitize_user_record(user)
+    return {
+        "member_id": sanitized["email"],
+        "display_name": sanitized["name"] or sanitized["email"],
+        "role": sanitized["role"],
+        "is_active": sanitized["is_active"],
+    }
+
+
+def list_workflow_members(*, include_inactive: bool = False) -> list[dict[str, Any]]:
+    """List people that may be selected by the finding assignment workflow."""
+    users = list_users(include_inactive=include_inactive)
+    return [
+        {
+            "member_id": user["email"],
+            "display_name": user["name"] or user["email"],
+            "role": user["role"],
+            "is_active": user["is_active"],
+        }
+        for user in users
+        if include_inactive or user["is_active"]
+    ]
+
+
 def activate_user(email: str) -> dict[str, Any] | None:
     backend = _get_backend()
     normalized_email = _normalize_email(email)

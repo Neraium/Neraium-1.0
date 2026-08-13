@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { buildEngineeringReasoningModel, buildEngineeringReasoningModelsFromEvidenceRuns, buildFacilityLabelContext } from "../viewModels/engineeringReasoning";
 import { analysisBelongsToBaseline } from "../viewModels/baselineSelection";
 import { deriveEscalationReadiness, deriveWorkspacePresentationState } from "../viewModels/operationsBrief";
@@ -15,12 +15,15 @@ import { EvidenceRecordWorkspace, FindingReviewWorkspace, InvestigationWorkspace
 import TraceTimeline from "./engineering/TraceTimeline";
 import "../styles/engineering-reasoning.css";
 
+const WorkQueueWorkspace = lazy(() => import("./work/WorkQueueWorkspace"));
+
 const ROUTES = {
   portfolio: "/portfolio",
   site: "/sites/current",
   systems: "/systems",
   findings: "/findings",
   finding: "/findings",
+  work: "/work",
   investigation: "/investigations",
   investigations: "/investigations",
   evidence: "/evidence",
@@ -35,6 +38,7 @@ function routeFromLocation() {
   if (path.startsWith("/sites/")) return "site";
   if (path.startsWith("/findings/")) return "finding";
   if (path === "/findings") return "findings";
+  if (path === "/work" || path.startsWith("/work/")) return "work";
   if (path === "/investigations") return "investigations";
   if (path.startsWith("/investigations")) return "investigation";
   if (path.startsWith("/evidence")) return "evidence";
@@ -274,6 +278,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const effectiveRoute = route === "portfolio" && portfolioModels.length <= 1 ? "site" : route;
   const activeNavigation = ["finding", "findings"].includes(effectiveRoute) ? "findings" : ["investigation", "evidence", "trace"].includes(effectiveRoute) ? "investigations" : ["system", "systems"].includes(effectiveRoute) ? "systems" : effectiveRoute;
   const navItems = [
+    ["work", "Work"],
     ["site", "System Status"],
     ["live-monitoring", "Live Monitoring"],
     ["systems", "Systems"],
@@ -365,7 +370,8 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     const sidebar = mobileSidebarRef.current;
     const previousOverflow = document.body.style.overflow;
     const focusable = Array.from(sidebar?.querySelectorAll("button:not([disabled])") ?? []);
-    focusable[0]?.focus();
+    const activeNavigationItem = sidebar?.querySelector('nav[aria-label="Primary navigation"] [aria-current="page"]');
+    (activeNavigationItem ?? focusable[0])?.focus();
     if (window.matchMedia?.("(max-width: 1024px)")?.matches) document.body.style.overflow = "hidden";
 
     function handleMenuKeyDown(event) {
@@ -436,6 +442,17 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   function openSystem(name) {
     setSelectedSystemName(name);
     pushRoute(`/systems/${encodeURIComponent(name)}`, "system");
+  }
+
+  function routeWorkFinding(findingId) {
+    pushRoute(findingId ? `/work/${encodeURIComponent(findingId)}` : "/work", "work");
+  }
+
+  function technicalFindingFor(workFinding) {
+    return model.findings.find((candidate) => candidate.id === workFinding.sourceFindingKey
+      || candidate.sourceFindingKey === workFinding.sourceFindingKey
+      || candidate.workflowFindingId === workFinding.findingId
+      || candidate.mergedFindingIds?.includes(workFinding.sourceFindingKey)) ?? null;
   }
 
   function handleSearch(item) {
@@ -608,7 +625,8 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
           <div className="forensic-topbar__site"><span>{model.site.name}</span>{model.selectedFinding?.confidenceContract && Object.keys(model.selectedFinding.confidenceContract).length ? null : <ConfidenceTierChip tier={model.evidenceQuality} />}</div>
         </header>
         <main id="forensic-main" aria-label="Neraium operational workspace" tabIndex={-1} data-route={effectiveRoute}>
-          {showFirstBaseline ? <FirstBaselineExperience onImport={beginFirstBaseline} onExit={dismissFirstBaseline} />
+          {effectiveRoute === "work" ? <Suspense fallback={<p className="case-unavailable">Loading work…</p>}><WorkQueueWorkspace apiFetch={apiFetch} currentUser={currentUser} findingId={pathIdentity(["work"])} onRouteFinding={routeWorkFinding} technicalFindingFor={technicalFindingFor} onOpenInvestigation={openInvestigation} onOpenEvidence={openEvidence} /></Suspense>
+            : showFirstBaseline ? <FirstBaselineExperience onImport={beginFirstBaseline} onExit={dismissFirstBaseline} />
             : ["noDataset", "datasetReady", "analysisRunning"].includes(presentationState.key) ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
               : effectiveRoute === "finding" ? <FindingReviewWorkspace model={model} finding={selectedFinding} reviewRecord={selectedReviewRecord} onReviewAction={handleFindingReviewAction} onWorkflowSave={handleWorkflowSave} onWorkflowFeedback={handleWorkflowFeedback} onWorkflowResolve={handleWorkflowResolve} onWorkflowReload={reloadSelectedFindingWorkflow} onOpenInvestigation={openInvestigation} onBack={() => goBack("site")} />
                 : effectiveRoute === "investigation" ? <InvestigationWorkspace model={model} finding={selectedFinding} reviewRecord={selectedReviewRecord} escalated={deriveEscalationReadiness(selectedFinding, model.result).serious} onReviewAction={handleFindingReviewAction} onOpenEvidence={openEvidence} onTrace={() => navigate("trace")} onBack={() => goBack("findings")} />

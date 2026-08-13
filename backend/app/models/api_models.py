@@ -373,13 +373,16 @@ class FindingStatusRequest(ContractModel):
 class FindingAssignment(ContractModel):
     target_type: Literal["person", "team"]
     label: Annotated[str, StringConstraints(min_length=1, max_length=200)]
-    external_ref: Annotated[str, StringConstraints(max_length=200)] | None = None
+    external_ref: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = None
 
 
 class FindingWorkflowUpdateRequest(ContractModel):
     expected_version: int = Field(ge=0)
     idempotency_key: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = None
-    status: Literal["open", "acknowledged", "investigating", "monitoring", "resolved", "dismissed"] | None = None
+    status: Literal[
+        "open", "acknowledged", "investigating", "waiting", "escalated",
+        "awaiting_review", "monitoring", "resolved", "dismissed",
+    ] | None = None
     user_priority: Literal["low", "medium", "high", "critical"] | None = None
     assignment: FindingAssignment | None = None
     due_at: str | None = None
@@ -398,6 +401,18 @@ class FindingWorkflowUpdateRequest(ContractModel):
 class FindingFeedbackRequest(OperatorFeedbackRequest):
     expected_version: int = Field(ge=0)
     idempotency_key: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = None
+
+
+class FindingFieldReportRequest(ContractModel):
+    expected_version: int = Field(ge=0)
+    idempotency_key: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = None
+    note: OptionalNote | None = None
+    inspected: Annotated[str, StringConstraints(max_length=2000)] | None = None
+    found: Annotated[str, StringConstraints(max_length=2000)] | None = None
+    action_taken: Annotated[str, StringConstraints(max_length=2000)] | None = None
+    problem_found: Literal["yes", "no", "uncertain"]
+    needs_escalation: bool = False
+    investigation_complete: bool = False
 
 
 class FindingResolutionRequest(ContractModel):
@@ -419,11 +434,16 @@ class FindingSourceResponse(BaseModel):
 
 class FindingWorkflowResponse(BaseModel):
     version: int
-    status: Literal["open", "acknowledged", "investigating", "monitoring", "resolved", "dismissed"]
+    status: Literal[
+        "open", "acknowledged", "investigating", "waiting", "escalated",
+        "awaiting_review", "monitoring", "resolved", "dismissed",
+    ]
     recommended_priority: Literal["low", "medium", "high", "critical"] | None = None
     user_priority: Literal["low", "medium", "high", "critical"] | None = None
     effective_priority: Literal["low", "medium", "high", "critical"] | None = None
     assignment: FindingAssignment | None = None
+    assigned_by: str | None = None
+    assignment_history: list[dict[str, Any]] = Field(default_factory=list)
     due_at: str | None = None
     manager_note: str | None = None
     work_order_reference: str | None = None
@@ -431,6 +451,8 @@ class FindingWorkflowResponse(BaseModel):
     validation_outcome: str | None = None
     validation_note: str | None = None
     latest_feedback: dict[str, Any] | None = None
+    latest_field_report: dict[str, Any] | None = None
+    field_reports: list[dict[str, Any]] = Field(default_factory=list)
     resolution: dict[str, Any] | None = None
     updated_at: str | None = None
     updated_by: str | None = None
@@ -462,7 +484,19 @@ class FindingCasesListResponse(BaseModel):
 class FindingActivityResponse(BaseModel):
     finding_id: str
     events: list[dict[str, Any]] = Field(default_factory=list)
+    activity: list[dict[str, Any]] = Field(default_factory=list)
     version: int
+
+
+class FindingWorkflowMemberResponse(BaseModel):
+    member_id: str
+    display_name: str
+    role: Literal["viewer", "operator", "admin"]
+    is_active: bool = True
+
+
+class FindingWorkflowMembersListResponse(BaseModel):
+    members: list[FindingWorkflowMemberResponse] = Field(default_factory=list)
 
 
 class FacilitySystemContext(ContractModel):

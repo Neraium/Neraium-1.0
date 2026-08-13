@@ -18,31 +18,70 @@ Operational state is stored separately in `finding_cases` and append-only `findi
 The workflow projection includes:
 
 - monotonically increasing `version`;
-- status: `open`, `acknowledged`, `investigating`, `monitoring`, `resolved`, or `dismissed`;
+- status: `open`, `acknowledged`, `investigating`, `waiting`, `escalated`,
+  `awaiting_review`, `monitoring`, `resolved`, or `dismissed`;
 - recommended, user-selected, and effective priority;
 - optional person or team assignment with a display label and external reference;
+- assigner and append-only assignment/reassignment history;
 - due date and manager note;
 - optional work-order and external integration references;
 - latest feedback;
+- latest and historical structured technician field reports;
 - validation outcome and note;
 - resolution outcome, note, actor, and time.
 
 Controlled resolution outcomes are `issue_found`, `no_issue_found`, `operational_change`, `sensor_issue`, and `maintenance_performed`. They are retained on the finding for future validation; they do not retroactively change the evidence or its confidence.
 
-Assignment labels are lightweight references, not a Neraium user directory. Work-order fields are integration hooks, not CMMS records.
+Person assignments with an `external_ref` use the existing auth account email/subject as
+their stable member ID. New directory-backed person assignments must resolve to an active
+account and project its canonical display name. `GET /api/findings/members` exposes only
+the safe active-member projection (`member_id`, `display_name`, existing generic `role`,
+and `is_active`). Label-only person assignments and team/reference assignments remain
+readable and writable for historical compatibility; they are not treated as validated
+identities. No team, organization, or enterprise identity model is implied. Work-order
+fields remain integration hooks, not CMMS records.
+
+Structured field reports record a concise note, what was inspected, what was found,
+action taken, the `yes`/`no`/`uncertain` physical-problem result, escalation need, and
+investigation completion. Each report is one immutable workflow event. An escalation
+request projects the finding to `escalated`; a completed investigation without escalation
+projects it to `awaiting_review`. Terminal `resolved` and `dismissed` findings reject new
+field reports so a late direct API write cannot silently reopen completed work.
 
 ## API and concurrency
 
 The API exposes:
 
-- `GET /api/findings` with source, status, and pagination filters;
+- `GET /api/findings` with source/status, priority, system, assigned-to-me, assignee,
+  unassigned, overdue, in-progress, awaiting-review, active, recently-resolved, and
+  pagination filters. Workflow filters are applied before pagination;
+- `GET /api/findings/members` for the authenticated active-member assignment picker;
 - `GET /api/findings/{finding_id}`;
 - `GET /api/findings/{finding_id}/activity`;
 - `PATCH /api/findings/{finding_id}/workflow`;
 - `POST /api/findings/{finding_id}/feedback`;
+- `POST /api/findings/{finding_id}/field-reports`;
 - `POST /api/findings/{finding_id}/resolution`.
 
-Every mutation requires `expected_version`. A stale edit returns HTTP 409 with the current version, allowing clients to reload instead of overwriting another operator's work. Optional idempotency keys make retries replay-safe. Reads use the existing API-access boundary; mutations use the existing operator-role boundary and audit logging. No manager- or engineer-specific authorization role is introduced.
+Every mutation requires `expected_version`. A stale edit returns HTTP 409 with the current
+version, allowing clients to reload instead of overwriting another operator's work.
+Optional idempotency keys make retries replay-safe. Raw append-only events remain in the
+activity response for audit consumers; the additive `activity` projection provides plain
+human labels and includes the original detection event.
+
+Production authorization uses the existing roles rather than introducing maintenance
+RBAC. `operator` and `admin` retain lead/engineer workflow capability. A `viewer` can act
+only when the current assignment is a validated active person assignment whose member ID
+exactly matches the authenticated subject. That viewer may acknowledge, investigate,
+wait, escalate, submit field reports, and complete to awaiting review; they cannot assign,
+reprioritize, set dates/guidance, dismiss, resolve, or use engineering feedback mutations.
+These checks are server-side. Existing non-production compatibility behavior and the
+general `require_api_access` deployment assumptions remain unchanged.
+
+Assignment never grants evidence or dataset access. Finding reads and writes continue to
+use the persisted dataset/workspace scope. Cross-user shared operational visibility is
+therefore intentionally deferred until an explicit shared workspace boundary exists;
+per-user isolation is not weakened by this workflow.
 
 ## Legacy compatibility
 

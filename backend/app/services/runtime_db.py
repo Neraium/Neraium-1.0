@@ -154,7 +154,8 @@ def init_runtime_db() -> None:
                 version INTEGER NOT NULL CHECK (version > 0),
                 event_type TEXT NOT NULL CHECK (event_type IN (
                     'workflow_updated', 'feedback_recorded', 'resolution_recorded',
-                    'legacy_status_imported', 'legacy_feedback_imported'
+                    'legacy_status_imported', 'legacy_feedback_imported',
+                    'field_report_recorded'
                 )),
                 recorded_at TEXT NOT NULL,
                 actor TEXT NOT NULL,
@@ -258,6 +259,7 @@ RUNTIME_SCHEMA_MIGRATIONS = (
     "006_live_analysis_orchestration",
     "007_finding_workflow_sidecar",
     "008_finding_workflow_scope",
+    "009_finding_field_reports",
 )
 
 
@@ -700,7 +702,8 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
                 version INTEGER NOT NULL CHECK (version > 0),
                 event_type TEXT NOT NULL CHECK (event_type IN (
                     'workflow_updated', 'feedback_recorded', 'resolution_recorded',
-                    'legacy_status_imported', 'legacy_feedback_imported'
+                    'legacy_status_imported', 'legacy_feedback_imported',
+                    'field_report_recorded'
                 )),
                 recorded_at TEXT NOT NULL,
                 actor TEXT NOT NULL,
@@ -774,6 +777,73 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
         connection.execute(
             "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
             ("008_finding_workflow_scope", now_iso()),
+        )
+
+    if "009_finding_field_reports" not in applied:
+        table_sql = _table_sql(connection, "finding_workflow_events")
+        if "field_report_recorded" not in table_sql:
+            # SQLite cannot alter CHECK constraints. Rebuild this append-only
+            # table transactionally while preserving every event and uniqueness
+            # constraint, then restore its immutability triggers.
+            connection.execute("DROP TRIGGER IF EXISTS trg_finding_workflow_events_no_update")
+            connection.execute("DROP TRIGGER IF EXISTS trg_finding_workflow_events_no_delete")
+            connection.execute(
+                "ALTER TABLE finding_workflow_events RENAME TO finding_workflow_events_legacy"
+            )
+            connection.execute(
+                """
+                CREATE TABLE finding_workflow_events (
+                    event_id TEXT PRIMARY KEY,
+                    finding_id TEXT NOT NULL,
+                    version INTEGER NOT NULL CHECK (version > 0),
+                    event_type TEXT NOT NULL CHECK (event_type IN (
+                        'workflow_updated', 'feedback_recorded', 'resolution_recorded',
+                        'legacy_status_imported', 'legacy_feedback_imported',
+                        'field_report_recorded'
+                    )),
+                    recorded_at TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    idempotency_key TEXT,
+                    payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
+                    FOREIGN KEY(finding_id) REFERENCES finding_cases(finding_id) ON DELETE RESTRICT,
+                    UNIQUE (finding_id, version),
+                    UNIQUE (finding_id, idempotency_key)
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO finding_workflow_events (
+                    event_id, finding_id, version, event_type, recorded_at, actor,
+                    idempotency_key, payload_json
+                )
+                SELECT event_id, finding_id, version, event_type, recorded_at, actor,
+                       idempotency_key, payload_json
+                FROM finding_workflow_events_legacy
+                """
+            )
+            connection.execute("DROP TABLE finding_workflow_events_legacy")
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_finding_workflow_events_finding_version "
+                "ON finding_workflow_events(finding_id, version DESC)"
+            )
+            connection.execute(
+                """
+                CREATE TRIGGER trg_finding_workflow_events_no_update
+                BEFORE UPDATE ON finding_workflow_events
+                BEGIN SELECT RAISE(ABORT, 'finding_workflow_events_append_only'); END
+                """
+            )
+            connection.execute(
+                """
+                CREATE TRIGGER trg_finding_workflow_events_no_delete
+                BEFORE DELETE ON finding_workflow_events
+                BEGIN SELECT RAISE(ABORT, 'finding_workflow_events_append_only'); END
+                """
+            )
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("009_finding_field_reports", now_iso()),
         )
 
 

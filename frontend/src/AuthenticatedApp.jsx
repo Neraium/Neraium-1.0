@@ -45,7 +45,7 @@ function readInitialWorkspaceRoute() {
   if (pathname === HOME_PATH || pathname === "/signin") return "system-body";
   if (parseBaselineRoute(pathname) || parseBaselineComparisonRoute(pathname)) return "data-connections";
   if (parseBaselineAnalysisRoute(pathname)) return "system-body";
-  if (["/portfolio", "/workspace"].includes(pathname) || pathname.startsWith("/sites/") || pathname.startsWith("/systems") || pathname.startsWith("/findings") || pathname.startsWith("/investigations") || pathname.startsWith("/evidence") || pathname.startsWith("/trace")) return "system-body";
+  if (["/portfolio", "/workspace", "/work"].includes(pathname) || pathname.startsWith("/sites/") || pathname.startsWith("/systems") || pathname.startsWith("/work/") || pathname.startsWith("/findings") || pathname.startsWith("/investigations") || pathname.startsWith("/evidence") || pathname.startsWith("/trace")) return "system-body";
   return PATH_WORKSPACES[pathname] ?? "system-body";
 }
 

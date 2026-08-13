@@ -366,6 +366,32 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(screen.getByRole("heading", { name: "Cooling system" })).toBeTruthy();
   });
 
+  it("routes canonical shared work independently and preserves engineer drill-down", async () => {
+    const workCase = {
+      finding_id: "canonical-work-1",
+      source: { kind: "evidence_run", id: "run-42", finding_key: "finding-1", run_id: "run-42" },
+      evidence: { finding: { headline: "Chiller 03 changed", system_name: "Cooling system", equipment_name: "Chiller 03", next_checks: ["Inspect the condenser approach first."], confidence: "high" } },
+      workflow: { version: 1, status: "investigating", effective_priority: "high", assignment: { target_type: "person", label: "Engineer One", external_ref: "engineer@neraium.test" } },
+      activity: { count: 0 },
+    };
+    const apiFetch = vi.fn(async (url) => {
+      const path = String(url);
+      if (path.startsWith("/api/findings?")) return { ok: true, json: async () => ({ findings: [workCase], has_more: false }) };
+      if (path === "/api/findings/members") return { ok: true, json: async () => ({ members: [] }) };
+      if (path.endsWith("/activity")) return { ok: true, json: async () => ({ activity: [] }) };
+      if (path.startsWith("/api/evidence/runs?")) return { ok: true, json: async () => ({ runs: [] }) };
+      return { ok: true, json: async () => ({}) };
+    });
+    renderWorkspace({ path: "/work", apiFetch });
+    const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(within(navigation).getByRole("button", { name: "Work" }).getAttribute("aria-current")).toBe("page");
+    fireEvent.click(await screen.findByRole("button", { name: /Open Chiller 03/i }));
+    expect(window.location.pathname).toBe("/work/canonical-work-1");
+    fireEvent.click(await screen.findByRole("button", { name: "Open investigation" }));
+    expect(window.location.pathname).toBe("/investigations/finding-1");
+    expect(screen.getByRole("heading", { name: "Supporting evidence" })).toBeTruthy();
+  });
+
   it("speaks confidently when the completed analysis has no meaningful changes", () => {
     const result = analysisResult({ analysis: { insights: [] }, result: { data_gaps: [], data_quality: { coverage_percent: 100, warnings: [] } } });
     renderWorkspace({ result });

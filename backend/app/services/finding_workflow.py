@@ -4,15 +4,18 @@ import hashlib
 import json
 import sqlite3
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from app.services.auth_store import workflow_member
 from app.services.dataset_scope import current_dataset_scope, dataset_scope_context, dataset_scope_from_payload
 from app.services.runtime_db import db_connection, init_runtime_db, now_iso
 
 
 SOURCE_KINDS = {"evidence_run", "live_finding"}
 WORKFLOW_STATUSES = {
-    "open", "acknowledged", "investigating", "monitoring", "resolved", "dismissed",
+    "open", "acknowledged", "investigating", "waiting", "escalated",
+    "awaiting_review", "monitoring", "resolved", "dismissed",
 }
 PRIORITIES = {"low", "medium", "high", "critical"}
 WORKFLOW_FIELDS = {
@@ -30,6 +33,26 @@ class FindingWorkflowConflictError(RuntimeError):
         super().__init__(reason)
         self.reason = reason
         self.current_version = current_version
+
+
+class FindingWorkflowValidationError(ValueError):
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
+_VIEWER_STATUSES = {"acknowledged", "investigating", "waiting", "escalated", "awaiting_review"}
+_STATUS_TRANSITIONS = {
+    "open": {"acknowledged", "investigating", "monitoring", "escalated", "resolved", "dismissed"},
+    "acknowledged": {"investigating", "waiting", "escalated", "monitoring", "resolved", "dismissed"},
+    "investigating": {"waiting", "escalated", "awaiting_review", "monitoring", "resolved", "dismissed"},
+    "waiting": {"investigating", "escalated", "awaiting_review", "resolved", "dismissed"},
+    "escalated": {"investigating", "waiting", "awaiting_review", "monitoring", "resolved", "dismissed"},
+    "awaiting_review": {"investigating", "waiting", "escalated", "monitoring", "resolved", "dismissed"},
+    "monitoring": {"open", "investigating", "awaiting_review", "resolved", "dismissed"},
+    "resolved": {"open", "monitoring"},
+    "dismissed": {"open", "monitoring"},
+}
 
 
 def evidence_finding_id(run_id: str, source_finding_key: str) -> str:
@@ -319,6 +342,8 @@ def _default_workflow(case: dict[str, Any]) -> dict[str, Any]:
         "user_priority": None,
         "effective_priority": recommended,
         "assignment": None,
+        "assigned_by": None,
+        "assignment_history": [],
         "due_at": None,
         "manager_note": None,
         "work_order_reference": None,
@@ -326,6 +351,8 @@ def _default_workflow(case: dict[str, Any]) -> dict[str, Any]:
         "validation_outcome": None,
         "validation_note": None,
         "latest_feedback": None,
+        "latest_field_report": None,
+        "field_reports": [],
         "resolution": None,
         "updated_at": None,
         "updated_by": None,
@@ -338,9 +365,23 @@ def _project(case: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, An
         event_type = str(event.get("event_type") or "")
         changes = event.get("changes") if isinstance(event.get("changes"), dict) else {}
         if event_type in {"workflow_updated", "legacy_status_imported"}:
+            prior_assignment = workflow.get("assignment")
             for field in WORKFLOW_FIELDS:
                 if field in changes:
                     workflow[field] = changes[field]
+            if "assignment" in changes:
+                assignment = changes.get("assignment")
+                workflow["assigned_by"] = event.get("actor") if assignment else None
+                workflow["assignment_history"].append({
+                    "action": "reassigned" if prior_assignment and assignment else (
+                        "assigned" if assignment else "unassigned"
+                    ),
+                    "from": prior_assignment,
+                    "to": assignment,
+                    "actor": event.get("actor"),
+                    "recorded_at": event.get("recorded_at"),
+                    "version": event.get("version"),
+                })
         elif event_type in {"feedback_recorded", "legacy_feedback_imported"}:
             feedback = event.get("feedback") if isinstance(event.get("feedback"), dict) else {}
             workflow["latest_feedback"] = feedback or None
@@ -348,6 +389,15 @@ def _project(case: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, An
                 workflow["validation_outcome"] = feedback["outcome"]
             if feedback.get("note"):
                 workflow["validation_note"] = feedback["note"]
+        elif event_type == "field_report_recorded":
+            report = event.get("field_report") if isinstance(event.get("field_report"), dict) else {}
+            if report:
+                workflow["latest_field_report"] = report
+                workflow["field_reports"].append(report)
+                if report.get("needs_escalation"):
+                    workflow["status"] = "escalated"
+                elif report.get("investigation_complete"):
+                    workflow["status"] = "awaiting_review"
         elif event_type == "resolution_recorded":
             workflow["status"] = "resolved"
             workflow["resolution"] = event.get("resolution")
@@ -358,6 +408,75 @@ def _project(case: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, An
         workflow["updated_by"] = event.get("actor")
     workflow["effective_priority"] = workflow["user_priority"] or workflow["recommended_priority"]
     return workflow
+
+
+def _normalized_person_assignment(assignment: Any) -> Any:
+    """Validate directory-backed person assignments without rewriting legacy references."""
+    if not isinstance(assignment, dict) or assignment.get("target_type") != "person":
+        return assignment
+    member_id = _clean(assignment.get("external_ref"))
+    if member_id is None:
+        # Historical label-only assignments remain a supported compatibility shape.
+        return assignment
+    member = workflow_member(member_id, include_inactive=True)
+    if member is None:
+        raise FindingWorkflowValidationError("unknown_assignment_member")
+    if not member["is_active"]:
+        raise FindingWorkflowValidationError("inactive_assignment_member")
+    return {
+        "target_type": "person",
+        "label": member["display_name"],
+        "external_ref": member["member_id"],
+    }
+
+
+def _is_exact_active_member_assignment(workflow: dict[str, Any], actor: str) -> bool:
+    assignment = workflow.get("assignment")
+    if not isinstance(assignment, dict) or assignment.get("target_type") != "person":
+        return False
+    member_id = _clean(assignment.get("external_ref"))
+    normalized_actor = str(actor or "").strip().lower()
+    if member_id is None or member_id.strip().lower() != normalized_actor:
+        return False
+    member = workflow_member(member_id, include_inactive=False)
+    return bool(member and member["member_id"] == normalized_actor)
+
+
+def authorize_finding_action(
+    finding_id: str, *, actor: str, role: str, strict: bool,
+    action: str, changes: dict[str, Any] | None = None,
+) -> None:
+    """Apply the small production workflow policy at the authoritative boundary."""
+    if not strict:
+        return
+    normalized_role = str(role or "viewer").strip().lower()
+    if normalized_role in {"operator", "admin"}:
+        return
+    if normalized_role != "viewer":
+        raise FindingWorkflowValidationError("workflow_action_forbidden")
+    case = read_finding_case(finding_id)
+    if not _is_exact_active_member_assignment(case["workflow"], actor):
+        raise FindingWorkflowValidationError("workflow_action_forbidden")
+    if action == "field_report":
+        return
+    if action != "workflow" or not changes or set(changes) != {"status"}:
+        raise FindingWorkflowValidationError("workflow_action_forbidden")
+    target = changes.get("status")
+    if target not in _VIEWER_STATUSES:
+        raise FindingWorkflowValidationError("workflow_action_forbidden")
+
+
+def validate_status_transition(
+    current_status: str, target_status: str, *, strict: bool,
+) -> None:
+    if target_status not in WORKFLOW_STATUSES:
+        raise FindingWorkflowValidationError("unsupported_workflow_status")
+    if not strict or current_status == target_status:
+        return
+    if target_status not in _STATUS_TRANSITIONS.get(current_status, set()):
+        raise FindingWorkflowValidationError(
+            f"invalid_status_transition:{current_status}:{target_status}"
+        )
 
 
 def _case_response(case: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -396,7 +515,12 @@ def read_finding_case(finding_id: str) -> dict[str, Any]:
 
 def list_finding_cases(
     *, source_kind: str | None = None, source_run_id: str | None = None,
-    workflow_status: str | None = None, limit: int = 50, offset: int = 0,
+    workflow_status: str | None = None, priority: str | None = None,
+    system: str | None = None, assigned_to_me: bool = False,
+    assignee: str | None = None, unassigned: bool = False, overdue: bool = False,
+    in_progress: bool = False, awaiting_review: bool = False,
+    recently_resolved: bool = False, active: bool = False,
+    actor: str | None = None, limit: int = 50, offset: int = 0,
 ) -> dict[str, Any]:
     materialize_existing_finding_cases(source_run_id=source_run_id, source_kind=source_kind)
     init_runtime_db()
@@ -419,6 +543,78 @@ def list_finding_cases(
     cases = [read_finding_case(identifier) for identifier in identifiers]
     if workflow_status:
         cases = [item for item in cases if item["workflow"]["status"] == workflow_status]
+    if priority:
+        cases = [item for item in cases if item["workflow"]["effective_priority"] == priority]
+    if system:
+        wanted_system = system.strip().lower()
+        cases = [
+            item for item in cases
+            if wanted_system in {
+                str((item["evidence"].get("finding") or {}).get("system_id") or "").strip().lower(),
+                str((item["evidence"].get("finding") or {}).get("system_name") or "").strip().lower(),
+            }
+        ]
+
+    def assignment_id(item: dict[str, Any]) -> str | None:
+        assignment = item["workflow"].get("assignment")
+        if not isinstance(assignment, dict):
+            return None
+        return _clean(assignment.get("external_ref"))
+
+    if assigned_to_me:
+        normalized_actor = str(actor or "").strip().lower()
+        cases = [
+            item for item in cases
+            if (assignment_id(item) or "").strip().lower() == normalized_actor
+        ]
+    if assignee:
+        normalized_assignee = assignee.strip().lower()
+        cases = [
+            item for item in cases
+            if (assignment_id(item) or "").strip().lower() == normalized_assignee
+        ]
+    if unassigned:
+        cases = [item for item in cases if item["workflow"].get("assignment") is None]
+    terminal_statuses = {"resolved", "dismissed"}
+    if active:
+        cases = [item for item in cases if item["workflow"]["status"] not in terminal_statuses]
+    if in_progress:
+        cases = [
+            item for item in cases
+            if item["workflow"]["status"] in {"acknowledged", "investigating", "waiting", "escalated"}
+        ]
+    if awaiting_review:
+        cases = [item for item in cases if item["workflow"]["status"] == "awaiting_review"]
+    now = datetime.now(timezone.utc)
+    if overdue:
+        def is_overdue(item: dict[str, Any]) -> bool:
+            due_at = item["workflow"].get("due_at")
+            if not due_at or item["workflow"]["status"] in terminal_statuses:
+                return False
+            try:
+                parsed = datetime.fromisoformat(str(due_at).replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                return parsed.astimezone(timezone.utc) < now
+            except ValueError:
+                return False
+        cases = [item for item in cases if is_overdue(item)]
+    if recently_resolved:
+        cutoff = now - timedelta(days=30)
+        def is_recently_resolved(item: dict[str, Any]) -> bool:
+            if item["workflow"]["status"] not in terminal_statuses:
+                return False
+            timestamp = item["workflow"].get("updated_at")
+            if not timestamp:
+                return False
+            try:
+                parsed = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                return parsed.astimezone(timezone.utc) >= cutoff
+            except ValueError:
+                return False
+        cases = [item for item in cases if is_recently_resolved(item)]
     bounded_offset = max(0, int(offset))
     bounded_limit = max(1, min(int(limit), 100))
     page = cases[bounded_offset:bounded_offset + bounded_limit]
@@ -432,8 +628,113 @@ def list_finding_cases(
 
 def finding_activity(finding_id: str) -> dict[str, Any]:
     case = read_finding_case(finding_id)
-    events = list(reversed(_events(finding_id)))
-    return {"finding_id": finding_id, "events": events, "version": case["workflow"]["version"]}
+    chronological_events = _events(finding_id)
+    activity_groups: list[list[dict[str, Any]]] = []
+    current_assignment: dict[str, Any] | None = None
+    for event in chronological_events:
+        entries, current_assignment = _human_activity_entries(
+            event, current_assignment=current_assignment,
+        )
+        activity_groups.append(entries)
+    events = list(reversed(chronological_events))
+    activity = [entry for group in reversed(activity_groups) for entry in group]
+    activity.append({
+        "activity_type": "detected",
+        "label": "Finding detected",
+        "summary": "Neraium surfaced this persistent behavioral change for review.",
+        "actor": "Neraium",
+        "recorded_at": case["created_at"],
+        "version": 0,
+    })
+    return {
+        "finding_id": finding_id, "events": events, "activity": activity,
+        "version": case["workflow"]["version"],
+    }
+
+
+def _activity_entry(event: dict[str, Any], *, label: str, summary: str) -> dict[str, Any]:
+    return {
+        "activity_type": str(event.get("event_type") or "workflow_updated"),
+        "label": label,
+        "summary": summary,
+        "actor": event.get("actor"),
+        "recorded_at": event.get("recorded_at"),
+        "version": event.get("version"),
+    }
+
+
+def _human_activity_entries(
+    event: dict[str, Any], *, current_assignment: dict[str, Any] | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    event_type = str(event.get("event_type") or "")
+    entries: list[dict[str, Any]] = []
+    if event_type in {"workflow_updated", "legacy_status_imported"}:
+        changes = event.get("changes") if isinstance(event.get("changes"), dict) else {}
+        if "assignment" in changes:
+            assignment = changes.get("assignment")
+            label = (
+                "Finding reassigned" if current_assignment and assignment else
+                "Finding assigned" if assignment else "Assignment removed"
+            )
+            summary = (
+                f"Assigned to {assignment.get('label')}." if isinstance(assignment, dict)
+                else "The finding is no longer assigned."
+            )
+            entries.append(_activity_entry(event, label=label, summary=summary))
+            current_assignment = assignment if isinstance(assignment, dict) else None
+        if "status" in changes:
+            status = str(changes["status"]).replace("_", " ")
+            status_label = {
+                "acknowledged": "Work acknowledged",
+                "investigating": "Investigation started",
+                "waiting": "Work marked waiting",
+                "escalated": "Finding escalated",
+                "awaiting review": "Investigation submitted for review",
+                "monitoring": "Monitoring started",
+                "resolved": "Finding resolved",
+                "dismissed": "Finding dismissed",
+            }.get(status, "Status changed")
+            entries.append(_activity_entry(
+                event, label=status_label, summary=f"Status changed to {status}.",
+            ))
+        if "user_priority" in changes:
+            priority = changes.get("user_priority")
+            entries.append(_activity_entry(
+                event, label="Priority changed",
+                summary=f"Priority changed to {priority}." if priority else "Priority override removed.",
+            ))
+        if "due_at" in changes:
+            entries.append(_activity_entry(
+                event, label="Due date changed",
+                summary="Due date updated." if changes.get("due_at") else "Due date removed.",
+            ))
+        if "manager_note" in changes:
+            entries.append(_activity_entry(
+                event, label="Guidance updated",
+                summary="Technical or maintenance guidance was updated.",
+            ))
+    elif event_type in {"feedback_recorded", "legacy_feedback_imported"}:
+        entries.append(_activity_entry(
+            event, label="Note added",
+            summary="A finding note or validation result was recorded.",
+        ))
+    elif event_type == "field_report_recorded":
+        report = event.get("field_report") or {}
+        label = "Investigation completed" if report.get("investigation_complete") else "Field report added"
+        summary = "The technician submitted field findings."
+        if report.get("needs_escalation"):
+            label, summary = "Escalation requested", "The technician submitted findings and requested help."
+        entries.append(_activity_entry(event, label=label, summary=summary))
+    elif event_type == "resolution_recorded":
+        entries.append(_activity_entry(
+            event, label="Finding resolved",
+            summary="The review outcome was recorded and the finding was resolved.",
+        ))
+    if not entries:
+        entries.append(_activity_entry(
+            event, label="Finding updated", summary="Workflow details were updated.",
+        ))
+    return entries, current_assignment
 
 
 def _fingerprint(event_type: str, payload: dict[str, Any]) -> str:
@@ -520,14 +821,54 @@ def _append_event(
 def update_finding_workflow(
     finding_id: str, *, changes: dict[str, Any], expected_version: int,
     actor: str, idempotency_key: str | None = None, recorded_at: str | None = None,
+    enforce_transitions: bool = False,
 ) -> dict[str, Any]:
     invalid = set(changes) - WORKFLOW_FIELDS
     if invalid:
         raise ValueError(f"unsupported_workflow_fields:{','.join(sorted(invalid))}")
+    normalized_changes = dict(changes)
+    if "assignment" in normalized_changes:
+        normalized_changes["assignment"] = _normalized_person_assignment(
+            normalized_changes["assignment"]
+        )
+    if "status" in normalized_changes:
+        current = read_finding_case(finding_id)["workflow"]["status"]
+        validate_status_transition(
+            current, str(normalized_changes["status"]), strict=enforce_transitions,
+        )
     _append_event(
         finding_id, event_type="workflow_updated", actor=actor,
-        payload={"changes": changes}, expected_version=expected_version,
+        payload={"changes": normalized_changes}, expected_version=expected_version,
         idempotency_key=idempotency_key, recorded_at=recorded_at,
+    )
+    return read_finding_case(finding_id)
+
+
+def record_finding_field_report(
+    finding_id: str, *, field_report: dict[str, Any], expected_version: int,
+    actor: str, idempotency_key: str | None = None, recorded_at: str | None = None,
+) -> dict[str, Any]:
+    current_status = read_finding_case(finding_id)["workflow"]["status"]
+    if current_status in {"resolved", "dismissed"}:
+        raise FindingWorkflowValidationError("field_report_not_allowed_for_terminal_finding")
+    timestamp = recorded_at or now_iso()
+    normalized = {
+        "note": _clean(field_report.get("note")),
+        "inspected": _clean(field_report.get("inspected")),
+        "found": _clean(field_report.get("found")),
+        "action_taken": _clean(field_report.get("action_taken")),
+        "problem_found": field_report.get("problem_found"),
+        "needs_escalation": bool(field_report.get("needs_escalation")),
+        "investigation_complete": bool(field_report.get("investigation_complete")),
+        "actor": actor,
+        "recorded_at": timestamp,
+    }
+    if normalized["problem_found"] not in {"yes", "no", "uncertain"}:
+        raise FindingWorkflowValidationError("invalid_problem_found")
+    _append_event(
+        finding_id, event_type="field_report_recorded", actor=actor,
+        payload={"field_report": normalized}, expected_version=expected_version,
+        idempotency_key=idempotency_key, recorded_at=timestamp,
     )
     return read_finding_case(finding_id)
 

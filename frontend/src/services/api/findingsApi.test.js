@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { FindingApiError, fetchFinding, fetchFindingActivity, fetchFindings, patchFindingWorkflow, postFindingFeedback, resolveFinding } from "./findingsApi";
+import { FindingApiError, fetchFinding, fetchFindingActivity, fetchFindingMembers, fetchFindings, patchFindingWorkflow, postFindingFeedback, postFindingFieldReport, resolveFinding } from "./findingsApi";
 
 function response(payload, { ok = true, status = 200 } = {}) {
   return { ok, status, json: async () => payload };
@@ -21,6 +21,23 @@ describe("findings API", () => {
     const result = await fetchFindings({ apiFetch, sourceKind: "evidence_run", sourceRunId: "run-42" });
     expect(result.findings[0]).toMatchObject({ workflow: { findingId: "canonical-1", source: { finding_key: "source-1" } } });
     expect(apiFetch.mock.calls[0][0]).toBe("/api/findings?source_kind=evidence_run&source_run_id=run-42&limit=100&offset=0");
+  });
+
+  it("maps operational queue filters to backend query parameters before pagination", async () => {
+    const apiFetch = vi.fn().mockResolvedValue(response({ findings: [], limit: 30, offset: 60, has_more: false }));
+    await fetchFindings({ apiFetch, assignedToMe: true, unassigned: true, overdue: true, inProgress: true, awaitingReview: true, recentlyResolved: true, active: true, assignee: "tech@example.com", priority: "high", status: "waiting", system: "AHU 1", limit: 30, offset: 60 });
+    const url = new URL(apiFetch.mock.calls[0][0], "https://neraium.test");
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      status: "waiting", priority: "high", system: "AHU 1", assignee: "tech@example.com",
+      assigned_to_me: "true", unassigned: "true", overdue: "true", in_progress: "true",
+      awaiting_review: "true", recently_resolved: "true", active: "true", limit: "30", offset: "60",
+    });
+  });
+
+  it("loads active workflow members with stable identities", async () => {
+    const apiFetch = vi.fn().mockResolvedValue(response({ members: [{ member_id: "tech@example.com", display_name: "Taylor Tech", role: "viewer", is_active: true }] }));
+    await expect(fetchFindingMembers({ apiFetch })).resolves.toEqual([{ memberId: "tech@example.com", displayName: "Taylor Tech", role: "viewer", active: true }]);
+    expect(apiFetch.mock.calls[0][0]).toBe("/api/findings/members");
   });
 
   it("sends assignment edits with explicit version protection", async () => {
@@ -45,6 +62,13 @@ describe("findings API", () => {
     const apiFetch = vi.fn().mockResolvedValue(response({ finding_id: "finding-1", workflow: { version: 6, status: "monitoring", latest_feedback: { category: "useful_warning" } } }));
     await postFindingFeedback({ apiFetch, findingId: "finding-1", expectedVersion: 5, idempotencyKey: "feedback-5", category: "useful_warning", note: "Watch next load cycle", actionTaken: "Reviewed logs" });
     expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({ expected_version: 5, idempotency_key: "feedback-5", category: "useful_warning", note: "Watch next load cycle", outcome: null, action_taken: "Reviewed logs", intervention_at: null, followup_at: null });
+  });
+
+  it("records the concise structured field report against the displayed version", async () => {
+    const apiFetch = vi.fn().mockResolvedValue(response({ finding_id: "finding-1", workflow: { version: 7, status: "awaiting_review", latest_field_report: { problem_found: "yes" } } }));
+    const result = await postFindingFieldReport({ apiFetch, findingId: "finding-1", expectedVersion: 6, idempotencyKey: "field-6", inspected: "Fan belt", found: "Loose belt", actionTaken: "Adjusted tension", note: "Vibration reduced", problemFound: "yes", needsEscalation: false, investigationComplete: true });
+    expect(result.workflow).toMatchObject({ status: "awaiting_review", latestFieldReport: { problem_found: "yes" } });
+    expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({ expected_version: 6, idempotency_key: "field-6", note: "Vibration reduced", inspected: "Fan belt", found: "Loose belt", action_taken: "Adjusted tension", problem_found: "yes", needs_escalation: false, investigation_complete: true });
   });
 
   it("surfaces version conflicts distinctly", async () => {

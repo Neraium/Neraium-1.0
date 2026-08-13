@@ -45,9 +45,11 @@ HISTORICAL_INGESTION_OPERATIONS = {
 }
 FINDING_WORKFLOW_OPERATIONS = {
     ("get", "/api/findings"),
+    ("get", "/api/findings/members"),
     ("get", "/api/findings/{finding_id}"),
     ("get", "/api/findings/{finding_id}/activity"),
     ("patch", "/api/findings/{finding_id}/workflow"),
+    ("post", "/api/findings/{finding_id}/field-reports"),
     ("post", "/api/findings/{finding_id}/feedback"),
     ("post", "/api/findings/{finding_id}/resolution"),
 }
@@ -271,7 +273,10 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
             dependency.call.__name__ for dependency in matching_routes[0].dependant.dependencies
         }
         assert "require_api_access" in dependency_names
-        if method in {"patch", "post"}:
+        if (method, path) in {
+            ("post", "/api/findings/{finding_id}/feedback"),
+            ("post", "/api/findings/{finding_id}/resolution"),
+        }:
             assert "require_operator_role" in dependency_names
     progress_method, progress_path, progress_operation_id, progress_model = UPLOAD_PROGRESS_OPERATION
     progress_operation = schema["paths"][progress_path][progress_method]
