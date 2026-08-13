@@ -2,12 +2,16 @@ const TERMINAL_STATUSES = new Set(["resolved", "dismissed"]);
 
 export const WORK_FILTERS = [
   { id: "active", label: "Active" },
-  { id: "needs-assignment", label: "Needs assignment" },
+  { id: "needs-assignment", label: "Needs assignment", teamOnly: true },
   { id: "in-progress", label: "In progress" },
   { id: "overdue", label: "Overdue" },
   { id: "awaiting-review", label: "Awaiting review" },
   { id: "recently-resolved", label: "Recently resolved" },
 ];
+
+export function workFiltersForMode(mode = "mine") {
+  return WORK_FILTERS.filter((item) => mode === "team" || !item.teamOnly);
+}
 
 function text(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -65,6 +69,15 @@ export function workStatusLabel(value) {
   })[status] ?? title(status, "Needs review");
 }
 
+export function workStatusTone(value) {
+  const status = text(value).toLowerCase().replace(/[ -]+/g, "_");
+  if (["escalated"].includes(status)) return "attention";
+  if (["awaiting_review", "monitoring"].includes(status)) return "review";
+  if (["resolved", "dismissed"].includes(status)) return "complete";
+  if (["acknowledged", "investigating", "waiting"].includes(status)) return "active";
+  return "new";
+}
+
 export function workDueState(value, now = new Date()) {
   const source = text(value);
   if (!source) return { label: "No due date", tone: "none", overdue: false };
@@ -80,21 +93,31 @@ export function workDueState(value, now = new Date()) {
 }
 
 export function queryForWorkQueue({ mode = "mine", filter = "active", assignee = "", priority = "", status = "", system = "", limit = 30, offset = 0 } = {}) {
+  const teamView = mode === "team";
+  const effectiveFilter = !teamView && filter === "needs-assignment" ? "active" : filter;
   return {
-    assignedToMe: mode === "mine" && filter !== "needs-assignment",
-    unassigned: filter === "needs-assignment",
-    inProgress: filter === "in-progress",
-    overdue: filter === "overdue",
-    awaitingReview: filter === "awaiting-review",
-    recentlyResolved: filter === "recently-resolved",
-    active: filter === "active",
-    assignee: mode === "team" ? text(assignee) : "",
-    priority: text(priority),
-    status: text(status),
-    system: text(system),
+    assignedToMe: !teamView,
+    unassigned: teamView && effectiveFilter === "needs-assignment",
+    inProgress: effectiveFilter === "in-progress",
+    overdue: effectiveFilter === "overdue",
+    awaitingReview: effectiveFilter === "awaiting-review",
+    recentlyResolved: effectiveFilter === "recently-resolved",
+    active: effectiveFilter === "active",
+    assignee: teamView ? text(assignee) : "",
+    priority: teamView ? text(priority) : "",
+    status: teamView ? text(status) : "",
+    system: teamView ? text(system) : "",
     limit,
     offset,
   };
+}
+
+export function workCardAction(finding, { mode = "mine" } = {}) {
+  if (mode === "team") return finding?.status === "awaiting_review" ? "Review report" : "Open finding";
+  if (finding?.status === "open") return "Review assignment";
+  if (["acknowledged", "investigating", "waiting", "escalated"].includes(finding?.status)) return "Continue work";
+  if (finding?.status === "awaiting_review") return "View submitted report";
+  return "View work";
 }
 
 export function normalizeWorkFinding(item, now = new Date()) {
@@ -172,7 +195,8 @@ export function normalizeWorkFinding(item, now = new Date()) {
   };
 }
 
-export function emptyStateForQueue({ mode = "mine", filter = "active" } = {}) {
+export function emptyStateForQueue({ mode = "mine", filter = "active", filtered = false } = {}) {
+  if (filtered) return { title: "No matching work", body: "Clear or adjust the team filters to see more findings." };
   if (mode === "mine" && filter === "active") return { title: "Nothing assigned to you", body: "New assignments will appear here when a lead sends work your way." };
   return ({
     "needs-assignment": { title: "No unassigned findings", body: "Every finding in this view has an owner." },

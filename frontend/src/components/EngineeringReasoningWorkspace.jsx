@@ -304,7 +304,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     ["site", "System Status"],
     ["live-monitoring", "Live Monitoring"],
     ["systems", "Systems"],
-    ["findings", "Findings"],
+    ["findings", "Analysis Findings"],
     ["investigations", "Evidence & Outcomes"],
     ["data-connections", "Data"],
     ...(portfolioModels.length > 1 ? [["portfolio", "Sites"]] : []),

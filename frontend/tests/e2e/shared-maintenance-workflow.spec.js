@@ -251,9 +251,12 @@ test.describe("Shared maintenance workflow", () => {
     await expect(page.getByTestId("work-queue-workspace")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Work", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "My Work" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Needs assignment" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "CHWP-1 · Mechanical Room 1" })).toBeVisible();
 
     await page.getByRole("button", { name: "Team Findings" }).click();
+    await expect(page.getByRole("button", { name: "More filters" })).toBeVisible();
+    await expect(page.locator("#work-queue-controls")).toBeHidden();
     await page.getByRole("button", { name: "Needs assignment" }).click();
     const unassignedCard = page.getByTestId("work-finding-card");
     await expect(unassignedCard).toHaveCount(1);
@@ -261,12 +264,14 @@ test.describe("Shared maintenance workflow", () => {
     await unassignedCard.getByRole("button", { name: /Open CHWP-2/ }).click();
 
     const leadControls = page.locator(".lead-controls");
+    await expect(page.getByRole("button", { name: "Accept work" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Report what you found" })).toHaveCount(0);
     await leadControls.getByLabel("Assign to").selectOption("taylor.tech.e2e@neraium.test");
     await leadControls.getByLabel("Priority").selectOption("critical");
     await leadControls.getByLabel("Due date").fill("2026-08-13");
     await leadControls.getByLabel("Guidance for the technician").fill("Inspect the coupling guard and bearings first; call the lead if vibration is severe.");
-    await leadControls.getByRole("button", { name: "Save assignment" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Work updated." })).toBeVisible();
+    await leadControls.getByRole("button", { name: "Save work details" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Assignment and guidance saved." })).toBeVisible();
     expect(state.mutationBodies.at(-1).body).toMatchObject({
       assignment: { target_type: "person", label: "E2E Taylor Technician", external_ref: "taylor.tech.e2e@neraium.test" },
       user_priority: "critical",
@@ -275,7 +280,7 @@ test.describe("Shared maintenance workflow", () => {
     });
 
     await leadControls.getByLabel("Assign to").selectOption("riley.tech.e2e@neraium.test");
-    await leadControls.getByRole("button", { name: "Save assignment" }).click();
+    await leadControls.getByRole("button", { name: "Save work details" }).click();
     await expect.poll(() => state.mutationBodies.filter((item) => item.endpoint === "workflow").length).toBe(2);
     expect(state.mutationBodies.at(-1).body.assignment).toEqual({ target_type: "person", label: "E2E Riley Technician", external_ref: "riley.tech.e2e@neraium.test" });
 
@@ -288,11 +293,11 @@ test.describe("Shared maintenance workflow", () => {
     await page.screenshot({ path: path.join(screenshotDirectory, "lead-desktop.png"), fullPage: true });
 
     await leadControls.getByRole("button", { name: "Return for investigation" }).click();
-    await expect(page.getByText("In progress", { exact: true }).first()).toBeVisible();
+    await expect(page.locator(".work-brief__urgency").getByText("In progress", { exact: true })).toBeVisible();
     await leadControls.getByRole("button", { name: "Monitor", exact: true }).click();
-    await expect(page.getByText("Monitoring", { exact: true }).first()).toBeVisible();
+    await expect(page.locator(".work-brief__urgency").getByText("Monitoring", { exact: true })).toBeVisible();
     await leadControls.getByRole("button", { name: "Resolve", exact: true }).click();
-    await expect(page.getByText("Resolved", { exact: true }).first()).toBeVisible();
+    await expect(page.locator(".work-brief__urgency").getByText("Resolved", { exact: true })).toBeVisible();
     expect(state.mutationBodies.map((item) => item.endpoint)).toContain("resolution");
 
     await expectNoSeriousAccessibilityIssues(page);

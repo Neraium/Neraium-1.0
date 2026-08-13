@@ -394,8 +394,8 @@ test.describe("Facility workspace authorization", () => {
     await expect(leadControls.getByLabel("Assign to").locator(`option[value="${users.outsider.email}"]`)).toHaveCount(0);
     await leadControls.getByLabel("Assign to").selectOption(users.technician.email);
     await leadControls.getByLabel("Guidance for the technician").fill("Inspect bearings first and notify the lead if vibration is severe.");
-    await leadControls.getByRole("button", { name: "Save assignment" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Work updated." })).toBeVisible();
+    await leadControls.getByRole("button", { name: "Save work details" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Assignment and guidance saved." })).toBeVisible();
     expect(state.mutations.at(-1)).toMatchObject({
       actor: users.lead.email,
       endpoint: "workflow",

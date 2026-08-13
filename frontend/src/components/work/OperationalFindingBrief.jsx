@@ -39,9 +39,24 @@ function LeadControls({ finding, members, membersLoading, membersError, onWorkfl
   const unavailableAssignment = Boolean(finding.assignment.label && finding.assignment.label !== "Unassigned" && !assignedMember);
   const historicalAssignment = unavailableAssignment && !membersLoading && !membersError;
   const currentMemberId = unavailableAssignment ? "__historical" : finding.assignment.externalReference;
-  const [draft, setDraft] = useState({ memberId: currentMemberId, priority: finding.priority, dueDate: dateValue(finding.workflow.dueDate ?? finding.workflow.due_at), managerNote: finding.managerNote });
-  useEffect(() => setDraft({ memberId: currentMemberId, priority: finding.priority, dueDate: dateValue(finding.workflow.dueDate ?? finding.workflow.due_at), managerNote: finding.managerNote }), [currentMemberId, finding]);
+  const currentDueDate = dateValue(finding.workflow.dueDate ?? finding.workflow.due_at);
+  const [draft, setDraft] = useState({ memberId: currentMemberId, priority: finding.priority, dueDate: currentDueDate, managerNote: finding.managerNote });
+  useEffect(() => setDraft({ memberId: currentMemberId, priority: finding.priority, dueDate: currentDueDate, managerNote: finding.managerNote }), [currentDueDate, currentMemberId, finding.managerNote, finding.priority]);
   const selected = members.find((member) => member.memberId === draft.memberId);
+  const hasChanges = draft.memberId !== currentMemberId
+    || draft.priority !== finding.priority
+    || draft.dueDate !== currentDueDate
+    || draft.managerNote !== finding.managerNote;
+  const statusActions = ({
+    open: [["escalated", "Escalate"]],
+    acknowledged: [["escalated", "Escalate"]],
+    investigating: [["monitoring", "Monitor"], ["escalated", "Escalate"]],
+    waiting: [["investigating", "Resume investigation"], ["escalated", "Escalate"]],
+    escalated: [["investigating", "Return for investigation"], ["monitoring", "Monitor"]],
+    awaiting_review: [["investigating", "Return for investigation"], ["monitoring", "Monitor"]],
+    monitoring: [["investigating", "Return for investigation"]],
+  })[finding.status] ?? [];
+  const canResolve = ["awaiting_review", "escalated", "monitoring"].includes(finding.status);
 
   function save(event) {
     event.preventDefault();
@@ -53,7 +68,7 @@ function LeadControls({ finding, members, membersLoading, membersError, onWorkfl
     if (draft.memberId !== "__historical") {
       changes.assignment = selected ? { kind: "person", label: selected.displayName, externalReference: selected.memberId } : null;
     }
-    onWorkflow?.(changes);
+    onWorkflow?.(changes, "Assignment and guidance saved.");
   }
 
   return (
@@ -64,16 +79,14 @@ function LeadControls({ finding, members, membersLoading, membersError, onWorkfl
         <label>Priority<select value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value }))}>{PRIORITIES.map((priority) => <option key={priority} value={priority}>{priority[0].toUpperCase() + priority.slice(1)}</option>)}</select></label>
         <label>Due date<input type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} /></label>
         <label className="lead-controls__guidance">Guidance for the technician<textarea value={draft.managerNote} onChange={(event) => setDraft((current) => ({ ...current, managerNote: event.target.value }))} /></label>
-        <button type="submit" className="work-primary-action" disabled={pending}>Save assignment</button>
+        <button type="submit" className="work-primary-action" disabled={pending || !hasChanges}>{pending ? "Saving…" : "Save work details"}</button>
       </form>
-      <div className="lead-controls__outcomes" aria-label="Lead workflow outcomes">
-        <button type="button" onClick={() => onWorkflow?.({ status: "investigating" })} disabled={pending}>Return for investigation</button>
-        <button type="button" onClick={() => onWorkflow?.({ status: "monitoring" })} disabled={pending}>Monitor</button>
-        <button type="button" onClick={() => onWorkflow?.({ status: "escalated" })} disabled={pending}>Escalate</button>
-        <button type="button" onClick={() => onWorkflow?.({ status: "dismissed" })} disabled={pending}>Dismiss</button>
-        <button type="button" onClick={() => onResolve?.("maintenance_performed", "Lead reviewed the completed field investigation.")} disabled={pending}>Resolve</button>
-        <button type="button" onClick={() => onResolve?.("no_issue_found", "No maintenance issue was found after review.")} disabled={pending}>No action needed</button>
-      </div>
+      {statusActions.length || canResolve ? <div className="lead-controls__review"><span className="work-eyebrow">{canResolve ? "Review outcome" : "Next status"}</span><div className="lead-controls__outcomes" aria-label="Lead workflow outcomes">
+        {statusActions.map(([status, label]) => <button type="button" key={status} onClick={() => onWorkflow?.({ status }, `${label} recorded.`)} disabled={pending}>{label}</button>)}
+        {canResolve ? <button type="button" className="work-outcome-primary" onClick={() => onResolve?.("maintenance_performed", "Lead reviewed the completed field investigation.")} disabled={pending}>Resolve</button> : null}
+        {canResolve ? <button type="button" onClick={() => onResolve?.("no_issue_found", "No maintenance issue was found after review.")} disabled={pending}>No action needed</button> : null}
+      </div></div> : null}
+      <details className="lead-controls__more"><summary>More outcomes</summary><button type="button" onClick={() => onWorkflow?.({ status: "dismissed" }, "Finding dismissed.")} disabled={pending}>Dismiss finding</button></details>
     </section>
   );
 }
@@ -81,7 +94,9 @@ function LeadControls({ finding, members, membersLoading, membersError, onWorkfl
 export default function OperationalFindingBrief({ finding, currentUser, members = [], membersLoading = false, membersError = "", activity = [], activityLoading = false, activityError = "", pending = false, mutationMessage = "", mutationError = false, onBack, onWorkflow, onFieldReport, onResolve, technicalFinding, onInvestigation, onEvidence }) {
   const lead = canLeadWorkflow(currentUser?.role);
   const assignedToMe = isAssignedToCurrentUser(finding, currentUser);
-  const technicianCanUpdate = lead || assignedToMe;
+  const canPerformFieldWork = assignedToMe;
+  const canReportFieldWork = canPerformFieldWork && ["investigating", "waiting", "escalated"].includes(finding.status);
+  const leadNeedsFieldResult = lead && !assignedToMe && (Boolean(finding.latestFieldReport) || ["awaiting_review", "escalated", "monitoring"].includes(finding.status));
   return (
     <article className="work-brief">
       <button type="button" className="work-back" onClick={onBack}>Back to work list</button>
@@ -97,18 +112,20 @@ export default function OperationalFindingBrief({ finding, currentUser, members 
       </dl>
       <section className="work-first-check"><span className="work-eyebrow">Check first</span><h2>{finding.firstCheck}</h2>{finding.managerNote ? <p>{finding.managerNote}</p> : null}</section>
 
-      {technicianCanUpdate && !finding.terminal ? (
+      {canPerformFieldWork && !finding.terminal ? (
         <section className="work-quick-actions" aria-label="Technician work actions">
-          {finding.status === "open" ? <button type="button" className="work-primary-action" onClick={() => onWorkflow?.({ status: "acknowledged" })} disabled={pending}>Accept work</button> : null}
-          {finding.status === "acknowledged" ? <button type="button" className="work-primary-action" onClick={() => onWorkflow?.({ status: "investigating" })} disabled={pending}>Start investigation</button> : null}
-          {["investigating", "waiting", "escalated"].includes(finding.status) ? <button type="button" onClick={() => onWorkflow?.({ status: "waiting" })} disabled={pending}>Mark waiting</button> : null}
+          {finding.status === "open" ? <button type="button" className="work-primary-action" onClick={() => onWorkflow?.({ status: "acknowledged" }, "Work accepted.")} disabled={pending}>Accept work</button> : null}
+          {finding.status === "acknowledged" ? <button type="button" className="work-primary-action" onClick={() => onWorkflow?.({ status: "investigating" }, "Investigation started.")} disabled={pending}>Start investigation</button> : null}
+          {["investigating", "escalated"].includes(finding.status) ? <button type="button" onClick={() => onWorkflow?.({ status: "waiting" }, "Work marked waiting.")} disabled={pending}>Mark waiting</button> : null}
+          {finding.status === "waiting" ? <button type="button" className="work-primary-action" onClick={() => onWorkflow?.({ status: "investigating" }, "Investigation resumed.")} disabled={pending}>Resume investigation</button> : null}
         </section>
       ) : !lead && !assignedToMe ? <p className="work-permission-note">This work is not assigned to you. You can review it, but only its assignee or a lead can update it.</p> : null}
       <p className={`work-form-status${mutationError ? " is-error" : ""}`} role="status" aria-live="polite">{mutationMessage}</p>
 
-      {lead ? <LeadControls finding={finding} members={members} membersLoading={membersLoading} membersError={membersError} onWorkflow={onWorkflow} onResolve={onResolve} pending={pending} /> : null}
-      {technicianCanUpdate && !finding.terminal ? <FieldReportForm disabled={pending} onSubmit={onFieldReport} /> : null}
-      <LatestFieldReport report={finding.latestFieldReport} />
+      {leadNeedsFieldResult ? <LatestFieldReport report={finding.latestFieldReport} /> : null}
+      {lead && !finding.terminal ? <LeadControls finding={finding} members={members} membersLoading={membersLoading} membersError={membersError} onWorkflow={onWorkflow} onResolve={onResolve} pending={pending} /> : null}
+      {canReportFieldWork && !finding.terminal ? <FieldReportForm disabled={pending} onSubmit={onFieldReport} /> : null}
+      {!lead || assignedToMe ? <LatestFieldReport report={finding.latestFieldReport} /> : null}
       <FindingActivityTimeline activity={activity} loading={activityLoading} error={activityError} />
 
       <section className="work-drilldown" aria-labelledby="work-drilldown-title">

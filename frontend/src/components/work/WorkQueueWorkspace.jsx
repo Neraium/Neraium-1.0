@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fetchFinding, fetchFindingActivity, fetchFindingMembers, fetchFindings, isFindingApiUnavailable, patchFindingWorkflow, postFindingFieldReport, resolveFinding } from "../../services/api/findingsApi";
-import { emptyStateForQueue, normalizeWorkFinding, queryForWorkQueue, WORK_FILTERS } from "../../viewModels/workQueue";
+import { emptyStateForQueue, normalizeWorkFinding, queryForWorkQueue, workCardAction, workFiltersForMode, workStatusLabel } from "../../viewModels/workQueue";
 import OperationalFindingBrief from "./OperationalFindingBrief";
 import WorkFindingCard from "./WorkFindingCard";
 import "../../styles/work-workflow.css";
@@ -14,6 +14,7 @@ function clean(value) {
 export default function WorkQueueWorkspace({ apiFetch, currentUser, currentWorkspace = null, findingId = "", onRouteFinding, onOpenInvestigation, onOpenEvidence, technicalFindingFor }) {
   const [mode, setMode] = useState("mine");
   const [filter, setFilter] = useState("active");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [controls, setControls] = useState({ assignee: "", priority: "", status: "", system: "" });
   const [offset, setOffset] = useState(0);
   const [queue, setQueue] = useState({ items: [], loading: true, error: "", hasMore: false });
@@ -26,6 +27,8 @@ export default function WorkQueueWorkspace({ apiFetch, currentUser, currentWorks
   const [reloadKey, setReloadKey] = useState(0);
   const members = membersState.items;
   const workspaceName = clean(currentWorkspace?.display_name ?? currentWorkspace?.displayName) || "Personal workspace";
+  const visibleFilters = workFiltersForMode(mode);
+  const activeControlCount = mode === "team" ? Object.values(controls).filter((value) => clean(value)).length : 0;
 
   useEffect(() => {
     setSelectedId(clean(findingId));
@@ -104,11 +107,18 @@ export default function WorkQueueWorkspace({ apiFetch, currentUser, currentWorks
     return () => { cancelled = true; };
   }, [apiFetch, selectedItem?.findingId, selectedItem?.version]);
 
-  const empty = emptyStateForQueue({ mode, filter });
+  const empty = emptyStateForQueue({ mode, filter, filtered: activeControlCount > 0 });
   const technicalFinding = useMemo(() => selectedItem ? technicalFindingFor?.(selectedItem) ?? null : null, [selectedItem, technicalFindingFor]);
 
   function changeMode(nextMode) {
     setMode(nextMode);
+    if (nextMode === "mine" && filter === "needs-assignment") setFilter("active");
+    if (nextMode === "mine") setFiltersOpen(false);
+    setOffset(0);
+  }
+
+  function clearControls() {
+    setControls({ assignee: "", priority: "", status: "", system: "" });
     setOffset(0);
   }
 
@@ -142,12 +152,12 @@ export default function WorkQueueWorkspace({ apiFetch, currentUser, currentWorks
     setReloadKey((value) => value + 1);
   }
 
-  async function mutateWorkflow(changes) {
+  async function mutateWorkflow(changes, successMessage = "Work updated.") {
     if (!selectedItem) return;
     setMutation({ pending: true, message: "", error: false });
     try {
       const result = await patchFindingWorkflow({ apiFetch, findingId: selectedItem.findingId, expectedVersion: selectedItem.version, changes });
-      applyResult(result, "Work updated.");
+      applyResult(result, successMessage);
     } catch (error) {
       setMutation({ pending: false, message: error?.message || "Work could not be updated.", error: true });
       throw error;
@@ -182,13 +192,25 @@ export default function WorkQueueWorkspace({ apiFetch, currentUser, currentWorks
       <section className="work-queue" aria-labelledby="work-queue-title">
         <header className="work-queue__header"><div><span className="work-eyebrow">Facility workspace · {workspaceName}</span><h1 id="work-queue-title">Work</h1><p>Shared findings and human action for this maintenance team.</p></div></header>
         <div className="work-mode-switch" role="group" aria-label="Work view"><button type="button" aria-pressed={mode === "mine"} onClick={() => changeMode("mine")}>My Work</button><button type="button" aria-pressed={mode === "team"} onClick={() => changeMode("team")}>Team Findings</button></div>
-        <div className="work-filter-list" aria-label="Work filters">{WORK_FILTERS.map((item) => <button type="button" key={item.id} aria-pressed={filter === item.id} onClick={() => changeFilter(item.id)}>{item.label}</button>)}</div>
-        {mode === "team" ? <><div className="work-queue-controls" aria-label="Queue controls"><label>Assignee<select value={controls.assignee} disabled={membersState.loading || Boolean(membersState.error)} onChange={(event) => updateControl("assignee", event.target.value)}><option value="">Anyone</option>{members.map((member) => <option key={member.memberId} value={member.memberId}>{member.displayName}</option>)}</select></label><label>Priority<select value={controls.priority} onChange={(event) => updateControl("priority", event.target.value)}><option value="">Any priority</option>{["low", "medium", "high", "critical"].map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label>Status<select value={controls.status} onChange={(event) => updateControl("status", event.target.value)}><option value="">Any status</option>{["open", "acknowledged", "investigating", "waiting", "escalated", "awaiting_review", "monitoring", "resolved", "dismissed"].map((item) => <option key={item} value={item}>{item.replace(/_/g, " ")}</option>)}</select></label><label>System<input value={controls.system} onChange={(event) => updateControl("system", event.target.value)} placeholder="System name" /></label></div>{membersState.error ? <p className="work-member-error" role="alert">{membersState.error}</p> : null}</> : null}
+        <div className="work-filter-list" aria-label={`${mode === "mine" ? "My Work" : "Team Findings"} filters`}>{visibleFilters.map((item) => <button type="button" key={item.id} aria-pressed={filter === item.id} onClick={() => changeFilter(item.id)}>{item.label}</button>)}</div>
+        {mode === "team" ? <>
+          <div className="work-filter-tools">
+            <button type="button" className="work-filter-toggle" aria-expanded={filtersOpen} aria-controls="work-queue-controls" onClick={() => setFiltersOpen((value) => !value)}>More filters{activeControlCount ? ` · ${activeControlCount} active` : ""}</button>
+            {activeControlCount ? <button type="button" className="work-filter-clear" onClick={clearControls}>Clear filters</button> : null}
+          </div>
+          <div id="work-queue-controls" className="work-queue-controls" aria-label="Additional team filters" hidden={!filtersOpen}>
+            <label>Assignee<select value={controls.assignee} disabled={membersState.loading || Boolean(membersState.error)} onChange={(event) => updateControl("assignee", event.target.value)}><option value="">Anyone</option>{members.map((member) => <option key={member.memberId} value={member.memberId}>{member.displayName}</option>)}</select></label>
+            <label>Priority<select value={controls.priority} onChange={(event) => updateControl("priority", event.target.value)}><option value="">Any priority</option>{["low", "medium", "high", "critical"].map((item) => <option key={item} value={item}>{item[0].toUpperCase() + item.slice(1)}</option>)}</select></label>
+            <label>Status<select value={controls.status} onChange={(event) => updateControl("status", event.target.value)}><option value="">Any status</option>{["open", "acknowledged", "investigating", "waiting", "escalated", "awaiting_review", "monitoring", "resolved", "dismissed"].map((item) => <option key={item} value={item}>{workStatusLabel(item)}</option>)}</select></label>
+            <label>System<input value={controls.system} onChange={(event) => updateControl("system", event.target.value)} placeholder="System name" /></label>
+          </div>
+          {membersState.error && filtersOpen ? <p className="work-member-error" role="alert">{membersState.error}</p> : null}
+        </> : null}
 
-        {queue.loading ? <p className="work-queue-state" role="status">Loading work…</p>
+        {queue.loading ? <div className="work-queue-state work-queue-state--loading" role="status"><span className="work-loading-mark" aria-hidden="true" /><h2>Loading {mode === "mine" ? "My Work" : "Team Findings"}</h2><p>Fetching the latest work for {workspaceName}.</p></div>
           : queue.error ? <div className="work-queue-state" role="alert"><h2>Work is unavailable</h2><p>{queue.error}</p><button type="button" onClick={() => setReloadKey((value) => value + 1)}>Try again</button></div>
-            : queue.items.length ? <div className="work-card-list">{queue.items.map((finding) => <WorkFindingCard key={finding.findingId} finding={finding} selected={finding.findingId === selectedId} onOpen={openFinding} />)}</div>
-              : <div className="work-queue-state"><h2>{empty.title}</h2><p>{empty.body}</p></div>}
+            : queue.items.length ? <div className="work-card-list">{queue.items.map((finding) => <WorkFindingCard key={finding.findingId} finding={finding} mode={mode} actionLabel={workCardAction(finding, { mode })} selected={finding.findingId === selectedId} onOpen={openFinding} />)}</div>
+              : <div className="work-queue-state"><h2>{empty.title}</h2><p>{empty.body}</p>{activeControlCount ? <button type="button" onClick={clearControls}>Clear filters</button> : null}</div>}
         {!queue.loading && !queue.error && queue.items.length ? <nav className="work-pagination" aria-label="Work pages"><button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>Previous</button><span>Page {Math.floor(offset / PAGE_SIZE) + 1}</span><button type="button" disabled={!queue.hasMore} onClick={() => setOffset(offset + PAGE_SIZE)}>Next</button></nav> : null}
       </section>
 

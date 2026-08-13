@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyStateForQueue, normalizeWorkFinding, queryForWorkQueue, workDueState } from "./workQueue";
+import { emptyStateForQueue, normalizeWorkFinding, queryForWorkQueue, workCardAction, workDueState, workFiltersForMode, workStatusTone } from "./workQueue";
 
 function canonicalItem(assignment = { target_type: "person", label: "Taylor Tech", external_ref: "tech@example.com" }) {
   return {
@@ -15,8 +15,11 @@ function canonicalItem(assignment = { target_type: "person", label: "Taylor Tech
 describe("work queue view model", () => {
   it("maps My Work and queue filters to server-authored parameters", () => {
     expect(queryForWorkQueue({ mode: "mine", filter: "overdue", limit: 30, offset: 30 })).toMatchObject({ assignedToMe: true, overdue: true, active: false, limit: 30, offset: 30 });
-    expect(queryForWorkQueue({ mode: "mine", filter: "needs-assignment" })).toMatchObject({ assignedToMe: false, unassigned: true });
+    expect(queryForWorkQueue({ mode: "mine", filter: "needs-assignment" })).toMatchObject({ assignedToMe: true, unassigned: false, active: true });
     expect(queryForWorkQueue({ mode: "team", filter: "needs-assignment", assignee: "tech@example.com" })).toMatchObject({ assignedToMe: false, unassigned: true, assignee: "tech@example.com" });
+    expect(queryForWorkQueue({ mode: "mine", priority: "critical", status: "waiting", system: "Air" })).toMatchObject({ priority: "", status: "", system: "" });
+    expect(workFiltersForMode("mine").map((item) => item.id)).not.toContain("needs-assignment");
+    expect(workFiltersForMode("team").map((item) => item.id)).toContain("needs-assignment");
   });
 
   it("prioritizes operational card language and preserves historical assignments", () => {
@@ -35,5 +38,10 @@ describe("work queue view model", () => {
     expect(emptyStateForQueue({ mode: "mine", filter: "active" }).title).toBe("Nothing assigned to you");
     expect(emptyStateForQueue({ mode: "team", filter: "needs-assignment" }).title).toBe("No unassigned findings");
     expect(emptyStateForQueue({ mode: "team", filter: "recently-resolved" }).title).toBe("No recently resolved findings");
+    expect(emptyStateForQueue({ mode: "team", filter: "active", filtered: true }).title).toBe("No matching work");
+    expect(workStatusTone("awaiting_review")).toBe("review");
+    expect(workStatusTone("escalated")).toBe("attention");
+    expect(workCardAction({ status: "investigating" }, { mode: "mine" })).toBe("Continue work");
+    expect(workCardAction({ status: "awaiting_review" }, { mode: "team" })).toBe("Review report");
   });
 });

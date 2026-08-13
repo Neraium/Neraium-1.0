@@ -380,7 +380,7 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
   it("supports direct workflow navigation and keyboard search", () => {
     renderWorkspace();
     const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
-    for (const label of ["System Status", "Live Monitoring", "Systems", "Findings", "Evidence & Outcomes", "Data"]) expect(within(navigation).getByRole("button", { name: label })).toBeTruthy();
+    for (const label of ["System Status", "Live Monitoring", "Systems", "Analysis Findings", "Evidence & Outcomes", "Data"]) expect(within(navigation).getByRole("button", { name: label })).toBeTruthy();
     fireEvent.click(within(navigation).getByRole("button", { name: "Evidence & Outcomes" }));
     expect(window.location.pathname).toBe("/investigations");
     fireEvent.click(within(navigation).getByRole("button", { name: "Systems" }));

@@ -65,15 +65,18 @@ describe("shared maintenance Work area", () => {
     expect(within(card).getByRole("heading", { name: "AHU 1" })).toBeTruthy();
     expect(within(card).getByText("Supply fan response weakened")).toBeTruthy();
     expect(card.textContent).not.toMatch(/coupling|raw signal|provenance|lineage/i);
-    for (const label of ["Status", "Assigned to", "Due", "Change confidence"]) expect(within(card).getByText(label)).toBeTruthy();
+    expect(within(card).getByText("Needs review")).toBeTruthy();
+    for (const label of ["Assigned by", "Due", "Change confidence"]) expect(within(card).getByText(label)).toBeTruthy();
 
     fireEvent.click(within(card).getByRole("button", { name: /Open AHU 1/i }));
-    expect(await screen.findByRole("heading", { name: "Report what you found" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Report what you found" })).toBeNull();
     expect(screen.getByText("Inspect the fan belt first.")).toBeTruthy();
     expect(screen.getByText("Morgan Lead")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Accept work" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Accept work" }));
     await waitFor(() => expect(apiFetch.mock.calls.some(([url, options]) => String(url).endsWith("/workflow") && JSON.parse(options.body).status === "acknowledged")).toBe(true));
+    fireEvent.click(await screen.findByRole("button", { name: "Start investigation" }));
+    await screen.findByRole("heading", { name: "Report what you found" });
 
     fireEvent.change(screen.getByLabelText("What did you inspect?"), { target: { value: "Fan belt and bearings" } });
     fireEvent.change(screen.getByLabelText("What did you find?"), { target: { value: "Belt was loose" } });
@@ -98,14 +101,14 @@ describe("shared maintenance Work area", () => {
     const picker = within(leadControls).getByLabelText("Assign to");
     fireEvent.change(picker, { target: { value: "tech@example.com" } });
     fireEvent.change(within(leadControls).getByLabelText("Priority"), { target: { value: "critical" } });
-    fireEvent.click(within(leadControls).getByRole("button", { name: "Save assignment" }));
+    fireEvent.click(within(leadControls).getByRole("button", { name: "Save work details" }));
     await waitFor(() => expect(apiFetch.mock.calls.some(([url]) => String(url).endsWith("/workflow"))).toBe(true));
     const patchCall = apiFetch.mock.calls.find(([url]) => String(url).endsWith("/workflow"));
     expect(JSON.parse(patchCall[1].body)).toMatchObject({ assignment: { target_type: "person", label: "Taylor Tech", external_ref: "tech@example.com" }, user_priority: "critical" });
   });
 
   it("renders human activity, technician-note and evidence availability states", async () => {
-    const apiFetch = apiHarness();
+    const apiFetch = apiHarness(casePayload({ status: "awaiting_review" }));
     const onOpenInvestigation = vi.fn();
     render(React.createElement(WorkQueueWorkspace, { apiFetch, currentUser: { email: "lead@example.com", role: "operator" }, technicalFindingFor: () => ({ id: "condition-1" }), onOpenInvestigation }));
     fireEvent.click(await screen.findByRole("button", { name: /Open AHU 1/i }));
@@ -113,6 +116,8 @@ describe("shared maintenance Work area", () => {
     expect(screen.getByText("Assigned to Taylor Tech.")).toBeTruthy();
     expect(screen.queryByText("workflow_updated")).toBeNull();
     expect(screen.getByText("No technician notes yet.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Accept work" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Report what you found" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
     expect(onOpenInvestigation).toHaveBeenCalledWith({ id: "condition-1" });
   });
@@ -134,11 +139,21 @@ describe("shared maintenance Work area", () => {
       currentWorkspace: { workspace_id: "ws-a", display_name: "North Plant" },
     }));
     expect(await screen.findByText("Facility workspace · North Plant")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Needs assignment" })).toBeNull();
     await waitFor(() => expect(apiFetch.mock.calls.some(([url]) => String(url).includes("assigned_to_me=true"))).toBe(true));
     fireEvent.click(screen.getByRole("button", { name: "Team Findings" }));
+    expect(screen.getByRole("button", { name: "Needs assignment" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "More filters" }));
+    fireEvent.change(screen.getByLabelText("Priority"), { target: { value: "critical" } });
     await waitFor(() => {
       const listCalls = apiFetch.mock.calls.filter(([url]) => String(url).startsWith("/api/findings?"));
-      expect(String(listCalls.at(-1)?.[0])).not.toContain("assigned_to_me=true");
+      expect(String(listCalls.at(-1)?.[0])).toContain("priority=critical");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "My Work" }));
+    await waitFor(() => {
+      const listCalls = apiFetch.mock.calls.filter(([url]) => String(url).startsWith("/api/findings?"));
+      expect(String(listCalls.at(-1)?.[0])).toContain("assigned_to_me=true");
+      expect(String(listCalls.at(-1)?.[0])).not.toContain("priority=critical");
     });
   });
 
@@ -149,7 +164,10 @@ describe("shared maintenance Work area", () => {
     const picker = await screen.findByLabelText("Assign to");
     await waitFor(() => expect(picker.value).toBe("__historical"));
     expect((await within(picker).findByRole("option", { name: "Former member · Former Tech" })).disabled).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Save assignment" }));
+    const saveButton = screen.getByRole("button", { name: "Save work details" });
+    expect(saveButton.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Priority"), { target: { value: "critical" } });
+    fireEvent.click(saveButton);
     await waitFor(() => expect(apiFetch.mock.calls.some(([url]) => String(url).endsWith("/workflow"))).toBe(true));
     const body = JSON.parse(apiFetch.mock.calls.find(([url]) => String(url).endsWith("/workflow"))[1].body);
     expect(Object.hasOwn(body, "assignment")).toBe(false);
