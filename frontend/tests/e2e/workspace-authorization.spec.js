@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { expect, governedComparisonResult, test } from "./fixtures.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const screenshotDirectory = path.resolve(here, "../../../.planning/screenshots/shared-workspace-authorization");
+const screenshotDirectory = path.resolve(here, "../../../.planning/screenshots/work-evidence-polish");
 const WORKSPACE_A = "ws-north-plant";
 const WORKSPACE_B = "ws-south-plant";
 const FINDING_ID = "finding-shared-pump";
@@ -407,7 +407,9 @@ test.describe("Facility workspace authorization", () => {
         },
       },
     });
-    await page.screenshot({ path: path.join(screenshotDirectory, "lead-assignment-desktop.png"), fullPage: true });
+    await expect(page.getByLabel("Needs assignment: 0 matching findings")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Review active findings" })).toBeVisible();
+    await page.screenshot({ path: path.join(screenshotDirectory, "lead-team-empty-state-desktop.png"), fullPage: true });
 
     state.actor = users.technician;
     await page.goto("/work", { waitUntil: "domcontentloaded" });
@@ -419,7 +421,7 @@ test.describe("Facility workspace authorization", () => {
       actor: users.technician.email,
       body: { investigation_complete: true, needs_escalation: false },
     });
-    await page.screenshot({ path: path.join(screenshotDirectory, "technician-complete-desktop.png"), fullPage: true });
+    await page.screenshot({ path: path.join(screenshotDirectory, "technician-completed-work-desktop.png"), fullPage: true });
     expectWorkspaceHeaders(state, WORKSPACE_A);
   });
 
@@ -440,9 +442,16 @@ test.describe("Facility workspace authorization", () => {
     await page.getByRole("button", { name: "Open evidence record" }).click();
     await expect(page).toHaveURL(new RegExp(`/evidence/${FINDING_KEY}$`));
     await expect(page.getByRole("heading", { name: "Source lineage" })).toBeVisible();
-    await expect(page.getByText("CHWP-2-SPD / CHWP-2-FLOW")).toBeVisible();
+    await expect(page.getByText("Correlation strength decreased by 0.38 from the learned baseline.")).toBeVisible();
+    await expect(page.getByText("Absolute relationship change 0.38")).toBeVisible();
+    await expect(page.getByText("0.37999999999999995")).toHaveCount(0);
     await expect(page.getByText(SECRET_EVIDENCE)).toBeVisible();
     await page.screenshot({ path: path.join(screenshotDirectory, "engineer-evidence-desktop.png"), fullPage: true });
+    const technical = page.locator("details.case-classification-detail").filter({ hasText: "Technical values and identifiers" });
+    await expect(technical).not.toHaveAttribute("open", "");
+    await technical.getByText("Technical values and identifiers").click();
+    await expect(page.getByText("CHWP-2-SPD / CHWP-2-FLOW")).toBeVisible();
+    await expect(page.getByText("workspace-authorization-run", { exact: true })).toBeVisible();
     expectWorkspaceHeaders(state, WORKSPACE_A);
   });
 
@@ -483,6 +492,15 @@ test.describe("Facility workspace authorization", () => {
     expect(await accept.evaluate((node) => node.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
     await accept.click();
     await brief.getByRole("button", { name: "Start investigation" }).click();
+    const activityDisclosure = brief.locator("details.work-progressive-section").filter({ hasText: "Activity history" });
+    const evidenceDisclosure = brief.locator("details.work-progressive-section").filter({ hasText: "Investigation and evidence" });
+    await expect(activityDisclosure).not.toHaveAttribute("open", "");
+    await expect(evidenceDisclosure).not.toHaveAttribute("open", "");
+    await expect(brief.getByRole("heading", { name: "Report what you found" })).toBeVisible();
+    const touchHeights = await brief.locator("button:visible, summary:visible, textarea:visible, input:not([type='radio']):not([type='checkbox']):visible").evaluateAll((nodes) => nodes.map((node) => ({ label: node.getAttribute("aria-label") || node.textContent || node.getAttribute("name") || node.tagName, height: node.getBoundingClientRect().height })));
+    expect(touchHeights.filter((item) => item.height < 44)).toEqual([]);
+    const choiceHeights = await brief.locator(".work-choice-row label:visible, .work-check-row label:visible").evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height));
+    expect(choiceHeights.every((height) => height >= 44)).toBe(true);
     await page.evaluate(() => document.activeElement?.blur());
     await page.screenshot({ path: path.join(screenshotDirectory, "technician-390.png"), fullPage: true });
     await brief.getByLabel("What did you inspect?").fill("Bearings and local gauge");

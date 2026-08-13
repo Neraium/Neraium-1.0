@@ -14,6 +14,19 @@ function reportDate(value) {
   return Number.isNaN(parsed.getTime()) ? "Date not recorded" : parsed.toLocaleString();
 }
 
+function useCompactDisclosure() {
+  const [compact, setCompact] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(max-width: 430px)")?.matches));
+  useEffect(() => {
+    const media = window.matchMedia?.("(max-width: 430px)");
+    if (!media) return undefined;
+    const update = () => setCompact(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+  return compact;
+}
+
 function LatestFieldReport({ report }) {
   return (
     <section className="work-field-result" aria-labelledby="work-field-result-title">
@@ -91,12 +104,31 @@ function LeadControls({ finding, members, membersLoading, membersError, onWorkfl
   );
 }
 
+function WorkDrilldown({ compact, technicalFinding, onInvestigation, onEvidence }) {
+  const content = technicalFinding ? <div><button type="button" onClick={() => onInvestigation?.(technicalFinding)}>Open investigation</button><button type="button" onClick={() => onEvidence?.(technicalFinding)}>Open technical evidence</button></div> : <p>Technical evidence is not available in this workspace context. The operational finding and team history remain available here.</p>;
+  if (compact) {
+    return (
+      <details className="work-drilldown work-progressive-section">
+        <summary><span><span className="work-eyebrow">Deeper context</span><strong>Investigation and evidence</strong></span><small>{technicalFinding ? "Available" : "Unavailable"}</small></summary>
+        <div className="work-progressive-section__content">{content}</div>
+      </details>
+    );
+  }
+  return (
+    <section className="work-drilldown" aria-labelledby="work-drilldown-title">
+      <header><span className="work-eyebrow">Deeper context</span><h2 id="work-drilldown-title">Investigation and evidence</h2></header>
+      {content}
+    </section>
+  );
+}
+
 export default function OperationalFindingBrief({ finding, currentUser, members = [], membersLoading = false, membersError = "", activity = [], activityLoading = false, activityError = "", pending = false, mutationMessage = "", mutationError = false, onBack, onWorkflow, onFieldReport, onResolve, technicalFinding, onInvestigation, onEvidence }) {
   const lead = canLeadWorkflow(currentUser?.role);
   const assignedToMe = isAssignedToCurrentUser(finding, currentUser);
   const canPerformFieldWork = assignedToMe;
   const canReportFieldWork = canPerformFieldWork && ["investigating", "waiting", "escalated"].includes(finding.status);
   const leadNeedsFieldResult = lead && !assignedToMe && (Boolean(finding.latestFieldReport) || ["awaiting_review", "escalated", "monitoring"].includes(finding.status));
+  const compactDisclosure = useCompactDisclosure();
   return (
     <article className="work-brief">
       <button type="button" className="work-back" onClick={onBack}>Back to work list</button>
@@ -126,12 +158,8 @@ export default function OperationalFindingBrief({ finding, currentUser, members 
       {lead && !finding.terminal ? <LeadControls finding={finding} members={members} membersLoading={membersLoading} membersError={membersError} onWorkflow={onWorkflow} onResolve={onResolve} pending={pending} /> : null}
       {canReportFieldWork && !finding.terminal ? <FieldReportForm disabled={pending} onSubmit={onFieldReport} /> : null}
       {!lead || assignedToMe ? <LatestFieldReport report={finding.latestFieldReport} /> : null}
-      <FindingActivityTimeline activity={activity} loading={activityLoading} error={activityError} />
-
-      <section className="work-drilldown" aria-labelledby="work-drilldown-title">
-        <header><span className="work-eyebrow">Deeper context</span><h2 id="work-drilldown-title">Investigation and evidence</h2></header>
-        {technicalFinding ? <div><button type="button" onClick={() => onInvestigation?.(technicalFinding)}>Open investigation</button><button type="button" onClick={() => onEvidence?.(technicalFinding)}>Open technical evidence</button></div> : <p>Technical evidence is not available in this workspace context. The operational finding and team history remain available here.</p>}
-      </section>
+      <FindingActivityTimeline activity={activity} loading={activityLoading} error={activityError} collapsed={compactDisclosure} />
+      <WorkDrilldown compact={compactDisclosure} technicalFinding={technicalFinding} onInvestigation={onInvestigation} onEvidence={onEvidence} />
     </article>
   );
 }

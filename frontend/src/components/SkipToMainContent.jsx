@@ -1,5 +1,6 @@
 export default function SkipToMainContent({ targetId = "main-content" }) {
-  const handleActivate = () => {
+  const handleActivate = (event) => {
+    event.preventDefault();
     const target = document.getElementById(targetId);
     if (!target) return;
     target.focus({ preventScroll: true });
@@ -7,8 +8,8 @@ export default function SkipToMainContent({ targetId = "main-content" }) {
   };
 
   return (
-    <button type="button" className="skip-link" onClick={handleActivate}>
+    <a className="skip-link" href={`#${targetId}`} onClick={handleActivate}>
       Skip to main content
-    </button>
+    </a>
   );
 }

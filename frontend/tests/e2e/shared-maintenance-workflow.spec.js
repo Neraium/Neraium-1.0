@@ -367,8 +367,10 @@ test.describe("Shared maintenance workflow", () => {
     await expect(page).toHaveURL(/\/evidence\/pump-response$/);
     await expect(page.getByRole("heading", { name: "Source lineage" })).toBeVisible();
     await expect(page.getByText("Baseline", { exact: true })).toBeVisible();
-    await expect(page.getByText("CHWP-2-SPD / CHWP-2-FLOW")).toBeVisible();
+    await expect(page.getByText("CHWP-2-SPD / CHWP-2-FLOW")).not.toBeVisible();
     await page.screenshot({ path: path.join(screenshotDirectory, "engineer-evidence-desktop.png"), fullPage: true });
+    await page.getByText("Technical values and identifiers").click();
+    await expect(page.getByText("CHWP-2-SPD / CHWP-2-FLOW")).toBeVisible();
     await expectNoSeriousAccessibilityIssues(page);
     await expectNoHorizontalOverflow(page);
     expect(errors).toEqual([]);

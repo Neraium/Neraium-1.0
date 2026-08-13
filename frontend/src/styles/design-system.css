@@ -263,7 +263,13 @@ summary:focus-visible,
   z-index: 10000;
   top: var(--space-12);
   left: var(--space-12);
-  transform: translateY(-200%);
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
   border: 0;
   font: inherit;
   cursor: pointer;
@@ -275,7 +281,12 @@ summary:focus-visible,
 }
 
 .skip-link:focus {
-  transform: translateY(0);
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
 }
 
 .workspace-shell-with-back {

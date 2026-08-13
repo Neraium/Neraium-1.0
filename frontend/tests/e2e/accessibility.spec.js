@@ -14,8 +14,15 @@ test.describe("Accessibility audit", () => {
     const main = page.getByRole("main", { name: "Neraium operational workspace" });
     const skipLink = page.getByRole("link", { name: "Skip to main content" });
     await expect(page.getByRole("navigation", { name: "Primary navigation" })).toBeVisible();
+    const hiddenStyle = await skipLink.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return { width: node.getBoundingClientRect().width, clipPath: style.clipPath, overflow: style.overflow };
+    });
+    expect(hiddenStyle.width).toBeLessThanOrEqual(1);
+    expect(hiddenStyle.clipPath === "inset(50%)" || hiddenStyle.overflow === "hidden").toBe(true);
     await page.keyboard.press("Tab");
     await expect(skipLink).toBeFocused();
+    expect(await skipLink.evaluate((node) => node.getBoundingClientRect().width)).toBeGreaterThan(1);
     await page.keyboard.press("Enter");
     await expect(main).toBeFocused();
     const connections = page.getByRole("button", { name: "Data", exact: true });

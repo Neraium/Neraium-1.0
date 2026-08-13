@@ -25,10 +25,16 @@ describe("RelatedEvidencePackages", () => {
     render(React.createElement(RelatedEvidencePackages, { packageId: "package-a", apiFetch }));
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Related findings observed" })).toBeTruthy());
-    expect(screen.getByText("Selected package").parentElement.textContent).toContain("package-a");
-    expect(screen.getByRole("heading", { name: /Related package package-b/ })).toBeTruthy();
+    expect(screen.getByText("Related evidence")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Related evidence package" })).toBeTruthy();
     expect(screen.getByText(/overlapping observation windows/)).toBeTruthy();
     expect(screen.getByText("Related evidence does not establish cause, propagation, diagnosis, or equipment failure.")).toBeTruthy();
+    const correlationTrace = screen.getByText("Correlation trace").closest("details");
+    const technicalReferences = screen.getByText("Technical references").closest("details");
+    expect(correlationTrace.open).toBe(false);
+    expect(correlationTrace.textContent).toContain("package-a");
+    expect(technicalReferences.open).toBe(false);
+    expect(technicalReferences.textContent).toContain("package-b");
   });
 
   it("does not issue a request when no current package identity exists", () => {

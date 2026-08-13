@@ -108,6 +108,7 @@ export default function WorkQueueWorkspace({ apiFetch, currentUser, currentWorks
   }, [apiFetch, selectedItem?.findingId, selectedItem?.version]);
 
   const empty = emptyStateForQueue({ mode, filter, filtered: activeControlCount > 0 });
+  const selectedFilterLabel = visibleFilters.find((item) => item.id === filter)?.label ?? "Current view";
   const technicalFinding = useMemo(() => selectedItem ? technicalFindingFor?.(selectedItem) ?? null : null, [selectedItem, technicalFindingFor]);
 
   function changeMode(nextMode) {
@@ -210,7 +211,12 @@ export default function WorkQueueWorkspace({ apiFetch, currentUser, currentWorks
         {queue.loading ? <div className="work-queue-state work-queue-state--loading" role="status"><span className="work-loading-mark" aria-hidden="true" /><h2>Loading {mode === "mine" ? "My Work" : "Team Findings"}</h2><p>Fetching the latest work for {workspaceName}.</p></div>
           : queue.error ? <div className="work-queue-state" role="alert"><h2>Work is unavailable</h2><p>{queue.error}</p><button type="button" onClick={() => setReloadKey((value) => value + 1)}>Try again</button></div>
             : queue.items.length ? <div className="work-card-list">{queue.items.map((finding) => <WorkFindingCard key={finding.findingId} finding={finding} mode={mode} actionLabel={workCardAction(finding, { mode })} selected={finding.findingId === selectedId} onOpen={openFinding} />)}</div>
-              : <div className="work-queue-state"><h2>{empty.title}</h2><p>{empty.body}</p>{activeControlCount ? <button type="button" onClick={clearControls}>Clear filters</button> : null}</div>}
+              : <div className={`work-queue-state${mode === "team" ? " work-queue-state--operational" : ""}`}>
+                {mode === "team" ? <div className="work-queue-state__summary" aria-label={`${selectedFilterLabel}: 0 matching findings`}><span>{selectedFilterLabel}</span><strong>0 matching</strong></div> : null}
+                <h2>{empty.title}</h2><p>{empty.body}</p>
+                {activeControlCount ? <button type="button" onClick={clearControls}>Clear filters</button>
+                  : mode === "team" && filter !== "active" ? <button type="button" onClick={() => changeFilter("active")}>Review active findings</button> : null}
+              </div>}
         {!queue.loading && !queue.error && queue.items.length ? <nav className="work-pagination" aria-label="Work pages"><button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>Previous</button><span>Page {Math.floor(offset / PAGE_SIZE) + 1}</span><button type="button" disabled={!queue.hasMore} onClick={() => setOffset(offset + PAGE_SIZE)}>Next</button></nav> : null}
       </section>
 

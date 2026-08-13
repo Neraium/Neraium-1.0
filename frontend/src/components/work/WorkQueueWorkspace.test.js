@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WorkQueueWorkspace from "./WorkQueueWorkspace";
 
+const originalMatchMedia = window.matchMedia;
+
 function response(payload, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => payload };
 }
@@ -55,7 +57,10 @@ function apiHarness(initialCase = casePayload()) {
   return apiFetch;
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+});
 
 describe("shared maintenance Work area", () => {
   it("gives an assigned technician a plain-language, actionable field workflow", async () => {
@@ -129,6 +134,34 @@ describe("shared maintenance Work area", () => {
     fireEvent.click(screen.getByRole("button", { name: "Team Findings" }));
     fireEvent.click(screen.getByRole("button", { name: "Overdue" }));
     expect(await screen.findByRole("heading", { name: "No overdue work" })).toBeTruthy();
+    expect(screen.getByLabelText("Overdue: 0 matching findings")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Review active findings" }));
+    await waitFor(() => {
+      const listCalls = apiFetch.mock.calls.filter(([url]) => String(url).startsWith("/api/findings?"));
+      expect(String(listCalls.at(-1)?.[0])).toContain("active=true");
+    });
+  });
+
+  it("keeps field work open and collapses lower-priority context on narrow screens", async () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+    });
+    const apiFetch = apiHarness(casePayload({ status: "investigating" }));
+    render(React.createElement(WorkQueueWorkspace, {
+      apiFetch,
+      currentUser: { email: "tech@example.com", name: "Taylor Tech", role: "viewer" },
+      technicalFindingFor: () => ({ id: "condition-1" }),
+    }));
+    fireEvent.click(await screen.findByRole("button", { name: /Open AHU 1/i }));
+    expect(screen.getByRole("heading", { name: "Report what you found" })).toBeTruthy();
+    const activity = screen.getByText("Activity history").closest("details");
+    const evidence = screen.getByText("Investigation and evidence").closest("details");
+    await screen.findByText("Finding assigned");
+    expect(activity.open).toBe(false);
+    expect(evidence.open).toBe(false);
+    fireEvent.click(activity.querySelector("summary"));
+    expect(activity.open).toBe(true);
   });
 
   it("presents My Work and Team Findings as views of the current facility workspace", async () => {

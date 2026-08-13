@@ -94,10 +94,12 @@ test.describe("Evidence Package Correlation v1", () => {
 
     const related = page.getByTestId("related-evidence");
     await expect(related.getByRole("heading", { name: "Related findings observed" })).toBeVisible();
-    await expect(related.getByText("package-current", { exact: true })).toBeVisible();
-    await expect(related.getByRole("heading", { name: /Related package package-related/ })).toBeVisible();
+    await expect(related.getByRole("heading", { name: "Related evidence package" })).toBeVisible();
     await expect(related.getByText(/overlapping observation windows/)).toBeVisible();
-    await related.getByText("Evidence references").click();
+    await expect(related.getByText("package-current", { exact: true })).not.toBeVisible();
+    await related.getByText("Correlation trace").click();
+    await expect(related.getByText("package-current", { exact: true })).toBeVisible();
+    await related.getByText("Technical references").click();
     await expect(related.getByText("evidence-package:package-related#operating_context.comparison_window.start")).toBeVisible();
     await expect(related.getByText("Related evidence does not establish cause, propagation, diagnosis, or equipment failure.")).toBeVisible();
   });

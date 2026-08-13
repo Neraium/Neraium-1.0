@@ -30,20 +30,19 @@ export default function RelatedEvidencePackages({ packageId, apiFetch }) {
   return (
     <section className={`related-evidence related-evidence--${presentation.tone}`} aria-labelledby="related-evidence-title" data-testid="related-evidence">
       <header className="related-evidence__header">
-        <div><span className="forensic-kicker">Evidence Package Correlation v1</span><h2 id="related-evidence-title">{presentation.title}</h2></div>
-        {normalizedPackageId ? <small>Selected package <code>{normalizedPackageId}</code></small> : null}
+        <div><span className="forensic-kicker">Related evidence</span><h2 id="related-evidence-title">{presentation.title}</h2></div>
       </header>
       <p>{presentation.body}</p>
       {presentation.items.length ? (
         <div className="related-evidence__list" aria-label="Related evidence packages">
           {presentation.items.map((item) => (
             <article key={item.relationship_id} className="related-evidence__item">
-              <h3>Related package <code>{item.package_id}</code></h3>
+              <h3>Related evidence package</h3>
               <p>{item.reason}</p>
               <ul className="related-evidence__dimensions" aria-label="Supported relationship dimensions">
                 {item.relationshipLabels.map((label) => <li key={label}>{label}</li>)}
               </ul>
-              <details><summary>Evidence references</summary><ul className="related-evidence__refs">{(item.evidence_refs ?? []).map((reference) => <li key={reference}><code>{reference}</code></li>)}</ul></details>
+              <details><summary>Technical references</summary><ul className="related-evidence__refs"><li><code>{item.package_id}</code></li>{(item.evidence_refs ?? []).map((reference) => <li key={reference}><code>{reference}</code></li>)}</ul></details>
               {item.limitationLabels.length ? <ul className="related-evidence__limitations" aria-label="Relationship limitations">{item.limitationLabels.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul> : null}
             </article>
           ))}
@@ -51,6 +50,7 @@ export default function RelatedEvidencePackages({ packageId, apiFetch }) {
       ) : null}
       {presentation.limitations.length ? <ul className="related-evidence__limitations" aria-label="Correlation limitations">{presentation.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}</ul> : null}
       <p className="related-evidence__non-claim">{presentation.nonClaim}</p>
+      {normalizedPackageId ? <details className="related-evidence__trace"><summary>Correlation trace</summary><p>Selected evidence package <code>{normalizedPackageId}</code></p></details> : null}
     </section>
   );
 }

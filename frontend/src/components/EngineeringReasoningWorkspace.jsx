@@ -13,6 +13,7 @@ import PortfolioWorkspace from "./engineering/PortfolioWorkspace";
 import OperationsBrief from "./engineering/OperationsBrief";
 import { EvidenceRecordWorkspace, FindingReviewWorkspace, InvestigationWorkspace } from "./engineering/FindingCaseWorkspaces";
 import TraceTimeline from "./engineering/TraceTimeline";
+import SkipToMainContent from "./SkipToMainContent";
 import "../styles/engineering-reasoning.css";
 
 const WorkQueueWorkspace = lazy(() => import("./work/WorkQueueWorkspace"));
@@ -627,7 +628,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
 
   return (
     <div className="forensic-shell" data-testid="engineering-reasoning-platform">
-      <a className="skip-link" href="#forensic-main">Skip to main content</a>
+      <SkipToMainContent targetId="forensic-main" />
       <aside id="forensic-navigation" ref={mobileSidebarRef} className={`forensic-sidebar${mobileNavOpen ? " is-open" : ""}`} aria-label="Application sidebar" aria-hidden={compactNavigation && !mobileNavOpen} inert={compactNavigation && !mobileNavOpen ? "" : undefined}>
         <div className="forensic-brand"><span className="forensic-brand__mark" aria-hidden="true">N</span><div><strong>Neraium</strong><small>Operational evidence</small></div></div>
         <nav aria-label="Primary navigation">

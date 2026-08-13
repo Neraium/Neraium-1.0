@@ -43,6 +43,16 @@ function analysisResult(overrides = {}) {
       data_confidence: { rating: "high", summary: "Telemetry passed the recorded checks." },
       operating_mode: { match: "strong", confidence: "high", baseline_mode_label: "Mid-load", recent_mode_label: "Mid-load" },
       persistence: { persistent: true, duration: "3 days", summary: "The shift persisted across comparable windows." },
+      finding_confidence_v1: {
+        relationship_comparison: {
+          metric: "pearson_correlation",
+          baseline_value: 0.094013,
+          current_value: 0.833811,
+          signed_change: 0.739798,
+          absolute_change: 0.739798,
+          direction: "increased",
+        },
+      },
       investigation_guidance: [
         { rank: 1, check: "Verify pressure transmitter.", reason: "Source validation bounds the interpretation.", category: "instrumentation" },
         { rank: 2, check: "Review the affected pressure boundary.", reason: "The mapped relationship changed there.", category: "physical_system" },
@@ -372,9 +382,16 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(window.location.pathname).toBe("/evidence/finding-1");
     expect(screen.getByTestId("evidence-record")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Source lineage" })).toBeTruthy();
-    expect(screen.getByText("Metric")).toBeTruthy();
-    expect(screen.getByText("Signed change")).toBeTruthy();
-    expect(screen.getByText("Absolute change")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Relationship comparison" })).toBeTruthy();
+    expect(screen.getByText("Correlation strength increased by 0.74 from the learned baseline.")).toBeTruthy();
+    expect(screen.getByText("0.09")).toBeTruthy();
+    expect(screen.getByText("0.83")).toBeTruthy();
+    expect(screen.getByText("+0.74")).toBeTruthy();
+    const technical = screen.getByText("Technical values and identifiers").closest("details");
+    expect(technical.open).toBe(false);
+    expect(technical.textContent).toContain("pearson_correlation");
+    expect(technical.textContent).toContain("0.739798");
+    expect(technical.textContent).toContain("No structured evidence records are linked. 3 supporting observations are shown in the evidence summary.");
   });
 
   it("supports direct workflow navigation and keyboard search", () => {

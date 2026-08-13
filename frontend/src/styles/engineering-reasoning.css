@@ -24,8 +24,8 @@
 .forensic-shell :focus-visible { outline: 2px solid #77b9ff; outline-offset: 3px; }
 .forensic-shell code, .forensic-shell time, .forensic-shell output, .forensic-shell kbd, .forensic-shell dd { font-variant-numeric: tabular-nums; }
 .forensic-shell code, .forensic-shell time, .forensic-shell kbd { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
-.skip-link { position: fixed; top: 8px; left: 8px; z-index: 1000; transform: translateY(-160%); padding: 10px 14px; background: var(--fr-blue); color: #05101a; border-radius: 4px; }
-.skip-link:focus { transform: none; }
+.skip-link { position: fixed; top: 8px; left: 8px; z-index: 1000; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; padding: 0; border: 0; background: var(--fr-blue); color: #05101a; border-radius: 4px; }
+.skip-link:focus { width: auto; height: auto; margin: 0; overflow: visible; clip: auto; clip-path: none; padding: 10px 14px; }
 
 .forensic-sidebar { position: sticky; top: 0; height: 100vh; min-height: 640px; z-index: 30; display: flex; flex-direction: column; background: #090f17; border-right: 1px solid var(--fr-line); padding: 22px 14px 16px; }
 .forensic-brand { display: flex; align-items: center; gap: 11px; padding: 0 8px 24px; border-bottom: 1px solid var(--fr-line); }
@@ -634,6 +634,8 @@
   padding: 10px 12px;
   background: #0b121b;
 }
+
+.classification-detail-grid > .classification-detail-grid__wide { grid-column: 1 / -1; }
 
 .classification-detail-grid dt {
   color: var(--fr-faint);
@@ -1408,6 +1410,13 @@
 .case-classification-detail > :last-child { margin-bottom: 15px; }
 .evidence-record-grid { display: grid; gap: 1px; margin-top: 12px; border: 1px solid var(--fr-line); background: var(--fr-line); }
 .evidence-record-grid > section { min-width: 0; padding: 18px; background: var(--fr-surface); }
+.evidence-comparison__summary { margin: 0 0 13px !important; color: #d9e3ec !important; font-size: 14px !important; }
+.evidence-comparison dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0; border: 1px solid var(--fr-line); background: var(--fr-line); }
+.evidence-comparison dl > div { min-width: 0; padding: 12px; background: #0b121b; }
+.evidence-comparison dt { color: var(--fr-faint); font-size: 8px; font-weight: 680; letter-spacing: .1em; text-transform: uppercase; }
+.evidence-comparison dd { margin: 5px 0 2px; color: #dce7f1; font-size: 18px; font-variant-numeric: tabular-nums; }
+.evidence-comparison dd small { display: block; margin-top: 2px; color: var(--fr-muted); font-size: 9px; line-height: 1.4; }
+.technical-record-note { color: var(--fr-muted); font-size: 10px; line-height: 1.5; }
 .related-evidence { min-width: 0; display: grid; gap: 12px; margin-top: 12px; padding: 18px; border: 1px solid var(--fr-line); background: var(--fr-surface); }
 .related-evidence__header { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
 .related-evidence__header > div { min-width: 0; }
@@ -1430,6 +1439,9 @@
 .related-evidence__refs,
 .related-evidence__limitations { display: grid; gap: 5px; margin: 7px 0 0; padding-left: 18px; color: #aebdca; font-size: 9px; line-height: 1.5; }
 .related-evidence__non-claim { padding: 9px 11px; border-left: 2px solid rgba(214,164,80,.65); background: rgba(102,72,20,.12); color: #c8b990 !important; }
+.related-evidence__trace { color: var(--fr-muted); font-size: 9px; }
+.related-evidence__trace > summary { width: max-content; min-height: 44px; display: flex; align-items: center; cursor: pointer; color: #aab9c8; }
+.related-evidence__trace > p { margin: 0; }
 .evidence-record-actions { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-top: 12px; padding: 15px; border: 1px solid var(--fr-line); background: rgba(10,17,26,.58); }
 
 @media (max-width: 900px) {
@@ -1512,6 +1524,7 @@
   .case-primary-action .forensic-button, .evidence-record-actions > .forensic-button { width: 100%; }
   .case-sections { margin-top: 8px; }
   .case-sections > section, .evidence-record-grid > section { padding: 14px 12px; }
+  .evidence-comparison dl { grid-template-columns: 1fr; }
   .related-evidence { padding: 14px 12px; }
   .related-evidence__header { align-items: start; flex-direction: column; gap: 7px; }
   .related-evidence__header small { text-align: left; }

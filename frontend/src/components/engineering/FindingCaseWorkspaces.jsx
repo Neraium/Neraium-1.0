@@ -42,6 +42,46 @@ function displayLabel(value, fallback = "Unavailable") {
   return text ? text.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) : fallback;
 }
 
+function evidenceNumber(value, { signed = false } = {}) {
+  if (value === null || value === undefined || value === "") return "Not supplied";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "Not supplied";
+  const precision = Math.abs(number) > 0 && Math.abs(number) < 0.01 ? 3 : 2;
+  const formatted = number.toFixed(precision).replace(/\.?0+$/, "");
+  return signed && number > 0 ? `+${formatted}` : formatted;
+}
+
+function metricLabel(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "pearson_correlation") return "Correlation strength";
+  if (normalized === "spearman_correlation") return "Rank correlation";
+  return displayLabel(value, "Relationship strength");
+}
+
+function displayTimestamp(value) {
+  const parsed = new Date(value);
+  if (!value || Number.isNaN(parsed.getTime())) return "Not supplied";
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(parsed) + " UTC";
+}
+
+function RelationshipComparison({ finding }) {
+  const comparison = finding.comparison ?? {};
+  const hasValues = [comparison.baselineValue, comparison.currentValue, comparison.signedChange].some((value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)));
+  if (!hasValues) return <p className="case-unavailable">A numeric baseline comparison was not recorded.</p>;
+  const direction = comparison.direction === "decreased" ? "decreased" : comparison.direction === "increased" ? "increased" : "changed";
+  const magnitude = evidenceNumber(comparison.absoluteChange);
+  return (
+    <div className="evidence-comparison">
+      <p className="evidence-comparison__summary">{metricLabel(comparison.metric)} {direction}{magnitude === "Not supplied" ? "" : ` by ${magnitude}`} from the learned baseline.</p>
+      <dl>
+        <div><dt>Baseline</dt><dd>{evidenceNumber(comparison.baselineValue)}<small>{comparison.baseline}</small></dd></div>
+        <div><dt>Current</dt><dd>{evidenceNumber(comparison.currentValue)}<small>{comparison.current}</small></dd></div>
+        <div><dt>Change</dt><dd>{evidenceNumber(comparison.signedChange, { signed: true })}<small>{displayLabel(comparison.direction, "Comparison recorded")}</small></dd></div>
+      </dl>
+    </div>
+  );
+}
+
 function evidenceTrendPhrase(value) {
   return ({
     increasing: "Evidence support increasing",
@@ -136,20 +176,27 @@ function TechnicalAnalysisMetadata({ finding }) {
   const relationship = finding.relationships?.[0] ?? {};
   const metric = finding.comparison?.metric || relationship.metric || "Relationship coefficient";
   const identity = finding.technicalIdentity ?? {};
+  const structuredRecordCount = finding.evidenceObjects.length;
+  const observationCount = finding.supporting.length;
   return (
-    <dl className="classification-detail-grid classification-detail-grid--mode">
-      <div><dt>Metric</dt><dd>{metric}</dd></div>
-      <div><dt>Baseline</dt><dd>{finding.comparison.baselineValue ?? "Not supplied"}</dd></div>
-      <div><dt>Current</dt><dd>{finding.comparison.currentValue ?? "Not supplied"}</dd></div>
-      <div><dt>Signed change</dt><dd>{finding.comparison.signedChange ?? "Not supplied"}</dd></div>
-      <div><dt>Absolute change</dt><dd>{finding.comparison.absoluteChange ?? "Not supplied"}</dd></div>
-      <div><dt>Evidence records</dt><dd>{finding.evidenceObjects.length}</dd></div>
-      <div><dt>Finding identity</dt><dd>{identity.findingId || finding.id}</dd></div>
-      <div><dt>Workflow identity</dt><dd>{identity.workflowFindingId || "Not linked"}</dd></div>
-      <div><dt>System identity</dt><dd>{identity.systemId || "Not supplied"}</dd></div>
-      <div><dt>Asset identity</dt><dd>{identity.assetId || "Not supplied"}</dd></div>
-      <div><dt>Source signals</dt><dd>{finding.rawVariables?.join(" / ") || [relationship.rawSource, relationship.rawTarget].filter(Boolean).join(" / ") || "Not supplied"}</dd></div>
-    </dl>
+    <>
+      <p className="technical-record-note">{structuredRecordCount
+        ? `${structuredRecordCount} linked structured evidence ${structuredRecordCount === 1 ? "record" : "records"}; ${observationCount} supporting ${observationCount === 1 ? "observation" : "observations"}.`
+        : `No structured evidence records are linked. ${observationCount} supporting ${observationCount === 1 ? "observation is" : "observations are"} shown in the evidence summary.`}</p>
+      <dl className="classification-detail-grid classification-detail-grid--mode">
+        <div><dt>Metric key</dt><dd>{metric}</dd></div>
+        <div><dt>Baseline · raw</dt><dd>{finding.comparison.baselineValue ?? "Not supplied"}</dd></div>
+        <div><dt>Current · raw</dt><dd>{finding.comparison.currentValue ?? "Not supplied"}</dd></div>
+        <div><dt>Signed change · raw</dt><dd>{finding.comparison.signedChange ?? "Not supplied"}</dd></div>
+        <div><dt>Absolute change · raw</dt><dd>{finding.comparison.absoluteChange ?? "Not supplied"}</dd></div>
+        <div><dt>Linked structured records</dt><dd>{structuredRecordCount}</dd></div>
+        <div><dt>Finding identity</dt><dd>{identity.findingId || finding.id}</dd></div>
+        <div><dt>Workflow identity</dt><dd>{identity.workflowFindingId || "Not linked"}</dd></div>
+        <div><dt>System identity</dt><dd>{identity.systemId || "Not supplied"}</dd></div>
+        <div><dt>Asset identity</dt><dd>{identity.assetId || "Not supplied"}</dd></div>
+        <div><dt>Source signals</dt><dd>{finding.rawVariables?.join(" / ") || [relationship.rawSource, relationship.rawTarget].filter(Boolean).join(" / ") || "Not supplied"}</dd></div>
+      </dl>
+    </>
   );
 }
 
@@ -232,12 +279,13 @@ export function EvidenceRecordWorkspace({ model, finding, reviewRecord, apiFetch
       <CaseHeader eyebrow="Evidence record" finding={finding} reviewRecord={reviewRecord} />
       <div className="evidence-record-grid">
         <section><h2>Supporting evidence</h2>{finding.supporting.length ? <ul>{finding.supporting.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No supporting observation was supplied.</p>}</section>
+        <section><h2>Relationship comparison</h2><RelationshipComparison finding={finding} /></section>
         <section><h2>Source lineage</h2><EvidenceLineage finding={finding} relationship={relationship} result={model.result} /></section>
-        <section><h2>Record context</h2><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Baseline window</dt><dd>{finding.comparison.baseline}</dd></div><div><dt>Current window</dt><dd>{finding.comparison.current}</dd></div><div><dt>Evidence run</dt><dd>{runId ?? "Not persisted"}</dd></div><div><dt>Generated</dt><dd>{finding.generatedAt || "Not supplied"}</dd></div></dl></section>
-        <section><h2>Technical values</h2><TechnicalAnalysisMetadata finding={finding} /></section>
+        <section><h2>Record context</h2><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Baseline window</dt><dd>{finding.comparison.baseline}</dd></div><div><dt>Current window</dt><dd>{finding.comparison.current}</dd></div><div className="classification-detail-grid__wide"><dt>Generated</dt><dd>{displayTimestamp(finding.generatedAt)}</dd></div></dl></section>
       </div>
       <RelatedEvidencePackages packageId={packageId} apiFetch={apiFetch} />
       <section className="evidence-record-actions"><EvidencePackageExport runId={runId} apiFetch={apiFetch} disabled={!runId} /><button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open trace mode</button></section>
+      <details className="case-classification-detail"><summary>Technical values and identifiers</summary><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Evidence run</dt><dd>{runId ?? "Not persisted"}</dd></div><div><dt>Evidence package</dt><dd>{packageId ?? "Not persisted"}</dd></div><div className="classification-detail-grid__wide"><dt>Generated timestamp</dt><dd>{finding.generatedAt || "Not supplied"}</dd></div></dl><TechnicalAnalysisMetadata finding={finding} /></details>
       <details className="case-classification-detail"><summary>Audit history</summary><ReviewStateBlock finding={finding} reviewRecord={reviewRecord} showActions={false} /><p>{finding.outcome ? JSON.stringify(finding.outcome) : "No persisted review outcome was recorded."}</p></details>
     </div>
   );
