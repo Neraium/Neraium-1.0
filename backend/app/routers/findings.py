@@ -15,7 +15,7 @@ from app.models.api_models import (
     FindingWorkflowMembersListResponse,
     FindingWorkflowUpdateRequest,
 )
-from app.services.auth_store import list_workflow_members
+from app.services.auth_store import list_workflow_members, list_workspace_members
 from app.services.evidence_store import validation_outcome_for_category
 from app.services.finding_workflow import (
     FindingNotFoundError,
@@ -31,6 +31,7 @@ from app.services.finding_workflow import (
     update_finding_workflow,
 )
 from app.services.runtime_db import record_audit_event
+from app.services.workspace_authorization import current_workspace_context
 
 
 router = APIRouter(
@@ -117,7 +118,20 @@ def get_findings(
 
 @router.get("/members", response_model=FindingWorkflowMembersListResponse)
 def get_finding_workflow_members() -> dict[str, Any]:
-    return {"members": list_workflow_members(include_inactive=False)}
+    workspace = current_workspace_context()
+    if workspace.is_explicit:
+        members = list_workspace_members(workspace.workspace_id, include_inactive=False)
+    else:
+        personal_member = next(
+            (
+                member
+                for member in list_workflow_members(include_inactive=False)
+                if member["member_id"] == workspace.dataset_scope.user_id
+            ),
+            None,
+        )
+        members = [personal_member] if personal_member else []
+    return {"members": members}
 
 
 @router.get("/{finding_id}", response_model=FindingCaseResponse)
@@ -231,9 +245,8 @@ def submit_finding_field_report(
 @router.post(
     "/{finding_id}/feedback",
     response_model=FindingCaseResponse,
-    dependencies=[Depends(require_operator_role)],
 )
-def submit_finding_feedback(
+async def submit_finding_feedback(
     request: Request, finding_id: FindingIdPath, payload: FindingFeedbackRequest
 ) -> dict[str, Any]:
     actor, request_id = _actor(request)
@@ -246,6 +259,8 @@ def submit_finding_feedback(
         "followup_at": payload.followup_at,
     }
     try:
+        read_finding_case(finding_id)
+        await require_operator_role(request)
         updated = record_finding_feedback(
             finding_id,
             feedback=feedback,
@@ -270,13 +285,14 @@ def submit_finding_feedback(
 @router.post(
     "/{finding_id}/resolution",
     response_model=FindingCaseResponse,
-    dependencies=[Depends(require_operator_role)],
 )
-def submit_finding_resolution(
+async def submit_finding_resolution(
     request: Request, finding_id: FindingIdPath, payload: FindingResolutionRequest
 ) -> dict[str, Any]:
     actor, request_id = _actor(request)
     try:
+        read_finding_case(finding_id)
+        await require_operator_role(request)
         updated = resolve_finding(
             finding_id,
             outcome=payload.outcome,

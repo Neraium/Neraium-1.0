@@ -584,6 +584,39 @@ class AuthUserCreateRequest(ContractModel):
     role: Literal["viewer", "operator", "admin"] = "operator"
 
 
+class WorkspaceSummaryResponse(BaseModel):
+    workspace_id: str
+    display_name: str
+    kind: Literal["personal", "facility"]
+    is_active: bool = True
+
+
+class WorkspacesListResponse(BaseModel):
+    workspaces: list[WorkspaceSummaryResponse] = Field(default_factory=list)
+    default_workspace_id: str = "default"
+
+
+class WorkspaceMemberResponse(BaseModel):
+    member_id: str
+    display_name: str
+    role: Literal["viewer", "operator", "admin"]
+    is_active: bool = True
+
+
+class WorkspaceMembersListResponse(BaseModel):
+    workspace_id: str
+    members: list[WorkspaceMemberResponse] = Field(default_factory=list)
+
+
+class WorkspaceCreateRequest(ContractModel):
+    display_name: ShortText
+    adopt_current_scope: bool = True
+
+
+class WorkspaceMemberAddRequest(ContractModel):
+    email: EmailAddress
+
+
 class ObservabilitySummaryResponse(BaseModel):
     queue: dict[str, int]
     evidence_runs: dict[str, Any]

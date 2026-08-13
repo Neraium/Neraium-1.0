@@ -69,6 +69,10 @@ summary { min-height: 44px; align-content: center; cursor: pointer; }
 .workspace-back-control__breadcrumb::before { content: "/"; margin-right: var(--space-12); color: var(--text-disabled); }
 .workspace-back-control__product strong { color: var(--text-secondary); }
 .workspace-back-control__help { min-height: 38px; padding: 0 12px; border: 1px solid var(--surface-border-strong); border-radius: var(--control-radius); background: var(--surface-b); color: var(--text-primary); font-weight: 650; }
+.workspace-facility-context { display: grid; gap: 2px; min-width: 0; }
+.workspace-facility-context__label { color: var(--text-muted); font-size: 0.65rem; font-weight: 700; letter-spacing: 0.075em; line-height: 1; text-transform: uppercase; }
+.workspace-facility-context strong { max-width: 180px; overflow: hidden; color: var(--text-secondary); font-size: var(--type-body-sm); text-overflow: ellipsis; white-space: nowrap; }
+.workspace-facility-context select { min-height: 34px; max-width: 220px; padding: 4px 28px 4px 9px; border: 1px solid var(--surface-border-strong); border-radius: var(--control-radius); background: var(--surface-b); color: var(--text-primary); font-size: var(--type-body-sm); }
 .workspace-route-main { min-width: 0; }
 
 /* Data import and connector setup */
@@ -387,6 +391,24 @@ summary { min-height: 44px; align-content: center; cursor: pointer; }
   background: var(--surface-c);
 }
 
+.admin-membership-block {
+  display: grid;
+  gap: var(--space-12);
+  margin-bottom: var(--space-16);
+  padding: var(--space-16);
+  border: 1px solid rgba(70, 142, 240, 0.28);
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(35, 91, 169, 0.1), var(--surface-c));
+}
+
+.admin-membership-block__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-12); }
+.admin-membership-block__header h3 { margin: 0; color: var(--text-primary); font-size: var(--type-heading-sm); }
+.admin-membership-block__header p { margin: var(--space-4) 0 0; color: var(--text-muted); }
+.admin-membership-form { display: flex; align-items: end; gap: var(--space-12); }
+.admin-membership-form label { display: grid; flex: 1 1 260px; gap: var(--space-6); color: var(--text-secondary); font-size: var(--type-body-sm); font-weight: 650; }
+.admin-membership-form select { min-height: 42px; border: 1px solid var(--surface-border-strong); border-radius: var(--control-radius); background: var(--surface-b); color: var(--text-primary); }
+.admin-membership-form button { min-height: 42px; }
+
 .admin-access-form .command-button {
   align-self: end;
   justify-self: start;
@@ -497,6 +519,19 @@ summary { min-height: 44px; align-content: center; cursor: pointer; }
     display: none;
   }
 
+  .workspace-facility-context__label {
+    display: none;
+  }
+
+  .workspace-facility-context select {
+    max-width: min(42vw, 190px);
+    min-height: 40px;
+  }
+
+  .workspace-facility-context strong {
+    max-width: min(34vw, 150px);
+  }
+
   .workspace-back-control__meta {
     flex: 0 0 auto;
   }
@@ -573,6 +608,16 @@ summary { min-height: 44px; align-content: center; cursor: pointer; }
 
   .admin-access-list article button {
     flex: 1 1 auto;
+  }
+
+  .admin-membership-block__header,
+  .admin-membership-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-membership-form label {
+    flex-basis: auto;
   }
 }
 

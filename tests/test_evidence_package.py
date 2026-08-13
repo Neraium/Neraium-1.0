@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.services import evidence_store
+from app.services.dataset_scope import build_dataset_scope
 
 
 def _record(run_id: str, governance: dict | None = None) -> dict:
@@ -77,7 +78,9 @@ def test_raw_telemetry_requires_explicit_export_permission() -> None:
 
 def test_tag_for_audit_persists_actor_and_timestamp() -> None:
     client = TestClient(create_app())
-    evidence_store.upsert_evidence_run(_record("audit-tag-run"))
+    record = _record("audit-tag-run")
+    record["dataset_scope"] = build_dataset_scope(user_id="engineer@example.com").as_dict()
+    evidence_store.upsert_evidence_run(record)
 
     response = client.post("/api/evidence/runs/audit-tag-run/audit-tag", headers={"X-Neraium-User": "engineer@example.com"})
 
@@ -97,13 +100,18 @@ def test_evidence_package_requires_operator_role_in_production(monkeypatch, tmp_
     monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
     settings = Settings(app_env="production", backend_host="127.0.0.1", backend_port=8010, cors_origins=["https://app.neraium.com"], runtime_dir=tmp_path)
     with TestClient(create_app(settings), base_url="https://testserver") as client:
-        evidence_store.upsert_evidence_run(_record("permission-run"))
         create_user("viewer@example.com", "password123", role="viewer")
+        viewer_record = _record("permission-run-viewer")
+        viewer_record["dataset_scope"] = build_dataset_scope(user_id="viewer@example.com").as_dict()
+        evidence_store.upsert_evidence_run(viewer_record)
         login = client.post("/api/auth/login", json={"email": "viewer@example.com", "password": "password123"})
         assert login.status_code == 200
-        assert client.get("/api/evidence/package/permission-run?format=json").status_code == 403
+        assert client.get("/api/evidence/package/permission-run-viewer?format=json").status_code == 403
 
         create_user("operator@example.com", "password123", role="operator")
+        operator_record = _record("permission-run-operator")
+        operator_record["dataset_scope"] = build_dataset_scope(user_id="operator@example.com").as_dict()
+        evidence_store.upsert_evidence_run(operator_record)
         login = client.post("/api/auth/login", json={"email": "operator@example.com", "password": "password123"})
         assert login.status_code == 200
-        assert client.get("/api/evidence/package/permission-run?format=json").status_code == 200
+        assert client.get("/api/evidence/package/permission-run-operator?format=json").status_code == 200

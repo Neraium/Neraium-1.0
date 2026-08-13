@@ -101,11 +101,12 @@ def export_evidence_run(request: Request, run_id: RunIdPath, format: Literal["ma
     )
 
 
-@router.get("/evidence/package/{run_id}", response_model=None, dependencies=[Depends(require_operator_role)])
-def export_evidence_package(request: Request, run_id: RunIdPath, format: Literal["pdf", "json"] = Query(default="pdf")):
+@router.get("/evidence/package/{run_id}", response_model=None)
+async def export_evidence_package(request: Request, run_id: RunIdPath, format: Literal["pdf", "json"] = Query(default="pdf")):
     record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
+    await require_operator_role(request)
     package = build_evidence_package_payload(record)
     auth_context = getattr(request.state, "auth_context", {})
     record_audit_event(
@@ -128,14 +129,18 @@ def export_evidence_package(request: Request, run_id: RunIdPath, format: Literal
     )
 
 
-@router.post("/evidence/runs/{run_id}/audit-tag", response_model=EvidenceRunResponse, dependencies=[Depends(require_operator_role)])
-def tag_evidence_run_for_audit(request: Request, run_id: RunIdPath) -> dict[str, Any]:
+@router.post("/evidence/runs/{run_id}/audit-tag", response_model=EvidenceRunResponse)
+async def tag_evidence_run_for_audit(request: Request, run_id: RunIdPath) -> dict[str, Any]:
+    if read_evidence_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="Evidence run not found.")
+    await require_operator_role(request)
     auth_context = getattr(request.state, "auth_context", {})
     actor = auth_context.get("auth_subject", "operator")
     try:
         updated = tag_evidence_for_audit(run_id, actor, now_iso())
     except ValueError as error:
-        if str(error) == "evidence_run_not_found":
+        detail = str(error)
+        if detail == "evidence_run_not_found":
             raise HTTPException(status_code=404, detail="Evidence run not found.") from None
         raise
     record_audit_event(
@@ -149,8 +154,11 @@ def tag_evidence_run_for_audit(request: Request, run_id: RunIdPath) -> dict[str,
     return updated
 
 
-@router.post("/evidence/runs/{run_id}/feedback", response_model=EvidenceRunResponse, dependencies=[Depends(require_operator_role)])
-def submit_evidence_feedback(request: Request, run_id: RunIdPath, payload: OperatorFeedbackRequest) -> dict[str, Any]:
+@router.post("/evidence/runs/{run_id}/feedback", response_model=EvidenceRunResponse)
+async def submit_evidence_feedback(request: Request, run_id: RunIdPath, payload: OperatorFeedbackRequest) -> dict[str, Any]:
+    if read_evidence_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="Evidence run not found.")
+    await require_operator_role(request)
     auth_context = getattr(request.state, "auth_context", {})
     actor = auth_context.get("auth_subject", "operator")
     try:
@@ -191,8 +199,11 @@ def submit_evidence_feedback(request: Request, run_id: RunIdPath, payload: Opera
     return updated
 
 
-@router.post("/evidence/runs/{run_id}/status", response_model=EvidenceRunResponse, dependencies=[Depends(require_operator_role)])
-def update_finding_status(request: Request, run_id: RunIdPath, payload: FindingStatusRequest) -> dict[str, Any]:
+@router.post("/evidence/runs/{run_id}/status", response_model=EvidenceRunResponse)
+async def update_finding_status(request: Request, run_id: RunIdPath, payload: FindingStatusRequest) -> dict[str, Any]:
+    if read_evidence_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="Evidence run not found.")
+    await require_operator_role(request)
     auth_context = getattr(request.state, "auth_context", {})
     actor = auth_context.get("auth_subject", "operator")
     try:
@@ -208,8 +219,11 @@ def update_finding_status(request: Request, run_id: RunIdPath, payload: FindingS
             idempotency_key=auth_context.get("request_id"),
         )
     except ValueError as error:
-        if str(error) == "evidence_run_not_found":
+        detail = str(error)
+        if detail == "evidence_run_not_found":
             raise HTTPException(status_code=404, detail="Evidence run not found.") from None
+        if detail == "assignment_member_required":
+            raise HTTPException(status_code=422, detail=detail) from None
         raise
     record_audit_event(
         actor=actor,

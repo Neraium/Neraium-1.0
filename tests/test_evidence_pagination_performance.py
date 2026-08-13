@@ -4,6 +4,7 @@ import time
 from datetime import UTC, datetime, timedelta
 
 from app.services import evidence_store
+from app.services.dataset_scope import current_dataset_scope
 
 
 def _records(count: int) -> list[dict]:
@@ -33,6 +34,7 @@ def _records(count: int) -> list[dict]:
             "latest_feedback_category": "confirmed_issue" if feedback else None,
             "evidence_summary": ["Relationship change persisted across the operating window."],
             "data_conditions": ["complete"],
+            "dataset_scope": current_dataset_scope().as_dict(),
         })
     return records
 

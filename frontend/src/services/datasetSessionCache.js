@@ -18,6 +18,20 @@ function normalizeWorkspaceId(value) {
   return WORKSPACE_PATTERN.test(normalized) ? normalized : DEFAULT_DATA_WORKSPACE_ID;
 }
 
+function activeWorkspaceSummaries(session) {
+  const summaries = Array.isArray(session?.workspaces) ? session.workspaces : [];
+  const normalized = summaries
+    .filter((workspace) => workspace && workspace.is_active !== false && WORKSPACE_PATTERN.test(String(workspace.workspace_id ?? "").trim()))
+    .map((workspace) => ({
+      ...workspace,
+      workspace_id: String(workspace.workspace_id).trim(),
+      display_name: String(workspace.display_name || "Facility workspace").trim(),
+    }))
+    .filter((workspace, index, all) => all.findIndex((candidate) => candidate.workspace_id === workspace.workspace_id) === index);
+  if (normalized.length) return normalized;
+  return [{ workspace_id: DEFAULT_DATA_WORKSPACE_ID, display_name: "Personal workspace", kind: "personal", is_active: true }];
+}
+
 function normalizeUserId(user) {
   return String(user?.email ?? user?.id ?? user ?? "").trim().toLowerCase();
 }
@@ -55,6 +69,31 @@ export function datasetCacheScopeKey(user, workspaceId = getCurrentWorkspaceId()
   const userId = normalizeUserId(user);
   if (!userId) return "signed-out";
   return `${userId}::${normalizeWorkspaceId(workspaceId)}`;
+}
+
+export function resolveAuthorizedWorkspaceSelection(session, requestedWorkspaceId = getCurrentWorkspaceId()) {
+  const workspaces = activeWorkspaceSummaries(session);
+  const allowedIds = new Set(workspaces.map((workspace) => workspace.workspace_id));
+  const requested = normalizeWorkspaceId(requestedWorkspaceId);
+  const configuredDefault = normalizeWorkspaceId(session?.default_workspace_id);
+  const workspaceId = allowedIds.has(requested)
+    ? requested
+    : allowedIds.has(configuredDefault)
+      ? configuredDefault
+      : workspaces[0].workspace_id;
+  return {
+    workspaceId,
+    currentWorkspace: workspaces.find((workspace) => workspace.workspace_id === workspaceId) ?? workspaces[0],
+    workspaces,
+    stale: workspaceId !== requested,
+  };
+}
+
+export function activateAuthorizedWorkspaceSession(session) {
+  const selection = resolveAuthorizedWorkspaceSelection(session);
+  setCurrentWorkspaceId(selection.workspaceId);
+  const activation = activateDatasetCacheScope(session?.user, selection.workspaceId);
+  return { ...selection, scopeKey: activation.scopeKey, changed: activation.changed };
 }
 
 export function clearDatasetSessionCache({ clearScopeOwner = true, clearWorkspace = true } = {}) {

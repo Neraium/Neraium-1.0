@@ -5,12 +5,18 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
 from app.services import live_analysis, live_intelligence
 from app.services.auth_store import create_user
+from app.services.dataset_scope import (
+    build_dataset_scope,
+    current_dataset_scope,
+    dataset_scope_context,
+)
 from app.services.live_windows import build_rolling_window
 from app.services.runtime_db import db_connection, init_runtime_db
 
@@ -545,12 +551,13 @@ def test_duplicate_window_and_concurrent_claim_are_prevented(monkeypatch) -> Non
         connection.execute(
             """
             INSERT INTO live_analysis_runs (
-                run_id, system_id, baseline_reference, window_start, window_end,
+                run_id, scope_storage_id, system_id, baseline_reference, window_start, window_end,
                 status, started_at, created_at
-            ) VALUES (?, ?, ?, ?, ?, 'running', ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?)
             """,
             (
                 "live-run-active",
+                current_dataset_scope().storage_id,
                 SYSTEM_ID,
                 BASELINE_ID,
                 "2026-08-01T10:00:00+00:00",
@@ -750,12 +757,13 @@ def test_stale_active_run_is_failed_after_worker_restart() -> None:
         connection.execute(
             """
             INSERT INTO live_analysis_runs (
-                run_id, system_id, baseline_reference, window_start, window_end,
+                run_id, scope_storage_id, system_id, baseline_reference, window_start, window_end,
                 status, started_at, created_at
-            ) VALUES (?, ?, ?, ?, ?, 'running', ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?)
             """,
             (
                 "live-run-stale",
+                current_dataset_scope().storage_id,
                 "restart-system",
                 BASELINE_ID,
                 "2026-08-01T10:00:00+00:00",
@@ -772,6 +780,81 @@ def test_stale_active_run_is_failed_after_worker_restart() -> None:
     health = live_analysis.list_live_analysis_health(system_id="restart-system")[0]
     assert health["current_status"] == "error"
     assert health["consecutive_failures"] == 1
+
+
+def test_live_analysis_resources_are_exactly_scoped_before_listing_and_detail() -> None:
+    scope_a = build_dataset_scope(user_id="facility-a@example.com")
+    scope_b = build_dataset_scope(user_id="facility-b@example.com")
+    with dataset_scope_context(scope_a):
+        config_a = _configuration(
+            system_id="shared-system", baseline_id="facility-a-baseline", enabled=False
+        )
+    with dataset_scope_context(scope_b):
+        config_b = _configuration(
+            system_id="shared-system", baseline_id="facility-b-baseline", enabled=False
+        )
+        assert live_analysis.list_live_analysis_configurations() == [config_b]
+        assert live_analysis.read_live_analysis_configuration(
+            "shared-system"
+        )["approved_baseline_id"] == "facility-b-baseline"
+    with dataset_scope_context(scope_a):
+        assert live_analysis.list_live_analysis_configurations() == [config_a]
+        assert live_analysis.read_live_analysis_configuration(
+            "shared-system"
+        )["approved_baseline_id"] == "facility-a-baseline"
+
+
+def test_unscoped_live_source_rows_remain_fail_closed() -> None:
+    with db_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO live_analysis_runs (
+                run_id, system_id, baseline_reference, window_start, window_end,
+                status, created_at
+            ) VALUES ('unscoped-run', 'legacy-system', 'baseline', ?, ?, 'completed', ?)
+            """,
+            (NOW.isoformat(), NOW.isoformat(), NOW.isoformat()),
+        )
+        connection.execute(
+            """
+            INSERT INTO live_findings (
+                finding_id, deduplication_key, system_id, relationship_identity,
+                finding_classification_json, first_detected_at, last_observed_at,
+                current_state, persistence_state_json, latest_evidence_json,
+                source_live_analysis_run_id, baseline_reference, created_at, updated_at
+            ) VALUES ('unscoped-finding', 'legacy-key', 'legacy-system', 'flow|pressure',
+                      '{}', ?, ?, 'open', '{}', '{}', 'unscoped-run', 'baseline', ?, ?)
+            """,
+            (NOW.isoformat(), NOW.isoformat(), NOW.isoformat(), NOW.isoformat()),
+        )
+
+    assert live_analysis.list_live_analysis_runs() == []
+    assert live_analysis.list_live_findings() == []
+    with pytest.raises(live_analysis.LiveAnalysisNotFoundError):
+        live_analysis.read_live_analysis_run("unscoped-run")
+    with pytest.raises(live_analysis.LiveAnalysisNotFoundError):
+        live_analysis.read_live_finding("unscoped-finding")
+
+
+def test_due_worker_never_selects_another_scope(monkeypatch) -> None:
+    scope_a = build_dataset_scope(user_id="due-a@example.com")
+    scope_b = build_dataset_scope(user_id="due-b@example.com")
+    with dataset_scope_context(scope_a):
+        _configuration(system_id="due-a-system", enabled=True)
+    with dataset_scope_context(scope_b):
+        _configuration(system_id="due-b-system", enabled=True)
+
+    triggered: list[str] = []
+
+    def trigger(system_id: str, *, now: datetime | None = None) -> dict[str, Any]:
+        triggered.append(system_id)
+        return {"system_id": system_id, "status": "completed"}
+
+    monkeypatch.setattr(live_analysis, "trigger_live_analysis", trigger)
+    with dataset_scope_context(scope_a):
+        summary = live_analysis.run_due_live_analyses(now=NOW)
+    assert triggered == ["due-a-system"]
+    assert summary["attempted_systems"] == 1
 
 
 def test_window_builder_requires_timezone_aware_bounds() -> None:

@@ -195,7 +195,13 @@ describe("App session initialization", () => {
   it("opens an authenticated session with one verification request", async () => {
     render(h(App));
 
-    await launchWorkspace();
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId("workspace-loading-state")
+        ?? screen.queryByTestId("gate-workspace")
+        ?? screen.queryByTestId("app-render-fallback"),
+      ).toBeTruthy();
+    });
 
     expect(fetchCurrentUser).toHaveBeenCalledTimes(1);
     expect(fetchCurrentUser.mock.calls[0][0].signal).toBeInstanceOf(AbortSignal);
@@ -207,8 +213,9 @@ describe("App session initialization", () => {
 
     render(h(App));
 
-    expect(await screen.findByTestId("auth-screen")).toBeTruthy();
-    expect(screen.queryByTestId("workspace-loading-state")).toBeNull();
+    await waitFor(() => expect(fetchCurrentUser).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByTestId("workspace-loading-state")).toBeNull());
+    expect(screen.getByTestId("auth-screen")).toBeTruthy();
     expect(fetchCurrentUser).toHaveBeenCalledTimes(1);
     expect(runtimeMocks.useFacilityRuntime).not.toHaveBeenCalled();
   });
@@ -288,6 +295,31 @@ describe("App session initialization", () => {
       removeItem.mockRestore();
       consoleWarn.mockRestore();
     }
+  });
+
+  it("replaces a stale selected workspace before mounting runtime and exposes authorized facility choices", async () => {
+    window.history.replaceState({}, "", "/workspace/live-monitoring");
+    window.localStorage.setItem("neraium.current_workspace_id", "ws-removed");
+    fetchCurrentUser.mockResolvedValueOnce({
+      authenticated: true,
+      user: { email: "operator@facility.com", name: "Operator", role: "operator" },
+      default_workspace_id: "default",
+      workspaces: [
+        { workspace_id: "default", display_name: "Personal workspace", kind: "personal", is_active: true },
+        { workspace_id: "ws-central", display_name: "Central Plant", kind: "facility", is_active: true },
+      ],
+    });
+
+    render(h(App));
+
+    await waitFor(() => expect(screen.queryByTestId("workspace-loading-state")).toBeNull());
+    expect(screen.getByTestId("live-monitoring-workspace")).toBeTruthy();
+    expect(window.localStorage.getItem("neraium.current_workspace_id")).toBe("default");
+    const selector = screen.getByLabelText("Facility workspace");
+    expect(selector.value).toBe("default");
+    fireEvent.change(selector, { target: { value: "ws-central" } });
+    await waitFor(() => expect(selector.value).toBe("ws-central"));
+    expect(window.localStorage.getItem("neraium.current_workspace_id")).toBe("ws-central");
   });
 });
 

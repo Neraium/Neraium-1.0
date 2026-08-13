@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import get_settings
+from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope, dataset_scope_from_payload
 from app.services.finding_workflow import (
     compatibility_write_feedback,
     compatibility_write_status,
@@ -18,6 +19,7 @@ from app.services.runtime_db import (
     append_evidence_audit_tag_event_db,
     hydrate_evidence_event_history_db,
     list_evidence_runs_db,
+    read_evidence_run_db,
     read_latest_payload,
     upsert_evidence_run_db,
     upsert_evidence_runs_db,
@@ -92,7 +94,13 @@ def list_evidence_runs_page(*, limit: int = DEFAULT_EVIDENCE_PAGE_SIZE, offset: 
 
 
 def read_evidence_run(run_id: str) -> dict[str, Any] | None:
+    # Loading first performs the one-time legacy mirror import when needed.
     raw_items = _load_raw_evidence_runs(limit=500)
+    record = read_evidence_run_db(run_id)
+    if record is None:
+        return None
+    if not any(item.get("run_id") == run_id for item in raw_items):
+        raw_items = [*hydrate_evidence_event_history_db([record]), *raw_items]
     annotated_items = _annotate_and_sort_evidence_runs(raw_items)
     for item in annotated_items:
         if item.get("run_id") == run_id:
@@ -107,6 +115,11 @@ def latest_evidence_run() -> dict[str, Any] | None:
 
 def upsert_evidence_run(record: dict[str, Any]) -> dict[str, Any]:
     record = dict(record)
+    attach_dataset_scope(
+        record,
+        scope=dataset_scope_from_payload(record) or current_dataset_scope(),
+        dataset_id=record.get("dataset_id"),
+    )
     raw_items = _load_raw_evidence_runs(limit=500)
     prior_items = [item for item in raw_items if str(item.get("run_id") or "") != str(record.get("run_id") or "")]
     persisted = _annotate_evidence_record(record, prior_items)
@@ -566,10 +579,16 @@ def _import_legacy_evidence_file() -> bool:
         except (OSError, json.JSONDecodeError):
             payload = []
         if isinstance(payload, list):
+            # A legacy mirror is only safe to adopt when it already carries an
+            # authoritative DatasetScope.  Binding an unscoped record to the
+            # first reader would turn access into ownership and could expose a
+            # different facility's evidence.
             records = [
                 item
                 for item in payload[:500]
-                if isinstance(item, dict) and str(item.get("run_id") or "").strip()
+                if isinstance(item, dict)
+                and str(item.get("run_id") or "").strip()
+                and dataset_scope_from_payload(item) is not None
             ]
     imported = upsert_evidence_runs_db(records)
     upsert_latest_payload(LEGACY_EVIDENCE_IMPORT_MARKER, True)

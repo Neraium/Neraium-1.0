@@ -31,6 +31,7 @@ from app.services.auth_store import (
     list_users,
     revoke_session,
     session_cookie_name,
+    workspace_session_summary,
 )
 from app.services.rate_limiter import consume_rate_limit, reset_rate_limit
 from app.services.runtime_db import record_audit_event
@@ -188,7 +189,14 @@ def read_auth_me(request: Request) -> dict[str, Any]:
         session = get_session_record(session_id)
     except Exception as error:
         _raise_auth_store_unavailable("verify_session", request, error)
-    return {"authenticated": bool(user), "user": user, "session": session}
+    if not user:
+        return {"authenticated": False, "user": None, "session": None}
+    return {
+        "authenticated": True,
+        "user": user,
+        "session": session,
+        **workspace_session_summary(user["email"]),
+    }
 
 
 @router.get(
@@ -331,7 +339,12 @@ def login(payload: LoginRequest, request: Request, response: Response) -> dict[s
         request=request,
         detail={"client_ip": _client_ip(request), "role": user.get("role", "operator")},
     )
-    return {"authenticated": True, "user": user, "session": session}
+    return {
+        "authenticated": True,
+        "user": user,
+        "session": session,
+        **workspace_session_summary(user["email"]),
+    }
 
 
 @router.post("/auth/logout")

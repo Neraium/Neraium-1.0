@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
@@ -9,6 +10,7 @@ import pytest
 from app.services import evidence_store, runtime_db
 from app.services.dataset_scope import attach_dataset_scope, build_dataset_scope, set_current_dataset_scope
 from app.services.finding_workflow import (
+    FindingNotFoundError,
     FindingWorkflowConflictError,
     evidence_finding_id,
     materialize_live_finding_cases,
@@ -127,7 +129,7 @@ def test_ambiguous_historical_run_level_assignment_is_not_fanned_out(client) -> 
     assert legacy["observation_status"] == "investigating"
 
 
-def test_unambiguous_legacy_write_uses_one_event_and_replays_without_duplicates(client) -> None:
+def test_legacy_status_route_rejects_new_label_only_assignment(client) -> None:
     evidence_store.upsert_evidence_run(_record("single-run"))
     payload = {
         "state": "monitoring",
@@ -138,13 +140,14 @@ def test_unambiguous_legacy_write_uses_one_event_and_replays_without_duplicates(
     first = client.post("/api/evidence/runs/single-run/status", json=payload, headers=headers)
     replay = client.post("/api/evidence/runs/single-run/status", json=payload, headers=headers)
 
-    assert first.status_code == replay.status_code == 200
+    assert first.status_code == replay.status_code == 422
+    assert first.json()["detail"] == "assignment_member_required"
     finding_id = evidence_finding_id("single-run", "condition-a")
     case = client.get(f"/api/findings/{finding_id}").json()
-    assert case["workflow"]["version"] == 1
-    assert case["workflow"]["assignment"]["label"] == "Alex"
+    assert case["workflow"]["version"] == 0
+    assert case["workflow"]["assignment"] is None
     activity = client.get(f"/api/findings/{finding_id}/activity").json()
-    assert len(activity["events"]) == 1
+    assert activity["events"] == []
     with runtime_db.db_connection() as connection:
         assert connection.execute(
             "SELECT COUNT(*) FROM finding_status_events WHERE run_id = 'single-run'"
@@ -232,7 +235,7 @@ def test_scoped_case_is_not_visible_or_mutable_from_another_workspace(client) ->
     ).status_code == 404
 
 
-def test_unscoped_live_finding_is_not_claimed_by_first_reader() -> None:
+def test_unscoped_live_finding_cannot_be_claimed_by_first_reader() -> None:
     with runtime_db.db_connection() as connection:
         connection.execute(
             """
@@ -263,12 +266,13 @@ def test_unscoped_live_finding_is_not_claimed_by_first_reader() -> None:
     set_current_dataset_scope(build_dataset_scope(user_id="first", workspace_id="first"))
     materialize_live_finding_cases("live-finding-existing")
     set_current_dataset_scope(build_dataset_scope(user_id="second", workspace_id="second"))
-    assert read_finding_case("live-finding-existing")["source"]["kind"] == "live_finding"
+    with pytest.raises(FindingNotFoundError, match="Finding not found"):
+        read_finding_case("live-finding-existing")
     with runtime_db.db_connection() as connection:
         row = connection.execute(
             "SELECT scope_storage_id, dataset_scope_json FROM finding_cases WHERE finding_id = 'live-finding-existing'"
         ).fetchone()
-    assert tuple(row) == (None, None)
+    assert row is None
 
 
 def test_workflow_tables_enforce_append_only_identity_and_survive_evidence_prune() -> None:

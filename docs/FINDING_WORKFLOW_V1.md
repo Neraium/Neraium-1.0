@@ -34,12 +34,12 @@ Controlled resolution outcomes are `issue_found`, `no_issue_found`, `operational
 
 Person assignments with an `external_ref` use the existing auth account email/subject as
 their stable member ID. New directory-backed person assignments must resolve to an active
-account and project its canonical display name. `GET /api/findings/members` exposes only
-the safe active-member projection (`member_id`, `display_name`, existing generic `role`,
-and `is_active`). Label-only person assignments and team/reference assignments remain
-readable and writable for historical compatibility; they are not treated as validated
-identities. No team, organization, or enterprise identity model is implied. Work-order
-fields remain integration hooks, not CMMS records.
+account and active membership in the current facility workspace, then project its
+canonical display name. `GET /api/findings/members` exposes only the safe active-member
+projection (`member_id`, `display_name`, existing generic `role`, and `is_active`) for
+that workspace. Historical label-only person assignments remain readable, but new
+label-only writes are rejected because assignment must identify an authorized member.
+Work-order fields remain integration hooks, not CMMS records.
 
 Structured field reports record a concise note, what was inspected, what was found,
 action taken, the `yes`/`no`/`uncertain` physical-problem result, escalation need, and
@@ -78,10 +78,11 @@ reprioritize, set dates/guidance, dismiss, resolve, or use engineering feedback 
 These checks are server-side. Existing non-production compatibility behavior and the
 general `require_api_access` deployment assumptions remain unchanged.
 
-Assignment never grants evidence or dataset access. Finding reads and writes continue to
-use the persisted dataset/workspace scope. Cross-user shared operational visibility is
-therefore intentionally deferred until an explicit shared workspace boundary exists;
-per-user isolation is not weakened by this workflow.
+Assignment never grants evidence or dataset access. Explicit facility membership is the
+shared authorization boundary for findings, activity, evidence, and investigation. The
+existing account role remains the action-policy boundary. Personal workspaces remain
+isolated, and a user outside a facility receives the same opaque result as a missing
+finding or evidence record.
 
 ## Legacy compatibility
 
@@ -93,4 +94,4 @@ Existing run-level lifecycle and feedback endpoints remain supported. Compatibil
 - new finding-level endpoints do not also write legacy lifecycle rows;
 - source provenance, package identity, replay, and audit history remain unchanged.
 
-New evidence records include an immutable identity snapshot for every source finding so a multi-finding run can be materialized without guessing. Older records remain readable. Finding cases are scoped using the persisted dataset/workspace scope where it exists. Legacy live records without such scope retain their historical visibility behavior rather than letting the first reader claim new provenance.
+New evidence records include an immutable identity snapshot for every source finding so a multi-finding run can be materialized without guessing. Historical records with an authoritative DatasetScope remain readable in that exact scope. Ambiguous unscoped evidence and live-analysis rows remain stored but fail closed; a reader can never claim them implicitly.

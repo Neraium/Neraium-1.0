@@ -188,9 +188,15 @@ function responseMatchesExpectedType(response, expectedResponseType) {
   return contentType.toLowerCase().includes(String(expectedResponseType).toLowerCase());
 }
 
-function shouldTryNextCandidate({ response, expectedResponseType, method, hasNextCandidate }) {
+function isBootstrapFallbackPath(path) {
+  const normalized = String(path || "").toLowerCase();
+  return normalized === "/api/auth/me" || isPublicReadonlyPath(normalized);
+}
+
+function shouldTryNextCandidate({ response, expectedResponseType, method, hasNextCandidate, path }) {
   if (!hasNextCandidate || !["GET", "HEAD"].includes(method)) return false;
-  if (response.status >= 500 || [404, 405, 408, 425].includes(response.status)) return true;
+  if (response.status >= 500 || [408, 425].includes(response.status)) return true;
+  if ([404, 405].includes(response.status)) return isBootstrapFallbackPath(path);
   return response.ok && !responseMatchesExpectedType(response, expectedResponseType);
 }
 
@@ -279,7 +285,7 @@ export async function apiFetch(path, options = {}) {
       );
 
       const hasNextCandidate = index < candidates.length - 1;
-      if (shouldTryNextCandidate({ response, expectedResponseType, method: normalizedMethod, hasNextCandidate })) {
+      if (shouldTryNextCandidate({ response, expectedResponseType, method: normalizedMethod, hasNextCandidate, path: normalizedPath })) {
         const reason = response.ok ? "unexpected-content-type" : `http-${response.status}`;
         lastError = new Error(`API candidate returned ${response.status}`);
         logFallback(path, normalizedMethod, reason, index);

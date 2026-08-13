@@ -5,7 +5,7 @@ import { buildCanonicalFindingRun, OPERATOR_EMPTY_STATE, sanitizeOperatorText } 
 
 function observationRequestError(response, payload, fallback) {
   if (response?.status === 401) return "Your session expired. Sign in again, then reopen Insights.";
-  if (response?.status === 403) return "Your account does not have permission to update this evidence record. Ask an administrator for access.";
+  if (response?.status === 403 || response?.status === 404) return "This evidence is unavailable in the current facility workspace.";
   if (response?.status >= 500) return fallback;
   const detail = String(payload?.detail || "").trim();
   if (!detail || /(traceback|exception|stack trace|shared_upload|psycopg|sqlite3|errno|file:\/\/|[a-z]:\\)/i.test(detail)) return fallback;
@@ -310,6 +310,7 @@ export default function ObservationCenterWorkspace({
   const [caseNote, setCaseNote] = useState("");
   const [workOrderReference, setWorkOrderReference] = useState("");
   const [caseStateResult, setCaseStateResult] = useState({ status: "idle", message: "" });
+  const [exportState, setExportState] = useState({ status: "idle", message: "" });
   const [notificationPrefs, setNotificationPrefs] = useState(() => loadJsonStorage(NOTIFICATION_STORAGE_KEY, {
     enabled: false,
     quietStart: "22:00",
@@ -622,7 +623,7 @@ export default function ObservationCenterWorkspace({
       );
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(String(payload?.detail ?? `Unexpected response: ${response.status}`));
+        throw new Error(observationRequestError(response, payload, "Older insights could not be loaded."));
       }
       const olderRuns = Array.isArray(payload?.runs) ? payload.runs : [];
       setRuns((current) => {
@@ -727,9 +728,26 @@ export default function ObservationCenterWorkspace({
     if (response?.ok) setFacilityContext(await response.json());
   }
 
-  function downloadRun(runId, format) {
-    const href = `/api/evidence/export/${encodeURIComponent(runId)}?format=${encodeURIComponent(format)}`;
-    window.open(href, "_blank", "noopener,noreferrer");
+  async function downloadRun(runId, format) {
+    if (!runId || exportState.status === "loading") return;
+    setExportState({ status: "loading", message: `Preparing ${format.toUpperCase()} export…` });
+    try {
+      const response = await apiFetch(`/api/evidence/export/${encodeURIComponent(runId)}?format=${encodeURIComponent(format)}`);
+      const payload = response.ok ? null : await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(observationRequestError(response, payload, "Evidence export could not be prepared."));
+      const blob = await response.blob();
+      const disposition = response.headers?.get?.("content-disposition") ?? "";
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? `neraium-evidence-${runId}.${format}`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setExportState({ status: "complete", message: `${format.toUpperCase()} evidence exported.` });
+    } catch (exportError) {
+      setExportState({ status: "error", message: exportError?.message || "Evidence export failed." });
+    }
   }
 
   if (loading) {
@@ -1080,8 +1098,9 @@ export default function ObservationCenterWorkspace({
         <Panel title="Evidence Sources" className="span-7 observation-center__panel">
           {selectedRun ? (
             <div className="observation-center__export-actions" style={{ marginBottom: 16 }}>
-              <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "json")}>Export JSON</button>
-              <button type="button" className="secondary-command-button" onClick={() => downloadRun(selectedRun.run_id, "csv")}>Export CSV</button>
+              <button type="button" className="secondary-command-button" disabled={exportState.status === "loading"} onClick={() => downloadRun(selectedRun.run_id, "json")}>Export JSON</button>
+              <button type="button" className="secondary-command-button" disabled={exportState.status === "loading"} onClick={() => downloadRun(selectedRun.run_id, "csv")}>Export CSV</button>
+              {exportState.message ? <span className="observation-feedback-state" role="status" aria-live="polite">{exportState.message}</span> : null}
             </div>
           ) : null}
           <div className="telemetry-grid telemetry-grid--compact">

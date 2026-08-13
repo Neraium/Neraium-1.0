@@ -7,9 +7,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from app.services.auth_store import workflow_member
+from app.services.auth_store import workflow_member, workspace_assignment_member
 from app.services.dataset_scope import current_dataset_scope, dataset_scope_context, dataset_scope_from_payload
 from app.services.runtime_db import db_connection, init_runtime_db, now_iso
+from app.services.workspace_authorization import current_workspace_context
 
 
 SOURCE_KINDS = {"evidence_run", "live_finding"}
@@ -250,16 +251,18 @@ def materialize_live_finding_cases(
     finding_id: str | None = None, *, source_run_id: str | None = None
 ) -> list[str]:
     init_runtime_db()
-    query = "SELECT * FROM live_findings"
-    params: tuple[Any, ...] = ()
+    query = "SELECT * FROM live_findings WHERE scope_storage_id = ?"
+    params: tuple[Any, ...] = (current_dataset_scope().storage_id,)
     if finding_id:
-        query += " WHERE finding_id = ?"
-        params = (finding_id,)
+        query += " AND finding_id = ?"
+        params = (*params, finding_id)
     elif source_run_id:
-        query += " WHERE source_live_analysis_run_id = ?"
-        params = (source_run_id,)
+        query += " AND source_live_analysis_run_id = ?"
+        params = (*params, source_run_id)
     with db_connection() as connection:
         rows = connection.execute(query, params).fetchall()
+        scope = current_dataset_scope()
+        scope_json = _json(scope.as_dict())
         for row in rows:
             live_id = str(row["finding_id"])
             connection.execute(
@@ -270,7 +273,7 @@ def materialize_live_finding_cases(
                 ) VALUES (?, 'live_finding', ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    live_id, live_id, live_id, None, None,
+                    live_id, live_id, live_id, scope.storage_id, scope_json,
                     _json(_live_snapshot(row)), row["created_at"],
                 ),
             )
@@ -282,11 +285,11 @@ def materialize_existing_finding_cases(
 ) -> None:
     init_runtime_db()
     if source_kind != "live_finding":
-        query = "SELECT payload_json FROM evidence_runs"
-        params: tuple[Any, ...] = ()
+        query = "SELECT payload_json FROM evidence_runs WHERE scope_storage_id = ?"
+        params: tuple[Any, ...] = (current_dataset_scope().storage_id,)
         if source_run_id:
-            query += " WHERE run_id = ?"
-            params = (source_run_id,)
+            query += " AND run_id = ?"
+            params = (*params, source_run_id)
         query += " ORDER BY created_at DESC LIMIT 1001"
         with db_connection() as connection:
             records = [json.loads(row["payload_json"]) for row in connection.execute(query, params).fetchall()]
@@ -302,7 +305,7 @@ def _raw_case(finding_id: str) -> dict[str, Any] | None:
         row = connection.execute(
             """
             SELECT * FROM finding_cases
-            WHERE finding_id = ? AND (scope_storage_id IS NULL OR scope_storage_id = ?)
+            WHERE finding_id = ? AND scope_storage_id = ?
             """,
             (finding_id, current_dataset_scope().storage_id),
         ).fetchone()
@@ -416,9 +419,18 @@ def _normalized_person_assignment(assignment: Any) -> Any:
         return assignment
     member_id = _clean(assignment.get("external_ref"))
     if member_id is None:
-        # Historical label-only assignments remain a supported compatibility shape.
-        return assignment
-    member = workflow_member(member_id, include_inactive=True)
+        # Existing events remain projectable, but assignment is authorization-
+        # independent and every new person assignment must name an account.
+        raise FindingWorkflowValidationError("assignment_member_required")
+    workspace = current_workspace_context()
+    if workspace.is_explicit:
+        member = workspace_assignment_member(
+            workspace.workspace_id, member_id, include_inactive=True
+        )
+    elif member_id.strip().lower() == workspace.dataset_scope.user_id:
+        member = workflow_member(member_id, include_inactive=True)
+    else:
+        member = None
     if member is None:
         raise FindingWorkflowValidationError("unknown_assignment_member")
     if not member["is_active"]:
@@ -438,7 +450,15 @@ def _is_exact_active_member_assignment(workflow: dict[str, Any], actor: str) -> 
     normalized_actor = str(actor or "").strip().lower()
     if member_id is None or member_id.strip().lower() != normalized_actor:
         return False
-    member = workflow_member(member_id, include_inactive=False)
+    workspace = current_workspace_context()
+    if workspace.is_explicit:
+        member = workspace_assignment_member(
+            workspace.workspace_id, member_id, include_inactive=False
+        )
+    elif member_id.strip().lower() == workspace.dataset_scope.user_id:
+        member = workflow_member(member_id, include_inactive=False)
+    else:
+        member = None
     return bool(member and member["member_id"] == normalized_actor)
 
 
@@ -447,6 +467,9 @@ def authorize_finding_action(
     action: str, changes: dict[str, Any] | None = None,
 ) -> None:
     """Apply the small production workflow policy at the authoritative boundary."""
+    # Resolve the resource boundary before action policy so foreign and missing
+    # identifiers have the same opaque result for every role.
+    case = read_finding_case(finding_id)
     if not strict:
         return
     normalized_role = str(role or "viewer").strip().lower()
@@ -454,7 +477,6 @@ def authorize_finding_action(
         return
     if normalized_role != "viewer":
         raise FindingWorkflowValidationError("workflow_action_forbidden")
-    case = read_finding_case(finding_id)
     if not _is_exact_active_member_assignment(case["workflow"], actor):
         raise FindingWorkflowValidationError("workflow_action_forbidden")
     if action == "field_report":
@@ -532,7 +554,7 @@ def list_finding_cases(
     if source_run_id:
         conditions.append("json_extract(source_snapshot_json, '$.source_run_id') = ?")
         params.append(source_run_id)
-    conditions.append("(scope_storage_id IS NULL OR scope_storage_id = ?)")
+    conditions.append("scope_storage_id = ?")
     params.append(current_dataset_scope().storage_id)
     query = "SELECT finding_id FROM finding_cases"
     if conditions:
@@ -766,7 +788,7 @@ def _append_event(
         exists = connection.execute(
             """
             SELECT 1 FROM finding_cases
-            WHERE finding_id = ? AND (scope_storage_id IS NULL OR scope_storage_id = ?)
+            WHERE finding_id = ? AND scope_storage_id = ?
             """,
             (finding_id, current_dataset_scope().storage_id),
         ).fetchone()
@@ -904,7 +926,8 @@ def resolve_finding(
 def _legacy_history(run_id: str) -> list[tuple[str, dict[str, Any]]]:
     with db_connection() as connection:
         record_row = connection.execute(
-            "SELECT payload_json FROM evidence_runs WHERE run_id = ?", (run_id,)
+            "SELECT payload_json FROM evidence_runs WHERE run_id = ? AND scope_storage_id = ?",
+            (run_id, current_dataset_scope().storage_id),
         ).fetchone()
         record = json.loads(record_row["payload_json"]) if record_row else {}
         events: list[tuple[str, dict[str, Any]]] = []
@@ -953,7 +976,7 @@ def _migrate_legacy_events_if_unambiguous(run_id: str) -> None:
             """
             SELECT finding_id FROM finding_cases
             WHERE source_kind = 'evidence_run' AND source_id = ?
-              AND (scope_storage_id IS NULL OR scope_storage_id = ?)
+              AND scope_storage_id = ?
             """,
             (run_id, current_dataset_scope().storage_id),
         ).fetchall()
@@ -997,9 +1020,9 @@ def compatibility_write_status(
     if record is None:
         raise ValueError("evidence_run_not_found")
     record_scope = dataset_scope_from_payload(record)
-    if record_scope is not None and record_scope.workspace_id != current_dataset_scope().workspace_id:
+    if record_scope is None or record_scope != current_dataset_scope():
         raise ValueError("evidence_run_not_found")
-    with dataset_scope_context(record_scope or current_dataset_scope()):
+    with dataset_scope_context(record_scope):
         cases = materialize_evidence_finding_cases(record)
         event = {
             "state": state, "actor": actor, "recorded_at": recorded_at,
@@ -1015,10 +1038,9 @@ def compatibility_write_status(
             "work_order_reference": _clean(work_order_reference),
         }
         if assignee is not None:
-            changes["assignment"] = (
-                {"target_type": "person", "label": str(assignee).strip(), "external_ref": None}
-                if str(assignee).strip() else None
-            )
+            if str(assignee).strip():
+                raise FindingWorkflowValidationError("assignment_member_required")
+            changes["assignment"] = None
         _append_event(
             cases[0], event_type="workflow_updated", actor=actor,
             payload={"changes": changes, "compatibility": {"run_id": run_id}},
@@ -1037,9 +1059,9 @@ def compatibility_write_feedback(
     if record is None:
         raise ValueError("evidence_run_not_found")
     record_scope = dataset_scope_from_payload(record)
-    if record_scope is not None and record_scope.workspace_id != current_dataset_scope().workspace_id:
+    if record_scope is None or record_scope != current_dataset_scope():
         raise ValueError("evidence_run_not_found")
-    with dataset_scope_context(record_scope or current_dataset_scope()):
+    with dataset_scope_context(record_scope):
         cases = materialize_evidence_finding_cases(record)
         event = {**feedback, "actor": actor, "recorded_at": recorded_at}
         if len(cases) != 1 or _raw_case(cases[0]) is None:
@@ -1059,7 +1081,7 @@ def compatibility_events_for_run(run_id: str) -> dict[str, list[dict[str, Any]]]
             """
             SELECT finding_id FROM finding_cases
             WHERE source_kind = 'evidence_run' AND source_id = ?
-              AND (scope_storage_id IS NULL OR scope_storage_id = ?)
+              AND scope_storage_id = ?
             """,
             (run_id, current_dataset_scope().storage_id),
         ).fetchall()

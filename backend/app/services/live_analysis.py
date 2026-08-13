@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.services import behavioral_model_repository, live_intelligence
+from app.services.dataset_scope import current_dataset_scope
 from app.services.live_windows import MIN_LIVE_ANALYSIS_ROWS, build_rolling_window
 from app.services.runtime_db import db_connection, init_runtime_db
 
@@ -50,8 +51,13 @@ def _iso(value: datetime) -> str:
     return value.astimezone(UTC).isoformat()
 
 
+def _scope_id() -> str:
+    return current_dataset_scope().storage_id
+
+
 def _config_payload(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
     payload = dict(row)
+    payload.pop("scope_storage_id", None)
     payload["enabled"] = bool(payload["enabled"])
     payload["minimum_coverage_percent"] = float(payload["minimum_coverage_percent"])
     return payload
@@ -59,12 +65,14 @@ def _config_payload(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
 
 def _run_payload(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
     payload = dict(row)
+    payload.pop("scope_storage_id", None)
     payload.pop("analytics_result_json", None)
     return payload
 
 
 def _finding_payload(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
     payload = dict(row)
+    payload.pop("scope_storage_id", None)
     payload["finding_classification"] = json.loads(payload.pop("finding_classification_json"))
     payload["persistence_state"] = json.loads(payload.pop("persistence_state_json"))
     payload["latest_evidence"] = json.loads(payload.pop("latest_evidence_json"))
@@ -104,17 +112,18 @@ def create_live_analysis_configuration(
             connection.execute(
                 """
                 INSERT INTO live_analysis_configurations (
-                    system_id, enabled, approved_baseline_id,
+                    system_id, scope_storage_id, enabled, approved_baseline_id,
                     analysis_interval_seconds, comparison_window_minutes,
                     minimum_coverage_percent, allowed_lateness_minutes,
                     last_analysis_started_at, last_analysis_completed_at,
                     next_analysis_at, current_status, latest_error,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, ?, ?)
                 """,
                 (
                     values["system_id"],
+                    _scope_id(),
                     1 if enabled else 0,
                     values["approved_baseline_id"],
                     values["analysis_interval_seconds"],
@@ -135,8 +144,9 @@ def create_live_analysis_configuration(
                 next_scheduled_run=next_analysis,
             )
             row = connection.execute(
-                "SELECT * FROM live_analysis_configurations WHERE system_id = ?",
-                (values["system_id"],),
+                "SELECT * FROM live_analysis_configurations "
+                "WHERE system_id = ? AND scope_storage_id = ?",
+                (values["system_id"], _scope_id()),
             ).fetchone()
     except sqlite3.IntegrityError as error:
         if "UNIQUE constraint failed" in str(error):
@@ -153,8 +163,9 @@ def read_live_analysis_configuration(system_id: str) -> dict[str, Any]:
     init_runtime_db()
     with db_connection() as connection:
         row = connection.execute(
-            "SELECT * FROM live_analysis_configurations WHERE system_id = ?",
-            (system_id,),
+            "SELECT * FROM live_analysis_configurations "
+            "WHERE system_id = ? AND scope_storage_id = ?",
+            (system_id, _scope_id()),
         ).fetchone()
     if row is None:
         raise LiveAnalysisNotFoundError("Live-analysis configuration not found.")
@@ -166,11 +177,11 @@ def list_live_analysis_configurations(
     enabled: bool | None = None,
 ) -> list[dict[str, Any]]:
     init_runtime_db()
-    query = "SELECT * FROM live_analysis_configurations"
-    params: tuple[Any, ...] = ()
+    query = "SELECT * FROM live_analysis_configurations WHERE scope_storage_id = ?"
+    params: tuple[Any, ...] = (_scope_id(),)
     if enabled is not None:
-        query += " WHERE enabled = ?"
-        params = (1 if enabled else 0,)
+        query += " AND enabled = ?"
+        params = (*params, 1 if enabled else 0)
     query += " ORDER BY system_id"
     with db_connection() as connection:
         rows = connection.execute(query, params).fetchall()
@@ -195,20 +206,21 @@ def update_live_analysis_configuration(
         raise ValueError("At least one live-analysis configuration field must be supplied.")
     timestamp = _iso((now or _now()).astimezone(UTC))
     assignments = [f"{key} = ?" for key in selected]
-    params = [*selected.values(), timestamp, system_id]
+    params = [*selected.values(), timestamp, system_id, _scope_id()]
     with db_connection() as connection:
         connection.execute("BEGIN IMMEDIATE")
         updated = connection.execute(
             f"""
             UPDATE live_analysis_configurations
             SET {', '.join(assignments)}, updated_at = ?, latest_error = NULL
-            WHERE system_id = ?
+            WHERE system_id = ? AND scope_storage_id = ?
             """,
             tuple(params),
         ).rowcount
         row = connection.execute(
-            "SELECT * FROM live_analysis_configurations WHERE system_id = ?",
-            (system_id,),
+            "SELECT * FROM live_analysis_configurations "
+            "WHERE system_id = ? AND scope_storage_id = ?",
+            (system_id, _scope_id()),
         ).fetchone()
     if not updated or row is None:
         raise LiveAnalysisNotFoundError("Live-analysis configuration not found.")
@@ -231,7 +243,7 @@ def set_live_analysis_enabled(
             UPDATE live_analysis_configurations
             SET enabled = ?, current_status = ?, next_analysis_at = ?,
                 latest_error = NULL, updated_at = ?
-            WHERE system_id = ?
+            WHERE system_id = ? AND scope_storage_id = ?
             """,
             (
                 1 if enabled else 0,
@@ -239,6 +251,7 @@ def set_live_analysis_enabled(
                 next_analysis,
                 timestamp,
                 system_id,
+                _scope_id(),
             ),
         ).rowcount
         if not updated:
@@ -252,8 +265,9 @@ def set_live_analysis_enabled(
             preserve_history=True,
         )
         row = connection.execute(
-            "SELECT * FROM live_analysis_configurations WHERE system_id = ?",
-            (system_id,),
+            "SELECT * FROM live_analysis_configurations "
+            "WHERE system_id = ? AND scope_storage_id = ?",
+            (system_id, _scope_id()),
         ).fetchone()
     return _config_payload(row)
 
@@ -290,9 +304,11 @@ def _upsert_health(
     reset_failures: bool = False,
     preserve_history: bool = False,
 ) -> None:
+    scope_storage_id = _scope_id()
     existing = connection.execute(
-        "SELECT * FROM live_analysis_health WHERE system_id = ?",
-        (system_id,),
+        "SELECT * FROM live_analysis_health "
+        "WHERE system_id = ? AND scope_storage_id = ?",
+        (system_id, scope_storage_id),
     ).fetchone()
     prior = dict(existing) if existing else {}
     failures = int(prior.get("consecutive_failures") or 0)
@@ -307,13 +323,13 @@ def _upsert_health(
     connection.execute(
         """
         INSERT INTO live_analysis_health (
-            system_id, last_attempted_run_at, last_completed_run_at,
+            system_id, scope_storage_id, last_attempted_run_at, last_completed_run_at,
             last_successful_run_at, current_status, current_window_coverage,
             latest_skipped_reason, consecutive_failures, latest_error,
             next_scheduled_run, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(system_id) DO UPDATE SET
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(scope_storage_id, system_id) DO UPDATE SET
             last_attempted_run_at = excluded.last_attempted_run_at,
             last_completed_run_at = excluded.last_completed_run_at,
             last_successful_run_at = excluded.last_successful_run_at,
@@ -327,6 +343,7 @@ def _upsert_health(
         """,
         (
             system_id,
+            scope_storage_id,
             attempted_at if attempted_at is not None else prior.get("last_attempted_run_at"),
             completed_at if completed_at is not None else prior.get("last_completed_run_at"),
             successful_at if successful_at is not None else prior.get("last_successful_run_at"),
@@ -359,9 +376,9 @@ def _create_or_reuse_run(
             """
             SELECT * FROM live_analysis_runs
             WHERE system_id = ? AND baseline_reference = ?
-              AND window_start = ? AND window_end = ?
+              AND window_start = ? AND window_end = ? AND scope_storage_id = ?
             """,
-            (config["system_id"], baseline_reference, start_iso, end_iso),
+            (config["system_id"], baseline_reference, start_iso, end_iso, _scope_id()),
         ).fetchone()
         if existing:
             existing_status = str(existing["status"])
@@ -390,10 +407,10 @@ def _create_or_reuse_run(
         running = connection.execute(
             """
             SELECT run_id FROM live_analysis_runs
-            WHERE system_id = ? AND status = 'running'
+            WHERE system_id = ? AND status = 'running' AND scope_storage_id = ?
             LIMIT 1
             """,
-            (config["system_id"],),
+            (config["system_id"], _scope_id()),
         ).fetchone()
         initial_status = "skipped" if running else "pending"
         skipped_reason = "analysis_already_running" if running else None
@@ -401,13 +418,14 @@ def _create_or_reuse_run(
         connection.execute(
             """
             INSERT INTO live_analysis_runs (
-                run_id, system_id, baseline_reference, window_start, window_end,
+                run_id, scope_storage_id, system_id, baseline_reference, window_start, window_end,
                 status, started_at, completed_at, skipped_reason, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
+                _scope_id(),
                 config["system_id"],
                 baseline_reference,
                 start_iso,
@@ -432,8 +450,8 @@ def _create_or_reuse_run(
                 preserve_history=True,
             )
         row = connection.execute(
-            "SELECT * FROM live_analysis_runs WHERE run_id = ?",
-            (run_id,),
+            "SELECT * FROM live_analysis_runs WHERE run_id = ? AND scope_storage_id = ?",
+            (run_id, _scope_id()),
         ).fetchone()
     return _run_payload(row), bool(running)
 
@@ -469,16 +487,16 @@ def _skip_run(
             UPDATE live_analysis_runs
             SET status = 'skipped', completed_at = ?, rows_analyzed = ?,
                 signals_analyzed = ?, coverage = ?, skipped_reason = ?
-            WHERE run_id = ? AND status = 'pending'
+            WHERE run_id = ? AND status = 'pending' AND scope_storage_id = ?
             """,
-            (timestamp, rows, signals, coverage, reason, run_id),
+            (timestamp, rows, signals, coverage, reason, run_id, _scope_id()),
         )
         connection.execute(
             """
             UPDATE live_analysis_configurations
             SET last_analysis_started_at = ?, last_analysis_completed_at = ?,
                 next_analysis_at = ?, current_status = ?, updated_at = ?
-            WHERE system_id = ?
+            WHERE system_id = ? AND scope_storage_id = ?
             """,
             (
                 timestamp,
@@ -487,6 +505,7 @@ def _skip_run(
                 "disabled" if reason == "disabled" else "waiting",
                 timestamp,
                 config["system_id"],
+                _scope_id(),
             ),
         )
         _upsert_health(
@@ -502,8 +521,8 @@ def _skip_run(
             preserve_history=True,
         )
         row = connection.execute(
-            "SELECT * FROM live_analysis_runs WHERE run_id = ?",
-            (run_id,),
+            "SELECT * FROM live_analysis_runs WHERE run_id = ? AND scope_storage_id = ?",
+            (run_id, _scope_id()),
         ).fetchone()
     return _run_payload(row)
 
@@ -533,9 +552,9 @@ def _claim_run(run_id: str, config: dict[str, Any], now: datetime, coverage: flo
                 """
                 UPDATE live_analysis_runs
                 SET status = 'running', started_at = ?
-                WHERE run_id = ? AND status = 'pending'
+                WHERE run_id = ? AND status = 'pending' AND scope_storage_id = ?
                 """,
-                (timestamp, run_id),
+                (timestamp, run_id, _scope_id()),
             ).rowcount
         except sqlite3.IntegrityError:
             return False
@@ -546,9 +565,9 @@ def _claim_run(run_id: str, config: dict[str, Any], now: datetime, coverage: flo
             UPDATE live_analysis_configurations
             SET current_status = 'running', last_analysis_started_at = ?,
                 latest_error = NULL, updated_at = ?
-            WHERE system_id = ?
+            WHERE system_id = ? AND scope_storage_id = ?
             """,
-            (timestamp, timestamp, config["system_id"]),
+            (timestamp, timestamp, config["system_id"], _scope_id()),
         )
         _upsert_health(
             connection,
@@ -564,7 +583,7 @@ def _claim_run(run_id: str, config: dict[str, Any], now: datetime, coverage: flo
 
 
 def _deduplication_key(system_id: str, baseline_reference: str, identity: str) -> str:
-    material = "\0".join((system_id, baseline_reference, identity)).encode("utf-8")
+    material = "\0".join((_scope_id(), system_id, baseline_reference, identity)).encode("utf-8")
     return hashlib.sha256(material).hexdigest()
 
 
@@ -584,8 +603,9 @@ def _finalize_findings(
         identity = str(detection["relationship_identity"])
         key = _deduplication_key(system_id, baseline_reference, identity)
         existing = connection.execute(
-            "SELECT * FROM live_findings WHERE deduplication_key = ?",
-            (key,),
+            "SELECT * FROM live_findings "
+            "WHERE deduplication_key = ? AND scope_storage_id = ?",
+            (key, _scope_id()),
         ).fetchone()
         persistence = detection.get("persistence") or {}
         persistent = persistence.get("persistent") is True
@@ -602,17 +622,18 @@ def _finalize_findings(
             connection.execute(
                 """
                 INSERT INTO live_findings (
-                    finding_id, deduplication_key, system_id, relationship_identity,
+                    finding_id, scope_storage_id, deduplication_key, system_id, relationship_identity,
                     finding_classification_json, first_detected_at, last_observed_at,
                     opened_at, resolved_at, current_state, persistence_state_json,
                     severity_score, latest_evidence_json,
                     source_live_analysis_run_id, baseline_reference,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     finding_id,
+                    _scope_id(),
                     key,
                     system_id,
                     identity,
@@ -649,7 +670,7 @@ def _finalize_findings(
                 persistence_state_json = ?, severity_score = ?,
                 latest_evidence_json = ?, source_live_analysis_run_id = ?,
                 updated_at = ?
-            WHERE finding_id = ?
+            WHERE finding_id = ? AND scope_storage_id = ?
             """,
             (
                 classification_json,
@@ -662,6 +683,7 @@ def _finalize_findings(
                 run_id,
                 timestamp,
                 prior["finding_id"],
+                _scope_id(),
             ),
         )
         updated += 1
@@ -673,10 +695,11 @@ def _finalize_findings(
             f"""
             SELECT finding_id FROM live_findings
             WHERE system_id = ? AND baseline_reference = ?
+              AND scope_storage_id = ?
               AND current_state IN ('observing', 'open')
               AND relationship_identity IN ({placeholders})
             """,
-            (system_id, baseline_reference, *sorted(aligned)),
+            (system_id, baseline_reference, _scope_id(), *sorted(aligned)),
         ).fetchall()
         for row in rows:
             connection.execute(
@@ -684,9 +707,9 @@ def _finalize_findings(
                 UPDATE live_findings
                 SET current_state = 'resolved', resolved_at = ?,
                     source_live_analysis_run_id = ?, updated_at = ?
-                WHERE finding_id = ?
+                WHERE finding_id = ? AND scope_storage_id = ?
                 """,
-                (timestamp, run_id, timestamp, row["finding_id"]),
+                (timestamp, run_id, timestamp, row["finding_id"], _scope_id()),
             )
             resolved += 1
     return created, updated, resolved
@@ -721,7 +744,7 @@ def _complete_run(
                 error_summary = NULL, analytics_result_reference = ?,
                 analytics_result_json = ?, created_findings_count = ?,
                 updated_findings_count = ?, resolved_findings_count = ?
-            WHERE run_id = ? AND status = 'running'
+            WHERE run_id = ? AND status = 'running' AND scope_storage_id = ?
             """,
             (
                 timestamp,
@@ -734,6 +757,7 @@ def _complete_run(
                 updated,
                 resolved,
                 run_id,
+                _scope_id(),
             ),
         )
         connection.execute(
@@ -741,9 +765,9 @@ def _complete_run(
             UPDATE live_analysis_configurations
             SET last_analysis_completed_at = ?, next_analysis_at = ?,
                 current_status = 'enabled', latest_error = NULL, updated_at = ?
-            WHERE system_id = ?
+            WHERE system_id = ? AND scope_storage_id = ?
             """,
-            (timestamp, next_analysis, timestamp, config["system_id"]),
+            (timestamp, next_analysis, timestamp, config["system_id"], _scope_id()),
         )
         _upsert_health(
             connection,
@@ -758,8 +782,8 @@ def _complete_run(
             preserve_history=True,
         )
         row = connection.execute(
-            "SELECT * FROM live_analysis_runs WHERE run_id = ?",
-            (run_id,),
+            "SELECT * FROM live_analysis_runs WHERE run_id = ? AND scope_storage_id = ?",
+            (run_id, _scope_id()),
         ).fetchone()
     return _run_payload(row)
 
@@ -780,18 +804,18 @@ def _fail_run(
             """
             UPDATE live_analysis_runs
             SET status = 'failed', completed_at = ?, error_summary = ?
-            WHERE run_id = ? AND status IN ('pending', 'running')
+            WHERE run_id = ? AND status IN ('pending', 'running') AND scope_storage_id = ?
             """,
-            (timestamp, summary, run_id),
+            (timestamp, summary, run_id, _scope_id()),
         )
         connection.execute(
             """
             UPDATE live_analysis_configurations
             SET last_analysis_completed_at = ?, next_analysis_at = ?,
                 current_status = 'error', latest_error = ?, updated_at = ?
-            WHERE system_id = ?
+            WHERE system_id = ? AND scope_storage_id = ?
             """,
-            (timestamp, next_analysis, summary, timestamp, config["system_id"]),
+            (timestamp, next_analysis, summary, timestamp, config["system_id"], _scope_id()),
         )
         _upsert_health(
             connection,
@@ -805,8 +829,8 @@ def _fail_run(
             preserve_history=True,
         )
         row = connection.execute(
-            "SELECT * FROM live_analysis_runs WHERE run_id = ?",
-            (run_id,),
+            "SELECT * FROM live_analysis_runs WHERE run_id = ? AND scope_storage_id = ?",
+            (run_id, _scope_id()),
         ).fetchone()
     return _run_payload(row)
 
@@ -845,10 +869,11 @@ def _recover_stale_active_run(
             SELECT run_id, status, started_at
             FROM live_analysis_runs
             WHERE system_id = ? AND status IN ('pending', 'running')
+              AND scope_storage_id = ?
             ORDER BY created_at
             LIMIT 1
             """,
-            (config["system_id"],),
+            (config["system_id"], _scope_id()),
         ).fetchone()
     if row is None:
         return False
@@ -873,9 +898,9 @@ def _recover_stale_active_run(
             """
             UPDATE live_analysis_runs
             SET status = 'failed', completed_at = ?, error_summary = ?
-            WHERE run_id = ? AND status IN ('pending', 'running')
+            WHERE run_id = ? AND status IN ('pending', 'running') AND scope_storage_id = ?
             """,
-            (timestamp, summary, row["run_id"]),
+            (timestamp, summary, row["run_id"], _scope_id()),
         ).rowcount
         if not updated:
             return False
@@ -884,9 +909,9 @@ def _recover_stale_active_run(
             UPDATE live_analysis_configurations
             SET last_analysis_completed_at = ?, next_analysis_at = ?,
                 current_status = 'error', latest_error = ?, updated_at = ?
-            WHERE system_id = ?
+            WHERE system_id = ? AND scope_storage_id = ?
             """,
-            (timestamp, next_analysis, summary, timestamp, config["system_id"]),
+            (timestamp, next_analysis, summary, timestamp, config["system_id"], _scope_id()),
         )
         _upsert_health(
             connection,
@@ -1051,11 +1076,11 @@ def run_due_live_analyses(*, now: datetime | None = None) -> dict[str, Any]:
                 """
                 SELECT system_id
                 FROM live_analysis_configurations
-                WHERE enabled = 1
+                WHERE scope_storage_id = ? AND enabled = 1
                   AND (next_analysis_at IS NULL OR next_analysis_at <= ?)
                 ORDER BY next_analysis_at, system_id
                 """,
-                (timestamp,),
+                (_scope_id(), timestamp),
             ).fetchall()
         ]
 
@@ -1102,10 +1127,10 @@ def list_live_analysis_runs(
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     init_runtime_db()
-    query = "SELECT * FROM live_analysis_runs"
-    params: list[Any] = []
+    query = "SELECT * FROM live_analysis_runs WHERE scope_storage_id = ?"
+    params: list[Any] = [_scope_id()]
     if system_id:
-        query += " WHERE system_id = ?"
+        query += " AND system_id = ?"
         params.append(system_id)
     query += " ORDER BY created_at DESC, run_id DESC LIMIT ?"
     params.append(max(1, min(int(limit), 500)))
@@ -1118,8 +1143,8 @@ def read_live_analysis_run(run_id: str) -> dict[str, Any]:
     init_runtime_db()
     with db_connection() as connection:
         row = connection.execute(
-            "SELECT * FROM live_analysis_runs WHERE run_id = ?",
-            (run_id,),
+            "SELECT * FROM live_analysis_runs WHERE run_id = ? AND scope_storage_id = ?",
+            (run_id, _scope_id()),
         ).fetchone()
     if row is None:
         raise LiveAnalysisNotFoundError("Live-analysis run not found.")
@@ -1133,8 +1158,8 @@ def list_live_findings(
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     init_runtime_db()
-    conditions: list[str] = []
-    params: list[Any] = []
+    conditions: list[str] = ["scope_storage_id = ?"]
+    params: list[Any] = [_scope_id()]
     if system_id:
         conditions.append("system_id = ?")
         params.append(system_id)
@@ -1155,8 +1180,8 @@ def read_live_finding(finding_id: str) -> dict[str, Any]:
     init_runtime_db()
     with db_connection() as connection:
         row = connection.execute(
-            "SELECT * FROM live_findings WHERE finding_id = ?",
-            (finding_id,),
+            "SELECT * FROM live_findings WHERE finding_id = ? AND scope_storage_id = ?",
+            (finding_id, _scope_id()),
         ).fetchone()
     if row is None:
         raise LiveAnalysisNotFoundError("Live finding not found.")
@@ -1168,14 +1193,16 @@ def list_live_analysis_health(
     system_id: str | None = None,
 ) -> list[dict[str, Any]]:
     init_runtime_db()
-    query = "SELECT * FROM live_analysis_health"
-    params: tuple[Any, ...] = ()
+    query = "SELECT * FROM live_analysis_health WHERE scope_storage_id = ?"
+    params: tuple[Any, ...] = (_scope_id(),)
     if system_id:
-        query += " WHERE system_id = ?"
-        params = (system_id,)
+        query += " AND system_id = ?"
+        params = (*params, system_id)
     query += " ORDER BY system_id"
     with db_connection() as connection:
         rows = [dict(row) for row in connection.execute(query, params).fetchall()]
+    for row in rows:
+        row.pop("scope_storage_id", None)
     if not rows and system_id:
         return [
             {

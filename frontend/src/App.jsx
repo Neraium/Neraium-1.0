@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 
 import WorkspaceLoadingState from "./components/WorkspaceLoadingState";
 import { fetchCurrentUser } from "./services/api/authApi";
-import { clearDatasetSessionCache } from "./services/datasetSessionCache";
+import { activateAuthorizedWorkspaceSession, clearDatasetSessionCache } from "./services/datasetSessionCache";
 
 const AuthScreen = lazy(() => import("./components/AuthScreen"));
 const AuthenticatedApp = lazy(() => import("./AuthenticatedApp"));
@@ -11,6 +11,7 @@ function App() {
   const [authState, setAuthState] = useState({
     status: "checking",
     user: null,
+    workspaceSession: null,
     notice: "",
     errorKind: null,
   });
@@ -20,17 +21,21 @@ function App() {
     clearDatasetSessionCache();
   }, []);
 
-  const handleAuthenticated = useCallback((user) => {
-    setAuthState({ status: "authenticated", user, notice: "", errorKind: null });
+  const handleAuthenticated = useCallback((sessionOrUser) => {
+    const workspaceSession = sessionOrUser?.user
+      ? sessionOrUser
+      : { authenticated: true, user: sessionOrUser, workspaces: [], default_workspace_id: "default" };
+    activateAuthorizedWorkspaceSession(workspaceSession);
+    setAuthState({ status: "authenticated", user: workspaceSession.user, workspaceSession, notice: "", errorKind: null });
   }, []);
 
   const handleSignedOut = useCallback((notice = "Sign in to continue.") => {
     resetSignedOutSession();
-    setAuthState({ status: "signed-out", user: null, notice, errorKind: null });
+    setAuthState({ status: "signed-out", user: null, workspaceSession: null, notice, errorKind: null });
   }, [resetSignedOutSession]);
 
   const handleRetrySession = useCallback(() => {
-    setAuthState({ status: "checking", user: null, notice: "", errorKind: null });
+    setAuthState({ status: "checking", user: null, workspaceSession: null, notice: "", errorKind: null });
     setAuthCheckAttempt((current) => current + 1);
   }, []);
 
@@ -42,7 +47,7 @@ function App() {
       .then((payload) => {
         if (cancelled) return;
         if (payload?.authenticated && payload?.user) {
-          handleAuthenticated(payload.user);
+          handleAuthenticated(payload);
           return;
         }
         handleSignedOut("Sign in to continue.");
@@ -55,6 +60,7 @@ function App() {
         setAuthState({
           status: "error",
           user: null,
+          workspaceSession: null,
           notice: String(error?.message ?? "Unable to verify your session. Retry session verification."),
           errorKind,
         });
@@ -99,7 +105,7 @@ function App() {
   const userKey = String(authState.user.email ?? authState.user.id ?? "authenticated");
   return (
     <Suspense fallback={<WorkspaceLoadingState label="Opening workspace" detail="Loading the application runtime." fullScreen />}>
-      <AuthenticatedApp key={userKey} currentUser={authState.user} onSignedOut={handleSignedOut} />
+      <AuthenticatedApp key={userKey} currentUser={authState.user} workspaceSession={authState.workspaceSession} onSignedOut={handleSignedOut} />
     </Suspense>
   );
 }

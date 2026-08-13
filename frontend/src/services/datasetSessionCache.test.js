@@ -8,6 +8,7 @@ import {
   clearDatasetSessionCache,
   datasetCacheScopeKey,
   getCurrentWorkspaceId,
+  resolveAuthorizedWorkspaceSelection,
   setCurrentWorkspaceId,
 } from "./datasetSessionCache";
 
@@ -103,6 +104,36 @@ describe("dataset session cache scoping", () => {
 
     expect(getCurrentWorkspaceId()).toBe("default");
     expect(datasetCacheScopeKey({ email: "alice@example.com" })).toBe("alice@example.com::default");
+  });
+
+  it("rejects a stale locally selected workspace against the authenticated session", () => {
+    window.localStorage.setItem(CURRENT_WORKSPACE_STORAGE_KEY, "ws-former-facility");
+    const session = {
+      user: { email: "alice@example.com" },
+      default_workspace_id: "default",
+      workspaces: [
+        { workspace_id: "default", display_name: "Personal workspace", kind: "personal", is_active: true },
+        { workspace_id: "ws-central", display_name: "Central Plant", kind: "facility", is_active: true },
+      ],
+    };
+
+    expect(resolveAuthorizedWorkspaceSelection(session)).toMatchObject({
+      workspaceId: "default",
+      currentWorkspace: { display_name: "Personal workspace" },
+      stale: true,
+    });
+  });
+
+  it("will not select an inactive workspace summary", () => {
+    const session = {
+      default_workspace_id: "ws-disabled",
+      workspaces: [
+        { workspace_id: "ws-disabled", display_name: "Disabled", kind: "facility", is_active: false },
+        { workspace_id: "ws-active", display_name: "Active", kind: "facility", is_active: true },
+      ],
+    };
+
+    expect(resolveAuthorizedWorkspaceSelection(session, "ws-disabled").workspaceId).toBe("ws-active");
   });
 
   it("keeps workspace startup usable when Safari denies storage access", () => {

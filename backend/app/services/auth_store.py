@@ -8,6 +8,7 @@ import os
 import secrets
 import sqlite3
 import threading
+import uuid
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -126,6 +127,35 @@ AUTH_SCHEMA_STATEMENTS = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS auth_workspaces (
+        workspace_id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        scope_tenant_id TEXT NOT NULL,
+        scope_user_id TEXT NOT NULL,
+        scope_workspace_id TEXT NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        disabled_at TEXT,
+        created_by TEXT NOT NULL,
+        UNIQUE(scope_tenant_id, scope_user_id, scope_workspace_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS auth_workspace_members (
+        workspace_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        added_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        disabled_at TEXT,
+        added_by TEXT NOT NULL,
+        PRIMARY KEY(workspace_id, email),
+        FOREIGN KEY(workspace_id) REFERENCES auth_workspaces(workspace_id) ON DELETE RESTRICT,
+        FOREIGN KEY(email) REFERENCES auth_users(email) ON DELETE RESTRICT
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS auth_sessions (
         session_id TEXT PRIMARY KEY,
         email TEXT NOT NULL,
@@ -144,6 +174,14 @@ AUTH_SCHEMA_STATEMENTS = (
     """,
     """
     CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked ON auth_sessions(revoked_at, expires_at DESC)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_auth_workspace_members_email_active
+    ON auth_workspace_members(email, is_active)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_auth_workspace_members_workspace_active
+    ON auth_workspace_members(workspace_id, is_active)
     """,
 )
 
@@ -164,6 +202,35 @@ POSTGRES_AUTH_SCHEMA_STATEMENTS = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS auth_workspaces (
+        workspace_id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        scope_tenant_id TEXT NOT NULL,
+        scope_user_id TEXT NOT NULL,
+        scope_workspace_id TEXT NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        disabled_at TIMESTAMPTZ,
+        created_by TEXT NOT NULL,
+        UNIQUE(scope_tenant_id, scope_user_id, scope_workspace_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS auth_workspace_members (
+        workspace_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        added_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        disabled_at TIMESTAMPTZ,
+        added_by TEXT NOT NULL,
+        PRIMARY KEY(workspace_id, email),
+        FOREIGN KEY(workspace_id) REFERENCES auth_workspaces(workspace_id) ON DELETE RESTRICT,
+        FOREIGN KEY(email) REFERENCES auth_users(email) ON DELETE RESTRICT
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS auth_sessions (
         session_id TEXT PRIMARY KEY,
         email TEXT NOT NULL,
@@ -177,11 +244,14 @@ POSTGRES_AUTH_SCHEMA_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_auth_users_role_active ON auth_users(role, is_active)",
     "CREATE INDEX IF NOT EXISTS idx_auth_sessions_email ON auth_sessions(email, expires_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked ON auth_sessions(revoked_at, expires_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_auth_workspace_members_email_active ON auth_workspace_members(email, is_active)",
+    "CREATE INDEX IF NOT EXISTS idx_auth_workspace_members_workspace_active ON auth_workspace_members(workspace_id, is_active)",
 )
 
 AUTH_SCHEMA_MIGRATIONS = (
     "001_auth_integrity",
     "002_single_active_session",
+    "003_workspace_membership",
 )
 
 
@@ -279,6 +349,12 @@ def _apply_auth_schema_migrations(connection: Any, *, dialect: str, placeholder:
         connection.execute(
             f"INSERT INTO auth_schema_migrations (migration_id, applied_at) VALUES ({placeholder}, {placeholder})",
             ("002_single_active_session", migration_time),
+        )
+
+    if "003_workspace_membership" not in applied:
+        connection.execute(
+            f"INSERT INTO auth_schema_migrations (migration_id, applied_at) VALUES ({placeholder}, {placeholder})",
+            ("003_workspace_membership", _now_iso()),
         )
 
 
@@ -445,6 +521,160 @@ class _BaseAuthBackend:
         )
         self._execute(sql, (bool(is_active), deactivated_at, timestamp, email))
         return self.read_user(email)
+
+    def create_workspace(self, workspace: dict[str, Any], first_member: dict[str, Any]) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                f"""
+                INSERT INTO auth_workspaces (
+                    workspace_id, display_name, scope_tenant_id, scope_user_id,
+                    scope_workspace_id, is_active, created_at, updated_at,
+                    disabled_at, created_by
+                ) VALUES ({self._placeholders(10)})
+                """,
+                (
+                    workspace["workspace_id"], workspace["display_name"],
+                    workspace["scope_tenant_id"], workspace["scope_user_id"],
+                    workspace["scope_workspace_id"], True, workspace["created_at"],
+                    workspace["updated_at"], None, workspace["created_by"],
+                ),
+            )
+            connection.execute(
+                f"""
+                INSERT INTO auth_workspace_members (
+                    workspace_id, email, is_active, added_at, updated_at,
+                    disabled_at, added_by
+                ) VALUES ({self._placeholders(7)})
+                """,
+                (
+                    first_member["workspace_id"], first_member["email"], True,
+                    first_member["added_at"], first_member["updated_at"], None,
+                    first_member["added_by"],
+                ),
+            )
+
+    def read_workspace(self, workspace_id: str) -> dict[str, Any] | None:
+        sql = f"SELECT * FROM auth_workspaces WHERE workspace_id = {self.placeholder}"
+        return self._fetch_one(sql, (workspace_id,))
+
+    def list_workspaces_for_email(
+        self, email: str, *, include_inactive: bool = False, limit: int = 500
+    ) -> list[dict[str, Any]]:
+        clauses = [f"m.email = {self.placeholder}"]
+        if not include_inactive:
+            clauses.extend(["m.is_active", "w.is_active", "u.is_active"])
+        return self._fetch_all(
+            f"""
+            SELECT w.*, m.is_active AS membership_is_active,
+                   m.added_at AS membership_added_at,
+                   m.disabled_at AS membership_disabled_at
+            FROM auth_workspace_members m
+            JOIN auth_workspaces w ON w.workspace_id = m.workspace_id
+            JOIN auth_users u ON u.email = m.email
+            WHERE {' AND '.join(clauses)}
+            ORDER BY w.created_at ASC, w.workspace_id ASC
+            LIMIT {self.placeholder}
+            """,
+            (email, limit),
+        )
+
+    def read_workspace_member(self, workspace_id: str, email: str) -> dict[str, Any] | None:
+        return self._fetch_one(
+            f"""
+            SELECT m.*, u.name, u.role, u.is_active AS account_is_active
+            FROM auth_workspace_members m
+            JOIN auth_users u ON u.email = m.email
+            WHERE m.workspace_id = {self.placeholder} AND m.email = {self.placeholder}
+            """,
+            (workspace_id, email),
+        )
+
+    def list_workspace_members(
+        self, workspace_id: str, *, include_inactive: bool = False, limit: int = 500
+    ) -> list[dict[str, Any]]:
+        clauses = [f"m.workspace_id = {self.placeholder}"]
+        if not include_inactive:
+            clauses.extend(["m.is_active", "u.is_active"])
+        return self._fetch_all(
+            f"""
+            SELECT m.*, u.name, u.role, u.is_active AS account_is_active,
+                   u.deactivated_at AS account_deactivated_at
+            FROM auth_workspace_members m
+            JOIN auth_users u ON u.email = m.email
+            WHERE {' AND '.join(clauses)}
+            ORDER BY lower(u.name) ASC, m.email ASC
+            LIMIT {self.placeholder}
+            """,
+            (workspace_id, limit),
+        )
+
+    def upsert_workspace_member(self, payload: dict[str, Any]) -> None:
+        self._execute(
+            f"""
+            INSERT INTO auth_workspace_members (
+                workspace_id, email, is_active, added_at, updated_at,
+                disabled_at, added_by
+            ) VALUES ({self._placeholders(7)})
+            ON CONFLICT(workspace_id, email) DO UPDATE SET
+                is_active=excluded.is_active,
+                updated_at=excluded.updated_at,
+                disabled_at=excluded.disabled_at,
+                added_by=excluded.added_by
+            """,
+            (
+                payload["workspace_id"], payload["email"], True,
+                payload["added_at"], payload["updated_at"], None,
+                payload["added_by"],
+            ),
+        )
+
+    def disable_workspace_member(self, workspace_id: str, email: str) -> int:
+        timestamp = _now_iso()
+        with self._connect() as connection:
+            if self.dialect == "sqlite":
+                connection.execute("BEGIN IMMEDIATE")
+            else:
+                connection.execute(
+                    f"SELECT workspace_id FROM auth_workspaces WHERE workspace_id = {self.placeholder} FOR UPDATE",
+                    (workspace_id,),
+                )
+            member_cursor = connection.execute(
+                f"""
+                SELECT m.is_active, u.role
+                FROM auth_workspace_members m
+                JOIN auth_users u ON u.email = m.email
+                WHERE m.workspace_id = {self.placeholder} AND m.email = {self.placeholder}
+                """,
+                (workspace_id, email),
+            )
+            member = self._row_to_dict(member_cursor, member_cursor.fetchone())
+            if not member or not bool(member.get("is_active", True)):
+                return 0
+            if normalize_role(member.get("role"), "viewer") == "admin":
+                admin_cursor = connection.execute(
+                    f"""
+                    SELECT COUNT(*) AS active_admins
+                    FROM auth_workspace_members m
+                    JOIN auth_users u ON u.email = m.email
+                    WHERE m.workspace_id = {self.placeholder}
+                      AND m.is_active AND u.is_active AND u.role = 'admin'
+                    """,
+                    (workspace_id,),
+                )
+                admin_count = self._row_to_dict(admin_cursor, admin_cursor.fetchone())
+                if int((admin_count or {}).get("active_admins") or 0) <= 1:
+                    raise ValueError("A workspace must retain at least one active admin member.")
+            cursor = connection.execute(
+                f"""
+                UPDATE auth_workspace_members
+                SET is_active = {self.placeholder}, disabled_at = {self.placeholder},
+                    updated_at = {self.placeholder}
+                WHERE workspace_id = {self.placeholder} AND email = {self.placeholder}
+                  AND is_active
+                """,
+                (False, timestamp, timestamp, workspace_id, email),
+            )
+            return int(getattr(cursor, "rowcount", 0) or 0)
 
     def upsert_session(self, payload: dict[str, Any]) -> None:
         sql = f"""
@@ -1150,6 +1380,210 @@ def list_workflow_members(*, include_inactive: bool = False) -> list[dict[str, A
         for user in users
         if include_inactive or user["is_active"]
     ]
+
+
+def _sanitize_workspace_record(workspace: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "workspace_id": str(workspace.get("workspace_id") or ""),
+        "display_name": str(workspace.get("display_name") or ""),
+        "scope_tenant_id": str(workspace.get("scope_tenant_id") or ""),
+        "scope_user_id": str(workspace.get("scope_user_id") or ""),
+        "scope_workspace_id": str(workspace.get("scope_workspace_id") or ""),
+        "is_active": bool(workspace.get("is_active", True)),
+        "created_at": _serialize_timestamp(workspace.get("created_at")),
+        "updated_at": _serialize_timestamp(workspace.get("updated_at")),
+        "disabled_at": _serialize_timestamp(workspace.get("disabled_at")),
+        "created_by": _normalize_email(workspace.get("created_by", "")),
+        "membership_is_active": bool(workspace.get("membership_is_active", True)),
+    }
+
+
+def workspace_summary(workspace: dict[str, Any]) -> dict[str, Any]:
+    sanitized = _sanitize_workspace_record(workspace)
+    return {
+        "workspace_id": sanitized["workspace_id"],
+        "display_name": sanitized["display_name"],
+        "kind": "facility",
+        "is_active": sanitized["is_active"] and sanitized["membership_is_active"],
+    }
+
+
+def personal_workspace_summary() -> dict[str, Any]:
+    return {
+        "workspace_id": "default",
+        "display_name": "Personal workspace",
+        "kind": "personal",
+        "is_active": True,
+    }
+
+
+def list_authorized_workspaces(email: str, *, include_inactive: bool = False) -> list[dict[str, Any]]:
+    normalized_email = _normalize_email(email)
+    if not normalized_email:
+        return []
+    backend = _get_backend()
+    if not hasattr(backend, "list_workspaces_for_email"):
+        # Compatibility for narrowly-scoped test/third-party auth backends.
+        return []
+    return [
+        _sanitize_workspace_record(item)
+        for item in backend.list_workspaces_for_email(
+            normalized_email, include_inactive=include_inactive
+        )
+    ]
+
+
+def workspace_session_summary(email: str) -> dict[str, Any]:
+    workspaces = [personal_workspace_summary()]
+    workspaces.extend(workspace_summary(item) for item in list_authorized_workspaces(email))
+    return {"workspaces": workspaces, "default_workspace_id": "default"}
+
+
+def get_workspace(workspace_id: str) -> dict[str, Any] | None:
+    raw = _get_backend().read_workspace(str(workspace_id or "").strip())
+    return _sanitize_workspace_record(raw) if raw else None
+
+
+def get_authorized_workspace(workspace_id: str, email: str) -> dict[str, Any] | None:
+    normalized_email = _normalize_email(email)
+    backend = _get_backend()
+    workspace = backend.read_workspace(str(workspace_id or "").strip())
+    member = backend.read_workspace_member(str(workspace_id or "").strip(), normalized_email)
+    if not workspace or not member:
+        return None
+    if not bool(workspace.get("is_active", True)):
+        return None
+    if not bool(member.get("is_active", True)) or not bool(member.get("account_is_active", True)):
+        return None
+    sanitized = _sanitize_workspace_record(workspace)
+    sanitized["membership_is_active"] = True
+    return sanitized
+
+
+def create_workspace(
+    display_name: str,
+    *,
+    created_by: str,
+    scope_tenant_id: str | None = None,
+    scope_user_id: str | None = None,
+    scope_workspace_id: str | None = None,
+) -> dict[str, Any]:
+    actor = _normalize_email(created_by)
+    name = str(display_name or "").strip()
+    if not actor:
+        raise ValueError("A workspace creator is required.")
+    if not name:
+        raise ValueError("Workspace name is required.")
+    backend = _get_backend()
+    user = backend.read_user(actor)
+    if not user or not bool(user.get("is_active", True)):
+        raise ValueError("Workspace creator must be an active account.")
+    workspace_id = f"ws-{uuid.uuid4()}"
+    empty_scope_principal = f"workspace:{workspace_id}"
+    timestamp = _now_iso()
+    payload = {
+        "workspace_id": workspace_id,
+        "display_name": name,
+        "scope_tenant_id": str(scope_tenant_id or empty_scope_principal),
+        "scope_user_id": str(scope_user_id or empty_scope_principal),
+        "scope_workspace_id": str(scope_workspace_id or "default"),
+        "created_at": timestamp,
+        "updated_at": timestamp,
+        "created_by": actor,
+    }
+    backend.create_workspace(
+        payload,
+        {
+            "workspace_id": workspace_id,
+            "email": actor,
+            "added_at": timestamp,
+            "updated_at": timestamp,
+            "added_by": actor,
+        },
+    )
+    created = backend.read_workspace(workspace_id)
+    if not created:  # pragma: no cover - defensive persistence check
+        raise RuntimeError("auth_workspace_write_failed")
+    return _sanitize_workspace_record(created)
+
+
+def _workspace_member_projection(member: dict[str, Any]) -> dict[str, Any]:
+    membership_active = bool(member.get("is_active", True))
+    account_active = bool(member.get("account_is_active", True))
+    return {
+        "member_id": _normalize_email(member.get("email", "")),
+        "display_name": str(member.get("name") or member.get("email") or ""),
+        "role": normalize_role(member.get("role"), "viewer"),
+        "is_active": membership_active and account_active,
+    }
+
+
+def workspace_assignment_member(
+    workspace_id: str, member_id: str, *, include_inactive: bool = False
+) -> dict[str, Any] | None:
+    raw = _get_backend().read_workspace_member(
+        str(workspace_id or "").strip(), _normalize_email(member_id)
+    )
+    if raw is None:
+        return None
+    projected = _workspace_member_projection(raw)
+    if not include_inactive and not projected["is_active"]:
+        return None
+    return projected
+
+
+def list_workspace_members(
+    workspace_id: str, *, include_inactive: bool = False
+) -> list[dict[str, Any]]:
+    return [
+        _workspace_member_projection(item)
+        for item in _get_backend().list_workspace_members(
+            str(workspace_id or "").strip(), include_inactive=include_inactive
+        )
+    ]
+
+
+def add_workspace_member(workspace_id: str, email: str, *, added_by: str) -> dict[str, Any]:
+    workspace_id = str(workspace_id or "").strip()
+    normalized_email = _normalize_email(email)
+    actor = _normalize_email(added_by)
+    backend = _get_backend()
+    workspace = backend.read_workspace(workspace_id)
+    if not workspace or not bool(workspace.get("is_active", True)):
+        raise ValueError("Workspace not found.")
+    user = backend.read_user(normalized_email)
+    if not user:
+        raise ValueError("User account not found.")
+    if not bool(user.get("is_active", True)):
+        raise ValueError("Inactive accounts cannot be added to a workspace.")
+    timestamp = _now_iso()
+    backend.upsert_workspace_member(
+        {
+            "workspace_id": workspace_id,
+            "email": normalized_email,
+            "added_at": timestamp,
+            "updated_at": timestamp,
+            "added_by": actor,
+        }
+    )
+    member = workspace_assignment_member(workspace_id, normalized_email)
+    if member is None:  # pragma: no cover - defensive persistence check
+        raise RuntimeError("auth_workspace_member_write_failed")
+    return member
+
+
+def disable_workspace_member(workspace_id: str, email: str) -> dict[str, Any] | None:
+    workspace_id = str(workspace_id or "").strip()
+    normalized_email = _normalize_email(email)
+    backend = _get_backend()
+    current = backend.read_workspace_member(workspace_id, normalized_email)
+    if current is None:
+        return None
+    if not bool(current.get("is_active", True)):
+        return _workspace_member_projection(current)
+    backend.disable_workspace_member(workspace_id, normalized_email)
+    disabled = backend.read_workspace_member(workspace_id, normalized_email)
+    return _workspace_member_projection(disabled) if disabled else None
 
 
 def activate_user(email: str) -> dict[str, Any] | None:

@@ -13,6 +13,7 @@ from typing import Any, Callable, Iterator
 
 from app.core.config import get_settings
 from app.services.dataset_scope import (
+    attach_dataset_scope,
     build_upload_queue_routing,
     current_dataset_scope,
     dataset_scope_context,
@@ -113,6 +114,7 @@ def init_runtime_db() -> None:
                 completed_at TEXT,
                 status TEXT NOT NULL,
                 source_name TEXT,
+                scope_storage_id TEXT,
                 payload_json TEXT NOT NULL
             );
 
@@ -260,6 +262,8 @@ RUNTIME_SCHEMA_MIGRATIONS = (
     "007_finding_workflow_sidecar",
     "008_finding_workflow_scope",
     "009_finding_field_reports",
+    "010_workspace_evidence_scope",
+    "011_workspace_live_analysis_scope",
 )
 
 
@@ -568,6 +572,7 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
             """
             CREATE TABLE IF NOT EXISTS live_analysis_configurations (
                 system_id TEXT PRIMARY KEY,
+                scope_storage_id TEXT,
                 enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
                 approved_baseline_id TEXT,
                 analysis_interval_seconds INTEGER NOT NULL DEFAULT 300 CHECK (analysis_interval_seconds > 0),
@@ -590,6 +595,7 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
             """
             CREATE TABLE IF NOT EXISTS live_analysis_runs (
                 run_id TEXT PRIMARY KEY,
+                scope_storage_id TEXT,
                 system_id TEXT NOT NULL,
                 baseline_reference TEXT NOT NULL DEFAULT '',
                 window_start TEXT NOT NULL,
@@ -620,6 +626,7 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
             """
             CREATE TABLE IF NOT EXISTS live_findings (
                 finding_id TEXT PRIMARY KEY,
+                scope_storage_id TEXT,
                 deduplication_key TEXT NOT NULL UNIQUE,
                 system_id TEXT NOT NULL,
                 relationship_identity TEXT NOT NULL,
@@ -642,6 +649,7 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
             """
             CREATE TABLE IF NOT EXISTS live_analysis_health (
                 system_id TEXT PRIMARY KEY,
+                scope_storage_id TEXT,
                 last_attempted_run_at TEXT,
                 last_completed_run_at TEXT,
                 last_successful_run_at TEXT,
@@ -666,7 +674,8 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
             """CREATE INDEX IF NOT EXISTS idx_live_analysis_runs_window
                    ON live_analysis_runs (system_id, window_end DESC)""",
             """CREATE UNIQUE INDEX IF NOT EXISTS idx_live_analysis_one_running
-                   ON live_analysis_runs (system_id) WHERE status = 'running'""",
+                   ON live_analysis_runs (scope_storage_id, system_id)
+                   WHERE status = 'running' AND scope_storage_id IS NOT NULL""",
             """CREATE INDEX IF NOT EXISTS idx_live_findings_system_state
                    ON live_findings (system_id, current_state, last_observed_at DESC)""",
             """CREATE INDEX IF NOT EXISTS idx_live_findings_baseline_relationship
@@ -844,6 +853,247 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
         connection.execute(
             "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
             ("009_finding_field_reports", now_iso()),
+        )
+
+    if "010_workspace_evidence_scope" not in applied:
+        evidence_columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(evidence_runs)").fetchall()
+        }
+        if "scope_storage_id" not in evidence_columns:
+            connection.execute("ALTER TABLE evidence_runs ADD COLUMN scope_storage_id TEXT")
+        # Backfill only rows that carry an authoritative full DatasetScope. A
+        # missing or malformed scope remains NULL and therefore fail-closed.
+        rows = connection.execute(
+            "SELECT run_id, payload_json FROM evidence_runs WHERE scope_storage_id IS NULL"
+        ).fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except (TypeError, json.JSONDecodeError):
+                continue
+            scope = dataset_scope_from_payload(payload if isinstance(payload, dict) else None)
+            if scope is not None:
+                connection.execute(
+                    "UPDATE evidence_runs SET scope_storage_id = ? WHERE run_id = ?",
+                    (scope.storage_id, str(row["run_id"])),
+                )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_evidence_runs_scope_created "
+            "ON evidence_runs(scope_storage_id, created_at DESC, run_id DESC)"
+        )
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("010_workspace_evidence_scope", now_iso()),
+        )
+
+    if "011_workspace_live_analysis_scope" not in applied:
+        # Legacy live-analysis rows do not carry enough information to infer an
+        # owner. Add nullable keys without backfilling; exact-scope queries keep
+        # those ambiguous source rows inaccessible until an audited adoption.
+        for table_name in (
+            "live_analysis_configurations",
+            "live_analysis_runs",
+            "live_findings",
+            "live_analysis_health",
+        ):
+            columns = {
+                str(row["name"])
+                for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+            }
+            if "scope_storage_id" not in columns:
+                connection.execute(f"ALTER TABLE {table_name} ADD COLUMN scope_storage_id TEXT")
+        # Rebuild the tables so normal facility-local identifiers can repeat in
+        # unrelated scopes. UUID run/finding IDs remain stable; all natural-key
+        # uniqueness and the run->finding relationship include exact scope.
+        connection.execute("PRAGMA defer_foreign_keys = ON")
+        connection.executescript(
+            """
+            CREATE TABLE live_analysis_configurations_scoped (
+                system_id TEXT NOT NULL,
+                scope_storage_id TEXT,
+                enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+                approved_baseline_id TEXT,
+                analysis_interval_seconds INTEGER NOT NULL DEFAULT 300 CHECK (analysis_interval_seconds > 0),
+                comparison_window_minutes INTEGER NOT NULL DEFAULT 60 CHECK (comparison_window_minutes > 0),
+                minimum_coverage_percent REAL NOT NULL DEFAULT 80 CHECK (
+                    minimum_coverage_percent >= 0 AND minimum_coverage_percent <= 100
+                ),
+                allowed_lateness_minutes INTEGER NOT NULL DEFAULT 5 CHECK (allowed_lateness_minutes >= 0),
+                last_analysis_started_at TEXT,
+                last_analysis_completed_at TEXT,
+                next_analysis_at TEXT,
+                current_status TEXT NOT NULL DEFAULT 'disabled' CHECK (
+                    current_status IN ('enabled', 'disabled', 'running', 'waiting', 'error')
+                ),
+                latest_error TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(scope_storage_id, system_id)
+            );
+
+            CREATE TABLE live_analysis_runs_scoped (
+                run_id TEXT PRIMARY KEY,
+                scope_storage_id TEXT,
+                system_id TEXT NOT NULL,
+                baseline_reference TEXT NOT NULL DEFAULT '',
+                window_start TEXT NOT NULL,
+                window_end TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'skipped', 'failed')),
+                started_at TEXT,
+                completed_at TEXT,
+                rows_analyzed INTEGER NOT NULL DEFAULT 0 CHECK (rows_analyzed >= 0),
+                signals_analyzed INTEGER NOT NULL DEFAULT 0 CHECK (signals_analyzed >= 0),
+                coverage REAL NOT NULL DEFAULT 0 CHECK (coverage >= 0 AND coverage <= 100),
+                skipped_reason TEXT CHECK (skipped_reason IS NULL OR skipped_reason IN (
+                    'disabled', 'missing_baseline', 'insufficient_coverage',
+                    'insufficient_signals', 'telemetry_delayed', 'telemetry_unavailable',
+                    'duplicate_window', 'analysis_already_running'
+                )),
+                error_summary TEXT,
+                analytics_result_reference TEXT,
+                analytics_result_json TEXT CHECK (
+                    analytics_result_json IS NULL OR json_valid(analytics_result_json)
+                ),
+                created_findings_count INTEGER NOT NULL DEFAULT 0 CHECK (created_findings_count >= 0),
+                updated_findings_count INTEGER NOT NULL DEFAULT 0 CHECK (updated_findings_count >= 0),
+                resolved_findings_count INTEGER NOT NULL DEFAULT 0 CHECK (resolved_findings_count >= 0),
+                created_at TEXT NOT NULL,
+                UNIQUE(scope_storage_id, run_id),
+                UNIQUE(scope_storage_id, system_id, baseline_reference, window_start, window_end)
+            );
+
+            CREATE TABLE live_findings_scoped (
+                finding_id TEXT PRIMARY KEY,
+                scope_storage_id TEXT,
+                deduplication_key TEXT NOT NULL,
+                system_id TEXT NOT NULL,
+                relationship_identity TEXT NOT NULL,
+                finding_classification_json TEXT NOT NULL CHECK (json_valid(finding_classification_json)),
+                first_detected_at TEXT NOT NULL,
+                last_observed_at TEXT NOT NULL,
+                opened_at TEXT,
+                resolved_at TEXT,
+                current_state TEXT NOT NULL CHECK (current_state IN ('observing', 'open', 'resolved')),
+                persistence_state_json TEXT NOT NULL CHECK (json_valid(persistence_state_json)),
+                severity_score REAL,
+                latest_evidence_json TEXT NOT NULL CHECK (json_valid(latest_evidence_json)),
+                source_live_analysis_run_id TEXT NOT NULL,
+                baseline_reference TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(scope_storage_id, deduplication_key),
+                FOREIGN KEY(scope_storage_id, source_live_analysis_run_id)
+                    REFERENCES live_analysis_runs_scoped(scope_storage_id, run_id)
+            );
+
+            CREATE TABLE live_analysis_health_scoped (
+                system_id TEXT NOT NULL,
+                scope_storage_id TEXT,
+                last_attempted_run_at TEXT,
+                last_completed_run_at TEXT,
+                last_successful_run_at TEXT,
+                current_status TEXT NOT NULL CHECK (current_status IN (
+                    'healthy', 'waiting_for_data', 'missing_baseline', 'delayed',
+                    'running', 'error', 'disabled', 'never_run'
+                )),
+                current_window_coverage REAL NOT NULL DEFAULT 0 CHECK (
+                    current_window_coverage >= 0 AND current_window_coverage <= 100
+                ),
+                latest_skipped_reason TEXT,
+                consecutive_failures INTEGER NOT NULL DEFAULT 0 CHECK (consecutive_failures >= 0),
+                latest_error TEXT,
+                next_scheduled_run TEXT,
+                updated_at TEXT NOT NULL,
+                UNIQUE(scope_storage_id, system_id)
+            );
+
+            INSERT INTO live_analysis_configurations_scoped (
+                system_id, scope_storage_id, enabled, approved_baseline_id,
+                analysis_interval_seconds, comparison_window_minutes,
+                minimum_coverage_percent, allowed_lateness_minutes,
+                last_analysis_started_at, last_analysis_completed_at,
+                next_analysis_at, current_status, latest_error, created_at, updated_at
+            ) SELECT system_id, scope_storage_id, enabled, approved_baseline_id,
+                     analysis_interval_seconds, comparison_window_minutes,
+                     minimum_coverage_percent, allowed_lateness_minutes,
+                     last_analysis_started_at, last_analysis_completed_at,
+                     next_analysis_at, current_status, latest_error, created_at, updated_at
+              FROM live_analysis_configurations;
+            INSERT INTO live_analysis_runs_scoped (
+                run_id, scope_storage_id, system_id, baseline_reference,
+                window_start, window_end, status, started_at, completed_at,
+                rows_analyzed, signals_analyzed, coverage, skipped_reason,
+                error_summary, analytics_result_reference, analytics_result_json,
+                created_findings_count, updated_findings_count,
+                resolved_findings_count, created_at
+            ) SELECT run_id, scope_storage_id, system_id, baseline_reference,
+                     window_start, window_end, status, started_at, completed_at,
+                     rows_analyzed, signals_analyzed, coverage, skipped_reason,
+                     error_summary, analytics_result_reference, analytics_result_json,
+                     created_findings_count, updated_findings_count,
+                     resolved_findings_count, created_at
+              FROM live_analysis_runs;
+            INSERT INTO live_findings_scoped (
+                finding_id, scope_storage_id, deduplication_key, system_id,
+                relationship_identity, finding_classification_json,
+                first_detected_at, last_observed_at, opened_at, resolved_at,
+                current_state, persistence_state_json, severity_score,
+                latest_evidence_json, source_live_analysis_run_id,
+                baseline_reference, created_at, updated_at
+            ) SELECT finding_id, scope_storage_id, deduplication_key, system_id,
+                     relationship_identity, finding_classification_json,
+                     first_detected_at, last_observed_at, opened_at, resolved_at,
+                     current_state, persistence_state_json, severity_score,
+                     latest_evidence_json, source_live_analysis_run_id,
+                     baseline_reference, created_at, updated_at
+              FROM live_findings;
+            INSERT INTO live_analysis_health_scoped (
+                system_id, scope_storage_id, last_attempted_run_at,
+                last_completed_run_at, last_successful_run_at, current_status,
+                current_window_coverage, latest_skipped_reason,
+                consecutive_failures, latest_error, next_scheduled_run, updated_at
+            ) SELECT system_id, scope_storage_id, last_attempted_run_at,
+                     last_completed_run_at, last_successful_run_at, current_status,
+                     current_window_coverage, latest_skipped_reason,
+                     consecutive_failures, latest_error, next_scheduled_run, updated_at
+              FROM live_analysis_health;
+
+            DROP TABLE live_findings;
+            DROP TABLE live_analysis_runs;
+            DROP TABLE live_analysis_configurations;
+            DROP TABLE live_analysis_health;
+            ALTER TABLE live_analysis_configurations_scoped RENAME TO live_analysis_configurations;
+            ALTER TABLE live_analysis_runs_scoped RENAME TO live_analysis_runs;
+            ALTER TABLE live_findings_scoped RENAME TO live_findings;
+            ALTER TABLE live_analysis_health_scoped RENAME TO live_analysis_health;
+
+            CREATE INDEX idx_live_config_scope_due
+                ON live_analysis_configurations(scope_storage_id, enabled, next_analysis_at, system_id);
+            CREATE INDEX idx_live_runs_scope_created
+                ON live_analysis_runs(scope_storage_id, created_at DESC, run_id DESC);
+            CREATE INDEX idx_live_analysis_runs_system_created
+                ON live_analysis_runs(scope_storage_id, system_id, created_at DESC);
+            CREATE INDEX idx_live_analysis_runs_window
+                ON live_analysis_runs(scope_storage_id, system_id, window_end DESC);
+            CREATE UNIQUE INDEX idx_live_analysis_one_running
+                ON live_analysis_runs(scope_storage_id, system_id)
+                WHERE status = 'running' AND scope_storage_id IS NOT NULL;
+            CREATE INDEX idx_live_findings_scope_observed
+                ON live_findings(scope_storage_id, last_observed_at DESC, finding_id DESC);
+            CREATE INDEX idx_live_findings_system_state
+                ON live_findings(scope_storage_id, system_id, current_state, last_observed_at DESC);
+            CREATE INDEX idx_live_findings_baseline_relationship
+                ON live_findings(scope_storage_id, baseline_reference, relationship_identity);
+            CREATE INDEX idx_live_health_scope_system
+                ON live_analysis_health(scope_storage_id, system_id);
+            CREATE INDEX idx_live_analysis_health_status
+                ON live_analysis_health(scope_storage_id, current_status, updated_at DESC);
+            """
+        )
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("011_workspace_live_analysis_scope", now_iso()),
         )
 
 
@@ -1943,30 +2193,45 @@ def delete_latest_payload_prefix(prefix: str) -> int:
 
 
 def upsert_evidence_runs_db(records: list[dict[str, Any]]) -> int:
-    prepared = [
-        (
-            record["run_id"],
-            record.get("created_at") or now_iso(),
-            record.get("completed_at"),
-            record.get("status", "pending"),
-            record.get("source_name"),
-            json.dumps(record),
+    prepared = []
+    for source in records:
+        record = dict(source)
+        scope = dataset_scope_from_payload(record) or current_dataset_scope()
+        attach_dataset_scope(record, scope=scope, dataset_id=record.get("dataset_id"))
+        prepared.append(
+            (
+                record["run_id"],
+                record.get("created_at") or now_iso(),
+                record.get("completed_at"),
+                record.get("status", "pending"),
+                record.get("source_name"),
+                scope.storage_id,
+                json.dumps(record),
+            )
         )
-        for record in records
-    ]
     if not prepared:
         return 0
     init_runtime_db()
     with db_connection() as connection:
+        for run_id, *_values, scope_storage_id, _payload_json in prepared:
+            existing = connection.execute(
+                "SELECT scope_storage_id FROM evidence_runs WHERE run_id = ?", (run_id,)
+            ).fetchone()
+            if existing is not None and existing["scope_storage_id"] != scope_storage_id:
+                raise ValueError("evidence_run_scope_conflict")
         connection.executemany(
             """
-            INSERT INTO evidence_runs (run_id, created_at, completed_at, status, source_name, payload_json)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO evidence_runs (
+                run_id, created_at, completed_at, status, source_name,
+                scope_storage_id, payload_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id) DO UPDATE SET
                 created_at=excluded.created_at,
                 completed_at=excluded.completed_at,
                 status=excluded.status,
                 source_name=excluded.source_name,
+                scope_storage_id=excluded.scope_storage_id,
                 payload_json=excluded.payload_json
             """,
             prepared,
@@ -1984,8 +2249,9 @@ def list_evidence_runs_db(limit: int = 50, offset: int = 0) -> list[dict[str, An
     bounded_offset = max(0, int(offset))
     with db_connection() as connection:
         rows = connection.execute(
-            "SELECT payload_json FROM evidence_runs ORDER BY created_at DESC, run_id DESC LIMIT ? OFFSET ?",
-            (bounded_limit, bounded_offset),
+            "SELECT payload_json FROM evidence_runs WHERE scope_storage_id = ? "
+            "ORDER BY created_at DESC, run_id DESC LIMIT ? OFFSET ?",
+            (current_dataset_scope().storage_id, bounded_limit, bounded_offset),
         ).fetchall()
     return [json.loads(row["payload_json"]) for row in rows]
 
@@ -1994,8 +2260,8 @@ def read_evidence_run_db(run_id: str) -> dict[str, Any] | None:
     init_runtime_db()
     with db_connection() as connection:
         row = connection.execute(
-            "SELECT payload_json FROM evidence_runs WHERE run_id = ?",
-            (run_id,),
+            "SELECT payload_json FROM evidence_runs WHERE run_id = ? AND scope_storage_id = ?",
+            (run_id, current_dataset_scope().storage_id),
         ).fetchone()
     if row is None:
         return None
@@ -2063,8 +2329,8 @@ def _append_evidence_event(
     )
     with db_connection() as connection:
         exists = connection.execute(
-            "SELECT 1 FROM evidence_runs WHERE run_id = ?",
-            (run_id,),
+            "SELECT 1 FROM evidence_runs WHERE run_id = ? AND scope_storage_id = ?",
+            (run_id, current_dataset_scope().storage_id),
         ).fetchone()
         if exists is None:
             raise ValueError("evidence_run_not_found")
@@ -2076,9 +2342,16 @@ def _append_evidence_event(
 
 
 def hydrate_evidence_event_history_db(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    run_ids = [str(record.get("run_id") or "") for record in records if record.get("run_id")]
+    scope = current_dataset_scope()
+    scoped_records = [
+        record for record in records
+        if dataset_scope_from_payload(record) == scope
+    ]
+    run_ids = [
+        str(record.get("run_id") or "") for record in scoped_records if record.get("run_id")
+    ]
     if not run_ids:
-        return records
+        return []
     init_runtime_db()
     placeholders = ", ".join("?" for _ in run_ids)
     event_sets: dict[str, dict[str, list[dict[str, Any]]]] = {
@@ -2097,7 +2370,7 @@ def hydrate_evidence_event_history_db(records: list[dict[str, Any]]) -> list[dic
             for row in rows:
                 event_sets[str(row["run_id"])][bucket].append(json.loads(row["payload_json"]))
     hydrated = []
-    for source in records:
+    for source in scoped_records:
         record = dict(source)
         events = event_sets.get(str(record.get("run_id") or ""), {})
         # New writes for an unambiguous one-finding run live only in the

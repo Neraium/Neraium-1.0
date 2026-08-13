@@ -75,6 +75,28 @@ describe("configured API fallback", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("does not retry an authoritative protected-resource 404", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(404));
+    vi.stubGlobal("fetch", fetchMock);
+    const { apiFetch } = await loadConfiguredApi();
+
+    await expect(apiFetch("/api/findings/case-from-another-workspace", { expectedResponseType: "json", timeoutMs: 1000 }))
+      .resolves.toMatchObject({ status: 404 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains bootstrap fallback when the configured auth route is missing", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(404))
+      .mockResolvedValueOnce(response(200));
+    vi.stubGlobal("fetch", fetchMock);
+    const { apiFetch } = await loadConfiguredApi();
+
+    await expect(apiFetch("/api/auth/me", { expectedResponseType: "json", timeoutMs: 1000 }))
+      .resolves.toMatchObject({ status: 200 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("does not replay mutating requests against a fallback candidate", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("connection lost"));
     vi.stubGlobal("fetch", fetchMock);

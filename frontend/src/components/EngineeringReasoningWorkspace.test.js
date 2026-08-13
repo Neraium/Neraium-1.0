@@ -81,7 +81,7 @@ function analysisResult(overrides = {}) {
   };
 }
 
-function renderWorkspace({ path = "/sites/current", result = analysisResult(), apiFetch = vi.fn(), onWorkspaceNavigate = vi.fn(), role = "operator" } = {}) {
+function renderWorkspace({ path = "/sites/current", result = analysisResult(), apiFetch = vi.fn(), onWorkspaceNavigate = vi.fn(), onWorkspaceChange = vi.fn(), workspaceSession = null, currentWorkspace = null, role = "operator" } = {}) {
   window.history.replaceState({}, "", path);
   const props = {
     liveOps: {},
@@ -91,9 +91,12 @@ function renderWorkspace({ path = "/sites/current", result = analysisResult(), a
     effectiveLatestUploadSnapshot: result ? { status: "complete", sii_completed: true } : {},
     apiFetch,
     onWorkspaceNavigate,
+    onWorkspaceChange,
+    workspaceSession,
+    currentWorkspace,
     currentUser: { name: "Engineer One", email: "engineer@neraium.test", role },
   };
-  return { ...render(React.createElement(EngineeringReasoningWorkspace, props)), onWorkspaceNavigate };
+  return { ...render(React.createElement(EngineeringReasoningWorkspace, props)), onWorkspaceNavigate, onWorkspaceChange };
 }
 
 afterEach(() => {
@@ -103,6 +106,28 @@ afterEach(() => {
 });
 
 describe("EngineeringReasoningWorkspace daily workflows", () => {
+  it("switches among explicit facility workspaces from compact workspace controls", () => {
+    const onWorkspaceChange = vi.fn();
+    renderWorkspace({
+      onWorkspaceChange,
+      workspaceSession: { workspaces: [{ workspace_id: "default", display_name: "Personal workspace", is_active: true }, { workspace_id: "ws-north", display_name: "North Plant", is_active: true }] },
+      currentWorkspace: { workspace_id: "ws-north", display_name: "North Plant" },
+    });
+    const selector = screen.getByLabelText("Current facility workspace");
+    expect(selector.value).toBe("ws-north");
+    fireEvent.change(selector, { target: { value: "default" } });
+    expect(onWorkspaceChange).toHaveBeenCalledWith("default");
+  });
+
+  it.each(["investigations", "evidence"])("never falls back to a default finding for an unknown %s deep link", async (routeName) => {
+    const apiFetch = vi.fn(async () => ({ ok: true, json: async () => ({ runs: [] }) }));
+    renderWorkspace({ path: `/${routeName}/workspace-b-secret`, apiFetch });
+    expect(await screen.findByRole("heading", { name: "Finding unavailable" })).toBeTruthy();
+    expect(screen.getByText("This finding is unavailable in the current facility workspace.")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Chiller 03 changed" })).toBeNull();
+    expect(document.body.textContent).not.toContain("workspace-b-secret");
+  });
+
   it("launches first-baseline onboarding instead of an analytical empty dashboard", () => {
     const { onWorkspaceNavigate } = renderWorkspace({ result: null });
     expect(screen.getByTestId("first-baseline-experience")).toBeTruthy();

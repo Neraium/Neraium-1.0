@@ -25,7 +25,7 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
       const payload = await loginUser({ email: email.trim(), password });
       window.localStorage.setItem(LAST_EMAIL_KEY, email.trim().toLowerCase());
       setPassword("");
-      onAuthenticated?.(payload.user);
+      onAuthenticated?.(payload);
     } catch (submitError) {
       setError(String(submitError?.message ?? "Sign in failed. Check your credentials and try again."));
     } finally {

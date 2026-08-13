@@ -26,7 +26,16 @@ describe("authApi", () => {
   });
 
   it("returns a verified authenticated session", async () => {
-    const session = { authenticated: true, user: { email: "operator@example.com", role: "operator" }, session: { active: true } };
+    const session = {
+      authenticated: true,
+      user: { email: "operator@example.com", role: "operator" },
+      session: { active: true },
+      default_workspace_id: "default",
+      workspaces: [
+        { workspace_id: "default", display_name: "Personal workspace", kind: "personal", is_active: true },
+        { workspace_id: "ws-central", display_name: "Central Plant", kind: "facility", is_active: true },
+      ],
+    };
     apiFetch.mockResolvedValue(reply(session));
 
     await expect(fetchCurrentUser()).resolves.toEqual(session);

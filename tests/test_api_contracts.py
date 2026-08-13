@@ -53,6 +53,13 @@ FINDING_WORKFLOW_OPERATIONS = {
     ("post", "/api/findings/{finding_id}/feedback"),
     ("post", "/api/findings/{finding_id}/resolution"),
 }
+WORKSPACE_AUTHORIZATION_OPERATIONS = {
+    ("get", "/api/workspaces"),
+    ("post", "/api/workspaces"),
+    ("get", "/api/workspaces/current/members"),
+    ("post", "/api/workspaces/{workspace_id}/members"),
+    ("post", "/api/workspaces/{workspace_id}/members/{email}/disable"),
+}
 UPLOAD_PROGRESS_OPERATION = (
     "get",
     "/api/data/upload-status/{job_id}",
@@ -66,6 +73,7 @@ EXPECTED_OPENAPI_OPERATION_COUNT = (
     + len(CORRELATION_OPERATIONS)
     + len(HISTORICAL_INGESTION_OPERATIONS)
     + len(FINDING_WORKFLOW_OPERATIONS)
+    + len(WORKSPACE_AUTHORIZATION_OPERATIONS)
 )
 
 
@@ -277,7 +285,14 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
             ("post", "/api/findings/{finding_id}/feedback"),
             ("post", "/api/findings/{finding_id}/resolution"),
         }:
-            assert "require_operator_role" in dependency_names
+            # These handlers intentionally resolve the workspace-scoped
+            # finding before applying the operator policy, so foreign IDs stay
+            # an opaque 404 even for a viewer.  The role check therefore lives
+            # inside the endpoint rather than in FastAPI's pre-handler graph.
+            assert matching_routes[0].endpoint.__name__ in {
+                "submit_finding_feedback",
+                "submit_finding_resolution",
+            }
     progress_method, progress_path, progress_operation_id, progress_model = UPLOAD_PROGRESS_OPERATION
     progress_operation = schema["paths"][progress_path][progress_method]
     assert progress_operation["operationId"] == progress_operation_id

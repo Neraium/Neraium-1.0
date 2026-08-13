@@ -5,7 +5,13 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.main import create_app
 from app.services import evidence_store
-from app.services.auth_store import create_user, deactivate_user
+from app.services.auth_store import (
+    add_workspace_member,
+    create_user,
+    create_workspace,
+    deactivate_user,
+)
+from app.services.dataset_scope import build_dataset_scope, dataset_scope_context
 from app.services.finding_workflow import evidence_finding_id
 
 
@@ -41,19 +47,33 @@ def test_active_member_directory_assignment_reassignment_and_legacy_reference(cl
     create_user("tech@example.com", "password123", name="Taylor Tech", role="viewer")
     create_user("lead@example.com", "password123", name="Morgan Lead", role="operator")
     create_user("inactive@example.com", "password123", name="Inactive Tech", role="viewer")
+    workspace = create_workspace(
+        "Central Plant",
+        created_by="lead@example.com",
+        scope_tenant_id="lead@example.com",
+        scope_user_id="lead@example.com",
+        scope_workspace_id="default",
+    )
+    add_workspace_member(workspace["workspace_id"], "tech@example.com", added_by="lead@example.com")
+    add_workspace_member(workspace["workspace_id"], "inactive@example.com", added_by="lead@example.com")
     deactivate_user("inactive@example.com")
+    headers = {
+        "X-Neraium-User": "lead@example.com",
+        "X-Neraium-Workspace-Id": workspace["workspace_id"],
+    }
 
-    members = client.get("/api/findings/members")
+    members = client.get("/api/findings/members", headers=headers)
     assert members.status_code == 200
-    assert members.json()["members"] == [
-        {"member_id": "tech@example.com", "display_name": "Taylor Tech", "role": "viewer", "is_active": True},
+    assert sorted(members.json()["members"], key=lambda item: item["member_id"]) == [
         {"member_id": "lead@example.com", "display_name": "Morgan Lead", "role": "operator", "is_active": True},
+        {"member_id": "tech@example.com", "display_name": "Taylor Tech", "role": "viewer", "is_active": True},
     ]
 
-    finding_id = _materialize("member-assignment")
+    with dataset_scope_context(build_dataset_scope(user_id="lead@example.com")):
+        finding_id = _materialize("member-assignment")
     assigned = client.patch(
         f"/api/findings/{finding_id}/workflow",
-        headers={"X-Neraium-User": "lead@example.com"},
+        headers=headers,
         json={
             "expected_version": 0,
             "assignment": {"target_type": "person", "label": "stale label", "external_ref": "TECH@example.com"},
@@ -72,7 +92,7 @@ def test_active_member_directory_assignment_reassignment_and_legacy_reference(cl
 
     reassigned = client.patch(
         f"/api/findings/{finding_id}/workflow",
-        headers={"X-Neraium-User": "lead@example.com"},
+        headers=headers,
         json={
             "expected_version": 1,
             "assignment": {"target_type": "person", "label": "Morgan", "external_ref": "lead@example.com"},
@@ -82,24 +102,28 @@ def test_active_member_directory_assignment_reassignment_and_legacy_reference(cl
     history = reassigned.json()["workflow"]["assignment_history"]
     assert [item["action"] for item in history] == ["assigned", "reassigned"]
 
-    legacy_id = _materialize("legacy-label-assignment")
+    with dataset_scope_context(build_dataset_scope(user_id="lead@example.com")):
+        legacy_id = _materialize("legacy-label-assignment")
     legacy = client.patch(
         f"/api/findings/{legacy_id}/workflow",
+        headers=headers,
         json={
             "expected_version": 0,
             "assignment": {"target_type": "person", "label": "Historical technician"},
         },
     )
-    assert legacy.status_code == 200
-    assert legacy.json()["workflow"]["assignment"]["external_ref"] is None
+    assert legacy.status_code == 422
+    assert legacy.json()["detail"] == "assignment_member_required"
 
     for member_id, expected_detail in (
         ("missing@example.com", "unknown_assignment_member"),
         ("inactive@example.com", "inactive_assignment_member"),
     ):
-        invalid_id = _materialize(f"invalid-{member_id.split('@')[0]}")
+        with dataset_scope_context(build_dataset_scope(user_id="lead@example.com")):
+            invalid_id = _materialize(f"invalid-{member_id.split('@')[0]}")
         invalid = client.patch(
             f"/api/findings/{invalid_id}/workflow",
+            headers=headers,
             json={
                 "expected_version": 0,
                 "assignment": {"target_type": "person", "label": "Invalid", "external_ref": member_id},
@@ -182,11 +206,27 @@ def test_field_reports_escalation_review_resolution_and_human_activity(client) -
 
 
 def test_human_activity_expands_bundled_assignment_priority_due_and_guidance(client) -> None:
+    create_user("lead@example.com", "password123", name="Lead", role="operator")
     create_user("first@example.com", "password123", name="First Tech", role="viewer")
     create_user("second@example.com", "password123", name="Second Tech", role="viewer")
-    finding_id = _materialize("activity-bundled-changes")
+    workspace = create_workspace(
+        "Activity Plant",
+        created_by="lead@example.com",
+        scope_tenant_id="lead@example.com",
+        scope_user_id="lead@example.com",
+        scope_workspace_id="default",
+    )
+    for email in ("first@example.com", "second@example.com"):
+        add_workspace_member(workspace["workspace_id"], email, added_by="lead@example.com")
+    headers = {
+        "X-Neraium-User": "lead@example.com",
+        "X-Neraium-Workspace-Id": workspace["workspace_id"],
+    }
+    with dataset_scope_context(build_dataset_scope(user_id="lead@example.com")):
+        finding_id = _materialize("activity-bundled-changes")
     first = client.patch(
         f"/api/findings/{finding_id}/workflow",
+        headers=headers,
         json={
             "expected_version": 0,
             "assignment": {"target_type": "person", "label": "First", "external_ref": "first@example.com"},
@@ -198,6 +238,7 @@ def test_human_activity_expands_bundled_assignment_priority_due_and_guidance(cli
     assert first.status_code == 200
     second = client.patch(
         f"/api/findings/{finding_id}/workflow",
+        headers=headers,
         json={
             "expected_version": 1,
             "assignment": {"target_type": "person", "label": "Second", "external_ref": "second@example.com"},
@@ -207,7 +248,7 @@ def test_human_activity_expands_bundled_assignment_priority_due_and_guidance(cli
 
     labels = [
         item["label"]
-        for item in client.get(f"/api/findings/{finding_id}/activity").json()["activity"]
+        for item in client.get(f"/api/findings/{finding_id}/activity", headers=headers).json()["activity"]
     ]
     assert labels == [
         "Finding reassigned", "Finding assigned", "Priority changed",
@@ -217,13 +258,16 @@ def test_human_activity_expands_bundled_assignment_priority_due_and_guidance(cli
 
 def test_work_queue_filters_are_applied_before_pagination(client) -> None:
     create_user("tech@example.com", "password123", name="Taylor Tech", role="viewer")
-    my_id = _materialize("queue-my-work", system_id="ahu-1")
-    unassigned_id = _materialize("queue-unassigned", system_id="boiler-1")
-    review_id = _materialize("queue-review", system_id="ahu-2")
-    resolved_id = _materialize("queue-resolved", system_id="pump-1")
+    headers = {"X-Neraium-User": "tech@example.com"}
+    with dataset_scope_context(build_dataset_scope(user_id="tech@example.com")):
+        my_id = _materialize("queue-my-work", system_id="ahu-1")
+        unassigned_id = _materialize("queue-unassigned", system_id="boiler-1")
+        review_id = _materialize("queue-review", system_id="ahu-2")
+        resolved_id = _materialize("queue-resolved", system_id="pump-1")
 
     client.patch(
         f"/api/findings/{my_id}/workflow",
+        headers=headers,
         json={
             "expected_version": 0,
             "status": "investigating",
@@ -233,26 +277,28 @@ def test_work_queue_filters_are_applied_before_pagination(client) -> None:
     )
     client.patch(
         f"/api/findings/{review_id}/workflow",
+        headers=headers,
         json={"expected_version": 0, "status": "awaiting_review"},
     )
     client.post(
         f"/api/findings/{resolved_id}/resolution",
+        headers=headers,
         json={"expected_version": 0, "outcome": "no_issue_found"},
     )
 
     my_work = client.get(
         "/api/findings?assigned_to_me=true&limit=1",
-        headers={"X-Neraium-User": "tech@example.com"},
+        headers=headers,
     ).json()
     assert [item["finding_id"] for item in my_work["findings"]] == [my_id]
     assert my_work["has_more"] is False
-    assert {item["finding_id"] for item in client.get("/api/findings?unassigned=true").json()["findings"]} == {
+    assert {item["finding_id"] for item in client.get("/api/findings?unassigned=true", headers=headers).json()["findings"]} == {
         unassigned_id, review_id, resolved_id,
     }
-    assert [item["finding_id"] for item in client.get("/api/findings?overdue=true").json()["findings"]] == [my_id]
-    assert [item["finding_id"] for item in client.get("/api/findings?awaiting_review=true").json()["findings"]] == [review_id]
-    assert [item["finding_id"] for item in client.get("/api/findings?recently_resolved=true").json()["findings"]] == [resolved_id]
-    assert [item["finding_id"] for item in client.get("/api/findings?system=boiler-1").json()["findings"]] == [unassigned_id]
+    assert [item["finding_id"] for item in client.get("/api/findings?overdue=true", headers=headers).json()["findings"]] == [my_id]
+    assert [item["finding_id"] for item in client.get("/api/findings?awaiting_review=true", headers=headers).json()["findings"]] == [review_id]
+    assert [item["finding_id"] for item in client.get("/api/findings?recently_resolved=true", headers=headers).json()["findings"]] == [resolved_id]
+    assert [item["finding_id"] for item in client.get("/api/findings?system=boiler-1", headers=headers).json()["findings"]] == [unassigned_id]
 
 
 def test_production_viewer_can_only_mutate_exact_own_validated_assignment(monkeypatch, tmp_path) -> None:
@@ -270,13 +316,25 @@ def test_production_viewer_can_only_mutate_exact_own_validated_assignment(monkey
         create_user("lead@example.com", "password123", name="Morgan Lead", role="operator")
         create_user("tech@example.com", "password123", name="Taylor Tech", role="viewer")
         create_user("other@example.com", "password123", name="Other Tech", role="viewer")
-        finding_id = _materialize("production-policy")
+        workspace = create_workspace(
+            "Production Plant",
+            created_by="lead@example.com",
+            scope_tenant_id="lead@example.com",
+            scope_user_id="lead@example.com",
+            scope_workspace_id="default",
+        )
+        for member in ("tech@example.com", "other@example.com"):
+            add_workspace_member(workspace["workspace_id"], member, added_by="lead@example.com")
+        workspace_headers = {"X-Neraium-Workspace-Id": workspace["workspace_id"]}
+        with dataset_scope_context(build_dataset_scope(user_id="lead@example.com")):
+            finding_id = _materialize("production-policy")
 
         assert client.post(
             "/api/auth/login", json={"email": "lead@example.com", "password": "password123"},
         ).status_code == 200
         assigned = client.patch(
             f"/api/findings/{finding_id}/workflow",
+            headers=workspace_headers,
             json={
                 "expected_version": 0,
                 "assignment": {"target_type": "person", "label": "Taylor", "external_ref": "tech@example.com"},
@@ -290,16 +348,19 @@ def test_production_viewer_can_only_mutate_exact_own_validated_assignment(monkey
         ).status_code == 200
         accepted = client.patch(
             f"/api/findings/{finding_id}/workflow",
+            headers=workspace_headers,
             json={"expected_version": 1, "status": "acknowledged"},
         )
         assert accepted.status_code == 200
         forbidden_priority = client.patch(
             f"/api/findings/{finding_id}/workflow",
+            headers=workspace_headers,
             json={"expected_version": 2, "user_priority": "critical"},
         )
         assert forbidden_priority.status_code == 403
         assert client.post(
             f"/api/findings/{finding_id}/resolution",
+            headers=workspace_headers,
             json={"expected_version": 2, "outcome": "issue_found"},
         ).status_code == 403
         client.post("/api/auth/logout")
@@ -309,6 +370,7 @@ def test_production_viewer_can_only_mutate_exact_own_validated_assignment(monkey
         ).status_code == 200
         not_mine = client.patch(
             f"/api/findings/{finding_id}/workflow",
+            headers=workspace_headers,
             json={"expected_version": 2, "status": "investigating"},
         )
         assert not_mine.status_code == 403

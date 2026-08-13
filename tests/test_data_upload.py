@@ -985,7 +985,10 @@ def test_upload_records_authenticated_actor_in_evidence() -> None:
         upload.json()["status_url"],
         headers={"X-Neraium-User": "operator@example.com"},
     )
-    detail = client.get(f"/api/evidence/runs/{run_id}")
+    detail = client.get(
+        f"/api/evidence/runs/{run_id}",
+        headers={"X-Neraium-User": "operator@example.com"},
+    )
 
     assert detail.status_code == 200
     assert detail.json()["initiated_by"] == "operator@example.com"

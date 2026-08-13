@@ -125,4 +125,52 @@ describe("shared maintenance Work area", () => {
     fireEvent.click(screen.getByRole("button", { name: "Overdue" }));
     expect(await screen.findByRole("heading", { name: "No overdue work" })).toBeTruthy();
   });
+
+  it("presents My Work and Team Findings as views of the current facility workspace", async () => {
+    const apiFetch = apiHarness();
+    render(React.createElement(WorkQueueWorkspace, {
+      apiFetch,
+      currentUser: { email: "tech@example.com", role: "viewer" },
+      currentWorkspace: { workspace_id: "ws-a", display_name: "North Plant" },
+    }));
+    expect(await screen.findByText("Facility workspace · North Plant")).toBeTruthy();
+    await waitFor(() => expect(apiFetch.mock.calls.some(([url]) => String(url).includes("assigned_to_me=true"))).toBe(true));
+    fireEvent.click(screen.getByRole("button", { name: "Team Findings" }));
+    await waitFor(() => {
+      const listCalls = apiFetch.mock.calls.filter(([url]) => String(url).startsWith("/api/findings?"));
+      expect(String(listCalls.at(-1)?.[0])).not.toContain("assigned_to_me=true");
+    });
+  });
+
+  it("keeps a removed member's historical assignment unless a lead intentionally changes it", async () => {
+    const apiFetch = apiHarness(casePayload({ assignment: { target_type: "person", label: "Former Tech", external_ref: "former@example.com" } }));
+    render(React.createElement(WorkQueueWorkspace, { apiFetch, currentUser: { email: "lead@example.com", role: "operator" } }));
+    fireEvent.click(await screen.findByRole("button", { name: /Open AHU 1/i }));
+    const picker = await screen.findByLabelText("Assign to");
+    await waitFor(() => expect(picker.value).toBe("__historical"));
+    expect((await within(picker).findByRole("option", { name: "Former member · Former Tech" })).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Save assignment" }));
+    await waitFor(() => expect(apiFetch.mock.calls.some(([url]) => String(url).endsWith("/workflow"))).toBe(true));
+    const body = JSON.parse(apiFetch.mock.calls.find(([url]) => String(url).endsWith("/workflow"))[1].body);
+    expect(Object.hasOwn(body, "assignment")).toBe(false);
+  });
+
+  it("shows a clean workspace denial for a direct finding link without leaking the id", async () => {
+    const apiFetch = apiHarness();
+    render(React.createElement(WorkQueueWorkspace, { apiFetch, currentUser: { email: "tech@example.com", role: "viewer" }, findingId: "workspace-b-secret" }));
+    expect(await screen.findByRole("heading", { name: "Finding unavailable" })).toBeTruthy();
+    expect(screen.getByText("This finding is unavailable in the current facility workspace.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("workspace-b-secret");
+  });
+
+  it("reports member loading failures and disables assignment selection", async () => {
+    const base = apiHarness();
+    const apiFetch = vi.fn(async (url, options) => String(url) === "/api/findings/members"
+      ? response({ detail: "Workspace not found." }, 404)
+      : base(url, options));
+    render(React.createElement(WorkQueueWorkspace, { apiFetch, currentUser: { email: "lead@example.com", role: "operator" } }));
+    fireEvent.click(await screen.findByRole("button", { name: /Open AHU 1/i }));
+    expect(await screen.findByText("Assignment is unavailable until active members load.")).toBeTruthy();
+    expect(screen.getByLabelText(/Assign to/).disabled).toBe(true);
+  });
 });

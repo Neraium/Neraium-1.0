@@ -83,6 +83,19 @@ function WorkspaceStateNotice({ state, onPrimary }) {
   );
 }
 
+function ScopedRouteState({ loading, onBack }) {
+  return (
+    <section className="case-workspace scoped-route-state" role={loading ? "status" : "alert"} aria-live="polite">
+      <span className="forensic-kicker">Facility workspace</span>
+      <h1>{loading ? "Loading authorized evidence…" : "Finding unavailable"}</h1>
+      <p>{loading
+        ? "Checking this finding and its evidence in your current facility workspace."
+        : "This finding is unavailable in the current facility workspace."}</p>
+      {!loading ? <button type="button" className="forensic-button forensic-button--secondary" onClick={onBack}>Back to findings</button> : null}
+    </section>
+  );
+}
+
 function TechnicalSummary({ model }) {
   const warnings = model.selectedFinding?.technicalLimitations ?? [];
   return (
@@ -228,7 +241,7 @@ function writeStorageValue(key, value) {
   }
 }
 
-export default function EngineeringReasoningWorkspace({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection, apiFetch, comparisonAnalysisId = null, datasetScopeKey = "anonymous", onWorkspaceNavigate, onSignOut, signOutPending = false, currentUser }) {
+export default function EngineeringReasoningWorkspace({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection, apiFetch, comparisonAnalysisId = null, datasetScopeKey = "anonymous", workspaceSession = null, currentWorkspace = null, onWorkspaceChange, onWorkspaceNavigate, onSignOut, signOutPending = false, currentUser }) {
   const [route, setRoute] = useState(routeFromLocation);
   const [selectedFindingId, setSelectedFindingId] = useState(() => pathIdentity(["findings", "evidence", "investigations"]));
   const [selectedSystemName, setSelectedSystemName] = useState(() => pathIdentity(["systems"]));
@@ -239,6 +252,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const restoreScrollRef = useRef(0);
   const [selectedSiteId, setSelectedSiteId] = useState(() => pathIdentity(["sites"]) || null);
   const [portfolioRuns, setPortfolioRuns] = useState([]);
+  const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [facilityLabelContext, setFacilityLabelContext] = useState({});
   const [findingWorkflowRecords, setFindingWorkflowRecords] = useState({});
   const storageScope = storageScopeFor(currentUser, datasetScopeKey);
@@ -269,7 +283,15 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   }, [currentModel, facilityLabelContext, portfolioRuns]);
   const portfolioSites = useMemo(() => portfolioModels.map((item) => item.site), [portfolioModels]);
   const model = portfolioModels.find((item) => item.site.id === selectedSiteId) ?? currentModel;
-  const selectedFinding = selectedFindingId === "__overview__" ? null : model.findings.find((finding) => finding.id === selectedFindingId) ?? model.selectedFinding;
+  const routeRequiresExactFinding = ["investigation", "evidence"].includes(route) && Boolean(selectedFindingId && selectedFindingId !== "__overview__");
+  const exactSelectedFinding = selectedFindingId && selectedFindingId !== "__overview__"
+    ? model.findings.find((finding) => finding.id === selectedFindingId)
+    : null;
+  const selectedFinding = selectedFindingId === "__overview__"
+    ? null
+    : routeRequiresExactFinding
+      ? exactSelectedFinding ?? null
+      : exactSelectedFinding ?? model.selectedFinding;
   const effectiveReviewRecords = useMemo(() => ({ ...reviewRecords, ...findingWorkflowRecords }), [findingWorkflowRecords, reviewRecords]);
   const selectedReviewRecord = selectedFinding ? reviewRecordFor(selectedFinding, effectiveReviewRecords) : null;
   const selectedSystem = model.subsystems.find((system) => system.name === selectedSystemName) ?? null;
@@ -288,14 +310,21 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     ...(portfolioModels.length > 1 ? [["portfolio", "Sites"]] : []),
     ...(currentUser?.role === "admin" ? [["governance-admin", "Administration"]] : []),
   ];
+  const availableWorkspaces = (Array.isArray(workspaceSession?.workspaces)
+    ? workspaceSession.workspaces
+    : Array.isArray(currentUser?.workspaces) ? currentUser.workspaces : [])
+    .filter((workspace) => workspace?.is_active !== false);
+  const currentWorkspaceId = String(currentWorkspace?.workspace_id ?? currentWorkspace?.workspaceId ?? workspaceSession?.default_workspace_id ?? "default");
 
   useEffect(() => {
     let cancelled = false;
     setPortfolioRuns([]);
+    setPortfolioLoading(true);
     Promise.resolve(apiFetch?.("/api/evidence/runs?limit=100"))
       .then((response) => response?.ok ? response.json() : null)
       .then((payload) => { if (!cancelled && Array.isArray(payload?.runs)) setPortfolioRuns(payload.runs); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setPortfolioLoading(false); });
     return () => { cancelled = true; };
   }, [apiFetch, datasetScopeKey]);
 
@@ -606,6 +635,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
         </nav>
         <div className="forensic-sidebar__account">
           <span>{currentUser?.name || currentUser?.email || "Signed in"}</span><small>{currentUser?.role || "engineer"}</small>
+          {availableWorkspaces.length > 1 ? <label className="forensic-workspace-selector forensic-workspace-selector--sidebar"><span>Facility workspace</span><select value={currentWorkspaceId} onChange={(event) => onWorkspaceChange?.(event.target.value)}>{availableWorkspaces.map((workspace) => <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.display_name}</option>)}</select></label> : null}
           {onSignOut ? <button type="button" onClick={onSignOut} disabled={signOutPending}>{signOutPending ? "Signing out..." : "Sign out"}</button> : null}
         </div>
       </aside>
@@ -622,10 +652,14 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
             onClick={() => setMobileNavOpen((value) => !value)}
           ><span className="forensic-mobile-menu__label">Menu</span><svg className="forensic-mobile-menu__icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
           <GlobalAssetSearch items={model.searchItems} onSelect={handleSearch} />
-          <div className="forensic-topbar__site"><span>{model.site.name}</span>{model.selectedFinding?.confidenceContract && Object.keys(model.selectedFinding.confidenceContract).length ? null : <ConfidenceTierChip tier={model.evidenceQuality} />}</div>
+          <div className="forensic-topbar__site">
+            {availableWorkspaces.length > 1 ? <label className="forensic-workspace-selector"><span>Facility</span><select aria-label="Current facility workspace" value={currentWorkspaceId} onChange={(event) => onWorkspaceChange?.(event.target.value)}>{availableWorkspaces.map((workspace) => <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.display_name}</option>)}</select></label> : <span>{currentWorkspace?.display_name ?? currentWorkspace?.displayName ?? model.site.name}</span>}
+            {model.selectedFinding?.confidenceContract && Object.keys(model.selectedFinding.confidenceContract).length ? null : <ConfidenceTierChip tier={model.evidenceQuality} />}
+          </div>
         </header>
         <main id="forensic-main" aria-label="Neraium operational workspace" tabIndex={-1} data-route={effectiveRoute}>
-          {effectiveRoute === "work" ? <Suspense fallback={<p className="case-unavailable">Loading work…</p>}><WorkQueueWorkspace apiFetch={apiFetch} currentUser={currentUser} findingId={pathIdentity(["work"])} onRouteFinding={routeWorkFinding} technicalFindingFor={technicalFindingFor} onOpenInvestigation={openInvestigation} onOpenEvidence={openEvidence} /></Suspense>
+          {effectiveRoute === "work" ? <Suspense fallback={<p className="case-unavailable">Loading work…</p>}><WorkQueueWorkspace apiFetch={apiFetch} currentUser={currentUser} currentWorkspace={currentWorkspace} findingId={pathIdentity(["work"])} onRouteFinding={routeWorkFinding} technicalFindingFor={technicalFindingFor} onOpenInvestigation={openInvestigation} onOpenEvidence={openEvidence} /></Suspense>
+            : routeRequiresExactFinding && !selectedFinding ? <ScopedRouteState loading={portfolioLoading} onBack={() => navigate("findings")} />
             : showFirstBaseline ? <FirstBaselineExperience onImport={beginFirstBaseline} onExit={dismissFirstBaseline} />
             : ["noDataset", "datasetReady", "analysisRunning"].includes(presentationState.key) ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
               : effectiveRoute === "finding" ? <FindingReviewWorkspace model={model} finding={selectedFinding} reviewRecord={selectedReviewRecord} onReviewAction={handleFindingReviewAction} onWorkflowSave={handleWorkflowSave} onWorkflowFeedback={handleWorkflowFeedback} onWorkflowResolve={handleWorkflowResolve} onWorkflowReload={reloadSelectedFindingWorkflow} onOpenInvestigation={openInvestigation} onBack={() => goBack("site")} />

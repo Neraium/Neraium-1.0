@@ -35,7 +35,7 @@ describe("findings API", () => {
   });
 
   it("loads active workflow members with stable identities", async () => {
-    const apiFetch = vi.fn().mockResolvedValue(response({ members: [{ member_id: "tech@example.com", display_name: "Taylor Tech", role: "viewer", is_active: true }] }));
+    const apiFetch = vi.fn().mockResolvedValue(response({ members: [{ member_id: "tech@example.com", display_name: "Taylor Tech", role: "viewer", is_active: true }, { member_id: "former@example.com", display_name: "Former Tech", role: "viewer", is_active: false }] }));
     await expect(fetchFindingMembers({ apiFetch })).resolves.toEqual([{ memberId: "tech@example.com", displayName: "Taylor Tech", role: "viewer", active: true }]);
     expect(apiFetch.mock.calls[0][0]).toBe("/api/findings/members");
   });
@@ -96,5 +96,15 @@ describe("findings API", () => {
     await expect(resolveFinding({ apiFetch, findingId: "finding-1", outcome: "confirmed_issue" })).rejects.toBeInstanceOf(TypeError);
     expect(apiFetch).not.toHaveBeenCalled();
     expect(new FindingApiError("missing", { status: 404 }).unavailable).toBe(true);
+    expect(new FindingApiError("denied", { status: 403 }).unavailable).toBe(true);
+  });
+
+  it("does not expose protected backend detail for an opaque workspace denial", async () => {
+    const apiFetch = vi.fn().mockResolvedValue(response({ detail: "foreign workspace finding foreign-42" }, { ok: false, status: 404 }));
+    await expect(fetchFinding({ apiFetch, findingId: "foreign-42" })).rejects.toMatchObject({
+      status: 404,
+      unavailable: true,
+      message: "Finding workflow could not be loaded.",
+    });
   });
 });

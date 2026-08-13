@@ -11,6 +11,7 @@ import {
   activateDatasetCacheScope,
   clearDatasetSessionCache,
   getCurrentWorkspaceId,
+  resolveAuthorizedWorkspaceSelection,
   setCurrentWorkspaceId,
 } from "./services/datasetSessionCache";
 import { resolveSessionStore } from "./viewModels/sessionState";
@@ -49,15 +50,14 @@ function readInitialWorkspaceRoute() {
   return PATH_WORKSPACES[pathname] ?? "system-body";
 }
 
-function initializeAuthenticatedRoute(currentUser) {
+function initializeAuthenticatedRoute(currentUser, workspaceSession) {
   const baselineRoute = parseBaselineRoute();
   const comparisonRoute = parseBaselineComparisonRoute();
   const analysisRoute = parseBaselineAnalysisRoute();
   const routeIdentity = baselineRoute ?? comparisonRoute ?? analysisRoute;
   let datasetScopeKey = "authenticated";
   try {
-    if (routeIdentity?.portfolioId) setCurrentWorkspaceId(routeIdentity.portfolioId);
-    const workspaceId = routeIdentity?.portfolioId ?? getCurrentWorkspaceId();
+    const workspaceId = resolveAuthorizedWorkspaceSelection(workspaceSession).workspaceId;
     datasetScopeKey = activateDatasetCacheScope(currentUser, workspaceId).scopeKey;
   } catch {
     // Browser storage is an optional cache; authenticated routing remains available without it.
@@ -72,9 +72,9 @@ function initializeAuthenticatedRoute(currentUser) {
   };
 }
 
-function AuthenticatedApp({ currentUser, onSignedOut }) {
+function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
   const accessCode = String(import.meta.env.VITE_NERAIUM_API_TOKEN ?? "").trim();
-  const [initialRoute] = useState(() => initializeAuthenticatedRoute(currentUser));
+  const [initialRoute] = useState(() => initializeAuthenticatedRoute(currentUser, workspaceSession));
   const [activeWorkspace, setActiveWorkspaceState] = useState(initialRoute.activeWorkspace);
   const [selectedBaselineIdentity, setSelectedBaselineIdentity] = useState(initialRoute.baselineRoute);
   const [comparisonBaselineIdentity, setComparisonBaselineIdentity] = useState(initialRoute.comparisonRoute);
@@ -85,8 +85,22 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
   const [appReady, setAppReady] = useState(false);
   const [signOutPending, setSignOutPending] = useState(false);
   const [datasetScopeKey, setDatasetScopeKey] = useState(initialRoute.datasetScopeKey);
+  const [currentWorkspaceId, setCurrentWorkspaceIdState] = useState(() => resolveAuthorizedWorkspaceSelection(workspaceSession).workspaceId);
   const initialAllowPersistedLatest = readStoredAllowPersistedLatest();
   const hasAccess = true;
+  const authorizedWorkspaces = useMemo(
+    () => resolveAuthorizedWorkspaceSelection(workspaceSession, currentWorkspaceId).workspaces,
+    [currentWorkspaceId, workspaceSession],
+  );
+  const currentWorkspace = useMemo(
+    () => authorizedWorkspaces.find((workspace) => workspace.workspace_id === currentWorkspaceId) ?? authorizedWorkspaces[0],
+    [authorizedWorkspaces, currentWorkspaceId],
+  );
+
+  const handleWorkspaceChange = useCallback((workspaceId) => {
+    const selection = resolveAuthorizedWorkspaceSelection(workspaceSession, workspaceId);
+    setCurrentWorkspaceId(selection.workspaceId);
+  }, [workspaceSession]);
 
   const setActiveWorkspace = useCallback((workspaceId) => {
     const nextWorkspace = workspaceId === "home" ? "home" : workspaceId;
@@ -387,7 +401,10 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
   useEffect(() => {
     if (typeof window === "undefined" || !currentUser) return undefined;
     const applyWorkspaceChange = () => {
-      const scope = activateDatasetCacheScope(currentUser, getCurrentWorkspaceId());
+      const selection = resolveAuthorizedWorkspaceSelection(workspaceSession, getCurrentWorkspaceId());
+      if (selection.stale) setCurrentWorkspaceId(selection.workspaceId);
+      const scope = activateDatasetCacheScope(currentUser, selection.workspaceId);
+      setCurrentWorkspaceIdState(selection.workspaceId);
       clearUploadSessionState();
       setAllowPersistedLatest(true);
       setDatasetScopeKey(scope.scopeKey);
@@ -403,7 +420,7 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
       window.removeEventListener("neraium:workspace-changed", applyWorkspaceChange);
       window.removeEventListener("storage", handleStorage);
     };
-  }, [clearUploadSessionState, currentUser, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest]);
+  }, [clearUploadSessionState, currentUser, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, workspaceSession]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -477,6 +494,9 @@ function AuthenticatedApp({ currentUser, onSignedOut }) {
         handleSignOut={handleSignOut}
         signOutPending={signOutPending}
         currentUser={currentUser}
+        workspaceSession={{ ...workspaceSession, workspaces: authorizedWorkspaces }}
+        currentWorkspace={currentWorkspace}
+        onWorkspaceChange={handleWorkspaceChange}
         setActiveWorkspace={setActiveWorkspace}
         selectedBaselineIdentity={selectedBaselineIdentity}
         comparisonBaselineIdentity={comparisonBaselineIdentity}

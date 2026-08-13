@@ -93,7 +93,10 @@ hooks/
 
 # Citadel transient planning/runtime artifacts
 .planning/telemetry/
-.planning/screenshots/
+!.planning/screenshots/
+.planning/screenshots/*
+!.planning/screenshots/shared-workspace-authorization/
+!.planning/screenshots/shared-workspace-authorization/*.png
 .planning/verification/
 .planning/map/
 .planning/app-server/

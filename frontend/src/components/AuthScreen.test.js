@@ -33,7 +33,14 @@ describe("AuthScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(screen.getByRole("button", { name: "Signing in..." }).disabled).toBe(true);
     expect(loginUser).toHaveBeenCalledTimes(1);
-    resolveLogin({ user: { email: "admin@example.com", role: "admin" } });
+    const session = {
+      authenticated: true,
+      user: { email: "admin@example.com", role: "admin" },
+      workspaces: [{ workspace_id: "default", display_name: "Personal workspace", kind: "personal", is_active: true }],
+      default_workspace_id: "default",
+    };
+    resolveLogin(session);
     await waitFor(() => expect(onAuthenticated).toHaveBeenCalledTimes(1));
+    expect(onAuthenticated).toHaveBeenCalledWith(session);
   });
 });

@@ -58,6 +58,13 @@
 .forensic-topbar { position: sticky; top: 0; z-index: 24; height: 66px; display: grid; grid-template-columns: minmax(280px, 680px) 1fr; align-items: center; gap: 22px; padding: 0 30px; background: rgba(7,11,17,.92); border-bottom: 1px solid var(--fr-line); backdrop-filter: blur(16px); }
 .forensic-topbar__site { justify-self: end; display: flex; align-items: center; gap: 12px; min-width: 0; font-size: 12px; }
 .forensic-topbar__site > span { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fr-muted); }
+.forensic-workspace-selector { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--fr-faint); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.forensic-workspace-selector select { max-width: 220px; min-height: 36px; border: 1px solid var(--fr-line-strong); border-radius: 4px; background: #09111a; color: var(--fr-text); padding: 6px 28px 6px 9px; font-size: 11px; letter-spacing: normal; text-transform: none; }
+.forensic-workspace-selector--sidebar { display: none; margin: 10px 0 4px; }
+.scoped-route-state { max-width: 720px; min-height: 320px; padding: clamp(28px, 6vw, 64px); border: 1px solid var(--fr-line); background: var(--fr-surface); }
+.scoped-route-state h1 { margin: 8px 0 12px; font-size: clamp(26px, 4vw, 42px); font-weight: 520; }
+.scoped-route-state p { max-width: 560px; color: var(--fr-muted); line-height: 1.6; }
+.scoped-route-state button { margin-top: 18px; }
 .forensic-mobile-menu { display: none; }
 .forensic-mobile-menu__icon { display: none; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .forensic-app > main { min-width: 0; padding: 30px clamp(22px, 3vw, 48px) 64px; }
@@ -373,6 +380,8 @@
   .forensic-mobile-menu__label { display: none; }
   .forensic-mobile-menu__icon { display: block; }
   .forensic-topbar__site { display: none; }
+  .forensic-workspace-selector--sidebar { display: grid; gap: 5px; }
+  .forensic-workspace-selector--sidebar select { width: 100%; max-width: none; min-height: 42px; }
   .global-asset-search { width: 100%; min-width: 0; height: 44px; }
   .global-asset-search kbd { display: none; }
   .global-asset-search__results { position: fixed; top: 60px; left: 16px; right: 16px; }

@@ -353,4 +353,27 @@ describe("ObservationCenterWorkspace", () => {
     expect(screen.queryByRole("button", { name: "Load older issues" })).toBeNull();
   });
 
+  it("downloads evidence through authenticated apiFetch rather than a new unauthenticated window", async () => {
+    installLocalStorageMock();
+    const run = {
+      run_id: "export-run-1", source_type: "csv_upload", source_name: "telemetry.csv", status: "completed",
+      created_at: "2026-06-16T00:00:00Z", observation_type: "trajectory_drift", observation_status: "open",
+      variables: ["temperature", "humidity"], evidence_summary: ["System behavior changed."],
+    };
+    const apiFetch = vi.fn(async (url) => String(url).startsWith("/api/evidence/export/")
+      ? { ok: true, status: 200, headers: { get: () => "attachment; filename=facility-evidence.json" }, blob: async () => new Blob(["{}"], { type: "application/json" }) }
+      : createResponse({ runs: [run] }));
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:facility-evidence");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    renderWorkspace({ apiFetch });
+    fireEvent.click(await screen.findByText("Additional tools"));
+    fireEvent.click(screen.getByRole("button", { name: "Export JSON" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/api/evidence/export/export-run-1?format=json"));
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+    expect(await screen.findByText("JSON evidence exported.")).toBeTruthy();
+  });
+
 });

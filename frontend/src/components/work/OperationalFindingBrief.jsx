@@ -34,27 +34,33 @@ function LatestFieldReport({ report }) {
   );
 }
 
-function LeadControls({ finding, members, onWorkflow, onResolve, pending }) {
-  const currentMemberId = finding.assignment.historical ? "__historical" : finding.assignment.externalReference;
+function LeadControls({ finding, members, membersLoading, membersError, onWorkflow, onResolve, pending }) {
+  const assignedMember = members.find((member) => member.memberId === finding.assignment.externalReference);
+  const unavailableAssignment = Boolean(finding.assignment.label && finding.assignment.label !== "Unassigned" && !assignedMember);
+  const historicalAssignment = unavailableAssignment && !membersLoading && !membersError;
+  const currentMemberId = unavailableAssignment ? "__historical" : finding.assignment.externalReference;
   const [draft, setDraft] = useState({ memberId: currentMemberId, priority: finding.priority, dueDate: dateValue(finding.workflow.dueDate ?? finding.workflow.due_at), managerNote: finding.managerNote });
   useEffect(() => setDraft({ memberId: currentMemberId, priority: finding.priority, dueDate: dateValue(finding.workflow.dueDate ?? finding.workflow.due_at), managerNote: finding.managerNote }), [currentMemberId, finding]);
   const selected = members.find((member) => member.memberId === draft.memberId);
 
   function save(event) {
     event.preventDefault();
-    onWorkflow?.({
-      assignment: draft.memberId === "__historical" ? undefined : selected ? { kind: "person", label: selected.displayName, externalReference: selected.memberId } : null,
+    const changes = {
       priority: draft.priority,
       dueDate: draft.dueDate ? `${draft.dueDate}T23:59:59Z` : null,
       managerNote: draft.managerNote || null,
-    });
+    };
+    if (draft.memberId !== "__historical") {
+      changes.assignment = selected ? { kind: "person", label: selected.displayName, externalReference: selected.memberId } : null;
+    }
+    onWorkflow?.(changes);
   }
 
   return (
     <section className="lead-controls" aria-labelledby="lead-controls-title">
       <header><span className="work-eyebrow">Lead review</span><h2 id="lead-controls-title">Ownership and next step</h2></header>
       <form onSubmit={save}>
-        <label>Assign to<select value={draft.memberId} onChange={(event) => setDraft((current) => ({ ...current, memberId: event.target.value }))}><option value="">Unassigned</option>{finding.assignment.historical ? <option value="__historical" disabled>{finding.assignment.label} · historical reference</option> : null}{members.map((member) => <option key={member.memberId} value={member.memberId}>{member.displayName}</option>)}</select></label>
+        <label>Assign to<select aria-label="Assign to" value={draft.memberId} disabled={membersLoading || Boolean(membersError)} onChange={(event) => setDraft((current) => ({ ...current, memberId: event.target.value }))}><option value="">Unassigned</option>{unavailableAssignment ? <option value="__historical" disabled>{historicalAssignment ? "Former member" : "Current assignment"} · {finding.assignment.label}</option> : null}{members.map((member) => <option key={member.memberId} value={member.memberId}>{member.displayName}</option>)}</select>{membersError ? <small className="work-error">Assignment is unavailable until active members load.</small> : null}</label>
         <label>Priority<select value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value }))}>{PRIORITIES.map((priority) => <option key={priority} value={priority}>{priority[0].toUpperCase() + priority.slice(1)}</option>)}</select></label>
         <label>Due date<input type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} /></label>
         <label className="lead-controls__guidance">Guidance for the technician<textarea value={draft.managerNote} onChange={(event) => setDraft((current) => ({ ...current, managerNote: event.target.value }))} /></label>
@@ -72,7 +78,7 @@ function LeadControls({ finding, members, onWorkflow, onResolve, pending }) {
   );
 }
 
-export default function OperationalFindingBrief({ finding, currentUser, members = [], activity = [], activityLoading = false, activityError = "", pending = false, mutationMessage = "", mutationError = false, onBack, onWorkflow, onFieldReport, onResolve, technicalFinding, onInvestigation, onEvidence }) {
+export default function OperationalFindingBrief({ finding, currentUser, members = [], membersLoading = false, membersError = "", activity = [], activityLoading = false, activityError = "", pending = false, mutationMessage = "", mutationError = false, onBack, onWorkflow, onFieldReport, onResolve, technicalFinding, onInvestigation, onEvidence }) {
   const lead = canLeadWorkflow(currentUser?.role);
   const assignedToMe = isAssignedToCurrentUser(finding, currentUser);
   const technicianCanUpdate = lead || assignedToMe;
@@ -100,7 +106,7 @@ export default function OperationalFindingBrief({ finding, currentUser, members 
       ) : !lead && !assignedToMe ? <p className="work-permission-note">This work is not assigned to you. You can review it, but only its assignee or a lead can update it.</p> : null}
       <p className={`work-form-status${mutationError ? " is-error" : ""}`} role="status" aria-live="polite">{mutationMessage}</p>
 
-      {lead ? <LeadControls finding={finding} members={members} onWorkflow={onWorkflow} onResolve={onResolve} pending={pending} /> : null}
+      {lead ? <LeadControls finding={finding} members={members} membersLoading={membersLoading} membersError={membersError} onWorkflow={onWorkflow} onResolve={onResolve} pending={pending} /> : null}
       {technicianCanUpdate && !finding.terminal ? <FieldReportForm disabled={pending} onSubmit={onFieldReport} /> : null}
       <LatestFieldReport report={finding.latestFieldReport} />
       <FindingActivityTimeline activity={activity} loading={activityLoading} error={activityError} />

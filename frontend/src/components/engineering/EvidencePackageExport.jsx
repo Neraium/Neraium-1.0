@@ -6,6 +6,18 @@ function filenameFromHeader(response, fallback) {
   return match?.[1] ?? fallback;
 }
 
+async function exportError(response) {
+  if (response?.status === 401) return "Your session expired. Sign in again before exporting evidence.";
+  if (response?.status === 403 || response?.status === 404) return "This evidence is unavailable in the current facility workspace.";
+  try {
+    const payload = await response.json();
+    const detail = typeof payload?.detail === "string" ? payload.detail.trim() : "";
+    return detail || "Evidence package could not be prepared.";
+  } catch {
+    return "Evidence package could not be prepared.";
+  }
+}
+
 export default function EvidencePackageExport({ runId, apiFetch, disabled = false }) {
   const [state, setState] = useState({ status: "idle", message: "" });
   async function exportPackage(format) {
@@ -13,7 +25,7 @@ export default function EvidencePackageExport({ runId, apiFetch, disabled = fals
     setState({ status: "loading", message: `Preparing ${format.toUpperCase()} evidence package…` });
     try {
       const response = await apiFetch(`/api/evidence/package/${encodeURIComponent(runId)}?format=${format}`);
-      if (!response.ok) throw new Error("Evidence package could not be prepared.");
+      if (!response.ok) throw new Error(await exportError(response));
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");

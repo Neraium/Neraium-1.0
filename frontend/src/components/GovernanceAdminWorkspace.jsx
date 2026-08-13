@@ -33,6 +33,7 @@ export default function GovernanceAdminWorkspace({
   Panel,
   EmptyState,
   currentUser = null,
+  currentWorkspace = null,
 }) {
   const [payload, setPayload] = useState(null);
   const [performance, setPerformance] = useState(null);
@@ -119,7 +120,7 @@ export default function GovernanceAdminWorkspace({
       </Panel>
       </div>
 
-      <AccessAdminPanel apiFetch={apiFetch} accessCode={accessCode} Panel={Panel} currentUser={currentUser} />
+      <AccessAdminPanel apiFetch={apiFetch} accessCode={accessCode} Panel={Panel} currentUser={currentUser} currentWorkspace={currentWorkspace} />
 
       <div className="workspace-grid workspace-grid--two admin-record-grid">
         {rows.map((record) => (
@@ -143,30 +144,37 @@ export default function GovernanceAdminWorkspace({
 }
 
 
-function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser }) {
+function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWorkspace }) {
   const [users, setUsers] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState({ email: "", name: "", password: "", role: "operator" });
+  const [memberEmail, setMemberEmail] = useState("");
+  const isFacilityWorkspace = currentWorkspace?.kind === "facility";
 
   async function read(response) { try { return await response.json(); } catch { return {}; } }
   async function loadAccess() {
     setLoading(true); setError("");
     try {
-      const [userResponse, sessionResponse] = await Promise.all([
+      const requests = [
         apiFetch("/api/auth/users?include_inactive=true", { accessCode, cache: "no-store" }),
         apiFetch("/api/auth/sessions?include_revoked=false", { accessCode, cache: "no-store" }),
-      ]);
+      ];
+      if (isFacilityWorkspace) requests.push(apiFetch("/api/workspaces/current/members", { accessCode, cache: "no-store" }));
+      const [userResponse, sessionResponse, memberResponse] = await Promise.all(requests);
       const userPayload = await read(userResponse); const sessionPayload = await read(sessionResponse);
-      if (!userResponse.ok || !sessionResponse.ok) throw new Error(safeAdminError(userPayload?.detail || sessionPayload?.detail, "User access records could not be loaded. Refresh and retry."));
+      const memberPayload = memberResponse ? await read(memberResponse) : { members: [] };
+      if (!userResponse.ok || !sessionResponse.ok || (memberResponse && !memberResponse.ok)) throw new Error(safeAdminError(userPayload?.detail || sessionPayload?.detail || memberPayload?.detail, "User access records could not be loaded. Refresh and retry."));
       setUsers(userPayload.users || []); setSessions(sessionPayload.sessions || []);
+      setMembers(memberPayload.members || []);
     } catch (loadError) { setError(safeAdminError(loadError?.message || loadError, "User access records could not be loaded. Refresh and retry.")); }
     finally { setLoading(false); }
   }
-  useEffect(() => { void loadAccess(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setMemberEmail(""); void loadAccess(); }, [currentWorkspace?.workspace_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function mutate(key, path, options = {}) {
     if (busy) return false;
@@ -189,12 +197,71 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser }) {
     if (created) setForm({ email: "", name: "", password: "", role: "operator" });
   }
 
+  async function addFacilityMember(event) {
+    event.preventDefault();
+    if (!isFacilityWorkspace || !memberEmail) return;
+    const added = await mutate(`member-add-${memberEmail}`, `/api/workspaces/${encodeURIComponent(currentWorkspace.workspace_id)}/members`, {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: memberEmail }),
+    });
+    if (added) setMemberEmail("");
+  }
+
+  const activeMemberIds = new Set(members.filter((member) => member.is_active).map((member) => member.member_id));
+  const availableAccounts = users.filter((user) => user.is_active && !activeMemberIds.has(user.email));
+
   return (
     <Panel
       title="User Access"
       subtitle={`Signed in as ${currentUser?.email || "administrator"}.`}
     >
       {loading ? <p role="status">Loading user accounts and active sessions...</p> : null}
+      <section className="admin-membership-block" aria-labelledby="current-facility-membership-title">
+        <div className="admin-membership-block__header">
+          <div>
+            <h3 id="current-facility-membership-title">Current facility membership</h3>
+            <p>{isFacilityWorkspace
+              ? `${currentWorkspace.display_name} access is separate from global account status.`
+              : "Personal workspaces are private. Select a facility workspace to manage team access."}</p>
+          </div>
+          <span className="status-badge">{isFacilityWorkspace ? currentWorkspace.display_name : "Personal"}</span>
+        </div>
+        {isFacilityWorkspace ? (
+          <>
+            <form className="admin-membership-form" onSubmit={addFacilityMember}>
+              <label>
+                <span>Add active account</span>
+                <select aria-label="Account to add to current facility" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} disabled={Boolean(busy) || availableAccounts.length === 0}>
+                  <option value="">{availableAccounts.length ? "Select an account" : "No eligible active accounts"}</option>
+                  {availableAccounts.map((user) => <option key={user.email} value={user.email}>{user.name || user.email} · {user.role}</option>)}
+                </select>
+              </label>
+              <button className="secondary-command-button" type="submit" disabled={Boolean(busy) || !memberEmail}>Add facility access</button>
+            </form>
+            <div className="admin-access-list" aria-label="Current facility members">
+              {members.map((member) => (
+                <article key={member.member_id}>
+                  <div>
+                    <strong>{member.display_name || member.member_id}</strong>
+                    <small>{member.member_id} · workspace access active · account role {member.role}</small>
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      className="operational-link-button operational-link-button--danger"
+                      disabled={Boolean(busy) || member.member_id === currentUser?.email}
+                      title={member.member_id === currentUser?.email ? "You cannot disable your current workspace access." : "Remove future access without deactivating this account."}
+                      onClick={() => void mutate(`member-disable-${member.member_id}`, `/api/workspaces/${encodeURIComponent(currentWorkspace.workspace_id)}/members/${encodeURIComponent(member.member_id)}/disable`)}
+                    >
+                      Disable facility access
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </section>
       <form className="admin-access-form" onSubmit={createAccount} aria-busy={Boolean(busy)}>
         <label>
           <span>Email address</span>
@@ -225,7 +292,7 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser }) {
           <article key={user.email}>
             <div>
               <strong>{user.name || user.email}</strong>
-              <small>{user.email} · {user.role} · {user.is_active ? "active" : "inactive"}</small>
+              <small>{user.email} · {user.role} · account {user.is_active ? "active" : "inactive"}</small>
             </div>
             <div>
               {user.is_active ? (

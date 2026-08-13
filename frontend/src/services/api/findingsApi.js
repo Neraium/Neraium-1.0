@@ -1,4 +1,4 @@
-const UNAVAILABLE_STATUSES = new Set([404, 405, 501]);
+const UNAVAILABLE_STATUSES = new Set([403, 404, 405, 501]);
 
 function cleanText(value) {
   return String(value ?? "").trim();
@@ -49,7 +49,10 @@ async function checkedPayload(response, fallbackMessage) {
   const status = Number(response?.status ?? 0);
   const code = cleanText(payload?.code ?? payload?.detail?.code ?? payload?.detail?.error)
     || (status === 409 || status === 412 ? "version_conflict" : UNAVAILABLE_STATUSES.has(status) ? "finding_api_unavailable" : "finding_api_error");
-  throw new FindingApiError(errorDetail(payload, fallbackMessage), { status, code, payload });
+  const message = status === 403 || status === 404
+    ? fallbackMessage
+    : errorDetail(payload, fallbackMessage);
+  throw new FindingApiError(message, { status, code, payload });
 }
 
 export function findingWorkflowIdentity(finding) {

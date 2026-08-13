@@ -13,6 +13,7 @@ from app.services import evidence_store, runtime_db
 from app.connectors.models import NormalizedTelemetryRecord
 from app.services.auth_store import _SQLiteAuthBackend
 from app.services.data_connections import append_connection_buffer
+from app.services.dataset_scope import build_dataset_scope, dataset_scope_context
 from app.services.evidence_store import read_evidence_run, record_operator_feedback
 from db.migrations.create_normalization_tables import run as run_normalization_migration
 
@@ -97,6 +98,23 @@ def test_runtime_migrations_apply_cleanly_to_fresh_database(tmp_path: Path) -> N
             "idx_live_analysis_runs_window",
             "idx_live_analysis_one_running",
         } <= run_indexes
+        config_unique = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'live_analysis_configurations'"
+        ).fetchone()[0]
+        health_unique = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'live_analysis_health'"
+        ).fetchone()[0]
+        finding_foreign_keys = connection.execute(
+            "PRAGMA foreign_key_list(live_findings)"
+        ).fetchall()
+        assert "UNIQUE(scope_storage_id, system_id)" in config_unique
+        assert "UNIQUE(scope_storage_id, system_id)" in health_unique
+        assert {(row[3], row[4]) for row in finding_foreign_keys} == {
+            ("scope_storage_id", "scope_storage_id"),
+            ("source_live_analysis_run_id", "run_id"),
+        }
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute(
                 "INSERT INTO data_connections VALUES (?, ?, ?, ?, ?, ?)",
@@ -146,6 +164,60 @@ def test_runtime_upgrade_from_unversioned_schema_preserves_valid_rows(tmp_path: 
             connection.execute(
                 "UPDATE upload_queue SET status = 'corrupt' WHERE job_id = 'valid-job'"
             )
+
+
+def test_workspace_evidence_scope_migration_backfills_only_authoritative_scopes(
+    tmp_path: Path,
+) -> None:
+    runtime_db.configure_runtime_dir(tmp_path)
+    db_path = tmp_path / "runtime.db"
+    scope = build_dataset_scope(
+        tenant_id="facility-owner@example.com",
+        user_id="facility-owner@example.com",
+        workspace_id="default",
+    )
+    scoped_payload = {
+        "run_id": "scoped-run",
+        "status": "completed",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "dataset_scope": scope.as_dict(),
+    }
+    unscoped_payload = {
+        "run_id": "unscoped-run",
+        "status": "completed",
+        "created_at": "2026-01-02T00:00:00+00:00",
+    }
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE evidence_runs (
+                run_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, completed_at TEXT,
+                status TEXT NOT NULL, source_name TEXT, payload_json TEXT NOT NULL
+            )
+            """
+        )
+        for payload in (scoped_payload, unscoped_payload):
+            connection.execute(
+                "INSERT INTO evidence_runs VALUES (?, ?, NULL, ?, NULL, ?)",
+                (payload["run_id"], payload["created_at"], payload["status"], json.dumps(payload)),
+            )
+
+    runtime_db.init_runtime_db()
+
+    with runtime_db.db_connection() as connection:
+        stored = {
+            row["run_id"]: row["scope_storage_id"]
+            for row in connection.execute(
+                "SELECT run_id, scope_storage_id FROM evidence_runs ORDER BY run_id"
+            )
+        }
+        assert stored == {"scoped-run": scope.storage_id, "unscoped-run": None}
+        indexes = {row[1] for row in connection.execute("PRAGMA index_list(evidence_runs)")}
+        assert "idx_evidence_runs_scope_created" in indexes
+
+    with dataset_scope_context(scope):
+        assert runtime_db.read_evidence_run_db("scoped-run") == scoped_payload
+        assert runtime_db.read_evidence_run_db("unscoped-run") is None
 
 
 def test_upload_queue_claim_is_atomic_across_connections(tmp_path: Path) -> None:
@@ -368,6 +440,12 @@ def test_legacy_evidence_is_imported_once_and_cannot_resurrect_after_retention(
                     "created_at": "2026-01-01T00:00:00+00:00",
                     "status": "completed",
                     "source_type": "csv_upload",
+                    "dataset_scope": {
+                        "version": 1,
+                        "tenant_id": "anonymous",
+                        "user_id": "anonymous",
+                        "workspace_id": "default",
+                    },
                 }
             ]
         ),
@@ -382,6 +460,40 @@ def test_legacy_evidence_is_imported_once_and_cannot_resurrect_after_retention(
 
     assert evidence_store.list_evidence_runs() == []
     assert evidence_path.exists()  # The stale compatibility mirror remains harmless.
+
+
+def test_unscoped_legacy_evidence_is_not_claimed_by_first_reader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime_db.configure_runtime_dir(tmp_path)
+    runtime_db.init_runtime_db()
+    evidence_dir = tmp_path / "evidence"
+    evidence_path = evidence_dir / "runs.json"
+    evidence_dir.mkdir(parents=True)
+    evidence_path.write_text(
+        json.dumps(
+            [
+                {
+                    "run_id": "ambiguous-run",
+                    "created_at": "2026-01-01T00:00:00+00:00",
+                    "status": "completed",
+                    "source_type": "csv_upload",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(evidence_store, "EVIDENCE_DIR", evidence_dir)
+    monkeypatch.setattr(evidence_store, "EVIDENCE_RUNS_PATH", evidence_path)
+
+    assert evidence_store.read_evidence_run("ambiguous-run") is None
+    assert evidence_store.list_evidence_runs() == []
+
+    with runtime_db.db_connection() as connection:
+        imported = connection.execute(
+            "SELECT 1 FROM evidence_runs WHERE run_id = ?", ("ambiguous-run",)
+        ).fetchone()
+    assert imported is None
 
 def test_upload_queue_helpers_validate_status_transitions(tmp_path: Path) -> None:
     runtime_db.configure_runtime_dir(tmp_path)

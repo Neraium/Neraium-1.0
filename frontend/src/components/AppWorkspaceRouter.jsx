@@ -29,8 +29,12 @@ function WorkspaceWithBackControl({
   errorContext,
   activeWorkspace,
   onHelp,
+  workspaceSession,
+  currentWorkspace,
+  onWorkspaceChange,
   children,
 }) {
+  const workspaces = workspaceSession?.workspaces ?? [];
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace} errorContext={{ ...errorContext, workspaceId: activeWorkspace }}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
@@ -49,6 +53,20 @@ function WorkspaceWithBackControl({
               {contextLabel ? <span className="workspace-back-control__breadcrumb" aria-current="page">{contextLabel}</span> : null}
             </div>
             <div className="workspace-back-control__meta">
+              <div className="workspace-facility-context">
+                <span className="workspace-facility-context__label">Facility workspace</span>
+                {workspaces.length > 1 ? (
+                  <select
+                    aria-label="Facility workspace"
+                    value={currentWorkspace?.workspace_id ?? "default"}
+                    onChange={(event) => onWorkspaceChange?.(event.target.value)}
+                  >
+                    {workspaces.map((workspace) => (
+                      <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.display_name}</option>
+                    ))}
+                  </select>
+                ) : <strong>{currentWorkspace?.display_name ?? "Personal workspace"}</strong>}
+              </div>
               <span className="workspace-back-control__product"><strong>Neraium</strong> · Read-only</span>
               {typeof onHelp === "function" ? (
                 <button type="button" className="workspace-back-control__help" onClick={onHelp}>Help</button>
@@ -102,6 +120,9 @@ export default function AppWorkspaceRouter({
   handleSignOut,
   signOutPending = false,
   currentUser = null,
+  workspaceSession = null,
+  currentWorkspace = null,
+  onWorkspaceChange = () => {},
   setActiveWorkspace,
   selectedBaselineIdentity = null,
   comparisonBaselineIdentity = null,
@@ -129,6 +150,7 @@ export default function AppWorkspaceRouter({
     selectedAnalysisIdentity?.analysisRunId ?? currentResultIdentity,
     resultsNavigationKey,
   ].join(":");
+  const workspaceContextProps = { workspaceSession, currentWorkspace, onWorkspaceChange };
 
   if (activeWorkspace === "home") {
     return (
@@ -153,6 +175,7 @@ export default function AppWorkspaceRouter({
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
+        {...workspaceContextProps}
       >
         <Suspense fallback={renderLoadingPanel("Opening Live Monitoring", "Loading telemetry, rolling analysis, and finding state...")}>
           <LiveMonitoringWorkspace key={`live:${datasetScopeKey}`} apiFetch={apiFetch} accessCode={accessCode} datasetScopeKey={datasetScopeKey} />
@@ -172,6 +195,7 @@ export default function AppWorkspaceRouter({
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
+        {...workspaceContextProps}
       >
         <Suspense fallback={renderLoadingPanel("Preparing telemetry intake", "Loading dataset validation and connector status...")}>
           <DataConnectionsWorkspace
@@ -221,6 +245,7 @@ export default function AppWorkspaceRouter({
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
+        {...workspaceContextProps}
       >
         <Suspense fallback={renderLoadingPanel("Loading investigation record", "Preparing analysis history, evidence, and diagnostics...")}>
           <SystemStoryWorkspace
@@ -259,6 +284,7 @@ export default function AppWorkspaceRouter({
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
+        {...workspaceContextProps}
       >
         <EmptyState title="Administrator access required" body="This workspace is limited to administrators." actionLabel="Return to Portfolio" onAction={() => setActiveWorkspace("system-body")} />
       </WorkspaceWithBackControl>
@@ -276,6 +302,7 @@ export default function AppWorkspaceRouter({
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
+        {...workspaceContextProps}
       >
         <Suspense fallback={renderLoadingPanel("Loading administration", "Preparing access controls and governance records...")}>
           <GovernanceAdminWorkspace
@@ -285,6 +312,7 @@ export default function AppWorkspaceRouter({
             EmptyState={EmptyState}
             onBackToGate={() => setActiveWorkspace("system-body")}
             currentUser={currentUser}
+            currentWorkspace={currentWorkspace}
           />
         </Suspense>
       </WorkspaceWithBackControl>
@@ -302,6 +330,7 @@ export default function AppWorkspaceRouter({
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
         onHelp={() => setActiveWorkspace("help-changelog")}
+        {...workspaceContextProps}
       >
         <Suspense fallback={renderLoadingPanel("Loading investigation", "Prioritizing findings and preparing evidence...")}>
           <ObservationCenterWorkspace
@@ -329,6 +358,7 @@ export default function AppWorkspaceRouter({
         contextLabel="Help & Status"
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
+        {...workspaceContextProps}
       >
         <Suspense fallback={renderLoadingPanel("Loading support status", "Checking service status and operator guidance...")}>
           <HelpChangelogWorkspace
@@ -369,6 +399,9 @@ export default function AppWorkspaceRouter({
             onSignOut={handleSignOut}
             signOutPending={signOutPending}
             currentUser={currentUser}
+            workspaceSession={workspaceSession}
+            currentWorkspace={currentWorkspace}
+            onWorkspaceChange={onWorkspaceChange}
             apiFetch={apiFetch}
             onCsvSelected={(files) => {
               handleUploadAttemptStarted({ files, workflow: "create_baseline" });

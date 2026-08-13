@@ -1,5 +1,6 @@
 from app.main import create_app
 from app.services import evidence_store, runtime_db
+from app.services.dataset_scope import build_dataset_scope, dataset_scope_context
 from fastapi.testclient import TestClient
 
 
@@ -22,8 +23,10 @@ def _record(run_id: str) -> dict:
 
 def test_feedback_and_workflow_state_are_independent_append_only_events() -> None:
     client = TestClient(create_app())
-    evidence_store.upsert_evidence_run(_record("finding-run"))
-    original = runtime_db.read_evidence_run_db("finding-run")
+    scope = build_dataset_scope(user_id="engineer@example.com")
+    with dataset_scope_context(scope):
+        evidence_store.upsert_evidence_run(_record("finding-run"))
+        original = runtime_db.read_evidence_run_db("finding-run")
 
     feedback = client.post(
         "/api/evidence/runs/finding-run/feedback",
@@ -49,7 +52,8 @@ def test_feedback_and_workflow_state_are_independent_append_only_events() -> Non
     assert payload["finding_status_history"][0]["state"] == "dismissed"
     assert payload["operator_feedback_history"][0]["category"] == "false_positive"
 
-    assert runtime_db.read_evidence_run_db("finding-run") == original
+    with dataset_scope_context(scope):
+        assert runtime_db.read_evidence_run_db("finding-run") == original
 
 
 def test_missing_finding_does_not_create_orphan_events() -> None:

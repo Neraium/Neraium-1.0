@@ -5,7 +5,12 @@ import uuid
 from fastapi import HTTPException, Request
 
 from app.services.auth_store import get_user_by_session, normalize_role, session_cookie_name
-from app.services.dataset_scope import WORKSPACE_HEADER, dataset_scope_from_auth_context, set_current_dataset_scope
+from app.services.dataset_scope import WORKSPACE_HEADER, set_current_dataset_scope
+from app.services.workspace_authorization import (
+    WorkspaceAuthorizationError,
+    resolve_workspace_context,
+    set_current_workspace_context,
+)
 
 _PUBLIC_READONLY_PATHS = (
     "/api/health",
@@ -60,12 +65,19 @@ def _set_auth_context(request: Request, *, subject: str, role: str, source: str,
         "client_ip": _client_ip(request),
         "authenticated": authenticated,
     }
-    dataset_scope = dataset_scope_from_auth_context(
-        request.state.auth_context,
-        request.headers.get(WORKSPACE_HEADER),
-    )
-    request.state.dataset_scope = dataset_scope
-    set_current_dataset_scope(dataset_scope)
+    try:
+        workspace_context = resolve_workspace_context(
+            subject=subject,
+            requested_workspace_id=request.headers.get(WORKSPACE_HEADER),
+            auth_source=source,
+        )
+    except WorkspaceAuthorizationError as error:
+        # Keep an unauthorized facility indistinguishable from an absent one.
+        raise HTTPException(status_code=404, detail="Workspace not found.") from error
+    request.state.workspace_context = workspace_context.as_dict()
+    request.state.dataset_scope = workspace_context.dataset_scope
+    set_current_workspace_context(workspace_context)
+    set_current_dataset_scope(workspace_context.dataset_scope)
 
 
 async def require_api_access(request: Request) -> None:
@@ -122,18 +134,18 @@ async def require_api_access(request: Request) -> None:
     if _strict_auth_mode(request):
         raise HTTPException(status_code=401, detail="Authentication required.")
 
-    user = (
+    header_user = (
         request.headers.get("X-Neraium-User")
         or request.headers.get("X-Authenticated-User")
         or request.headers.get("X-Forwarded-Email")
-        or "anonymous"
     )
+    user = header_user or "anonymous"
     role = request.headers.get("X-Neraium-Role", "operator")
     _set_auth_context(
         request,
         subject=user,
         role=role,
-        source="header" if resolved_token else "anonymous",
+        source="header" if header_user else "anonymous",
         has_access_header=bool(access_header or bearer_header),
         has_access_cookie=bool(cookie_token),
         has_auth_session_cookie=bool(auth_session_cookie),
