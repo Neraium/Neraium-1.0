@@ -93,7 +93,11 @@ jobs:
 
           def canonical(value):
               if isinstance(value, dict):
-                  return {key: canonical(value[key]) for key in sorted(value)}
+                  return {
+                      key: canonical(value[key])
+                      for key in sorted(value)
+                      if not (key == "Sid" and value[key] == "")
+                  }
               if isinstance(value, list):
                   items = [canonical(item) for item in value]
                   return sorted(items, key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")))
