@@ -51,7 +51,7 @@ jobs:
           printf '%s\n' "$identity" | jq .
           account="$(jq -r '.Account' <<<"$identity")"
           arn="$(jq -r '.Arn' <<<"$identity")"
-          region="$(aws configure get region)"
+          region="${AWS_REGION:?}"
           [[ "$account" == "680779862188" ]]
           [[ "$region" == "us-east-2" ]]
           [[ "$arn" == arn:aws:sts::680779862188:assumed-role/neraium-staging-github-deploy-role/* ]]
