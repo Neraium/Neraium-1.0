@@ -1,0 +1,398 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyProductionRequestTags",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Environment": "production"
+        }
+      }
+    },
+    {
+      "Sid": "DenyProductionTaggedMutation",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Environment": "production"
+        }
+      }
+    },
+    {
+      "Sid": "DenyProductionNamedAccess",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": [
+        "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-*",
+        "arn:aws:ecr:us-east-2:680779862188:repository/neraium-prod-*",
+        "arn:aws:ecs:us-east-2:680779862188:cluster/neraium-prod-*",
+        "arn:aws:ecs:us-east-2:680779862188:service/neraium-prod-*/*",
+        "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-*:*",
+        "arn:aws:elasticloadbalancing:us-east-2:680779862188:loadbalancer/app/neraium-prod-*/*",
+        "arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-*/*",
+        "arn:aws:elasticloadbalancing:us-east-2:680779862188:listener/app/neraium-prod-*/*/*",
+        "arn:aws:elasticloadbalancing:us-east-2:680779862188:listener-rule/app/neraium-prod-*/*/*/*",
+        "arn:aws:logs:us-east-2:680779862188:log-group:/ecs/neraium-prod-*",
+        "arn:aws:logs:us-east-2:680779862188:log-group:/ecs/neraium-prod-*:*",
+        "arn:aws:rds:us-east-2:680779862188:db:neraium-prod-*",
+        "arn:aws:rds:us-east-2:680779862188:snapshot:neraium-prod-*",
+        "arn:aws:rds:us-east-2:680779862188:subgrp:neraium-prod-*",
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-*"
+      ]
+    },
+    {
+      "Sid": "DenyS3MutationOutsideStagingBucket",
+      "Effect": "Deny",
+      "Action": [
+        "s3:Create*",
+        "s3:Delete*",
+        "s3:Put*",
+        "s3:TagResource",
+        "s3:UntagResource"
+      ],
+      "NotResource": [
+        "arn:aws:s3:::neraium-staging-upload-state-680779862188-us-east-2",
+        "arn:aws:s3:::neraium-staging-upload-state-680779862188-us-east-2/*"
+      ]
+    },
+    {
+      "Sid": "DenyPassRoleOutsideStagingTaskRoles",
+      "Effect": "Deny",
+      "Action": "iam:PassRole",
+      "NotResource": [
+        "arn:aws:iam::680779862188:role/neraium-staging-task-app-role",
+        "arn:aws:iam::680779862188:role/neraium-staging-ecs-task-execution-role"
+      ]
+    },
+    {
+      "Sid": "ReadOnlyHandlerInventory",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:GetConnectionGroup",
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:ListDistributions",
+        "cloudfront:ListTagsForResource",
+        "ec2:Describe*",
+        "ecs:Describe*",
+        "ecs:List*",
+        "elasticfilesystem:Describe*",
+        "elasticfilesystem:ListTagsForResource",
+        "elasticloadbalancing:Describe*",
+        "kms:DescribeKey",
+        "logs:DescribeLogGroups",
+        "rds:Describe*",
+        "s3:ListAllMyBuckets",
+        "secretsmanager:GetRandomPassword",
+        "secretsmanager:ListSecrets",
+        "sns:ListTopics"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CreateTaggedStagingEc2Resources",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateInternetGateway",
+        "ec2:CreateRouteTable",
+        "ec2:CreateSecurityGroup",
+        "ec2:CreateSubnet",
+        "ec2:CreateTags",
+        "ec2:CreateVpc"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Application": "Neraium",
+          "aws:RequestTag/Environment": "staging"
+        }
+      }
+    },
+    {
+      "Sid": "ManageTaggedStagingEc2Resources",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AssociateRouteTable",
+        "ec2:AttachInternetGateway",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:CreateRoute",
+        "ec2:DeleteInternetGateway",
+        "ec2:DeleteRoute",
+        "ec2:DeleteRouteTable",
+        "ec2:DeleteSecurityGroup",
+        "ec2:DeleteSubnet",
+        "ec2:DeleteTags",
+        "ec2:DeleteVpc",
+        "ec2:DetachInternetGateway",
+        "ec2:DisassociateRouteTable",
+        "ec2:ModifySubnetAttribute",
+        "ec2:ModifyVpcAttribute",
+        "ec2:ReplaceRoute",
+        "ec2:ReplaceRouteTableAssociation",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:UpdateSecurityGroupRuleDescriptionsEgress",
+        "ec2:UpdateSecurityGroupRuleDescriptionsIngress"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Application": "Neraium",
+          "aws:ResourceTag/Environment": "staging"
+        }
+      }
+    },
+    {
+      "Sid": "CreateTaggedStagingLoadBalancerResources",
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:CreateLoadBalancer",
+        "elasticloadbalancing:CreateTargetGroup"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Application": "Neraium",
+          "aws:RequestTag/Environment": "staging"
+        }
+      }
+    },
+    {
+      "Sid": "ManageNamedStagingLoadBalancerResources",
+      "Effect": "Allow",
+      "Action": "elasticloadbalancing:*",
+      "Resource": [
+        "arn:aws:elasticloadbalancing:us-east-2:680779862188:loadbalancer/app/neraium-staging-alb/*",
+        "arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-staging-api-tg/*",
+        "arn:aws:elasticloadbalancing:us-east-2:680779862188:listener/app/neraium-staging-alb/*/*",
+        "arn:aws:elasticloadbalancing:us-east-2:680779862188:listener-rule/app/neraium-staging-alb/*/*/*"
+      ]
+    },
+    {
+      "Sid": "ManageNamedStagingEcsResources",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:CreateCluster",
+        "ecs:CreateService",
+        "ecs:DeleteCluster",
+        "ecs:DeleteService",
+        "ecs:StopServiceDeployment",
+        "ecs:TagResource",
+        "ecs:UntagResource",
+        "ecs:UpdateCluster",
+        "ecs:UpdateClusterSettings",
+        "ecs:UpdateService"
+      ],
+      "Resource": [
+        "arn:aws:ecs:us-east-2:680779862188:cluster/neraium-staging-cluster",
+        "arn:aws:ecs:us-east-2:680779862188:service/neraium-staging-cluster/neraium-staging-api-service",
+        "arn:aws:ecs:us-east-2:680779862188:service/neraium-staging-cluster/neraium-staging-worker-service",
+        "arn:aws:ecs:us-east-2:680779862188:service-deployment/neraium-staging-cluster/*/*"
+      ]
+    },
+    {
+      "Sid": "RegisterTaggedStagingTaskDefinitions",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:RegisterTaskDefinition",
+        "ecs:TagResource"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Application": "Neraium",
+          "aws:RequestTag/Environment": "staging"
+        }
+      }
+    },
+    {
+      "Sid": "ManageNamedStagingTaskDefinitions",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DeregisterTaskDefinition",
+        "ecs:TagResource",
+        "ecs:UntagResource"
+      ],
+      "Resource": [
+        "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-staging-api:*",
+        "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-staging-worker:*"
+      ]
+    },
+    {
+      "Sid": "PassOnlyStagingTaskRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::680779862188:role/neraium-staging-task-app-role",
+        "arn:aws:iam::680779862188:role/neraium-staging-ecs-task-execution-role"
+      ],
+      "Condition": {
+        "StringEqualsIfExists": {
+          "iam:PassedToService": "ecs-tasks.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "ManageOnlyStagingEcrRepository",
+      "Effect": "Allow",
+      "Action": "ecr:*",
+      "Resource": "arn:aws:ecr:us-east-2:680779862188:repository/neraium-staging-api"
+    },
+    {
+      "Sid": "ManageOnlyStagingUploadBucket",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": "arn:aws:s3:::neraium-staging-upload-state-680779862188-us-east-2"
+    },
+    {
+      "Sid": "CreateTaggedStagingEfsResources",
+      "Effect": "Allow",
+      "Action": [
+        "elasticfilesystem:CreateAccessPoint",
+        "elasticfilesystem:CreateFileSystem",
+        "elasticfilesystem:TagResource"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Application": "Neraium",
+          "aws:RequestTag/Environment": "staging"
+        }
+      }
+    },
+    {
+      "Sid": "ManageTaggedStagingEfsResources",
+      "Effect": "Allow",
+      "Action": [
+        "elasticfilesystem:CreateMountTarget",
+        "elasticfilesystem:DeleteAccessPoint",
+        "elasticfilesystem:DeleteFileSystem",
+        "elasticfilesystem:DeleteMountTarget",
+        "elasticfilesystem:ModifyMountTargetSecurityGroups",
+        "elasticfilesystem:PutBackupPolicy",
+        "elasticfilesystem:PutLifecycleConfiguration",
+        "elasticfilesystem:TagResource",
+        "elasticfilesystem:UntagResource",
+        "elasticfilesystem:UpdateFileSystem"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Application": "Neraium",
+          "aws:ResourceTag/Environment": "staging"
+        }
+      }
+    },
+    {
+      "Sid": "ManageOnlyStagingRdsResources",
+      "Effect": "Allow",
+      "Action": "rds:*",
+      "Resource": [
+        "arn:aws:rds:us-east-2:680779862188:db:neraium-staging-postgres",
+        "arn:aws:rds:us-east-2:680779862188:snapshot:neraium-staging-*",
+        "arn:aws:rds:us-east-2:680779862188:subgrp:neraium-staging-db-subnets"
+      ]
+    },
+    {
+      "Sid": "UseDefaultPostgresRdsConfiguration",
+      "Effect": "Allow",
+      "Action": "rds:CreateDBInstance",
+      "Resource": [
+        "arn:aws:rds:us-east-2:680779862188:og:default*",
+        "arn:aws:rds:us-east-2:680779862188:pg:default.postgres*"
+      ]
+    },
+    {
+      "Sid": "CreateRdsManagedMasterSecret",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:TagResource"
+      ],
+      "Resource": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-*"
+    },
+    {
+      "Sid": "ManageOnlyNamedStagingSecrets",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:DeleteSecret",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:TagResource",
+        "secretsmanager:UntagResource",
+        "secretsmanager:UpdateSecret"
+      ],
+      "Resource": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/staging/*"
+    },
+    {
+      "Sid": "ManageOnlyStagingLogGroups",
+      "Effect": "Allow",
+      "Action": "logs:*",
+      "Resource": [
+        "arn:aws:logs:us-east-2:680779862188:log-group:/ecs/neraium-staging-*",
+        "arn:aws:logs:us-east-2:680779862188:log-group:/ecs/neraium-staging-*:*"
+      ]
+    },
+    {
+      "Sid": "ManageOnlyStagingAlertsTopic",
+      "Effect": "Allow",
+      "Action": "sns:*",
+      "Resource": "arn:aws:sns:us-east-2:680779862188:neraium-staging-infrastructure-alerts"
+    },
+    {
+      "Sid": "ManageOnlyStagingAlarms",
+      "Effect": "Allow",
+      "Action": "cloudwatch:*",
+      "Resource": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-staging-*"
+    },
+    {
+      "Sid": "CreateTaggedStagingDistribution",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:CreateDistributionWithTags",
+        "cloudfront:TagResource"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/Application": "Neraium",
+          "aws:RequestTag/Environment": "staging"
+        }
+      }
+    },
+    {
+      "Sid": "CreateCloudFrontConnectionGroup",
+      "Effect": "Allow",
+      "Action": "cloudfront:CreateConnectionGroup",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageTaggedStagingDistribution",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:DeleteDistribution",
+        "cloudfront:TagResource",
+        "cloudfront:UntagResource",
+        "cloudfront:UpdateDistribution"
+      ],
+      "Resource": "arn:aws:cloudfront::680779862188:distribution/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Application": "Neraium",
+          "aws:ResourceTag/Environment": "staging"
+        }
+      }
+    }
+  ]
+}

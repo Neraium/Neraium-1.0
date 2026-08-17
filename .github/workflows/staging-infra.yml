@@ -1,0 +1,514 @@
+name: Staging infrastructure preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  preflight:
+    name: Read-only staging infrastructure preflight
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    environment: staging-infra
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5c3a
+        with:
+          ref: main
+
+      - name: Verify protected ref and reviewed support artifacts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_SHA" == "$(git rev-parse HEAD)" ]]
+          sha256sum --check <<'CHECKSUMS'
+          7af39dd1dd1a42c1f31fd584a53213f2a8e335cebb70f979834d5b85764c318b  infra/staging/neraium-staging.yaml
+          1ed4bb14abde6ed567522a4984fa914be93fed0db1d9695ab855d768ba18a088  .planning/neraium-staging-cloudformation-role-policy.json
+          a5cbf14784678abd2d166531e3f5a10df890ac922f5ba0fe46a805bd3e579b30  .planning/neraium-staging-github-deploy-role-policy.json
+          CHECKSUMS
+
+      - name: Assume the staging deploy role with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          role-to-assume: arn:aws:iam::680779862188:role/neraium-staging-github-deploy-role
+          aws-region: us-east-2
+          role-session-name: github-staging-infra-preflight
+          output-credentials: false
+          inline-session-policy: >-
+            {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["sts:GetCallerIdentity","iam:Get*","iam:List*","cloudformation:DescribeStacks","cloudformation:GetTemplateSummary","ec2:Describe*","ecr:DescribeRepositories","ecs:Describe*","ecs:ListTaskDefinitions","elasticfilesystem:Describe*","elasticfilesystem:ListTagsForResource","elasticloadbalancing:Describe*","logs:DescribeLogGroups","rds:Describe*","s3:ListBucket","secretsmanager:DescribeSecret","sns:ListTopics","cloudfront:ListDistributions","cloudwatch:DescribeAlarms"],"Resource":"*"}]}
+
+      - name: Verify caller identity, account, and region
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          identity="$(aws sts get-caller-identity --output json)"
+          printf '%s\n' "$identity" | jq .
+          account="$(jq -r '.Account' <<<"$identity")"
+          arn="$(jq -r '.Arn' <<<"$identity")"
+          region="$(aws configure get region)"
+          [[ "$account" == "680779862188" ]]
+          [[ "$region" == "us-east-2" ]]
+          [[ "$arn" == arn:aws:sts::680779862188:assumed-role/neraium-staging-github-deploy-role/* ]]
+          {
+            echo '### Staging infrastructure preflight'
+            echo
+            echo '- Caller identity, account, and region: **passed**'
+            echo "- Principal: \`$arn\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify IAM roles, trusts, and effective policies
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import fnmatch
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          ACCOUNT = "680779862188"
+          DEPLOY = "neraium-staging-github-deploy-role"
+          CFN = "neraium-staging-cloudformation-role"
+          APP = "neraium-staging-task-app-role"
+          EXECUTION = "neraium-staging-ecs-task-execution-role"
+
+          def aws(*args):
+              command = ["aws", *args, "--output", "json"]
+              print("+", " ".join(command), flush=True)
+              result = subprocess.run(command, text=True, capture_output=True)
+              if result.stdout:
+                  print(result.stdout.rstrip())
+              if result.stderr:
+                  print(result.stderr.rstrip(), file=sys.stderr)
+              if result.returncode:
+                  raise RuntimeError(f"AWS read failed ({result.returncode}): {' '.join(command)}")
+              return json.loads(result.stdout)
+
+          def canonical(value):
+              if isinstance(value, dict):
+                  return {key: canonical(value[key]) for key in sorted(value)}
+              if isinstance(value, list):
+                  items = [canonical(item) for item in value]
+                  return sorted(items, key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")))
+              return value
+
+          def assert_equal(actual, expected, label):
+              actual = canonical(actual)
+              expected = canonical(expected)
+              if actual != expected:
+                  print(f"{label} mismatch", file=sys.stderr)
+                  print("EXPECTED:", json.dumps(expected, indent=2, sort_keys=True), file=sys.stderr)
+                  print("ACTUAL:", json.dumps(actual, indent=2, sort_keys=True), file=sys.stderr)
+                  raise AssertionError(label)
+              print(f"PASS: {label}")
+
+          def trust(role_name):
+              role = aws("iam", "get-role", "--role-name", role_name)["Role"]
+              if role.get("PermissionsBoundary"):
+                  raise AssertionError(
+                      f"{role_name} has an unreviewed permissions boundary: {role['PermissionsBoundary']}"
+                  )
+              return role["AssumeRolePolicyDocument"]
+
+          def policies(role_name):
+              attached = aws("iam", "list-attached-role-policies", "--role-name", role_name)["AttachedPolicies"]
+              inline = aws("iam", "list-role-policies", "--role-name", role_name)["PolicyNames"]
+              statements = []
+              for policy in attached:
+                  metadata = aws("iam", "get-policy", "--policy-arn", policy["PolicyArn"])["Policy"]
+                  document = aws(
+                      "iam", "get-policy-version",
+                      "--policy-arn", policy["PolicyArn"],
+                      "--version-id", metadata["DefaultVersionId"],
+                  )["PolicyVersion"]["Document"]
+                  statement = document.get("Statement", [])
+                  statements.extend(statement if isinstance(statement, list) else [statement])
+              for policy_name in inline:
+                  document = aws(
+                      "iam", "get-role-policy",
+                      "--role-name", role_name,
+                      "--policy-name", policy_name,
+                  )["PolicyDocument"]
+                  statement = document.get("Statement", [])
+                  statements.extend(statement if isinstance(statement, list) else [statement])
+              return attached, inline, {"Version": "2012-10-17", "Statement": statements}
+
+          def allow_actions(document):
+              actions = []
+              for statement in document.get("Statement", []):
+                  if statement.get("Effect") != "Allow":
+                      continue
+                  value = statement.get("Action", [])
+                  actions.extend(value if isinstance(value, list) else [value])
+              return actions
+
+          def require_actions(document, required, label):
+              granted = allow_actions(document)
+              missing = [action for action in required if not any(fnmatch.fnmatchcase(action.lower(), pattern.lower()) for pattern in granted)]
+              if missing:
+                  raise AssertionError(f"{label} is missing required Allow actions: {missing}")
+              print(f"PASS: {label} contains all {len(required)} required actions")
+
+          def forbid_allow_dependencies(document, label):
+              forbidden = ("ppc", "production", "neraium-prod")
+              for statement in document.get("Statement", []):
+                  if statement.get("Effect") != "Allow":
+                      continue
+                  rendered = json.dumps(statement, sort_keys=True).lower()
+                  matches = [term for term in forbidden if term in rendered]
+                  if matches:
+                      raise AssertionError(f"{label} Allow statement contains forbidden dependencies {matches}: {rendered}")
+              print(f"PASS: {label} has no PPC or production Allow dependency")
+
+          def forbid_document_dependencies(document, label):
+              rendered = json.dumps(document, sort_keys=True).lower()
+              matches = [term for term in ("ppc", "production", "neraium-prod") if term in rendered]
+              if matches:
+                  raise AssertionError(f"{label} contains forbidden dependencies: {matches}")
+              print(f"PASS: {label} contains no PPC or production dependency")
+
+          expected_deploy_trust = {
+              "Version": "2012-10-17",
+              "Statement": [{
+                  "Effect": "Allow",
+                  "Principal": {"Federated": f"arn:aws:iam::{ACCOUNT}:oidc-provider/token.actions.githubusercontent.com"},
+                  "Action": "sts:AssumeRoleWithWebIdentity",
+                  "Condition": {"StringEquals": {
+                      "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                      "token.actions.githubusercontent.com:sub": "repo:Neraium/Neraium-1.0:environment:staging-infra",
+                  }},
+              }],
+          }
+          expected_cfn_trust = {
+              "Version": "2012-10-17",
+              "Statement": [{
+                  "Effect": "Allow",
+                  "Principal": {"Service": "cloudformation.amazonaws.com"},
+                  "Action": "sts:AssumeRole",
+              }],
+          }
+          expected_ecs_trust = {
+              "Version": "2012-10-17",
+              "Statement": [{
+                  "Effect": "Allow",
+                  "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+                  "Action": "sts:AssumeRole",
+              }],
+          }
+
+          assert_equal(trust(DEPLOY), expected_deploy_trust, "deploy-role OIDC trust")
+          deploy_attached, deploy_inline, deploy_document = policies(DEPLOY)
+          expected_deploy_attachments = {
+              f"arn:aws:iam::{ACCOUNT}:policy/NeraiumStagingDeployPreflight",
+              f"arn:aws:iam::{ACCOUNT}:policy/NeraiumStagingDeployChangeSet",
+          }
+          actual_deploy_attachments = {item["PolicyArn"] for item in deploy_attached}
+          if actual_deploy_attachments != expected_deploy_attachments:
+              raise AssertionError(f"deploy-role attachments differ: {sorted(actual_deploy_attachments)}")
+          if deploy_inline:
+              raise AssertionError(f"deploy-role has forbidden inline policies: {deploy_inline}")
+          expected_deploy_document = json.loads(Path(".planning/neraium-staging-github-deploy-role-policy.json").read_text())
+          assert_equal(deploy_document, expected_deploy_document, "aggregate deploy-role policy")
+          forbid_allow_dependencies(deploy_document, "deploy-role policy")
+
+          assert_equal(trust(CFN), expected_cfn_trust, "CloudFormation-role service trust")
+          _, _, cfn_document = policies(CFN)
+          expected_cfn_document = json.loads(Path(".planning/neraium-staging-cloudformation-role-policy.json").read_text())
+          assert_equal(cfn_document, expected_cfn_document, "aggregate CloudFormation-role policy")
+          forbid_allow_dependencies(cfn_document, "CloudFormation-role policy")
+
+          app_required = [
+              "s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:PutObjectTagging",
+              "elasticfilesystem:ClientMount", "elasticfilesystem:ClientWrite",
+              "secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret", "kms:Decrypt", "sns:Publish",
+              "ecs:DescribeServices", "elasticloadbalancing:DescribeTargetHealth",
+          ]
+          execution_required = [
+              "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams",
+              "secretsmanager:GetSecretValue",
+          ]
+          for role_name, required in ((APP, app_required), (EXECUTION, execution_required)):
+              assert_equal(trust(role_name), expected_ecs_trust, f"{role_name} ECS-only trust")
+              attached, _, document = policies(role_name)
+              if role_name == EXECUTION:
+                  required_managed = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                  if required_managed not in {item["PolicyArn"] for item in attached}:
+                      raise AssertionError(f"{EXECUTION} lacks {required_managed}")
+              require_actions(document, required, role_name)
+              forbid_document_dependencies(document, role_name)
+
+          service_roles = [
+              "AWSServiceRoleForECS",
+              "AWSServiceRoleForAmazonElasticFileSystem",
+              "AWSServiceRoleForElasticLoadBalancing",
+              "AWSServiceRoleForRDS",
+          ]
+          for role_name in service_roles:
+              aws("iam", "get-role", "--role-name", role_name)
+              print(f"PASS: service-linked role exists: {role_name}")
+          PY
+          {
+            echo '- IAM role existence, trusts, attachments, and policies: **passed**'
+            echo '- Runtime role required actions and forbidden dependency scan: **passed**'
+            echo '- ECS, EFS, ELB, and RDS service-linked roles: **passed**'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify all deterministic staging names are unoccupied
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          collision() {
+            echo "COLLISION: $1 already exists" >&2
+            return 1
+          }
+
+          expect_absent_error() {
+            local label="$1"
+            local pattern="$2"
+            shift 2
+            local output
+            local status
+            set +e
+            output="$("$@" 2>&1)"
+            status=$?
+            set -e
+            printf '%s\n' "$output"
+            if [[ $status -eq 0 ]]; then
+              collision "$label"
+            fi
+            if ! grep -Eiq "$pattern" <<<"$output"; then
+              echo "FAIL CLOSED: $label check was denied or unavailable" >&2
+              return 1
+            fi
+            echo "VIABLE: $label is absent"
+          }
+
+          expect_zero() {
+            local label="$1"
+            shift
+            local output
+            output="$("$@")"
+            printf '%s\n' "$output"
+            [[ "$output" == "0" ]] || collision "$label"
+            echo "VIABLE: $label is absent"
+          }
+
+          expect_absent_error "CloudFormation stack neraium-staging" 'Stack with id neraium-staging does not exist' \
+            aws cloudformation describe-stacks --stack-name neraium-staging --output json
+
+          availability_zones="$(aws ec2 describe-availability-zones \
+            --filters Name=state,Values=available --output json)"
+          printf '%s\n' "$availability_zones" | jq .
+          [[ "$(jq '.AvailabilityZones | length' <<<"$availability_zones")" -ge 2 ]] || {
+            echo 'FAIL CLOSED: fewer than two Availability Zones are available in us-east-2' >&2
+            exit 1
+          }
+
+          vpc_inventory="$(aws ec2 describe-vpcs --output json)"
+          subnet_inventory="$(aws ec2 describe-subnets --output json)"
+          printf '%s\n' "$vpc_inventory" | jq '{VpcCidrs: [.Vpcs[].CidrBlock]}'
+          printf '%s\n' "$subnet_inventory" | jq '{SubnetCidrs: [.Subnets[].CidrBlock]}'
+          printf '%s\n' "$vpc_inventory" > "$RUNNER_TEMP/neraium-vpcs.json"
+          printf '%s\n' "$subnet_inventory" > "$RUNNER_TEMP/neraium-subnets.json"
+          RUNNER_TEMP="$RUNNER_TEMP" python3 - <<'PY'
+          import ipaddress
+          import json
+          import os
+          from pathlib import Path
+
+          staging = ipaddress.ip_network("10.42.0.0/16")
+          temporary = Path(os.environ["RUNNER_TEMP"])
+          existing = []
+          for vpc in json.loads((temporary / "neraium-vpcs.json").read_text())["Vpcs"]:
+              cidrs = {vpc["CidrBlock"]}
+              cidrs.update(item["CidrBlock"] for item in vpc.get("CidrBlockAssociationSet", []))
+              for cidr in cidrs:
+                  existing.append(("VPC", vpc["VpcId"], ipaddress.ip_network(cidr)))
+          for subnet in json.loads((temporary / "neraium-subnets.json").read_text())["Subnets"]:
+              existing.append(("subnet", subnet["SubnetId"], ipaddress.ip_network(subnet["CidrBlock"])))
+          overlaps = [(kind, identifier, str(network)) for kind, identifier, network in existing if staging.overlaps(network)]
+          if overlaps:
+              raise AssertionError(f"staging CIDR {staging} overlaps existing networks: {overlaps}")
+          print(f"VIABLE: staging CIDR {staging} does not overlap any existing VPC or subnet")
+          PY
+
+          expect_zero "VPC neraium-staging-vpc" aws ec2 describe-vpcs \
+            --filters Name=tag:Name,Values=neraium-staging-vpc --query 'length(Vpcs)' --output text
+          expect_zero "internet gateway neraium-staging-igw" aws ec2 describe-internet-gateways \
+            --filters Name=tag:Name,Values=neraium-staging-igw --query 'length(InternetGateways)' --output text
+          for name in neraium-staging-public-a neraium-staging-public-b neraium-staging-data-a neraium-staging-data-b; do
+            expect_zero "subnet $name" aws ec2 describe-subnets \
+              --filters Name=tag:Name,Values="$name" --query 'length(Subnets)' --output text
+          done
+          expect_zero "route table neraium-staging-public-routes" aws ec2 describe-route-tables \
+            --filters Name=tag:Name,Values=neraium-staging-public-routes --query 'length(RouteTables)' --output text
+          for name in neraium-staging-alb-sg neraium-staging-api-sg neraium-staging-worker-sg neraium-staging-rds-sg neraium-staging-efs-sg; do
+            expect_zero "security group $name" aws ec2 describe-security-groups \
+              --filters Name=group-name,Values="$name" --query 'length(SecurityGroups)' --output text
+          done
+
+          expect_absent_error "S3 bucket neraium-staging-upload-state-680779862188-us-east-2" '\(404\)|Not Found|NoSuchBucket' \
+            aws s3api head-bucket --bucket neraium-staging-upload-state-680779862188-us-east-2 \
+              --expected-bucket-owner 680779862188
+          expect_absent_error "ECR repository neraium-staging-api" 'RepositoryNotFoundException' \
+            aws ecr describe-repositories --repository-names neraium-staging-api --output json
+
+          efs_json="$(aws efs describe-file-systems --output json)"
+          printf '%s\n' "$efs_json" | jq .
+          efs_collision=0
+          while IFS= read -r filesystem_id; do
+            tags="$(aws efs list-tags-for-resource --resource-id "$filesystem_id" --output json)"
+            printf '%s\n' "$tags" | jq .
+            if jq -e '.Tags[]? | select(.Key == "Name" and .Value == "neraium-staging-runtime")' <<<"$tags" >/dev/null; then
+              efs_collision=1
+            fi
+          done < <(jq -r '.FileSystems[].FileSystemId' <<<"$efs_json")
+          [[ $efs_collision -eq 0 ]] || collision "EFS file system neraium-staging-runtime"
+          echo 'VIABLE: EFS file system neraium-staging-runtime is absent'
+
+          access_points="$(aws efs describe-access-points --output json)"
+          printf '%s\n' "$access_points" | jq .
+          for name in neraium-staging-runtime-api neraium-staging-runtime-worker; do
+            if jq -e --arg name "$name" '.AccessPoints[]? | .Tags[]? | select(.Key == "Name" and .Value == $name)' <<<"$access_points" >/dev/null; then
+              collision "EFS access point $name"
+            fi
+            echo "VIABLE: EFS access point $name is absent"
+          done
+
+          expect_absent_error "RDS instance neraium-staging-postgres" 'DBInstanceNotFound' \
+            aws rds describe-db-instances --db-instance-identifier neraium-staging-postgres --output json
+          expect_absent_error "RDS subnet group neraium-staging-db-subnets" 'DBSubnetGroupNotFoundFault' \
+            aws rds describe-db-subnet-groups --db-subnet-group-name neraium-staging-db-subnets --output json
+
+          for name in neraium/staging/api-token neraium/staging/bootstrap-admin-password neraium/staging/cloudfront-origin-header; do
+            expect_absent_error "Secrets Manager secret $name" 'ResourceNotFoundException' \
+              aws secretsmanager describe-secret --secret-id "$name" --output json
+          done
+          for name in /ecs/neraium-staging-api /ecs/neraium-staging-worker; do
+            expect_zero "CloudWatch log group $name" aws logs describe-log-groups \
+              --log-group-name-prefix "$name" --query "length(logGroups[?logGroupName=='$name'])" --output text
+          done
+          expect_zero "SNS topic neraium-staging-infrastructure-alerts" aws sns list-topics \
+            --query "length(Topics[?TopicArn=='arn:aws:sns:us-east-2:680779862188:neraium-staging-infrastructure-alerts'])" --output text
+
+          expect_absent_error "ALB neraium-staging-alb" 'LoadBalancerNotFound' \
+            aws elbv2 describe-load-balancers --names neraium-staging-alb --output json
+          expect_absent_error "target group neraium-staging-api-tg" 'TargetGroupNotFound' \
+            aws elbv2 describe-target-groups --names neraium-staging-api-tg --output json
+          distributions="$(aws cloudfront list-distributions --output json)"
+          printf '%s\n' "$distributions" | jq .
+          [[ "$(jq '[.DistributionList.Items[]? | select(.Comment == "neraium-staging-api")] | length' <<<"$distributions")" == "0" ]] \
+            || collision "CloudFront distribution comment neraium-staging-api"
+          echo 'VIABLE: CloudFront distribution comment neraium-staging-api is absent'
+
+          cluster="$(aws ecs describe-clusters --clusters neraium-staging-cluster --output json)"
+          printf '%s\n' "$cluster" | jq .
+          [[ "$(jq '.clusters | length' <<<"$cluster")" == "0" ]] || collision "ECS cluster neraium-staging-cluster"
+          [[ "$(jq '[.failures[]? | select(.reason != "MISSING")] | length' <<<"$cluster")" == "0" ]] || {
+            echo 'FAIL CLOSED: unexpected ECS cluster response' >&2
+            exit 1
+          }
+          echo 'VIABLE: ECS cluster neraium-staging-cluster is absent'
+          set +e
+          services="$(aws ecs describe-services --cluster neraium-staging-cluster \
+            --services neraium-staging-api-service neraium-staging-worker-service --output json 2>&1)"
+          services_status=$?
+          set -e
+          printf '%s\n' "$services"
+          if [[ $services_status -eq 0 ]]; then
+            [[ "$(jq '.services | length' <<<"$services")" == "0" ]] || collision "ECS staging service"
+            [[ "$(jq '[.failures[]? | select(.reason != "MISSING")] | length' <<<"$services")" == "0" ]] || {
+              echo 'FAIL CLOSED: unexpected ECS service response' >&2
+              exit 1
+            }
+          elif ! grep -q 'ClusterNotFoundException' <<<"$services"; then
+            echo 'FAIL CLOSED: ECS service inventory was denied or unavailable' >&2
+            exit 1
+          fi
+          echo 'VIABLE: both ECS staging services are absent'
+          for family in neraium-staging-api neraium-staging-worker; do
+            task_definitions="$(aws ecs list-task-definitions --family-prefix "$family" --output json)"
+            printf '%s\n' "$task_definitions" | jq .
+            if jq -e --arg family "$family" '.taskDefinitionArns[]? | split("/")[-1] | split(":")[0] == $family' <<<"$task_definitions" >/dev/null; then
+              collision "ECS task family $family"
+            fi
+            echo "VIABLE: ECS task family $family is absent"
+          done
+
+          for name in neraium-staging-alb-5xx neraium-staging-postgres-free-storage; do
+            expect_zero "CloudWatch alarm $name" aws cloudwatch describe-alarms \
+              --alarm-names "$name" --query 'length(MetricAlarms)' --output text
+          done
+          echo '- Deterministic staging-name collision inventory: **passed (all names viable)**' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate the CloudFormation template without execution
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          template=infra/staging/neraium-staging.yaml
+
+          echo '+ aws cloudformation get-template-summary --template-body file://infra/staging/neraium-staging.yaml'
+          aws cloudformation get-template-summary --template-body "file://$template" --output json | tee /tmp/template-summary.json
+          jq . /tmp/template-summary.json
+
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          path = Path("infra/staging/neraium-staging.yaml")
+          text = path.read_text()
+
+          def default_for(parameter):
+              match = re.search(rf"(?ms)^  {re.escape(parameter)}:\n(?P<body>(?:    .*\n)+)", text)
+              if not match:
+                  raise AssertionError(f"parameter {parameter} is missing")
+              default = re.search(r"(?m)^    Default:\s*([^#\n]+?)\s*$", match.group("body"))
+              if not default:
+                  raise AssertionError(f"parameter {parameter} has no default")
+              return default.group(1).strip(" '\"")
+
+          assert default_for("MaintenanceMode") == "enabled", "MaintenanceMode must default to enabled"
+          assert default_for("ApiDesiredCount") == "0", "ApiDesiredCount must default to zero"
+          assert default_for("WorkerDesiredCount") == "0", "WorkerDesiredCount must default to zero"
+          if re.search(r"(?mi)^\s*Type:\s*AWS::IAM::", text):
+              raise AssertionError("template contains an IAM resource")
+          forbidden_patterns = (
+              r"(?i)ppc",
+              r"(?i)neraium-prod",
+              r"(?i)arn:aws[^\s'\"]*(?:prod|production)[^\s'\"]*",
+              r"(?i)role/[^\s'\"]*(?:prod|production)[^\s'\"]*",
+          )
+          forbidden = [match.group(0) for pattern in forbidden_patterns for match in re.finditer(pattern, text)]
+          if forbidden:
+              raise AssertionError(f"template contains forbidden PPC or production identity/resource references: {forbidden}")
+          print("PASS: maintenance is enabled and desired counts are zero")
+          print("PASS: template contains no IAM resources")
+          print("PASS: template contains no PPC or production identity/resource references")
+          PY
+          {
+            echo '- CloudFormation get-template-summary validation: **passed**'
+            echo '- Local paused-state and forbidden-content assertions: **passed**'
+            echo '- No change set, stack operation, mutation probe, or resource creation was attempted.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report preflight result
+        if: ${{ always() }}
+        shell: bash
+        env:
+          PREFLIGHT_RESULT: ${{ job.status }}
+        run: |
+          set -Eeuo pipefail
+          {
+            echo
+            echo "### Final result: **$PREFLIGHT_RESULT**"
+            echo
+            echo 'This workflow is inspection-only. A failure means the staging IAM baseline, template, or collision-free prerequisite was not proven; it fails closed.'
+          } >> "$GITHUB_STEP_SUMMARY"

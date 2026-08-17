@@ -1,0 +1,249 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyStackExecution",
+      "Effect": "Deny",
+      "Action": [
+        "cloudformation:CreateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:ExecuteChangeSet",
+        "cloudformation:UpdateStack"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyOtherChangeSets",
+      "Effect": "Deny",
+      "Action": [
+        "cloudformation:CreateChangeSet",
+        "cloudformation:DeleteChangeSet"
+      ],
+      "NotResource": "arn:aws:cloudformation:us-east-2:680779862188:stack/neraium-staging/*"
+    },
+    {
+      "Sid": "DenyOtherPassRole",
+      "Effect": "Deny",
+      "Action": "iam:PassRole",
+      "NotResource": "arn:aws:iam::680779862188:role/neraium-staging-cloudformation-role"
+    },
+    {
+      "Sid": "ReadRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListRolePolicies"
+      ],
+      "Resource": [
+        "arn:aws:iam::680779862188:role/neraium-staging-cloudformation-role",
+        "arn:aws:iam::680779862188:role/neraium-staging-ecs-task-execution-role",
+        "arn:aws:iam::680779862188:role/neraium-staging-github-deploy-role",
+        "arn:aws:iam::680779862188:role/neraium-staging-task-app-role"
+      ]
+    },
+    {
+      "Sid": "ReadPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion"
+      ],
+      "Resource": [
+        "arn:aws:iam::680779862188:policy/*",
+        "arn:aws:iam::aws:policy/*"
+      ]
+    },
+    {
+      "Sid": "ReadServiceRoles",
+      "Effect": "Allow",
+      "Action": "iam:GetRole",
+      "Resource": [
+        "arn:aws:iam::680779862188:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS",
+        "arn:aws:iam::680779862188:role/aws-service-role/elasticfilesystem.amazonaws.com/AWSServiceRoleForAmazonElasticFileSystem",
+        "arn:aws:iam::680779862188:role/aws-service-role/elasticloadbalancing.amazonaws.com/AWSServiceRoleForElasticLoadBalancing",
+        "arn:aws:iam::680779862188:role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS"
+      ]
+    },
+    {
+      "Sid": "ReadInventory",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:DescribeAlarms",
+        "ec2:DescribeAvailabilityZones",
+        "ec2:DescribeInternetGateways",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DescribeRouteTables",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcAttribute",
+        "ec2:DescribeVpcs",
+        "ecs:DescribeTaskDefinition",
+        "ecs:ListTaskDefinitions",
+        "elasticfilesystem:DescribeAccessPoints",
+        "elasticfilesystem:DescribeBackupPolicy",
+        "elasticfilesystem:DescribeFileSystems",
+        "elasticfilesystem:DescribeLifecycleConfiguration",
+        "elasticfilesystem:DescribeMountTargets",
+        "elasticfilesystem:ListTagsForResource",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "elasticloadbalancing:DescribeTags",
+        "elasticloadbalancing:DescribeTargetGroups",
+        "logs:DescribeLogGroups",
+        "rds:DescribeDBInstances",
+        "rds:DescribeDBSnapshots",
+        "rds:DescribeDBSubnetGroups",
+        "rds:ListTagsForResource",
+        "sns:ListTopics"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-2"
+        }
+      }
+    },
+    {
+      "Sid": "ReadEcr",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:DescribeRepositories",
+        "ecr:GetLifecyclePolicy",
+        "ecr:ListTagsForResource"
+      ],
+      "Resource": "arn:aws:ecr:us-east-2:680779862188:repository/neraium-staging-api"
+    },
+    {
+      "Sid": "ReadEcs",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeClusters",
+        "ecs:DescribeServices",
+        "ecs:ListTagsForResource"
+      ],
+      "Resource": [
+        "arn:aws:ecs:us-east-2:680779862188:cluster/neraium-staging-cluster",
+        "arn:aws:ecs:us-east-2:680779862188:service/neraium-staging-cluster/neraium-staging-api-service",
+        "arn:aws:ecs:us-east-2:680779862188:service/neraium-staging-cluster/neraium-staging-worker-service",
+        "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-staging-api:*",
+        "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-staging-worker:*"
+      ]
+    },
+    {
+      "Sid": "ReadBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketCors",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetBucketLocation",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketTagging",
+        "s3:GetBucketVersioning",
+        "s3:GetEncryptionConfiguration",
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::neraium-staging-upload-state-680779862188-us-east-2"
+    },
+    {
+      "Sid": "ReadSecrets",
+      "Effect": "Allow",
+      "Action": "secretsmanager:DescribeSecret",
+      "Resource": [
+        "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/staging/api-token-*",
+        "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/staging/bootstrap-admin-password-*",
+        "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/staging/cloudfront-origin-header-*"
+      ]
+    },
+    {
+      "Sid": "ReadSns",
+      "Effect": "Allow",
+      "Action": [
+        "sns:GetTopicAttributes",
+        "sns:ListTagsForResource"
+      ],
+      "Resource": "arn:aws:sns:us-east-2:680779862188:neraium-staging-infrastructure-alerts"
+    },
+    {
+      "Sid": "ReadCloudFront",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:ListTagsForResource"
+      ],
+      "Resource": "arn:aws:cloudfront::680779862188:distribution/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Application": "Neraium",
+          "aws:ResourceTag/Environment": "staging"
+        }
+      }
+    },
+    {
+      "Sid": "ReadStack",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStacks",
+        "cloudformation:GetTemplate",
+        "cloudformation:ListChangeSets",
+        "cloudformation:ListStackResources"
+      ],
+      "Resource": "arn:aws:cloudformation:us-east-2:680779862188:stack/neraium-staging/*"
+    },
+    {
+      "Sid": "ReadGlobal",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:GetTemplateSummary",
+        "cloudfront:ListDistributions"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CreateChangeSet",
+      "Effect": "Allow",
+      "Action": "cloudformation:CreateChangeSet",
+      "Resource": "arn:aws:cloudformation:us-east-2:680779862188:stack/neraium-staging/*",
+      "Condition": {
+        "ArnEquals": {
+          "cloudformation:RoleArn": "arn:aws:iam::680779862188:role/neraium-staging-cloudformation-role"
+        },
+        "StringEquals": {
+          "aws:RequestTag/Application": "Neraium",
+          "aws:RequestTag/Environment": "staging"
+        },
+        "StringLike": {
+          "cloudformation:ChangeSetName": "neraium-staging-*"
+        }
+      }
+    },
+    {
+      "Sid": "ReadDeleteChangeSet",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:DeleteChangeSet",
+        "cloudformation:DescribeChangeSet"
+      ],
+      "Resource": "arn:aws:cloudformation:us-east-2:680779862188:stack/neraium-staging/*",
+      "Condition": {
+        "StringLike": {
+          "cloudformation:ChangeSetName": "neraium-staging-*"
+        }
+      }
+    },
+    {
+      "Sid": "PassCfnRole",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::680779862188:role/neraium-staging-cloudformation-role",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "cloudformation.amazonaws.com"
+        }
+      }
+    }
+  ]
+}

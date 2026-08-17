@@ -1,0 +1,1224 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Isolated, production-shaped Neraium staging infrastructure. Creates no IAM
+  roles and starts in a paused, zero-task state by default.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Deployment controls
+        Parameters:
+          - ContainerImageDigest
+          - BuildSha
+          - ApiDesiredCount
+          - WorkerDesiredCount
+          - MaintenanceMode
+      - Label:
+          default: Staging bootstrap configuration
+        Parameters:
+          - BootstrapAdminEmail
+          - LogRetentionDays
+    ParameterLabels:
+      ContainerImageDigest:
+        default: Digest in the staging ECR repository
+      MaintenanceMode:
+        default: Keep non-health API routes paused
+
+Parameters:
+  ContainerImageDigest:
+    Type: String
+    Default: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    AllowedPattern: '^sha256:[0-9a-f]{64}$'
+    ConstraintDescription: Must be a sha256 image digest.
+    Description: >-
+      Digest in neraium-staging-api. The all-zero bootstrap value is safe only
+      while both desired counts remain zero; publish an image before scaling up.
+  BuildSha:
+    Type: String
+    Default: staging-infra-bootstrap
+    AllowedPattern: '^[A-Za-z0-9._-]{1,128}$'
+    Description: Immutable build identifier supplied to both task definitions.
+  ApiDesiredCount:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 2
+    Description: API task count. Zero is the safe paused baseline.
+  WorkerDesiredCount:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 2
+    Description: Worker task count. Scale to zero only after queue drain.
+  MaintenanceMode:
+    Type: String
+    Default: enabled
+    AllowedValues:
+      - enabled
+      - disabled
+    Description: >-
+      When enabled, health/readiness routes remain live and other API routes
+      return 503 through the staging ALB.
+  BootstrapAdminEmail:
+    Type: String
+    Default: staging-admin@neraium.invalid
+    AllowedPattern: '^[^@[:space:]]+@[^@[:space:]]+$'
+    Description: Synthetic staging administrator identity; never use a customer address.
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    AllowedValues:
+      - 7
+      - 14
+      - 30
+      - 60
+
+Conditions:
+  MaintenanceModeEnabled: !Equals [!Ref MaintenanceMode, enabled]
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: neraium-staging-vpc
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: neraium-staging-igw
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref Vpc
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.42.0.0/24
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: neraium-staging-public-a
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.42.1.0/24
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: neraium-staging-public-b
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  DataSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.42.10.0/24
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: neraium-staging-data-a
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  DataSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.42.11.0/24
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: neraium-staging-data-b
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: neraium-staging-public-routes
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetA
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetB
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public HTTP origin for the staging CloudFront distribution
+      GroupName: neraium-staging-alb-sg
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: CloudFront origin traffic; listener rules require a secret header
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - Description: Forward API traffic to staging API tasks
+          IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 10.42.0.0/16
+      Tags:
+        - Key: Name
+          Value: neraium-staging-alb-sg
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  ApiSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Neraium staging API tasks
+      GroupName: neraium-staging-api-sg
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: API traffic from the staging ALB only
+          IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      SecurityGroupEgress:
+        - Description: Controlled staging task egress without a NAT gateway
+          IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: neraium-staging-api-sg
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  WorkerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Neraium staging worker tasks; no inbound rules
+      GroupName: neraium-staging-worker-sg
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - Description: Controlled staging task egress without a NAT gateway
+          IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: neraium-staging-worker-sg
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Neraium staging PostgreSQL from API tasks only
+      GroupName: neraium-staging-rds-sg
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: PostgreSQL from staging API tasks
+          IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref ApiSecurityGroup
+      SecurityGroupEgress: []
+      Tags:
+        - Key: Name
+          Value: neraium-staging-rds-sg
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  EfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Neraium staging EFS from API and worker tasks only
+      GroupName: neraium-staging-efs-sg
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: NFS from staging API tasks
+          IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref ApiSecurityGroup
+        - Description: NFS from staging worker tasks
+          IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref WorkerSecurityGroup
+      SecurityGroupEgress: []
+      Tags:
+        - Key: Name
+          Value: neraium-staging-efs-sg
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  UploadStateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub neraium-staging-upload-state-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-tagged-synthetic-sources
+            Status: Enabled
+            TagFilters:
+              - Key: NeraiumDataClass
+                Value: synthetic-source
+            ExpirationInDays: 7
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 7
+          - Id: abort-incomplete-multipart-uploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+          - Id: retain-quiesced-runtime-backups
+            Status: Enabled
+            Prefix: runtime-backups/
+            ExpirationInDays: 30
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub neraium-staging-upload-state-${AWS::AccountId}-${AWS::Region}
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  UploadStateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UploadStateBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt UploadStateBucket.Arn
+              - !Sub ${UploadStateBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  EcrRepository:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RepositoryName: neraium-staging-api
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: IMMUTABLE
+      LifecyclePolicy:
+        LifecyclePolicyText: >-
+          {"rules":[{"rulePriority":1,"description":"Keep the newest 20 staging images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":20},"action":{"type":"expire"}}]}
+      Tags:
+        - Key: Name
+          Value: neraium-staging-api
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  RuntimeFileSystem:
+    Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BackupPolicy:
+        Status: DISABLED
+      Encrypted: true
+      FileSystemTags:
+        - Key: Name
+          Value: neraium-staging-runtime
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_14_DAYS
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+
+  ApiRuntimeAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      AccessPointTags:
+        - Key: Name
+          Value: neraium-staging-runtime-api
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+      FileSystemId: !Ref RuntimeFileSystem
+      PosixUser:
+        Gid: '10001'
+        Uid: '10001'
+      RootDirectory:
+        CreationInfo:
+          OwnerGid: '10001'
+          OwnerUid: '10001'
+          Permissions: '0750'
+        Path: /api
+
+  WorkerRuntimeAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      AccessPointTags:
+        - Key: Name
+          Value: neraium-staging-runtime-worker
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+      FileSystemId: !Ref RuntimeFileSystem
+      PosixUser:
+        Gid: '10001'
+        Uid: '10001'
+      RootDirectory:
+        CreationInfo:
+          OwnerGid: '10001'
+          OwnerUid: '10001'
+          Permissions: '0750'
+        Path: /worker
+
+  EfsMountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref RuntimeFileSystem
+      SecurityGroups:
+        - !Ref EfsSecurityGroup
+      SubnetId: !Ref DataSubnetA
+
+  EfsMountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref RuntimeFileSystem
+      SecurityGroups:
+        - !Ref EfsSecurityGroup
+      SubnetId: !Ref DataSubnetB
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Isolated Neraium staging data subnets
+      DBSubnetGroupName: neraium-staging-db-subnets
+      SubnetIds:
+        - !Ref DataSubnetA
+        - !Ref DataSubnetB
+      Tags:
+        - Key: Name
+          Value: neraium-staging-db-subnets
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  AuthDatabase:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      AllocatedStorage: '20'
+      AutoMinorVersionUpgrade: true
+      BackupRetentionPeriod: 1
+      CopyTagsToSnapshot: true
+      DBInstanceClass: db.t4g.micro
+      DBInstanceIdentifier: neraium-staging-postgres
+      DBName: neraium
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      DeleteAutomatedBackups: false
+      DeletionProtection: false
+      EnablePerformanceInsights: false
+      Engine: postgres
+      ManageMasterUserPassword: true
+      MasterUsername: neraium_admin
+      MaxAllocatedStorage: 25
+      MultiAZ: false
+      Port: 5432
+      PubliclyAccessible: false
+      StorageEncrypted: true
+      StorageType: gp3
+      VPCSecurityGroups:
+        - !Ref RdsSecurityGroup
+      Tags:
+        - Key: Name
+          Value: neraium-staging-postgres
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  ApiTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Neraium staging API access token
+      GenerateSecretString:
+        ExcludeCharacters: '"@/\\'
+        ExcludePunctuation: true
+        PasswordLength: 48
+      Name: neraium/staging/api-token
+      Tags:
+        - Key: Name
+          Value: neraium-staging-api-token
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  BootstrapAdminPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Synthetic Neraium staging bootstrap administrator password
+      GenerateSecretString:
+        ExcludeCharacters: '"@/\\'
+        ExcludePunctuation: true
+        PasswordLength: 32
+      Name: neraium/staging/bootstrap-admin-password
+      Tags:
+        - Key: Name
+          Value: neraium-staging-bootstrap-admin-password
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  CloudFrontOriginHeaderSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Random staging CloudFront-to-ALB origin verification value
+      GenerateSecretString:
+        ExcludePunctuation: true
+        PasswordLength: 48
+      Name: neraium/staging/cloudfront-origin-header
+      Tags:
+        - Key: Name
+          Value: neraium-staging-cloudfront-origin-header
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: /ecs/neraium-staging-api
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Name
+          Value: neraium-staging-api-logs
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  WorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: /ecs/neraium-staging-worker
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Name
+          Value: neraium-staging-worker-logs
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  InfrastructureAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Neraium staging infrastructure alerts
+      TopicName: neraium-staging-infrastructure-alerts
+      Tags:
+        - Key: Name
+          Value: neraium-staging-infrastructure-alerts
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      IpAddressType: ipv4
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: 'false'
+        - Key: routing.http.drop_invalid_header_fields.enabled
+          Value: 'true'
+      Name: neraium-staging-alb
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: neraium-staging-alb
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+      Type: application
+
+  ApiTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /api/health
+      HealthCheckPort: traffic-port
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200'
+      Name: neraium-staging-api-tg
+      Port: 8080
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '120'
+      TargetType: ip
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: neraium-staging-api-tg
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            ContentType: application/json
+            MessageBody: '{"detail":"staging origin access denied"}'
+            StatusCode: '403'
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  HealthRoutingRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ApiTargetGroup
+      Conditions:
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: X-Neraium-Origin-Verify
+            Values:
+              - !Sub '{{resolve:secretsmanager:${CloudFrontOriginHeaderSecret}:SecretString}}'
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /api/health
+              - /api/ready
+      ListenerArn: !Ref HttpListener
+      Priority: 10
+
+  ApplicationRoutingRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions: !If
+        - MaintenanceModeEnabled
+        - - Type: fixed-response
+            FixedResponseConfig:
+              ContentType: application/json
+              MessageBody: '{"detail":"neraium staging maintenance"}'
+              StatusCode: '503'
+        - - Type: forward
+            TargetGroupArn: !Ref ApiTargetGroup
+      Conditions:
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: X-Neraium-Origin-Verify
+            Values:
+              - !Sub '{{resolve:secretsmanager:${CloudFrontOriginHeaderSecret}:SecretString}}'
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /api
+              - /api/*
+      ListenerArn: !Ref HttpListener
+      Priority: 20
+
+  ApiDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn:
+      - HealthRoutingRule
+      - ApplicationRoutingRule
+    Properties:
+      DistributionConfig:
+        Comment: neraium-staging-api
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - DELETE
+            - GET
+            - HEAD
+            - OPTIONS
+            - PATCH
+            - POST
+            - PUT
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+          TargetOriginId: neraium-staging-alb-origin
+          ViewerProtocolPolicy: redirect-to-https
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        Origins:
+          - ConnectionAttempts: 3
+            ConnectionTimeout: 10
+            CustomOriginConfig:
+              HTTPPort: 80
+              OriginKeepaliveTimeout: 5
+              OriginProtocolPolicy: http-only
+              OriginReadTimeout: 60
+              OriginSSLProtocols:
+                - TLSv1.2
+            DomainName: !GetAtt LoadBalancer.DNSName
+            Id: neraium-staging-alb-origin
+            OriginCustomHeaders:
+              - HeaderName: X-Neraium-Origin-Verify
+                HeaderValue: !Sub '{{resolve:secretsmanager:${CloudFrontOriginHeaderSecret}:SecretString}}'
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+          MinimumProtocolVersion: TLSv1.2_2021
+      Tags:
+        - Key: Name
+          Value: neraium-staging-api
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: neraium-staging-cluster
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: neraium-staging-cluster
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  ApiTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Command:
+            - python
+            - -m
+            - app.entrypoint
+          Cpu: 512
+          Environment:
+            - Name: APP_ENV
+              Value: production
+            - Name: NERAIUM_PROCESS_ROLE
+              Value: api
+            - Name: BACKEND_HOST
+              Value: 0.0.0.0
+            - Name: BACKEND_PORT
+              Value: '8080'
+            - Name: NERAIUM_RUNTIME_DIR
+              Value: /mnt/neraium-runtime
+            - Name: NERAIUM_UPLOAD_STATE_BUCKET
+              Value: !Ref UploadStateBucket
+            - Name: CORS_ORIGINS
+              Value: !Sub
+                - https://${DistributionDomain}
+                - DistributionDomain: !GetAtt ApiDistribution.DomainName
+            - Name: LOG_LEVEL
+              Value: INFO
+            - Name: LOG_FORMAT
+              Value: json
+            - Name: NERAIUM_BUILD_SHA
+              Value: !Ref BuildSha
+            - Name: NERAIUM_AUTH_DATABASE_SECRET_ARN
+              Value: !GetAtt AuthDatabase.MasterUserSecret.SecretArn
+            - Name: NERAIUM_AUTH_DATABASE_HOST
+              Value: !GetAtt AuthDatabase.Endpoint.Address
+            - Name: NERAIUM_AUTH_DATABASE_PORT
+              Value: !GetAtt AuthDatabase.Endpoint.Port
+            - Name: NERAIUM_AUTH_DATABASE_NAME
+              Value: neraium
+            - Name: NERAIUM_AUTH_DATABASE_SSLMODE
+              Value: require
+            - Name: NERAIUM_BOOTSTRAP_ADMIN_EMAIL
+              Value: !Ref BootstrapAdminEmail
+            - Name: NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD
+              Value: 'false'
+            - Name: NERAIUM_INFRA_MONITOR_ENABLED
+              Value: 'true'
+            - Name: NERAIUM_INFRA_MONITOR_INTERVAL_SECONDS
+              Value: '60'
+            - Name: NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS
+              Value: '180'
+            - Name: NERAIUM_ECS_CLUSTER
+              Value: neraium-staging-cluster
+            - Name: NERAIUM_ECS_API_SERVICE
+              Value: neraium-staging-api-service
+            - Name: NERAIUM_ECS_WORKER_SERVICE
+              Value: neraium-staging-worker-service
+            - Name: NERAIUM_ALB_TARGET_GROUP_ARN
+              Value: !Ref ApiTargetGroup
+            - Name: NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN
+              Value: !Ref InfrastructureAlertsTopic
+          Essential: true
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - >-
+                python -c "import urllib.request;
+                urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=5).read()"
+                || exit 1
+            Interval: 30
+            Retries: 3
+            StartPeriod: 30
+            Timeout: 10
+          Image: !Sub ${EcrRepository.RepositoryUri}@${ContainerImageDigest}
+          LinuxParameters:
+            InitProcessEnabled: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ApiLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Memory: 1024
+          MountPoints:
+            - ContainerPath: /mnt/neraium-runtime
+              ReadOnly: false
+              SourceVolume: runtime
+          Name: neraium-staging-api
+          PortMappings:
+            - ContainerPort: 8080
+              HostPort: 8080
+              Protocol: tcp
+          Secrets:
+            - Name: NERAIUM_API_TOKEN
+              ValueFrom: !Ref ApiTokenSecret
+            - Name: NERAIUM_BOOTSTRAP_ADMIN_PASSWORD
+              ValueFrom: !Ref BootstrapAdminPasswordSecret
+          StopTimeout: 120
+      Cpu: '512'
+      EphemeralStorage:
+        SizeInGiB: 21
+      ExecutionRoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/neraium-staging-ecs-task-execution-role
+      Family: neraium-staging-api
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      TaskRoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/neraium-staging-task-app-role
+      Tags:
+        - Key: Name
+          Value: neraium-staging-api
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+      Volumes:
+        - EFSVolumeConfiguration:
+            AuthorizationConfig:
+              AccessPointId: !Ref ApiRuntimeAccessPoint
+              IAM: ENABLED
+            FilesystemId: !Ref RuntimeFileSystem
+            RootDirectory: /
+            TransitEncryption: ENABLED
+          Name: runtime
+
+  WorkerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Command:
+            - python
+            - -m
+            - app.entrypoint
+          Cpu: 1024
+          Environment:
+            - Name: APP_ENV
+              Value: production
+            - Name: NERAIUM_PROCESS_ROLE
+              Value: worker
+            - Name: NERAIUM_RUNTIME_DIR
+              Value: /mnt/neraium-runtime
+            - Name: NERAIUM_UPLOAD_STATE_BUCKET
+              Value: !Ref UploadStateBucket
+            - Name: CORS_ORIGINS
+              Value: !Sub
+                - https://${DistributionDomain}
+                - DistributionDomain: !GetAtt ApiDistribution.DomainName
+            - Name: LOG_LEVEL
+              Value: INFO
+            - Name: LOG_FORMAT
+              Value: json
+            - Name: NERAIUM_BUILD_SHA
+              Value: !Ref BuildSha
+          Essential: true
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - python -c "import os; os.kill(1, 0)" || exit 1
+            Interval: 30
+            Retries: 3
+            StartPeriod: 30
+            Timeout: 10
+          Image: !Sub ${EcrRepository.RepositoryUri}@${ContainerImageDigest}
+          LinuxParameters:
+            InitProcessEnabled: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WorkerLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Memory: 2048
+          MountPoints:
+            - ContainerPath: /mnt/neraium-runtime
+              ReadOnly: false
+              SourceVolume: runtime
+          Name: neraium-staging-worker
+          StopTimeout: 120
+      Cpu: '1024'
+      EphemeralStorage:
+        SizeInGiB: 21
+      ExecutionRoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/neraium-staging-ecs-task-execution-role
+      Family: neraium-staging-worker
+      Memory: '2048'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      TaskRoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/neraium-staging-task-app-role
+      Tags:
+        - Key: Name
+          Value: neraium-staging-worker
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+      Volumes:
+        - EFSVolumeConfiguration:
+            AuthorizationConfig:
+              AccessPointId: !Ref WorkerRuntimeAccessPoint
+              IAM: ENABLED
+            FilesystemId: !Ref RuntimeFileSystem
+            RootDirectory: /
+            TransitEncryption: ENABLED
+          Name: runtime
+
+  ApiService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - ApplicationRoutingRule
+      - EfsMountTargetA
+      - EfsMountTargetB
+      - AuthDatabase
+    Properties:
+      Cluster: !Ref EcsCluster
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: !Ref ApiDesiredCount
+      EnableECSManagedTags: true
+      EnableExecuteCommand: false
+      HealthCheckGracePeriodSeconds: 90
+      LaunchType: FARGATE
+      LoadBalancers:
+        - ContainerName: neraium-staging-api
+          ContainerPort: 8080
+          TargetGroupArn: !Ref ApiTargetGroup
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref ApiSecurityGroup
+          Subnets:
+            - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
+      PlatformVersion: LATEST
+      PropagateTags: SERVICE
+      SchedulingStrategy: REPLICA
+      ServiceName: neraium-staging-api-service
+      Tags:
+        - Key: Name
+          Value: neraium-staging-api-service
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+      TaskDefinition: !Ref ApiTaskDefinition
+
+  WorkerService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - EfsMountTargetA
+      - EfsMountTargetB
+    Properties:
+      Cluster: !Ref EcsCluster
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: !Ref WorkerDesiredCount
+      EnableECSManagedTags: true
+      EnableExecuteCommand: false
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref WorkerSecurityGroup
+          Subnets:
+            - !Ref PublicSubnetA
+            - !Ref PublicSubnetB
+      PlatformVersion: LATEST
+      PropagateTags: SERVICE
+      SchedulingStrategy: REPLICA
+      ServiceName: neraium-staging-worker-service
+      Tags:
+        - Key: Name
+          Value: neraium-staging-worker-service
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+      TaskDefinition: !Ref WorkerTaskDefinition
+
+  AlbServerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Ref InfrastructureAlertsTopic
+      AlarmDescription: Neraium staging ALB is returning server errors
+      AlarmName: neraium-staging-alb-5xx
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt LoadBalancer.LoadBalancerFullName
+      EvaluationPeriods: 2
+      MetricName: HTTPCode_ELB_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+  DatabaseFreeStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Ref InfrastructureAlertsTopic
+      AlarmDescription: Neraium staging PostgreSQL free storage is below 2 GiB
+      AlarmName: neraium-staging-postgres-free-storage
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref AuthDatabase
+      EvaluationPeriods: 2
+      MetricName: FreeStorageSpace
+      Namespace: AWS/RDS
+      Period: 300
+      Statistic: Average
+      Threshold: 2147483648
+      TreatMissingData: missing
+      Tags:
+        - Key: Application
+          Value: Neraium
+        - Key: Environment
+          Value: staging
+
+Outputs:
+  StagingUrl:
+    Description: AWS-managed HTTPS endpoint for the staging API
+    Value: !Sub
+      - https://${DistributionDomain}
+      - DistributionDomain: !GetAtt ApiDistribution.DomainName
+  CloudFrontDistributionId:
+    Value: !Ref ApiDistribution
+  LoadBalancerDnsName:
+    Value: !GetAtt LoadBalancer.DNSName
+  LoadBalancerArn:
+    Value: !Ref LoadBalancer
+  ApiTargetGroupArn:
+    Value: !Ref ApiTargetGroup
+  HealthRoutingRuleArn:
+    Value: !Ref HealthRoutingRule
+  ApplicationRoutingRuleArn:
+    Value: !Ref ApplicationRoutingRule
+  MaintenanceMode:
+    Value: !Ref MaintenanceMode
+  VpcId:
+    Value: !Ref Vpc
+  PublicSubnetIds:
+    Value: !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB]]
+  DataSubnetIds:
+    Value: !Join [',', [!Ref DataSubnetA, !Ref DataSubnetB]]
+  EcsClusterName:
+    Value: !Ref EcsCluster
+  ApiServiceName:
+    Value: !GetAtt ApiService.Name
+  WorkerServiceName:
+    Value: !GetAtt WorkerService.Name
+  ApiTaskDefinitionArn:
+    Value: !Ref ApiTaskDefinition
+  WorkerTaskDefinitionArn:
+    Value: !Ref WorkerTaskDefinition
+  EcrRepositoryUri:
+    Value: !GetAtt EcrRepository.RepositoryUri
+  UploadStateBucketName:
+    Value: !Ref UploadStateBucket
+  RuntimeFileSystemId:
+    Value: !Ref RuntimeFileSystem
+  ApiRuntimeAccessPointArn:
+    Value: !GetAtt ApiRuntimeAccessPoint.Arn
+  WorkerRuntimeAccessPointArn:
+    Value: !GetAtt WorkerRuntimeAccessPoint.Arn
+  AuthDatabaseEndpoint:
+    Value: !GetAtt AuthDatabase.Endpoint.Address
+  AuthDatabasePort:
+    Value: !GetAtt AuthDatabase.Endpoint.Port
+  AuthDatabaseManagedSecretArn:
+    Value: !GetAtt AuthDatabase.MasterUserSecret.SecretArn
+  ApiTokenSecretArn:
+    Value: !Ref ApiTokenSecret
+  BootstrapAdminPasswordSecretArn:
+    Value: !Ref BootstrapAdminPasswordSecret
+  InfrastructureAlertsTopicArn:
+    Value: !Ref InfrastructureAlertsTopic
+  TaskAppRoleArn:
+    Value: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/neraium-staging-task-app-role
+  TaskExecutionRoleArn:
+    Value: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/neraium-staging-ecs-task-execution-role
