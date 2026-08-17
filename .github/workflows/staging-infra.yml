@@ -203,27 +203,6 @@ jobs:
               }],
           }
 
-          assert_equal(trust(DEPLOY), expected_deploy_trust, "deploy-role OIDC trust")
-          deploy_attached, deploy_inline, deploy_document = policies(DEPLOY)
-          expected_deploy_attachments = {
-              f"arn:aws:iam::{ACCOUNT}:policy/NeraiumStagingDeployPreflight",
-              f"arn:aws:iam::{ACCOUNT}:policy/NeraiumStagingDeployChangeSet",
-          }
-          actual_deploy_attachments = {item["PolicyArn"] for item in deploy_attached}
-          if actual_deploy_attachments != expected_deploy_attachments:
-              raise AssertionError(f"deploy-role attachments differ: {sorted(actual_deploy_attachments)}")
-          if deploy_inline:
-              raise AssertionError(f"deploy-role has forbidden inline policies: {deploy_inline}")
-          expected_deploy_document = json.loads(Path(".planning/neraium-staging-github-deploy-role-policy.json").read_text())
-          assert_equal(deploy_document, expected_deploy_document, "aggregate deploy-role policy")
-          forbid_allow_dependencies(deploy_document, "deploy-role policy")
-
-          assert_equal(trust(CFN), expected_cfn_trust, "CloudFormation-role service trust")
-          _, _, cfn_document = policies(CFN)
-          expected_cfn_document = json.loads(Path(".planning/neraium-staging-cloudformation-role-policy.json").read_text())
-          assert_equal(cfn_document, expected_cfn_document, "aggregate CloudFormation-role policy")
-          forbid_allow_dependencies(cfn_document, "CloudFormation-role policy")
-
           app_required = [
               "s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:PutObjectTagging",
               "elasticfilesystem:ClientMount", "elasticfilesystem:ClientWrite",
@@ -234,7 +213,39 @@ jobs:
               "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams",
               "secretsmanager:GetSecretValue",
           ]
-          for role_name, required in ((APP, app_required), (EXECUTION, execution_required)):
+
+          failures = []
+
+          def audit(label, operation):
+              try:
+                  operation()
+                  print(f"AUDIT PASS: {label}")
+              except Exception as error:
+                  failures.append(f"{label}: {error}")
+                  print(f"AUDIT FAIL: {label}: {error}", file=sys.stderr)
+
+          def verify_deploy_policy():
+              deploy_attached, deploy_inline, deploy_document = policies(DEPLOY)
+              expected_deploy_attachments = {
+                  f"arn:aws:iam::{ACCOUNT}:policy/NeraiumStagingDeployPreflight",
+                  f"arn:aws:iam::{ACCOUNT}:policy/NeraiumStagingDeployChangeSet",
+              }
+              actual_deploy_attachments = {item["PolicyArn"] for item in deploy_attached}
+              if actual_deploy_attachments != expected_deploy_attachments:
+                  raise AssertionError(f"deploy-role attachments differ: {sorted(actual_deploy_attachments)}")
+              if deploy_inline:
+                  raise AssertionError(f"deploy-role has forbidden inline policies: {deploy_inline}")
+              expected = json.loads(Path(".planning/neraium-staging-github-deploy-role-policy.json").read_text())
+              assert_equal(deploy_document, expected, "aggregate deploy-role policy")
+              forbid_allow_dependencies(deploy_document, "deploy-role policy")
+
+          def verify_cfn_policy():
+              _, _, cfn_document = policies(CFN)
+              expected = json.loads(Path(".planning/neraium-staging-cloudformation-role-policy.json").read_text())
+              assert_equal(cfn_document, expected, "aggregate CloudFormation-role policy")
+              forbid_allow_dependencies(cfn_document, "CloudFormation-role policy")
+
+          def verify_runtime_role(role_name, required):
               assert_equal(trust(role_name), expected_ecs_trust, f"{role_name} ECS-only trust")
               attached, _, document = policies(role_name)
               if role_name == EXECUTION:
@@ -244,6 +255,17 @@ jobs:
               require_actions(document, required, role_name)
               forbid_document_dependencies(document, role_name)
 
+          audit("deploy-role OIDC trust", lambda: assert_equal(
+              trust(DEPLOY), expected_deploy_trust, "deploy-role OIDC trust"
+          ))
+          audit("deploy-role attachments and aggregate policy", verify_deploy_policy)
+          audit("CloudFormation-role service trust", lambda: assert_equal(
+              trust(CFN), expected_cfn_trust, "CloudFormation-role service trust"
+          ))
+          audit("CloudFormation-role aggregate policy", verify_cfn_policy)
+          audit(APP, lambda: verify_runtime_role(APP, app_required))
+          audit(EXECUTION, lambda: verify_runtime_role(EXECUTION, execution_required))
+
           service_roles = [
               "AWSServiceRoleForECS",
               "AWSServiceRoleForAmazonElasticFileSystem",
@@ -251,8 +273,16 @@ jobs:
               "AWSServiceRoleForRDS",
           ]
           for role_name in service_roles:
-              aws("iam", "get-role", "--role-name", role_name)
-              print(f"PASS: service-linked role exists: {role_name}")
+              audit(
+                  f"service-linked role {role_name}",
+                  lambda role_name=role_name: aws("iam", "get-role", "--role-name", role_name),
+              )
+
+          if failures:
+              print("IAM AUDIT FAILURES:", file=sys.stderr)
+              for failure in failures:
+                  print(f"- {failure}", file=sys.stderr)
+              raise SystemExit(1)
           PY
           {
             echo '- IAM role existence, trusts, attachments, and policies: **passed**'
