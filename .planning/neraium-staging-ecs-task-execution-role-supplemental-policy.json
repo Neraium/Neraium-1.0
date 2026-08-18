@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadOnlyInjectedStagingSecrets",
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": [
+        "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/staging/api-token-*",
+        "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/staging/bootstrap-admin-password-*"
+      ]
+    }
+  ]
+}

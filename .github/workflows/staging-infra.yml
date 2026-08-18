@@ -29,8 +29,11 @@ jobs:
           [[ "$GITHUB_SHA" == "$(git rev-parse HEAD)" ]]
           sha256sum --check <<'CHECKSUMS'
           7af39dd1dd1a42c1f31fd584a53213f2a8e335cebb70f979834d5b85764c318b  infra/staging/neraium-staging.yaml
-          1ed4bb14abde6ed567522a4984fa914be93fed0db1d9695ab855d768ba18a088  .planning/neraium-staging-cloudformation-role-policy.json
+          c9e36d08825998d31963169cecfa7047d6a082d537ef5f94c4f8ad8acd87470a  .planning/neraium-staging-cloudformation-role-policy.json
           a5cbf14784678abd2d166531e3f5a10df890ac922f5ba0fe46a805bd3e579b30  .planning/neraium-staging-github-deploy-role-policy.json
+          e8c9110fa3afdb762b44bcdf9aebdbb4efb40b5ba4740bd3432167bbfe6f05ef  .planning/neraium-staging-github-deploy-role-trust-policy.json
+          fc3bc76d0ab5fbf39f3ca23e66febbdc2c439e6c33b5cfc7f86da3d70cc28a48  .planning/neraium-staging-task-app-role-supplemental-policy.json
+          647fea2595747f598d8390692567110c1cd9d45c70ed44b319a3e793086c220c  .planning/neraium-staging-ecs-task-execution-role-supplemental-policy.json
           CHECKSUMS
 
       - name: Assume the staging deploy role with GitHub OIDC
@@ -78,6 +81,16 @@ jobs:
           CFN = "neraium-staging-cloudformation-role"
           APP = "neraium-staging-task-app-role"
           EXECUTION = "neraium-staging-ecs-task-execution-role"
+          RUNTIME_SUPPLEMENTS = {
+              APP: (
+                  "NeraiumStagingTaskAppRuntimeSupplemental",
+                  Path(".planning/neraium-staging-task-app-role-supplemental-policy.json"),
+              ),
+              EXECUTION: (
+                  "NeraiumStagingTaskExecutionSecrets",
+                  Path(".planning/neraium-staging-ecs-task-execution-role-supplemental-policy.json"),
+              ),
+          }
 
           def aws(*args):
               command = ["aws", *args, "--output", "json"]
@@ -171,25 +184,9 @@ jobs:
                       raise AssertionError(f"{label} Allow statement contains forbidden dependencies {matches}: {rendered}")
               print(f"PASS: {label} has no PPC or production Allow dependency")
 
-          def forbid_document_dependencies(document, label):
-              rendered = json.dumps(document, sort_keys=True).lower()
-              matches = [term for term in ("ppc", "production", "neraium-prod") if term in rendered]
-              if matches:
-                  raise AssertionError(f"{label} contains forbidden dependencies: {matches}")
-              print(f"PASS: {label} contains no PPC or production dependency")
-
-          expected_deploy_trust = {
-              "Version": "2012-10-17",
-              "Statement": [{
-                  "Effect": "Allow",
-                  "Principal": {"Federated": f"arn:aws:iam::{ACCOUNT}:oidc-provider/token.actions.githubusercontent.com"},
-                  "Action": "sts:AssumeRoleWithWebIdentity",
-                  "Condition": {"StringEquals": {
-                      "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-                      "token.actions.githubusercontent.com:sub": "repo:Neraium/Neraium-1.0:environment:staging-infra",
-                  }},
-              }],
-          }
+          expected_deploy_trust = json.loads(
+              Path(".planning/neraium-staging-github-deploy-role-trust-policy.json").read_text()
+          )
           expected_cfn_trust = {
               "Version": "2012-10-17",
               "Statement": [{
@@ -208,13 +205,14 @@ jobs:
           }
 
           app_required = [
-              "s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:PutObjectTagging",
+              "s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject",
+              "s3:PutObjectTagging", "s3:AbortMultipartUpload",
               "elasticfilesystem:ClientMount", "elasticfilesystem:ClientWrite",
-              "secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret", "kms:Decrypt", "sns:Publish",
+              "secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret", "sns:Publish",
               "ecs:DescribeServices", "elasticloadbalancing:DescribeTargetHealth",
           ]
           execution_required = [
-              "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams",
+              "logs:CreateLogStream", "logs:PutLogEvents",
               "secretsmanager:GetSecretValue",
           ]
 
@@ -251,13 +249,27 @@ jobs:
 
           def verify_runtime_role(role_name, required):
               assert_equal(trust(role_name), expected_ecs_trust, f"{role_name} ECS-only trust")
-              attached, _, document = policies(role_name)
+              attached, inline, document = policies(role_name)
               if role_name == EXECUTION:
                   required_managed = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
                   if required_managed not in {item["PolicyArn"] for item in attached}:
                       raise AssertionError(f"{EXECUTION} lacks {required_managed}")
+              supplemental_name, supplemental_path = RUNTIME_SUPPLEMENTS[role_name]
+              if supplemental_name not in set(inline):
+                  raise AssertionError(f"{role_name} lacks inline policy {supplemental_name}")
+              supplemental = aws(
+                  "iam", "get-role-policy",
+                  "--role-name", role_name,
+                  "--policy-name", supplemental_name,
+              )["PolicyDocument"]
+              expected_supplemental = json.loads(supplemental_path.read_text())
+              assert_equal(
+                  supplemental,
+                  expected_supplemental,
+                  f"{role_name} exact {supplemental_name} policy",
+              )
               require_actions(document, required, role_name)
-              forbid_document_dependencies(document, role_name)
+              forbid_allow_dependencies(document, role_name)
 
           audit("deploy-role OIDC trust", lambda: assert_equal(
               trust(DEPLOY), expected_deploy_trust, "deploy-role OIDC trust"

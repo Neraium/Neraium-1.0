@@ -1,0 +1,58 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CompleteTaggedStagingObjectUploads",
+      "Effect": "Allow",
+      "Action": [
+        "s3:AbortMultipartUpload",
+        "s3:PutObjectTagging"
+      ],
+      "Resource": "arn:aws:s3:::neraium-staging-upload-state-680779862188-us-east-2/*"
+    },
+    {
+      "Sid": "MountWritableTaggedStagingFileSystem",
+      "Effect": "Allow",
+      "Action": [
+        "elasticfilesystem:ClientMount",
+        "elasticfilesystem:ClientWrite"
+      ],
+      "Resource": "arn:aws:elasticfilesystem:us-east-2:680779862188:file-system/*",
+      "Condition": {
+        "Bool": {
+          "elasticfilesystem:AccessedViaMountTarget": "true"
+        },
+        "StringEquals": {
+          "aws:ResourceTag/Application": "Neraium",
+          "aws:ResourceTag/Environment": "staging"
+        }
+      }
+    },
+    {
+      "Sid": "PublishOnlyStagingInfrastructureAlerts",
+      "Effect": "Allow",
+      "Action": "sns:Publish",
+      "Resource": "arn:aws:sns:us-east-2:680779862188:neraium-staging-infrastructure-alerts"
+    },
+    {
+      "Sid": "DescribeOnlyStagingServices",
+      "Effect": "Allow",
+      "Action": "ecs:DescribeServices",
+      "Resource": [
+        "arn:aws:ecs:us-east-2:680779862188:service/neraium-staging-cluster/neraium-staging-api-service",
+        "arn:aws:ecs:us-east-2:680779862188:service/neraium-staging-cluster/neraium-staging-worker-service"
+      ]
+    },
+    {
+      "Sid": "DescribeOhioTargetHealth",
+      "Effect": "Allow",
+      "Action": "elasticloadbalancing:DescribeTargetHealth",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-2"
+        }
+      }
+    }
+  ]
+}
