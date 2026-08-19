@@ -58,7 +58,7 @@ jobs:
               default = re.search(r"(?m)^    Default:\s*([^#\n]+?)\s*$", match.group("body"))
               if not default:
                   raise AssertionError(f"missing default: {parameter}")
-              return default.group(1).strip(" '\\"")
+              return default.group(1).strip().strip("'\"")
 
           assert default_for("MaintenanceMode") == "enabled"
           assert default_for("ApiDesiredCount") == "0"
