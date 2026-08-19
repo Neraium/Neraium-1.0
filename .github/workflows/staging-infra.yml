@@ -28,8 +28,8 @@ jobs:
           [[ "$GITHUB_REF" == "refs/heads/main" ]]
           [[ "$GITHUB_SHA" == "$(git rev-parse HEAD)" ]]
           sha256sum --check <<'CHECKSUMS'
-          7af39dd1dd1a42c1f31fd584a53213f2a8e335cebb70f979834d5b85764c318b  infra/staging/neraium-staging.yaml
-          c9e36d08825998d31963169cecfa7047d6a082d537ef5f94c4f8ad8acd87470a  .planning/neraium-staging-cloudformation-role-policy.json
+          2367ce9553fa086e96690a63d7880b9935d4252100c5eee933b3152a44582563  infra/staging/neraium-staging.yaml
+          f2fae68372fe3ec3cd082280547ba1c9adeb70aef877e038f748bfff7f732b0c  .planning/neraium-staging-cloudformation-role-policy.json
           a5cbf14784678abd2d166531e3f5a10df890ac922f5ba0fe46a805bd3e579b30  .planning/neraium-staging-github-deploy-role-policy.json
           e8c9110fa3afdb762b44bcdf9aebdbb4efb40b5ba4740bd3432167bbfe6f05ef  .planning/neraium-staging-github-deploy-role-trust-policy.json
           fc3bc76d0ab5fbf39f3ca23e66febbdc2c439e6c33b5cfc7f86da3d70cc28a48  .planning/neraium-staging-task-app-role-supplemental-policy.json

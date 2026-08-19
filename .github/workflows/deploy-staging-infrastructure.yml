@@ -27,7 +27,6 @@ jobs:
       EXPECTED_ACCOUNT_ID: '680779862188'
       STACK_NAME: neraium-staging
       TEMPLATE_FILE: infra/staging/neraium-staging.yaml
-      DEPLOY_TEMPLATE_FILE: /tmp/neraium-staging-deploy.yaml
       CFN_ROLE_ARN: arn:aws:iam::680779862188:role/neraium-staging-cloudformation-role
       CHANGE_SET_NAME: neraium-staging-initial-create
 
@@ -50,7 +49,6 @@ jobs:
           from pathlib import Path
 
           path = Path("infra/staging/neraium-staging.yaml")
-          deploy_path = Path("/tmp/neraium-staging-deploy.yaml")
           text = path.read_text()
 
           def default_for(parameter: str) -> str:
@@ -65,6 +63,7 @@ jobs:
           assert default_for("MaintenanceMode") == "enabled"
           assert default_for("ApiDesiredCount") == "0"
           assert default_for("WorkerDesiredCount") == "0"
+          assert "AllowedPattern: '^[^@\\s]+@[^@\\s]+$'" in text
           if re.search(r"(?mi)^\s*Type:\s*AWS::IAM::", text):
               raise AssertionError("staging template must not create IAM resources")
           forbidden = [
@@ -76,16 +75,7 @@ jobs:
           if matches:
               raise AssertionError(f"forbidden production/PPC references: {matches}")
 
-          broken = "AllowedPattern: '^[^@[:space:]]+@[^@[:space:]]+$'"
-          corrected = "AllowedPattern: '^[^@\\s]+@[^@\\s]+$'"
-          if text.count(broken) != 1:
-              raise AssertionError("expected exactly one BootstrapAdminEmail POSIX pattern")
-          deploy_text = text.replace(broken, corrected, 1)
-          if deploy_text.count(corrected) != 1:
-              raise AssertionError("CloudFormation-compatible email pattern replacement failed")
-          deploy_path.write_text(deploy_text)
-
-          print("PASS: staging template remains paused, IAM-free, production-isolated, and CloudFormation-compatible")
+          print("PASS: source template remains paused, IAM-free, production-isolated, and CloudFormation-compatible")
           PY
 
       - name: Configure AWS credentials
@@ -141,7 +131,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           aws cloudformation validate-template \
-            --template-body "file://$DEPLOY_TEMPLATE_FILE" \
+            --template-body "file://$TEMPLATE_FILE" \
             --region "$AWS_REGION" \
             --output json > /tmp/template-validation.json
           jq . /tmp/template-validation.json
@@ -155,7 +145,7 @@ jobs:
             --stack-name "$STACK_NAME" \
             --change-set-name "$CHANGE_SET_NAME" \
             --change-set-type CREATE \
-            --template-body "file://$DEPLOY_TEMPLATE_FILE" \
+            --template-body "file://$TEMPLATE_FILE" \
             --role-arn "$CFN_ROLE_ARN" \
             --parameters \
               ParameterKey=ApiDesiredCount,ParameterValue=0 \
@@ -209,6 +199,30 @@ jobs:
           aws cloudformation wait stack-create-complete \
             --stack-name "$STACK_NAME" \
             --region "$AWS_REGION"
+
+      - name: Report CloudFormation failure events before exit
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          aws cloudformation describe-stack-events \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --output json > /tmp/stack-events.json
+          jq -r '
+            .StackEvents
+            | map(select(.ResourceStatus == "CREATE_FAILED"))
+            | reverse
+            | .[]
+            | [.EventId, .Timestamp, .LogicalResourceId, .ResourceType, (.ResourceStatusReason // "")]
+            | @tsv
+          ' /tmp/stack-events.json | tee /tmp/create-failed-events.tsv
+          {
+            echo '### CREATE_FAILED events (required before recovery)'
+            echo '```text'
+            cat /tmp/create-failed-events.tsv
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify paused staging stack
         shell: bash

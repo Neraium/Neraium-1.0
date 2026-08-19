@@ -63,7 +63,7 @@ Parameters:
   BootstrapAdminEmail:
     Type: String
     Default: staging-admin@neraium.invalid
-    AllowedPattern: '^[^@[:space:]]+@[^@[:space:]]+$'
+    AllowedPattern: '^[^@\s]+@[^@\s]+$'
     Description: Synthetic staging administrator identity; never use a customer address.
   LogRetentionDays:
     Type: Number
