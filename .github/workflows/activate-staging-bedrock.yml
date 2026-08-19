@@ -1,0 +1,179 @@
+name: Activate Bedrock in staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type ACTIVATE to apply the staging Bedrock policy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-bedrock-activation
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    name: Activate staging Bedrock interpretation
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'ACTIVATE' }}
+    runs-on: ubuntu-latest
+    environment: staging-infra
+    timeout-minutes: 20
+    env:
+      AWS_REGION: us-east-2
+      EXPECTED_ACCOUNT_ID: '680779862188'
+      STAGING_APP_ROLE: neraium-staging-task-app-role
+      BEDROCK_POLICY_NAME: NeraiumStagingBedrockInterpretation
+      BEDROCK_POLICY_FILE: .planning/neraium-staging-bedrock-interpretation-policy.json
+      ECS_CLUSTER: neraium-staging-cluster
+      ECS_API_SERVICE: neraium-staging-api-service
+
+    steps:
+      - name: Check out protected main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5c3a
+        with:
+          ref: main
+
+      - name: Verify protected ref and policy scope
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_SHA" == "$(git rev-parse HEAD)" ]]
+
+          jq -e '
+            .Version == "2012-10-17"
+            and (.Statement | length) == 1
+            and .Statement[0].Effect == "Allow"
+            and .Statement[0].Action == "bedrock:InvokeModel"
+            and .Statement[0].Resource == "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-micro-v1:0"
+          ' "$BEDROCK_POLICY_FILE" >/dev/null
+
+          echo 'Policy scope verified: one model, one action, staging region.'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS account and staging targets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          identity="$(aws sts get-caller-identity --output json)"
+          account="$(jq -r '.Account' <<<"$identity")"
+          arn="$(jq -r '.Arn' <<<"$identity")"
+          [[ "$account" == "$EXPECTED_ACCOUNT_ID" ]]
+          [[ "$AWS_REGION" == "us-east-2" ]]
+
+          aws iam get-role --role-name "$STAGING_APP_ROLE" --output json > /tmp/staging-app-role.json
+          jq -e --arg role "$STAGING_APP_ROLE" '.Role.RoleName == $role' /tmp/staging-app-role.json >/dev/null
+
+          service="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_API_SERVICE" \
+            --region "$AWS_REGION" \
+            --output json)"
+          printf '%s\n' "$service" > /tmp/staging-api-service.json
+          jq -e '.failures | length == 0' /tmp/staging-api-service.json >/dev/null
+          jq -e --arg service "$ECS_API_SERVICE" '.services[0].serviceName == $service and .services[0].status == "ACTIVE"' /tmp/staging-api-service.json >/dev/null
+
+          {
+            echo '### Staging Bedrock activation'
+            echo
+            echo "- AWS account: \`$account\`"
+            echo "- Principal: \`$arn\`"
+            echo "- Runtime role: \`$STAGING_APP_ROLE\`"
+            echo "- ECS service: \`$ECS_API_SERVICE\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apply Bedrock-only inline policy
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          aws iam put-role-policy \
+            --role-name "$STAGING_APP_ROLE" \
+            --policy-name "$BEDROCK_POLICY_NAME" \
+            --policy-document "file://$BEDROCK_POLICY_FILE"
+
+      - name: Verify exact applied policy
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          aws iam get-role-policy \
+            --role-name "$STAGING_APP_ROLE" \
+            --policy-name "$BEDROCK_POLICY_NAME" \
+            --query PolicyDocument \
+            --output json > /tmp/actual-bedrock-policy.json
+
+          jq -S . "$BEDROCK_POLICY_FILE" > /tmp/expected-bedrock-policy.json
+          jq -S . /tmp/actual-bedrock-policy.json > /tmp/canonical-actual-bedrock-policy.json
+          diff -u /tmp/expected-bedrock-policy.json /tmp/canonical-actual-bedrock-policy.json
+
+          jq -e '
+            [.Statement[] | select(.Effect == "Allow") | .Action]
+            | flatten
+            | . == ["bedrock:InvokeModel"]
+          ' /tmp/actual-bedrock-policy.json >/dev/null
+
+          echo '- Exact Bedrock inline policy: **verified**' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restart staging API when running
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          desired="$(jq -r '.services[0].desiredCount' /tmp/staging-api-service.json)"
+          if [[ "$desired" -gt 0 ]]; then
+            aws ecs update-service \
+              --cluster "$ECS_CLUSTER" \
+              --service "$ECS_API_SERVICE" \
+              --force-new-deployment \
+              --region "$AWS_REGION" \
+              --output json > /tmp/staging-api-redeploy.json
+
+            aws ecs wait services-stable \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_API_SERVICE" \
+              --region "$AWS_REGION"
+
+            echo '- Staging API deployment: **restarted and stable**' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '- Staging API deployment: **not restarted (desired count is 0)**' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Verify final service state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          final="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_API_SERVICE" \
+            --region "$AWS_REGION" \
+            --output json)"
+          jq -e '.failures | length == 0' <<<"$final" >/dev/null
+          jq -e '.services[0].status == "ACTIVE"' <<<"$final" >/dev/null
+
+          desired="$(jq -r '.services[0].desiredCount' <<<"$final")"
+          running="$(jq -r '.services[0].runningCount' <<<"$final")"
+          pending="$(jq -r '.services[0].pendingCount' <<<"$final")"
+
+          if [[ "$desired" -gt 0 ]]; then
+            [[ "$running" -eq "$desired" ]]
+            [[ "$pending" -eq 0 ]]
+          fi
+
+          {
+            echo "- Desired tasks: \`$desired\`"
+            echo "- Running tasks: \`$running\`"
+            echo "- Pending tasks: \`$pending\`"
+            echo '- Bedrock staging activation: **complete**'
+          } >> "$GITHUB_STEP_SUMMARY"
