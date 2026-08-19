@@ -1,0 +1,148 @@
+name: Diagnose staging rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type DIAGNOSE to inspect the failed staging stack
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Inspect staging CloudFormation rollback
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'DIAGNOSE' }}
+    runs-on: ubuntu-latest
+    environment: staging-infra
+    timeout-minutes: 10
+    env:
+      AWS_REGION: us-east-2
+      EXPECTED_ACCOUNT_ID: '680779862188'
+      STACK_NAME: neraium-staging
+
+    steps:
+      - name: Check out protected main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5c3a
+        with:
+          ref: main
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify account and stack
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          identity="$(aws sts get-caller-identity --output json)"
+          account="$(jq -r '.Account' <<<"$identity")"
+          [[ "$account" == "$EXPECTED_ACCOUNT_ID" ]]
+
+          stack="$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --output json)"
+          status="$(jq -r '.Stacks[0].StackStatus' <<<"$stack")"
+
+          echo "Stack status: $status"
+          {
+            echo '### Staging rollback diagnostics'
+            echo
+            echo "- AWS account: \`$account\`"
+            echo "- Stack: \`$STACK_NAME\`"
+            echo "- Stack status: \`$status\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Show failed and rollback events
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          aws cloudformation describe-stack-events \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --output json > /tmp/stack-events.json
+
+          echo '--- FAILED / ROLLBACK EVENTS ---'
+          jq -r '
+            .StackEvents
+            | map(select(
+                (.ResourceStatus | test("FAILED|ROLLBACK"))
+                or ((.ResourceStatusReason // "") | length > 0 and (.ResourceStatus | test("CREATE|DELETE")))
+              ))
+            | .[]
+            | [
+                .Timestamp,
+                .LogicalResourceId,
+                .ResourceType,
+                .ResourceStatus,
+                (.ResourceStatusReason // "")
+              ]
+            | @tsv
+          ' /tmp/stack-events.json
+
+          echo
+          echo '--- FIRST CREATE_FAILED EVENTS ---'
+          jq -r '
+            .StackEvents
+            | map(select(.ResourceStatus == "CREATE_FAILED"))
+            | reverse
+            | .[]
+            | [
+                .Timestamp,
+                .LogicalResourceId,
+                .ResourceType,
+                (.ResourceStatusReason // "")
+              ]
+            | @tsv
+          ' /tmp/stack-events.json
+
+          failures="$(jq '[.StackEvents[] | select(.ResourceStatus == "CREATE_FAILED")] | length' /tmp/stack-events.json)"
+          {
+            echo "- CREATE_FAILED event count: \`$failures\`"
+            echo
+            echo '#### Failed resources'
+            echo '```text'
+            jq -r '
+              .StackEvents
+              | map(select(.ResourceStatus == "CREATE_FAILED"))
+              | reverse
+              | .[]
+              | [.LogicalResourceId, .ResourceType, (.ResourceStatusReason // "")]
+              | @tsv
+            ' /tmp/stack-events.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Show surviving retained resources
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          aws cloudformation list-stack-resources \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --output json > /tmp/stack-resources.json
+          status=$?
+          set -e
+
+          if [[ $status -eq 0 ]]; then
+            echo '--- CURRENT STACK RESOURCES ---'
+            jq -r '.StackResourceSummaries[] | [.LogicalResourceId, .ResourceType, .ResourceStatus, (.PhysicalResourceId // "")] | @tsv' /tmp/stack-resources.json
+          else
+            echo 'Unable to list stack resources.'
+          fi
+
+      - name: State next action
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo
+          echo 'Diagnostics only. No AWS resources were modified or deleted by this workflow.'
+          echo '- Diagnostic workflow: **read-only complete**' >> "$GITHUB_STEP_SUMMARY"
