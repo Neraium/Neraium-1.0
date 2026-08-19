@@ -1,0 +1,241 @@
+name: Deploy staging infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type CREATE-STAGING to create the isolated staging stack
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-infrastructure-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Create isolated staging infrastructure
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'CREATE-STAGING' }}
+    runs-on: ubuntu-latest
+    environment: staging-infra
+    timeout-minutes: 60
+    env:
+      AWS_REGION: us-east-2
+      EXPECTED_ACCOUNT_ID: '680779862188'
+      STACK_NAME: neraium-staging
+      TEMPLATE_FILE: infra/staging/neraium-staging.yaml
+      CFN_ROLE_ARN: arn:aws:iam::680779862188:role/neraium-staging-cloudformation-role
+      CHANGE_SET_NAME: neraium-staging-initial-create
+
+    steps:
+      - name: Check out protected main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5c3a
+        with:
+          ref: main
+
+      - name: Verify protected ref and template safety defaults
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_SHA" == "$(git rev-parse HEAD)" ]]
+          test -f "$TEMPLATE_FILE"
+
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          path = Path("infra/staging/neraium-staging.yaml")
+          text = path.read_text()
+
+          def default_for(parameter: str) -> str:
+              match = re.search(rf"(?ms)^  {re.escape(parameter)}:\n(?P<body>(?:    .*\n)+)", text)
+              if not match:
+                  raise AssertionError(f"missing parameter: {parameter}")
+              default = re.search(r"(?m)^    Default:\s*([^#\n]+?)\s*$", match.group("body"))
+              if not default:
+                  raise AssertionError(f"missing default: {parameter}")
+              return default.group(1).strip(" '\\"")
+
+          assert default_for("MaintenanceMode") == "enabled"
+          assert default_for("ApiDesiredCount") == "0"
+          assert default_for("WorkerDesiredCount") == "0"
+          if re.search(r"(?mi)^\s*Type:\s*AWS::IAM::", text):
+              raise AssertionError("staging template must not create IAM resources")
+          forbidden = [
+              r"(?i)ppc",
+              r"(?i)neraium-prod",
+              r"(?i)role/[^\s'\"]*(?:prod|production)[^\s'\"]*",
+          ]
+          matches = [m.group(0) for pattern in forbidden for m in re.finditer(pattern, text)]
+          if matches:
+              raise AssertionError(f"forbidden production/PPC references: {matches}")
+          print("PASS: staging template remains paused, IAM-free, and production-isolated")
+          PY
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify account, region, roles, and stack absence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          identity="$(aws sts get-caller-identity --output json)"
+          account="$(jq -r '.Account' <<<"$identity")"
+          arn="$(jq -r '.Arn' <<<"$identity")"
+          [[ "$account" == "$EXPECTED_ACCOUNT_ID" ]]
+          [[ "$AWS_REGION" == "us-east-2" ]]
+
+          role="$(aws iam get-role --role-name neraium-staging-cloudformation-role --output json)"
+          jq -e '.Role.Arn == "arn:aws:iam::680779862188:role/neraium-staging-cloudformation-role"' <<<"$role" >/dev/null
+
+          set +e
+          existing="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION" --output json 2>&1)"
+          status=$?
+          set -e
+          if [[ $status -eq 0 ]]; then
+            echo "Refusing initial-create workflow: stack $STACK_NAME already exists." >&2
+            printf '%s\n' "$existing" >&2
+            exit 1
+          fi
+          grep -q "does not exist" <<<"$existing" || {
+            echo "Could not prove stack absence; failing closed." >&2
+            printf '%s\n' "$existing" >&2
+            exit 1
+          }
+
+          {
+            echo '### Staging infrastructure deployment'
+            echo
+            echo "- AWS account: \`$account\`"
+            echo "- Principal: \`$arn\`"
+            echo "- Stack: \`$STACK_NAME\`"
+            echo "- CloudFormation role: \`$CFN_ROLE_ARN\`"
+            echo '- Initial desired API tasks: `0`'
+            echo '- Initial desired worker tasks: `0`'
+            echo '- Maintenance mode: `enabled`'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate CloudFormation template
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          aws cloudformation validate-template \
+            --template-body "file://$TEMPLATE_FILE" \
+            --region "$AWS_REGION" \
+            --output json > /tmp/template-validation.json
+          jq . /tmp/template-validation.json
+
+      - name: Create reviewed CREATE change set
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          aws cloudformation create-change-set \
+            --stack-name "$STACK_NAME" \
+            --change-set-name "$CHANGE_SET_NAME" \
+            --change-set-type CREATE \
+            --template-body "file://$TEMPLATE_FILE" \
+            --role-arn "$CFN_ROLE_ARN" \
+            --parameters \
+              ParameterKey=ApiDesiredCount,ParameterValue=0 \
+              ParameterKey=WorkerDesiredCount,ParameterValue=0 \
+              ParameterKey=MaintenanceMode,ParameterValue=enabled \
+              ParameterKey=BuildSha,ParameterValue="$GITHUB_SHA" \
+            --tags Key=Application,Value=Neraium Key=Environment,Value=staging \
+            --region "$AWS_REGION" \
+            --output json > /tmp/create-change-set.json
+
+          aws cloudformation wait change-set-create-complete \
+            --stack-name "$STACK_NAME" \
+            --change-set-name "$CHANGE_SET_NAME" \
+            --region "$AWS_REGION"
+
+      - name: Inspect and constrain change set
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          aws cloudformation describe-change-set \
+            --stack-name "$STACK_NAME" \
+            --change-set-name "$CHANGE_SET_NAME" \
+            --region "$AWS_REGION" \
+            --output json > /tmp/change-set.json
+
+          jq '{Status, ExecutionStatus, Changes: [.Changes[].ResourceChange | {Action, LogicalResourceId, ResourceType, Replacement}]}' /tmp/change-set.json
+
+          jq -e '.Status == "CREATE_COMPLETE" and .ExecutionStatus == "AVAILABLE"' /tmp/change-set.json >/dev/null
+          jq -e '[.Changes[].ResourceChange.Action] | all(. == "Add")' /tmp/change-set.json >/dev/null
+          jq -e '[.Changes[].ResourceChange.ResourceType | select(startswith("AWS::IAM::"))] | length == 0' /tmp/change-set.json >/dev/null
+
+          resource_count="$(jq '.Changes | length' /tmp/change-set.json)"
+          [[ "$resource_count" -gt 0 ]]
+
+          {
+            echo "- Change-set resource count: \`$resource_count\`"
+            echo '- Change-set actions: **Add only**'
+            echo '- IAM resources in change set: **none**'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Execute initial staging change set
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          aws cloudformation execute-change-set \
+            --stack-name "$STACK_NAME" \
+            --change-set-name "$CHANGE_SET_NAME" \
+            --region "$AWS_REGION"
+
+          aws cloudformation wait stack-create-complete \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION"
+
+      - name: Verify paused staging stack
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          stack="$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --output json)"
+          jq -e '.Stacks[0].StackStatus == "CREATE_COMPLETE"' <<<"$stack" >/dev/null
+
+          cluster="$(aws ecs describe-clusters \
+            --clusters neraium-staging-cluster \
+            --region "$AWS_REGION" \
+            --output json)"
+          jq -e '.clusters[0].status == "ACTIVE"' <<<"$cluster" >/dev/null
+
+          services="$(aws ecs describe-services \
+            --cluster neraium-staging-cluster \
+            --services neraium-staging-api-service neraium-staging-worker-service \
+            --region "$AWS_REGION" \
+            --output json)"
+          jq -e '.failures | length == 0' <<<"$services" >/dev/null
+          jq -e '[.services[] | .desiredCount] | all(. == 0)' <<<"$services" >/dev/null
+          jq -e '[.services[] | .runningCount] | all(. == 0)' <<<"$services" >/dev/null
+
+          db_status="$(aws rds describe-db-instances \
+            --db-instance-identifier neraium-staging-postgres \
+            --region "$AWS_REGION" \
+            --query 'DBInstances[0].DBInstanceStatus' \
+            --output text)"
+          [[ "$db_status" == "available" ]]
+
+          {
+            echo '- CloudFormation stack: **CREATE_COMPLETE**'
+            echo '- ECS cluster: **ACTIVE**'
+            echo '- API desired/running tasks: **0 / 0**'
+            echo '- Worker desired/running tasks: **0 / 0**'
+            echo '- Staging PostgreSQL: **available**'
+            echo '- Initial staging infrastructure deployment: **complete and paused**'
+          } >> "$GITHUB_STEP_SUMMARY"
