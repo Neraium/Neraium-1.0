@@ -74,7 +74,7 @@ jobs:
             .StackEvents
             | map(select(
                 (.ResourceStatus | test("FAILED|ROLLBACK"))
-                or ((.ResourceStatusReason // "") | length > 0 and (.ResourceStatus | test("CREATE|DELETE")))
+                or ((((.ResourceStatusReason // "") | length) > 0) and (.ResourceStatus | test("CREATE|DELETE")))
               ))
             | .[]
             | [
