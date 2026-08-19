@@ -99,9 +99,6 @@
       "Effect": "Allow",
       "Action": [
         "ec2:CreateInternetGateway",
-        "ec2:CreateRouteTable",
-        "ec2:CreateSecurityGroup",
-        "ec2:CreateSubnet",
         "ec2:CreateTags",
         "ec2:CreateVpc"
       ],
@@ -110,6 +107,26 @@
         "StringEquals": {
           "aws:RequestTag/Application": "Neraium",
           "aws:RequestTag/Environment": "staging"
+        }
+      }
+    },
+    {
+      "Sid": "CreateChildrenOnlyInTaggedStagingVpc",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateRouteTable",
+        "ec2:CreateSecurityGroup",
+        "ec2:CreateSubnet"
+      ],
+      "Resource": "arn:aws:ec2:us-east-2:680779862188:vpc/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-2",
+          "aws:ResourceTag/Application": "Neraium",
+          "aws:ResourceTag/Environment": "staging"
+        },
+        "ArnLike": {
+          "ec2:Vpc": "arn:aws:ec2:us-east-2:680779862188:vpc/*"
         }
       }
     },

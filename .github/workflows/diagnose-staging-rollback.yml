@@ -78,6 +78,7 @@ jobs:
               ))
             | .[]
             | [
+                .EventId,
                 .Timestamp,
                 .LogicalResourceId,
                 .ResourceType,
@@ -114,7 +115,7 @@ jobs:
               | map(select(.ResourceStatus == "CREATE_FAILED"))
               | reverse
               | .[]
-              | [.LogicalResourceId, .ResourceType, (.ResourceStatusReason // "")]
+              | [.EventId, .LogicalResourceId, .ResourceType, (.ResourceStatusReason // "")]
               | @tsv
             ' /tmp/stack-events.json
             echo '```'
