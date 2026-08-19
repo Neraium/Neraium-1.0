@@ -53,12 +53,6 @@
           "aws:RequestedRegion": "us-east-2"
         }
       }
-    },
-    {
-      "Sid": "InvokeStagingNovaMicroOnly",
-      "Effect": "Allow",
-      "Action": "bedrock:InvokeModel",
-      "Resource": "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-micro-v1:0"
     }
   ]
 }
