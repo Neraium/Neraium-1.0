@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.core.security import require_api_access, require_operator_role
 from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse, FindingStatusRequest, LatestEvidenceResponse, OperatorFeedbackRequest
+from app.services.bedrock_interpreter import BedrockInterpretationDisabled, BedrockInterpretationError, interpret_evidence_package
 from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, build_evidence_package_payload, build_evidence_package_pdf, latest_evidence_run, list_evidence_runs_page, read_evidence_run, record_finding_status, record_operator_feedback, tag_evidence_for_audit
 from app.services.runtime_db import now_iso, record_audit_event
 from app.routers import data as data_router
@@ -127,6 +128,38 @@ async def export_evidence_package(request: Request, run_id: RunIdPath, format: L
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="neraium-evidence-{run_id}.pdf"'},
     )
+
+
+@router.post("/evidence/runs/{run_id}/interpretation")
+async def interpret_evidence_run(request: Request, run_id: RunIdPath) -> dict[str, Any]:
+    record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Evidence run not found.")
+    await require_operator_role(request)
+    package = build_evidence_package_payload(record)
+    try:
+        interpretation = interpret_evidence_package(package)
+    except BedrockInterpretationDisabled as error:
+        raise HTTPException(status_code=503, detail=str(error)) from None
+    except BedrockInterpretationError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from None
+
+    auth_context = getattr(request.state, "auth_context", {})
+    record_audit_event(
+        actor=auth_context.get("auth_subject", record.get("initiated_by", "unknown")),
+        action="evidence.interpretation.generated",
+        resource_type="evidence_run",
+        resource_id=run_id,
+        request_id=auth_context.get("request_id"),
+        detail={
+            "provider": interpretation.get("provider"),
+            "model_id": interpretation.get("model_id"),
+            "model_role": interpretation.get("model_role"),
+            "input_tokens": (interpretation.get("usage") or {}).get("input_tokens"),
+            "output_tokens": (interpretation.get("usage") or {}).get("output_tokens"),
+        },
+    )
+    return {"run_id": run_id, **interpretation}
 
 
 @router.post("/evidence/runs/{run_id}/audit-tag", response_model=EvidenceRunResponse)
