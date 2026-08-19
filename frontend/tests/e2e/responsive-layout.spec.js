@@ -96,9 +96,16 @@ test.describe("Responsive engineering workspace", () => {
     await openPortfolio(page, { width: 390, height: 844 });
     const undersized = await page.evaluate(() => Array.from(document.querySelectorAll("button, a[href], input, summary")).filter((node) => {
       const style = getComputedStyle(node); const rect = node.getBoundingClientRect();
-      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0 && (rect.width < 24 || rect.height < 24);
+      const clipped = style.clipPath !== "none" || (style.clip && style.clip !== "auto");
+      return !clipped && style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0 && (rect.width < 24 || rect.height < 24);
     }).map((node) => ({ label: node.getAttribute("aria-label") || node.textContent?.trim(), width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height })));
     expect(undersized).toEqual([]);
+
+    const skipLink = page.getByRole("link", { name: "Skip to main content" });
+    await skipLink.focus();
+    const skipBox = await skipLink.boundingBox();
+    expect(skipBox?.width ?? 0).toBeGreaterThanOrEqual(24);
+    expect(skipBox?.height ?? 0).toBeGreaterThanOrEqual(24);
   });
 
   test("long site identifiers truncate without expanding the viewport", async ({ page }) => {
