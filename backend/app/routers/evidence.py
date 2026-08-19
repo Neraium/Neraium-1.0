@@ -130,7 +130,14 @@ async def export_evidence_package(request: Request, run_id: RunIdPath, format: L
     )
 
 
-@router.post("/evidence/runs/{run_id}/interpretation")
+@router.post(
+    "/evidence/runs/{run_id}/interpretation",
+    responses={
+        404: {"description": "Evidence run not found."},
+        502: {"description": "Amazon Bedrock interpretation failed."},
+        503: {"description": "Bedrock interpretation is disabled."},
+    },
+)
 async def interpret_evidence_run(request: Request, run_id: RunIdPath) -> dict[str, Any]:
     record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
     if record is None:
