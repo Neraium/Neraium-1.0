@@ -27,6 +27,7 @@ jobs:
       EXPECTED_ACCOUNT_ID: '680779862188'
       STACK_NAME: neraium-staging
       TEMPLATE_FILE: infra/staging/neraium-staging.yaml
+      DEPLOY_TEMPLATE_FILE: /tmp/neraium-staging-deploy.yaml
       CFN_ROLE_ARN: arn:aws:iam::680779862188:role/neraium-staging-cloudformation-role
       CHANGE_SET_NAME: neraium-staging-initial-create
 
@@ -49,6 +50,7 @@ jobs:
           from pathlib import Path
 
           path = Path("infra/staging/neraium-staging.yaml")
+          deploy_path = Path("/tmp/neraium-staging-deploy.yaml")
           text = path.read_text()
 
           def default_for(parameter: str) -> str:
@@ -73,7 +75,17 @@ jobs:
           matches = [m.group(0) for pattern in forbidden for m in re.finditer(pattern, text)]
           if matches:
               raise AssertionError(f"forbidden production/PPC references: {matches}")
-          print("PASS: staging template remains paused, IAM-free, and production-isolated")
+
+          broken = "AllowedPattern: '^[^@[:space:]]+@[^@[:space:]]+$'"
+          corrected = "AllowedPattern: '^[^@\\s]+@[^@\\s]+$'"
+          if text.count(broken) != 1:
+              raise AssertionError("expected exactly one BootstrapAdminEmail POSIX pattern")
+          deploy_text = text.replace(broken, corrected, 1)
+          if deploy_text.count(corrected) != 1:
+              raise AssertionError("CloudFormation-compatible email pattern replacement failed")
+          deploy_path.write_text(deploy_text)
+
+          print("PASS: staging template remains paused, IAM-free, production-isolated, and CloudFormation-compatible")
           PY
 
       - name: Configure AWS credentials
@@ -129,7 +141,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           aws cloudformation validate-template \
-            --template-body "file://$TEMPLATE_FILE" \
+            --template-body "file://$DEPLOY_TEMPLATE_FILE" \
             --region "$AWS_REGION" \
             --output json > /tmp/template-validation.json
           jq . /tmp/template-validation.json
@@ -143,7 +155,7 @@ jobs:
             --stack-name "$STACK_NAME" \
             --change-set-name "$CHANGE_SET_NAME" \
             --change-set-type CREATE \
-            --template-body "file://$TEMPLATE_FILE" \
+            --template-body "file://$DEPLOY_TEMPLATE_FILE" \
             --role-arn "$CFN_ROLE_ARN" \
             --parameters \
               ParameterKey=ApiDesiredCount,ParameterValue=0 \
