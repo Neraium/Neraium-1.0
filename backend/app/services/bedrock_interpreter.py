@@ -13,6 +13,7 @@ DEFAULT_MODEL_ID = "amazon.nova-micro-v1:0"
 DEFAULT_MAX_TOKENS = 700
 DEFAULT_TEMPERATURE = 0.1
 MAX_EVIDENCE_CHARACTERS = 24_000
+STAGING_CLUSTER_NAME = "neraium-staging-cluster"
 
 
 class BedrockInterpretationDisabled(RuntimeError):
@@ -39,6 +40,10 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _staging_bedrock_default() -> bool:
+    return os.getenv("NERAIUM_ECS_CLUSTER", "").strip() == STAGING_CLUSTER_NAME
+
+
 def get_bedrock_config() -> BedrockInterpretationConfig:
     max_tokens = int(os.getenv("NERAIUM_BEDROCK_MAX_TOKENS", str(DEFAULT_MAX_TOKENS)))
     temperature = float(os.getenv("NERAIUM_BEDROCK_TEMPERATURE", str(DEFAULT_TEMPERATURE)))
@@ -47,7 +52,7 @@ def get_bedrock_config() -> BedrockInterpretationConfig:
     if not 0.0 <= temperature <= 1.0:
         raise ValueError("NERAIUM_BEDROCK_TEMPERATURE must be between 0 and 1.")
     return BedrockInterpretationConfig(
-        enabled=_env_bool("NERAIUM_BEDROCK_ENABLED", False),
+        enabled=_env_bool("NERAIUM_BEDROCK_ENABLED", _staging_bedrock_default()),
         model_id=os.getenv("NERAIUM_BEDROCK_MODEL_ID", DEFAULT_MODEL_ID).strip() or DEFAULT_MODEL_ID,
         region=(os.getenv("NERAIUM_BEDROCK_REGION") or os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "").strip() or None,
         max_tokens=max_tokens,

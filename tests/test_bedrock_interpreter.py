@@ -6,6 +6,7 @@ from app.services.bedrock_interpreter import (
     BedrockInterpretationConfig,
     BedrockInterpretationDisabled,
     BedrockInterpretationError,
+    get_bedrock_config,
     interpret_evidence_package,
 )
 
@@ -35,6 +36,24 @@ def _config(enabled: bool = True) -> BedrockInterpretationConfig:
 def test_interpreter_is_opt_in() -> None:
     with pytest.raises(BedrockInterpretationDisabled):
         interpret_evidence_package({"governance": {"raw_telemetry_included": False}}, config=_config(False))
+
+
+def test_staging_cluster_enables_bedrock_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("NERAIUM_BEDROCK_ENABLED", raising=False)
+    monkeypatch.setenv("NERAIUM_ECS_CLUSTER", "neraium-staging-cluster")
+    assert get_bedrock_config().enabled is True
+
+
+def test_explicit_disable_overrides_staging_default(monkeypatch) -> None:
+    monkeypatch.setenv("NERAIUM_ECS_CLUSTER", "neraium-staging-cluster")
+    monkeypatch.setenv("NERAIUM_BEDROCK_ENABLED", "false")
+    assert get_bedrock_config().enabled is False
+
+
+def test_non_staging_remains_disabled_by_default(monkeypatch) -> None:
+    monkeypatch.delenv("NERAIUM_BEDROCK_ENABLED", raising=False)
+    monkeypatch.setenv("NERAIUM_ECS_CLUSTER", "neraium-prod-cluster")
+    assert get_bedrock_config().enabled is False
 
 
 def test_interpreter_refuses_raw_telemetry_packages() -> None:

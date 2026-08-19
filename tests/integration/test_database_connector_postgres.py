@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from app.connectors.database_connector import DatabaseConnector
 from app.core.config import Settings
 from app.main import create_app
-from app.services.auth_store import _PostgresAuthBackend
+from app.services.auth_store import AUTH_SCHEMA_MIGRATIONS, _PostgresAuthBackend
 from db.migrations.create_normalization_tables import run as run_normalization_migration
 
 pytestmark = pytest.mark.integration
@@ -290,9 +290,13 @@ def test_auth_schema_migrations_apply_on_real_postgres(postgres_databases) -> No
                 ).fetchall()
             )
             assert types["expires_at"] == "timestamp with time zone"
-            assert connection.execute(
-                "SELECT COUNT(*) FROM auth_schema_migrations"
-            ).fetchone()[0] == 2
+            applied_migrations = tuple(
+                row[0]
+                for row in connection.execute(
+                    "SELECT migration_id FROM auth_schema_migrations ORDER BY migration_id"
+                ).fetchall()
+            )
+            assert applied_migrations == AUTH_SCHEMA_MIGRATIONS
     finally:
         with psycopg.connect(admin_dsn, sslmode="require", autocommit=True) as connection:
             connection.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
