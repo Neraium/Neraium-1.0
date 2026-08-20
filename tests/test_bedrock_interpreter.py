@@ -26,8 +26,8 @@ class FakeBedrockClient:
 def _config(enabled: bool = True) -> BedrockInterpretationConfig:
     return BedrockInterpretationConfig(
         enabled=enabled,
-        model_id="amazon.nova-micro-v1:0",
-        region="us-east-1",
+        model_id="us.amazon.nova-micro-v1:0",
+        region="us-east-2",
         max_tokens=500,
         temperature=0.1,
     )
@@ -73,7 +73,7 @@ def test_interpreter_uses_converse_without_changing_authoritative_role() -> None
         client=client,
     )
 
-    assert client.request["modelId"] == "amazon.nova-micro-v1:0"
+    assert client.request["modelId"] == "us.amazon.nova-micro-v1:0"
     assert client.request["inferenceConfig"]["temperature"] == 0.1
     assert "Never recalculate findings" in client.request["system"][0]["text"]
     assert "Root cause not established" in client.request["messages"][0]["content"][0]["text"]

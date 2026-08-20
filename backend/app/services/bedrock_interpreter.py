@@ -9,7 +9,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 
-DEFAULT_MODEL_ID = "amazon.nova-micro-v1:0"
+DEFAULT_MODEL_ID = "us.amazon.nova-micro-v1:0"
 DEFAULT_MAX_TOKENS = 700
 DEFAULT_TEMPERATURE = 0.1
 MAX_EVIDENCE_CHARACTERS = 24_000
