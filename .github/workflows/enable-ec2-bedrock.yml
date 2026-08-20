@@ -1,0 +1,84 @@
+name: Enable Neraium Bedrock on EC2
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type ENABLE-NERAIUM-BEDROCK-ON-EC2 exactly
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  enable:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'ENABLE-NERAIUM-BEDROCK-ON-EC2' }}
+    runs-on: ubuntu-latest
+    environment: staging-infra
+    timeout-minutes: 10
+    env:
+      AWS_REGION: us-east-2
+      EXPECTED_ACCOUNT_ID: '680779862188'
+      TARGET_ROLE_NAME: PPCFieldOperationsStagingRole
+      TARGET_POLICY_NAME: NeraiumBedrockInterpretationOnly
+      POLICY_FILE: .planning/neraium-staging-bedrock-interpretation-policy.json
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5c3a
+        with:
+          ref: main
+
+      - name: Validate exact policy scope
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REF" == 'refs/heads/main' ]]
+          jq -e '
+            .Version == "2012-10-17"
+            and (.Statement | length) == 1
+            and .Statement[0].Effect == "Allow"
+            and .Statement[0].Action == "bedrock:InvokeModel"
+            and .Statement[0].Resource == "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-micro-v1:0"
+          ' "$POLICY_FILE" >/dev/null
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Apply Bedrock-only permission to the existing EC2 role
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$(aws sts get-caller-identity --query Account --output text)" == "$EXPECTED_ACCOUNT_ID" ]]
+          role_arn="$(aws iam get-role --role-name "$TARGET_ROLE_NAME" --query 'Role.Arn' --output text)"
+          [[ "$role_arn" == "arn:aws:iam::680779862188:role/PPCFieldOperationsStagingRole" ]]
+
+          aws iam put-role-policy \
+            --role-name "$TARGET_ROLE_NAME" \
+            --policy-name "$TARGET_POLICY_NAME" \
+            --policy-document "file://$POLICY_FILE"
+
+          aws iam get-role-policy \
+            --role-name "$TARGET_ROLE_NAME" \
+            --policy-name "$TARGET_POLICY_NAME" \
+            --query PolicyDocument \
+            --output json > /tmp/live-policy.json
+
+          jq -S . "$POLICY_FILE" > /tmp/expected.json
+          jq -S . /tmp/live-policy.json > /tmp/live.json
+          diff -u /tmp/expected.json /tmp/live.json
+
+          {
+            echo '### Neraium Bedrock on EC2'
+            echo
+            echo '- Account: `680779862188`'
+            echo '- EC2 role: `PPCFieldOperationsStagingRole`'
+            echo '- Permission: `bedrock:InvokeModel` only'
+            echo '- Model: `amazon.nova-micro-v1:0` in `us-east-2`'
+            echo '- Verification: **passed**'
+          } >> "$GITHUB_STEP_SUMMARY"
