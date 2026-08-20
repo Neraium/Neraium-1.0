@@ -451,8 +451,31 @@ jobs:
             aws elbv2 describe-target-groups --names neraium-staging-api-tg --output json
           distributions="$(aws cloudfront list-distributions --output json)"
           printf '%s\n' "$distributions" | jq .
-          [[ "$(jq '[.DistributionList.Items[]? | select(.Comment == "neraium-staging-api")] | length' <<<"$distributions")" == "0" ]] \
-            || collision "CloudFront distribution comment neraium-staging-api"
+          if ! jq -e '
+            type == "object"
+            and (.DistributionList | type == "object")
+            and (.DistributionList.Quantity | type == "number" and . >= 0 and floor == .)
+            and (.DistributionList.IsTruncated == false)
+            and (
+              .DistributionList as $list
+              | if ($list | has("Items")) then
+                  ($list.Items | type == "array")
+                  and ($list.Items | length == $list.Quantity)
+                  and ($list.Items | all(
+                    type == "object" and (.Comment | type == "string")
+                  ))
+                else
+                  $list.Quantity == 0
+                end
+            )
+          ' <<<"$distributions" >/dev/null; then
+            echo 'FAIL CLOSED: CloudFront distribution inventory was empty, malformed, or incomplete' >&2
+            exit 1
+          fi
+          if jq -e '.DistributionList.Items[]? | select(.Comment == "neraium-staging-api")' \
+            <<<"$distributions" >/dev/null; then
+            collision "CloudFront distribution comment neraium-staging-api"
+          fi
           echo 'VIABLE: CloudFront distribution comment neraium-staging-api is absent'
 
           cluster="$(aws ecs describe-clusters --clusters neraium-staging-cluster --output json)"
