@@ -2,10 +2,21 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "InvokeStagingNovaMicroOnly",
+      "Sid": "InvokeNovaMicroViaUsInferenceProfile",
       "Effect": "Allow",
       "Action": "bedrock:InvokeModel",
-      "Resource": "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-micro-v1:0"
+      "Resource": [
+        "arn:aws:bedrock:us-east-2:680779862188:inference-profile/us.amazon.nova-micro-v1:0",
+        "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-micro-v1:0",
+        "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-micro-v1:0",
+        "arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-micro-v1:0"
+      ]
+    },
+    {
+      "Sid": "ReadNovaMicroInferenceProfile",
+      "Effect": "Allow",
+      "Action": "bedrock:GetInferenceProfile",
+      "Resource": "arn:aws:bedrock:us-east-2:680779862188:inference-profile/us.amazon.nova-micro-v1:0"
     }
   ]
 }
