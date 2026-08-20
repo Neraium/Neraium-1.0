@@ -1,19 +1,22 @@
 name: Enable Neraium Bedrock on EC2
 
 on:
-  workflow_dispatch:
-    inputs:
-      confirmation:
-        description: Type ENABLE-NERAIUM-BEDROCK-ON-EC2 exactly
-        required: true
-        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/enable-ec2-bedrock.yml
+      - .planning/neraium-staging-bedrock-interpretation-policy.json
 
 permissions:
   contents: read
 
+concurrency:
+  group: neraium-ec2-bedrock-permission
+  cancel-in-progress: false
+
 jobs:
   enable:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'ENABLE-NERAIUM-BEDROCK-ON-EC2' }}
     runs-on: ubuntu-latest
     environment: staging-infra
     timeout-minutes: 10
@@ -25,16 +28,17 @@ jobs:
       POLICY_FILE: .planning/neraium-staging-bedrock-interpretation-policy.json
 
     steps:
-      - name: Check out main
+      - name: Check out triggering main commit
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5c3a
         with:
-          ref: main
+          ref: ${{ github.sha }}
 
       - name: Validate exact policy scope
         shell: bash
         run: |
           set -Eeuo pipefail
           [[ "$GITHUB_REF" == 'refs/heads/main' ]]
+          [[ "$GITHUB_SHA" == "$(git rev-parse HEAD)" ]]
           jq -e '
             .Version == "2012-10-17"
             and (.Statement | length) == 1
@@ -76,6 +80,7 @@ jobs:
           {
             echo '### Neraium Bedrock on EC2'
             echo
+            echo '- Trigger: automatic push to `main` for the Bedrock workflow/policy files'
             echo '- Account: `680779862188`'
             echo '- EC2 role: `PPCFieldOperationsStagingRole`'
             echo '- Permission: `bedrock:InvokeModel` only'
