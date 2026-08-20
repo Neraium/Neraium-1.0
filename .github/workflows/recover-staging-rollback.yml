@@ -7,10 +7,6 @@ on:
         description: Type DELETE-neraium-staging-ROLLBACK_COMPLETE exactly
         required: true
         type: string
-      create_failed_event_id:
-        description: Exact CREATE_FAILED EventId from Diagnose staging rollback
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -29,6 +25,7 @@ jobs:
       AWS_REGION: us-east-2
       EXPECTED_ACCOUNT_ID: '680779862188'
       STACK_NAME: neraium-staging
+      EXPECTED_ROLE_ARN: arn:aws:iam::680779862188:role/neraium-staging-cloudformation-role
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5c3a
         with:
@@ -38,29 +35,59 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Prove exact failed stack and inspect retained-resource candidates
+      - name: Prove exact failed staging stack and inspect retained-resource candidates
         shell: bash
-        env:
-          CREATE_FAILED_EVENT_ID: ${{ inputs.create_failed_event_id }}
         run: |
           set -Eeuo pipefail
+
+          [[ "$AWS_REGION" == 'us-east-2' ]]
+          [[ "$STACK_NAME" == 'neraium-staging' ]]
           [[ "$(aws sts get-caller-identity --query Account --output text)" == "$EXPECTED_ACCOUNT_ID" ]]
+
           stack="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION" --output json)"
+          [[ "$(jq -r '.Stacks[0].StackName' <<<"$stack")" == "$STACK_NAME" ]]
           [[ "$(jq -r '.Stacks[0].StackStatus' <<<"$stack")" == 'ROLLBACK_COMPLETE' ]]
+          [[ "$(jq -r '.Stacks[0].RoleARN' <<<"$stack")" == "$EXPECTED_ROLE_ARN" ]]
+          [[ "$(jq -r '[.Stacks[0].Tags[]? | select(.Key == "Application" and .Value == "Neraium")] | length' <<<"$stack")" == '1' ]]
+          [[ "$(jq -r '[.Stacks[0].Tags[]? | select(.Key == "Environment" and .Value == "staging")] | length' <<<"$stack")" == '1' ]]
+
           aws cloudformation describe-stack-events --stack-name "$STACK_NAME" --region "$AWS_REGION" --output json > /tmp/stack-events.json
-          jq -e --arg event_id "$CREATE_FAILED_EVENT_ID" '.StackEvents[] | select(.EventId == $event_id and .ResourceStatus == "CREATE_FAILED")' /tmp/stack-events.json >/dev/null
+          create_failed_count="$(jq '[.StackEvents[] | select(.ResourceStatus == "CREATE_FAILED")] | length' /tmp/stack-events.json)"
+          [[ "$create_failed_count" -gt 0 ]]
+
+          echo 'Verified CREATE_FAILED events:'
+          jq -r '.StackEvents[] | select(.ResourceStatus == "CREATE_FAILED") | [.EventId, .LogicalResourceId, .ResourceType] | @tsv' /tmp/stack-events.json
+
           aws cloudformation list-stack-resources --stack-name "$STACK_NAME" --region "$AWS_REGION" --output json > /tmp/stack-resources.json
           jq -e '[.StackResourceSummaries[] | select(.ResourceStatus == "DELETE_FAILED")] | length == 0' /tmp/stack-resources.json >/dev/null
+
           echo 'Retained resources are preserved by the template DeletionPolicy; this workflow does not pass --retain-resources to bypass it.'
           jq -r '.StackResourceSummaries[] | select(.LogicalResourceId | IN("UploadStateBucket", "EcrRepository", "RuntimeFileSystem", "AuthDatabase", "ApiTokenSecret", "BootstrapAdminPasswordSecret", "CloudFrontOriginHeaderSecret", "ApiLogGroup", "WorkerLogGroup")) | [.LogicalResourceId, .ResourceStatus, (.PhysicalResourceId // "")] | @tsv' /tmp/stack-resources.json
+
+          {
+            echo '### Staging rollback recovery preflight'
+            echo
+            echo "- AWS account: \`$EXPECTED_ACCOUNT_ID\`"
+            echo "- Region: \`$AWS_REGION\`"
+            echo "- Stack: \`$STACK_NAME\`"
+            echo '- Stack status: `ROLLBACK_COMPLETE`'
+            echo "- CREATE_FAILED events verified: \`$create_failed_count\`"
+            echo '- DELETE_FAILED resources: `0`'
+            echo '- Retained resources: preserved by template policy'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Delete only the diagnosed staging rollback stack
         shell: bash
         run: |
           set -Eeuo pipefail
           aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$AWS_REGION"
           aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$AWS_REGION"
-          if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION" --output json; then
+          if aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION" --output json 2>/tmp/post-delete-describe.err; then
             echo 'FAIL CLOSED: staging stack still exists after deletion waiter.' >&2
             exit 1
           fi
+          grep -Eiq 'does not exist' /tmp/post-delete-describe.err || {
+            cat /tmp/post-delete-describe.err >&2
+            echo 'FAIL CLOSED: unable to prove staging stack absence after deletion.' >&2
+            exit 1
+          }
           echo 'Deleted only neraium-staging. Template-retained resources, if any, remain and must pass staging-infra collision preflight before recreation.' >> "$GITHUB_STEP_SUMMARY"
