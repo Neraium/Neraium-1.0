@@ -41,10 +41,20 @@ jobs:
           [[ "$GITHUB_SHA" == "$(git rev-parse HEAD)" ]]
           jq -e '
             .Version == "2012-10-17"
-            and (.Statement | length) == 1
+            and (.Statement | length) == 2
+            and .Statement[0].Sid == "InvokeNovaMicroViaUsInferenceProfile"
             and .Statement[0].Effect == "Allow"
             and .Statement[0].Action == "bedrock:InvokeModel"
-            and .Statement[0].Resource == "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-micro-v1:0"
+            and (.Statement[0].Resource | sort) == ([
+              "arn:aws:bedrock:us-east-2:680779862188:inference-profile/us.amazon.nova-micro-v1:0",
+              "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-micro-v1:0",
+              "arn:aws:bedrock:us-east-2::foundation-model/amazon.nova-micro-v1:0",
+              "arn:aws:bedrock:us-west-2::foundation-model/amazon.nova-micro-v1:0"
+            ] | sort)
+            and .Statement[1].Sid == "ReadNovaMicroInferenceProfile"
+            and .Statement[1].Effect == "Allow"
+            and .Statement[1].Action == "bedrock:GetInferenceProfile"
+            and .Statement[1].Resource == "arn:aws:bedrock:us-east-2:680779862188:inference-profile/us.amazon.nova-micro-v1:0"
           ' "$POLICY_FILE" >/dev/null
 
       - name: Configure AWS credentials
@@ -83,7 +93,7 @@ jobs:
             echo '- Trigger: automatic push to `main` for the Bedrock workflow/policy files'
             echo '- Account: `680779862188`'
             echo '- EC2 role: `PPCFieldOperationsStagingRole`'
-            echo '- Permission: `bedrock:InvokeModel` only'
-            echo '- Model: `amazon.nova-micro-v1:0` in `us-east-2`'
+            echo '- Invocation: Nova Micro through the US inference profile'
+            echo '- Profile: `us.amazon.nova-micro-v1:0`'
             echo '- Verification: **passed**'
           } >> "$GITHUB_STEP_SUMMARY"
