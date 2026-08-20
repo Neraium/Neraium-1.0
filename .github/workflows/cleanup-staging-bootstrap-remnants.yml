@@ -1,0 +1,163 @@
+name: Cleanup staging bootstrap remnants
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type DELETE-STAGING-BOOTSTRAP-REMNANTS exactly
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-infrastructure-deployment
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'DELETE-STAGING-BOOTSTRAP-REMNANTS' }}
+    runs-on: ubuntu-latest
+    environment: staging-infra
+    timeout-minutes: 30
+    env:
+      AWS_REGION: us-east-2
+      EXPECTED_ACCOUNT_ID: '680779862188'
+      BUCKET: neraium-staging-upload-state-680779862188-us-east-2
+      ECR_REPOSITORY: neraium-staging-api
+      EFS_NAME: neraium-staging-runtime
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5c3a
+        with:
+          ref: main
+
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Prove exact staging-only cleanup scope
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$(aws sts get-caller-identity --query Account --output text)" == "$EXPECTED_ACCOUNT_ID" ]]
+          [[ "$AWS_REGION" == 'us-east-2' ]]
+
+          set +e
+          stack_output="$(aws cloudformation describe-stacks --stack-name neraium-staging --region "$AWS_REGION" --output json 2>&1)"
+          stack_status=$?
+          set -e
+          [[ $stack_status -ne 0 ]]
+          grep -Eq 'Stack with id neraium-staging does not exist' <<<"$stack_output"
+
+          verify_tags() {
+            local json="$1"
+            jq -e '
+              ([.[] | select(.Key == "Application" and .Value == "Neraium")] | length) == 1
+              and ([.[] | select(.Key == "Environment" and .Value == "staging")] | length) == 1
+            ' <<<"$json" >/dev/null
+          }
+
+          bucket_tags="$(aws s3api get-bucket-tagging --bucket "$BUCKET" --expected-bucket-owner "$EXPECTED_ACCOUNT_ID" --query TagSet --output json)"
+          verify_tags "$bucket_tags"
+
+          repo="$(aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --output json)"
+          repo_arn="$(jq -r '.repositories[0].repositoryArn' <<<"$repo")"
+          [[ "$repo_arn" == "arn:aws:ecr:${AWS_REGION}:${EXPECTED_ACCOUNT_ID}:repository/${ECR_REPOSITORY}" ]]
+          ecr_tags="$(aws ecr list-tags-for-resource --resource-arn "$repo_arn" --query tags --output json)"
+          verify_tags "$ecr_tags"
+
+          efs_inventory="$(aws efs describe-file-systems --output json)"
+          mapfile -t efs_ids < <(jq -r '.FileSystems[].FileSystemId' <<<"$efs_inventory")
+          matches=()
+          for fs in "${efs_ids[@]}"; do
+            tags="$(aws efs list-tags-for-resource --resource-id "$fs" --query Tags --output json)"
+            if jq -e '.[] | select(.Key == "Name" and .Value == "neraium-staging-runtime")' <<<"$tags" >/dev/null; then
+              verify_tags "$tags"
+              matches+=("$fs")
+            fi
+          done
+          [[ ${#matches[@]} -eq 1 ]]
+          printf '%s' "${matches[0]}" > /tmp/efs-id
+          [[ "$(aws efs describe-mount-targets --file-system-id "${matches[0]}" --query 'length(MountTargets)' --output text)" == '0' ]]
+          [[ "$(aws efs describe-access-points --file-system-id "${matches[0]}" --query 'length(AccessPoints)' --output text)" == '0' ]]
+
+          for secret in neraium/staging/api-token neraium/staging/bootstrap-admin-password neraium/staging/cloudfront-origin-header; do
+            secret_json="$(aws secretsmanager describe-secret --secret-id "$secret" --output json)"
+            [[ "$(jq -r '.Name' <<<"$secret_json")" == "$secret" ]]
+            secret_tags="$(jq -c '.Tags' <<<"$secret_json")"
+            verify_tags "$secret_tags"
+          done
+
+          for log_group in /ecs/neraium-staging-api /ecs/neraium-staging-worker; do
+            [[ "$(aws logs describe-log-groups --log-group-name-prefix "$log_group" --query "length(logGroups[?logGroupName=='$log_group'])" --output text)" == '1' ]]
+            log_tags_obj="$(aws logs list-tags-log-group --log-group-name "$log_group" --output json)"
+            log_tags="$(jq -c '.tags | to_entries | map({Key:.key,Value:.value})' <<<"$log_tags_obj")"
+            verify_tags "$log_tags"
+          done
+
+          echo 'Verified exact retained staging bootstrap remnants and confirmed neraium-staging stack is absent.'
+
+      - name: Delete only verified retained bootstrap remnants
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          # Empty every version and delete marker before deleting the versioned staging bucket.
+          while true; do
+            page="$(aws s3api list-object-versions --bucket "$BUCKET" --max-items 1000 --output json)"
+            delete_payload="$(jq -c '{Objects: ([.Versions[]?, .DeleteMarkers[]?] | map({Key:.Key,VersionId:.VersionId})), Quiet:true}' <<<"$page")"
+            count="$(jq '.Objects | length' <<<"$delete_payload")"
+            [[ "$count" == '0' ]] && break
+            aws s3api delete-objects --bucket "$BUCKET" --delete "$delete_payload" >/dev/null
+          done
+          aws s3api delete-bucket --bucket "$BUCKET" --expected-bucket-owner "$EXPECTED_ACCOUNT_ID"
+
+          aws ecr delete-repository --repository-name "$ECR_REPOSITORY" --force >/dev/null
+
+          aws efs delete-file-system --file-system-id "$(cat /tmp/efs-id)"
+
+          for secret in neraium/staging/api-token neraium/staging/bootstrap-admin-password neraium/staging/cloudfront-origin-header; do
+            aws secretsmanager delete-secret --secret-id "$secret" --force-delete-without-recovery >/dev/null
+          done
+
+          for log_group in /ecs/neraium-staging-api /ecs/neraium-staging-worker; do
+            aws logs delete-log-group --log-group-name "$log_group"
+          done
+
+      - name: Verify cleanup completed
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          aws s3api head-bucket --bucket "$BUCKET" --expected-bucket-owner "$EXPECTED_ACCOUNT_ID" >/tmp/bucket-check 2>&1
+          bucket_status=$?
+          aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" >/tmp/ecr-check 2>&1
+          ecr_status=$?
+          set -e
+          [[ $bucket_status -ne 0 ]]
+          [[ $ecr_status -ne 0 ]]
+
+          efs_id="$(cat /tmp/efs-id)"
+          for _ in {1..30}; do
+            if [[ "$(aws efs describe-file-systems --file-system-id "$efs_id" --query 'length(FileSystems)' --output text)" == '0' ]]; then
+              break
+            fi
+            sleep 2
+          done
+          [[ "$(aws efs describe-file-systems --file-system-id "$efs_id" --query 'length(FileSystems)' --output text)" == '0' ]]
+
+          for log_group in /ecs/neraium-staging-api /ecs/neraium-staging-worker; do
+            [[ "$(aws logs describe-log-groups --log-group-name-prefix "$log_group" --query "length(logGroups[?logGroupName=='$log_group'])" --output text)" == '0' ]]
+          done
+
+          {
+            echo '### Staging bootstrap remnant cleanup'
+            echo
+            echo '- Scope: retained synthetic staging bootstrap resources only'
+            echo '- Stack neraium-staging: absent before cleanup'
+            echo '- S3/ECR/EFS/secrets/log groups: cleanup issued and verified where immediately observable'
+            echo '- Production/PPC/Bedrock/IAM: untouched'
+          } >> "$GITHUB_STEP_SUMMARY"
