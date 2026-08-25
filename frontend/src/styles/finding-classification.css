@@ -43,6 +43,14 @@
   text-transform: uppercase;
 }
 
+.finding-classification__explanation {
+  max-width: 48ch;
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
 .finding-classification__facts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

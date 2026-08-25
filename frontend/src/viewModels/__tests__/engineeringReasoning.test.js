@@ -140,7 +140,7 @@ describe("engineering reasoning model", () => {
     expect(model.searchItems.some((item) => item.label === "chw_flow_01")).toBe(false);
   });
 
-  it("uses the explicit unassigned dataset state instead of a fake current site", () => {
+  it("uses operator-facing facility context language instead of dataset assignment terminology", () => {
     const model = buildEngineeringReasoningModel({ result: {
       data_quality: { coverage_percent: 100 },
       analysis_explanation: {
@@ -149,9 +149,9 @@ describe("engineering reasoning model", () => {
       },
     } });
 
-    expect(model.site.name).toBe("Dataset assignment pending");
-    expect(model.site.locationLabel).toBe("Unassigned dataset");
-    expect(model.selectedFinding.location.hierarchy[0]).toBe("Unassigned dataset");
+    expect(model.site.name).toBe("Current facility");
+    expect(model.site.locationLabel).toBe("Facility context not assigned");
+    expect(model.selectedFinding.location.hierarchy[0]).toBe("Facility context not assigned");
   });
 
   it("reports Normal when analysis is sufficient and has no active findings", () => {
@@ -233,7 +233,7 @@ describe("engineering reasoning model", () => {
 
     const finding = model.selectedFinding;
     expect(finding.title).toBe("Condenser-side behavior changed");
-    expect(finding.location.label).toBe("Unassigned dataset · Cooling system");
+    expect(finding.location.label).toBe("Facility context not assigned · Cooling system");
     expect(finding.location.label).not.toContain("Observed subsystem behavior changed");
     expect(finding.tier).toBe("Narrowed");
     expect(finding.confidenceReason).toBe("Missing telemetry limits the conclusion.");
@@ -406,5 +406,71 @@ describe("engineering reasoning model", () => {
     });
     expect(finding.persistence).toEqual(confidence.persistence);
     expect(finding.classificationPresentation.persistence.label).toBe("Observing");
+  });
+
+  it("preserves canonical SII evidence without replacing the active finding comparator", () => {
+    const siiEvidence = {
+      source: "sii_result",
+      relationship_changes: [{ id: "canonical-rel", source: "Canonical A", target: "Canonical B" }],
+      provenance: { analysis_run_id: "run-42" },
+    };
+    const model = buildEngineeringReasoningModel({ result: {
+      facility_name: "North Plant",
+      sii_reliable_enough_to_show: true,
+      evidence_persisted: true,
+      data_quality: { coverage_percent: 100 },
+      analysis_result: { sii_evidence: siiEvidence },
+      analysis_explanation: {
+        fingerprint: { status: "Established" },
+        relationships: [{ id: "active-rel", columns: ["Active A", "Active B"], baseline_strength: 0.8, current_strength: 0.4 }],
+        insights: [{
+          id: "active-finding",
+          what_changed: "Active comparison changed.",
+          variables: ["Active A", "Active B"],
+          supporting_evidence: ["The active comparator supports a bounded change."],
+          contributing_relationships: [{ id: "active-rel", columns: ["Active A", "Active B"], baseline_strength: 0.8, current_strength: 0.4 }],
+        }],
+      },
+    } });
+
+    expect(model.siiEvidence).toBe(siiEvidence);
+    expect(model.selectedFinding.siiEvidence).toBe(siiEvidence);
+    expect(model.selectedFinding.relationships.map((item) => item.id)).toEqual(["active-rel"]);
+    expect(model.selectedFinding.relationships.map((item) => item.id)).not.toContain("canonical-rel");
+  });
+
+  it("keeps the explicit SII reliability gate first-class", () => {
+    const model = buildEngineeringReasoningModel({ result: {
+      facility_name: "North Plant",
+      sii_reliable_enough_to_show: false,
+      data_quality: { coverage_percent: 100 },
+      analysis_result: {
+        fingerprint: { status: "Established" },
+        insights: [{ id: "withheld", what_changed: "A relationship changed.", supporting_evidence: ["A bounded observation was recorded."] }],
+      },
+    } });
+
+    expect(model.reliableEnoughToShow).toBe(false);
+    expect(model.status).toBe("Evidence insufficient");
+    expect(model.selectedFinding.status).toBe("Evidence insufficient");
+    expect(model.selectedFinding.recommendationAllowed).toBe(false);
+  });
+
+  it("withholds claims when evidence persistence explicitly failed", () => {
+    const model = buildEngineeringReasoningModel({ result: {
+      facility_name: "North Plant",
+      sii_reliable_enough_to_show: true,
+      evidence_persisted: false,
+      data_quality: { coverage_percent: 100 },
+      analysis_result: {
+        fingerprint: { status: "Established" },
+        insights: [{ id: "not-persisted", what_changed: "A relationship changed.", supporting_evidence: ["A bounded observation was recorded."] }],
+      },
+    } });
+
+    expect(model.reliableEnoughToShow).toBe(false);
+    expect(model.status).toBe("Evidence insufficient");
+    expect(model.selectedFinding.status).toBe("Evidence insufficient");
+    expect(model.selectedFinding.recommendationAllowed).toBe(false);
   });
 });

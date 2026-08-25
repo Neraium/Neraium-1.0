@@ -72,8 +72,8 @@ export function FindingWorkflowSummary({ workflow = {}, compact = false }) {
     <dl className={`finding-workflow-summary${compact ? " finding-workflow-summary--compact" : ""}`}>
       <div><dt>Priority</dt><dd>{title(workflow.priority ?? workflow.effectivePriority ?? workflow.effective_priority, "Needs review")}</dd></div>
       <div><dt>Assignment</dt><dd>{clean(assignment.label) || "Unassigned"}{assignment.kind || assignment.targetType || assignment.target_type ? <small>{title(assignment.kind ?? assignment.targetType ?? assignment.target_type)}</small> : null}</dd></div>
-      <div data-due-tone={due.tone}><dt>Due</dt><dd>{due.label}</dd></div>
-      <div><dt>Workflow</dt><dd>{workflowStatusLabel(status)}</dd></div>
+      {!compact ? <div data-due-tone={due.tone}><dt>Due</dt><dd>{due.label}</dd></div> : null}
+      {!compact ? <div><dt>Workflow</dt><dd>{workflowStatusLabel(status)}</dd></div> : null}
       {!compact && workflow.validationOutcome ? <div><dt>Validation</dt><dd>{title(workflow.validationOutcome)}</dd></div> : null}
       {!compact && workflow.workOrderReference ? <div><dt>Work order</dt><dd>{workflow.workOrderReference}</dd></div> : null}
     </dl>
@@ -166,7 +166,6 @@ export default function FindingWorkflowPanel({ finding, workflow = {}, onSave, o
     <section className="finding-workflow" aria-labelledby={`finding-workflow-${finding?.id ?? identity}`}>
       <header><div><span className="forensic-kicker">Finding workflow</span><h2 id={`finding-workflow-${finding?.id ?? identity}`}>Ownership and next action</h2></div><span>Version {version}</span></header>
       <FindingWorkflowSummary workflow={workflow} />
-      {!persisted ? <p className="finding-workflow__notice">Finding-level workflow is not available for this historical record. Existing review actions remain available.</p> : null}
       <details className="finding-workflow__editor">
         <summary>Edit workflow</summary>
         <form onSubmit={save}>
@@ -201,6 +200,7 @@ export default function FindingWorkflowPanel({ finding, workflow = {}, onSave, o
           <button type="submit" className="forensic-button" disabled={!persisted || typeof onResolve !== "function" || state.pending === "resolve"}>{state.pending === "resolve" ? "Recording…" : "Resolve finding"}</button>
         </form>
       </details>
+      {!persisted ? <p className="finding-workflow__notice">Historical record · Finding-level workflow is unavailable. Existing review actions remain available.</p> : null}
       <p className={`finding-workflow__status${state.error ? " is-error" : ""}`} role="status" aria-live="polite">{state.message}</p>
     </section>
   );

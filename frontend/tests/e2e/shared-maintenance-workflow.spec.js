@@ -362,7 +362,7 @@ test.describe("Shared maintenance workflow", () => {
     await page.goto("/work/finding-review", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Open investigation" }).click();
     await expect(page).toHaveURL(/\/investigations\/pump-response$/);
-    await expect(page.getByText("Investigation guidance")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Relationships changed" })).toBeVisible();
     await page.getByRole("button", { name: "Open evidence record" }).click();
     await expect(page).toHaveURL(/\/evidence\/pump-response$/);
     await expect(page.getByRole("heading", { name: "Source lineage" })).toBeVisible();
