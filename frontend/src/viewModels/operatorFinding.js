@@ -467,7 +467,7 @@ export const FINDING_CLASSIFICATIONS = Object.freeze({
     label: "Context-limited relationship change",
     tone: "context",
     priority: "Context review",
-    meaning: "The relationship changed, but differing operating context limits like-for-like interpretation.",
+    meaning: "The relationship changed, but recent operating conditions differ too much from the learned baseline to determine why.",
   },
   possible_instrumentation_issue: {
     label: "Possible instrumentation issue",

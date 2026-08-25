@@ -21,6 +21,7 @@ function FindingList({ findings, brief, model, reviewRecords, onReview, onReview
           rankingExplanation={brief.priorityFinding?.id === finding.id ? brief.priorityExplanation : ""}
           onReview={onReview}
           onReviewAction={onReviewAction}
+          primaryActionLabel="Investigate"
           escalation={deriveEscalationReadiness(finding, model.result)}
         />
       ))}
@@ -43,7 +44,19 @@ export default function OperationsBrief({ model, reviewRecords = {}, onReview, o
   const brief = useMemo(() => buildOperationsBrief(model, reviewRecords, now), [model, now, reviewRecords]);
   const activeFindingCount = brief.newFindings.length + brief.needsAttention.length + brief.monitoringFindings.length;
   const monitoringCount = brief.monitoringFindings.length + brief.monitoringIssues.length;
-  const allQuiet = activeFindingCount === 0 && brief.monitoringIssues.length === 0;
+  const workloadHeadline = activeFindingCount
+    ? `${activeFindingCount} ${activeFindingCount === 1 ? "finding" : "findings"} awaiting review`
+    : brief.monitoringIssues.length
+      ? `${brief.monitoringIssues.length} telemetry ${brief.monitoringIssues.length === 1 ? "constraint" : "constraints"} to review`
+      : model.status === "Evidence insufficient"
+        ? "Evidence needs review"
+        : "No findings awaiting review";
+  const reviewSummary = `${workloadHeadline}.`;
+  const telemetrySummary = brief.monitoringIssues.length
+    ? `${brief.monitoringIssues.length} telemetry ${brief.monitoringIssues.length === 1 ? "constraint is" : "constraints are"} being monitored.`
+    : "";
+  const insufficientEvidence = model.status === "Evidence insufficient";
+  const allQuiet = model.status === "Normal" && activeFindingCount === 0 && brief.monitoringIssues.length === 0;
   const escalation = brief.escalations[0] ?? null;
   const escalationState = escalation ? deriveEscalationReadiness(escalation, model.result) : null;
 
@@ -52,24 +65,29 @@ export default function OperationsBrief({ model, reviewRecords = {}, onReview, o
       <header className="operations-brief__header">
         <div>
           <span className="forensic-kicker">Operations Brief · {briefDate(now)}</span>
-          <h1>{model.site.name}</h1>
-          <p>What deserves attention right now.</p>
+          <h1>{workloadHeadline}</h1>
+          <p>{model.site.assigned ? `${model.site.name} · ` : ""}What deserves attention right now.</p>
         </div>
         <div className="operations-brief__state" data-quiet={allQuiet ? "true" : "false"}>
           <span>Current conditions</span>
-          <strong>{allQuiet ? "Within learned behavior" : `${activeFindingCount} ${activeFindingCount === 1 ? "item" : "items"} in review`}</strong>
+          <strong>{workloadHeadline}</strong>
         </div>
       </header>
 
       {allQuiet ? (
         <section className="operations-quiet" aria-live="polite">
           <span className="operations-quiet__mark" aria-hidden="true" />
-          <div><h2>All monitored systems are within learned behavior.</h2><p>No new findings require review.</p></div>
+          <div><h2>No supported material change.</h2><p>Measured relationships remain within the learned comparison boundary.</p></div>
+        </section>
+      ) : insufficientEvidence && activeFindingCount === 0 ? (
+        <section className="operations-quiet operations-quiet--insufficient" aria-live="polite">
+          <span className="operations-quiet__mark" aria-hidden="true" />
+          <div><h2>Insufficient evidence.</h2><p>The available telemetry does not support a reliable finding or a no-change conclusion.</p></div>
         </section>
       ) : (
         <section className="operations-answer" aria-live="polite">
-          <strong>{brief.newFindings.length ? `${brief.newFindings.length} new ${brief.newFindings.length === 1 ? "finding" : "findings"} for review.` : "No new findings for review."}</strong>
-          <span>{brief.needsAttention.length ? `${brief.needsAttention.length} unresolved ${brief.needsAttention.length === 1 ? "finding needs" : "findings need"} attention.` : monitoringCount ? `${monitoringCount} ${monitoringCount === 1 ? "item is" : "items are"} being monitored.` : ""}</span>
+          <strong>{reviewSummary}</strong>
+          <span>{brief.needsAttention.length ? `${brief.needsAttention.length} unresolved ${brief.needsAttention.length === 1 ? "finding needs" : "findings need"} attention.` : telemetrySummary}</span>
         </section>
       )}
 

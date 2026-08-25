@@ -177,10 +177,11 @@ function SystemsOverview({ model, onSystem }) {
 
 function FindingsOverview({ model, reviewRecords, onReview, onReviewAction }) {
   const visible = model.findings.filter((finding) => reviewRecordFor(finding, reviewRecords).state !== "not_useful");
+  const insufficient = model.status === "Evidence insufficient";
   return (
     <div className="findings-overview operational-overview">
       <OverviewHeader eyebrow="Findings" name="Current findings" status={model.status} confidence={model.evidenceQuality} summary={visible.length ? `${visible.length} active ${visible.length === 1 ? "finding" : "findings"}` : "No active findings"} />
-      {visible.length ? <section className="active-findings" aria-label="Current findings"><div>{visible.map((finding) => <FindingSummary key={finding.id} finding={finding} reviewRecord={reviewRecordFor(finding, reviewRecords)} onReview={onReview} onReviewAction={onReviewAction} />)}</div></section> : <section className="normal-summary"><span>Current conditions</span><h2>All monitored systems are within learned behavior.</h2><p>No new unexplained changes require review.</p></section>}
+      {visible.length ? <section className="active-findings" aria-label="Current findings"><div>{visible.map((finding) => <FindingSummary key={finding.id} finding={finding} reviewRecord={reviewRecordFor(finding, reviewRecords)} onReview={onReview} onReviewAction={onReviewAction} />)}</div></section> : <section className="normal-summary"><span>Current conditions</span><h2>{insufficient ? "Insufficient evidence." : "No supported material change."}</h2><p>{insufficient ? "The available telemetry does not support a reliable finding or a no-change conclusion." : "Measured relationships remain within the learned comparison boundary."}</p></section>}
     </div>
   );
 }

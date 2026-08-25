@@ -132,6 +132,7 @@ export default function FindingClassificationSummary({ finding, presentation: su
       <div className="finding-classification__identity">
         <span>Classification</span>
         <strong>{presentation.label}</strong>
+        <p className="finding-classification__explanation">{presentation.meaning}</p>
       </div>
       <dl className="finding-classification__facts">
         {dimensions.changeDetection ? <div><dt>Change confidence</dt><dd>{displayLabel(dimensions.changeDetection.level)}</dd></div> : <div><dt>Evidence confidence</dt><dd>{detailedConfidenceLabel(finding, presentation)}</dd></div>}

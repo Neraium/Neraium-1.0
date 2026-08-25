@@ -1282,16 +1282,34 @@
 .operational-finding__identity > div:first-child { min-width: 0; display: grid; gap: 3px; }
 .operational-finding__identity > div:first-child strong { overflow: hidden; color: #b7c6d5; font-size: 10px; font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
 .operational-finding__identity > div:first-child small { color: var(--fr-faint); font-size: 9px; }
-.operational-finding__status { padding: 4px 8px; border: 1px solid var(--fr-line-strong); border-radius: 999px; color: #b7c6d5; font-size: 8px; text-transform: capitalize; }
+.operational-finding__status { align-self: flex-start; padding: 4px 8px; border: 1px solid var(--fr-line-strong); border-radius: 999px; color: #b7c6d5; font-size: 8px; text-transform: capitalize; }
 .operational-finding__what { padding: 8px 15px 0; }
 .operational-finding__what > span,
+.operational-finding__context > span,
+.operational-finding__primary-evidence > span,
+.operational-finding__limit > span,
 .operational-finding__next > span,
 .finding-confidence-strip span,
 .finding-workflow-summary dt { color: var(--fr-faint); font-size: 8px; font-weight: 680; letter-spacing: .1em; text-transform: uppercase; }
 .operational-finding__what h3 { max-width: 50ch; margin: 0; font-size: 18px; line-height: 1.25; font-weight: 560; letter-spacing: -.01em; }
 .operational-finding__what p { max-width: 76ch; margin: 7px 0 0; color: #c0ccd8; font-size: 11px; line-height: 1.5; }
+.operational-finding__context,
+.operational-finding__primary-evidence,
+.operational-finding__limit { display: grid; gap: 6px; margin-top: 11px; padding: 10px 15px; border-top: 1px solid var(--fr-line); }
+.operational-finding__context dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--fr-line); }
+.operational-finding__context dl > div { min-width: 0; display: grid; gap: 3px; padding: 7px 9px; background: #0b121b; }
+.operational-finding__context dt { color: var(--fr-faint); font-size: 8px; text-transform: uppercase; }
+.operational-finding__context dd { margin: 0; color: #c0ccd8; font-size: 10px; overflow-wrap: anywhere; }
+.operational-finding__primary-evidence ul { display: grid; gap: 5px; margin: 0; padding-left: 17px; }
+.operational-finding__primary-evidence li,
+.operational-finding__primary-evidence p,
+.operational-finding__limit p { margin: 0; color: #c0ccd8; font-size: 10px; line-height: 1.45; }
+.operational-finding__limit { border-left: 2px solid var(--fr-amber); background: rgba(223, 170, 86, .025); }
 .operational-finding__next { display: grid; gap: 5px; margin-top: 11px; padding: 10px 15px; border-top: 1px solid var(--fr-line); border-bottom: 1px solid var(--fr-line); }
 .operational-finding__next p { margin: 0; color: #d1dbe5; font-size: 11px; line-height: 1.45; }
+.operational-finding__attention { display: grid; gap: 5px; padding: 10px 15px; border-bottom: 1px solid var(--fr-line); }
+.operational-finding__attention > span { color: var(--fr-faint); font-size: 8px; font-weight: 680; letter-spacing: .1em; text-transform: uppercase; }
+.operational-finding__attention p { max-width: 76ch; margin: 0; color: #b8c6d3; font-size: 10px; line-height: 1.45; }
 .operational-finding__brief { display: grid; grid-template-columns: repeat(2, 1fr); margin-top: 11px; border-top: 1px solid var(--fr-line); border-bottom: 1px solid var(--fr-line); }
 .operational-finding__brief p { min-width: 0; display: grid; gap: 5px; margin: 0; padding: 11px 15px; color: #c0ccd8; font-size: 10px; line-height: 1.45; }
 .operational-finding__brief p + p { border-left: 1px solid var(--fr-line); }
@@ -1306,6 +1324,7 @@
 .operational-finding__relationship-detail li { line-height: 1.45; }
 .operational-finding__ranking { display: grid; gap: 4px; margin: 0; padding: 10px 15px; color: var(--fr-muted); font-size: 9px; line-height: 1.45; border-bottom: 1px solid var(--fr-line); }
 .finding-workflow-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0; padding: 0; border-bottom: 1px solid var(--fr-line); background: var(--fr-line); }
+.finding-workflow-summary--compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .finding-workflow-summary > div { min-width: 0; display: grid; align-content: start; gap: 5px; padding: 10px 12px; background: #0b121b; }
 .finding-workflow-summary dd { margin: 0; color: #c9d5df; font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
 .finding-workflow-summary dd small { display: block; margin-top: 3px; color: var(--fr-faint); font-size: 8px; }
@@ -1321,6 +1340,12 @@
 .operational-finding__more > summary { min-height: 36px; display: inline-flex; align-items: center; padding: 0 12px; border: 1px solid var(--fr-line-strong); border-radius: var(--radius-control); color: var(--fr-muted); cursor: pointer; font-size: 10px; list-style-position: inside; }
 .operational-finding__more[open] { flex: 1 1 100%; }
 .operational-finding__more[open] > summary { margin-bottom: 8px; }
+.operational-finding__evidence-body { padding: 10px 15px 12px; }
+.operational-finding__evidence-body dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0 0 10px; background: var(--fr-line); }
+.operational-finding__evidence-body dl > div { min-width: 0; display: grid; gap: 3px; padding: 7px 9px; background: #0b121b; }
+.operational-finding__evidence-body dt { color: var(--fr-faint); font-size: 8px; text-transform: uppercase; }
+.operational-finding__evidence-body dd { margin: 0; color: #c0ccd8; font-size: 10px; overflow-wrap: anywhere; }
+.operational-finding__evidence-body .operational-finding__evidence-limit { padding: 9px 0 0; color: #c8b990; }
 
 .finding-review-actions { min-width: 0; display: grid; gap: 9px; }
 .finding-review-actions__buttons { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -1378,7 +1403,7 @@
 .finding-workflow > header { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 15px; border-bottom: 1px solid var(--fr-line); }
 .finding-workflow > header h2 { margin: 4px 0 0; font-size: 15px; font-weight: 560; }
 .finding-workflow > header > span { color: var(--fr-faint); font-size: 9px; }
-.finding-workflow__notice { margin: 0; padding: 11px 14px; border-bottom: 1px solid var(--fr-line); color: #c8b990; font-size: 10px; line-height: 1.5; }
+.finding-workflow__notice { margin: 0; padding: 8px 14px 2px; color: var(--fr-faint); font-size: 9px; line-height: 1.45; }
 .finding-workflow__editor,
 .finding-workflow__feedback,
 .finding-workflow__resolution { border-bottom: 1px solid var(--fr-line); }
@@ -1410,12 +1435,41 @@
 .case-classification-detail > :last-child { margin-bottom: 15px; }
 .evidence-record-grid { display: grid; gap: 1px; margin-top: 12px; border: 1px solid var(--fr-line); background: var(--fr-line); }
 .evidence-record-grid > section { min-width: 0; padding: 18px; background: var(--fr-surface); }
+.sii-evidence-record { margin-top: 12px; }
+.sii-evidence-sections { display: grid; gap: 1px; margin-top: 12px; background: var(--fr-line); }
+.sii-evidence-sections > section { min-width: 0; padding: 16px; background: var(--fr-surface); }
+.sii-evidence-sections h3 { margin: 0 0 10px; color: #8297ad; font-size: 9px; font-weight: 680; letter-spacing: .13em; text-transform: uppercase; }
+.sii-evidence-sections p,
+.sii-evidence-sections li { color: #c5d0dc; font-size: 11px; line-height: 1.5; }
+.sii-evidence-sections ul { margin: 8px 0 0; padding-left: 18px; }
+.sii-relationship-list { display: grid; gap: 8px; padding: 0 !important; list-style: none; }
+.sii-relationship-list > li { padding: 10px; border: 1px solid var(--fr-line); }
+.sii-relationship-list dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 8px 0 0; }
+.sii-relationship-list dl div { min-width: 0; }
+.sii-relationship-list dt { color: var(--fr-faint); font-size: 8px; text-transform: uppercase; }
+.sii-relationship-list dd { margin: 2px 0 0; overflow-wrap: anywhere; }
 .evidence-comparison__summary { margin: 0 0 13px !important; color: #d9e3ec !important; font-size: 14px !important; }
 .evidence-comparison dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0; border: 1px solid var(--fr-line); background: var(--fr-line); }
 .evidence-comparison dl > div { min-width: 0; padding: 12px; background: #0b121b; }
 .evidence-comparison dt { color: var(--fr-faint); font-size: 8px; font-weight: 680; letter-spacing: .1em; text-transform: uppercase; }
 .evidence-comparison dd { margin: 5px 0 2px; color: #dce7f1; font-size: 18px; font-variant-numeric: tabular-nums; }
 .evidence-comparison dd small { display: block; margin-top: 2px; color: var(--fr-muted); font-size: 9px; line-height: 1.4; }
+.investigation-timezone { margin: -3px 0 12px !important; color: var(--fr-faint) !important; font-size: 9px !important; }
+.investigation-relationship-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.investigation-relationship-list > li { min-width: 0; margin: 0 !important; border: 1px solid var(--fr-line); background: rgba(7, 13, 20, .72); }
+.investigation-relationship-list header { display: grid; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--fr-line); }
+.investigation-relationship-list header span,
+.investigation-relationship-list dt { color: var(--fr-faint); font-size: 8px; font-weight: 680; letter-spacing: .08em; text-transform: uppercase; }
+.investigation-relationship-list header strong { color: #d5e0ea; font-size: 12px; overflow-wrap: anywhere; }
+.investigation-relationship-list code,
+.investigation-signal-list code { color: #9db8cf; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9px; overflow-wrap: anywhere; word-break: break-word; }
+.investigation-relationship-list dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--fr-line); }
+.investigation-relationship-list dl > div { min-width: 0; display: grid; align-content: start; gap: 5px; padding: 9px 11px; background: #0b121b; }
+.investigation-relationship-list dd { margin: 0; color: #c5d0dc; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.investigation-relationship-list__comparison dd { display: flex; align-items: center; gap: 8px; color: #72bdff; font-size: 15px; font-variant-numeric: tabular-nums; }
+.investigation-relationship-list__comparison dd span { color: var(--fr-faint); }
+.investigation-signal-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px !important; padding: 0 !important; list-style: none; }
+.investigation-signal-list li { min-width: 0; max-width: 100%; margin: 0 !important; padding: 6px 8px; border: 1px solid var(--fr-line); background: #0b121b; }
 .technical-record-note { color: var(--fr-muted); font-size: 10px; line-height: 1.5; }
 .related-evidence { min-width: 0; display: grid; gap: 12px; margin-top: 12px; padding: 18px; border: 1px solid var(--fr-line); background: var(--fr-surface); }
 .related-evidence__header { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
@@ -1498,15 +1552,23 @@
   .operational-finding__identity > div:first-child strong { white-space: normal; overflow-wrap: anywhere; }
   .operational-finding__what { padding: 8px 12px 0; }
   .operational-finding__what h3 { font-size: 16px; overflow-wrap: anywhere; }
+  .operational-finding__context,
+  .operational-finding__primary-evidence,
+  .operational-finding__limit,
+  .operational-finding__next { padding-inline: 12px; }
+  .operational-finding__attention { padding: 9px 12px; }
+  .operational-finding__context dl { grid-template-columns: 1fr; }
+  .operational-finding__evidence-body { padding-inline: 12px; }
+  .operational-finding__evidence-body dl { grid-template-columns: 1fr; }
   .operational-finding__brief { grid-template-columns: 1fr; }
   .operational-finding__brief p { padding: 9px 12px; }
   .operational-finding__condition-evidence,
   .operational-finding__relationship-detail { padding-inline: 12px; }
   .operational-finding__brief p + p { border-top: 1px solid var(--fr-line); border-left: 0; }
   .operational-finding__ranking { padding-inline: 12px; }
-  .operational-finding__action { flex-wrap: wrap; padding: 9px 12px 11px; }
-  .operational-finding__action > .forensic-button { flex: 1 1 140px; min-height: 44px; }
-  .operational-finding__more { flex: 1 1 140px; }
+  .operational-finding__action { align-items: center; flex-direction: row; flex-wrap: wrap; padding: 9px 12px 11px; }
+  .operational-finding__action > .forensic-button { flex: 1 1 calc(50% - 4px); min-height: 44px; }
+  .operational-finding__more { flex: 1 1 calc(50% - 4px); }
   .operational-finding__more > summary { width: 100%; min-height: 44px; justify-content: center; }
   .finding-review-actions--compact .finding-review-actions__buttons, .finding-review-actions__buttons { grid-template-columns: 1fr; display: grid; }
   .finding-review-actions__buttons .forensic-button { width: 100%; min-height: 44px; }
@@ -1524,6 +1586,9 @@
   .case-primary-action .forensic-button, .evidence-record-actions > .forensic-button { width: 100%; }
   .case-sections { margin-top: 8px; }
   .case-sections > section, .evidence-record-grid > section { padding: 14px 12px; }
+  .sii-evidence-sections > section { padding: 14px 12px; }
+  .sii-relationship-list dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .investigation-relationship-list dl { grid-template-columns: minmax(0, 1fr); }
   .evidence-comparison dl { grid-template-columns: 1fr; }
   .related-evidence { padding: 14px 12px; }
   .related-evidence__header { align-items: start; flex-direction: column; gap: 7px; }
