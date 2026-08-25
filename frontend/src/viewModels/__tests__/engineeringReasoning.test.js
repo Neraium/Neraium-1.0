@@ -33,6 +33,7 @@ describe("engineering reasoning model", () => {
         systems: [{ name: "Hydronic loop" }],
         insights: [{
           id: "finding-1",
+          relationship_id: "rel-1",
           title: "Flow response weakened",
           what_changed: "Flow response weakened under comparable demand.",
           confidence: "Qualified",
@@ -69,6 +70,7 @@ describe("engineering reasoning model", () => {
         }],
         insights: [{
           id: "finding-1",
+          relationship_id: "rel-1",
           title: "Relationship change detected",
           what_changed: "Condenser performance changed.",
           system: "Cooling Plant",

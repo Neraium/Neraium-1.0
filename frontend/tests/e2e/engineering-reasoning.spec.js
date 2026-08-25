@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect, governedComparisonResult, test } from "./fixtures.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const screenshotDirectory = path.resolve(here, "../../../.planning/screenshots/operations-review-investigation");
+const screenshotDirectory = path.resolve(here, "../../../.planning/screenshots/results-progressive-disclosure");
 
 function reasoningPayload() {
   const analysis = {
@@ -134,166 +134,90 @@ async function openSite(page, viewport, payload = reasoningPayload()) {
   });
   await page.goto("/sites/current", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("engineering-reasoning-platform")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "1 finding awaiting review" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Analysis complete" })).toBeVisible();
   await expect(page.locator(".operational-finding")).toBeVisible();
 }
 
-test.describe("Daily engineering workflows", () => {
-  test.beforeAll(() => mkdirSync(screenshotDirectory, { recursive: true }));
 
-  test("moves from Operations Brief to finding, investigation, evidence, and trace", async ({ page }) => {
-    await openSite(page, { width: 1440, height: 900 });
-    await expect(page.getByTestId("operations-brief")).toBeVisible();
-    await expect(page.getByText("1 finding awaiting review.")).toBeVisible();
-    await expect(page.getByText("1 telemetry constraint is being monitored.")).toBeVisible();
-    const card = page.locator(".operational-finding");
-    await expect(card).toHaveCount(1);
-    await expect(card.getByRole("heading", { name: "Pump demand no longer matches flow." })).toBeVisible();
-    await expect(card.getByText("Flow & Pressure", { exact: true })).toBeVisible();
-    await expect(card.getByText("Equipment / system")).toBeVisible();
-    for (const label of ["Finding", "Requested next action", "Why this needs attention", "Evidence and limitations"]) await expect(card.getByText(label, { exact: true })).toBeVisible();
-    const workflow = card.locator(".finding-workflow-summary");
-    await expect(workflow.getByText("High")).toBeVisible();
-    await expect(workflow.getByText("Mechanical")).toBeVisible();
-    await expect(workflow.getByText("Investigating")).toHaveCount(0);
-    const confidence = card.locator(".finding-confidence-strip");
-    await expect(confidence).toContainText("Change confidenceHigh");
-    await expect(confidence).not.toContainText("Interpretation");
-    await expect(confidence).not.toContainText("Persistence");
-    await expect(confidence).not.toContainText("Context");
-    await expect(card.getByText("Finding confidence")).toHaveCount(0);
-    await expect(card).not.toContainText("Chiller-03");
-    await expect(card).not.toContainText("Flow-01");
-    await expect(card.getByText("Flow response decreased 12.4%.")).not.toBeVisible();
-    await card.getByText("Evidence and limitations").click();
-    await expect(card).toContainText("Flow response decreased 12.4%.");
-    await expect(card.getByRole("button", { name: "Investigate" })).toBeVisible();
-    await expect(card.getByText("Actions")).toBeVisible();
-    await page.screenshot({ path: path.join(screenshotDirectory, "finding-desktop.png"), fullPage: true });
-
-    await card.getByRole("button", { name: "Investigate" }).click();
-    await expect(page).toHaveURL(/\/findings\/flow-response$/);
-    await expect(page.getByRole("heading", { name: "Ownership and next action" })).toBeVisible();
-    await expect(page.getByText("Version 3")).toBeVisible();
-    for (const heading of ["What changed", "Why this deserves attention", "Important limitations", "What to check first"]) await expect(page.getByRole("heading", { name: heading })).toBeVisible();
-    await page.screenshot({ path: path.join(screenshotDirectory, "review-desktop.png"), fullPage: true });
-    await page.getByRole("button", { name: "Open investigation" }).click();
-    await expect(page).toHaveURL(/\/investigations\/flow-response$/);
-    await expect(page.getByRole("heading", { name: "Relationships changed" })).toBeVisible();
-    await expect(page.getByText("Current review state")).toBeVisible();
-    await expect(page.getByText("Jul 26, 2026 · 3:00 AM PDT").first()).toBeVisible();
-    await page.screenshot({ path: path.join(screenshotDirectory, "investigation-desktop.png"), fullPage: true });
-    await expect(page.getByText("Technical analysis metadata").locator("..")).not.toHaveAttribute("open", "");
-    await page.getByText("Technical analysis metadata").click();
-    await expect(page.getByText("Chiller-03 / Flow-01").first()).toBeVisible();
-    await page.getByRole("button", { name: "Open evidence record" }).click();
-    await expect(page).toHaveURL(/\/evidence\/flow-response$/);
-    await expect(page.getByRole("heading", { name: "Source lineage" })).toBeVisible();
-    await expect(page.getByText("Baseline", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Correlation strength decreased by 0.41 from the learned baseline.")).toBeVisible();
-    await expect(page.getByText("Authoritative SII evidence record")).toBeVisible();
-    await page.getByText("Authoritative SII evidence record").click();
-    await expect(page.getByText("Authenticated workspace identity unavailable.")).toBeVisible();
-    await expect(page.getByText("baseline-42")).toBeVisible();
-    await expect(page.getByText("Propagation evidence")).toHaveCount(0);
-    await page.getByRole("button", { name: "Open trace mode" }).click();
-    await expect(page.getByRole("heading", { name: "Trace mode" })).toBeVisible();
+test.describe("Results progressive disclosure", () => {
+  test.beforeAll(() => {
+    for (const name of ["phone", "tablet", "desktop"]) mkdirSync(path.join(screenshotDirectory, name), { recursive: true });
   });
 
-  test("mobile keeps the brief item and primary action clear without overflow", async ({ page }) => {
-    await openSite(page, { width: 390, height: 844 });
-    const card = page.locator(".operational-finding");
-    const metrics = await card.evaluate((node) => {
-      const header = node.querySelector(".operational-finding__identity")?.getBoundingClientRect();
-      const nextAction = node.querySelector(".operational-finding__next")?.getBoundingClientRect();
-      const workflow = node.querySelector(".finding-workflow-summary")?.getBoundingClientRect();
-      const confidence = node.querySelector(".finding-confidence-strip")?.getBoundingClientRect();
-      const action = node.querySelector(".operational-finding__action")?.getBoundingClientRect();
-      const cardBox = node.getBoundingClientRect();
-      return {
-        overflow: document.documentElement.scrollWidth - window.innerWidth,
-        cardHeight: cardBox.height,
-        headerBeforeWorkflow: Boolean(header && workflow && header.bottom <= workflow.top + 1),
-        nextActionBeforeWorkflow: Boolean(nextAction && workflow && nextAction.bottom <= workflow.top + 1),
-        workflowBeforeConfidence: Boolean(workflow && confidence && workflow.bottom <= confidence.top + 1),
-        confidenceBeforeAction: Boolean(confidence && action && confidence.bottom <= action.top + 1),
-        contentFitsCard: [header, nextAction, workflow, confidence, action].every((rect) => rect && rect.left >= cardBox.left - 1 && rect.right <= cardBox.right + 1),
-      };
+  const viewports = [
+    { name: "phone", width: 390, height: 844 },
+    { name: "tablet", width: 768, height: 1024 },
+    { name: "desktop", width: 1440, height: 900 },
+  ];
+
+  for (const viewport of viewports) {
+    test(`${viewport.name} keeps each evidence depth scoped and free of horizontal overflow`, async ({ page }) => {
+      await openSite(page, viewport);
+      await expect(page.getByText("1 finding deserves review.")).toBeVisible();
+      const card = page.getByTestId("compact-finding-card");
+      await expect(card).toContainText("Flow & Pressure");
+      await expect(card).toContainText("Change confidence");
+      await expect(card).not.toContainText("Chiller-03");
+      await expect(card).not.toContainText("Flow-01");
+      await expect(card.locator("details")).toHaveCount(0);
+      await expect(card.getByRole("button")).toHaveCount(1);
+      const resultsMetrics = await card.evaluate((node) => ({
+        cardHeight: node.getBoundingClientRect().height,
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+      }));
+      expect(resultsMetrics.cardHeight).toBeLessThanOrEqual(340);
+      expect(resultsMetrics.scrollWidth).toBeLessThanOrEqual(resultsMetrics.viewportWidth + 1);
+      await page.screenshot({ path: path.join(screenshotDirectory, viewport.name, "results.png"), fullPage: true });
+
+      await card.getByRole("button", { name: "Review finding" }).click();
+      for (const heading of ["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]) await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      for (const label of ["Change confidence", "Evidence quality", "Cause / attribution", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) await expect(page.getByText(label, { exact: true })).toBeVisible();
+      await expect(page.getByText("Cause / attribution").locator("..")).toContainText("hypothesis");
+      await expect(page.getByTestId("finding-review")).not.toContainText("Chiller-03");
+      await expect(page.getByTestId("finding-review")).not.toContainText("Flow-01");
+      await page.screenshot({ path: path.join(screenshotDirectory, viewport.name, "review.png"), fullPage: true });
+
+      await page.getByRole("button", { name: "Open investigation" }).click();
+      for (const heading of ["Primary relationship comparison", "Relationship evidence", "Persistence and confidence", "Operating context", "System evidence channels", "Data quality and comparability", "Timeline", "Source signals and lineage"]) await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      await expect(page.getByText("0.82").first()).toBeVisible();
+      await expect(page.getByText("0.41").first()).toBeVisible();
+      await expect(page.getByText("Chiller-03").first()).toBeVisible();
+      await expect(page.getByText("Analysis-run evidence; not finding-specific").first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Audit history" })).toHaveCount(0);
+      const investigationWidth = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth }));
+      expect(investigationWidth.scrollWidth).toBeLessThanOrEqual(investigationWidth.viewportWidth + 1);
+      await page.screenshot({ path: path.join(screenshotDirectory, viewport.name, "investigation.png"), fullPage: true });
+
+      await page.getByRole("button", { name: "Open evidence record" }).click();
+      for (const heading of ["Record identity", "Finding-owned relationships", "Finding provenance and lineage", "Evidence sufficiency", "Audit history"]) await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
+      await expect(page.getByTestId("evidence-record")).toContainText("pearson_correlation");
+      await expect(page.getByTestId("evidence-record")).toContainText("Chiller-03");
+      await expect(page.getByTestId("evidence-record")).toContainText("Authenticated workspace identity unavailable.");
+      await expect(page.getByTestId("evidence-record")).toContainText("Analysis-run evidence; not finding-specific");
+      const evidenceWidth = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth }));
+      expect(evidenceWidth.scrollWidth).toBeLessThanOrEqual(evidenceWidth.viewportWidth + 1);
+      await page.screenshot({ path: path.join(screenshotDirectory, viewport.name, "evidence.png"), fullPage: true });
     });
-    expect(metrics.overflow).toBeLessThanOrEqual(1);
-    expect(metrics.cardHeight).toBeLessThan(650);
-    expect(metrics.headerBeforeWorkflow).toBe(true);
-    expect(metrics.nextActionBeforeWorkflow).toBe(true);
-    expect(metrics.workflowBeforeConfidence).toBe(true);
-    expect(metrics.confidenceBeforeAction).toBe(true);
-    expect(metrics.contentFitsCard).toBe(true);
-    await page.screenshot({ path: path.join(screenshotDirectory, "finding-mobile-390.png"), fullPage: true });
-    await card.getByRole("button", { name: "Investigate" }).click();
-    await expect(page.getByTestId("finding-review")).toBeVisible();
-    await page.screenshot({ path: path.join(screenshotDirectory, "review-mobile-390.png"), fullPage: true });
-    await page.getByRole("button", { name: "Open investigation" }).click();
-    await expect(page.getByTestId("investigation-workspace")).toBeVisible();
-    await page.screenshot({ path: path.join(screenshotDirectory, "investigation-mobile-390.png"), fullPage: true });
+  }
+
+  test("unknown detail identities fail closed at every depth", async ({ page }) => {
+    await openSite(page, { width: 390, height: 844 });
+    for (const [route, heading] of [["findings", "Finding unavailable"], ["investigations", "Investigation unavailable"], ["evidence", "Evidence record unavailable"]]) {
+      await page.goto(`/${route}/workspace-b-secret`);
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      await expect(page.locator("body")).not.toContainText("workspace-b-secret");
+      await expect(page.locator("body")).not.toContainText("Flow response changed");
+    }
   });
 
-  test("long system and signal names reflow at narrow Safari-like viewport heights", async ({ page }) => {
-    const payload = reasoningPayload();
-    const result = payload.latest_result;
-    const analysis = result.analysis_explanation;
-    const longSystem = "North Campus Condenser Water Distribution and Pressure Boundary";
-    const longSignal = "Extremely long condenser discharge pressure transmitter identifier";
-    analysis.systems[0].name = longSystem;
-    analysis.insights[0].system = longSystem;
-    analysis.insights[0].variables = [longSignal, "Compressor demand signal with extended historian naming"];
-    analysis.insights[0].contributing_relationships[0].columns = analysis.insights[0].variables;
-    analysis.relationships[0].columns = analysis.insights[0].variables;
-    await openSite(page, { width: 320, height: 664 }, payload);
-    const metrics = await page.evaluate(() => ({ root: document.documentElement.scrollWidth, body: document.body.scrollWidth, viewport: innerWidth }));
-    expect(metrics.root).toBeLessThanOrEqual(metrics.viewport + 1);
-    expect(metrics.body).toBeLessThanOrEqual(metrics.viewport + 1);
-    await expect(page.getByText(longSystem).first()).toBeVisible();
-    await expect(page.locator(".finding-confidence-strip")).toContainText("Change confidence");
-  });
-
-  test("back navigation restores Operations Brief context", async ({ page }) => {
-    await openSite(page, { width: 390, height: 664 });
-    const card = page.locator(".operational-finding").first();
-    await expect(card).toBeVisible();
-    await card.scrollIntoViewIfNeeded();
-    await page.getByRole("button", { name: "Investigate" }).click();
-    await expect(page).toHaveURL(/\/findings\/flow-response$/);
-    await page.getByRole("button", { name: "Back to Operations Brief" }).click();
-    await expect(page).toHaveURL(/\/sites\/current$/);
-    await expect(page.getByTestId("operations-brief")).toBeVisible();
-    await expect(card).toBeVisible();
-    await expect(card.getByRole("button", { name: "Investigate" })).toBeVisible();
-  });
-
-  test("asset search opens the evidence record directly", async ({ page }) => {
-    await openSite(page, { width: 1280, height: 800 });
-    await page.getByRole("combobox", { name: /Search sites/ }).fill("Primary chilled-water flow");
-    await page.getByRole("option", { name: "Asset / signal: Primary chilled-water flow" }).click();
-    await expect(page).toHaveURL(/\/evidence\/flow-response$/);
-    await expect(page.getByTestId("evidence-record")).toBeVisible();
-    await expect(page.getByText("Correlation strength decreased by 0.41 from the learned baseline.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Open trace mode" })).toBeVisible();
-  });
-
-  test("desktop and mobile workflow surfaces have no serious accessibility violations", async ({ page }) => {
-    await openSite(page, { width: 1440, height: 900 });
-    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
-      await page.setViewportSize(viewport);
-      if (!new URL(page.url()).pathname.startsWith("/sites/")) {
-        if (viewport.width < 900) await page.getByRole("button", { name: "Open menu" }).click();
-        await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "System Status" }).click();
-        await expect(page.getByTestId("operations-brief")).toBeVisible();
-      }
-      for (const action of [null, "Investigate", "Open investigation"]) {
-        if (action) await page.getByRole("button", { name: action }).click();
-        const results = await new AxeBuilder({ page }).include("#forensic-main").analyze();
-        const serious = results.violations.filter((violation) => ["serious", "critical"].includes(violation.impact));
-        expect(serious, serious.map((item) => `${item.id}: ${item.help}`).join("\n")).toEqual([]);
-      }
+  test("primary hierarchy has no serious accessibility violations", async ({ page }) => {
+    await openSite(page, { width: 390, height: 844 });
+    for (const action of [null, "Review finding", "Open investigation", "Open evidence record"]) {
+      if (action) await page.getByRole("button", { name: action }).click();
+      const results = await new AxeBuilder({ page }).include("#forensic-main").analyze();
+      const serious = results.violations.filter((violation) => ["serious", "critical"].includes(violation.impact));
+      expect(serious, serious.map((item) => `${item.id}: ${item.help}`).join("\n")).toEqual([]);
     }
   });
 });

@@ -3,7 +3,7 @@ import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DataConnectionsWorkspace, { formatAnalysisUpdateTime, frontendPollingTiming, queuedWorkerMessage, resolveOpenBaselineIdentity } from "./DataConnectionsWorkspace";
-import IntakeFlowPanel, { baselineCompletionSummary, failedImportStageRows, resolveBaselineProcessingStage } from "./setup/IntakeFlowPanel";
+import IntakeFlowPanel, { baselineCompletionSummary, comparisonCompletionSummary, failedImportStageRows, resolveBaselineProcessingStage } from "./setup/IntakeFlowPanel";
 import { retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { clearBaselineResultCache } from "../services/api/baselineApi";
 import { persistBaselineSelection } from "../viewModels/baselineSelection";
@@ -650,6 +650,47 @@ describe("completion and recovery", () => {
       "Data quality": "Strong · 94/100",
       "Learning confidence": "91/100",
     });
+  });
+
+  it("keeps comparison completion calm and limited to review and system counts", () => {
+    const analysisResult = {
+      systems: [{ id: "system-a", name: "Cooling" }, { id: "system-b", name: "Pumping" }],
+      insights: [{ id: "finding-a", system_id: "system-a" }, { id: "finding-b", system_id: "system-b" }],
+    };
+    expect(comparisonCompletionSummary(analysisResult)).toEqual([
+      { label: "Findings for review", value: "2" },
+      { label: "Systems represented", value: "2" },
+    ]);
+    renderPanel({ uploadState: "complete", workflow: "analyze_new_data", analysisResult });
+    expect(screen.getByRole("heading", { name: "Analysis complete" })).toBeTruthy();
+    expect(screen.getByText("Findings for review").closest("div").textContent).toContain("2");
+    expect(screen.getByText("Systems represented").closest("div").textContent).toContain("2");
+    expect(screen.queryByText("Signals analyzed")).toBeNull();
+    expect(screen.queryByText("Relationships learned")).toBeNull();
+    expect(screen.queryByText("Data quality")).toBeNull();
+  });
+
+  it("counts only supported review candidates and their represented systems at completion", () => {
+    const analysisResult = {
+      systems: [
+        { id: "system-supported", name: "Supported system" },
+        { id: "system-insufficient", name: "Insufficient system" },
+        { id: "system-withheld", name: "Withheld system" },
+        { id: "system-deferred", name: "Deferred system" },
+      ],
+      insights: [
+        { id: "supported", system_id: "system-supported", status: "open", confidence_tier: "Confirmed" },
+        { id: "insufficient", system_id: "system-insufficient", finding_status: "Evidence insufficient" },
+        { id: "withheld", system_id: "system-withheld", confidence_tier: "Withheld" },
+        { id: "deferred", system_id: "system-deferred", tier: "Deferred" },
+      ],
+      relationships: new Array(47).fill({ metric: "TECHNICAL_COUNT_CANARY" }),
+      signals_analyzed: 91,
+    };
+    expect(comparisonCompletionSummary(analysisResult)).toEqual([
+      { label: "Findings for review", value: "1" },
+      { label: "Systems represented", value: "1" },
+    ]);
   });
 
   it("provides actionable recovery without exposing raw service responses", () => {

@@ -355,6 +355,43 @@ export function baselineCompletionSummary({
   return rows;
 }
 
+export function comparisonCompletionSummary(analysisResult) {
+  const isPlainRecord = (value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  };
+  const readOwn = (value, key) => isPlainRecord(value) && Object.prototype.hasOwnProperty.call(value, key) ? value[key] : undefined;
+  const readPath = (value, path) => path.split(".").reduce((current, key) => readOwn(current, key), value);
+  const normalized = (value) => String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const conditions = Array.isArray(readOwn(analysisResult, "conditions")) ? readOwn(analysisResult, "conditions") : [];
+  const insights = Array.isArray(readOwn(analysisResult, "insights")) ? readOwn(analysisResult, "insights") : [];
+  const candidates = conditions.length ? conditions : insights;
+  const findings = candidates.filter((finding) => {
+    if (!isPlainRecord(finding)) return false;
+    const status = normalized(firstDefined(readOwn(finding, "finding_status"), readOwn(finding, "status"), readOwn(finding, "evidence_status")));
+    const tier = normalized(firstDefined(readOwn(finding, "tier"), readOwn(finding, "confidence_tier"), readOwn(finding, "evidence_tier")));
+    const sufficiency = normalized(readPath(finding, "finding_confidence_v1.evidence_sufficiency.status"));
+    const classification = normalized(readPath(finding, "classification.type"));
+    return !["evidence_insufficient", "insufficient", "withheld", "deferred"].includes(status)
+      && !["withheld", "deferred"].includes(tier)
+      && !["insufficient", "evidence_insufficient"].includes(sufficiency)
+      && !["insufficient_evidence", "evidence_insufficient"].includes(classification)
+      && !["closed", "dismissed", "explained", "not_useful", "resolved"].includes(status);
+  });
+  const systems = new Set(findings.map((item) => firstDefined(
+    readOwn(item, "system_id"),
+    readOwn(item, "system"),
+    readOwn(item, "system_name"),
+    readPath(item, "localization.system"),
+    Array.isArray(readOwn(item, "affected_systems")) ? readOwn(item, "affected_systems")[0] : undefined,
+  )).filter((value) => String(value ?? "").trim()).map(String));
+  return [
+    { label: "Findings for review", value: String(findings.length) },
+    { label: "Systems represented", value: String(systems.size) },
+  ];
+}
+
 const NETWORK_NODES = [
   { x: 34, y: 68, r: 4 },
   { x: 79, y: 30, r: 5 },
@@ -699,8 +736,8 @@ function SuccessState({
         <header className="baseline-success__header">
           <span className="baseline-success__check" aria-hidden="true">✓</span>
           <div>
-            <p className="baseline-success__eyebrow">Comparison workflow complete</p>
-            <h3 id="comparison-ready-heading">Comparison Dataset Ready</h3>
+            <p className="baseline-success__eyebrow">Comparison complete</p>
+            <h3 id="comparison-ready-heading">Analysis complete</h3>
           </div>
         </header>
         <dl className="baseline-success__summary">
@@ -853,12 +890,14 @@ export default function IntakeFlowPanel({
       : latestMessage || "Check the source dataset and try again.",
   ).trim();
   const failedStages = failedImportStageRows(uploadJob);
-  const summary = baselineCompletionSummary({
-    result: baselineResult,
-    analysisResult,
-    uploadJob,
-    selectedFileLabel,
-  });
+  const summary = comparison
+    ? comparisonCompletionSummary(analysisResult)
+    : baselineCompletionSummary({
+      result: baselineResult,
+      analysisResult,
+      uploadJob,
+      selectedFileLabel,
+    });
   const submitWorkflow = comparison ? "analyze_new_data" : "create_baseline";
   const title = comparison ? "Import Comparison Dataset" : "Establish Initial Baseline";
   const presentationTitle = viewState === "complete"
@@ -1000,8 +1039,8 @@ export default function IntakeFlowPanel({
 
         {viewState === "terminal_loading" ? (
           <section className="baseline-detail-route" role="status" aria-live="polite" aria-busy="true">
-            <h3>Preparing completed results</h3>
-            <p>The analysis is complete. Loading the canonical saved result…</p>
+            <h3>Analysis complete</h3>
+            <p>Opening the saved Operations Summary…</p>
           </section>
         ) : null}
 

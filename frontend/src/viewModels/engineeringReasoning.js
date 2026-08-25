@@ -327,7 +327,8 @@ function normalizeRelationship(row, index, evidenceIndex = {}, labelContext = {}
   if (signedChange !== null) absoluteChange = Math.abs(signedChange);
   else if (absoluteChange !== null) absoluteChange = Math.abs(absoluteChange);
   const direction = relationshipDirection(signedChange, absoluteChange, comparison?.direction ?? row?.relationship_direction);
-  return { id: String(row?.id ?? row?.relationship_id ?? `relationship-${index}`), label: relationshipLabel(row, index, source, target), source, target, rawSource, rawTarget, metric: firstText(comparison?.metric, comparison?.metric_name, row?.metric_name, row?.metric, row?.statistic, "Relationship coefficient"), state: edgeState(row), changeType: firstText(row?.change_type, row?.state, row?.status, row?.relationship_state).toLowerCase(), baseline, current, signedChange, absoluteChange, relationshipDirection: direction, delta: absoluteChange, baselineSampleCount: firstNumber(comparison?.baseline_sample_size, row?.baseline_sample_size, row?.baseline_samples), currentSampleCount: firstNumber(comparison?.recent_sample_size, comparison?.current_sample_size, row?.recent_sample_size, row?.current_sample_size, row?.recent_samples), evidence, evidenceRefs, confidence: firstText(row?.confidence, row?.confidence_level, evidence[0]?.confidence), persistence: row?.persistence ?? null, supportTrend: supportTrend(row?.support_trend, row?.trajectory), windows: asArray(row?.source_time_ranges ?? row?.time_window ?? evidence[0]?.source_time_ranges) };
+  const sourceId = rawText(row?.id ?? row?.relationship_id);
+  return { id: sourceId || `relationship-${index}`, sourceBackedId: Boolean(sourceId), label: relationshipLabel(row, index, source, target), source, target, rawSource, rawTarget, metric: firstText(comparison?.metric, comparison?.metric_name, row?.metric_name, row?.metric, row?.statistic, "Relationship coefficient"), state: edgeState(row), changeType: firstText(row?.change_type, row?.state, row?.status, row?.relationship_state).toLowerCase(), baseline, current, signedChange, absoluteChange, relationshipDirection: direction, delta: absoluteChange, baselineSampleCount: firstNumber(comparison?.baseline_sample_size, row?.baseline_sample_size, row?.baseline_samples), currentSampleCount: firstNumber(comparison?.recent_sample_size, comparison?.current_sample_size, row?.recent_sample_size, row?.current_sample_size, row?.recent_samples), evidence, evidenceRefs, confidence: firstText(row?.confidence, row?.confidence_level, evidence[0]?.confidence), persistence: row?.persistence ?? null, supportTrend: supportTrend(row?.support_trend, row?.trajectory), windows: asArray(row?.source_time_ranges ?? row?.time_window ?? evidence[0]?.source_time_ranges) };
 }
 
 function siiProjection(result, analysis) {
@@ -467,8 +468,17 @@ function confidenceReason(tier, primaryLimitation) {
 }
 
 function buildFinding(raw, index, context) {
-  const relatedRows = asArray(raw?.supporting_relationships ?? raw?.contributing_relationships ?? raw?.relationships).map((row, rowIndex) => normalizeRelationship(row, rowIndex, context.evidenceIndex, context.labelContext));
-  const relationship = relatedRows[0] ?? context.relationships[0] ?? null;
+  const embeddedRows = asArray(raw?.supporting_relationships ?? raw?.contributing_relationships ?? raw?.relationships).map((row, rowIndex) => normalizeRelationship(row, rowIndex, context.evidenceIndex, context.labelContext));
+  const relationshipIds = unique([
+    raw?.relationship_id,
+    raw?.title_evidence_relationship_id,
+    ...asArray(raw?.relationship_ids),
+    ...asArray(raw?.supporting_relationship_ids),
+    ...asArray(raw?.contributing_relationship_ids),
+  ]);
+  const explicitlyMatchedRows = context.relationships.filter((row) => row.sourceBackedId && relationshipIds.includes(row.id));
+  const relatedRows = uniqueObjects([...embeddedRows, ...explicitlyMatchedRows], (row) => `${row.id}|${row.rawSource}|${row.rawTarget}`);
+  const relationship = relatedRows[0] ?? null;
   const evidenceRefs = unique(asArray(raw?.evidence_refs ?? raw?.evidenceRefs));
   const evidenceObjects = compact([...asArray(raw?.evidence ?? raw?.evidence_items), ...evidenceRefs.map((ref) => context.evidenceIndex?.[ref]), ...relatedRows.flatMap((row) => row.evidence)]);
   const rawSupporting = unique([...asArray(raw?.supporting_evidence), ...asArray(raw?.observed_facts), ...evidenceObjects.map(evidenceText)]
@@ -590,6 +600,18 @@ function buildFinding(raw, index, context) {
     firstDetectedAt: firstText(raw?.first_detected_at, raw?.firstDetectedAt),
     generatedAt: firstText(raw?.generated_at, raw?.generatedAt, context.result?.completed_at, context.result?.processed_at),
     siiEvidence: context.siiEvidence,
+    sourceAssociations: {
+      evidencePackageId: rawText(raw?.evidence_package_id ?? raw?.evidencePackageId),
+      relatedEvidencePackageIds: unique(asArray(raw?.related_evidence_package_ids ?? raw?.relatedEvidencePackageIds)),
+      relationshipIds,
+      sourcePaths: {
+        evidencePackageId: raw?.evidence_package_id !== undefined
+          ? "finding.evidence_package_id"
+          : raw?.evidencePackageId !== undefined
+            ? "finding.evidencePackageId"
+            : null,
+      },
+    },
   };
   finding.classificationPresentation = normalizeFindingPresentation(finding);
   return finding;
