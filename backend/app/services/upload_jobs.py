@@ -125,6 +125,23 @@ CSV_PROGRESS_UPDATE_EVERY = int(os.getenv("NERAIUM_CSV_PROGRESS_UPDATE_EVERY", "
 CSV_CHUNK_SIZE_ROWS = int(os.getenv("NERAIUM_CSV_CHUNK_SIZE_ROWS", "5000"))
 logger = logging.getLogger(__name__)
 
+_CUSTOMER_EXCLUDED_FAILURE_PREDICTION_ALIASES = frozenset(
+    {"projected_time_to_failure", "projected_time_to_failure_hours"}
+)
+
+
+def _project_runner_result_for_customer(value: Any) -> Any:
+    """Remove prediction-named aliases while retaining internal runner compatibility."""
+    if isinstance(value, dict):
+        return {
+            key: _project_runner_result_for_customer(item)
+            for key, item in value.items()
+            if key not in _CUSTOMER_EXCLUDED_FAILURE_PREDICTION_ALIASES
+        }
+    if isinstance(value, list):
+        return [_project_runner_result_for_customer(item) for item in value]
+    return value
+
 
 def _comparison_relationship_changes(
     active_model: dict[str, Any] | None,
@@ -1614,7 +1631,7 @@ def _build_csv_result(
         "operating_state": "Baseline-aligned" if effective_urgency == "nominal" else ("Structural drift observed" if effective_urgency == "review" else "Persistent structural drift observed"),
         "drift_status": "info" if effective_urgency == "nominal" else ("review" if effective_urgency == "review" else "unstable"),
         "sii_intelligence": sii_intelligence,
-        "sii_runner_result": runner_result,
+        "sii_runner_result": _project_runner_result_for_customer(runner_result),
         "processing_trace": processing_trace,
         "processing_stats": {
             "used_streaming": True,
@@ -1669,12 +1686,10 @@ def _build_csv_result(
     result["traceability"] = build_traceability_packet(job_id=job_id, filename=filename, result=result)
     result["decision_integrity"] = dict(result["traceability"])
     if isinstance(latest_runner_state, dict):
-        result["sii_intelligence"]["sii_runner_latest_state"] = latest_runner_state
+        result["sii_intelligence"]["sii_runner_latest_state"] = _project_runner_result_for_customer(latest_runner_state)
         result["sii_intelligence"]["instability_index"] = latest_runner_state.get("instability_index")
         result["sii_intelligence"]["review_window"] = latest_runner_state.get("review_window") or latest_runner_state.get("projected_time_to_failure")
         result["sii_intelligence"]["review_window_hours"] = latest_runner_state.get("review_window_hours") or latest_runner_state.get("projected_time_to_failure_hours")
-        result["sii_intelligence"]["projected_time_to_failure"] = result["sii_intelligence"]["review_window"]
-        result["sii_intelligence"]["projected_time_to_failure_hours"] = result["sii_intelligence"]["review_window_hours"]
     result["sii_intelligence"]["decision_integrity"] = dict(result["traceability"])
     normalized_telemetry = build_normalized_telemetry(
         rows=rows,

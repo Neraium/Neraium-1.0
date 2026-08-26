@@ -1,5 +1,7 @@
 # Long-Horizon Structural Memory
 
+> Classification: future/internal research. This document does not describe the ephemeral structural-cognition facade as persisted customer memory. Genuine production behavioral-model persistence is documented separately. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Long-horizon memory tracks behavior recurrence over seasonal and yearly horizons.
 
 ## Scope
@@ -11,4 +13,3 @@ Long-horizon memory tracks behavior recurrence over seasonal and yearly horizons
 - Operator adaptation patterns
 
 This is behavior memory, not raw telemetry archival.
-

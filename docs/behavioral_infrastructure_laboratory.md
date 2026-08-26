@@ -1,5 +1,7 @@
 # Behavioral Infrastructure Laboratory
 
+> Classification: internal research. Laboratory constructs and outputs do not participate in default customer authority. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 The behavioral laboratory simulates infrastructure behavior ecosystems for study and replay.
 
 ## Simulation boundaries
@@ -13,4 +15,3 @@ The behavioral laboratory simulates infrastructure behavior ecosystems for study
 - Environmental stress impacts
 - Operator adaptation influence
 - Topology evolution pathways
-

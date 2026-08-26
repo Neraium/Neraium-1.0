@@ -1,5 +1,7 @@
 # SII Operational Reasoning Simulation
 
+> Classification: internal/experimental. Simulated continuation alternatives are not production findings, counterfactual truth, or failure predictions. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Operational reasoning simulation explores structural continuation alternatives without deterministic failure prediction.
 
 ## Simulator scope

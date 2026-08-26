@@ -1,5 +1,7 @@
 # SII Operational Language
 
+> Classification: static reference. Customer-facing production copy is governed by [Neraium product language](PRODUCT_LANGUAGE.md) and [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Neraium standardizes a fixed operational vocabulary for Systemic Infrastructure Intelligence.
 
 ## Canonical Terms

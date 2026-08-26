@@ -2,21 +2,17 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.routers.audit import current_intelligence
-from app.services.sii_intelligence import build_sample_intelligence
+from app.services.sii_intelligence import DEFAULT_CUSTOMER_EXCLUDED_STRUCTURAL_FIELDS, build_sample_intelligence
 from app.services.sii_runner import write_latest_sii_state
 
 
-def test_legitimization_payload_sections_exist() -> None:
+def test_legitimization_packages_are_not_default_customer_authority() -> None:
     payload = build_sample_intelligence()
 
-    assert "cognition_validation" in payload
-    assert "operational_audit" in payload
-    assert "domain_validation_case_studies" in payload
-    assert "sii_standard" in payload
-    assert "structural_progression_dataset" in payload
-    assert "operational_cognition_simulation" in payload
-    assert "institutional_trust" in payload
-    assert "behavioral_infrastructure_twin" in payload
+    assert DEFAULT_CUSTOMER_EXCLUDED_STRUCTURAL_FIELDS.isdisjoint(payload)
+    assert payload["core_sii_outputs"]
+    assert payload["aletheia_gate"]
+    assert payload["evidence_lineage"]
 
 
 def test_audit_endpoints_return_replay_and_lineage() -> None:

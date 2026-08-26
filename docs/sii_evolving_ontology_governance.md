@@ -1,5 +1,7 @@
 # SII Evolving Ontology Governance
 
+> Classification: internal/experimental and static reference. Ontology candidates are not customer findings or per-run evidence. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Ontology evolution is evidence-proposed and operator-reviewed. It is never auto-promoted.
 
 ## Candidate lifecycle
@@ -17,4 +19,3 @@ Ontology evolution is evidence-proposed and operator-reviewed. It is never auto-
 
 ## Governance objective
 Expand operational cognition primitives without introducing speculative or non-defensible ontology entries.
-

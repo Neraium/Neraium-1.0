@@ -1,5 +1,7 @@
 # SII Structural Evolution Search
 
+> Classification: internal/experimental. Search output does not participate in default customer findings or evidence authority. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Structural evolution search targets replay-backed behavior, not raw telemetry retrieval.
 
 ## Search domains
@@ -17,4 +19,3 @@ Structural evolution search targets replay-backed behavior, not raw telemetry re
 
 ## Output model
 Search results provide behavior matches, evidence context, and replay references.
-

@@ -1,5 +1,7 @@
 # SII Operator Cognition Training
 
+> Classification: internal training/reference. Training scenarios do not participate in customer analytical authority. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Operator cognition training uses replay and simulation to strengthen human interpretation of structural evolution.
 
 ## Training modules
@@ -19,4 +21,3 @@ Operator cognition training uses replay and simulation to strengthen human inter
 
 ## Boundary
 Training supports human judgment and does not automate operator decisions.
-

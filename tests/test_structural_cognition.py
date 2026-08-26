@@ -1,3 +1,4 @@
+from app.services.sii_intelligence import DEFAULT_CUSTOMER_EXCLUDED_STRUCTURAL_FIELDS
 from app.services.structural_cognition import build_structural_cognition
 from app.services.upload_jobs import process_csv_content
 
@@ -66,7 +67,7 @@ def test_structural_cognition_returns_memory_archetypes_and_graph() -> None:
     assert "Structural pressure is propagating" in cognition["operator_explanation_v2"]["summary"]
 
 
-def test_upload_processing_embeds_structural_cognition_payload() -> None:
+def test_upload_processing_excludes_structural_facade_and_preserves_replay_evidence() -> None:
     result = process_csv_content(
         filename="structural-cognition.csv",
         content=(
@@ -82,13 +83,16 @@ def test_upload_processing_embeds_structural_cognition_payload() -> None:
 
     intelligence = result["sii_intelligence"]
 
-    assert intelligence["active_archetypes"]
-    assert intelligence["structural_memory"]["memory_matches"]
-    assert intelligence["causality_graph"]["dominant_pathways"]
-    assert intelligence["counterfactuals"]["uncertainty_ranges"]["instability_acceleration_window_days"]
-    assert intelligence["facility_cognition"]["global_structural_pressure_score"] >= 0
-    assert intelligence["operator_explanation_v2"]["active_archetypes"]
-    assert intelligence["structural_explanation"][0] == intelligence["operator_explanation_v2"]["summary"]
+    assert DEFAULT_CUSTOMER_EXCLUDED_STRUCTURAL_FIELDS.isdisjoint(intelligence)
+    assert intelligence["supporting_evidence"]
+    assert intelligence["relationship_evidence"]
+    assert intelligence["structural_explanation"]
+    assert intelligence["evidence_lineage"]
+    assert "propagating" not in " ".join(intelligence["structural_explanation"]).lower()
+    assert intelligence["replay_timeline"] == result["replay_timeline"]
+    assert "projected_time_to_failure" not in intelligence
+    assert "projected_time_to_failure_hours" not in intelligence
+    assert "projected_time_to_failure" not in str(result["sii_runner_result"])
 
 
 def test_structural_cognition_counterfactuals_remain_nondeterministic() -> None:

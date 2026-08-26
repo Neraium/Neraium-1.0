@@ -1,21 +1,18 @@
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.services.sii_intelligence import build_sample_intelligence
+from app.services.sii_intelligence import DEFAULT_CUSTOMER_EXCLUDED_STRUCTURAL_FIELDS, build_sample_intelligence
 from app.services.sii_runner import write_latest_sii_state
 
 
-def test_sii_reference_sections_present_in_intelligence_payload() -> None:
+def test_static_and_research_sections_are_absent_from_default_sample_authority() -> None:
     payload = build_sample_intelligence()
 
-    assert "sii_reference_architecture" in payload
-    assert "ontology_corpus" in payload
-    assert "industry_certification_packs" in payload
-    assert "multi_site_cognition_network" in payload
-    assert "structural_cognition_api_contracts" in payload
-    assert "operational_language_standard" in payload
-    assert "institutional_validation" in payload
-    assert "replay_timeline" in payload
+    assert DEFAULT_CUSTOMER_EXCLUDED_STRUCTURAL_FIELDS.isdisjoint(payload)
+    assert payload["supporting_evidence"]
+    assert payload["relationship_evidence"]
+    assert payload["evidence_lineage"]
+    assert payload["rooms"]
 
 
 def test_audit_and_replay_endpoints_remain_available_with_reference_layer() -> None:

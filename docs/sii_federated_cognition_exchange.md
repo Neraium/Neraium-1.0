@@ -1,5 +1,7 @@
 # SII Federated Cognition Exchange
 
+> Classification: future/internal research. Repository payload builders do not establish that production federation occurred. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Federated exchange allows facilities to share cognition primitives without exposing sensitive telemetry.
 
 ## Exchange scope
@@ -18,4 +20,3 @@ Federated exchange allows facilities to share cognition primitives without expos
 
 ## Privacy profile
 Payloads use privacy-preserving summaries and hashed facility identifiers.
-

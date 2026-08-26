@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { derivePrimaryMessage, deriveUploadSignal } from "./SystemTopologyWorkspace";
+import { derivePrimaryMessage, deriveUploadSignal, resolveProductionGovernance } from "./SystemTopologyWorkspace";
 
 describe("SystemTopologyWorkspace operator trust mapping", () => {
   it("keeps upload state pending when operator review evidence is not ready", () => {
@@ -32,5 +32,19 @@ describe("SystemTopologyWorkspace operator trust mapping", () => {
       canonicalFinding: { exists: true, summary: "Relationship drift detected across chilled water supply." },
       uploadSignal: { label: "Needs review" },
     })).toBe("Relationship drift detected across chilled water supply.");
+  });
+
+  it("does not reconstruct production governance from removed structural-facade fields", () => {
+    const legacyGovernance = { gate_outcome: "PASS", admitted_state: "ALERT" };
+
+    expect(resolveProductionGovernance({
+      sourceIntelligence: { distributed_cognition_governance: legacyGovernance },
+      distributed_cognition_governance: legacyGovernance,
+    })).toBeNull();
+
+    const aletheiaGate = { gate_outcome: "PASS", admitted_state: "WATCH" };
+    expect(resolveProductionGovernance({
+      sourceIntelligence: { aletheia_gate: aletheiaGate },
+    })).toBe(aletheiaGate);
   });
 });

@@ -1,5 +1,7 @@
 # SII Reference Architecture
 
+> Classification: static reference. This architecture describes research vocabulary and does not define the shipped upload result. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Neraium implements Systemic Infrastructure Intelligence (SII) as a replayable, evidence-driven operational cognition architecture.
 
 ## Canonical Layers
@@ -22,4 +24,3 @@ Neraium implements Systemic Infrastructure Intelligence (SII) as a replayable, e
 - Continuation and convergence modeled as operational ranges
 - Non-actuating and operator-centric interpretation
 - Structural cognition language preserved across backend, APIs, and UI
-

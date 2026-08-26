@@ -20,6 +20,30 @@ def _upload_csv(count: int = 90) -> bytes:
     return ("\n".join(lines) + "\n").encode()
 
 
+def _without_failure_prediction_aliases(value):
+    if isinstance(value, dict):
+        return {
+            key: _without_failure_prediction_aliases(item)
+            for key, item in value.items()
+            if key not in {"projected_time_to_failure", "projected_time_to_failure_hours"}
+        }
+    if isinstance(value, list):
+        return [_without_failure_prediction_aliases(item) for item in value]
+    return value
+
+
+def _has_failure_prediction_alias(value) -> bool:
+    if isinstance(value, dict):
+        return any(
+            key in {"projected_time_to_failure", "projected_time_to_failure_hours"}
+            or _has_failure_prediction_alias(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, list):
+        return any(_has_failure_prediction_alias(item) for item in value)
+    return False
+
+
 def test_upload_pipeline_invokes_authoritative_sii_entrypoint_exactly_once(monkeypatch) -> None:
     calls = []
 
@@ -46,6 +70,9 @@ def test_upload_pipeline_invokes_authoritative_sii_entrypoint_exactly_once(monke
     assert canonical["processing_trace"]["modules_attempted"].count("covariance_analysis") == 1
     assert result["baseline_analysis"] == canonical["compatibility"]["baseline_analysis"]
     assert result["relationship_model"] == canonical["compatibility"]["relationship_model"]
-    assert result["sii_runner_result"] == canonical["compatibility"]["sii_runner_result"]
+    canonical_runner = canonical["compatibility"]["sii_runner_result"]
+    assert _has_failure_prediction_alias(canonical_runner)
+    assert not _has_failure_prediction_alias(result["sii_runner_result"])
+    assert result["sii_runner_result"] == _without_failure_prediction_aliases(canonical_runner)
     assert result["processing_trace"]["sii_engine_version"] == "v2"
     assert result["processing_trace"]["rows_received"] == 90

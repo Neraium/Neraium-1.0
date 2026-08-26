@@ -4,7 +4,55 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.services.aletheia_governance import govern_candidate
-from app.services.structural_cognition import build_structural_cognition
+from app.services.structural_cognition import build_review_required_evidence_lineage
+
+
+DEFAULT_CUSTOMER_EXCLUDED_STRUCTURAL_FIELDS = frozenset(
+    {
+        "active_archetypes",
+        "active_fingerprint",
+        "behavioral_infrastructure_twin",
+        "canonical_deterioration_library",
+        "causality_graph",
+        "cognition_confidence",
+        "cognition_validation",
+        "counterfactuals",
+        "cross_domain_structural_intelligence",
+        "deterioration_library_matches",
+        "distributed_cognition_governance",
+        "domain_cognition_pack",
+        "domain_validation_case_studies",
+        "facility_cognition",
+        "federated_cognition_exchange",
+        "industry_certification_packs",
+        "institutional_trust",
+        "institutional_validation",
+        "multi_facility_cognition",
+        "multi_site_cognition_network",
+        "ontology_corpus",
+        "ontology_extension_candidates",
+        "operational_audit",
+        "operational_cognition_simulation",
+        "operational_language_standard",
+        "operational_time_intelligence",
+        "operator_cognition_training",
+        "operator_explanation_v2",
+        "operator_interaction_model",
+        "persistent_cognition_graph_memory",
+        "recovery_convergence",
+        "sii_graph_exchange",
+        "sii_reference_architecture",
+        "sii_standard",
+        "structural_benchmark",
+        "structural_cognition_api_contracts",
+        "structural_compression",
+        "structural_evolution_search",
+        "structural_memory",
+        "structural_ontology",
+        "structural_progression_dataset",
+        "structural_stability_index",
+    }
+)
 
 
 REQUIRED_INTELLIGENCE_FIELDS = [
@@ -69,8 +117,6 @@ def build_sample_intelligence() -> dict[str, Any]:
             "observed_persistence": "Observed across 3 monitoring windows",
             "review_window": "Not inferred in agnostic mode",
             "review_window_hours": None,
-            "projected_time_to_failure": "Not inferred in agnostic mode",
-            "projected_time_to_failure_hours": None,
             "last_updated": last_updated,
             "confidence": 86,
         },
@@ -104,13 +150,11 @@ def build_sample_intelligence() -> dict[str, Any]:
             "observed_persistence": "Stable across recent monitoring windows",
             "review_window": "Not inferred in agnostic mode",
             "review_window_hours": None,
-            "projected_time_to_failure": "Not inferred in agnostic mode",
-            "projected_time_to_failure_hours": None,
             "last_updated": last_updated,
             "confidence": 74,
         },
     ]
-    structural_cognition = build_structural_cognition(
+    evidence_lineage = build_review_required_evidence_lineage(
         baseline_analysis={
             "column_drift": [
                 {"column": "humidity", "percent_change": 18, "drift_flag": "review"},
@@ -141,7 +185,6 @@ def build_sample_intelligence() -> dict[str, Any]:
         room_summary={"room_count": len(rooms), "rooms": [{"room": room["room"]} for room in rooms]},
         urgency="review",
     )
-    operator_explanation = structural_cognition["operator_explanation_v2"]
     candidate = {
         "source": "sii_engine",
         "mode": "sample",
@@ -161,17 +204,11 @@ def build_sample_intelligence() -> dict[str, Any]:
         "why_flagged": rooms[0]["why_flagged"],
         "baseline_comparison": rooms[0]["baseline_comparison"],
         "observed_persistence": rooms[0]["observed_persistence"],
-        "review_window": rooms[0].get("review_window") or rooms[0]["projected_time_to_failure"],
-        "review_window_hours": rooms[0].get("review_window_hours") or rooms[0]["projected_time_to_failure_hours"],
-        "projected_time_to_failure": rooms[0].get("review_window") or rooms[0]["projected_time_to_failure"],
-        "projected_time_to_failure_hours": rooms[0].get("review_window_hours") or rooms[0]["projected_time_to_failure_hours"],
+        "review_window": rooms[0]["review_window"],
+        "review_window_hours": rooms[0]["review_window_hours"],
         "last_updated": last_updated,
         "rooms": rooms,
-        **structural_cognition,
-        "structural_explanation": [
-            operator_explanation["summary"],
-            *rooms[0]["structural_explanation"][:2],
-        ],
+        "evidence_lineage": evidence_lineage,
     }
     candidate["core_sii_outputs"] = build_core_sii_outputs(candidate)
     candidate["aletheia_gate"] = govern_candidate(candidate)
@@ -245,19 +282,13 @@ def build_upload_intelligence(
     )
     reliability_rating = data_quality.get("reliability_rating") or "unknown"
     data_quality_warning = (data_quality.get("warnings") or [None])[0]
-    structural_cognition = build_structural_cognition(
+    evidence_lineage = build_review_required_evidence_lineage(
         baseline_analysis=baseline_analysis,
         engine_result=engine_result,
         driver_attribution=driver_attribution,
         room_summary=room_summary,
         urgency=urgency,
     )
-    operator_explanation = structural_cognition["operator_explanation_v2"]
-    structural_explanation = [
-        operator_explanation["summary"],
-        *structural_explanation[:2],
-    ]
-
     room_records = build_upload_room_records(
         room_summary=room_summary,
         fallback_room=room,
@@ -279,8 +310,6 @@ def build_upload_intelligence(
         observed_persistence=observed_persistence_from_engine(engine_result),
         review_window=review_window,
         review_window_hours=review_window_hours,
-        projected_time_to_failure=review_window,
-        projected_time_to_failure_hours=review_window_hours,
         last_updated=last_updated,
         confidence=calibrated_confidence,
         room_assessments=room_assessments,
@@ -330,8 +359,6 @@ def build_upload_intelligence(
         "observed_persistence": primary_room_record["observed_persistence"],
         "review_window": primary_room_record["review_window"],
         "review_window_hours": primary_room_record["review_window_hours"],
-        "projected_time_to_failure": primary_room_record["review_window"],
-        "projected_time_to_failure_hours": primary_room_record["review_window_hours"],
         "last_updated": last_updated,
         "filename": filename,
         "row_count": row_count,
@@ -366,7 +393,7 @@ def build_upload_intelligence(
             "adaptive_baseline_strategy": adaptive_baseline.get("strategy"),
             "evidence_chain_quality": evidence_chain_quality,
         },
-        **structural_cognition,
+        "evidence_lineage": evidence_lineage,
     }
     candidate["core_sii_outputs"] = build_core_sii_outputs(candidate)
     candidate["aletheia_gate"] = govern_candidate(candidate)
@@ -420,8 +447,6 @@ def build_upload_room_records(
     observed_persistence: str,
     review_window: str,
     review_window_hours: int,
-    projected_time_to_failure: str,
-    projected_time_to_failure_hours: int,
     last_updated: str,
     confidence: int,
     room_assessments: dict[str, dict[str, Any]] | None = None,
@@ -536,8 +561,6 @@ def build_upload_room_records(
                 "observed_persistence": observed_persistence,
                 "review_window": review_window if index == 0 else (assessment.get("review_window") or assessment.get("projected_time_to_failure") or "Monitoring"),
                 "review_window_hours": review_window_hours if index == 0 else (assessment.get("review_window_hours") or assessment.get("projected_time_to_failure_hours")),
-                "projected_time_to_failure": review_window if index == 0 else (assessment.get("review_window") or assessment.get("projected_time_to_failure") or "Monitoring"),
-                "projected_time_to_failure_hours": review_window_hours if index == 0 else (assessment.get("review_window_hours") or assessment.get("projected_time_to_failure_hours")),
                 "last_updated": last_updated,
                 "confidence": room_confidence,
             }

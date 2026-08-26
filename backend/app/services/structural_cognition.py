@@ -47,6 +47,118 @@ from validation.institutional_validation_layer import InstitutionalValidationLay
 from governance.distributed_cognition_governance import build_governance_record
 
 
+def _build_structural_foundation(
+    *,
+    baseline_analysis: dict[str, Any],
+    engine_result: dict[str, Any],
+    driver_attribution: dict[str, Any],
+    room_summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    memory_engine = StructuralMemoryEngine()
+    fingerprint = memory_engine.build_fingerprint(
+        baseline_analysis=baseline_analysis,
+        engine_result=engine_result,
+        driver_attribution=driver_attribution,
+        room_summary=room_summary,
+    )
+    causality_graph = StructuralCausalityEngine().build_graph(
+        baseline_analysis=baseline_analysis,
+        engine_result=engine_result,
+        driver_attribution=driver_attribution,
+    )
+    facility_cognition = FacilityCognitionEngine().build_state(
+        room_summary=room_summary,
+        driver_attribution=driver_attribution,
+        engine_result=engine_result,
+        causality_graph=causality_graph,
+    )
+    memory_retrieval = memory_engine.retrieve(fingerprint=fingerprint)
+    propagation_score = float(causality_graph.get("propagation_score", 0.0))
+    acceleration = abs(float(fingerprint.get("volatility_acceleration", 0.0)))
+    topology_drift = {
+        "corroboration_level": engine_result.get("system_evidence", {}).get("corroboration_level", "limited"),
+        "meaningful_categories": engine_result.get("system_evidence", {}).get("categories_showing_meaningful_change", 0),
+    }
+    archetypes = StructuralArchetypeClassifier().classify(
+        topology_drift=topology_drift,
+        subsystem_pressure=facility_cognition.get("subsystem_pressure", {}),
+        relationship_changes=[
+            item
+            for item in engine_result.get("evidence", [])
+            if item.get("type") == "relationship_change"
+        ],
+        persistence=engine_result.get("persistence_assessment", {}),
+        propagation_velocity=propagation_score,
+        acceleration=acceleration,
+        facility_pressure_score=float(facility_cognition.get("global_structural_pressure_score", 0.0)),
+        intervention_history=fingerprint.get("operator_intervention_outcomes", []),
+    )
+    if archetypes:
+        fingerprint["archetypes"] = [item["name"] for item in archetypes[:3]]
+    return {
+        "fingerprint": fingerprint,
+        "causality_graph": causality_graph,
+        "facility_cognition": facility_cognition,
+        "memory_retrieval": memory_retrieval,
+        "archetypes": archetypes,
+    }
+
+
+def _build_evidence_lineage_from_foundation(
+    *,
+    foundation: dict[str, Any],
+    engine_result: dict[str, Any],
+    driver_attribution: dict[str, Any],
+    urgency: str,
+    last_updated: str,
+) -> dict[str, Any]:
+    causality_graph = foundation["causality_graph"]
+    return EvidenceLineageEngine().build(
+        intelligence={
+            **driver_attribution,
+            **{
+                "supporting_evidence": driver_attribution.get("supporting_evidence", []),
+                "relationship_evidence": [
+                    edge.get("explanation")
+                    for edge in causality_graph.get("edges", [])
+                    if edge.get("explanation")
+                ][:4],
+                "facility_cognition": foundation["facility_cognition"],
+                "causality_graph": causality_graph,
+                "structural_memory": foundation["memory_retrieval"],
+                "active_archetypes": foundation["archetypes"],
+                "urgency": urgency,
+                "last_updated": last_updated,
+            },
+        },
+        engine_result=engine_result,
+    )
+
+
+def build_review_required_evidence_lineage(
+    *,
+    baseline_analysis: dict[str, Any],
+    engine_result: dict[str, Any],
+    driver_attribution: dict[str, Any],
+    room_summary: dict[str, Any] | None,
+    urgency: str,
+) -> dict[str, Any]:
+    """Preserve the reviewed legacy lineage field without building the full facade."""
+    foundation = _build_structural_foundation(
+        baseline_analysis=baseline_analysis,
+        engine_result=engine_result,
+        driver_attribution=driver_attribution,
+        room_summary=room_summary,
+    )
+    return _build_evidence_lineage_from_foundation(
+        foundation=foundation,
+        engine_result=engine_result,
+        driver_attribution=driver_attribution,
+        urgency=urgency,
+        last_updated="",
+    )
+
+
 def build_structural_cognition(
     *,
     baseline_analysis: dict[str, Any],
@@ -55,13 +167,8 @@ def build_structural_cognition(
     room_summary: dict[str, Any] | None,
     urgency: str,
 ) -> dict[str, Any]:
-    memory_engine = StructuralMemoryEngine()
-    causality_engine = StructuralCausalityEngine()
-    facility_engine = FacilityCognitionEngine()
-    archetype_classifier = StructuralArchetypeClassifier()
     counterfactual_engine = CounterfactualEngine()
     explanation_engine = OperatorExplanationEngine()
-    lineage_engine = EvidenceLineageEngine()
     confidence_engine = CognitionConfidenceEngine()
     recovery_engine = RecoveryConvergenceEngine()
     compression_engine = StructuralCompressionEngine()
@@ -78,46 +185,17 @@ def build_structural_cognition(
     trust_framework = InstitutionalTrustFramework()
     institutional_validation_layer = InstitutionalValidationLayer()
 
-    fingerprint = memory_engine.build_fingerprint(
+    foundation = _build_structural_foundation(
         baseline_analysis=baseline_analysis,
         engine_result=engine_result,
         driver_attribution=driver_attribution,
         room_summary=room_summary,
     )
-    causality_graph = causality_engine.build_graph(
-        baseline_analysis=baseline_analysis,
-        engine_result=engine_result,
-        driver_attribution=driver_attribution,
-    )
-    facility_cognition = facility_engine.build_state(
-        room_summary=room_summary,
-        driver_attribution=driver_attribution,
-        engine_result=engine_result,
-        causality_graph=causality_graph,
-    )
-    memory_retrieval = memory_engine.retrieve(fingerprint=fingerprint)
-    propagation_score = float(causality_graph.get("propagation_score", 0.0))
-    acceleration = abs(float(fingerprint.get("volatility_acceleration", 0.0)))
-    topology_drift = {
-        "corroboration_level": engine_result.get("system_evidence", {}).get("corroboration_level", "limited"),
-        "meaningful_categories": engine_result.get("system_evidence", {}).get("categories_showing_meaningful_change", 0),
-    }
-    archetypes = archetype_classifier.classify(
-        topology_drift=topology_drift,
-        subsystem_pressure=facility_cognition.get("subsystem_pressure", {}),
-        relationship_changes=[
-            item
-            for item in engine_result.get("evidence", [])
-            if item.get("type") == "relationship_change"
-        ],
-        persistence=engine_result.get("persistence_assessment", {}),
-        propagation_velocity=propagation_score,
-        acceleration=acceleration,
-        facility_pressure_score=float(facility_cognition.get("global_structural_pressure_score", 0.0)),
-        intervention_history=fingerprint.get("operator_intervention_outcomes", []),
-    )
-    if archetypes:
-        fingerprint["archetypes"] = [item["name"] for item in archetypes[:3]]
+    fingerprint = foundation["fingerprint"]
+    causality_graph = foundation["causality_graph"]
+    facility_cognition = foundation["facility_cognition"]
+    memory_retrieval = foundation["memory_retrieval"]
+    archetypes = foundation["archetypes"]
     counterfactuals = counterfactual_engine.model(
         memory_retrieval=memory_retrieval,
         baseline_analysis=baseline_analysis,
@@ -145,25 +223,12 @@ def build_structural_cognition(
         recovery_convergence=float(recovery_convergence.get("convergence_index", 0.0)),
         relationship_coherence=max(0.0, 1.0 - min(len(causality_graph.get("edges", [])) * 0.08, 0.9)),
     )
-    evidence_lineage = lineage_engine.build(
-        intelligence={
-            **driver_attribution,
-            **{
-                "supporting_evidence": driver_attribution.get("supporting_evidence", []),
-                "relationship_evidence": [
-                    edge.get("explanation")
-                    for edge in causality_graph.get("edges", [])
-                    if edge.get("explanation")
-                ][:4],
-                "facility_cognition": facility_cognition,
-                "causality_graph": causality_graph,
-                "structural_memory": memory_retrieval,
-                "active_archetypes": archetypes,
-                "urgency": urgency,
-                "last_updated": counterfactuals.get("last_updated") or "",
-            },
-        },
+    evidence_lineage = _build_evidence_lineage_from_foundation(
+        foundation=foundation,
         engine_result=engine_result,
+        driver_attribution=driver_attribution,
+        urgency=urgency,
+        last_updated=counterfactuals.get("last_updated") or "",
     )
     cognition_confidence = confidence_engine.calibrate(
         intelligence={
