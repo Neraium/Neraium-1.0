@@ -1,6 +1,9 @@
 import logging
 import threading
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from app.entrypoint import _normalize_startup_role, main, run_worker
 
@@ -113,3 +116,152 @@ def test_run_worker_polls_due_live_analyses_independently(monkeypatch, tmp_path)
     run_worker(Settings(), poll_interval_seconds=0.01, shutdown_event=stop_event)
 
     assert calls == ["upload", "live"]
+
+
+def test_dedicated_worker_runs_configured_telemetry_scheduler_without_nested_loop(
+    monkeypatch, tmp_path
+) -> None:
+    class Settings:
+        process_role = "worker"
+        runtime_dir = Path(tmp_path)
+        telemetry_database_url = "postgresql://configured"
+        shutdown_timeout_seconds = 0.25
+
+    stop_event = threading.Event()
+    calls: list[object] = []
+
+    class Scheduler:
+        def start(self):
+            calls.append("telemetry_start")
+            raise AssertionError("dedicated worker must not start a nested scheduler loop")
+
+        def run_once(self):
+            calls.append("telemetry_run_once")
+            stop_event.set()
+            return SimpleNamespace(
+                outcome="processed",
+                connection_id="connection-a",
+                run_id="run-a",
+                error_code=None,
+            )
+
+        def stop(self, *, timeout_seconds):
+            calls.append(("telemetry_stop", timeout_seconds))
+            return True
+
+    class Runtime:
+        available = True
+        scheduler = Scheduler()
+
+        def verify_readiness(self):
+            calls.append("telemetry_readiness")
+            return True
+
+    monkeypatch.setattr("app.entrypoint.configure_runtime_db_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.configure_upload_jobs_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.configure_sii_runner_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.init_runtime_db", lambda: None)
+    monkeypatch.setattr("app.entrypoint.upload_state_backend", lambda: "runtime_db")
+    monkeypatch.setattr("app.entrypoint.shared_state_configured", lambda: False)
+    monkeypatch.setattr("app.entrypoint._publish_worker_health", lambda **kwargs: None)
+    monkeypatch.setattr(
+        "app.entrypoint._publish_telemetry_worker_health",
+        lambda **kwargs: calls.append(("telemetry_heartbeat", kwargs["status"])),
+    )
+    monkeypatch.setattr("app.entrypoint.build_worker_telemetry_runtime", lambda settings: Runtime())
+    monkeypatch.setattr(
+        "app.entrypoint.process_next_queued_upload_job",
+        lambda: calls.append("upload") or False,
+    )
+    monkeypatch.setattr(
+        "app.entrypoint.run_due_live_analysis_jobs",
+        lambda: calls.append("live")
+        or {"attempted_systems": 0, "completed": 0, "skipped": 0, "failed": 0},
+    )
+
+    run_worker(Settings(), poll_interval_seconds=0.01, shutdown_event=stop_event)
+
+    assert calls == [
+        "telemetry_readiness",
+        ("telemetry_heartbeat", "starting"),
+        "upload",
+        "live",
+        "telemetry_run_once",
+        ("telemetry_stop", 0.25),
+        ("telemetry_heartbeat", "stopped"),
+    ]
+
+
+def test_dedicated_worker_fails_closed_when_configured_runtime_is_unavailable(
+    monkeypatch, tmp_path
+) -> None:
+    class Settings:
+        process_role = "worker"
+        runtime_dir = Path(tmp_path)
+        telemetry_database_url = "postgresql://configured"
+
+    calls: list[str] = []
+    runtime = SimpleNamespace(
+        available=False,
+        unavailable_code="telemetry_runtime_configuration_invalid",
+    )
+
+    monkeypatch.setattr("app.entrypoint.configure_runtime_db_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.configure_upload_jobs_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.configure_sii_runner_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.init_runtime_db", lambda: None)
+    monkeypatch.setattr("app.entrypoint.upload_state_backend", lambda: "runtime_db")
+    monkeypatch.setattr("app.entrypoint.shared_state_configured", lambda: False)
+    monkeypatch.setattr("app.entrypoint._publish_worker_health", lambda **kwargs: None)
+    monkeypatch.setattr(
+        "app.entrypoint._publish_telemetry_worker_health", lambda **kwargs: None
+    )
+    monkeypatch.setattr("app.entrypoint.build_worker_telemetry_runtime", lambda settings: runtime)
+    monkeypatch.setattr(
+        "app.entrypoint.process_next_queued_upload_job",
+        lambda: calls.append("upload") or False,
+    )
+
+    with pytest.raises(RuntimeError, match="Configured telemetry runtime is unavailable"):
+        run_worker(Settings(), poll_interval_seconds=0.01)
+
+    assert calls == []
+
+
+def test_dedicated_worker_fails_closed_when_configured_schema_is_not_ready(
+    monkeypatch, tmp_path
+) -> None:
+    class Settings:
+        process_role = "worker"
+        runtime_dir = Path(tmp_path)
+        telemetry_database_url = "postgresql://configured"
+
+    calls: list[str] = []
+
+    class Runtime:
+        available = True
+        scheduler = SimpleNamespace(run_once=lambda: None)
+
+        def verify_readiness(self):
+            raise OSError("database details must not escape")
+
+    monkeypatch.setattr("app.entrypoint.configure_runtime_db_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.configure_upload_jobs_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.configure_sii_runner_dir", lambda runtime_dir: None)
+    monkeypatch.setattr("app.entrypoint.init_runtime_db", lambda: None)
+    monkeypatch.setattr("app.entrypoint.upload_state_backend", lambda: "runtime_db")
+    monkeypatch.setattr("app.entrypoint.shared_state_configured", lambda: False)
+    monkeypatch.setattr("app.entrypoint._publish_worker_health", lambda **kwargs: None)
+    monkeypatch.setattr(
+        "app.entrypoint._publish_telemetry_worker_health", lambda **kwargs: None
+    )
+    monkeypatch.setattr("app.entrypoint.build_worker_telemetry_runtime", lambda settings: Runtime())
+    monkeypatch.setattr(
+        "app.entrypoint.process_next_queued_upload_job",
+        lambda: calls.append("upload") or False,
+    )
+
+    with pytest.raises(RuntimeError, match="Configured telemetry runtime is not ready"):
+        run_worker(Settings(), poll_interval_seconds=0.01)
+
+    assert calls == []

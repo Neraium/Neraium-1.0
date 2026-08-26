@@ -8,7 +8,6 @@ import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 import { extractTelemetryBoundaryMeta } from "../viewModels/uploadState";
 
 const HomePage = lazy(() => import("./HomePage"));
-const LiveMonitoringWorkspace = lazy(() => import("./LiveMonitoringWorkspace"));
 const DataConnectionsWorkspace = lazy(() => import("./DataConnectionsWorkspace"));
 const EngineeringReasoningWorkspace = lazy(() => import("./EngineeringReasoningWorkspace"));
 const SystemStoryWorkspace = lazy(() => import("./SystemStoryWorkspace"));
@@ -164,26 +163,6 @@ export default function AppWorkspaceRouter({
     );
   }
 
-  if (activeWorkspace === "live-monitoring") {
-    return (
-      <WorkspaceWithBackControl
-        appReady={appReady}
-        errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
-        handleRetryWorkspace={handleRetryWorkspace}
-        contextLabel="Live Monitoring"
-        errorContext={errorContext}
-        activeWorkspace={activeWorkspace}
-        onHelp={() => setActiveWorkspace("help-changelog")}
-        {...workspaceContextProps}
-      >
-        <Suspense fallback={renderLoadingPanel("Opening Live Monitoring", "Loading telemetry, rolling analysis, and finding state...")}>
-          <LiveMonitoringWorkspace key={`live:${datasetScopeKey}`} apiFetch={apiFetch} accessCode={accessCode} datasetScopeKey={datasetScopeKey} />
-        </Suspense>
-      </WorkspaceWithBackControl>
-    );
-  }
-
   if (activeWorkspace === "data-connections") {
     return (
       <WorkspaceWithBackControl
@@ -197,7 +176,7 @@ export default function AppWorkspaceRouter({
         onHelp={() => setActiveWorkspace("help-changelog")}
         {...workspaceContextProps}
       >
-        <Suspense fallback={renderLoadingPanel("Preparing telemetry intake", "Loading dataset validation and connector status...")}>
+        <Suspense fallback={renderLoadingPanel("Opening Data Connections", "Loading facility-scoped telemetry sources and system mappings...")}>
           <DataConnectionsWorkspace
             accessCode={accessCode}
             apiFetch={apiFetch}
@@ -221,6 +200,7 @@ export default function AppWorkspaceRouter({
             comparisonMode={Boolean(comparisonBaselineIdentity?.baselineId)}
             autoOpenBaselineReady={true}
             datasetScopeKey={datasetScopeKey}
+            currentWorkspace={currentWorkspace}
             sessionStore={liveOps.session}
             onResetDemo={handleResetDemo}
             formatClockTime={formatClockTime}

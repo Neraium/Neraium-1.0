@@ -16,7 +16,8 @@ test.describe("Engineering workspace resilience", () => {
     await page.goto("/portfolio", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("engineering-reasoning-platform")).toBeVisible();
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
-    await expect(page.getByText("Partial Site").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Insufficient evidence" })).toBeVisible();
+    await expect(page.getByText("Evidence collection incomplete")).toBeVisible();
   });
 
   test("an unavailable evidence-history request leaves the current site usable", async ({ page }) => {
@@ -24,13 +25,14 @@ test.describe("Engineering workspace resilience", () => {
     await page.route("**/api/evidence/runs**", (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "temporarily unavailable" }) }));
     await page.goto("/portfolio", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("engineering-reasoning-platform")).toBeVisible();
-    await expect(page.getByText("Partial Site").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Insufficient evidence" })).toBeVisible();
+    await expect(page.getByText("Evidence collection incomplete")).toBeVisible();
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
   });
 
-  test("direct investigation links without analysis open first-baseline onboarding", async ({ page }) => {
+  test("direct investigation links without analysis fail closed", async ({ page }) => {
     await page.goto("/investigations/missing", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Create Your First Baseline" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Import Historical Dataset" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Investigation unavailable" })).toBeVisible();
+    await expect(page.getByText("Finding-scoped engineering evidence is unavailable.")).toBeVisible();
   });
 });

@@ -94,7 +94,7 @@ describe("SystemBodyWorkspace empty state", () => {
 
     expect(screen.getAllByText("Awaiting Telemetry").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Start with Neraium" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Import Dataset" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add data source" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Insights" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Data Quality" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Evidence" })).toBeNull();
@@ -122,7 +122,7 @@ describe("SystemBodyWorkspace empty state", () => {
     });
 
     expect(screen.getByRole("heading", { name: "Start with Neraium" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Import Dataset" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add data source" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Resume Previous Analysis" })).toBeTruthy();
     expect(screen.getByLabelText("Previous analysis").textContent).toContain("old-upload.csv");
     expect(screen.queryByText("Ready with warnings")).toBeNull();

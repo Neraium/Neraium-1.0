@@ -31,7 +31,6 @@ const HOME_PATH = "/";
 const WORKSPACE_PATHS = {
   home: "/home",
   "system-body": "/sites/current",
-  "live-monitoring": "/workspace/live-monitoring",
   "data-connections": "/workspace/data-sources",
   "observation-center": "/workspace/insights",
   "system-story": "/workspace/advanced",
@@ -44,6 +43,10 @@ function readInitialWorkspaceRoute() {
   if (typeof window === "undefined") return "system-body";
   const pathname = window.location.pathname.replace(/\/+$/, "") || HOME_PATH;
   if (pathname === HOME_PATH || pathname === "/signin") return "system-body";
+  if (pathname === "/workspace/live-monitoring") {
+    window.history.replaceState({}, "", WORKSPACE_PATHS["system-body"]);
+    return "system-body";
+  }
   if (parseBaselineRoute(pathname) || parseBaselineComparisonRoute(pathname)) return "data-connections";
   if (parseBaselineAnalysisRoute(pathname)) return "system-body";
   if (["/portfolio", "/workspace", "/work"].includes(pathname) || pathname.startsWith("/sites/") || pathname.startsWith("/systems") || pathname.startsWith("/work/") || pathname.startsWith("/findings") || pathname.startsWith("/investigations") || pathname.startsWith("/evidence") || pathname.startsWith("/trace")) return "system-body";

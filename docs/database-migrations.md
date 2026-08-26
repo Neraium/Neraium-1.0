@@ -24,6 +24,104 @@ Legacy evidence JSON is imported exactly once into SQLite in one transaction, ca
 
 The S3 upload queue is used for split-process production deployments. S3 object replacement does not provide the same atomic claim guarantee as the SQLite queue; deployments with more than one worker require an external single-consumer guarantee until conditional object writes or a database-backed distributed queue are implemented.
 
+## Production telemetry schema
+
+Ongoing production telemetry does not use the single-tenant runtime SQLite store or the S3 upload queue. API and worker processes coordinate through the additive PostgreSQL `telemetry` schema described in [Production Telemetry Connections](TELEMETRY_CONNECTIONS.md).
+
+The telemetry migrations are forward-only and must run in this exact order:
+
+1. `002_create_telemetry_connection_tables` from `backend/db/migrations/create_telemetry_connection_tables.py`
+2. `003_seed_telemetry_canonical_signal_concepts_v1` from `backend/db/migrations/seed_telemetry_canonical_signal_concepts.py`
+3. `004_extend_telemetry_ingestion_runtime` from `backend/db/migrations/extend_telemetry_ingestion_runtime.py`
+
+Migration 002 creates the scoped connection, secret-binding, signal, mapping, ingestion, checkpoint, observation/rejection, health, audit, and analysis-window tables. Migration 003 inserts the immutable v1 canonical concept identities. Migration 004 adds durable retry/backfill lineage, worker and analysis claims, authority snapshots, constraints, and indexes. Migration 004 refuses to run until 002 and 003 are recorded.
+
+Application startup never applies these migrations. When `NERAIUM_TELEMETRY_DATABASE_URL` is configured, startup runs all three structural verifiers and fails readiness/startup if the ledger, required tables, columns, indexes, constraints, or canonical catalog are incomplete.
+
+### Separately approved production migration procedure
+
+Do not run this procedure without database-change approval and a verified target. The commands intentionally do not print the DSN.
+
+Preconditions:
+
+1. Confirm `NERAIUM_TELEMETRY_DATABASE_URL` names the intended shared PostgreSQL database, requires TLS, and is available only through an approved secret-injection/session mechanism.
+2. Take and identify a restorable database snapshot/backup according to the production change plan.
+3. Confirm no telemetry worker is running and no production connection is enabled. The initial rollout should occur before the telemetry UI/provider is exposed.
+4. Use a dedicated migration identity with only the DDL rights needed to create/alter the `telemetry` schema and its objects. Do not use an RDS master credential in application task definitions.
+5. Run the repository migration tests and a disposable PostgreSQL rehearsal first. Set `NERAIUM_TEST_POSTGRES_DSN` only in the controlled test environment.
+
+Apply and immediately verify all migrations:
+
+```bash
+PYTHONPATH=backend ./.venv/bin/python - <<'PY'
+import os
+import psycopg
+
+from db.migrations.create_telemetry_connection_tables import apply as apply_002
+from db.migrations.create_telemetry_connection_tables import verify as verify_002
+from db.migrations.seed_telemetry_canonical_signal_concepts import apply as apply_003
+from db.migrations.seed_telemetry_canonical_signal_concepts import verify as verify_003
+from db.migrations.extend_telemetry_ingestion_runtime import apply as apply_004
+from db.migrations.extend_telemetry_ingestion_runtime import verify as verify_004
+
+dsn = os.environ["NERAIUM_TELEMETRY_DATABASE_URL"]
+with psycopg.connect(dsn, connect_timeout=5) as connection:
+    apply_002(connection)
+    apply_003(connection)
+    apply_004(connection)
+    verify_002(connection)
+    verify_003(connection)
+    verify_004(connection)
+print("telemetry migrations applied and verified")
+PY
+```
+
+Then switch to the least-privilege application identity and run verification only:
+
+```bash
+PYTHONPATH=backend ./.venv/bin/python - <<'PY'
+import os
+import psycopg
+
+from db.migrations.create_telemetry_connection_tables import verify as verify_002
+from db.migrations.seed_telemetry_canonical_signal_concepts import verify as verify_003
+from db.migrations.extend_telemetry_ingestion_runtime import verify as verify_004
+
+with psycopg.connect(os.environ["NERAIUM_TELEMETRY_DATABASE_URL"], connect_timeout=5) as connection:
+    for verify in (verify_002, verify_003, verify_004):
+        verify(connection)
+print("telemetry application identity verified")
+PY
+```
+
+Record only the migration IDs, timestamp, database identity, operator/change reference, and successful verifier output. Do not record or paste the DSN.
+
+### Rollback posture
+
+Production rollback is forward-fix plus application disablement:
+
+1. stop the telemetry worker from claiming more work;
+2. disable connections through the scoped API while the current application/database remain available;
+3. deploy the previously approved API/worker/frontend revision or remove the telemetry database configuration from the replacement tasks;
+4. preserve the additive schema, canonical observations, lineage, audit events, and Secrets Manager entries;
+5. diagnose and apply a reviewed forward migration before re-enabling ingestion.
+
+Do not drop the production schema, delete observations, rewrite checkpoints, or infer tenant ownership for legacy/global rows. `rollback_empty_schema_for_tests(...)` accepts the literal confirmation `DROP_EMPTY_TEST_TELEMETRY_SCHEMA` and refuses nonempty schemas; it is only for disposable tests and is not a production downgrade mechanism.
+
+### Required migration validation
+
+Run:
+
+```bash
+PYTHONPATH=backend ./.venv/bin/pytest -q \
+  tests/test_telemetry_migrations.py \
+  tests/test_canonical_signal_catalog.py \
+  tests/test_telemetry_ingestion_repository.py \
+  tests/test_telemetry_repository.py
+```
+
+For real PostgreSQL execution and concurrency coverage, provide the separately managed test DSN and rerun the repository's PostgreSQL-gated tests. A skip caused by an unset `NERAIUM_TEST_POSTGRES_DSN` is not production migration evidence.
+
 
 ## PostgreSQL normalization schema
 

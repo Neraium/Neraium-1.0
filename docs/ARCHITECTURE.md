@@ -7,8 +7,8 @@ Neraium is a full-stack platform for commercial water-system operators. Systemic
 - A FastAPI backend exposes authenticated API endpoints under `/api`.
 - A Vite React frontend provides operator, administration, and evidence-review workspaces.
 - Role-based access distinguishes viewers, operators, and administrators.
-- Runtime persistence stores analysis jobs, results, evidence, audit records, connector state, and sessions.
-- Read-only CSV, REST API, and database inputs support bounded telemetry analysis. Additional connector types are explicitly marked as planned.
+- Shared PostgreSQL stores scoped production telemetry connections, mappings, observations, leases, checkpoints, analysis windows, and lineage. Compatibility runtime persistence continues to store historical-import jobs and related state.
+- The production connection boundary supports hardened read-only HTTPS retrieval and a fail-closed server-owned historian template boundary. CSV, legacy REST/database, global SQLite telemetry, and legacy live-analysis adapters are local historical/manual compatibility paths; their API routers return `410` in shared environments and are not recurring production telemetry providers.
 
 ## Backend
 
@@ -22,7 +22,15 @@ backend/app/engine/          Deterministic Systemic Infrastructure Intelligence 
 backend/requirements.txt     Python runtime and test dependencies
 ```
 
-Major API workflows include authentication and session management, system discovery, dataset import, connector setup and health, analysis status and retry, insights, evidence review and export, administration, observability, and behavior replay.
+Major API workflows include authentication and session management, facility/system setup, Data Connections onboarding, telemetry discovery and mapping, connection health, findings, investigations, evidence review/export, administration, observability, and behavior replay. Historical import remains an admin-gated compatibility workflow rather than normal production onboarding.
+
+### Production telemetry authority
+
+Production telemetry follows the server-authoritative hierarchy `Tenant -> Facility -> System -> Asset/Equipment -> Signal`. Signals are evidence inputs to a defined physical system. They are not independently monitored product objects. Every connection, signal, mapping, run, checkpoint, observation, health record, error, audit event, analysis window, and evidence link carries the authenticated facility resource scope.
+
+The worker retrieves one bounded provider page under a PostgreSQL lease, resolves an approved mapping snapshot, normalizes unit/time/quality, atomically persists accepted observations and per-record rejections with a checkpoint revision, then projects eligible observations into one source-neutral canonical system window. That window invokes the existing authoritative SII orchestration exactly once and preserves exact observation lineage. Connector type never selects a different intelligence implementation.
+
+See [Production Telemetry Connections](TELEMETRY_CONNECTIONS.md) for the entity, provider, authorization, ingestion, health, and deployment contracts.
 
 Historical imports pass through the versioned ingestion and trust boundary in [Historical Data Ingestion & Trust v1](HISTORICAL_DATA_INGESTION_TRUST_V1.md). Received bytes are retained as immutable, content-addressed raw artifacts in the existing tenant/workspace storage scope. Parsing, mapping, unit conversion, exclusions, review decisions, and canonical rows are separate derived records. Only included canonical values enter the bounded analysis workflow. SII compares behavior windows and system relationships. It does not claim root cause, predict failure, or control equipment.
 
@@ -46,16 +54,18 @@ Older saved analyses remain readable. Missing certainty fields are normalized to
 
 The frontend lives in `frontend`. Startup is split into a small authentication gateway and a deferred authenticated runtime. Signed-out and session-checking views do not load telemetry, analysis, or workspace state modules. Authenticated workspaces remain route-level lazy chunks, and the production performance budget verifies both the startup size and the deferred-runtime boundary.
 
-The operator workspace is organized around distinct product objects:
+The ongoing production workspace is organized around distinct product objects:
 
-- **Systems** are operational equipment or processes discovered from telemetry behavior.
-- **Datasets** are bounded telemetry collections imported for analysis.
-- **Connectors** are configured read-only integrations with their own health state.
-- **Analyses** are individual SII executions against datasets.
-- **Insights** are operator-facing behavior changes that may warrant investigation.
-- **Evidence** is the observed telemetry and comparison context supporting an insight.
+- **Facilities** are authorized customer workspaces containing defined physical systems.
+- **Systems** are the unit of learned behavioral structure and ongoing evaluation.
+- **Assets / Equipment** organize evidence inputs within a system without replacing system-level intelligence.
+- **Data sources / Connections** are configured read-only telemetry integrations with multidimensional health.
+- **Signals** are intentionally mapped evidence inputs to a system model.
+- **Findings** are qualified system-level behavioral changes that deserve review.
+- **Investigations** expose the technical evidence, limitations, context, and engineering checks behind a finding.
+- **Evidence Records** preserve complete metrics, timestamps, identities, lineage, engine/version metadata, and audit context.
 
-The Operations Brief prioritizes current findings and discovered systems. Classification summaries expose data confidence, operating-mode match, persistence, and review priority without using red for unexplained systemic change. Findings and Investigations order the engineer view from observed change and classification rationale through context, timeline, evidence, checks, alternatives, and limitations. Shared frontend normalization keeps older saved findings readable without silently strengthening their classification. Data manages datasets, baseline imports, and connector availability. Analysis Details exposes analysis metadata and support diagnostics. Help & Status explains the product language and current service state. Administration provides governance records, user access, and session controls.
+The production hierarchy is Results / Operations Brief -> Finding Review -> Investigation -> Evidence Record. The brief stays restrained; deeper evidence is disclosed on demand. Stable and insufficient-evidence states use calm system-level language and do not imply that every sensor is normal. Data Connections is the primary onboarding surface. Shared frontend normalization keeps older saved findings readable without silently strengthening their classification. Historical import is hidden from normal navigation and retained only for permission-gated compatibility. Help & Status explains the product language and service state. Administration provides governance records, user access, and session controls.
 
 ## Local Integration
 

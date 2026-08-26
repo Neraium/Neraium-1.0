@@ -4,6 +4,7 @@ import time
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.routers import data as data_router
 from app.routers.data import rebuild_upload_replay_from_source
 from app.services import upload_jobs
 from app.services.upload_jobs import read_job, write_job, write_latest_upload_result
@@ -29,6 +30,47 @@ def test_rebuild_upload_replay_from_source(tmp_path: Path) -> None:
     assert payload["frame_count"] > 0
     assert payload["timeline"]
     assert payload["message"] == "Replay reconstructed from the retained source CSV."
+
+
+def test_replay_reconstruction_preserves_system_identity_without_rerunning_analysis(
+    monkeypatch,
+) -> None:
+    csv_path = upload_jobs.UPLOAD_DIR / "identity-replay.csv"
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    csv_path.write_text(
+        "timestamp,flow,pressure\n"
+        "2026-05-21T08:00:00Z,40,80\n"
+        "2026-05-21T08:01:00Z,41,82\n",
+        encoding="utf-8",
+    )
+    identity = {
+        "version": "server-bound-system-identity.v1",
+        "system_id": "chw-loop-1",
+        "authority": "facility-context.v1",
+        "dataset_scope_storage_id": "scope-digest",
+        "authority_record_digest": "a" * 64,
+    }
+    monkeypatch.setattr(data_router, "resolve_upload_artifacts", lambda _job_id: {})
+    monkeypatch.setattr(
+        upload_jobs,
+        "process_csv_file",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("replay must not run the analytical pipeline")
+        ),
+    )
+
+    payload = rebuild_upload_replay_from_source(
+        {
+            "job_id": "identity-replay-job",
+            "file_path": csv_path.name,
+            "filename": csv_path.name,
+            "phase4_system_identity": identity,
+        }
+    )
+
+    assert payload is not None
+    assert payload["job_id"] == "identity-replay-job"
+    assert payload["meta"]["phase4_system_identity"] == identity
 
 
 def test_rebuild_upload_replay_from_source_uses_minimal_fallback_when_numeric_signal_is_sparse(tmp_path: Path) -> None:

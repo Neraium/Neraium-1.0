@@ -34,6 +34,7 @@ def _client(runtime_dir: Path) -> TestClient:
         backend_port=8010,
         cors_origins=["http://localhost:5173"],
         runtime_dir=runtime_dir,
+        telemetry_legacy_compat_enabled=True,
     )
     return TestClient(create_app(settings))
 

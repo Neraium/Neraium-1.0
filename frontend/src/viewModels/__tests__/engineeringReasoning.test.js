@@ -8,6 +8,55 @@ import {
 } from "../engineeringReasoning";
 
 describe("engineering reasoning model", () => {
+  it("projects connector telemetry through the same canonical result seam", () => {
+    const canonicalAnalysis = {
+      systems: [{ id: "system-a", name: "Chilled-water system" }],
+      relationships: [{
+        id: "relationship-a",
+        columns: ["canonical-flow", "canonical-power"],
+        change_type: "changed",
+        baseline_strength: 0.84,
+        current_strength: 0.31,
+      }],
+      insights: [{
+        id: "finding-a",
+        relationship_id: "relationship-a",
+        system: "Chilled-water system",
+        title: "System response changed",
+        what_changed: "Flow and power no longer follow the learned relationship.",
+        supporting_evidence: ["The mapped system relationship changed during comparable operation."],
+        variables: ["canonical-flow", "canonical-power"],
+      }],
+    };
+    const sharedContract = {
+      facility_name: "North Plant",
+      system_id: "system-a",
+      baseline_sufficient: true,
+      data_quality: { coverage_percent: 100 },
+      sii_reliable_enough_to_show: true,
+      evidence_persisted: true,
+    };
+    const uploadModel = buildEngineeringReasoningModel({ result: { ...sharedContract, source_type: "historical_upload", analysis_explanation: canonicalAnalysis } });
+    const telemetryModel = buildEngineeringReasoningModel({ result: {
+      ...sharedContract,
+      source_type: "telemetry_connector",
+      analysis_metadata: { generated_from: "canonical_normalized_observations" },
+      telemetry_lineage: { lineage_digest: "lineage-a" },
+      analysis_result: structuredClone(canonicalAnalysis),
+    } });
+
+    expect(telemetryModel).toMatchObject({
+      status: uploadModel.status,
+      hasAnalysis: true,
+      selectedFinding: {
+        id: uploadModel.selectedFinding.id,
+        title: uploadModel.selectedFinding.title,
+        status: uploadModel.selectedFinding.status,
+      },
+    });
+    expect(telemetryModel.relationships).toEqual(uploadModel.relationships);
+  });
+
   it.each([
     [{ explicit: "Confirmed", coverage: 1, evidenceCount: 3 }, "Confirmed"],
     [{ explicit: "Confirmed", coverage: 0.8, evidenceCount: 3, limitations: ["gap"] }, "Narrowed"],
@@ -33,6 +82,7 @@ describe("engineering reasoning model", () => {
         systems: [{ name: "Hydronic loop" }],
         insights: [{
           id: "finding-1",
+          relationship_id: "rel-1",
           title: "Flow response weakened",
           what_changed: "Flow response weakened under comparable demand.",
           confidence: "Qualified",
@@ -69,6 +119,7 @@ describe("engineering reasoning model", () => {
         }],
         insights: [{
           id: "finding-1",
+          relationship_id: "rel-1",
           title: "Relationship change detected",
           what_changed: "Condenser performance changed.",
           system: "Cooling Plant",

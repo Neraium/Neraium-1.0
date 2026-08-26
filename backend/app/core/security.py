@@ -6,6 +6,10 @@ from fastapi import HTTPException, Request
 
 from app.services.auth_store import get_user_by_session, normalize_role, session_cookie_name
 from app.services.dataset_scope import WORKSPACE_HEADER, set_current_dataset_scope
+from app.services.phase4_scope import (
+    authenticated_phase4_scope_from_request_context,
+    set_current_authenticated_phase4_scope,
+)
 from app.services.workspace_authorization import (
     WorkspaceAuthorizationError,
     resolve_workspace_context,
@@ -19,6 +23,10 @@ _PUBLIC_READONLY_PATHS = (
     "/api/intelligence/engine-identity",
 )
 _ROLE_ORDER = {"viewer": 0, "operator": 1, "admin": 2}
+LEGACY_GLOBAL_TELEMETRY_RETIRED_DETAIL = {
+    "code": "legacy_global_telemetry_retired",
+    "message": "This global telemetry compatibility operation is retired.",
+}
 
 
 def _request_id(request: Request) -> str:
@@ -76,8 +84,14 @@ def _set_auth_context(request: Request, *, subject: str, role: str, source: str,
         raise HTTPException(status_code=404, detail="Workspace not found.") from error
     request.state.workspace_context = workspace_context.as_dict()
     request.state.dataset_scope = workspace_context.dataset_scope
+    phase4_scope = authenticated_phase4_scope_from_request_context(
+        auth_context=request.state.auth_context,
+        workspace_context=workspace_context,
+    )
+    request.state.authenticated_phase4_scope = phase4_scope
     set_current_workspace_context(workspace_context)
     set_current_dataset_scope(workspace_context.dataset_scope)
+    set_current_authenticated_phase4_scope(phase4_scope)
 
 
 async def require_api_access(request: Request) -> None:
@@ -170,3 +184,25 @@ async def require_operator_role(request: Request) -> None:
 
 async def require_admin_role(request: Request) -> None:
     await _require_minimum_role(request, "admin")
+
+
+async def require_historical_upload_access(request: Request) -> None:
+    """Keep legacy dataset intake behind an explicit production permission.
+
+    Historical upload remains available to local development and test workflows,
+    where role enforcement is intentionally relaxed.  In shared production it is
+    an administrative compatibility capability, not an ordinary operator action.
+    """
+
+    if _strict_auth_mode(request):
+        await require_admin_role(request)
+        return
+    await require_operator_role(request)
+
+
+def require_legacy_global_telemetry_access(request: Request) -> None:
+    """Keep unscoped SQLite telemetry/analysis APIs out of shared environments."""
+    settings = getattr(request.app.state, "settings", None)
+    environment = str(getattr(settings, "app_env", "development") or "").strip().lower()
+    if environment not in {"development", "test"}:
+        raise HTTPException(status_code=410, detail=LEGACY_GLOBAL_TELEMETRY_RETIRED_DETAIL)

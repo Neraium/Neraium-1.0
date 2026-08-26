@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 
+from app.engine.sii.behavioral_model_contract import AuthenticatedPhase4Scope
 from app.engine.sii.behavioral_model_store import InMemoryBehavioralModelStore
 from app.engine.sii.phase4 import evaluate_phase4
 
@@ -51,6 +52,10 @@ def _phase4_args(store, *, run_id: str, violation: float = 0.0) -> dict:
         "changed_edges": [],
     }
     return {
+        "phase4_scope": AuthenticatedPhase4Scope(
+            tenant_scope_id="org-1",
+            workspace_id="ws-1",
+        ),
         "columns": ["timestamp", "flow", "pressure"],
         "rows": rows,
         "numeric_columns": ["flow", "pressure"],
@@ -101,15 +106,16 @@ def test_phase4_persists_signal_relationship_graph_and_immutable_snapshots() -> 
     assert first["behavioral_model"]["relationship_memory_summary"]["relationships_tracked"] == 1
     first_snapshot_id = first["behavioral_snapshots"]["current_snapshot_id"]
     model_id = first["behavioral_model"]["model_id"]
-    first_snapshot = store.load_snapshot(model_id, first_snapshot_id)
+    scope = _phase4_args(store, run_id="unused")["phase4_scope"]
+    first_snapshot = store.load_snapshot(scope, model_id, first_snapshot_id)
 
     second = evaluate_phase4(**_phase4_args(store, run_id="run-2"))
     assert second["behavioral_model"]["model_version"] == "v2"
     assert second["expected_behavior"]["status"] == "complete"
     assert second["expected_behavior"]["models_evaluated"] == 2
     assert second["behavioral_snapshots"]["previous_snapshot_id"] == first_snapshot_id
-    assert store.load_snapshot(model_id, first_snapshot_id) == first_snapshot
-    assert len(store.list_snapshots(model_id)) == 2
+    assert store.load_snapshot(scope, model_id, first_snapshot_id) == first_snapshot
+    assert len(store.list_snapshots(scope, model_id)) == 2
     assert second["processing_trace"]["current_evidence_evaluated_before_model_update"] is True
 
 
@@ -166,12 +172,56 @@ def test_data_quality_block_does_not_change_active_model_version_or_memory() -> 
     store = InMemoryBehavioralModelStore()
     first = evaluate_phase4(**_phase4_args(store, run_id="quality-good"))
     model_id = first["behavioral_model"]["model_id"]
-    model_before = store.load_model(model_id)
+    scope = inputs_scope = _phase4_args(store, run_id="unused")["phase4_scope"]
+    model_before = store.load_model(scope, model_id)
     inputs = _phase4_args(store, run_id="quality-bad")
     inputs["data_quality"] = {"readiness": "not_ready", "data_confidence": {"rating": "low"}}
     result = evaluate_phase4(**inputs)
     assert result["behavioral_model"]["learning_decision"]["decision"] == "blocked_by_data_quality"
-    assert store.load_model(model_id) == model_before
+    assert store.load_model(inputs_scope, model_id) == model_before
+
+
+def test_missing_authenticated_scope_is_limited_and_performs_no_storage() -> None:
+    store = InMemoryBehavioralModelStore()
+    inputs = _phase4_args(store, run_id="missing-scope")
+    inputs["phase4_scope"] = None
+    result = evaluate_phase4(**inputs)
+
+    assert result["behavioral_model"]["status"] == "limited"
+    assert result["behavioral_model"]["limitations"] == ["authenticated_scope_unavailable"]
+    assert result["behavioral_model"]["identity"] == {
+        "identity_status": "limited",
+        "identity_limitations": ["authenticated_scope_unavailable"],
+        "memory_update_allowed": False,
+    }
+    assert result["processing_trace"]["storage_writes"] == []
+
+
+def test_payload_scope_mismatch_is_limited_and_performs_no_storage() -> None:
+    store = InMemoryBehavioralModelStore()
+    for claim, value in (("workspace_id", "ws-other"), ("tenant_id", "org-other")):
+        inputs = _phase4_args(store, run_id=f"mismatch-{claim}")
+        inputs["config"]["infrastructure_identity"][claim] = value
+        result = evaluate_phase4(**inputs)
+        assert result["behavioral_model"]["limitations"] == [
+            f"authenticated_scope_mismatch:{claim}"
+        ]
+        assert result["processing_trace"]["storage_writes"] == []
+
+
+def test_same_business_identity_isolated_by_authenticated_workspace() -> None:
+    store = InMemoryBehavioralModelStore()
+    first_inputs = _phase4_args(store, run_id="workspace-a")
+    second_inputs = _phase4_args(store, run_id="workspace-b")
+    second_inputs["phase4_scope"] = AuthenticatedPhase4Scope(
+        tenant_scope_id="org-1",
+        workspace_id="ws-2",
+    )
+    first = evaluate_phase4(**first_inputs)
+    second = evaluate_phase4(**second_inputs)
+    assert first["behavioral_model"]["model_id"] != second["behavioral_model"]["model_id"]
+    assert first["behavioral_model"]["model_version"] == "v1"
+    assert second["behavioral_model"]["model_version"] == "v1"
 
 
 def test_configured_learning_delay_matures_from_persisted_decision_history() -> None:

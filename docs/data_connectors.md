@@ -1,63 +1,44 @@
-# Data Connectors
+# Connector Boundaries
 
-## Purpose
+Neraium has two connector surfaces with different purposes. Do not treat them as one production registry.
 
-The Data Connectors layer gives Neraium a stable ingestion boundary for customer telemetry. Connectors collect data from external systems, normalize it into a shared schema, and hand it off to the existing Neraium API and intelligence flow without embedding engine logic inside the connector code.
+## Ongoing production telemetry
 
-## Architecture
+The production Data Connections workflow uses the retrieval-only provider contract documented in [Production Telemetry Connections](TELEMETRY_CONNECTIONS.md).
 
-Customer system  
--> Connector  
--> Normalized telemetry schema  
--> Existing Neraium engine and API  
--> Dashboard
+| Provider | Availability | Safety boundary |
+|---|---|---|
+| `https_telemetry` | Implemented; shared environments require approved controlled egress | Public HTTPS/443, `GET` only, server-resolved credentials, DNS/IP validation, no redirects/proxy inheritance, bounded pages/records/bytes/time/retries |
+| `historian_template` | Unavailable until server startup registers a reviewed template/executor | Server-owned template and network profile, bounded typed parameters, no browser SQL/DSN/path/host |
 
-Connectors are responsible for transport, basic validation, and normalization only. They do not make intelligence decisions, score drift, or interpret facility conditions.
+Production providers validate, discover, retrieve incremental pages, optionally retrieve bounded backfill, and report safe health. They contain no SII/classification logic and expose no command, setpoint, acknowledgement, actuator, or write method.
 
-## Supported connector types
+Retrieved records pass through intentional signal mapping, explicit unit/time/quality normalization, canonical PostgreSQL persistence, and one source-neutral system-window SII handoff. Signals that are not approved and mapped remain analysis-ineligible.
 
-- `csv`: functional. Handles local CSV upload and normalization.
-- `rest`: functional. Polls a REST endpoint and normalizes JSON telemetry payloads.
-- `database`: functional. Runs bounded read-only queries against SQLite or PostgreSQL and normalizes result rows.
-- `mqtt`: planned, not available in this release.
-- `opcua`: planned, not available in this release.
-- `bacnet`: planned, not available in this release.
+## Historical/manual compatibility connectors
 
-## Normalized telemetry schema
+The legacy registry retains these adapters for existing bounded historical workflows and tests:
 
-Each normalized record contains:
+- `csv`
+- `rest`
+- `database`
 
-- `source_id`
-- `system_id`
-- `sensor_id`
-- `sensor_name`
-- `value`
-- `unit`
-- `timestamp`
-- `quality_status`
-- `metadata`
+They are not recurring production telemetry providers and are not advertised by `GET /api/data-connections/providers`. The legacy REST model can represent browser-configured methods/headers/bodies, and the legacy database model can represent DSNs/queries/paths; for that reason they must never be wired into the production connection scheduler. Shared environments tombstone the complete `/api/connectors/*` compatibility router before request parsing, including descriptors, tests, CSV upload, ingest, and global health. The older unscoped `/api/telemetry/*` and `/api/live-analysis/*` SQLite APIs are also local-only and return `410` in staging/production. Only the facility-scoped Data Connections repository and canonical analysis seam are production-authoritative.
 
-Timestamps are parsed through the shared backend timestamp parser and normalized to a consistent ISO-style representation before records leave the connector boundary.
+MQTT, OPC UA, BACnet, Modbus, and vendor placeholders are unavailable. Their presence in compatibility descriptors is not evidence that a live integration exists.
 
-## How to add a new connector
+## Adding a production provider
 
-1. Create a class in `backend/app/connectors/` that extends `ConnectorBase`.
-2. Implement:
-   - `connect()`
-   - `validate_connection()`
-   - `fetch_historical()`
-   - `stream_latest()`
-   - `normalize()`
-   - `health_check()`
-3. Return `NormalizedConnectorBatch` and `NormalizedTelemetryRecord` objects from normalization.
-4. Register the connector in `backend/app/connectors/registry.py`.
-5. Add endpoint coverage and tests.
+A new provider must:
 
-## Current limitations
+1. implement only the retrieval capabilities in `backend/app/connectors/base.py`;
+2. accept browser input only through a strict, allow-listed public model;
+3. keep targets, templates, queries, network profiles, and credentials server-owned where required;
+4. resolve credentials through the opaque telemetry secret abstraction;
+5. enforce per-request and aggregate budgets and return sanitized stable errors;
+6. preserve source timestamps, units, quality, external tag/event identity, and bounded provenance;
+7. use the existing worker lease/checkpoint pipeline and canonical SII handoff without connector-specific analysis;
+8. add tenant-isolation, read-only, SSRF/egress, secret-redaction, retry/backfill, and contract tests;
+9. remain unavailable until the deployment capability and required infrastructure have been reviewed and configured.
 
-- CSV normalization infers units from common sensor names when a unit is not supplied.
-- REST ingestion currently expects a JSON list or a top-level `records`, `data`, `items`, or `telemetry` array.
-- Database queries are limited to one `SELECT` or `WITH` statement, execute in a read-only database session, return at most 5,000 rows by default (configurable up to 10,000), and time out after 30 seconds by default (configurable from 1 to 120 seconds).
-- The database account remains the security boundary for accessible PostgreSQL schemas and tables. Configure a dedicated least-privilege account with `SELECT` only on approved telemetry views; do not use an owner or administrative account. PostgreSQL transport requires TLS (`sslmode=require` by default; use `verify-full` with a trusted CA in production). SQLite system catalog reads are denied by the connector.
-- MQTT, OPC UA, BACnet, and vendor-specific connectors are planned and do not connect to live systems in this release.
-- The connector layer prepares normalized telemetry for the existing engine boundary; it does not yet orchestrate full historical backfill workflows or live industrial subscriptions.
+Never adapt a provider by exposing arbitrary SQL, DSN, path, URL, HTTP method/body/header, filesystem access, or OT write/control functionality to a browser request.

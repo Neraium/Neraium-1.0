@@ -10,12 +10,6 @@ from app.services.auth_store import create_user
 from app.services.rate_limiter import clear_rate_limits
 
 
-# Evidence Package v1 added its analysis-ID and package-ID reads, and Evidence
-# Package Lifecycle v1 added its transition write, Fingerprinting v1 added
-# three fingerprint reads and one historical-pattern read, and Correlation v1
-# added one related-package read to the prior 145-operation surface. Keep the
-# total as a route-surface guard while naming the additions.
-PRE_EVIDENCE_PACKAGE_OPERATION_COUNT = 145
 EVIDENCE_PACKAGE_OPERATIONS = {
     ("get", "/api/data/analyses/{comparison_analysis_id}/evidence-package"):
         "evidence_package_by_analysis_id_api_data_analyses__comparison_analysis_id__evidence_package_get",
@@ -66,15 +60,103 @@ UPLOAD_PROGRESS_OPERATION = (
     "getUploadJobStatusV1",
     "UploadStatusResponse",
 )
-EXPECTED_OPENAPI_OPERATION_COUNT = (
-    PRE_EVIDENCE_PACKAGE_OPERATION_COUNT
-    + len(EVIDENCE_PACKAGE_OPERATIONS)
-    + len(FINGERPRINT_OPERATIONS)
-    + len(CORRELATION_OPERATIONS)
-    + len(HISTORICAL_INGESTION_OPERATIONS)
-    + len(FINDING_WORKFLOW_OPERATIONS)
-    + len(WORKSPACE_AUTHORIZATION_OPERATIONS)
-)
+PRODUCTION_DATA_CONNECTION_OPERATIONS = {
+    ("get", "/api/data-connections"): (
+        "read_data_connections_api_data_connections_get",
+        "200",
+        "ConnectionsListResponse",
+    ),
+    ("post", "/api/data-connections"): (
+        "create_data_connection_api_data_connections_post",
+        "201",
+        "ConnectionActionResponse",
+    ),
+    ("get", "/api/data-connections/providers"): (
+        "list_data_connection_providers_api_data_connections_providers_get",
+        "200",
+        "ConnectorProvidersResponse",
+    ),
+    ("get", "/api/data-connections/signal-concepts"): (
+        "list_signal_concepts_api_data_connections_signal_concepts_get",
+        "200",
+        "CanonicalSignalConceptsResponse",
+    ),
+    ("get", "/api/data-connections/{connection_id}"): (
+        "read_data_connection_api_data_connections__connection_id__get",
+        "200",
+        "ConnectionPublicResponse",
+    ),
+    ("patch", "/api/data-connections/{connection_id}"): (
+        "update_data_connection_api_data_connections__connection_id__patch",
+        "200",
+        "ConnectionActionResponse",
+    ),
+    ("delete", "/api/data-connections/{connection_id}"): (
+        "archive_data_connection_api_data_connections__connection_id__delete",
+        "200",
+        "ConnectionActionResponse",
+    ),
+    ("put", "/api/data-connections/{connection_id}/credentials"): (
+        "put_data_connection_credentials_api_data_connections__connection_id__credentials_put",
+        "200",
+        "CredentialStatusResponse",
+    ),
+    ("post", "/api/data-connections/{connection_id}/validate"): (
+        "validate_data_connection_api_data_connections__connection_id__validate_post",
+        "200",
+        "ValidationResponse",
+    ),
+    ("post", "/api/data-connections/{connection_id}/discover"): (
+        "discover_data_connection_signals_api_data_connections__connection_id__discover_post",
+        "200",
+        "DiscoveryResponse",
+    ),
+    ("get", "/api/data-connections/{connection_id}/signals"): (
+        "list_data_connection_signals_api_data_connections__connection_id__signals_get",
+        "200",
+        "SignalsListResponse",
+    ),
+    ("put", "/api/data-connections/{connection_id}/signals/{signal_id}/mapping"): (
+        "update_signal_mapping_api_data_connections__connection_id__signals__signal_id__mapping_put",
+        "200",
+        "MappingResponse",
+    ),
+    ("post", "/api/data-connections/{connection_id}/enable"): (
+        "enable_data_connection_api_data_connections__connection_id__enable_post",
+        "200",
+        "ConnectionActionResponse",
+    ),
+    ("post", "/api/data-connections/{connection_id}/disable"): (
+        "disable_data_connection_api_data_connections__connection_id__disable_post",
+        "200",
+        "ConnectionActionResponse",
+    ),
+    ("get", "/api/data-connections/{connection_id}/runs"): (
+        "list_data_connection_runs_api_data_connections__connection_id__runs_get",
+        "200",
+        "IngestionRunsListResponse",
+    ),
+    ("get", "/api/data-connections/{connection_id}/errors"): (
+        "list_data_connection_errors_api_data_connections__connection_id__errors_get",
+        "200",
+        "IngestionErrorsListResponse",
+    ),
+    ("post", "/api/data-connections/{connection_id}/runs/{run_id}/retry"): (
+        "retry_data_connection_run_api_data_connections__connection_id__runs__run_id__retry_post",
+        "202",
+        "IngestionRunActionResponse",
+    ),
+    ("post", "/api/data-connections/{connection_id}/backfills"): (
+        "start_data_connection_backfill_api_data_connections__connection_id__backfills_post",
+        "202",
+        "IngestionRunActionResponse",
+    ),
+    ("get", "/api/data-connections/{connection_id}/backfills/{run_id}"): (
+        "read_data_connection_backfill_api_data_connections__connection_id__backfills__run_id__get",
+        "200",
+        "IngestionRunPublicResponse",
+    ),
+}
 
 
 def production_client(monkeypatch, tmp_path: Path) -> TestClient:
@@ -154,7 +236,8 @@ def test_payload_header_path_and_filename_limits(client: TestClient) -> None:
         "/api/connectors/csv/upload",
         files={"file": ("x" * 252 + ".csv", "timestamp,value\n2026-01-01T00:00:00Z,1", "text/csv")},
     )
-    assert invalid_filename.status_code == 400
+    assert invalid_filename.status_code == 410
+    assert invalid_filename.json()["detail"]["code"] == "legacy_connection_operation_retired"
 
 
 def test_unauthorized_forbidden_not_found_and_conflict_contracts(monkeypatch, tmp_path: Path) -> None:
@@ -202,11 +285,18 @@ def test_unauthorized_forbidden_not_found_and_conflict_contracts(monkeypatch, tm
 
 def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient) -> None:
     schema = client.get("/openapi.json").json()
-    operations = [
-        operation
-        for item in schema["paths"].values()
+    schema_operations = {
+        (method, path): operation
+        for path, item in schema["paths"].items()
         for method, operation in item.items()
         if method in {"get", "post", "put", "patch", "delete"}
+    }
+    runtime_operation_keys = [
+        (method.lower(), route.path)
+        for route in client.app.routes
+        if getattr(route, "methods", None)
+        and getattr(route, "include_in_schema", False)
+        for method in route.methods - {"HEAD", "OPTIONS"}
     ]
     runtime_operations = [
         route
@@ -214,10 +304,34 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
         if getattr(route, "methods", None)
         and getattr(route, "include_in_schema", False)
     ]
-    assert len(operations) == sum(len(route.methods - {"HEAD", "OPTIONS"}) for route in runtime_operations)
-    assert len(operations) == EXPECTED_OPENAPI_OPERATION_COUNT
-    operation_ids = [operation["operationId"] for operation in operations]
+    assert len(runtime_operation_keys) == len(set(runtime_operation_keys))
+    assert set(schema_operations) == set(runtime_operation_keys)
+    operation_ids = [
+        operation["operationId"] for operation in schema_operations.values()
+    ]
     assert len(operation_ids) == len(set(operation_ids))
+    for (method, path), (
+        operation_id,
+        success_status,
+        response_model,
+    ) in PRODUCTION_DATA_CONNECTION_OPERATIONS.items():
+        operation = schema_operations[(method, path)]
+        assert operation["operationId"] == operation_id
+        assert operation["tags"] == ["data-connections"]
+        assert operation["responses"][success_status]["content"]["application/json"][
+            "schema"
+        ] == {"$ref": f"#/components/schemas/{response_model}"}
+        matching_routes = [
+            route
+            for route in runtime_operations
+            if route.path == path and route.methods == {method.upper()}
+        ]
+        assert len(matching_routes) == 1
+        assert "require_api_access" in {
+            dependency.call.__name__
+            for dependency in matching_routes[0].dependant.dependencies
+        }
+    operations = list(schema_operations.values())
     for (method, path), operation_id in EVIDENCE_PACKAGE_OPERATIONS.items():
         operation = schema["paths"][path][method]
         assert operation["operationId"] == operation_id
@@ -268,7 +382,7 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
         }
         assert "require_api_access" in dependency_names
         if method == "patch":
-            assert "require_operator_role" in dependency_names
+            assert "require_historical_upload_access" in dependency_names
     for method, path in FINDING_WORKFLOW_OPERATIONS:
         operation = schema["paths"][path][method]
         assert operation["tags"] == ["findings"]

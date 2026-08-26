@@ -4,6 +4,8 @@ import json
 from typing import Any
 
 from app.services.analysis_provenance import build_analysis_provenance, canonical_digest
+from app.services.analysis_result_contract import build_sii_evidence_projection
+from app.services.telemetry_lineage import bounded_lineage_bundle
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -545,9 +547,23 @@ def build_evidence_record_from_result(
             if isinstance(condition, dict)
         ],
         "phase_2_supporting_evidence": _phase2_supporting_evidence_from_result(result),
+        "sii_evidence": (
+            analysis_result.get("sii_evidence")
+            if isinstance(analysis_result.get("sii_evidence"), dict)
+            else build_sii_evidence_projection(result)
+        ),
         "water_intelligence": water_intelligence,
         "water_prior_versions": water_prior_versions,
     }
+    telemetry_lineage = bounded_lineage_bundle(
+        result.get("telemetry_lineage")
+        or analysis_result.get("telemetry_lineage")
+    )
+    if telemetry_lineage is not None:
+        # Historical evidence keeps its established shape. Connector evidence
+        # gains only the bounded digest/sample; complete lineage is persisted
+        # through telemetry.analysis_window_observations.
+        record["telemetry_lineage"] = telemetry_lineage
     record["evidence_hash"] = canonical_digest(
         {key: value for key, value in record.items() if key != "evidence_hash"}
     )

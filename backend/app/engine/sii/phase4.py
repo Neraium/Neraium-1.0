@@ -11,6 +11,7 @@ from app.engine.sii.behavioral_evolution import evaluate_behavioral_evolution
 from app.engine.sii.behavioral_graph import compare_behavioral_graph
 from app.engine.sii.behavioral_model import (
     active_operating_mode,
+    authenticated_scope_mismatch_reason,
     behavioral_model_section,
     build_behavioral_snapshot,
     build_candidate_model,
@@ -19,6 +20,7 @@ from app.engine.sii.behavioral_model import (
     validate_model_compatibility,
 )
 from app.engine.sii.behavioral_model_contract import (
+    AuthenticatedPhase4Scope,
     BehavioralModelStorageError,
     BehavioralModelStorageUnavailable,
     BehavioralModelStore,
@@ -55,12 +57,18 @@ def evaluate_phase4(
     multiscale_analysis: dict[str, Any],
     physics_reasoning: dict[str, Any],
     covariance_analysis: dict[str, Any],
+    phase4_scope: AuthenticatedPhase4Scope | None = None,
     config: dict[str, Any] | None = None,
     progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Evaluate and persist Phase 4 after all Phase 1–3 evidence is available."""
 
     cfg = config if isinstance(config, dict) else {}
+    if not isinstance(phase4_scope, AuthenticatedPhase4Scope):
+        return limited_phase4("authenticated_scope_unavailable")
+    scope_mismatch = authenticated_scope_mismatch_reason(cfg, phase4_scope)
+    if scope_mismatch:
+        return limited_phase4(scope_mismatch)
     phase4_cfg = cfg.get("phase_4_config") if isinstance(cfg.get("phase_4_config"), dict) else {}
     source_run_id = _source_run_id(columns, rows, cfg)
     first_observed, observed_at, time_limitations = observation_bounds(rows, timestamp_column, source_run_id)
@@ -68,6 +76,7 @@ def evaluate_phase4(
         columns=columns,
         telemetry_signal_catalog=telemetry_signal_catalog,
         config={**cfg, **phase4_cfg},
+        authenticated_scope=phase4_scope,
     )
     trace = _initial_trace(identity, source_run_id)
     storage_failures: list[str] = []
@@ -84,9 +93,9 @@ def evaluate_phase4(
         configured_store = phase4_cfg.get("behavioral_model_store") or cfg.get("behavioral_model_store")
         try:
             store = configured_store if configured_store is not None else RuntimeBehavioralModelStore()
-            active_model = store.load_model(str(identity["model_id"]))
-            snapshots = store.list_snapshots(str(identity["model_id"]))
-            prior_learning_decisions = store.list_learning_decisions(str(identity["model_id"]))
+            active_model = store.load_model(phase4_scope, str(identity["model_id"]))
+            snapshots = store.list_snapshots(phase4_scope, str(identity["model_id"]))
+            prior_learning_decisions = store.list_learning_decisions(phase4_scope, str(identity["model_id"]))
             trace["behavioral_model_loaded"] = active_model is not None
             trace["behavioral_model_created"] = active_model is None
         except Exception as exc:
@@ -260,13 +269,13 @@ def evaluate_phase4(
     if store is not None and identity.get("model_id"):
         model_id = str(identity["model_id"])
         try:
-            decision_record = store.record_learning_decision(model_id, learning, source_run_id=source_run_id)
+            decision_record = store.record_learning_decision(phase4_scope, model_id, learning, source_run_id=source_run_id)
             storage_writes.append(_write("record_learning_decision", decision_record.get("decision_id")))
         except Exception as exc:
             storage_failures.append(_storage_reason("record_learning_decision", exc))
         if candidate_baseline:
             try:
-                stored_candidate = store.save_candidate_baseline(model_id, candidate_baseline, source_run_id=source_run_id)
+                stored_candidate = store.save_candidate_baseline(phase4_scope, model_id, candidate_baseline, source_run_id=source_run_id)
                 storage_writes.append(_write("save_candidate_baseline", stored_candidate.get("candidate_version")))
                 baseline_state = {
                     "previous_version": stored_candidate.get("previous_version"),
@@ -276,6 +285,7 @@ def evaluate_phase4(
                 }
                 if learning.get("learning_allowed"):
                     activated = store.activate_baseline(
+                        phase4_scope,
                         model_id,
                         str(stored_candidate["candidate_version"]),
                         source_run_id=source_run_id,
@@ -329,13 +339,13 @@ def evaluate_phase4(
             ][-100:]
             try:
                 if active_model is None:
-                    persisted_model = store.create_model(candidate_model, source_run_id=source_run_id)
+                    persisted_model = store.create_model(phase4_scope, candidate_model, source_run_id=source_run_id)
                     storage_writes.append(_write("create_model", persisted_model.get("model_version")))
                     trace["behavioral_model_created"] = True
                 else:
-                    persisted_model = store.save_model(candidate_model, source_run_id=source_run_id)
+                    persisted_model = store.save_model(phase4_scope, candidate_model, source_run_id=source_run_id)
                     storage_writes.append(_write("save_model", persisted_model.get("model_version")))
-                stored_snapshot = store.create_snapshot(current_snapshot, source_run_id=source_run_id)
+                stored_snapshot = store.create_snapshot(phase4_scope, current_snapshot, source_run_id=source_run_id)
                 storage_writes.append(_write("create_snapshot", stored_snapshot.get("snapshot_id")))
                 current_snapshot = stored_snapshot
             except Exception as exc:
@@ -350,7 +360,7 @@ def evaluate_phase4(
                 changes={**changes, "learning_decision": learning.get("decision")},
             )
             try:
-                current_snapshot = store.create_snapshot(current_snapshot, source_run_id=source_run_id)
+                current_snapshot = store.create_snapshot(phase4_scope, current_snapshot, source_run_id=source_run_id)
                 storage_writes.append(_write("create_snapshot", current_snapshot.get("snapshot_id")))
             except Exception as exc:
                 storage_failures.append(_storage_reason("create_snapshot", exc))
@@ -358,7 +368,7 @@ def evaluate_phase4(
         persisted_event_ids = []
         for event in prepared_events.get("events", []):
             try:
-                stored_event = store.append_event(model_id, event, source_run_id=source_run_id)
+                stored_event = store.append_event(phase4_scope, model_id, event, source_run_id=source_run_id)
                 persisted_event_ids.append(str(stored_event["event_id"]))
                 storage_writes.append(_write("append_event", stored_event.get("event_id")))
             except Exception as exc:
@@ -473,7 +483,11 @@ def limited_phase4(reason: str) -> dict[str, Any]:
             "model_id": None,
             "model_version": None,
             "snapshot_id": None,
-            "identity": {},
+            "identity": {
+                "identity_status": "limited",
+                "identity_limitations": [reason],
+                "memory_update_allowed": False,
+            },
             "behavioral_identity": {},
             "signal_memory_summary": {"signals_tracked": 0, "signals": []},
             "relationship_memory_summary": {"relationships_tracked": 0, "relationships": []},

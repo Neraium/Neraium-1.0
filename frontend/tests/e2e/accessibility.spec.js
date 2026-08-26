@@ -28,7 +28,14 @@ test.describe("Accessibility audit", () => {
     const connections = page.getByRole("button", { name: "Data", exact: true });
     await connections.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { name: "Establish Initial Baseline", level: 2 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect a physical system", level: 1 })).toBeVisible();
+    await expect(page.getByTestId("telemetry-connections-workspace")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Establish Initial Baseline" })).toHaveCount(0);
+
+    const addDataSource = page.getByRole("button", { name: "Add data source" }).first();
+    await addDataSource.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "Add a read-only data source", level: 2 })).toBeVisible();
   });
 
   test("portfolio passes automated serious and critical WCAG rules", async ({ page }) => {

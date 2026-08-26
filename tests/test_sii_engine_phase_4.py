@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 
+from app.engine.sii.behavioral_model_contract import AuthenticatedPhase4Scope
 from app.engine.sii.behavioral_model_store import InMemoryBehavioralModelStore
 from app.engine.sii.evidence_fusion import PHASE_4_SOURCE_MODULE_ORDER
 from app.engine.sii_engine import evaluate_sii
@@ -54,7 +55,14 @@ def _health() -> dict:
     }
 
 
-def _evaluate(store, run_id: str, *, violation: float = 0.0, phase4_config: dict | None = None) -> dict:
+def _evaluate(
+    store,
+    run_id: str,
+    *,
+    violation: float = 0.0,
+    phase4_config: dict | None = None,
+    phase4_scope: AuthenticatedPhase4Scope | None | bool = True,
+) -> dict:
     columns, rows = _rows(violation=violation)
     return evaluate_sii(
         columns=columns,
@@ -64,6 +72,14 @@ def _evaluate(store, run_id: str, *, violation: float = 0.0, phase4_config: dict
         operating_mode=_mode(),
         sensor_health=_health(),
         data_quality={"readiness": "ready", "warnings": [], "data_confidence": {"rating": "high"}},
+        phase4_scope=(
+            AuthenticatedPhase4Scope(
+                tenant_scope_id="org-1",
+                workspace_id="ws-1",
+            )
+            if phase4_scope is True
+            else phase4_scope
+        ),
         config={
             "numeric_columns": ["flow", "pressure"],
             "source_run_id": run_id,
@@ -152,3 +168,21 @@ def test_human_validation_keeps_candidate_baseline_inactive() -> None:
     assert learning["candidate_baseline"]["approval_status"] == "pending_validation"
     assert result["behavioral_model"]["baseline_state"]["active_version"] is None
     assert result["behavioral_snapshots"]["current_snapshot_id"] is None
+
+
+def test_missing_phase4_scope_preserves_phase1_through_phase3_and_writes_nothing() -> None:
+    store = InMemoryBehavioralModelStore()
+    result = _evaluate(store, "phase4-no-auth-scope", phase4_scope=None)
+
+    assert result["signal_drift"]["status"] == "complete"
+    assert result["relationship_analysis"]["status"] == "complete"
+    assert result["covariance_analysis"]["status"] == "complete"
+    assert result["physics_reasoning"]["active"] is True
+    assert result["behavioral_model"]["status"] == "limited"
+    assert result["behavioral_model"]["limitations"] == ["authenticated_scope_unavailable"]
+    assert result["behavioral_model"]["identity"] == {
+        "identity_status": "limited",
+        "identity_limitations": ["authenticated_scope_unavailable"],
+        "memory_update_allowed": False,
+    }
+    assert result["processing_trace"]["storage_writes"] == []

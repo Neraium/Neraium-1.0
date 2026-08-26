@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.connectors.base import ConnectorProviderDescriptor, TelemetryConnector
 from app.connectors.csv_connector import CSVConnector
 from app.connectors.database_connector import DatabaseConnector
+from app.connectors.historian_provider import HistorianTemplateConnector
+from app.connectors.https_telemetry import HttpsTelemetryConnector
 from app.connectors.models import ConnectorDescriptor
 from app.connectors.placeholders import (
     BACnetConnector,
@@ -29,6 +32,15 @@ CONNECTOR_CLASSES = {
     "modbus": ModbusConnector,
     "nodered": NodeRedConnector,
     "bas_bms": BASBMSConnector,
+}
+
+# The production registry is deliberately separate from the historical/manual
+# connector registry above. In particular, the legacy REST connector permits
+# browser-provided POST bodies/headers and the legacy database connector accepts
+# raw DSNs/queries; neither is an eligible continuous-ingestion provider.
+PRODUCTION_CONNECTOR_CLASSES: dict[str, type[TelemetryConnector]] = {
+    "https_telemetry": HttpsTelemetryConnector,
+    "historian_template": HistorianTemplateConnector,
 }
 
 
@@ -116,3 +128,32 @@ def build_connector_descriptors() -> list[ConnectorDescriptor]:
             supports_streaming=True,
         ),
     ]
+
+
+def build_production_connector_descriptors() -> list[ConnectorProviderDescriptor]:
+    """Return source-neutral retrieval providers only."""
+
+    return [
+        HttpsTelemetryConnector.descriptor(),
+        HistorianTemplateConnector.descriptor(),
+    ]
+
+
+def get_telemetry_connector(
+    connector_type: str,
+    **server_dependencies: Any,
+) -> TelemetryConnector:
+    """Construct a production provider from server-owned dependencies.
+
+    ``server_dependencies`` are startup/worker wiring (egress policy, secret
+    store, reviewed historian registry), never request-body fields.
+    """
+
+    connector_class = PRODUCTION_CONNECTOR_CLASSES.get(str(connector_type))
+    if connector_class is None:
+        raise ValueError("Telemetry connector type is not supported.")
+    try:
+        return connector_class(**server_dependencies)
+    except TypeError:
+        # Avoid reflecting dependency names or values through an API error.
+        raise ValueError("Telemetry connector is not configured on this server.") from None

@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
-from app.services.dataset_scope import payload_matches_dataset_scope
+from app.services.analysis_result_contract import ensure_analysis_result
+from app.services.dataset_scope import current_dataset_scope, payload_matches_dataset_scope
 from app.services.upload_state import build_session_scope
 
 
@@ -28,6 +29,10 @@ def project_result_for_transport(result: dict[str, Any] | None) -> dict[str, Any
         for key, value in result.items()
         if key not in _TRANSPORT_OMITTED_RESULT_KEYS
     }
+    # Build/upgrade the existing presentation contract while the authoritative
+    # SII result is still present; otherwise compact hydration would strip the
+    # only source from which the bounded SII evidence projection can be made.
+    projected["analysis_result"] = ensure_analysis_result(result)
     baseline = projected.get("baseline_analysis")
     if isinstance(baseline, dict) and "relationship_graph" in baseline:
         projected["baseline_analysis"] = {
@@ -80,22 +85,50 @@ def read_upload_history(
     limit: int = 100,
     current_result: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
-    try:
-        paths = sorted(
-            runtime_dir.glob("upload_result_*.json"),
-            key=lambda path: path.stat().st_mtime,
-            reverse=True,
-        )
-    except Exception:
-        paths = []
+    scope = current_dataset_scope()
+    scoped_root = runtime_dir / "scopes" / scope.storage_id
+    candidates: list[tuple[float, Path]] = []
+    seen_uploads: set[str] = set()
 
-    for path in paths[: max(0, int(limit or 100))]:
+    # Scoped files are authoritative. The runtime root is a compatibility
+    # fallback for older writers, and is accepted only when its embedded scope
+    # matches the current server-bound dataset scope.
+    for root in (scoped_root, runtime_dir):
+        try:
+            paths = sorted(
+                root.glob("upload_result_*.json"),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+        except Exception:
+            paths = []
+        for path in paths:
+            try:
+                result = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(result, dict) or not payload_matches_dataset_scope(result, scope):
+                continue
+            upload_identity = str(
+                result.get("job_id")
+                or result.get("upload_id")
+                or result.get("run_id")
+                or path.stem
+            ).strip()
+            if upload_identity in seen_uploads:
+                continue
+            seen_uploads.add(upload_identity)
+            try:
+                modified_at = path.stat().st_mtime
+            except OSError:
+                modified_at = 0.0
+            candidates.append((modified_at, path))
+
+    items: list[dict[str, Any]] = []
+    for _, path in sorted(candidates, key=lambda item: item[0], reverse=True):
         try:
             result = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
-            continue
-        if not payload_matches_dataset_scope(result):
             continue
 
         replay = (

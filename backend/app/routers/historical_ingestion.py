@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Path as ApiPath, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.core.security import require_api_access, require_operator_role
+from app.core.security import require_api_access, require_historical_upload_access
 from app.services.historical_ingestion import (
     CANONICAL_UNITS,
     SUPPORTED_ROLES,
@@ -84,7 +84,7 @@ def get_historical_canonical_dataset(
 @router.patch(
     "/datasets/{dataset_id}/review",
     operation_id="reviewHistoricalIngestionDatasetV1",
-    dependencies=[Depends(require_operator_role)],
+    dependencies=[Depends(require_historical_upload_access)],
 )
 def review_historical_ingestion_dataset(
     request: Request,

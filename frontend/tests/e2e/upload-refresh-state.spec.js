@@ -2,6 +2,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./fixtures.js";
 import { installStoredBaselineUpload } from "./stored-upload-mock.js";
 
+const RETIRED_UPLOAD_REASON = "Retired: queued historical-upload refresh begins with a clean-session file creator that is no longer available in the production Data Connections workflow.";
+
 async function openBaselineImport(page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
@@ -10,6 +12,7 @@ async function openBaselineImport(page) {
 }
 
 test("queued baseline reconciles truthfully after refresh and leaves a recoverable new-upload path", async ({ page }) => {
+  test.skip(true, RETIRED_UPLOAD_REASON);
   const jobId = "refresh-queued-baseline";
   const calls = await installStoredBaselineUpload(page, {
     jobId,

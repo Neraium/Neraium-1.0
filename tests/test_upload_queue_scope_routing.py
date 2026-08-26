@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from app.engine.sii.behavioral_model_contract import AuthenticatedPhase4Scope
 from app.services import upload_jobs, upload_state_repository
 from app.services.dataset_scope import (
     build_dataset_scope,
@@ -16,11 +17,16 @@ from app.services.dataset_scope import (
 from app.services.runtime_db import (
     claim_next_upload_job,
     clear_stale_processing_queue_jobs,
+    complete_upload_queue_job,
     enqueue_upload_job,
     read_upload_job,
     read_upload_queue_job,
 )
 from app.services.job_progress import complete_progress
+from app.services.phase4_scope import (
+    authenticated_phase4_scope_context,
+    authenticated_phase4_scope_from_queue_routing,
+)
 from app.services.upload_session_service import resolve_upload_status
 
 
@@ -71,6 +77,15 @@ class _FakeS3Client:
             if bucket == Bucket and key.startswith(Prefix)
         ]
         return {"Contents": contents, "IsTruncated": False}
+
+
+class _FailingReadS3Client(_FakeS3Client):
+    fail_reads = False
+
+    def get_object(self, *, Bucket: str, Key: str) -> dict[str, _FakeS3Body]:
+        if self.fail_reads:
+            raise RuntimeError("synthetic transient S3 read failure")
+        return super().get_object(Bucket=Bucket, Key=Key)
 
 
 def _configure_shared_runtime(monkeypatch: pytest.MonkeyPatch, fake_s3: _FakeS3Client) -> None:
@@ -370,6 +385,52 @@ def test_shared_queue_route_cannot_be_replaced_by_another_scope(
     queued = read_upload_queue_job("scope-conflict-job")
     assert queued is not None
     assert dataset_scope_from_queue_routing(queued) == owner_scope
+
+
+def test_shared_queue_roundtrip_preserves_authenticated_phase4_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_s3 = _FakeS3Client()
+    _configure_shared_runtime(monkeypatch, fake_s3)
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "api")
+    dataset_scope = build_dataset_scope(
+        tenant_id="tenant-a",
+        user_id="operator@example.com",
+        workspace_id="default",
+    )
+    phase4_scope = AuthenticatedPhase4Scope(
+        tenant_scope_id="tenant-a",
+        workspace_id="ws-plant-a",
+    )
+
+    set_current_dataset_scope(dataset_scope)
+    with authenticated_phase4_scope_context(phase4_scope):
+        enqueue_upload_job("phase4-shared-queue-job")
+    queued = read_upload_queue_job("phase4-shared-queue-job")
+
+    assert queued is not None
+    assert authenticated_phase4_scope_from_queue_routing(
+        queued,
+        dataset_scope=dataset_scope,
+    ) == phase4_scope
+
+
+def test_transient_shared_queue_read_cannot_erase_immutable_routing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_s3 = _FailingReadS3Client()
+    _configure_shared_runtime(monkeypatch, fake_s3)
+    scope = build_dataset_scope(user_id="owner@example.com", workspace_id="plant-a")
+    set_current_dataset_scope(scope)
+    enqueue_upload_job("transient-read-job")
+    key = ("shared-upload-state", "upload-state/upload-queue/transient-read-job.json")
+    original = fake_s3.objects[key]
+
+    fake_s3.fail_reads = True
+    with pytest.raises(RuntimeError, match="shared_upload_queue_read_failed"):
+        complete_upload_queue_job("transient-read-job", "failed", "synthetic")
+
+    assert fake_s3.objects[key] == original
 
 
 def test_split_runtime_stale_recovery_updates_the_routed_scoped_status(

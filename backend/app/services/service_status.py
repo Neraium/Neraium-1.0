@@ -13,6 +13,7 @@ STARTUP_STATUS: dict[str, Any] = {
     "default_connection_ready": False,
     "upload_worker_started": False,
     "data_poller_started": False,
+    "telemetry_worker_started": False,
     "upload_state_backend": "unknown",
     "upload_state_shared_configured": False,
 }
@@ -29,6 +30,7 @@ def reset_startup_status() -> None:
             "default_connection_ready": False,
             "upload_worker_started": False,
             "data_poller_started": False,
+            "telemetry_worker_started": False,
             "upload_state_backend": "unknown",
             "upload_state_shared_configured": False,
         }
@@ -54,6 +56,9 @@ def service_health_snapshot(*, include_upload_session: bool = False) -> dict[str
         "startup_complete": startup_complete,
         "failed_modules": failed_modules,
         "degraded_reasons": degraded_reasons,
+        "telemetry_worker_started": bool(
+            STARTUP_STATUS.get("telemetry_worker_started", False)
+        ),
         "upload_session_state": session_state,
         "upload_session_metrics": metrics,
     }

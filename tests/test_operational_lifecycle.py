@@ -188,6 +188,7 @@ def test_lifespan_stops_every_started_background_service(monkeypatch, tmp_path) 
         tmp_path,
         start_background_workers=True,
         start_data_connection_poller=True,
+        telemetry_legacy_compat_enabled=True,
         shutdown_timeout_seconds=0.25,
     )
     with TestClient(create_app(settings)) as client:

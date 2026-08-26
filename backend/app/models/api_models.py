@@ -342,6 +342,8 @@ class EvidenceRunResponse(BaseModel):
     potential_impact: str | None = None
     condition: dict[str, Any] = Field(default_factory=dict)
     finding_identity_snapshot: list[dict[str, Any]] = Field(default_factory=list)
+    phase_2_supporting_evidence: dict[str, Any] = Field(default_factory=dict)
+    sii_evidence: dict[str, Any] = Field(default_factory=dict)
 
 
 class OperatorFeedbackRequest(ContractModel):

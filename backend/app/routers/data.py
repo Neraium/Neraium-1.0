@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import asyncio
+import csv
 import json
 import time
 from pathlib import Path
@@ -16,9 +17,19 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Path as ApiPa
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from app.services.evidence_store import upsert_evidence_run
-from app.services.dataset_scope import current_dataset_scope, payload_matches_dataset_scope
+from app.services.dataset_scope import (
+    current_dataset_scope,
+    dataset_scope_context,
+    dataset_scope_from_queue_routing,
+    payload_matches_dataset_scope,
+)
 from app.services.analysis_result_contract import ensure_analysis_result
-from app.core.security import _strict_auth_mode, require_api_access, require_operator_role
+from app.core.security import (
+    _strict_auth_mode,
+    require_api_access,
+    require_historical_upload_access,
+    require_operator_role,
+)
 from app.core.path_safety import StoragePathError, ensure_storage_root, resolve_existing_storage_path, safe_upload_suffix, storage_key_for_server_path
 from app.services import upload_jobs
 from app.services.baseline_contracts import (
@@ -61,6 +72,14 @@ from app.services.behavioral_model_repository import (
     read_model,
     read_model_index,
 )
+from app.services.facility_context import resolve_server_bound_system_identity
+from app.services.phase4_scope import (
+    ServerBoundSystemIdentity,
+    authenticated_phase4_scope_context,
+    authenticated_phase4_scope_from_queue_routing,
+    server_bound_system_identity_context,
+    server_bound_system_identity_from_queue_routing,
+)
 from app.models.api_models import BaselineCreationResponse, BehavioralModelApprovalRequest, UploadStatusResponse
 from app.services.upload_evidence import build_evidence_record_from_result
 from app.services.upload_persistence import summarize_result
@@ -70,8 +89,9 @@ from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services.runtime_db import record_audit_event
 from app.services.runtime_db import enqueue_upload_job
 from app.services.runtime_db import queue_metrics as runtime_queue_metrics
-from app.services.runtime_db import touch_upload_queue_job, peek_next_upload_job_for_worker
+from app.services.runtime_db import peek_next_upload_job_for_worker, read_upload_queue_job
 from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir
+from app.services.runtime_db import read_upload_job
 from app.services.upload_state_repository import (
     create_presigned_upload_target,
     inspect_upload_source,
@@ -154,6 +174,37 @@ def _resolve_analysis_baseline(
         "portfolio_id": scope.workspace_id,
         "system_id": source_system,
     }
+
+
+def _resolve_upload_system_identity(
+    *,
+    requested_system_id: str | None,
+    baseline_binding: dict[str, Any] | None,
+):
+    return resolve_server_bound_system_identity(
+        requested_system_id=requested_system_id,
+        baseline_system_id=(baseline_binding or {}).get("system_id"),
+    )
+
+
+def _stored_server_bound_system_identity(payload: Any) -> ServerBoundSystemIdentity | None:
+    if not isinstance(payload, dict):
+        return None
+    try:
+        identity = ServerBoundSystemIdentity(
+            version=str(payload.get("version") or ""),
+            system_id=str(payload.get("system_id") or ""),
+            authority=str(payload.get("authority") or ""),
+            dataset_scope_storage_id=str(payload.get("dataset_scope_storage_id") or ""),
+            authority_record_digest=str(payload.get("authority_record_digest") or ""),
+        )
+    except (TypeError, ValueError):
+        return None
+    return (
+        identity
+        if identity.dataset_scope_storage_id == current_dataset_scope().storage_id
+        else None
+    )
 
 
 def _comparison_dataset_matches_baseline(
@@ -281,89 +332,117 @@ def _should_dispatch_upload_worker(settings: Any) -> bool:
     return True
 
 
+def _record_worker_start_failure(
+    worker_job_id: str,
+    error: Exception,
+    *,
+    runtime_dir: Path,
+) -> None:
+    """Publish a bootstrap failure only after restoring immutable queue scope."""
+    queue_entry = read_upload_queue_job(worker_job_id)
+    try:
+        dataset_scope = dataset_scope_from_queue_routing(queue_entry)
+    except ValueError:
+        logger.exception(
+            "worker_start_failure_scope_unavailable job_id=%s runtime_dir=%s",
+            worker_job_id,
+            runtime_dir,
+        )
+        return
+    phase4_scope = authenticated_phase4_scope_from_queue_routing(
+        queue_entry,
+        dataset_scope=dataset_scope,
+    )
+    system_identity = server_bound_system_identity_from_queue_routing(
+        queue_entry,
+        dataset_scope=dataset_scope,
+        phase4_scope=phase4_scope,
+        job_id=worker_job_id,
+    )
+    with dataset_scope_context(dataset_scope):
+        with authenticated_phase4_scope_context(phase4_scope):
+            with server_bound_system_identity_context(system_identity):
+                failed = upload_jobs.read_upload_status(worker_job_id) or {
+                    "job_id": worker_job_id
+                }
+                dataset_id = failed.get("dataset_id") or worker_job_id
+                request_id = failed.get("request_id")
+                technical_message = (
+                    f"{error.__class__.__name__}: "
+                    f"{str(error) or 'worker startup failed'}"
+                )
+                now = datetime.now(timezone.utc).isoformat()
+                failed.update(
+                    {
+                        **build_upload_error_payload(
+                            "server_unavailable",
+                            message="The import service could not start baseline processing. Retry shortly.",
+                            failed_stage="baseline_job_creation",
+                            retryable=True,
+                            legacy_error_type="worker_start_failed",
+                            job_id=worker_job_id,
+                            dataset_id=dataset_id,
+                            request_id=request_id,
+                            technical_message=technical_message,
+                            exception_type=error.__class__.__name__,
+                            file_stored=bool(
+                                failed.get("file_path")
+                                or failed.get("shared_upload_source_key")
+                            ),
+                            transfer_succeeded=bool(
+                                failed.get("file_path")
+                                or failed.get("shared_upload_source_key")
+                            ),
+                            retry_url=f"/api/data/upload/{worker_job_id}/retry",
+                        ),
+                        "progress_label": "Baseline processing could not start.",
+                        "worker_state": "stalled",
+                        "worker_last_seen_at": now,
+                        "result_available": False,
+                    }
+                )
+                upload_jobs.write_job(failed)
+                if not is_baseline_workflow(failed.get("workflow")):
+                    _upsert_failed_evidence_record(
+                        job_id=worker_job_id,
+                        filename=str(failed.get("filename") or "upload.csv"),
+                        source_type=(
+                            "json_upload"
+                            if str(failed.get("filename") or "")
+                            .lower()
+                            .endswith(".json")
+                            else "csv_upload"
+                        ),
+                        error_message=str(error) or error.__class__.__name__,
+                        initiated_by=str(failed.get("initiated_by") or "anonymous"),
+                    )
+
+
 def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
     worker_job_id: str | None = None
     try:
         logger.info("worker_thread_started runtime_dir=%s", runtime_dir)
         configure_runtime_db_dir(runtime_dir)
         worker_job_id = peek_next_upload_job_for_worker()
-        if worker_job_id:
-            now = datetime.now(timezone.utc).isoformat()
-            try:
-                touch_upload_queue_job(worker_job_id)
-            except Exception:
-                logger.exception("worker_first_heartbeat_touch_failed job_id=%s runtime_dir=%s", worker_job_id, runtime_dir)
-            current = upload_jobs.read_upload_status(worker_job_id) or {"job_id": worker_job_id}
-            staged = {
-                **current,
-                "job_id": worker_job_id,
-                # The worker process is awake, but this job is not active until
-                # claim_next_upload_job() transitions its queue row atomically.
-                "worker_state": "starting",
-                "worker_claimed": False,
-                "worker_last_seen_at": now,
-            }
-            if not staged.get("propagation_stage"):
-                staged["propagation_stage"] = "queued"
-            if staged.get("processing_state") in {None, "", "queued", "pending"}:
-                staged["processing_state"] = "queued"
-            if not staged.get("propagation_label"):
-                staged["propagation_label"] = "Queued."
-            if not staged.get("progress_label"):
-                staged["progress_label"] = staged.get("propagation_label")
-            upload_jobs.write_job(staged)
-            logger.info("worker_first_heartbeat_written job_id=%s runtime_dir=%s", worker_job_id, runtime_dir)
-
         upload_jobs.configure_runtime_dir(runtime_dir)
-        logger.info("worker_process_next_started job_id=%s runtime_dir=%s", worker_job_id, runtime_dir)
+        logger.info("worker_process_next_started runtime_dir=%s", runtime_dir)
         processed = upload_jobs.process_next_queued_upload_job()
-        logger.info("worker_process_next_finished job_id=%s runtime_dir=%s processed=%s", worker_job_id, runtime_dir, processed)
+        logger.info("worker_process_next_finished runtime_dir=%s processed=%s", runtime_dir, processed)
     except Exception as exc:
-        failed = upload_jobs.read_upload_status(worker_job_id) if worker_job_id else {}
-        failed = failed or ({"job_id": worker_job_id} if worker_job_id else {})
-        dataset_id = failed.get("dataset_id") or worker_job_id
-        request_id = failed.get("request_id")
-        technical_message = f"{exc.__class__.__name__}: {str(exc) or 'worker startup failed'}"
         logger.exception(
             "worker_process_next_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=%s runtime_dir=%s",
-            dataset_id,
+            None,
             worker_job_id,
-            request_id,
+            None,
             exc.__class__.__name__,
             runtime_dir,
         )
         if worker_job_id:
-            now = datetime.now(timezone.utc).isoformat()
-            failed.update({
-                **build_upload_error_payload(
-                    "server_unavailable",
-                    message="The import service could not start baseline processing. Retry shortly.",
-                    failed_stage="baseline_job_creation",
-                    retryable=True,
-                    legacy_error_type="worker_start_failed",
-                    job_id=worker_job_id,
-                    dataset_id=dataset_id,
-                    request_id=request_id,
-                    technical_message=technical_message,
-                    exception_type=exc.__class__.__name__,
-                    file_stored=bool(failed.get("file_path") or failed.get("shared_upload_source_key")),
-                    transfer_succeeded=bool(failed.get("file_path") or failed.get("shared_upload_source_key")),
-                    retry_url=f"/api/data/upload/{worker_job_id}/retry",
-                ),
-                "progress_label": "Baseline processing could not start.",
-                "worker_state": "stalled",
-                "worker_last_seen_at": now,
-                "result_available": False,
-            })
-            upload_jobs.write_job(failed)
-            if not is_baseline_workflow(failed.get("workflow")):
-                _upsert_failed_evidence_record(
-                    job_id=worker_job_id,
-                    filename=str(failed.get("filename") or "upload.csv"),
-                    source_type="json_upload" if str(failed.get("filename") or "").lower().endswith(".json") else "csv_upload",
-                    error_message=str(exc) or exc.__class__.__name__,
-                    initiated_by=str(failed.get("initiated_by") or "anonymous"),
-                )
+            _record_worker_start_failure(
+                worker_job_id,
+                exc,
+                runtime_dir=runtime_dir,
+            )
 
 
 def _run_tracked_upload_worker(runtime_dir: Path) -> None:
@@ -492,7 +571,11 @@ def _valid_large_upload_filename(filename: str) -> bool:
     return str(filename or "").lower().endswith(".csv")
 
 
-@router.post("/upload-session", status_code=201, dependencies=[Depends(require_operator_role)])
+@router.post(
+    "/upload-session",
+    status_code=201,
+    dependencies=[Depends(require_historical_upload_access)],
+)
 def create_large_upload_session(request: Request, payload: LargeUploadSessionRequest):
     if _strict_auth_mode(request):
         allowed, retry_after = consume_rate_limit(
@@ -530,6 +613,10 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
         )
     except ValueError as exc:
         return _baseline_binding_error(exc, workflow)
+    system_identity_resolution = _resolve_upload_system_identity(
+        requested_system_id=payload.system_id,
+        baseline_binding=baseline_binding,
+    )
     resolved_approval_required = (
         bool(getattr(settings, "baseline_approval_required", True))
         if payload.approval_required is None
@@ -608,6 +695,15 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
                 "active_baseline_dataset_id": (baseline_binding or {}).get("baseline_dataset_id"),
                 "active_baseline_system_id": (baseline_binding or {}).get("system_id") or current_dataset_scope().workspace_id,
                 "active_baseline_portfolio_id": (baseline_binding or {}).get("portfolio_id") or current_dataset_scope().workspace_id,
+                "phase4_system_identity": (
+                    system_identity_resolution.identity.as_dict()
+                    if system_identity_resolution.identity is not None
+                    else None
+                ),
+                "phase4_system_identity_status": (
+                    "available" if system_identity_resolution.available else "unavailable"
+                ),
+                "phase4_system_identity_reason": system_identity_resolution.reason,
             },
         )
     except Exception:
@@ -642,7 +738,11 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
     }
 
 
-@router.post("/upload-session/{upload_session_id}/complete", status_code=202, dependencies=[Depends(require_operator_role)])
+@router.post(
+    "/upload-session/{upload_session_id}/complete",
+    status_code=202,
+    dependencies=[Depends(require_historical_upload_access)],
+)
 def complete_large_upload_session(
     request: Request,
     upload_session_id: UploadJobPath,
@@ -814,6 +914,9 @@ def complete_large_upload_session(
         )
     except ValueError as exc:
         return _baseline_binding_error(exc, workflow)
+    phase4_system_identity = _stored_server_bound_system_identity(
+        session.get("phase4_system_identity")
+    )
     worker_dispatch_status = "thread_dispatched" if _should_dispatch_upload_worker(request.app.state.settings) else "external_worker_queue"
     try:
         session = write_large_upload_session(
@@ -878,6 +981,15 @@ def complete_large_upload_session(
         "active_baseline_dataset_id": (baseline_binding or {}).get("baseline_dataset_id"),
         "active_baseline_system_id": (baseline_binding or {}).get("system_id") or current_dataset_scope().workspace_id,
         "active_baseline_portfolio_id": (baseline_binding or {}).get("portfolio_id") or current_dataset_scope().workspace_id,
+        "phase4_system_identity": (
+            phase4_system_identity.as_dict()
+            if phase4_system_identity is not None
+            else None
+        ),
+        "phase4_system_identity_status": (
+            "available" if phase4_system_identity is not None else "unavailable"
+        ),
+        "phase4_system_identity_reason": session.get("phase4_system_identity_reason"),
     }
     if is_baseline_workflow(workflow):
         summary.update(
@@ -973,7 +1085,12 @@ def complete_large_upload_session(
             logger.warning("large_upload_evidence_write_failed upload_session_id=%s", upload_session_id, exc_info=True)
 
     try:
-        enqueue_upload_job(job_id)
+        enqueue_upload_job(
+            job_id,
+            system_identity=phase4_system_identity,
+            dataset_id=dataset_id,
+            upload_session_id=upload_session_id,
+        )
         _log_upload_event(
             "job_queued",
             correlation_id=upload_session_id,
@@ -1098,7 +1215,11 @@ def complete_large_upload_session(
     }
 
 
-@router.post("/upload", status_code=202, dependencies=[Depends(require_operator_role)])
+@router.post(
+    "/upload",
+    status_code=202,
+    dependencies=[Depends(require_historical_upload_access)],
+)
 async def upload_data(
     request: Request,
     file: UploadFile = File(...),
@@ -1137,6 +1258,10 @@ async def upload_data(
         )
     except ValueError as exc:
         return _baseline_binding_error(exc, workflow)
+    system_identity_resolution = _resolve_upload_system_identity(
+        requested_system_id=system_id,
+        baseline_binding=baseline_binding,
+    )
     resolved_approval_required = (
         bool(getattr(settings, "baseline_approval_required", True))
         if approval_required is None
@@ -1342,6 +1467,15 @@ async def upload_data(
             "active_baseline_dataset_id": (baseline_binding or {}).get("baseline_dataset_id"),
             "active_baseline_system_id": (baseline_binding or {}).get("system_id") or current_dataset_scope().workspace_id,
             "active_baseline_portfolio_id": (baseline_binding or {}).get("portfolio_id") or current_dataset_scope().workspace_id,
+            "phase4_system_identity": (
+                system_identity_resolution.identity.as_dict()
+                if system_identity_resolution.identity is not None
+                else None
+            ),
+            "phase4_system_identity_status": (
+                "available" if system_identity_resolution.available else "unavailable"
+            ),
+            "phase4_system_identity_reason": system_identity_resolution.reason,
         }
         if is_baseline_workflow(workflow):
             summary.update(
@@ -1402,7 +1536,12 @@ async def upload_data(
                 }
             )
         failure_stage = "baseline_job_creation"
-        enqueue_upload_job(job_id)
+        enqueue_upload_job(
+            job_id,
+            system_identity=system_identity_resolution.identity,
+            dataset_id=dataset_id,
+            upload_session_id=dataset_id,
+        )
         job_creation_ms = max(0.0, (time.perf_counter() - job_creation_started_at) * 1000)
         if processing_file_path is None:
             Path(temp_path).unlink(missing_ok=True)
@@ -1604,7 +1743,11 @@ async def upload_data(
     }
 
 
-@router.post("/upload/{job_id}/retry", status_code=202, dependencies=[Depends(require_operator_role)])
+@router.post(
+    "/upload/{job_id}/retry",
+    status_code=202,
+    dependencies=[Depends(require_historical_upload_access)],
+)
 async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
     settings = request.app.state.settings
     request_id = getattr(request.state, "request_id", None)
@@ -1700,7 +1843,10 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
     }
     try:
         upload_jobs.write_job(retried)
-        enqueue_upload_job(requested_job_id)
+        enqueue_upload_job(
+            requested_job_id,
+            preserve_existing_routing=True,
+        )
     except Exception:
         logger.exception(
             "upload_retry_enqueue_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=upload_enqueue_failed",
@@ -2300,7 +2446,7 @@ async def approve_behavioral_model_candidate(
     }
 
 
-@router.post("/reset", dependencies=[Depends(require_operator_role)])
+@router.post("/reset", dependencies=[Depends(require_historical_upload_access)])
 async def reset_data():
     reset_upload_state()
     _clear_endpoint_caches()
@@ -2310,13 +2456,65 @@ async def reset_data():
 def rebuild_upload_replay_from_source(job_id: str | dict | None = None, *args, **kwargs):
     payload = job_id if isinstance(job_id, dict) else {}
     requested_job_id = str(payload.get("job_id") or job_id or "")
+    if requested_job_id and not payload:
+        payload = read_upload_job(requested_job_id) or upload_jobs.read_upload_status(requested_job_id) or {}
+        if isinstance(payload, dict):
+            payload = {**payload, "job_id": requested_job_id}
+        else:
+            payload = {"job_id": requested_job_id}
+    if requested_job_id:
+        artifacts = resolve_upload_artifacts(requested_job_id)
+        result_payload = artifacts.get("result") if isinstance(artifacts.get("result"), dict) else {}
+        summary_payload = artifacts.get("summary") if isinstance(artifacts.get("summary"), dict) else {}
+        phase4_system_identity = (
+            result_payload.get("phase4_system_identity")
+            or summary_payload.get("phase4_system_identity")
+        )
+        if phase4_system_identity is not None and isinstance(payload, dict):
+            payload = {**payload, "phase4_system_identity": phase4_system_identity}
     file_path = payload.get("file_path")
     path = _resolve_upload_source_path(UPLOAD_RUNTIME_STATE.runtime_dir, file_path)
     if path is None:
-        return read_replay_payload(requested_job_id or None)
+        replay_payload = read_replay_payload(requested_job_id or None)
+        replay_meta = replay_payload.get("meta")
+        if not isinstance(replay_meta, dict):
+            replay_meta = {}
+        return {
+            **replay_payload,
+            "meta": {
+                **replay_meta,
+                "phase4_system_identity": payload.get("phase4_system_identity"),
+            },
+        }
 
-    result = upload_jobs.process_csv_file(path)
-    replay = result.get("replay_timeline") or {}
+    # Replay reconstruction is intentionally read-only. Running the full upload
+    # pipeline here would create a fresh job identity and could write unrelated
+    # Phase 4 memory under the caller's current context.
+    with path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
+        reader = csv.DictReader(handle)
+        columns = [str(column or "").strip() for column in (reader.fieldnames or [])]
+        rows = [dict(row) for row in reader]
+    timestamp_column = upload_jobs._detect_timestamp_column(columns)
+    numeric_columns = upload_jobs._detect_numeric_columns(
+        rows,
+        columns,
+        exclude={timestamp_column},
+    )
+    if timestamp_column and numeric_columns:
+        replay = upload_jobs._build_replay(
+            rows,
+            timestamp_column,
+            numeric_columns,
+            requested_job_id,
+        )
+    else:
+        replay = upload_jobs._minimal_replay(
+            columns,
+            rows,
+            timestamp_column,
+            numeric_columns,
+            requested_job_id,
+        )
     timeline = replay.get("timeline", []) if isinstance(replay, dict) else []
     replay_mode = "minimal_timestamp_fallback"
     try:
@@ -2339,10 +2537,14 @@ def rebuild_upload_replay_from_source(job_id: str | dict | None = None, *args, *
         pass
 
     return {
-        "job_id": requested_job_id or result.get("job_id"),
+        "job_id": requested_job_id or None,
         "timeline": timeline,
         "frame_count": len(timeline),
-        "meta": {**(replay.get("meta", {}) if isinstance(replay, dict) else {}), "replay_mode": replay_mode},
+        "meta": {
+            **(replay.get("meta", {}) if isinstance(replay, dict) else {}),
+            "replay_mode": replay_mode,
+            "phase4_system_identity": payload.get("phase4_system_identity"),
+        },
         "message": "Replay reconstructed from the retained source CSV.",
     }
 

@@ -2,6 +2,8 @@
 
 This document captures the active AWS deployment path for Neraium-1.0. Production bootstrap and ECS deployment are handled by a checked-in AWS CLI script plus GitHub Actions. Terraform is inactive and not the production source of truth.
 
+The checked-in production bootstrap/deploy workflow does **not** yet provision or inject the new production telemetry database, scoped telemetry Secrets Manager permissions, controlled connector egress, historian templates, or telemetry-specific alarms. The [production telemetry section](#production-telemetry-connections-separate-approval-required) is a required handoff, not a claim about deployed AWS state.
+
 ## Targets
 
 - Backend: Amazon ECS Express Mode / ECS Fargate
@@ -126,10 +128,13 @@ Two valid production patterns:
 - Keep frontend on static origin (Amplify/S3).
 - Add CloudFront behavior for `/api/*` with backend origin (ALB/ECS service).
 - Forward query strings, required headers, and cookies for authenticated requests.
-- Ensure all methods are allowed for API behavior (GET/HEAD/OPTIONS/POST at minimum). The presigned object upload is a separate S3 `PUT` governed by bucket CORS.
+- Ensure all API methods are allowed for the backend behavior (`GET`, `HEAD`, `OPTIONS`, `POST`, `PUT`, `PATCH`, and `DELETE`). The presigned object upload is a separate S3 `PUT` governed by bucket CORS.
 
 Required API routes to backend origin:
 
+- `/api/data-connections*`
+- `/api/findings*`
+- `/api/evidence*`
 - `/api/data/upload`
 - `/api/data/upload-session`
 - `/api/data/upload-session/*/complete`
@@ -138,9 +143,151 @@ Required API routes to backend origin:
 
 The local frontend default remains `http://127.0.0.1:8010` when `VITE_API_BASE_URL` is not set.
 
+## Production telemetry connections: separate approval required
+
+The application-side contract is documented in [Production Telemetry Connections](TELEMETRY_CONNECTIONS.md). No telemetry AWS, IAM, database, network, or production change was performed as part of the implementation campaign.
+
+### Pre-deploy inventory
+
+Before changing AWS, an authorized operator must record and verify, without pasting secret values:
+
+- the target AWS account, region, ECS cluster, API service/task family, worker service/task family, and current rollback revisions;
+- the shared PostgreSQL/RDS endpoint and database that will own the additive `telemetry` schema;
+- the API and worker task roles and the migration role;
+- the KMS key used by connection secrets, if not the AWS managed Secrets Manager key;
+- the actual API/worker VPC subnets, security groups, DNS resolver path, NAT/egress proxy/firewall, and approved customer source destinations;
+- CloudWatch log groups, metric filters/alarms, and worker desired count;
+- whether credentials will use dynamic API writes or a server-owned pre-provisioned binding workflow;
+- whether any reviewed historian template/executor and private network profile actually exist. The default application registry is empty.
+
+Do not infer these values from examples in this repository. Compare them with the live task definitions and approved infrastructure inventory before proceeding.
+
+### PostgreSQL prerequisites
+
+Use a shared PostgreSQL authority on a repository-supported version, reachable from both API and worker tasks. Production `NERAIUM_TELEMETRY_DATABASE_URL` validation requires TLS (`sslmode=require`, `verify-ca`, or `verify-full`; prefer `verify-full` with an approved CA). Store the DSN in Secrets Manager/SSM and inject it through the ECS task-definition `secrets` array. Do not put it in the task-definition `environment` array or GitHub logs.
+
+Use separate identities where the deployment supports them:
+
+- migration identity: the bounded DDL permissions needed to create/alter the `telemetry` schema and its objects;
+- application API/worker identity or identities: connect plus only the schema/table/sequence DML needed by the repository, with no schema drop/owner/superuser rights.
+
+The exact forward-only migration and verifier commands are in [Database migrations](database-migrations.md#production-telemetry-schema). Apply 002, 003, then 004 before any task receives `NERAIUM_TELEMETRY_DATABASE_URL`. Application startup verifies but never applies migrations.
+
+### Secrets Manager and IAM prerequisites
+
+Connection secrets use the namespace:
+
+```text
+neraium/<environment>/telemetry-connections/*
+```
+
+They must carry ownership tags for `neraium:managed-by`, `neraium:resource-scope-id`, and `neraium:connection-id`. Scope resource permissions to the environment namespace and constrain create/tag behavior with reviewed tag conditions. Do not grant `ListSecrets`, `DeleteSecret`, broad wildcard secret access, or access to another environment.
+
+Required actions depend on the approved credential model:
+
+| Principal | Pre-provisioned binding | Dynamic credential write |
+|---|---|---|
+| API task role | `secretsmanager:DescribeSecret`, `secretsmanager:GetSecretValue` for validation/discovery | Add scoped `CreateSecret` and `UpdateSecret`; retain scoped describe/get |
+| Worker task role | `secretsmanager:DescribeSecret`, `secretsmanager:GetSecretValue` | Same read-only actions; worker does not create/update secrets |
+| Approved operations/migration principal | Provision/tag/bind according to the reviewed runbook only | No standing application access required |
+
+Add `kms:Decrypt` only for the exact customer-managed key when required. Secret creation with a customer-managed key may need separately reviewed KMS encrypt/data-key permissions. Do not add KMS or IAM permissions by assumption.
+
+Keep `NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES=false` unless the dynamic-write policy has been reviewed and deployed. If it remains false, customer credential submission is intentionally unavailable until a server-owned pre-provisioned binding operation exists; the browser cannot submit an ARN/reference.
+
+### Egress and provider prerequisites
+
+The HTTPS adapter performs application-level SSRF checks and pins authorized DNS answers to the socket. Production still requires an independent controlled-egress boundary. Before setting `NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED=true`:
+
+1. route connector HTTPS through an approved egress firewall/proxy/NAT policy;
+2. deny loopback, RFC1918, link-local, metadata, multicast, reserved, and other non-public destinations independently of application code;
+3. restrict outbound TCP to 443 and approved destination policy where operationally possible;
+4. ensure environment proxy variables cannot bypass the policy (the connector itself uses `trust_env=false`);
+5. verify DNS resolution and direct-address TLS/SNI behavior from the worker task network;
+6. define logging that records safe outcome/code/latency without full URLs, query values, headers, credentials, or payloads.
+
+Private historian/customer sources require a separately approved network architecture and a registered `ServerHistorianTemplate`/executor. Do not open generic private egress and do not expose SQL, DSN, path, host, port, or query templates to the browser.
+
+### Task-definition configuration
+
+After schema, IAM, Secrets Manager, and egress approval, inject the following into both API and worker revisions as appropriate:
+
+```text
+# secret injection on API and worker
+NERAIUM_TELEMETRY_DATABASE_URL=<telemetry PostgreSQL DSN secret>
+
+# non-secret environment on API and worker
+NERAIUM_TELEMETRY_SECRET_REGION=<approved AWS region>
+NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED=true
+NERAIUM_TELEMETRY_LEGACY_COMPAT=false
+NERAIUM_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS=2
+NERAIUM_TELEMETRY_SCHEDULER_LEASE_SECONDS=120
+NERAIUM_TELEMETRY_WORKER_HEARTBEAT_INTERVAL_SECONDS=30
+
+# only if dynamic secret IAM was separately approved
+NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES=true
+```
+
+The timing values shown are application defaults, not sizing evidence. Change them only from measured source/API latency and lease behavior. Keep `NERAIUM_START_DATA_POLLER=false`. The existing worker role must have `NERAIUM_START_BACKGROUND_WORKERS=true` (or its role default), a nonzero desired count, and enough stop grace to finish or safely expire a bounded page. Do not run a separate frontend poller or the legacy API-thread data poller.
+
+Update the active GitHub deployment workflow or task-definition source of truth to preserve these settings in later revisions. A one-off console edit that the next workflow registration removes is not a valid deployment.
+
+### Telemetry monitoring prerequisites
+
+Extend CloudWatch monitoring before enablement. At minimum capture/alert on:
+
+- telemetry worker heartbeat absent/degraded and ECS worker desired/running count mismatch;
+- `telemetry_scheduler_iteration_failed`, ingestion-run failure, and repeated safe provider errors;
+- enabled connection with no success/telemetry/checkpoint beyond cadence;
+- retry storms, lease recovery, partial runs, and rejection-ratio spikes;
+- stale/unmapped/problem signal counts and mapping failures;
+- Secrets Manager access/ownership/version failures and controlled-egress denials;
+- `telemetry_schema_readiness_failure` or runtime configuration failure;
+- post-ingestion analysis failures or repeated insufficient authority/coverage.
+
+Do not use connection credentials, secret references, full source URLs, external payloads, or raw telemetry as metric dimensions.
+
+### Separately approved deployment sequence
+
+1. Freeze the reviewed application artifact/revision and record current API, worker, frontend, and database rollback points.
+2. Rehearse migrations and concurrent lease/checkpoint tests against disposable PostgreSQL using `NERAIUM_TEST_POSTGRES_DSN`.
+3. Approve and apply database role/network changes; take a production snapshot.
+4. Stop/hold the telemetry worker path and apply migrations 002, 003, 004 with the migration identity; run all three structural verifiers with the application identity.
+5. Provision/tag the telemetry secret namespace and apply least-privilege API/worker/KMS policies. Establish the approved dynamic-write or pre-provisioned-binding mode.
+6. Apply and independently verify controlled egress. Register any reviewed historian template/executor only if that provider is part of the approved rollout.
+7. Register new API and worker task definitions with the telemetry DSN secret and non-secret settings. Keep legacy compatibility and legacy polling off.
+8. Deploy the API revision first with telemetry schema readiness green, then deploy a worker revision with a controlled desired count. Confirm both revisions use the same database authority and build SHA.
+9. Deploy the reviewed frontend so Data Connections is the production onboarding surface and historical import remains hidden/admin-gated.
+10. In a non-production or explicitly approved pilot facility, execute create -> credential -> validate -> discover -> map -> enable -> ingest -> canonical observation -> SII -> Results -> Finding Review -> Investigation -> Evidence Record using controlled synthetic telemetry.
+11. Enable pilot customer connections gradually and watch telemetry health, checkpoint progress, rejection/retry rates, database growth, and analysis outcomes before broadening rollout.
+
+Every step above changes production state and requires separate approval. Do not automatically deploy, modify IAM, mutate the database, change DNS, or touch `demo.neraium.com`.
+
+### Post-deploy verification
+
+Verify all of the following before declaring the feature available:
+
+- `/api/health` and `/api/ready` are healthy on the direct backend and `app.neraium.com` API route;
+- API and worker startup contain no telemetry schema/runtime failure and report the expected build SHA/role;
+- an authenticated facility member sees only that facility's connections; a second-tenant probe receives opaque not-found/empty results;
+- provider discovery advertises retrieval-only capability and reports historian unavailable unless explicitly registered;
+- credential response, logs, errors, audit, evidence, and browser storage contain no value, ARN, binding ID, or internal reference;
+- SSRF probes and redirects remain denied from the deployed task network, and the controlled egress layer independently blocks private/metadata destinations;
+- validation distinguishes reachability and authentication; connection health additionally distinguishes telemetry arrival, mapping, quality, and checkpoint state;
+- discovered tags remain unmapped/disabled until an authorized mapping with explicit unit/time/cadence is approved;
+- the worker obtains one lease, persists an idempotent page plus checkpoint, records partial rejections without losing accepted siblings, and resumes after a controlled restart;
+- a bounded backfill is resumable and uses the same canonical pipeline;
+- one canonical system window invokes SII once and the resulting finding/evidence traces to exact observations, mapping revision, connection, run, and timestamps;
+- stable and insufficient-evidence outcomes do not manufacture findings or imply that individual sensors are normal;
+- CloudWatch telemetry alarms and safe dashboards receive expected events/counters without sensitive payloads.
+
+If any check fails, stop enabling new connections, disable pilot connections through the scoped API where safe, hold the worker, and use the forward-fix/application-rollback posture in [Database migrations](database-migrations.md#rollback-posture). Do not drop the telemetry schema or delete evidence.
+
 ## Deployment Order
 
-1. Push the latest GitHub `main` branch.
+For releases without production telemetry, the existing deployment order remains below. A release that enables production telemetry must first complete the separately approved sequence above; the current workflows do not do that automatically.
+
+1. Push the reviewed release branch through the normal protected-main process.
 2. Run the shared AWS bootstrap workflow or script when bucket, IAM, or log-group drift is possible.
 3. Build and push the backend Docker image to Amazon ECR.
 4. Deploy the backend through the GitHub Actions ECS workflow.
@@ -154,11 +301,14 @@ The local frontend default remains `http://127.0.0.1:8010` when `VITE_API_BASE_U
 8. Update backend `CORS_ORIGINS=https://<amplify-frontend-domain>` in ECS.
 9. Verify production domain routing:
    - `curl -i https://app.neraium.com/api/health` should NOT return `server: AmazonS3` redirect behavior.
-10. Verify upload pipeline routes on production domain:
+10. Verify the normal production Data Connections routes and the admin-gated historical compatibility routes on the production domain.
+11. Test the controlled create -> validate -> discover -> map -> enable flow for an approved non-production/pilot connection. If historical compatibility is part of the release, test its permission boundary separately.
+
+Historical compatibility routes include:
+
    - `POST /api/data/upload`
    - `GET /api/data/upload-status/<job_id>`
    - `GET /api/data/upload-stream/<job_id>`
-11. Test full CSV upload flow from live frontend.
 
 ## Local Validation Commands
 
@@ -194,7 +344,7 @@ Invoke-RestMethod http://127.0.0.1:8080/api/health
 
 ## Deployment Boundaries
 
-This preparation intentionally does not add user accounts, database persistence, or changes to API response shapes. AWS bootstrap and ECS deployment automation now live in checked-in scripts and GitHub workflows. Terraform remains deprecated and should not be used for active production ECS changes.
+The existing AWS bootstrap does not provision the production telemetry database schema, telemetry connection secrets/IAM, controlled egress, historian provider registration, or telemetry alarms. Those remain separately approved prerequisites. AWS bootstrap and ECS deployment automation otherwise live in checked-in scripts and GitHub workflows. Terraform remains deprecated and should not be used for active production ECS changes.
 
 ## Production Bootstrap
 

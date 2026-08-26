@@ -11,23 +11,23 @@ async function openSite(page, viewport) {
   await page.setViewportSize(viewport);
   await page.route("**/api/data/latest-upload**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(evidenceLimitedPayload()) }));
   await page.goto("/sites/current", { waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId("workspace-state-insufficientEvidence")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Insufficient evidence" })).toBeVisible();
 }
 
 test.describe("Evidence-limited analysis presentation", () => {
   test("withholds unsupported findings and explains the evidence boundary", async ({ page }) => {
     await openSite(page, { width: 1440, height: 900 });
-    await expect(page.getByText("Operations Brief · Insufficient Evidence")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "More evidence is needed" })).toBeVisible();
-    await expect(page.getByText("Analysis completed, but the available data does not support a reliable finding.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Review Evidence" })).toBeVisible();
+    await expect(page.getByText("Operations Brief")).toBeVisible();
+    await expect(page.getByText("Missing telemetry limits the conclusion.")).toBeVisible();
+    await expect(page.getByText("More complete operating history would improve the assessment.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open evidence record" })).toBeVisible();
     await expect(page.getByText("Possible hydraulic restriction")).toHaveCount(0);
     await expect(page.getByText("Inspect Filter-03")).toHaveCount(0);
   });
 
   test("mobile preserves the evidence boundary without overflow", async ({ page }) => {
     await openSite(page, { width: 390, height: 844 });
-    await expect(page.getByRole("heading", { name: "More evidence is needed" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Insufficient evidence" })).toBeVisible();
     await expect(page.getByText("Possible hydraulic restriction")).toHaveCount(0);
     const widths = await page.evaluate(() => ({ root: document.documentElement.scrollWidth, body: document.body.scrollWidth, viewport: innerWidth }));
     expect(widths.root).toBeLessThanOrEqual(widths.viewport + 1);

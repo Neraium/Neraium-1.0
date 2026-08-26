@@ -409,7 +409,7 @@ def test_stale_but_valid_initial_telemetry_sets_delayed_health(
     assert state["accepted_count"] == 1
 
 
-def test_telemetry_endpoints_require_authentication_in_production(
+def test_legacy_global_telemetry_endpoints_are_retired_after_authentication_in_production(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -442,14 +442,22 @@ def test_telemetry_endpoints_require_authentication_in_production(
             "/api/telemetry/signal-mappings",
             json=_mapping_payload(),
             headers=headers,
-        ).status_code == 201
+        ).status_code == 410
         assert production_client.post(
             "/api/telemetry/ingest",
             json=_ingestion_payload(
                 readings=[{"timestamp": _timestamp(), "signals": {"CHWP-1-KW": 1}}]
             ),
             headers=headers,
-        ).status_code == 200
+        ).status_code == 410
+        assert production_client.get(
+            "/api/telemetry/signal-mappings",
+            headers=headers,
+        ).status_code == 410
+        assert production_client.get(
+            "/api/telemetry/ingestion-health",
+            headers=headers,
+        ).status_code == 410
 
 
 def test_configurable_reading_signal_and_request_size_limits(

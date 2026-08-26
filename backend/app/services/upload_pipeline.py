@@ -5,7 +5,9 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from app.engine.sii.behavioral_model_contract import AuthenticatedPhase4Scope
 from app.engine.sii_engine import evaluate_sii
+from app.services.phase4_scope import ServerBoundSystemIdentity
 from app.services.cultivation_mapping import map_cultivation_columns
 from app.services.driver_attribution import build_driver_attribution
 from app.services.operator_report import build_operator_report
@@ -13,6 +15,7 @@ from app.services.mode_aware_authority import apply_mode_aware_suppression
 from app.services.sii_intelligence import build_upload_intelligence
 from app.services.sii_runner import RUNNER_MODULE
 from app.services.telemetry_confidence import apply_telemetry_confidence_adjustment
+from app.services.telemetry_analysis_window import run_upload_analysis_compatibility
 from app.services.job_progress import ProgressReporter
 from app.services.performance_instrumentation import (
     compact_performance_summary,
@@ -81,6 +84,8 @@ def run_structural_analysis_pipeline(
     build_upload_engine_result: Callable[..., dict[str, Any]],
     stage_notifier: Callable[..., None],
     progress_reporter: ProgressReporter | None = None,
+    phase4_scope: AuthenticatedPhase4Scope | None = None,
+    phase4_system_identity: ServerBoundSystemIdentity | None = None,
 ) -> dict[str, Any]:
     stage_notifier(job_id, stage="building_baseline", progress=60, label="Identifying systems...")
     matrix_rows = matrix_rows_for_profiles
@@ -232,13 +237,47 @@ def run_structural_analysis_pipeline(
             force=bool(metadata.get("operation_complete")),
         )
 
-    sii_result = evaluate_sii(
-        columns=columns,
-        rows=rows,
-        numeric_profiles=numeric_profiles,
-        timestamp_column=timestamp_column,
-        telemetry_signal_catalog=telemetry_signal_catalog,
-        config={
+    if phase4_scope is not None:
+        # Authenticated uploads accept business identity only through the
+        # server-bound queue contract. Ingestion reports are derived from the
+        # uploaded content and must never select longitudinal Phase 4 memory.
+        infrastructure_identity = {
+            "tenant_id": phase4_scope.tenant_scope_id,
+            "workspace_id": phase4_scope.workspace_id,
+            "resource_scope_id": phase4_scope.resource_scope_id,
+        }
+        if phase4_system_identity is not None:
+            infrastructure_identity["system_id"] = phase4_system_identity.system_id
+    else:
+        # Preserve direct/internal engine compatibility when no authenticated
+        # upload authority is present. This path cannot write a v2 scoped
+        # ledger because Phase 4 scope itself is unavailable.
+        infrastructure_identity = {
+            key: ingestion_report.get(key)
+            for key in (
+                "organization_id",
+                "tenant_id",
+                "workspace_id",
+                "portfolio_id",
+                "resource_scope_id",
+                "facility_id",
+                "system_id",
+                "subsystem_id",
+                "equipment_group_id",
+                "configured_model_id",
+            )
+            if ingestion_report.get(key)
+        }
+
+    sii_result = run_upload_analysis_compatibility(
+        evaluator=evaluate_sii,
+        evaluation_kwargs={
+            "columns": columns,
+            "rows": rows,
+            "numeric_profiles": numeric_profiles,
+            "timestamp_column": timestamp_column,
+            "telemetry_signal_catalog": telemetry_signal_catalog,
+            "config": {
             "numeric_columns": numeric_columns,
             "row_count_total": row_count_total,
             "header_present": bool(ingestion_report.get("header_present", True)),
@@ -273,20 +312,11 @@ def run_structural_analysis_pipeline(
             "processing_trace": initial_processing_trace,
             "source_run_id": job_id,
             "mode_aware_suppression_enabled": _mode_aware_suppression_enabled(),
-            "infrastructure_identity": {
-                key: ingestion_report.get(key)
-                for key in (
-                    "organization_id",
-                    "facility_id",
-                    "system_id",
-                    "subsystem_id",
-                    "equipment_group_id",
-                    "configured_model_id",
-                )
-                if ingestion_report.get(key)
+            "infrastructure_identity": infrastructure_identity,
             },
+            "progress_callback": report_engine_progress,
+            "phase4_scope": phase4_scope,
         },
-        progress_callback=report_engine_progress,
     )
     compatibility = sii_result.get("compatibility") or {}
     baseline_analysis = compatibility.get("baseline_analysis") or {}

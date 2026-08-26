@@ -2,7 +2,7 @@
 import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import DataConnectionsWorkspace, { formatAnalysisUpdateTime, frontendPollingTiming, queuedWorkerMessage, resolveOpenBaselineIdentity } from "./DataConnectionsWorkspace";
+import DataConnectionsWorkspace, { formatAnalysisUpdateTime, frontendPollingTiming, queuedWorkerMessage, resolveOpenBaselineIdentity } from "./HistoricalImportWorkspace";
 import IntakeFlowPanel, { baselineCompletionSummary, failedImportStageRows, resolveBaselineProcessingStage } from "./setup/IntakeFlowPanel";
 import { retryUploadAnalysisJob, uploadTelemetryFileWithProgress } from "../services/api/uploadApi";
 import { clearBaselineResultCache } from "../services/api/baselineApi";

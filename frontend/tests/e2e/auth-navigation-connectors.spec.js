@@ -1,8 +1,6 @@
 import { expect, test } from "./fixtures.js";
-import path from "node:path";
 
 const apiBaseURL = `http://127.0.0.1:${Number(process.env.PLAYWRIGHT_BACKEND_PORT || 8012)}`;
-const e2eDatabaseURL = `sqlite:///${path.resolve(process.cwd(), "../.playwright-runtime/e2e-telemetry.sqlite").replaceAll("\\", "/")}`;
 
 const AUTH_VIEWPORTS = [
   { name: "iPhone 12/13", width: 390, height: 844 },
@@ -108,20 +106,21 @@ test.describe("Authentication, navigation, connectors, and permissions", () => {
     await expect(page.getByRole("status")).toContainText("session expired");
   });
 
-  test("administrator can test and normalize a sample connector with refreshed health", async ({ page }) => {
+  test("administrator uses production Data Connections while the legacy connector panel stays retired", async ({ page }) => {
     await page.goto("/workspace/data-sources");
+    await expect(page.getByTestId("telemetry-connections-workspace")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect a physical system", level: 1 })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add data source" }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Establish Initial Baseline/i })).toHaveCount(0);
+    await expect(page.getByTestId("csv-upload-input")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: /Telemetry connector setup/i })).toHaveCount(0);
 
     await page.goto("/workspace/admin");
-    await expect(page.getByRole("heading", { name: /Telemetry connector setup/i })).toBeVisible();
-    await page.getByLabel("Connector type").selectOption("database");
-    await page.getByLabel("Database URL").fill(e2eDatabaseURL);
-    await page.getByRole("button", { name: "Test connection" }).click();
-    await expect(page.getByRole("status")).toContainText("No records were saved");
-    await page.getByRole("button", { name: "Prepare sample" }).click();
-    await expect(page.getByRole("status")).toContainText("records were validated for analysis");
-    await expect(page.getByLabel("Connector health")).toContainText("2 records");
-    await expect(page.getByLabel("Connector health")).not.toContainText("must be numeric");
+    await expect(page.getByRole("heading", { name: "Access & governance", level: 1 })).toBeVisible();
+    await expect(page.getByText("User Access", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Telemetry connector setup/i })).toHaveCount(0);
+    await expect(page.getByLabel("Database URL")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Test connection" })).toHaveCount(0);
   });
 
   test("administrator creates an operator whose direct admin link is denied in the frontend", async ({ page }) => {

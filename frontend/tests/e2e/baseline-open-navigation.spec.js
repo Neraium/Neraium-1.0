@@ -1,16 +1,7 @@
 import { expect, test } from "./fixtures.js";
 import { installStoredBaselineUpload } from "./stored-upload-mock.js";
 
-async function openBaselineImport(page) {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-  const dataButton = page.getByRole("button", { name: "Data", exact: true });
-  if (await dataButton.isVisible()) await dataButton.click();
-  else await page.getByRole("button", { name: "Import Historical Dataset" }).click();
-  await expect(page.getByRole("heading", { name: "Establish Initial Baseline", level: 2 })).toBeVisible();
-}
-
-async function completeBaseline(page, options = {}) {
+async function openStoredBaseline(page, options = {}) {
   const jobId = options.jobId ?? "04f9195e381b4d82b6b6285d3c58185f";
   const modelId = options.modelId ?? "bdm-v4-04f9195e";
   const calls = await installStoredBaselineUpload(page, {
@@ -19,13 +10,9 @@ async function completeBaseline(page, options = {}) {
     filename: options.filename ?? "baseline-production.csv",
     completeWhenPolled: true,
   });
-  await openBaselineImport(page);
-  await page.getByTestId("csv-upload-input").setInputFiles({
-    name: options.filename ?? "baseline-production.csv",
-    mimeType: "text/csv",
-    buffer: Buffer.from("timestamp,flow,pressure\n2026-07-29T00:00:00Z,100,40\n", "utf8"),
-  });
-  await page.getByRole("button", { name: "Continue" }).click();
+  // Historical creation is retired from normal production onboarding. Exact
+  // stored-baseline routes remain as the explicit compatibility boundary.
+  await page.goto(`/baselines/${modelId}/ready`, { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(new RegExp(`/baselines/${modelId}/ready$`), { timeout: 30000 });
   await expect(page.getByRole("heading", { name: "Baseline Established", level: 3 })).toBeVisible();
   return { calls, jobId, modelId };
@@ -48,7 +35,7 @@ test.describe("Baseline-ready navigation", () => {
       if (request.url().includes("/api/data/portfolios/default/baselines/bdm-v4-04f9195e")) exactRequests.push(request.url());
     });
 
-    await completeBaseline(page);
+    await openStoredBaseline(page);
 
     await expect(page.getByRole("heading", { name: "Waiting for comparison data" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Upload Comparison Dataset" })).toBeVisible();
@@ -60,7 +47,7 @@ test.describe("Baseline-ready navigation", () => {
 
   test("refresh restores the canonical baseline-ready state", async ({ page }) => {
     const errors = captureConsoleErrors(page);
-    await completeBaseline(page);
+    await openStoredBaseline(page);
     await page.reload({ waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/baselines\/bdm-v4-04f9195e\/ready$/);
@@ -103,7 +90,7 @@ test.describe("Baseline-ready navigation", () => {
   });
 
   test("primary action opens the canonical comparison upload route", async ({ page }) => {
-    await completeBaseline(page, { jobId: "keyboard-job", modelId: "keyboard-baseline" });
+    await openStoredBaseline(page, { jobId: "keyboard-job", modelId: "keyboard-baseline" });
     const comparisonButton = page.getByRole("button", { name: "Upload Comparison Dataset" });
     await comparisonButton.focus();
     await page.keyboard.press("Enter");
@@ -157,7 +144,7 @@ test.describe("Baseline-ready touch activation", () => {
 
   test("opens comparison upload from a mobile tap target", async ({ page }) => {
     const errors = captureConsoleErrors(page);
-    await completeBaseline(page, { jobId: "mobile-job", modelId: "mobile-baseline" });
+    await openStoredBaseline(page, { jobId: "mobile-job", modelId: "mobile-baseline" });
     const comparisonButton = page.getByRole("button", { name: "Upload Comparison Dataset" });
     await expect(comparisonButton).toBeEnabled();
     await comparisonButton.scrollIntoViewIfNeeded();

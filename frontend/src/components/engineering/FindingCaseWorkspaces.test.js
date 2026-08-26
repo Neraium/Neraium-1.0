@@ -1,112 +1,126 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
-import { FindingReviewWorkspace, InvestigationWorkspace, SiiEvidenceRecord } from "./FindingCaseWorkspaces";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { EvidenceRecordWorkspace, FindingReviewWorkspace, InvestigationWorkspace } from "./FindingCaseWorkspaces";
 
 afterEach(cleanup);
 
-describe("authoritative SII evidence disclosure", () => {
-  it("keeps uncertainty, quality, Phase 3/4, propagation, and provenance in structured disclosure", () => {
-    render(React.createElement(SiiEvidenceRecord, { evidence: {
-      source: "sii_result",
-      status: "complete",
-      engine: { name: "SII", version: "4.2" },
-      relationship_changes: [{ id: "rel-1", source: "Flow", target: "Pressure", change_type: "weakened", baseline_correlation: 0.91, current_correlation: 0.42 }],
-      operating_context: { status: "comparable", baseline_mode: "running", recent_mode: "running", match: "strong" },
-      persistence: { status: "persistent", method: "elapsed_time_support" },
-      uncertainty: { status: "limited", limitations: ["Missing samples reduce confidence."] },
-      data_quality: { status: "degraded", analysis_gate_state: "DEGRADED_READY", warnings: ["Historian coverage was reduced."] },
-      sensor_health: { status: "limited", signals: [{ signal: "Pressure", health: "suspect" }] },
-      configured_prior_observations: [{ observation_id: "prior-1", behavioral_status: "not_consistent_with_configured_expectation", human_review_required: true }],
-      phase_4: {
-        status: "complete",
-        available: true,
-        behavioral_evolution: { status: "complete", evidence_classification: "persistent_behavioral_change", limitations: ["Evolution does not establish future failure."] },
-        propagation: { status: "complete", candidate_paths: [{ path_id: "path-1", nodes: ["Flow", "Pressure"], compatibility: 0.81, causal_claim: false }] },
-      },
-      provenance: { analysis_run_id: "run-42", baseline_id: "baseline-7", input_hash: "input-hash" },
-    } }));
+const header = { systemContext: "Cooling plant", title: "Cooling relationship changed", reviewState: "New" };
 
-    const record = screen.getByTestId("sii-evidence-record");
-    for (const heading of ["Relationship evidence", "Operating context", "Persistence", "Uncertainty and data quality", "Sensor health", "Configured-prior evidence · Phase 3", "Behavioral evolution · Phase 4", "Provenance"]) {
-      expect(within(record).getByRole("heading", { name: heading })).toBeTruthy();
-    }
-    expect(record.textContent).toContain("Missing samples reduce confidence");
-    expect(record.textContent).toContain("Historian coverage was reduced");
-    expect(record.textContent).toContain("Pressure · Suspect");
-    expect(record.textContent).toContain("Flow → Pressure");
-    expect(record.textContent).toContain("baseline-7");
-    expect(record.textContent).toContain("Separate canonical SII comparison");
-  });
-
-  it("states unavailable Phase 4 evidence without inventing propagation", () => {
-    render(React.createElement(SiiEvidenceRecord, { evidence: {
-      source: "sii_result",
-      status: "limited",
-      phase_4: { status: "unavailable", available: false, limitations: ["Authenticated workspace identity unavailable."], propagation: {} },
-      provenance: {},
-    } }));
-
-    const record = screen.getByTestId("sii-evidence-record");
-    expect(record.textContent).toContain("Authenticated workspace identity unavailable");
-    expect(within(record).queryByText("Propagation evidence")).toBeNull();
-  });
-});
-
-function evidenceFinding() {
+function reviewProjection() {
   return {
-    id: "finding-evidence",
-    title: "Cooling relationship changed",
-    system: "Cooling plant",
-    status: "Change detected",
-    tier: "Qualified",
-    objectType: "condition",
-    observedChange: "Return temperature and chiller power no longer follow the learned relationship.",
-    whyItMatters: "The change affects two connected operating signals.",
-    primaryLimitation: "Operating context differs from baseline.",
-    confidenceReason: "Operating context differs from baseline.",
-    supporting: ["Return temperature / power changed during the current window."],
-    visibleSupporting: ["Return temperature / power changed during the current window."],
-    rawVariables: ["chw_return_temp_f", "chiller_power_kw"],
-    variables: ["Return temperature", "Chiller power"],
-    location: { label: "Cooling plant", system: "Cooling plant" },
-    comparison: { metric: "pearson_correlation", baselineValue: 0.88, currentValue: 0.2, signedChange: -0.68, absoluteChange: 0.68, direction: "decreased", baseline: "Learned baseline", current: "Current comparison" },
-    relationships: [{ id: "rel-1", source: "Return temperature", target: "Chiller power", rawSource: "chw_return_temp_f", rawTarget: "chiller_power_kw", metric: "pearson_correlation", baseline: 0.88, current: 0.2, signedChange: -0.68, absoluteChange: 0.68, relationshipDirection: "decreased", baselineSampleCount: 120, currentSampleCount: 48, windows: [{ start: "2026-08-25T04:00:00Z", end: "2026-08-25T05:23:56.206210+00:00" }] }],
-    classification: { type: "context_limited_relationship_change", confidence: "limited", reasons: ["Operating conditions differed from baseline."], certainty_limit: "The evidence does not establish a cause." },
-    dataConfidence: { rating: "medium", summary: "Usable with limits." },
-    operatingMode: { match: "weak", confidence: "limited", baseline_mode_label: "Mid load", recent_mode_label: "High load", reasons: ["Load differed from baseline."] },
-    persistence: { status: "observing", persistent: false },
-    investigationGuidance: [{ rank: 1, check: "Verify the relevant source signals.", reason: "Source validation bounds interpretation.", category: "instrumentation" }],
-    activityTimeline: [{ event_type: "finding_generated", title: "Finding generated", time: "2026-08-25T05:23:56.206210+00:00" }],
-    generatedAt: "2026-08-25T05:23:56.206210+00:00",
-    evidenceObjects: [],
-    technicalLimitations: [],
-    contradictions: [],
-    limitations: ["Operating context differs from baseline."],
-    confidenceDimensions: { changeDetection: { level: "high" }, interpretation: { level: "low", attribution_status: "unattributed" }, evidenceQuality: { level: "medium" }, operatingContext: { level: "low" } },
-    corroboration: { corroboration_strength: "limited", relationship_count: 1 },
-    comparableOperation: {},
-    conflictingRelationships: [],
-    uncertainRelationships: [],
+    contractVersion: "results-presentation.v1",
+    depth: "review",
+    variant: "ready",
+    identity: { findingKey: "finding-a" },
+    header,
+    whatChanged: "Return temperature and chiller power no longer follow the learned relationship.",
+    whyAttention: ["The change affects two connected operating signals."],
+    assessment: {
+      changeConfidence: { value: "High", state: "supported" },
+      evidenceQuality: { value: "Medium", state: "supported" },
+      causeAttribution: { value: "Not established", state: "unknown" },
+      persistence: { value: "Observing", state: "limited" },
+      operatingContext: { value: "Weak match", state: "limited" },
+      corroboration: { value: "Limited · 1 relationship", state: "limited" },
+      evidenceSufficiency: { value: "Supported for review", state: "supported" },
+    },
+    materialLimitation: "Operating context differs from baseline.",
+    checks: [{ label: "Verify the relevant source signals." }],
+    primaryAction: { label: "Open investigation", route: "/investigations/finding-a" },
   };
 }
 
-describe("review and investigation hierarchy", () => {
-  it("keeps review decision-oriented with mapped classification explanation and guidance", () => {
-    render(React.createElement(FindingReviewWorkspace, { finding: evidenceFinding(), reviewRecord: { state: "new" } }));
-    for (const heading of ["What changed", "Why this deserves attention", "Important limitations", "What to check first"]) expect(screen.getByRole("heading", { name: heading })).toBeTruthy();
-    expect(screen.getByText("The relationship changed, but recent operating conditions differ too much from the learned baseline to determine why.")).toBeTruthy();
+function investigationProjection() {
+  const relationship = {
+    id: "rel-a",
+    source: { display: "Return temperature", sourceId: "RAW_SIGNAL_A" },
+    target: { display: "Chiller power", sourceId: "RAW_SIGNAL_B" },
+    metricChannel: "Correlation strength",
+    baseline: 0.88,
+    current: 0.2,
+    signedChange: -0.68,
+    magnitude: 0.68,
+    direction: "decreased",
+    baselineSamples: 120,
+    currentSamples: 48,
+    windows: [{ baselineStart: "2026-08-01T00:00:00Z", baselineEnd: "2026-08-10T00:00:00Z", currentStart: "2026-08-20T00:00:00Z", currentEnd: "2026-08-25T00:00:00Z" }],
+    persistence: "observing",
+    support: "limited",
+  };
+  return {
+    contractVersion: "results-presentation.v1", depth: "investigation", variant: "ready", identity: { findingKey: "finding-a" }, header,
+    primaryComparison: relationship, relationships: [relationship], relationshipMap: null,
+    systemEvidence: [{ key: "multivariate", label: "Multivariate system evidence", state: { state: "available", reason: "" }, scope: "run", scopeLabel: "Analysis-run evidence; not finding-specific", sourcePath: "model.result.sii_result.covariance_analysis", summary: "Cross-signal structure changed.", metrics: [] }],
+    persistence: { state: { state: "available", reason: "" }, summary: "Observing", supportTrend: "Stable", windowDescription: "Five comparable windows" },
+    operatingContext: { state: { state: "available", reason: "" }, baselineMode: "Mid load", currentMode: "High load", comparability: "Weak", reasons: ["Load differed from baseline."] },
+    dataQuality: { state: { state: "available", reason: "" }, summary: "Usable with limits.", limitations: ["Historian coverage was reduced."], signalHealth: [{ signal: "Pressure", status: "Suspect" }] },
+    timeline: [{ label: "Finding generated", detail: "Current comparison" }],
+    sourceSignals: [{ display: "Return temperature", sourceId: "RAW_SIGNAL_A" }, { display: "Chiller power", sourceId: "RAW_SIGNAL_B" }],
+    lineageSummary: { source: "comparison.csv", baselineWindow: "Learned baseline", currentWindow: "Current comparison", evidenceRefs: ["EVIDENCE_A"] },
+    primaryAction: { label: "Open evidence record", route: "/evidence/finding-a" },
+  };
+}
+
+function evidenceProjection(scope = "run") {
+  return {
+    contractVersion: "results-presentation.v1", depth: "evidence", variant: "ready",
+    identity: { findingKey: "finding-a", findingId: "FINDING_A", workflowFindingId: null, conditionId: null, runId: "RUN_A", uploadId: "UPLOAD_A", datasetId: "DATASET_A", baselineId: "BASELINE_A", systemId: "SYSTEM_A", assetId: null },
+    header,
+    timestamps: { generatedAt: "2026-08-25T05:23:56.206210+00:00", firstDetectedAt: null, sourceRanges: [] },
+    signals: [{ display: "Return temperature", rawId: "RAW_SIGNAL_A", canonicalId: "CANONICAL_SIGNAL_A" }],
+    exactRelationships: [{ id: "RELATIONSHIP_A", baseline: 0.918273, current: 0.314159 }],
+    supportingEvidence: { statements: ["SUPPORTING_EVIDENCE_A"], items: [{ id: "EVIDENCE_ITEM_A" }] },
+    channels: [{ key: "multivariate", label: "Multivariate evidence", state: { state: "available", reason: "" }, scope: "run", scopeLabel: "Analysis-run evidence; not finding-specific", sourcePath: "model.result.sii_result.covariance_analysis", payload: { usable: false, missing: 0 } }],
+    classifications: { classification: { type: "CLASSIFICATION_A" }, confidenceContract: { version: "CONFIDENCE_A" }, alternatives: [] },
+    sufficiency: { status: "SUFFICIENCY_A", reasons: [] },
+    limitations: { material: ["No cause is established."], technical: [], contradictions: [] },
+    lineage: { sourceRows: [{ id: "LINEAGE_A" }], evidenceWindows: [], evidenceRefs: ["EVIDENCE_A"], traceability: null, findingProvenance: null },
+    engine: { name: "ENGINE_A", version: "4.2", schemaVersion: null, buildCommit: null, configurationHash: null, inputHash: null, resultHash: null },
+    package: { scope, scopeLabel: scope === "finding" ? "Package explicitly linked to this finding" : "Related package for this analysis run; not finding provenance", sourcePath: "model.result.evidence_package", packageId: "PACKAGE_A", immutableDetails: { id: "PACKAGE_A" }, relationshipLink: { state: "matched" } },
+    audit: { caseState: "open", caseHistory: [], outcome: null, review: null, trace: [] },
+    actions: { exportRunId: "RUN_A", exportScopeLabel: "Analysis-run export; not finding-specific", traceRoute: null },
+  };
+}
+
+describe("progressive results hierarchy", () => {
+  it("keeps Finding Review decision-oriented and preserves independent confidence dimensions", () => {
+    render(React.createElement(FindingReviewWorkspace, { projection: reviewProjection() }));
+    for (const heading of ["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]) expect(screen.getByRole("heading", { name: heading })).toBeTruthy();
+    const assessment = screen.getByRole("heading", { name: "Evidence assessment" }).closest("section");
+    for (const label of ["Change confidence", "Evidence quality", "Cause / attribution", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) expect(within(assessment).getByText(label)).toBeTruthy();
+    expect(within(assessment).getByText("Not established")).toBeTruthy();
     expect(screen.getByText("Verify the relevant source signals.")).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Relationships changed" })).toBeNull();
+    expect(document.body.textContent).not.toContain("RAW_SIGNAL_A");
+    expect(screen.queryByText("Audit history")).toBeNull();
   });
 
-  it("reveals relationship values, samples, source signals, and localized evidence time in investigation", () => {
-    render(React.createElement(InvestigationWorkspace, { model: { result: {}, facilityTimeZone: "America/Los_Angeles", nodes: [] }, finding: evidenceFinding(), reviewRecord: { state: "new" } }));
+  it("materially deepens Investigation while keeping run evidence visibly scoped", () => {
+    render(React.createElement(InvestigationWorkspace, { projection: investigationProjection() }));
     expect(screen.getByText("Correlation strength decreased by 0.68 from the learned baseline.")).toBeTruthy();
     expect(screen.getByText("120 baseline · 48 current")).toBeTruthy();
-    expect(screen.getAllByText("chw_return_temp_f").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Aug 24, 2026 · 10:23 PM PDT").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("heading", { name: "Investigation guidance" })).toBeNull();
+    expect(screen.getAllByText("RAW_SIGNAL_A").length).toBeGreaterThan(0);
+    expect(screen.getByText("Analysis-run evidence; not finding-specific")).toBeTruthy();
+    expect(screen.getByText("model.result.sii_result.covariance_analysis")).toBeTruthy();
+    expect(screen.queryByText("PACKAGE_A")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Audit history" })).toBeNull();
+  });
+
+  it("keeps complete technical depth and exact false/zero values in Evidence Record", () => {
+    const apiFetch = vi.fn();
+    render(React.createElement(EvidenceRecordWorkspace, { projection: evidenceProjection("run"), apiFetch }));
+    for (const value of ["FINDING_A", "RAW_SIGNAL_A", "CANONICAL_SIGNAL_A", "RELATIONSHIP_A", "0.918273", "0.314159", "SUPPORTING_EVIDENCE_A", "EVIDENCE_ITEM_A", "LINEAGE_A", "ENGINE_A", "PACKAGE_A", '"usable": false', '"missing": 0']) expect(document.body.textContent).toContain(value);
+    expect(screen.getByRole("heading", { name: "Related package for this analysis run" })).toBeTruthy();
+    expect(screen.getAllByText(/not finding provenance/i).length).toBeGreaterThan(0);
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("loads related-package context only for an explicitly linked finding package", async () => {
+    const apiFetch = vi.fn(async () => ({ ok: true, json: async () => ({ matches: [] }) }));
+    render(React.createElement(EvidenceRecordWorkspace, { projection: evidenceProjection("finding"), apiFetch }));
+    expect(screen.getByRole("heading", { name: "Package explicitly linked to this finding" })).toBeTruthy();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+    expect(apiFetch.mock.calls[0][0]).toContain("PACKAGE_A");
   });
 });

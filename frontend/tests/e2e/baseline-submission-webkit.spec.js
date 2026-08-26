@@ -1,7 +1,6 @@
 import { expect, test } from "./fixtures.js";
-import { installStoredBaselineUpload } from "./stored-upload-mock.js";
 
-test.describe("mobile Safari baseline submission", () => {
+test.describe("mobile production onboarding", () => {
   test.skip(({ browserName }) => browserName === "firefox", "Firefox does not support Playwright's mobile context option; WebKit covers this mobile Safari contract.");
   test.use({
     viewport: { width: 390, height: 844 },
@@ -9,24 +8,14 @@ test.describe("mobile Safari baseline submission", () => {
     hasTouch: true,
   });
 
-  test("the baseline button is the topmost tap target and immediately starts the stored upload", async ({ page }) => {
-    const calls = await installStoredBaselineUpload(page, { jobId: "mobile-safari", objectDelayMs: 750 });
-
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+  test("the Data Connections action is the topmost tap target and opens read-only setup", async ({ page }) => {
+    await page.goto("/workspace/data-sources", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-    await page.getByRole("button", { name: "Import Historical Dataset", exact: true }).tap();
-    await expect(page.getByRole("heading", { name: "Establish Initial Baseline", level: 2 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect a physical system", level: 1 })).toBeVisible();
+    await expect(page.getByTestId("csv-upload-input")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Import Historical Dataset" })).toHaveCount(0);
 
-    await page.getByTestId("csv-upload-input").setInputFiles({
-      name: "mobile-safari.csv",
-      mimeType: "text/csv",
-      buffer: Buffer.from(
-        "timestamp,room,temperature,humidity\n2026-05-01T08:00:00Z,Plant,75.2,58\n2026-05-01T08:05:00Z,Plant,75.5,59\n",
-        "utf8",
-      ),
-    });
-
-    const button = page.getByRole("button", { name: "Continue" });
+    const button = page.getByRole("button", { name: "Add data source" }).first();
     await expect(button).toBeEnabled();
     const isTopmostTapTarget = await button.evaluate((element) => {
       const rect = element.getBoundingClientRect();
@@ -36,19 +25,9 @@ test.describe("mobile Safari baseline submission", () => {
     expect(isTopmostTapTarget).toBe(true);
 
     await button.tap();
-    const progress = page.getByRole("progressbar", { name: /Upload, stage 1 of 4/ });
-    await expect(progress).toBeVisible();
-    await expect(page.locator("form.intake-flow")).toHaveAttribute("aria-busy", "true");
-    await expect(progress.getByRole("listitem")).toHaveText([
-      "1UploadSecurely transferring historical operating data.",
-      "2ValidateVerifying dataset integrity, timestamps, signal consistency, and data quality.",
-      "3LearnLearning how the infrastructure normally behaves by identifying persistent operating relationships across the dataset.",
-      "4Baseline ReadyInitial operating model successfully established.",
-    ]);
-    await expect(page.getByRole("button", { name: "Continue" })).toHaveCount(0);
-    await expect.poll(() => calls.completions).toBe(1);
-    expect(calls.sessions).toBe(1);
-    expect(calls.objectPuts).toBe(1);
+    await expect(page.getByRole("heading", { name: "Add a read-only data source", level: 2 })).toBeVisible();
+    await expect(page.getByText("Retrieval only", { exact: true })).toBeVisible();
+    await expect(page.getByText(/accepts no browser-supplied SQL, DSN, file path, HTTP method, or command/i)).toBeVisible();
     await expect(page.locator("body")).not.toContainText("We hit a workspace error");
   });
 });
