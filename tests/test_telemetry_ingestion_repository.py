@@ -17,6 +17,7 @@ from app.services.telemetry_repository import (
     TelemetryMappingConflict,
     TelemetryRepositoryError,
 )
+from app.services.telemetry_result_artifact import CanonicalResultArtifact
 
 
 class _Cursor:
@@ -1131,8 +1132,62 @@ def test_analysis_execution_claim_recovery_and_completion_are_scoped_cas(
     assert "execution_claim_expires_at <= %s" in recovery_sql
     assert "execution_claim_expired" in recovery_sql
 
+    from app.services.telemetry_result_artifact import canonical_result_id
+
+    source_run_id = "00000000-0000-4000-8000-000000000020"
+    result_id = canonical_result_id(
+        window_id=window_id,
+        execution_contract_version="analysis-window-execution.v1",
+    )
+    artifact = CanonicalResultArtifact(
+        result_id=result_id,
+        analysis_window_id=window_id,
+        source_run_id=source_run_id,
+        artifact_schema_version="telemetry-canonical-result-artifact.v1",
+        execution_contract_version="analysis-window-execution.v1",
+        analysis_schema_version="analysis-result-v1",
+        analysis_contract_version="analysis-result-v1",
+        engine_name="sii",
+        engine_version="1",
+        reference_metadata={},
+        observation_count=2,
+        observation_lineage_digest="f" * 64,
+        finding_ids={"ids": ["finding-a"], "total": 1, "truncated": False},
+        evidence_ids={"ids": ["evidence-a"], "total": 1, "truncated": False},
+        payload_encoding="zlib+canonical-json.v1",
+        payload_digest="d" * 64,
+        payload_uncompressed_bytes=10,
+        payload_stored_bytes=7,
+        serialization_ms=1.25,
+        payload=b"payload",
+    )
     completion_connection = _Connection(
-        [{"id": window_id, "status": "completed", "result_digest": "d" * 64}]
+        [
+            {"id": result_id},
+            {
+                "id": result_id,
+                "analysis_window_id": window_id,
+                "source_ingestion_run_id": source_run_id,
+                "artifact_schema_version": artifact.artifact_schema_version,
+                "execution_contract_version": artifact.execution_contract_version,
+                "analysis_schema_version": artifact.analysis_schema_version,
+                "analysis_contract_version": artifact.analysis_contract_version,
+                "engine_name": artifact.engine_name,
+                "engine_version": artifact.engine_version,
+                "reference_metadata": {},
+                "observation_count": 2,
+                "observation_lineage_digest": "f" * 64,
+                "finding_ids": dict(artifact.finding_ids),
+                "evidence_ids": dict(artifact.evidence_ids),
+                "payload_encoding": artifact.payload_encoding,
+                "payload_digest": artifact.payload_digest,
+                "payload_uncompressed_bytes": 10,
+                "payload_stored_bytes": 7,
+                "serialization_ms": 1.25,
+                "payload": b"payload",
+            },
+            {"id": window_id, "status": "completed", "result_digest": "d" * 64},
+        ]
     )
     completed = PostgreSQLTelemetryRepository(
         lambda: completion_connection
@@ -1148,11 +1203,18 @@ def test_analysis_execution_claim_recovery_and_completion_are_scoped_cas(
             "reference_digest": "e" * 64,
             "evidence_ids": ["evidence-a"],
             "finding_ids": ["finding-a"],
+            "observation_count": 2,
+            "observation_lineage_digest": "f" * 64,
         },
+        result_artifact=artifact,
     )
     assert completed["status"] == "completed"
-    completion_sql = completion_connection.statements[0][0]
+    artifact_sql = completion_connection.statements[0][0]
+    completion_sql = completion_connection.statements[2][0]
+    assert "INSERT INTO telemetry.analysis_result_artifacts" in artifact_sql
+    assert "ON CONFLICT" in artifact_sql
     assert "w.execution_claim_token = %s::UUID" in completion_sql
     assert "w.execution_claim_expires_at > %s" in completion_sql
     assert "result_metadata = %s::JSONB" in completion_sql
     assert "evidence_lineage = %s::JSONB" in completion_sql
+    assert completion_connection.commits == 1

@@ -84,6 +84,7 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
   const [selectedAnalysisIdentity, setSelectedAnalysisIdentity] = useState(initialRoute.analysisRoute);
   const [activeBaselineIdentity, setActiveBaselineIdentity] = useState(initialRoute.routeIdentity);
   const [pendingUploadFiles, setPendingUploadFiles] = useState([]);
+  const [canonicalConnectorResult, setCanonicalConnectorResult] = useState(null);
   const [resultsNavigationKey, setResultsNavigationKey] = useState(0);
   const [appReady, setAppReady] = useState(false);
   const [signOutPending, setSignOutPending] = useState(false);
@@ -102,6 +103,7 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
 
   const handleWorkspaceChange = useCallback((workspaceId) => {
     const selection = resolveAuthorizedWorkspaceSelection(workspaceSession, workspaceId);
+    setCanonicalConnectorResult(null);
     setCurrentWorkspaceId(selection.workspaceId);
   }, [workspaceSession]);
 
@@ -130,6 +132,7 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
         return false;
       }
     }
+    setCanonicalConnectorResult(null);
     setSelectedBaselineIdentity(identity);
     setComparisonBaselineIdentity(null);
     setSelectedAnalysisIdentity(null);
@@ -141,6 +144,7 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
   const handleBaselineClosedForComparison = useCallback((identity) => {
     const nextPath = baselineComparisonRoutePath(identity?.portfolioId, identity?.baselineId);
     if (!nextPath) return false;
+    setCanonicalConnectorResult(null);
     if (identity?.baselineId) setActiveBaselineIdentity(identity);
     setSelectedBaselineIdentity(null);
     setComparisonBaselineIdentity(identity);
@@ -206,12 +210,12 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
     activeUploadAttempt,
     handleReplayFrameChange,
     handleReplayModeChange,
-    handleUploadAttemptStarted,
+    handleUploadAttemptStarted: controllerHandleUploadAttemptStarted,
     handleUploadAttemptIdentified,
     handleUploadAttemptCleared,
     handleGateUploadComplete,
-    handleResumePreviousSession,
-    handleReopenHistoricalAnalysis,
+    handleResumePreviousSession: controllerHandleResumePreviousSession,
+    handleReopenHistoricalAnalysis: controllerHandleReopenHistoricalAnalysis,
     handleDeleteHistoricalAnalysis,
     handleResetDemo,
     handleBackToGate,
@@ -233,7 +237,23 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
     activeBaselineIdentity,
   });
 
+  const handleUploadAttemptStarted = useCallback((...args) => {
+    setCanonicalConnectorResult(null);
+    return controllerHandleUploadAttemptStarted(...args);
+  }, [controllerHandleUploadAttemptStarted]);
+
+  const handleResumePreviousSession = useCallback((...args) => {
+    setCanonicalConnectorResult(null);
+    return controllerHandleResumePreviousSession(...args);
+  }, [controllerHandleResumePreviousSession]);
+
+  const handleReopenHistoricalAnalysis = useCallback((...args) => {
+    setCanonicalConnectorResult(null);
+    return controllerHandleReopenHistoricalAnalysis(...args);
+  }, [controllerHandleReopenHistoricalAnalysis]);
+
   const handleHistoricalBaselineSelected = useCallback((identity, options) => {
+    setCanonicalConnectorResult(null);
     handleUploadAttemptCleared();
     return handleBaselineSelected(identity, options);
   }, [handleBaselineSelected, handleUploadAttemptCleared]);
@@ -373,6 +393,7 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
   const handleTelemetryAnalysisComplete = useCallback(async (completedPayload = null, options = {}) => {
     const outcome = await handleGateUploadComplete(completedPayload, options);
     if (outcome?.ignored) return outcome;
+    setCanonicalConnectorResult(null);
     setPendingUploadFiles([]);
     if (options.navigateToGate !== false) {
       const result = outcome?.latestResult ?? null;
@@ -392,6 +413,46 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
     return outcome;
   }, [activeBaselineIdentity, handleGateUploadComplete]);
 
+  const handleOpenConnectorAnalysisResult = useCallback((payload) => {
+    const resultId = String(payload?.result_id ?? "").trim();
+    const productResult = payload?.product_result;
+    if (!resultId || !productResult || typeof productResult !== "object" || Array.isArray(productResult)) {
+      throw new Error("The exact saved connector result could not be opened.");
+    }
+    const activeResult = {
+      ...productResult,
+      result_id: resultId,
+      analysis_window_id: payload.analysis_window_id ?? productResult.analysis_window_id ?? null,
+      connection_id: payload.connection_id ?? productResult.connection_id ?? null,
+      source_run_id: payload.source_run_id ?? productResult.source_run_id ?? null,
+      facility_id: payload.facility_id ?? productResult.facility_id ?? null,
+      system_id: payload.system_id ?? productResult.system_id ?? null,
+      asset_id: payload.asset_id ?? productResult.asset_id ?? null,
+      window_start: payload.window_start ?? productResult.window_start ?? null,
+      window_end: payload.window_end ?? productResult.window_end ?? null,
+      artifact_schema_version: payload.artifact_schema_version ?? productResult.artifact_schema_version ?? null,
+      execution_contract_version: payload.execution_contract_version ?? productResult.execution_contract_version ?? null,
+      analysis_schema_version: payload.analysis_schema_version ?? productResult.analysis_schema_version ?? null,
+      analysis_contract_version: payload.analysis_contract_version ?? productResult.analysis_contract_version ?? null,
+      payload_digest: payload.payload_digest ?? productResult.payload_digest ?? null,
+      payload_uncompressed_bytes: payload.payload_uncompressed_bytes ?? productResult.payload_uncompressed_bytes ?? null,
+      payload_stored_bytes: payload.payload_stored_bytes ?? productResult.payload_stored_bytes ?? null,
+      serialization_ms: payload.serialization_ms ?? productResult.serialization_ms ?? null,
+      projection_bytes: payload.projection_bytes ?? productResult.projection_bytes ?? null,
+      retrieval_ms: payload.retrieval_ms ?? productResult.retrieval_ms ?? null,
+      lineage_verified: payload.lineage_verified === true,
+    };
+    setCanonicalConnectorResult(activeResult);
+    setPendingUploadFiles([]);
+    setResultsNavigationKey((current) => current + 1);
+    setActiveWorkspace("system-body");
+    return activeResult;
+  }, [setActiveWorkspace]);
+
+  useEffect(() => {
+    setCanonicalConnectorResult(null);
+  }, [datasetScopeKey]);
+
   useEffect(() => {
     const handleSessionExpired = () => {
       resetSignedOutSession();
@@ -405,6 +466,7 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
     if (typeof window === "undefined" || !currentUser) return undefined;
     const applyWorkspaceChange = () => {
       const selection = resolveAuthorizedWorkspaceSelection(workspaceSession, getCurrentWorkspaceId());
+      setCanonicalConnectorResult(null);
       if (selection.stale) setCurrentWorkspaceId(selection.workspaceId);
       const scope = activateDatasetCacheScope(currentUser, selection.workspaceId);
       setCurrentWorkspaceIdState(selection.workspaceId);
@@ -474,6 +536,7 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
         gateProcessing={gateProcessing}
         effectiveLatestUploadResult={effectiveLatestUploadResult}
         effectiveLatestUploadSnapshot={effectiveLatestUploadSnapshot}
+        canonicalConnectorResult={canonicalConnectorResult}
         hasActiveSession={hasActiveSession}
         hasCurrentUploadResult={hasCurrentUploadResult}
         hasResumedSession={hasResumedSession}
@@ -485,6 +548,7 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
         handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         handleGateUploadComplete={handleTelemetryAnalysisComplete}
+        handleOpenConnectorAnalysisResult={handleOpenConnectorAnalysisResult}
         activeUploadAttempt={activeUploadAttempt}
         handleUploadAttemptStarted={handleUploadAttemptStarted}
         handleUploadAttemptIdentified={handleUploadAttemptIdentified}

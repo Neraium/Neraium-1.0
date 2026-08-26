@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import quote
 import uuid
 
 from fastapi import Request
@@ -1081,6 +1082,152 @@ def test_run_errors_are_sanitized_and_retry_is_operator_only(tmp_path):
         )
         assert duplicate.status_code == 409
         assert duplicate.json()["detail"]["code"] == "telemetry_ingestion_run_not_retryable"
+
+
+def test_canonical_result_routes_keep_exact_scoped_identity(
+    tmp_path, monkeypatch
+):
+    from app.services.telemetry_result_service import TelemetryCanonicalResultService
+
+    app, _repository = build_client(tmp_path)
+    result_id = str(uuid.uuid4())
+    run_id = str(uuid.uuid4())
+    window_id = str(uuid.uuid4())
+    system_id = "plant/" + ("s" * 154)
+    calls: list[tuple[str, dict[str, Any]]] = []
+    now = datetime.now(UTC).replace(microsecond=0)
+
+    def summary(connection_id: str) -> dict[str, Any]:
+        return {
+            "result_id": result_id,
+            "analysis_window_id": window_id,
+            "connection_id": connection_id,
+            "source_run_id": run_id,
+            "facility_id": "ws-facility-a",
+            "system_id": system_id,
+            "asset_id": "asset-a",
+            "window_start": now - timedelta(minutes=2),
+            "window_end": now,
+            "analytical_status": "stable",
+            "artifact_schema_version": "telemetry-canonical-result-artifact.v1",
+            "execution_contract_version": "analysis-window-execution.v1",
+            "analysis_schema_version": "analysis-result-v1",
+            "analysis_contract_version": "analysis-result-v1",
+            "engine_name": "sii",
+            "engine_version": "test",
+            "observation_count": 2,
+            "observation_lineage_digest": "a" * 64,
+            "finding_count": 0,
+            "evidence_count": 0,
+            "payload_digest": "b" * 64,
+            "payload_uncompressed_bytes": 1_024,
+            "payload_stored_bytes": 512,
+            "serialization_ms": 1.0,
+            "created_at": now,
+        }
+
+    def fake_list(self, scope, **identity):
+        calls.append(("list", identity))
+        return [summary(identity["connection_id"])]
+
+    def fake_get(self, scope, **identity):
+        calls.append(("get", identity))
+        return {
+            **summary(identity["connection_id"]),
+            "authority_digest": "c" * 64,
+            "reference_metadata": {},
+            "payload_encoding": "zlib+canonical-json.v1",
+            "projection_bytes": 256,
+            "shared_envelope_bytes": 128,
+            "technical_channels_bytes": 64,
+            "evidence_audit_bytes": 32,
+            "projection_serialization_ms": 0.5,
+            "retrieval_ms": 1.5,
+            "lineage_verified": True,
+            "product_result": {"result_id": result_id, "analysis_result": {}},
+        }
+
+    def fake_lineage(self, scope, **identity):
+        calls.append(("lineage", identity))
+        return {
+            "result_id": result_id,
+            "analysis_window_id": window_id,
+            "observation_count": 2,
+            "observation_lineage_digest": "a" * 64,
+            "lineage_verified": True,
+            "records": [],
+            "next_cursor": None,
+        }
+
+    monkeypatch.setattr(TelemetryCanonicalResultService, "list_results", fake_list)
+    monkeypatch.setattr(TelemetryCanonicalResultService, "get_result", fake_get)
+    monkeypatch.setattr(
+        TelemetryCanonicalResultService, "get_lineage_page", fake_lineage
+    )
+
+    with TestClient(app, base_url="https://testserver") as client:
+        connection_id = client.post(
+            "/api/data-connections", json=_connection_payload()
+        ).json()["connection"]["connection_id"]
+        base = f"/api/data-connections/{connection_id}/runs/{run_id}"
+        listed = client.get(f"{base}/analysis-results")
+        encoded_system_id = quote(system_id, safe="")
+        exact = client.get(
+            f"{base}/systems/{encoded_system_id}/analysis-results/{result_id}",
+            params={"asset_id": "asset-a"},
+        )
+        lineage = client.get(
+            f"{base}/systems/{encoded_system_id}/analysis-results/{result_id}/lineage",
+            params={"asset_id": "asset-a", "limit": 50},
+        )
+
+        assert listed.status_code == exact.status_code == lineage.status_code == 200
+        assert exact.json()["result_id"] == result_id
+        assert lineage.json()["lineage_verified"] is True
+        assert calls == [
+            (
+                "list",
+                {
+                    "connection_id": connection_id,
+                    "source_run_id": run_id,
+                    "limit": 100,
+                },
+            ),
+            (
+                "get",
+                {
+                    "connection_id": connection_id,
+                    "source_run_id": run_id,
+                    "system_id": system_id,
+                    "asset_id": "asset-a",
+                    "result_id": result_id,
+                },
+            ),
+            (
+                "lineage",
+                {
+                    "connection_id": connection_id,
+                    "source_run_id": run_id,
+                    "system_id": system_id,
+                    "asset_id": "asset-a",
+                    "result_id": result_id,
+                    "limit": 50,
+                    "cursor": None,
+                },
+            ),
+        ]
+
+        foreign = {
+            "X-Test-Tenant": "tenant-b",
+            "X-Test-Workspace": "ws-facility-b",
+        }
+        cross = client.get(f"{base}/analysis-results", headers=foreign)
+        absent = client.get(
+            f"/api/data-connections/{uuid.uuid4()}/runs/{run_id}/analysis-results",
+            headers=foreign,
+        )
+        assert cross.status_code == absent.status_code == 404
+        assert cross.json() == absent.json()
 
 
 def test_backfill_progress_keeps_same_range_during_transient_retry_and_exhausts_terminally(tmp_path):

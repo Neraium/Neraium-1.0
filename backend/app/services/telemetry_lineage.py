@@ -316,6 +316,19 @@ def build_durable_result_lineage(
         (sii_result, analysis_result),
         keys=frozenset({"finding_id", "finding_ids", "sii_finding_id"}),
     )
+    generated_finding_ids = {
+        str(item.get("id") or "").strip()
+        for collection_name in ("conditions", "insights")
+        for item in (
+            analysis_result.get(collection_name)
+            if isinstance(analysis_result.get(collection_name), list)
+            else []
+        )
+        if isinstance(item, Mapping) and str(item.get("id") or "").strip()
+    }
+    all_finding_ids = sorted({*finding_ids, *generated_finding_ids})
+    finding_total = max(finding_total, len(all_finding_ids))
+    finding_ids = all_finding_ids[:MAX_RESULT_REFERENCE_IDS]
     evidence_lineage = {
         "contract_version": DURABLE_RESULT_LINEAGE_VERSION,
         "window_id": _required_text(window_id, "telemetry_analysis_window_id_invalid"),
@@ -340,11 +353,20 @@ def build_durable_result_lineage(
     evidence_lineage["reference_digest"] = hashlib.sha256(
         reference_encoded.encode("utf-8")
     ).hexdigest()
+    analysis_metadata = analysis_result.get("analysis_metadata")
+    if not isinstance(analysis_metadata, Mapping):
+        analysis_metadata = {}
     result_metadata = {
         "contract_version": DURABLE_RESULT_LINEAGE_VERSION,
         "status": str(sii_result.get("status") or "completed")[:64],
+        # The product result's top-level identity is a schema version.  Keep it
+        # distinct from the nested analysis contract instead of silently
+        # reading the non-existent top-level ``contract_version`` field.
+        "analysis_schema_version": str(
+            analysis_result.get("schema_version") or ""
+        )[:128],
         "analysis_contract_version": str(
-            analysis_result.get("contract_version") or ""
+            analysis_metadata.get("contract_version") or ""
         )[:128],
         "observation_count": summary["observation_count"],
         "contributing_run_count": len(summary["contributing_ingestion_run_ids"]),

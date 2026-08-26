@@ -15,6 +15,9 @@ from app.core.security import require_admin_role, require_api_access, require_op
 from app.models.api_models import DataConnectionUpsertRequest
 from app.models.telemetry_api_models import (
     BackfillCreateRequest,
+    CanonicalAnalysisLineageResponse,
+    CanonicalAnalysisResultResponse,
+    CanonicalAnalysisResultsListResponse,
     CanonicalSignalConceptsResponse,
     ConnectionActionResponse,
     ConnectionCreateRequest,
@@ -42,6 +45,10 @@ from app.services.telemetry_connection_service import (
     TelemetryConnectionServiceError,
 )
 from app.services.telemetry_runtime import TelemetryRuntimeUnavailable, telemetry_runtime_from_app
+from app.services.telemetry_result_service import (
+    TelemetryCanonicalResultService,
+    TelemetryCanonicalResultServiceError,
+)
 from app.services.telemetry_scope import (
     TelemetryScopeUnavailableError,
     current_telemetry_scope,
@@ -52,6 +59,7 @@ from app.services.telemetry_domain import ConnectorType
 
 router = APIRouter(tags=["data-connections"], dependencies=[Depends(require_api_access)])
 ConnectionIdPath = Annotated[str, Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
+SystemIdPath = Annotated[str, Path(min_length=1, max_length=160, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$")]
 SignalIdPath = Annotated[UUID, Path()]
 
 
@@ -74,7 +82,14 @@ def _safe_legacy_message(value: Any) -> str:
 
 
 def _api_error(error: Exception) -> HTTPException:
-    if isinstance(error, (TelemetryConnectionServiceError, TelemetryRunServiceError)):
+    if isinstance(
+        error,
+        (
+            TelemetryConnectionServiceError,
+            TelemetryRunServiceError,
+            TelemetryCanonicalResultServiceError,
+        ),
+    ):
         return HTTPException(
             status_code=error.status_code,
             detail={"code": error.code, "message": error.safe_message, "retryable": error.retryable},
@@ -115,6 +130,19 @@ def _require_existing(request: Request, connection_id: str) -> tuple[TelemetryCo
     except TelemetryConnectionServiceError as error:
         raise _api_error(error) from None
     return service, scope
+
+
+def _result_service_scope(
+    request: Request, connection_id: str
+) -> tuple[TelemetryCanonicalResultService, Any]:
+    _connection_service, scope = _require_existing(request, connection_id)
+    try:
+        return (
+            TelemetryCanonicalResultService(telemetry_runtime_from_app(request.app)),
+            scope,
+        )
+    except TelemetryRuntimeUnavailable as error:
+        raise _api_error(error) from None
 
 
 @router.get("/data-connections", response_model=ConnectionsListResponse)
@@ -372,6 +400,98 @@ def list_data_connection_runs(
             )
         }
     except (TelemetryConnectionServiceError, TelemetryRunServiceError) as error:
+        raise _api_error(error) from None
+
+
+@router.get(
+    "/data-connections/{connection_id}/runs/{source_run_id}/analysis-results",
+    response_model=CanonicalAnalysisResultsListResponse,
+)
+def list_data_connection_analysis_results(
+    request: Request,
+    connection_id: ConnectionIdPath,
+    source_run_id: UUID,
+    limit: int = Query(default=100, ge=1, le=200),
+) -> dict[str, Any]:
+    service, scope = _result_service_scope(request, connection_id)
+    try:
+        return {
+            "results": service.list_results(
+                scope,
+                connection_id=str(connection_id),
+                source_run_id=str(source_run_id),
+                limit=limit,
+            )
+        }
+    except TelemetryCanonicalResultServiceError as error:
+        raise _api_error(error) from None
+
+
+@router.get(
+    "/data-connections/{connection_id}/runs/{source_run_id}/systems/"
+    "{system_id:path}/analysis-results/{result_id}",
+    response_model=CanonicalAnalysisResultResponse,
+)
+def read_data_connection_analysis_result(
+    request: Request,
+    connection_id: ConnectionIdPath,
+    source_run_id: UUID,
+    system_id: SystemIdPath,
+    result_id: UUID,
+    asset_id: str | None = Query(
+        default=None,
+        min_length=1,
+        max_length=160,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+    ),
+) -> dict[str, Any]:
+    service, scope = _result_service_scope(request, connection_id)
+    try:
+        return service.get_result(
+            scope,
+            connection_id=str(connection_id),
+            source_run_id=str(source_run_id),
+            system_id=str(system_id),
+            asset_id=asset_id,
+            result_id=str(result_id),
+        )
+    except TelemetryCanonicalResultServiceError as error:
+        raise _api_error(error) from None
+
+
+@router.get(
+    "/data-connections/{connection_id}/runs/{source_run_id}/systems/"
+    "{system_id:path}/analysis-results/{result_id}/lineage",
+    response_model=CanonicalAnalysisLineageResponse,
+)
+def read_data_connection_analysis_result_lineage(
+    request: Request,
+    connection_id: ConnectionIdPath,
+    source_run_id: UUID,
+    system_id: SystemIdPath,
+    result_id: UUID,
+    asset_id: str | None = Query(
+        default=None,
+        min_length=1,
+        max_length=160,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+    ),
+    limit: int = Query(default=100, ge=1, le=5_000),
+    cursor: str | None = Query(default=None, min_length=1, max_length=512),
+) -> dict[str, Any]:
+    service, scope = _result_service_scope(request, connection_id)
+    try:
+        return service.get_lineage_page(
+            scope,
+            connection_id=str(connection_id),
+            source_run_id=str(source_run_id),
+            system_id=str(system_id),
+            asset_id=asset_id,
+            result_id=str(result_id),
+            limit=limit,
+            cursor=cursor,
+        )
+    except TelemetryCanonicalResultServiceError as error:
         raise _api_error(error) from None
 
 

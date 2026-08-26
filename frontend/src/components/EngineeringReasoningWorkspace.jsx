@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "rea
 import { buildEngineeringReasoningModel, buildEngineeringReasoningModelsFromEvidenceRuns, buildFacilityLabelContext } from "../viewModels/engineeringReasoning";
 import { analysisBelongsToBaseline } from "../viewModels/baselineSelection";
 import { deriveWorkspacePresentationState } from "../viewModels/operationsBrief";
-import { projectEvidenceRecord, projectFindingReview, projectInvestigation, projectResults, projectSystems } from "../viewModels/resultsPresentation";
+import { projectAnalysisEvidenceRecord, projectAnalysisInvestigation, projectEvidenceRecord, projectFindingReview, projectInvestigation, projectResults, projectSystems } from "../viewModels/resultsPresentation";
 import { normalizeReviewRecords, reviewRecordFor, reviewRecordFromWorkflow } from "../viewModels/findingReviewState";
 import { fetchFindings } from "../services/api/findingsApi";
 import ConfidenceTierChip from "./engineering/ConfidenceTierChip";
@@ -108,13 +108,13 @@ function OverviewHeader({ eyebrow, name, status, confidence, location, summary =
   );
 }
 
-function SiteOverview({ projection, onReview, onOpenEvidence }) {
-  return <OperationsBrief projection={projection} onReview={onReview} onOpenEvidence={onOpenEvidence} />;
+function SiteOverview({ projection, onReview, onOpenInvestigation, onOpenEvidence }) {
+  return <OperationsBrief projection={projection} onReview={onReview} onOpenInvestigation={onOpenInvestigation} onOpenEvidence={onOpenEvidence} />;
 }
 
-function SystemOverview({ system, systemsProjection, onReview, onOpenEvidence, onSystem }) {
+function SystemOverview({ system, systemsProjection, onReview, onOpenInvestigation, onOpenEvidence, onSystem }) {
   if (!system) return <SystemsOverview projection={systemsProjection} onSystem={onSystem} />;
-  return <OperationsBrief projection={system.results} onReview={onReview} onOpenEvidence={onOpenEvidence} />;
+  return <OperationsBrief projection={system.results} onReview={onReview} onOpenInvestigation={onOpenInvestigation} onOpenEvidence={onOpenEvidence} />;
 }
 
 function SystemsOverview({ projection, onSystem }) {
@@ -129,12 +129,12 @@ function SystemsOverview({ projection, onSystem }) {
   );
 }
 
-function FindingsOverview({ projection, onReview, onOpenEvidence }) {
-  return <OperationsBrief projection={projection} onReview={onReview} onOpenEvidence={onOpenEvidence} />;
+function FindingsOverview({ projection, onReview, onOpenInvestigation, onOpenEvidence }) {
+  return <OperationsBrief projection={projection} onReview={onReview} onOpenInvestigation={onOpenInvestigation} onOpenEvidence={onOpenEvidence} />;
 }
 
-function EvidenceOutcomesOverview({ projection, onReview, onOpenEvidence }) {
-  return <OperationsBrief projection={projection} onReview={onReview} onOpenEvidence={onOpenEvidence} />;
+function EvidenceOutcomesOverview({ projection, onReview, onOpenInvestigation, onOpenEvidence }) {
+  return <OperationsBrief projection={projection} onReview={onReview} onOpenInvestigation={onOpenInvestigation} onOpenEvidence={onOpenEvidence} />;
 }
 
 function TraceWorkspace({ model, finding, apiFetch, onBack }) {
@@ -175,7 +175,7 @@ function scrollWindowTo(top) {
   window.scrollTo({ top, behavior: "auto" });
 }
 
-export default function EngineeringReasoningWorkspace({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, domainDetection, apiFetch, comparisonAnalysisId = null, datasetScopeKey = "anonymous", workspaceSession = null, currentWorkspace = null, onWorkspaceChange, onWorkspaceNavigate, onSignOut, signOutPending = false, currentUser }) {
+export default function EngineeringReasoningWorkspace({ liveOps, canonicalFinding, currentSession, effectiveLatestUploadResult, effectiveLatestUploadSnapshot, canonicalConnectorResult = null, domainDetection, apiFetch, comparisonAnalysisId = null, datasetScopeKey = "anonymous", workspaceSession = null, currentWorkspace = null, onWorkspaceChange, onWorkspaceNavigate, onSignOut, signOutPending = false, currentUser }) {
   const [route, setRoute] = useState(routeFromLocation);
   const [selectedFindingId, setSelectedFindingId] = useState(() => pathIdentity(["findings", "evidence", "investigations"]));
   const [selectedSystemName, setSelectedSystemName] = useState(() => pathIdentity(["systems"]));
@@ -204,7 +204,9 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
       ? effectiveLatestUploadResult
       : null
   ), [comparisonAnalysisId, effectiveLatestUploadResult]);
-  const currentModel = useMemo(() => buildEngineeringReasoningModel({ liveOps: {}, canonicalFinding: verifiedComparisonResult ? canonicalFinding : null, currentSession: {}, result: verifiedComparisonResult ?? {}, snapshot: effectiveLatestUploadSnapshot, domainDetection, labelContext: facilityLabelContext }), [canonicalFinding, domainDetection, effectiveLatestUploadSnapshot, facilityLabelContext, verifiedComparisonResult]);
+  const activeResult = useMemo(() => canonicalConnectorResult ?? verifiedComparisonResult ?? {}, [canonicalConnectorResult, verifiedComparisonResult]);
+  const activeResultId = canonicalConnectorResult ? String(canonicalConnectorResult.result_id ?? "") : "";
+  const currentModel = useMemo(() => buildEngineeringReasoningModel({ liveOps: {}, canonicalFinding: verifiedComparisonResult && !canonicalConnectorResult ? canonicalFinding : null, currentSession: {}, result: activeResult, snapshot: effectiveLatestUploadSnapshot, domainDetection, labelContext: facilityLabelContext }), [activeResult, canonicalConnectorResult, canonicalFinding, domainDetection, effectiveLatestUploadSnapshot, facilityLabelContext, verifiedComparisonResult]);
   const portfolioModels = useMemo(() => {
     const persisted = buildEngineeringReasoningModelsFromEvidenceRuns(portfolioRuns, facilityLabelContext);
     const currentName = currentModel.site.name.trim().toLowerCase();
@@ -221,12 +223,13 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     ? null
     : exactSelectedFinding ?? model.selectedFinding;
   const effectiveReviewRecords = useMemo(() => ({ ...reviewRecords, ...findingWorkflowRecords }), [findingWorkflowRecords, reviewRecords]);
-  const resultsProjection = useMemo(() => projectResults(model, effectiveReviewRecords), [effectiveReviewRecords, model]);
+  const resultsProjection = useMemo(() => projectResults(model, effectiveReviewRecords, { analysisResultId: activeResultId }), [activeResultId, effectiveReviewRecords, model]);
   const systemsProjection = useMemo(() => projectSystems(model, effectiveReviewRecords), [effectiveReviewRecords, model]);
   const selectedReviewRecord = selectedFinding ? reviewRecordFor(selectedFinding, effectiveReviewRecords) : null;
   const reviewProjection = useMemo(() => projectFindingReview(model, selectedFindingId, selectedReviewRecord ?? {}), [model, selectedFindingId, selectedReviewRecord]);
-  const investigationProjection = useMemo(() => projectInvestigation(model, selectedFindingId, selectedReviewRecord ?? {}), [model, selectedFindingId, selectedReviewRecord]);
-  const evidenceProjection = useMemo(() => projectEvidenceRecord(model, selectedFindingId, selectedReviewRecord ?? {}), [model, selectedFindingId, selectedReviewRecord]);
+  const analysisRouteSelected = Boolean(activeResultId && selectedFindingId === activeResultId && !exactSelectedFinding);
+  const investigationProjection = useMemo(() => analysisRouteSelected ? projectAnalysisInvestigation(model, selectedFindingId) : projectInvestigation(model, selectedFindingId, selectedReviewRecord ?? {}), [analysisRouteSelected, model, selectedFindingId, selectedReviewRecord]);
+  const evidenceProjection = useMemo(() => analysisRouteSelected ? projectAnalysisEvidenceRecord(model, selectedFindingId) : projectEvidenceRecord(model, selectedFindingId, selectedReviewRecord ?? {}), [analysisRouteSelected, model, selectedFindingId, selectedReviewRecord]);
   const selectedSystem = systemsProjection.systems.find((system) => system.systemKey === selectedSystemName) ?? null;
   const presentationState = useMemo(() => deriveWorkspacePresentationState(model), [model]);
   const effectiveRoute = route === "portfolio" && portfolioModels.length <= 1 ? "site" : route;
@@ -486,11 +489,11 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
               : effectiveRoute === "trace" ? <TraceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onBack={() => goBack("investigations")} />
                       : effectiveRoute === "portfolio" ? <PortfolioWorkspace sites={portfolioSites} onSelectSite={handleSelectSite} />
                         : effectiveRoute === "systems" ? <SystemsOverview projection={systemsProjection} onSystem={openSystem} />
-                          : effectiveRoute === "findings" ? <FindingsOverview projection={resultsProjection} onReview={openFinding} onOpenEvidence={openEvidence} />
-                            : effectiveRoute === "investigations" ? <EvidenceOutcomesOverview projection={resultsProjection} onReview={openFinding} onOpenEvidence={openEvidence} />
-                            : effectiveRoute === "system" ? <SystemOverview system={selectedSystem} systemsProjection={systemsProjection} onReview={openFinding} onOpenEvidence={openEvidence} onSystem={openSystem} />
+                            : effectiveRoute === "findings" ? <FindingsOverview projection={resultsProjection} onReview={openFinding} onOpenInvestigation={openInvestigation} onOpenEvidence={openEvidence} />
+                            : effectiveRoute === "investigations" ? <EvidenceOutcomesOverview projection={resultsProjection} onReview={openFinding} onOpenInvestigation={openInvestigation} onOpenEvidence={openEvidence} />
+                            : effectiveRoute === "system" ? <SystemOverview system={selectedSystem} systemsProjection={systemsProjection} onReview={openFinding} onOpenInvestigation={openInvestigation} onOpenEvidence={openEvidence} onSystem={openSystem} />
                               : presentationState.key === "legacyAnalysis" ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
-                                : <SiteOverview projection={resultsProjection} onReview={openFinding} onOpenEvidence={openEvidence} />}
+                                : <SiteOverview projection={resultsProjection} onReview={openFinding} onOpenInvestigation={openInvestigation} onOpenEvidence={openEvidence} />}
         </main>
       </div>
     </div>

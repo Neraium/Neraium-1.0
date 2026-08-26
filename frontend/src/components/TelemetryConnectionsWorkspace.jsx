@@ -3,11 +3,13 @@ import {
   createTelemetryConnection,
   discoverTelemetrySignals,
   getFacilityContext,
+  getTelemetryAnalysisResult,
   listCanonicalSignalConcepts,
   listTelemetryConnections,
   listTelemetryProviders,
   listTelemetryErrors,
   listTelemetryRuns,
+  listTelemetryRunAnalysisResults,
   listTelemetrySignals,
   mapTelemetrySignal,
   putTelemetryCredentials,
@@ -158,6 +160,7 @@ export default function TelemetryConnectionsWorkspace({
   currentUser = null,
   currentWorkspace = null,
   datasetScopeKey = "anonymous",
+  onOpenAnalysisResult = () => {},
 }) {
   const { canConfigure, canOperate } = roleCapabilities(currentUser);
   const [connections, setConnections] = useState([]);
@@ -167,6 +170,7 @@ export default function TelemetryConnectionsWorkspace({
   const [selectedConnectionId, setSelectedConnectionId] = useState("");
   const [signals, setSignals] = useState([]);
   const [runs, setRuns] = useState([]);
+  const [runResults, setRunResults] = useState({});
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -206,6 +210,7 @@ export default function TelemetryConnectionsWorkspace({
     setSelectedConnectionId("");
     setSignals([]);
     setRuns([]);
+    setRunResults({});
     setErrors([]);
     setFacilityContext(null);
     setMapping({ ...EMPTY_MAPPING });
@@ -545,6 +550,58 @@ export default function TelemetryConnectionsWorkspace({
     }
   }
 
+  async function openAnalysisResult(run, result) {
+    if (!selectedConnection || !result?.result_id || !result?.system_id) return;
+    const controller = beginAction(`result:${result.result_id}`);
+    try {
+      const payload = await getTelemetryAnalysisResult({
+        apiFetch,
+        accessCode,
+        connectionId: selectedConnection.connection_id,
+        runId: run.run_id,
+        systemId: result.system_id,
+        resultId: result.result_id,
+        assetId: result.asset_id ?? null,
+        signal: controller.signal,
+      });
+      const exactIdentity = String(payload?.result_id ?? "") === String(result.result_id)
+        && String(payload?.connection_id ?? "") === String(selectedConnection.connection_id)
+        && String(payload?.source_run_id ?? "") === String(run.run_id)
+        && String(payload?.system_id ?? "") === String(result.system_id)
+        && String(payload?.asset_id ?? "") === String(result.asset_id ?? "");
+      if (!payload?.product_result || !exactIdentity) {
+        throw new Error("The exact saved analysis result could not be verified.");
+      }
+      onOpenAnalysisResult(payload);
+    } catch (requestError) {
+      if (requestError?.name !== "AbortError") setError(requestError?.message);
+    } finally {
+      finishAction(controller);
+    }
+  }
+
+  async function handleReviewResults(run) {
+    if (!selectedConnection) return;
+    const controller = beginAction(`results:${run.run_id}`);
+    try {
+      const payload = await listTelemetryRunAnalysisResults({
+        apiFetch,
+        accessCode,
+        connectionId: selectedConnection.connection_id,
+        runId: run.run_id,
+        signal: controller.signal,
+      });
+      const results = Array.isArray(payload?.results) ? payload.results : [];
+      setRunResults((current) => ({ ...current, [run.run_id]: results }));
+      if (results.length === 1) await openAnalysisResult(run, results[0]);
+      else if (!results.length) setNotice("This run has no durable analytical result available for review.");
+    } catch (requestError) {
+      if (requestError?.name !== "AbortError") setError(requestError?.message);
+    } finally {
+      finishAction(controller);
+    }
+  }
+
   return (
     <div className="telemetry-connections" data-testid="telemetry-connections-workspace">
       <header className="telemetry-connections__hero">
@@ -636,7 +693,7 @@ export default function TelemetryConnectionsWorkspace({
           <section className="telemetry-panel telemetry-operations" aria-labelledby="ingestion-operations-heading">
             <div className="telemetry-panel__heading"><div><p className="section-token">Reference preparation and operations</p><h2 id="ingestion-operations-heading">Ingestion activity</h2></div><span>{errors.length} current problems</span></div>
             <form className="telemetry-backfill" onSubmit={handleBackfill}><div><h3>Prepare behavioral reference</h3><p>Schedule a bounded, resumable UTC backfill through the same canonical pipeline used for continued telemetry.</p></div><label><span>Start (UTC)</span><input required type="datetime-local" value={backfill.start} onChange={(event) => setBackfill({ ...backfill, start: event.target.value })} /></label><label><span>End (UTC)</span><input required type="datetime-local" value={backfill.end} onChange={(event) => setBackfill({ ...backfill, end: event.target.value })} /></label><button type="submit" disabled={!canOperate || Boolean(busy)}>Start backfill</button></form>
-            <div className="telemetry-ops-grid"><div><h3>Recent runs</h3>{runs.length ? <ul className="telemetry-record-list">{runs.map((run) => <li key={run.run_id}><div><strong>{formatState(run.mode)} · {formatState(run.status)}</strong><small>{run.observations_accepted ?? 0} accepted · {run.observations_rejected ?? 0} rejected · {run.observations_duplicate ?? 0} duplicate</small></div>{["failed", "partial"].includes(run.status) ? <button type="button" onClick={() => handleRetry(run)} disabled={!canOperate || Boolean(busy)}>Retry</button> : null}</li>)}</ul> : <p>No ingestion runs yet.</p>}</div><div><h3>Ingestion errors</h3>{errors.length ? <ul className="telemetry-record-list">{errors.map((item) => <li key={item.error_id}><div><strong>{formatState(item.reason_code)}</strong><small>{item.external_tag_id || "Batch-level"} · {formatState(item.disposition)} · last seen {formatTimestamp(item.last_seen_at, selectedConnection.timezone)}</small></div><span>{item.occurrence_count}×</span></li>)}</ul> : <p>No sanitized ingestion errors reported.</p>}</div></div>
+            <div className="telemetry-ops-grid"><div><h3>Recent runs</h3>{runs.length ? <ul className="telemetry-record-list">{runs.map((run) => <li key={run.run_id}><div><strong>{formatState(run.mode)} · {formatState(run.status)}</strong><small>{run.observations_accepted ?? 0} accepted · {run.observations_rejected ?? 0} rejected · {run.observations_duplicate ?? 0} duplicate</small>{runResults[run.run_id]?.length > 1 ? <span className="telemetry-run-results" aria-label="Saved analysis results">{runResults[run.run_id].map((result) => <button key={result.result_id} type="button" onClick={() => openAnalysisResult(run, result)} disabled={Boolean(busy)}>Open {result.system_id}{result.asset_id ? ` / ${result.asset_id}` : ""}</button>)}</span> : null}</div><span>{["succeeded", "partial"].includes(run.status) ? <button type="button" onClick={() => handleReviewResults(run)} disabled={Boolean(busy)}>Review results</button> : null}{["failed", "partial"].includes(run.status) ? <button type="button" onClick={() => handleRetry(run)} disabled={!canOperate || Boolean(busy)}>Retry</button> : null}</span></li>)}</ul> : <p>No ingestion runs yet.</p>}</div><div><h3>Ingestion errors</h3>{errors.length ? <ul className="telemetry-record-list">{errors.map((item) => <li key={item.error_id}><div><strong>{formatState(item.reason_code)}</strong><small>{item.external_tag_id || "Batch-level"} · {formatState(item.disposition)} · last seen {formatTimestamp(item.last_seen_at, selectedConnection.timezone)}</small></div><span>{item.occurrence_count}×</span></li>)}</ul> : <p>No sanitized ingestion errors reported.</p>}</div></div>
           </section>
         </>
       ) : null}

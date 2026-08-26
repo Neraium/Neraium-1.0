@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import TelemetryConnectionsWorkspace from "./TelemetryConnectionsWorkspace";
 
@@ -176,5 +176,30 @@ describe("TelemetryConnectionsWorkspace", () => {
     render(h(TelemetryConnectionsWorkspace, { apiFetch, currentUser: { role: "admin" }, datasetScopeKey: "facility-a" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Telemetry authority could not be established for this facility.");
     expect(screen.queryByText("Central plant API")).toBeNull();
+  });
+
+  it("retrieves an exact scoped canonical result without using the historical latest-result path", async () => {
+    const runId = "44444444-4444-4444-8444-444444444444";
+    const resultId = "77777777-7777-4777-8777-777777777777";
+    const onOpenAnalysisResult = vi.fn();
+    const apiFetch = vi.fn(async (path) => {
+      if (path === "/api/data-connections") return response({ connections: [connection()] });
+      const initial = basePayload(path);
+      if (initial) return initial;
+      if (path.includes("/signals?")) return response({ signals: [signal()] });
+      if (path.includes("/runs?")) return response({ runs: [{ run_id: runId, connection_id: CONNECTION_ID, mode: "incremental", status: "succeeded", observations_accepted: 20, observations_rejected: 0, observations_duplicate: 0 }] });
+      if (path.includes("/errors?")) return response({ errors: [] });
+      if (path === `/api/data-connections/${CONNECTION_ID}/runs/${runId}/analysis-results`) return response({ results: [{ result_id: resultId, system_id: "chw-loop", asset_id: "pump-1" }] });
+      if (path === `/api/data-connections/${CONNECTION_ID}/runs/${runId}/systems/chw-loop/analysis-results/${resultId}?asset_id=pump-1`) return response({ result_id: resultId, analysis_window_id: "88888888-8888-4888-8888-888888888888", connection_id: CONNECTION_ID, source_run_id: runId, system_id: "chw-loop", asset_id: "pump-1", payload_digest: "a".repeat(64), lineage_verified: true, product_result: { result_id: resultId, analysis_result: { systems: [{ id: "chw-loop", name: "Chilled water loop" }], conditions: [], insights: [] } } });
+      return response({}, 404);
+    });
+
+    render(h(TelemetryConnectionsWorkspace, { apiFetch, currentUser: { role: "viewer" }, datasetScopeKey: "facility-a", onOpenAnalysisResult }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review results" }));
+
+    await waitFor(() => expect(onOpenAnalysisResult).toHaveBeenCalledWith(expect.objectContaining({ result_id: resultId })));
+    expect(apiFetch).toHaveBeenCalledWith(`/api/data-connections/${CONNECTION_ID}/runs/${runId}/analysis-results`, expect.objectContaining({ cache: "no-store" }));
+    expect(apiFetch).toHaveBeenCalledWith(`/api/data-connections/${CONNECTION_ID}/runs/${runId}/systems/chw-loop/analysis-results/${resultId}?asset_id=pump-1`, expect.objectContaining({ cache: "no-store" }));
+    expect(apiFetch.mock.calls.some(([path]) => String(path).includes("/api/data/latest"))).toBe(false);
   });
 });

@@ -92,7 +92,7 @@ function analysisResult(overrides = {}) {
   };
 }
 
-function renderWorkspace({ path = "/sites/current", result = analysisResult(), apiFetch = vi.fn(), onWorkspaceNavigate = vi.fn(), onWorkspaceChange = vi.fn(), workspaceSession = null, currentWorkspace = null, role = "operator" } = {}) {
+function renderWorkspace({ path = "/sites/current", result = analysisResult(), canonicalConnectorResult = null, apiFetch = vi.fn(), onWorkspaceNavigate = vi.fn(), onWorkspaceChange = vi.fn(), workspaceSession = null, currentWorkspace = null, role = "operator" } = {}) {
   window.history.replaceState({}, "", path);
   const props = {
     liveOps: {},
@@ -100,6 +100,7 @@ function renderWorkspace({ path = "/sites/current", result = analysisResult(), a
     currentSession: {},
     effectiveLatestUploadResult: result,
     effectiveLatestUploadSnapshot: result ? { status: "complete", sii_completed: true } : {},
+    canonicalConnectorResult,
     apiFetch,
     onWorkspaceNavigate,
     onWorkspaceChange,
@@ -396,6 +397,136 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(screen.getAllByText("No supported material behavioral change.").length).toBeGreaterThan(0);
     expect(screen.getAllByText("The available comparison remains within the learned system-behavior boundary.").length).toBeGreaterThan(0);
     expect(screen.queryByText("Evidence insufficient")).toBeNull();
+  });
+
+  it("routes a stable connector result through result-scoped investigation and evidence without a fake finding", () => {
+    const resultId = "77777777-7777-4777-8777-777777777777";
+    const connectorResult = {
+      result_id: resultId,
+      analysis_window_id: "88888888-8888-4888-8888-888888888888",
+      connection_id: "11111111-1111-4111-8111-111111111111",
+      source_run_id: "44444444-4444-4444-8444-444444444444",
+      facility_id: "facility-a",
+      facility_name: "North Plant",
+      system_id: "cooling",
+      asset_id: "chiller-03",
+      window_start: "2026-08-25T00:00:00Z",
+      window_end: "2026-08-26T00:00:00Z",
+      payload_digest: "a".repeat(64),
+      artifact_schema_version: "telemetry-canonical-result-artifact.v1",
+      execution_contract_version: "analysis-window-execution.v1",
+      analysis_schema_version: "analysis-result-v1",
+      analysis_contract_version: "analysis-result-v1",
+      lineage_verified: true,
+      sii_completed: true,
+      sii_reliable_enough_to_show: true,
+      evidence_persisted: true,
+      baseline_sufficient: true,
+      data_quality: { coverage_percent: 100, warnings: [] },
+      analysis_result: {
+        schema_version: "analysis-result-v1",
+        systems: [{ id: "cooling", name: "Cooling system" }],
+        relationships: [{ id: "rel-1", columns: ["temp", "power"], baseline_strength: 0.8, current_strength: 0.81, change_type: "stable" }],
+        conditions: [],
+        insights: [],
+      },
+      sii_result: { temporal_analysis: { status: "stable" }, data_conditions: { status: "sufficient" }, engine: { name: "sii", version: "1" } },
+    };
+    renderWorkspace({ result: null, canonicalConnectorResult: connectorResult });
+
+    expect(screen.getByRole("heading", { name: "No supported material behavioral change." })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Review finding" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
+    expect(window.location.pathname).toBe(`/investigations/${resultId}`);
+    expect(screen.getByTestId("investigation-workspace")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open evidence record" }));
+    expect(window.location.pathname).toBe(`/evidence/${resultId}`);
+    expect(screen.getByTestId("evidence-record")).toBeTruthy();
+    expect(screen.getByText(resultId)).toBeTruthy();
+    expect(screen.getAllByText("telemetry-canonical-result-artifact.v1").length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toContain("finding-" + resultId);
+  });
+
+  it("keeps material connector finding and canonical result lineage identical through every disclosure depth", () => {
+    const base = analysisResult();
+    const resultId = "77777777-7777-4777-8777-777777777778";
+    const digest = "c".repeat(64);
+    const connectorResult = {
+      ...base,
+      result_id: resultId,
+      analysis_window_id: "88888888-8888-4888-8888-888888888889",
+      connection_id: "11111111-1111-4111-8111-111111111111",
+      source_run_id: "44444444-4444-4444-8444-444444444444",
+      facility_id: "facility-a",
+      system_id: "cooling",
+      asset_id: "chiller-03",
+      payload_digest: digest,
+      artifact_schema_version: "telemetry-canonical-result-artifact.v1",
+      execution_contract_version: "analysis-window-execution.v1",
+      analysis_schema_version: "analysis-result-v1",
+      analysis_contract_version: "analysis-result-v1",
+      lineage_verified: true,
+      analysis_result: base.analysis_explanation,
+      canonical_result: {
+        identity: {
+          result_id: resultId,
+          analysis_id: "analysis-connector-1",
+          analysis_window_id: "88888888-8888-4888-8888-888888888889",
+          source_ingestion_run_id: "44444444-4444-4444-8444-444444444444",
+          payload_digest: digest,
+          observation_count: 20,
+          observation_lineage_digest: "d".repeat(64),
+          artifact_schema_version: "telemetry-canonical-result-artifact.v1",
+          execution_contract_version: "analysis-window-execution.v1",
+          analysis_contract_version: "analysis-result-v1",
+        },
+        reference_metadata: {},
+        finding_ids: { items: ["finding-1"], total: 1, truncated: false },
+        evidence_ids: { items: ["ev-finding-1"], total: 1, truncated: false },
+        evidence_audit: { identity: { result_id: resultId }, finding_record_count: 1 },
+      },
+    };
+    renderWorkspace({ result: null, canonicalConnectorResult: connectorResult });
+
+    fireEvent.click(screen.getByRole("button", { name: "Review finding" }));
+    expect(window.location.pathname).toBe("/findings/finding-1");
+    expect(screen.getByTestId("finding-review")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
+    expect(window.location.pathname).toBe("/investigations/finding-1");
+    expect(screen.getByTestId("investigation-workspace")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open evidence record" }));
+    expect(window.location.pathname).toBe("/evidence/finding-1");
+    expect(screen.getByTestId("evidence-record")).toBeTruthy();
+    expect(screen.getAllByText("finding-1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(resultId).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(digest).length).toBeGreaterThan(0);
+  });
+
+  it("keeps a zero-finding insufficient connector result retrievable without creating a review case", () => {
+    const resultId = "99999999-9999-4999-8999-999999999999";
+    const connectorResult = {
+      result_id: resultId,
+      facility_name: "North Plant",
+      system_id: "cooling",
+      payload_digest: "b".repeat(64),
+      lineage_verified: true,
+      sii_completed: true,
+      sii_reliable_enough_to_show: true,
+      evidence_persisted: true,
+      baseline_sufficient: false,
+      data_quality: { coverage_percent: 40, warnings: ["Comparable baseline coverage is insufficient."] },
+      analysis_result: { schema_version: "analysis-result-v1", systems: [{ id: "cooling", name: "Cooling system" }], conditions: [], insights: [], warnings: ["Comparable baseline coverage is insufficient."] },
+      sii_result: { data_conditions: { status: "insufficient" } },
+    };
+    renderWorkspace({ result: null, canonicalConnectorResult: connectorResult });
+
+    expect(screen.getByRole("heading", { name: "Insufficient evidence" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Review finding" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
+    expect(screen.getByTestId("investigation-workspace")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open evidence record" }));
+    expect(screen.getByTestId("evidence-record")).toBeTruthy();
+    expect(screen.getAllByText(/Comparable baseline coverage is insufficient/).length).toBeGreaterThan(0);
   });
 
   it("keeps resolved findings out of every triage list without claiming the system is stable", () => {
