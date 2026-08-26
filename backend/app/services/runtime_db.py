@@ -20,6 +20,10 @@ from app.services.dataset_scope import (
     dataset_scope_from_payload,
     dataset_scope_from_queue_routing,
 )
+from app.services.phase4_scope import (
+    ServerBoundSystemIdentity,
+    build_upload_queue_phase4_scope_envelope,
+)
 
 
 RUNTIME_DIR = get_settings().runtime_dir
@@ -264,6 +268,7 @@ RUNTIME_SCHEMA_MIGRATIONS = (
     "009_finding_field_reports",
     "010_workspace_evidence_scope",
     "011_workspace_live_analysis_scope",
+    "012_upload_queue_phase4_scope",
 )
 
 
@@ -273,6 +278,19 @@ def _table_sql(connection: sqlite3.Connection, table_name: str) -> str:
         (table_name,),
     ).fetchone()
     return str(row["sql"] or "") if row else ""
+
+
+def _execute_transactional_script(connection: sqlite3.Connection, script: str) -> None:
+    """Execute a SQL script without committing the caller's transaction."""
+    pending_lines: list[str] = []
+    for line in script.splitlines():
+        pending_lines.append(line)
+        statement = "\n".join(pending_lines).strip()
+        if statement and sqlite3.complete_statement(statement):
+            connection.execute(statement)
+            pending_lines.clear()
+    if "\n".join(pending_lines).strip():
+        raise ValueError("incomplete_runtime_migration_statement")
 
 
 def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
@@ -907,7 +925,8 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
         # unrelated scopes. UUID run/finding IDs remain stable; all natural-key
         # uniqueness and the run->finding relationship include exact scope.
         connection.execute("PRAGMA defer_foreign_keys = ON")
-        connection.executescript(
+        _execute_transactional_script(
+            connection,
             """
             CREATE TABLE live_analysis_configurations_scoped (
                 system_id TEXT NOT NULL,
@@ -1094,6 +1113,25 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
         connection.execute(
             "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
             ("011_workspace_live_analysis_scope", now_iso()),
+        )
+
+    if "012_upload_queue_phase4_scope" not in applied:
+        # Routing is separate from mutable job payloads and from the bounded
+        # queue lifecycle columns used by older operators. Legacy queue rows
+        # intentionally have no matching route and therefore fail closed.
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS upload_queue_routing (
+                job_id TEXT PRIMARY KEY,
+                routing_json TEXT NOT NULL CHECK (json_valid(routing_json)),
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(job_id) REFERENCES upload_queue(job_id) ON DELETE CASCADE
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("012_upload_queue_phase4_scope", now_iso()),
         )
 
 
@@ -1314,8 +1352,17 @@ def _read_s3_queue_job(job_id: str) -> dict[str, Any] | None:
         return None
     try:
         response = client.get_object(Bucket=bucket, Key=_queue_object_key(job_id))
-    except Exception:
-        return None
+    except Exception as exc:
+        error_code = str(
+            getattr(exc, "response", {}).get("Error", {}).get("Code", "")
+        )
+        if isinstance(exc, KeyError) or error_code in {"404", "NoSuchKey", "NotFound"}:
+            return None
+        logger.exception(
+            "upload_queue_read_failed queue_backend=s3 job_id=%s",
+            job_id,
+        )
+        raise RuntimeError("shared_upload_queue_read_failed") from exc
     try:
         body = response["Body"].read().decode("utf-8")
         payload = json.loads(body)
@@ -1412,8 +1459,69 @@ def _queue_operational_metrics_from_records(records: list[dict[str, Any]]) -> di
     }
 
 
-def enqueue_upload_job(job_id: str) -> None:
-    routing = build_upload_queue_routing(current_dataset_scope())
+def _current_upload_queue_routing(
+    *,
+    job_id: str,
+    system_identity: ServerBoundSystemIdentity | None,
+    dataset_id: Any,
+    upload_session_id: Any,
+) -> dict[str, Any]:
+    dataset_scope = current_dataset_scope()
+    phase4_envelope = build_upload_queue_phase4_scope_envelope(
+        dataset_scope=dataset_scope,
+        system_identity=system_identity,
+        job_id=job_id,
+        dataset_id=dataset_id,
+        upload_session_id=upload_session_id,
+    )
+    return build_upload_queue_routing(
+        dataset_scope,
+        phase4_scope_envelope=phase4_envelope,
+    )
+
+
+def _resolve_enqueue_routing(
+    *,
+    generated_routing: dict[str, Any],
+    existing_routing: dict[str, Any] | None,
+    existing_status: str | None,
+    preserve_existing_routing: bool,
+) -> dict[str, Any]:
+    if existing_routing is None:
+        if existing_status in {"pending", "processing"}:
+            raise RuntimeError("upload_queue_routing_missing")
+        if existing_status is not None:
+            # A legacy retry may recover its authenticated DatasetScope, but it
+            # must never acquire Phase 4 system authority retroactively.
+            return build_upload_queue_routing(current_dataset_scope())
+        return generated_routing
+    try:
+        existing_scope = dataset_scope_from_queue_routing({"routing": existing_routing})
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
+    if existing_scope != current_dataset_scope():
+        raise RuntimeError("upload_queue_scope_conflict")
+    if preserve_existing_routing:
+        return existing_routing
+    if existing_routing != generated_routing:
+        raise RuntimeError("upload_queue_phase4_scope_conflict")
+    return existing_routing
+
+
+def enqueue_upload_job(
+    job_id: str,
+    *,
+    system_identity: ServerBoundSystemIdentity | None = None,
+    dataset_id: Any = None,
+    upload_session_id: Any = None,
+    preserve_existing_routing: bool = False,
+) -> None:
+    routing = _current_upload_queue_routing(
+        job_id=job_id,
+        system_identity=system_identity,
+        dataset_id=dataset_id,
+        upload_session_id=upload_session_id,
+    )
     backend = upload_queue_backend()
     if backend == "s3":
         _ensure_shared_upload_queue_backend()
@@ -1422,8 +1530,15 @@ def enqueue_upload_job(job_id: str) -> None:
         existing = existing_record or {}
         if existing_record is not None:
             try:
-                existing_scope = dataset_scope_from_queue_routing(existing)
-            except ValueError as exc:
+                routing = _resolve_enqueue_routing(
+                    generated_routing=routing,
+                    existing_routing=(
+                        existing.get("routing") if isinstance(existing.get("routing"), dict) else None
+                    ),
+                    existing_status=_normalize_upload_queue_status(existing.get("status")),
+                    preserve_existing_routing=preserve_existing_routing,
+                )
+            except RuntimeError as exc:
                 if _normalize_upload_queue_status(existing.get("status")) in {"pending", "processing"}:
                     _write_s3_queue_job(
                         {
@@ -1434,9 +1549,7 @@ def enqueue_upload_job(job_id: str) -> None:
                             "locked_at": None,
                         }
                     )
-                raise RuntimeError(str(exc)) from exc
-            if existing_scope != current_dataset_scope():
-                raise RuntimeError("upload_queue_scope_conflict")
+                raise
         if _normalize_upload_queue_status(existing.get("status")) in {"pending", "processing"}:
             logger.info("upload_queue_duplicate_enqueue_ignored queue_backend=%s job_id=%s status=%s", backend, job_id, existing.get("status"))
             return
@@ -1449,7 +1562,7 @@ def enqueue_upload_job(job_id: str) -> None:
                 "created_at": existing.get("created_at") or timestamp,
                 "updated_at": timestamp,
                 "locked_at": None,
-                "routing": existing.get("routing") or routing,
+                "routing": routing,
             }
         )
         logger.info("upload_queue_enqueued queue_backend=%s job_id=%s", backend, job_id)
@@ -1458,6 +1571,26 @@ def enqueue_upload_job(job_id: str) -> None:
     init_runtime_db()
     timestamp = now_iso()
     with db_connection() as connection:
+        existing_row = connection.execute(
+            """
+            SELECT q.status, r.routing_json
+            FROM upload_queue AS q
+            LEFT JOIN upload_queue_routing AS r ON r.job_id = q.job_id
+            WHERE q.job_id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+        if existing_row is not None:
+            try:
+                existing_routing = json.loads(existing_row["routing_json"])
+            except (TypeError, json.JSONDecodeError):
+                existing_routing = None
+            routing = _resolve_enqueue_routing(
+                generated_routing=routing,
+                existing_routing=existing_routing if isinstance(existing_routing, dict) else None,
+                existing_status=_normalize_upload_queue_status(existing_row["status"]),
+                preserve_existing_routing=preserve_existing_routing,
+            )
         connection.execute(
             """
             INSERT INTO upload_queue (job_id, status, attempts, last_error, created_at, updated_at, locked_at)
@@ -1470,6 +1603,14 @@ def enqueue_upload_job(job_id: str) -> None:
             WHERE upload_queue.status NOT IN ('pending', 'processing')
             """,
             (job_id, timestamp, timestamp),
+        )
+        connection.execute(
+            """
+            INSERT INTO upload_queue_routing (job_id, routing_json, created_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(job_id) DO UPDATE SET routing_json=excluded.routing_json
+            """,
+            (job_id, json.dumps(routing, sort_keys=True), timestamp),
         )
     logger.info("upload_queue_enqueued queue_backend=%s job_id=%s", backend, job_id)
 
@@ -1520,9 +1661,10 @@ def claim_next_upload_job_record() -> dict[str, Any] | None:
         row = connection.execute(
             """
             SELECT q.job_id, q.status, q.attempts, q.last_error,
-                   q.created_at, q.updated_at, q.locked_at, j.payload_json
+                   q.created_at, q.updated_at, q.locked_at, r.routing_json
             FROM upload_queue AS q
             INNER JOIN upload_jobs AS j ON j.job_id = q.job_id
+            LEFT JOIN upload_queue_routing AS r ON r.job_id = q.job_id
             WHERE q.status = 'pending'
             ORDER BY q.created_at ASC, q.job_id ASC
             LIMIT 1
@@ -1552,11 +1694,6 @@ def claim_next_upload_job_record() -> dict[str, Any] | None:
         pending_count,
         job_id,
     )
-    try:
-        job_payload = json.loads(row["payload_json"])
-    except (TypeError, json.JSONDecodeError):
-        job_payload = {}
-    scope = dataset_scope_from_payload(job_payload) if isinstance(job_payload, dict) else None
     claimed_record = {
         "job_id": job_id,
         "status": "processing",
@@ -1566,8 +1703,12 @@ def claim_next_upload_job_record() -> dict[str, Any] | None:
         "updated_at": timestamp,
         "locked_at": timestamp,
     }
-    if scope is not None:
-        claimed_record["routing"] = build_upload_queue_routing(scope)
+    try:
+        routing = json.loads(row["routing_json"])
+    except (TypeError, json.JSONDecodeError):
+        routing = None
+    if isinstance(routing, dict):
+        claimed_record["routing"] = routing
     return claimed_record
 
 
@@ -1925,9 +2066,11 @@ def read_upload_queue_job(job_id: str) -> dict[str, Any] | None:
     with db_connection() as connection:
         row = connection.execute(
             """
-            SELECT job_id, status, attempts, last_error, created_at, updated_at, locked_at
-            FROM upload_queue
-            WHERE job_id = ?
+            SELECT q.job_id, q.status, q.attempts, q.last_error,
+                   q.created_at, q.updated_at, q.locked_at, r.routing_json
+            FROM upload_queue AS q
+            LEFT JOIN upload_queue_routing AS r ON r.job_id = q.job_id
+            WHERE q.job_id = ?
             """,
             (job_id,),
         ).fetchone()
@@ -1947,7 +2090,11 @@ def read_upload_queue_job(job_id: str) -> dict[str, Any] | None:
                 (row["created_at"],),
             ).fetchone()
             position = int((pos_row["ahead"] if pos_row else 0) or 0) + 1
-    return {
+    try:
+        routing = json.loads(row["routing_json"])
+    except (TypeError, json.JSONDecodeError):
+        routing = None
+    result = {
         "job_id": row["job_id"],
         "status": normalized_status,
         "attempts": row["attempts"],
@@ -1957,6 +2104,9 @@ def read_upload_queue_job(job_id: str) -> dict[str, Any] | None:
         "locked_at": row["locked_at"],
         "queue_position": position,
     }
+    if isinstance(routing, dict):
+        result["routing"] = routing
+    return result
 
 
 def queue_metrics() -> dict[str, int]:

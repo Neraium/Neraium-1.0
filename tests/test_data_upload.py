@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 import asyncio
+import json
+import os
 import pytest
 import time
 from datetime import datetime, timedelta, timezone
@@ -232,7 +234,7 @@ def test_upload_in_split_role_production_uses_external_worker_queue(monkeypatch,
         lambda job_id, temp_path, filename=None, content_type=None: f"upload-state/upload-sources/{job_id}.csv",
     )
     monkeypatch.setattr(data_router, "queue_metrics", lambda: {"pending": 0, "processing": 0})
-    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda job_id: enqueued_jobs.append(job_id))
+    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda job_id, **_kwargs: enqueued_jobs.append(job_id))
     monkeypatch.setattr(data_router, "_dispatch_upload_worker_for_runtime", lambda runtime_dir: dispatched_workers.append(runtime_dir))
     client = TestClient(create_app(settings))
 
@@ -304,7 +306,7 @@ def test_retry_upload_analysis_returns_existing_active_job_without_duplicate_enq
         "progress": 50,
     })
     enqueued = []
-    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda value: enqueued.append(value))
+    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda value, **_kwargs: enqueued.append(value))
 
     response = client.post(f"/api/data/upload/{job_id}/retry")
 
@@ -328,7 +330,7 @@ def test_retry_upload_analysis_recovers_deterministic_stored_object(monkeypatch,
     recovered_key = f"upload-state/scopes/test/upload-sources/{job_id}.csv"
     monkeypatch.setattr(data_router, "resolve_existing_upload_source_key", lambda value, filename: recovered_key)
     enqueued = []
-    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda value: enqueued.append(value))
+    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda value, **_kwargs: enqueued.append(value))
 
     response = client.post(f"/api/data/upload/{job_id}/retry")
 
@@ -528,7 +530,7 @@ def test_upload_accepts_configured_service_token_in_production(monkeypatch, tmp_
     assert response.json()["status_url"].startswith("/api/data/upload-status/")
 
 
-def test_upload_accepts_authenticated_session_in_production(monkeypatch, tmp_path) -> None:
+def test_upload_rejects_authenticated_operator_session_in_production(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
     from app.services.auth_store import create_user
@@ -550,8 +552,7 @@ def test_upload_accepts_authenticated_session_in_production(monkeypatch, tmp_pat
         files={"file": ("sensor-export.csv", "timestamp,value\n2026-05-01,75", "text/csv")},
     )
 
-    assert response.status_code == 202
-    assert response.json()["status_url"].startswith("/api/data/upload-status/")
+    assert response.status_code == 403
 
 
 def test_upload_status_accepts_existing_session_cookie_in_production(monkeypatch, tmp_path) -> None:
@@ -926,6 +927,81 @@ def test_latest_upload_endpoint_returns_recent_history_and_score_diff() -> None:
     assert payload["history"][1]["filename"] == "baseline.csv"
     assert payload["history"][0]["diff"]["previous_filename"] == "baseline.csv"
     assert "neraium_score_delta" in payload["history"][0]["diff"]
+
+
+def test_upload_history_reads_only_current_scope_with_safe_legacy_fallback(tmp_path) -> None:
+    from app.services.dataset_scope import build_dataset_scope, set_current_dataset_scope
+    from app.services.upload_persistence import read_upload_history
+
+    current_scope = build_dataset_scope(user_id="current@example.com")
+    other_scope = build_dataset_scope(user_id="other@example.com")
+    set_current_dataset_scope(current_scope)
+    current_dir = tmp_path / "scopes" / current_scope.storage_id
+    other_dir = tmp_path / "scopes" / other_scope.storage_id
+    current_dir.mkdir(parents=True)
+    other_dir.mkdir(parents=True)
+
+    def write_result(path: Path, *, job_id: str, filename: str, scope: dict | None, mtime: int) -> None:
+        payload = {
+            "job_id": job_id,
+            "filename": filename,
+            "completed_at": f"2026-05-01T00:0{mtime // 100}:00Z",
+        }
+        if scope is not None:
+            payload["dataset_scope"] = scope
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        os.utime(path, (mtime, mtime))
+
+    write_result(
+        current_dir / "upload_result_current-new.json",
+        job_id="current-new",
+        filename="current-new.csv",
+        scope=current_scope.as_dict(),
+        mtime=300,
+    )
+    write_result(
+        current_dir / "upload_result_duplicate.json",
+        job_id="duplicate",
+        filename="scoped-duplicate.csv",
+        scope=current_scope.as_dict(),
+        mtime=200,
+    )
+    write_result(
+        tmp_path / "upload_result_duplicate.json",
+        job_id="duplicate",
+        filename="legacy-duplicate.csv",
+        scope=current_scope.as_dict(),
+        mtime=400,
+    )
+    write_result(
+        tmp_path / "upload_result_legacy-current.json",
+        job_id="legacy-current",
+        filename="legacy-current.csv",
+        scope=current_scope.as_dict(),
+        mtime=100,
+    )
+    write_result(
+        tmp_path / "upload_result_unscoped.json",
+        job_id="unscoped",
+        filename="unscoped.csv",
+        scope=None,
+        mtime=500,
+    )
+    write_result(
+        other_dir / "upload_result_other.json",
+        job_id="other",
+        filename="other.csv",
+        scope=other_scope.as_dict(),
+        mtime=600,
+    )
+
+    history = read_upload_history(tmp_path)
+
+    assert [item["filename"] for item in history] == [
+        "current-new.csv",
+        "scoped-duplicate.csv",
+        "legacy-current.csv",
+    ]
 
 
 def test_upload_creates_evidence_record_and_latest_endpoint_returns_it() -> None:
@@ -2710,9 +2786,9 @@ def test_worker_does_not_report_running_before_queue_claim(monkeypatch, tmp_path
     data_router._run_upload_worker_for_runtime(tmp_path)
 
     payload = upload_jobs.read_upload_status(job_id) or {}
-    assert payload.get("worker_state") == "starting"
-    assert payload.get("worker_claimed") is False
-    assert payload.get("worker_last_seen_at")
+    assert payload.get("worker_state") in {None, "queued"}
+    assert payload.get("worker_claimed") in {None, False}
+    assert payload.get("worker_last_seen_at") is None
 
 
 def test_worker_heartbeat_does_not_make_pending_queue_job_unclaimable(monkeypatch, tmp_path) -> None:

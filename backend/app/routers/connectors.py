@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from json import JSONDecodeError
 from pathlib import Path, PureWindowsPath
-from typing import Any
+from typing import Any, TypeVar
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.connectors.limits import MAX_CONNECTOR_RESPONSE_BYTES
 from app.connectors.models import (
@@ -18,7 +21,44 @@ from app.connectors.registry import CONNECTOR_CLASSES, build_connector_descripto
 from app.connectors.store import ConnectorHealthStore
 from app.core.security import require_admin_role, require_api_access
 
-router = APIRouter(tags=["connectors"], dependencies=[Depends(require_api_access), Depends(require_admin_role)])
+LegacyRequestModel = TypeVar("LegacyRequestModel", bound=BaseModel)
+LEGACY_CONNECTOR_RETIRED_DETAIL = {
+    "code": "legacy_connection_operation_retired",
+    "message": "This legacy connection operation is retired.",
+}
+
+
+def legacy_connector_compat_enabled(request: Request) -> bool:
+    settings = request.app.state.settings
+    environment = str(settings.app_env).strip().lower()
+    return environment in {"development", "test"} and bool(settings.telemetry_legacy_compat_enabled)
+
+
+def require_legacy_connector_compatibility(request: Request) -> None:
+    """Fail closed before FastAPI parses any legacy connector request body."""
+    if not legacy_connector_compat_enabled(request):
+        raise HTTPException(status_code=410, detail=LEGACY_CONNECTOR_RETIRED_DETAIL)
+
+
+router = APIRouter(
+    tags=["connectors"],
+    dependencies=[
+        Depends(require_api_access),
+        Depends(require_admin_role),
+        Depends(require_legacy_connector_compatibility),
+    ],
+)
+
+
+async def parse_legacy_request(request: Request, model: type[LegacyRequestModel]) -> LegacyRequestModel:
+    try:
+        return model.model_validate(await request.json())
+    except ValidationError as error:
+        raise RequestValidationError(error.errors()) from None
+    except (JSONDecodeError, UnicodeDecodeError):
+        raise RequestValidationError(
+            [{"type": "json_invalid", "loc": ("body",), "msg": "Invalid JSON body.", "input": None}]
+        ) from None
 
 
 @router.get("/connectors/types")
@@ -27,7 +67,8 @@ def read_connector_types() -> dict[str, Any]:
 
 
 @router.post("/connectors/test")
-def test_connector(request: Request, payload: ConnectorTestRequest) -> dict[str, Any]:
+async def test_connector(request: Request) -> Any:
+    payload = await parse_legacy_request(request, ConnectorTestRequest)
     connector = build_connector_instance(payload.connector_type, payload.config)
     validation_result = connector.validate_connection()
     health = connector.health_check()
@@ -106,7 +147,8 @@ async def upload_csv_connector(
 
 
 @router.post("/connectors/rest/test")
-def test_rest_connector(request: Request, payload: RestConnectorRequest) -> dict[str, Any]:
+async def test_rest_connector(request: Request) -> dict[str, Any]:
+    payload = await parse_legacy_request(request, RestConnectorRequest)
     connector = build_connector_instance("rest", payload.model_dump())
     try:
         validation_result = connector.validate_connection()
@@ -130,7 +172,8 @@ def test_rest_connector(request: Request, payload: RestConnectorRequest) -> dict
 
 
 @router.post("/connectors/rest/ingest")
-def ingest_rest_connector(request: Request, payload: RestConnectorRequest) -> dict[str, Any]:
+async def ingest_rest_connector(request: Request) -> Any:
+    payload = await parse_legacy_request(request, RestConnectorRequest)
     connector = build_connector_instance("rest", payload.model_dump())
     batch = normalize_or_fail(connector)
     health = ConnectorHealthStatus(
@@ -150,7 +193,8 @@ def ingest_rest_connector(request: Request, payload: RestConnectorRequest) -> di
 
 
 @router.post("/connectors/database/test")
-def test_database_connector(request: Request, payload: DatabaseConnectorRequest) -> dict[str, Any]:
+async def test_database_connector(request: Request) -> dict[str, Any]:
+    payload = await parse_legacy_request(request, DatabaseConnectorRequest)
     connector = build_connector_instance("database", payload.model_dump())
     validation_result = connector.validate_connection()
     health = connector.health_check()
@@ -168,7 +212,8 @@ def test_database_connector(request: Request, payload: DatabaseConnectorRequest)
 
 
 @router.post("/connectors/database/ingest")
-def ingest_database_connector(request: Request, payload: DatabaseConnectorRequest) -> dict[str, Any]:
+async def ingest_database_connector(request: Request) -> Any:
+    payload = await parse_legacy_request(request, DatabaseConnectorRequest)
     connector = build_connector_instance("database", payload.model_dump())
     try:
         batch = normalize_or_fail(connector)

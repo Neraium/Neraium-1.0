@@ -9,6 +9,10 @@ from statistics import median
 from typing import Any
 
 from app.engine.sii.behavioral_graph import relationship_memory_id, update_behavioral_graph
+from app.engine.sii.behavioral_model_contract import (
+    AuthenticatedPhase4Scope,
+    scoped_behavioral_model_id,
+)
 from app.engine.sii.common import (
     EPSILON,
     clamp,
@@ -43,6 +47,7 @@ def resolve_infrastructure_identity(
     columns: list[str],
     telemetry_signal_catalog: dict[str, Any] | list[dict[str, Any]] | None,
     config: dict[str, Any] | None,
+    authenticated_scope: AuthenticatedPhase4Scope | None = None,
 ) -> dict[str, Any]:
     """Resolve a deterministic system scope without inventing missing identity."""
 
@@ -56,6 +61,9 @@ def resolve_infrastructure_identity(
         if nested_value and direct_value and nested_value != direct_value:
             conflicts.append(f"conflicting_{field}")
         values[field] = nested_value or direct_value
+    if authenticated_scope is not None:
+        # Organization scope is authoritative server context, not payload data.
+        values["organization_id"] = authenticated_scope.tenant_scope_id
     configured_model_id = _clean(nested.get("configured_model_id")) or _clean(cfg.get("configured_model_id"))
     computed_schema = telemetry_schema_fingerprint(columns, telemetry_signal_catalog)
     declared_schema = _clean(nested.get("schema_fingerprint")) or _clean(cfg.get("schema_fingerprint"))
@@ -79,12 +87,15 @@ def resolve_infrastructure_identity(
     else:
         status = "adequate"
     seed_fields = {
+        "authenticated_scope": authenticated_scope.as_dict() if authenticated_scope else None,
         "configured_model_id": configured_model_id,
         **values,
     }
     identity_seed = json.dumps(seed_fields, sort_keys=True, separators=(",", ":"))
     model_id = (
-        f"behavioral-model:{sha256(identity_seed.encode('utf-8')).hexdigest()[:24]}"
+        scoped_behavioral_model_id(authenticated_scope, identity_seed)
+        if status == "adequate" and authenticated_scope is not None
+        else f"behavioral-model:{sha256(identity_seed.encode('utf-8')).hexdigest()[:24]}"
         if status == "adequate"
         else None
     )
@@ -103,6 +114,8 @@ def resolve_infrastructure_identity(
     return {
         "model_id": model_id,
         **values,
+        "authenticated_scope": authenticated_scope.as_dict() if authenticated_scope else None,
+        "authenticated_scope_digest": authenticated_scope.scope_digest if authenticated_scope else None,
         "schema_fingerprint": computed_schema,
         "configured_model_id": configured_model_id,
         "identity_confidence": {
@@ -116,6 +129,35 @@ def resolve_infrastructure_identity(
         "conflicts": conflicts,
         "memory_update_allowed": status == "adequate",
     }
+
+
+def authenticated_scope_mismatch_reason(
+    config: dict[str, Any] | None,
+    scope: AuthenticatedPhase4Scope,
+) -> str | None:
+    """Fail closed when payload/config identity attempts to contradict auth."""
+
+    cfg = config if isinstance(config, dict) else {}
+    phase4 = cfg.get("phase_4_config") if isinstance(cfg.get("phase_4_config"), dict) else {}
+    sources = [cfg, phase4]
+    for source in (cfg, phase4):
+        nested = source.get("infrastructure_identity")
+        if isinstance(nested, dict):
+            sources.append(nested)
+    expected = {
+        "tenant_id": scope.tenant_scope_id,
+        "tenant_scope_id": scope.tenant_scope_id,
+        "organization_id": scope.tenant_scope_id,
+        "workspace_id": scope.workspace_id,
+        "portfolio_id": scope.workspace_id,
+        "resource_scope_id": scope.resource_scope_id,
+    }
+    for claim, authenticated_value in expected.items():
+        for source in sources:
+            supplied = _clean(source.get(claim))
+            if supplied is not None and supplied != authenticated_value:
+                return f"authenticated_scope_mismatch:{claim}"
+    return None
 
 
 def telemetry_schema_fingerprint(

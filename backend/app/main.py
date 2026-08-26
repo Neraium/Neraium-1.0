@@ -22,6 +22,7 @@ from app.routers.data import wait_for_upload_workers
 from app.services.auth_store import initialize_auth_store
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
+from app.services.telemetry_runtime import build_telemetry_runtime
 from app.services.rate_limiter import clear_rate_limits
 from app.services.production_health import (
     record_api_request_metric,
@@ -43,10 +44,18 @@ logger = logging.getLogger(__name__)
 async def app_lifespan(app: FastAPI):
     settings = app.state.settings
     upload_worker_started = False
+    telemetry_scheduler_started = False
     data_poller_started = False
     production_monitor_started = False
     startup_started_at = time.perf_counter()
+    production = settings.app_env in {"prod", "production"}
+    legacy_connections_enabled = (
+        not production and settings.telemetry_legacy_compat_enabled
+    )
     reset_startup_status()
+    # The retired process-local connection is not a readiness dependency when
+    # compatibility is disabled (the default, and mandatory in shared envs).
+    STARTUP_STATUS["default_connection_ready"] = not legacy_connections_enabled
     STARTUP_STATUS["upload_state_backend"] = upload_state_backend()
     STARTUP_STATUS["upload_state_shared_configured"] = shared_state_configured()
 
@@ -107,13 +116,37 @@ async def app_lifespan(app: FastAPI):
         except Exception:
             logger.exception("latest_upload_cache_warmup_failure")
 
-        try:
-            ensure_default_data_connection(settings)
-            STARTUP_STATUS["default_connection_ready"] = True
-        except Exception as error:
-            STARTUP_STATUS["failed_modules"].append("default_connection: initialization_failed")
-            logger.exception("default_connection_startup_failure")
-            raise RuntimeError("Default data connection initialization failed.") from error
+        if legacy_connections_enabled:
+            try:
+                ensure_default_data_connection(settings)
+                STARTUP_STATUS["default_connection_ready"] = True
+            except Exception as error:
+                STARTUP_STATUS["failed_modules"].append("default_connection: initialization_failed")
+                logger.exception("default_connection_startup_failure")
+                raise RuntimeError("Default data connection initialization failed.") from error
+
+        telemetry_runtime = app.state.telemetry_runtime
+        if telemetry_runtime.available:
+            try:
+                telemetry_runtime.verify_readiness()
+            except Exception as error:
+                STARTUP_STATUS["failed_modules"].append("telemetry: schema_not_ready")
+                logger.error(
+                    "telemetry_schema_readiness_failure",
+                    extra={
+                        "event": "telemetry_schema_readiness_failure",
+                        "error_type": type(error).__name__,
+                    },
+                )
+                raise RuntimeError("Required telemetry schema is not ready.") from error
+        elif production and settings.telemetry_database_url:
+            STARTUP_STATUS["failed_modules"].append("telemetry: configuration_invalid")
+            raise RuntimeError("Required telemetry runtime configuration is invalid.")
+        elif production:
+            logger.warning(
+                "telemetry_runtime_not_configured",
+                extra={"event": "telemetry_runtime_not_configured"},
+            )
 
         if settings.start_background_workers:
             try:
@@ -125,7 +158,32 @@ async def app_lifespan(app: FastAPI):
                 logger.exception("upload_worker_startup_failure")
                 raise RuntimeError("Upload worker startup failed.") from error
 
-        if settings.start_data_connection_poller:
+        if (
+            settings.start_background_workers
+            and settings.process_role in {"worker", "all", "monolith"}
+            and telemetry_runtime.available
+        ):
+            try:
+                scheduler = telemetry_runtime.scheduler
+                telemetry_scheduler_started = bool(scheduler.start())
+                if not telemetry_scheduler_started and not scheduler.running:
+                    raise RuntimeError("telemetry scheduler did not start")
+                telemetry_scheduler_started = True
+                STARTUP_STATUS["telemetry_worker_started"] = True
+            except Exception as error:
+                STARTUP_STATUS["failed_modules"].append(
+                    "telemetry_worker: startup_failed"
+                )
+                logger.error(
+                    "telemetry_worker_startup_failure",
+                    extra={
+                        "event": "telemetry_worker_startup_failure",
+                        "error_type": type(error).__name__,
+                    },
+                )
+                raise RuntimeError("Telemetry worker startup failed.") from error
+
+        if settings.start_data_connection_poller and legacy_connections_enabled:
             try:
                 start_data_connection_poller()
                 data_poller_started = True
@@ -143,6 +201,7 @@ async def app_lifespan(app: FastAPI):
                 "event": "runtime_services_started",
                 "process_role": settings.process_role,
                 "upload_worker": upload_worker_started,
+                "telemetry_worker": telemetry_scheduler_started,
                 "data_poller": data_poller_started,
                 "startup_duration_ms": round((time.perf_counter() - startup_started_at) * 1000, 2),
             },
@@ -165,6 +224,21 @@ async def app_lifespan(app: FastAPI):
             except Exception:
                 shutdown_failures.append("data_poller_failure")
                 logger.exception("data_poller_shutdown_failure")
+        if telemetry_scheduler_started:
+            try:
+                if not telemetry_runtime.scheduler.stop(
+                    timeout_seconds=settings.shutdown_timeout_seconds
+                ):
+                    shutdown_failures.append("telemetry_worker_timeout")
+            except Exception as error:
+                shutdown_failures.append("telemetry_worker_failure")
+                logger.error(
+                    "telemetry_worker_shutdown_failure",
+                    extra={
+                        "event": "telemetry_worker_shutdown_failure",
+                        "error_type": type(error).__name__,
+                    },
+                )
         if upload_worker_started:
             try:
                 if not stop_upload_worker(timeout_seconds=settings.shutdown_timeout_seconds):
@@ -184,6 +258,7 @@ async def app_lifespan(app: FastAPI):
         clear_rate_limits()
         STARTUP_STATUS["upload_worker_started"] = False
         STARTUP_STATUS["data_poller_started"] = False
+        STARTUP_STATUS["telemetry_worker_started"] = False
         logger.info(
             "runtime_services_stopped",
             extra={
@@ -223,6 +298,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.connector_health_store = ConnectorHealthStore(settings.runtime_dir)
+    app.state.telemetry_runtime = build_telemetry_runtime(settings)
 
     app.include_router(health.router, prefix="/api")
     app.include_router(app_info.router, prefix="/api")
@@ -448,7 +524,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "health": "/health",
             "process_role": settings.process_role,
             "background_workers": settings.start_background_workers,
-            "data_poller": settings.start_data_connection_poller,
+            "data_poller": bool(STARTUP_STATUS.get("data_poller_started")),
         }
 
     @app.get("/health")

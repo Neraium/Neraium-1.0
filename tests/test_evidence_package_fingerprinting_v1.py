@@ -19,10 +19,16 @@ from app.services.runtime_db import configure_runtime_dir, list_latest_payloads_
 from app.services import runtime_db
 
 
-def _write_independent_index_entry(runtime_dir: str, prefix: str, package_id: str) -> None:
+def _write_independent_index_entry(
+    runtime_dir: str,
+    prefix: str,
+    package_id: str,
+    start_barrier,
+) -> None:
     from app.services.runtime_db import configure_runtime_dir, upsert_latest_payload
 
     configure_runtime_dir(Path(runtime_dir))
+    start_barrier.wait(timeout=30)
     upsert_latest_payload(f"{prefix}/{package_id}", {"package_id": package_id, "canonical_digest": f"digest-{package_id}"})
 
 
@@ -176,11 +182,18 @@ def test_independent_index_entries_survive_separate_process_connections(tmp_path
     runtime_dir.mkdir()
     prefix = "scopes/scope-a/baseline-analyses/fingerprint-index/system-a/evidence-package-canonical-sha256-v1"
     context = multiprocessing.get_context("spawn")
+    start_barrier = context.Barrier(12)
     processes = [
-        context.Process(target=_write_independent_index_entry, args=(str(runtime_dir), prefix, f"package-{index}"))
+        context.Process(
+            target=_write_independent_index_entry,
+            args=(str(runtime_dir), prefix, f"package-{index}", start_barrier),
+        )
         for index in range(8)
     ] + [
-        context.Process(target=_write_independent_index_entry, args=(str(runtime_dir), prefix, "package-0"))
+        context.Process(
+            target=_write_independent_index_entry,
+            args=(str(runtime_dir), prefix, "package-0", start_barrier),
+        )
         for _ in range(4)
     ]
     for process in processes:

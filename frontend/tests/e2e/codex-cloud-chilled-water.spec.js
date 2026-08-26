@@ -4,8 +4,10 @@ import { expect, test } from "./fixtures.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtures = path.resolve(here, "../../../test-fixtures/chilled-water");
+const RETIRED_UPLOAD_REASON = "Retired: this scenario requires creating historical baseline and comparison uploads, which app.neraium.com no longer exposes as a normal production workflow.";
 
 test("AWS-free chilled-water baseline and persistent pump degradation survive refresh and mobile", async ({ page }) => {
+  test.skip(true, RETIRED_UPLOAD_REASON);
   const foreignMarkers = ["commercial water system.csv", "Unassigned Analysis", "Demo Site"];
 
   await page.goto("/", { waitUntil: "domcontentloaded" });

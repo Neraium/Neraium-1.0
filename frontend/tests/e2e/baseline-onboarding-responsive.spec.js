@@ -7,6 +7,8 @@ const MOBILE_VIEWPORTS = [
   { name: "mobile landscape", width: 844, height: 390 },
 ];
 
+const RETIRED_UPLOAD_REASON = "Retired: app.neraium.com no longer exposes historical file upload as a normal production onboarding path; Data Connections is authoritative.";
+
 async function openBaselineImport(page, viewport = { width: 1440, height: 900 }) {
   await page.setViewportSize(viewport);
   await page.goto("/workspace/data-sources", { waitUntil: "domcontentloaded" });
@@ -22,65 +24,22 @@ async function chooseSampleDataset(page) {
   });
 }
 
-test.describe("Initial baseline learning experience", () => {
-  test("makes the compact upload workflow and primary action immediately clear", async ({ page }) => {
-    await openBaselineImport(page);
-
-    await expect(page.getByText("Upload representative historical operating data so Neraium can learn how the system normally behaves.")).toBeVisible();
-    await expect(page.getByText("SOURCE OPERATING HISTORY")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Upload historical data", level: 3 })).toBeVisible();
-    await expect(page.getByText("CSV, SCADA export, or historian export")).toBeVisible();
-    await expect(page.getByText("This dataset becomes Neraium's first learned operating model.")).toHaveCount(0);
-    await expect(page.getByText(/discovers persistent relationships between signals/i)).toHaveCount(0);
-    await expect(page.getByText(/normal only evolves when new operating behavior/i)).toHaveCount(0);
-
-    const steps = page.getByRole("list", { name: "How Neraium establishes its initial baseline" }).getByRole("listitem");
-    await expect(steps).toHaveCount(5);
-    await expect(steps).toHaveText([
-      "1Upload Data",
-      "2Validate Signals",
-      "3Learn Relationships",
-      "4Establish Baseline",
-      "5Begin Learning",
-    ]);
-
-    const choose = page.getByRole("button", { name: /choose historical dataset/i });
-    const continueAction = page.getByRole("button", { name: "Continue" });
-    await expect(choose).toBeVisible();
-    await expect(continueAction).toBeVisible();
-    await expect(page.getByText("Supported data sources")).toHaveCount(0);
-    await expect(page.getByText("Choose a telemetry file.")).toHaveCount(0);
-    await continueAction.click();
-    await expect(page.locator(".upload-analysis-card--baseline .upload-error-message")).toHaveText("Choose a telemetry file.");
-    await expect(page.getByText("Compare", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Evidence", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Findings", { exact: true })).toHaveCount(0);
-
-    await chooseSampleDataset(page);
-    const replace = page.getByRole("button", { name: "Replace file" });
-    await expect(continueAction).toBeVisible();
-    await expect(continueAction).toBeEnabled();
-    await expect(replace).toBeVisible();
-    await expect(page.getByText("central-plant-history.csv")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Analyze New Data" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Extend Baseline" })).toHaveCount(0);
-
-    const hierarchy = await page.evaluate(() => {
-      const primary = document.querySelector(".upload-baseline-card__primary");
-      const secondary = document.querySelector(".baseline-file-replace");
-      const primaryBox = primary.getBoundingClientRect();
-      const secondaryBox = secondary.getBoundingClientRect();
-      return {
-        primaryWidth: primaryBox.width,
-        secondaryWidth: secondaryBox.width,
-        primaryHeight: primaryBox.height,
-      };
-    });
-    expect(hierarchy.primaryWidth).toBeGreaterThan(hierarchy.secondaryWidth);
-    expect(hierarchy.primaryHeight).toBeGreaterThanOrEqual(44);
+test.describe("Production onboarding boundary", () => {
+  test("keeps historical upload absent and makes connection-first onboarding explicit", async ({ page }) => {
+    await page.goto("/workspace/data-sources", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
+    await expect(page.getByTestId("telemetry-connections-workspace")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect a physical system", level: 1 })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add data source" }).first()).toBeVisible();
+    await expect(page.getByRole("list", { name: "System setup progress" })).toContainText("Discover telemetry");
+    await expect(page.getByRole("list", { name: "System setup progress" })).toContainText("Map assets and signals");
+    await expect(page.getByRole("heading", { name: "Establish Initial Baseline" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Upload historical data" })).toHaveCount(0);
+    await expect(page.getByTestId("csv-upload-input")).toHaveCount(0);
   });
 
   test("has no horizontal overflow and keeps touch controls usable across mobile sizes", async ({ page }) => {
+    test.skip(true, RETIRED_UPLOAD_REASON);
     for (const viewport of MOBILE_VIEWPORTS) {
       await openBaselineImport(page, viewport);
       await chooseSampleDataset(page);
@@ -117,6 +76,7 @@ test.describe("Initial baseline learning experience", () => {
   });
 
   test("keeps a stored mobile transfer complete when dataset creation fails", async ({ page }) => {
+    test.skip(true, RETIRED_UPLOAD_REASON);
     let objectPuts = 0;
     let retryCalls = 0;
     const failure = {
@@ -186,6 +146,7 @@ test.describe("Initial baseline learning experience", () => {
   });
 
   test("supports keyboard file selection and passes the changed-component accessibility audit", async ({ page }) => {
+    test.skip(true, RETIRED_UPLOAD_REASON);
     await openBaselineImport(page);
     const choose = page.getByRole("button", { name: /choose historical dataset/i });
     await choose.focus();

@@ -114,14 +114,21 @@ def dataset_scope_context(scope: DatasetScope) -> Iterator[None]:
         _CURRENT_DATASET_SCOPE.reset(token)
 
 
-def build_upload_queue_routing(scope: DatasetScope | None = None) -> dict[str, Any]:
+def build_upload_queue_routing(
+    scope: DatasetScope | None = None,
+    *,
+    phase4_scope_envelope: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build the internal routing envelope carried by a shared queue record."""
     resolved = scope or current_dataset_scope()
-    return {
+    routing = {
         "version": UPLOAD_QUEUE_ROUTING_VERSION,
         "dataset_scope": resolved.as_dict(),
         "scope_storage_id": resolved.storage_id,
     }
+    if phase4_scope_envelope is not None:
+        routing["phase4_scope"] = dict(phase4_scope_envelope)
+    return routing
 
 
 def dataset_scope_from_queue_routing(payload: dict[str, Any] | None) -> DatasetScope:

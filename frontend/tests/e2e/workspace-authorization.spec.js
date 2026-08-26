@@ -438,19 +438,18 @@ test.describe("Facility workspace authorization", () => {
     await page.goto(`/work/${FINDING_ID}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Open investigation" }).click();
     await expect(page).toHaveURL(new RegExp(`/investigations/${FINDING_KEY}$`));
-    await expect(page.getByRole("heading", { name: "Relationships changed" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Relationship evidence" })).toBeVisible();
     await page.getByRole("button", { name: "Open evidence record" }).click();
     await expect(page).toHaveURL(new RegExp(`/evidence/${FINDING_KEY}$`));
-    await expect(page.getByRole("heading", { name: "Source lineage" })).toBeVisible();
-    await expect(page.getByText("Correlation strength decreased by 0.38 from the learned baseline.")).toBeVisible();
-    await expect(page.getByText("Absolute relationship change 0.38")).toBeVisible();
-    await expect(page.getByText("0.37999999999999995")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Finding provenance and lineage" })).toBeVisible();
+    const ownedRelationships = page.getByRole("heading", { name: "Finding-owned relationships" }).first().locator("..");
+    await expect(ownedRelationships).toContainText('"baseline": 0.84');
+    await expect(ownedRelationships).toContainText('"current": 0.46');
+    await expect(ownedRelationships).toContainText('"absoluteChange": 0.37999999999999995');
     await expect(page.getByText(SECRET_EVIDENCE)).toBeVisible();
     await page.screenshot({ path: path.join(screenshotDirectory, "engineer-evidence-desktop.png"), fullPage: true });
-    const technical = page.locator("details.case-classification-detail").filter({ hasText: "Technical values and identifiers" });
-    await expect(technical).not.toHaveAttribute("open", "");
-    await technical.getByText("Technical values and identifiers").click();
-    await expect(page.getByText("CHWP-2-SPD / CHWP-2-FLOW")).toBeVisible();
+    await expect(page.getByText("CHWP-2-SPD", { exact: true })).toBeVisible();
+    await expect(page.getByText("CHWP-2-FLOW", { exact: true })).toBeVisible();
     await expect(page.getByText("workspace-authorization-run", { exact: true })).toBeVisible();
     expectWorkspaceHeaders(state, WORKSPACE_A);
   });
@@ -466,8 +465,8 @@ test.describe("Facility workspace authorization", () => {
     await expect(page.locator("#forensic-main")).not.toContainText(SECRET_EVIDENCE);
 
     await page.goto(`/evidence/${FINDING_KEY}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Finding unavailable" })).toBeVisible();
-    await expect(page.getByText("This finding is unavailable in the current facility workspace.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Evidence record unavailable" })).toBeVisible();
+    await expect(page.getByText("A finding-scoped evidence record is unavailable.")).toBeVisible();
     await expect(page.locator("#forensic-main")).not.toContainText("North Plant");
     await expect(page.locator("#forensic-main")).not.toContainText(SECRET_EVIDENCE);
     await expect(page.locator("#forensic-main")).not.toContainText("Evidence records");

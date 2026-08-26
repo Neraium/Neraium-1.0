@@ -667,7 +667,7 @@ def test_live_analysis_api_crud_manual_run_lists_and_health(client: TestClient, 
     assert health.json()["health"][0]["current_status"] == "disabled"
 
 
-def test_live_analysis_api_authorization_follows_existing_roles(monkeypatch, tmp_path: Path) -> None:
+def test_legacy_live_analysis_api_is_retired_after_authentication_in_production(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
     monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
@@ -686,14 +686,14 @@ def test_live_analysis_api_authorization_follows_existing_roles(monkeypatch, tmp
             "/api/auth/login",
             json={"email": "viewer-live@example.com", "password": "password123"},
         ).status_code == 200
-        assert production_client.get("/api/live-analysis/configurations").status_code == 200
+        assert production_client.get("/api/live-analysis/configurations").status_code == 410
         assert production_client.post(
             "/api/live-analysis/configurations",
             json={"system_id": SYSTEM_ID},
-        ).status_code == 403
+        ).status_code == 410
         assert production_client.post(
             f"/api/live-analysis/systems/{SYSTEM_ID}/runs"
-        ).status_code == 403
+        ).status_code == 410
 
         create_user("operator-live@example.com", "password123", role="operator")
         assert production_client.post(
@@ -703,10 +703,10 @@ def test_live_analysis_api_authorization_follows_existing_roles(monkeypatch, tmp
         assert production_client.post(
             "/api/live-analysis/configurations",
             json={"system_id": SYSTEM_ID},
-        ).status_code == 403
+        ).status_code == 410
         assert production_client.post(
             f"/api/live-analysis/systems/{SYSTEM_ID}/runs"
-        ).status_code == 404
+        ).status_code == 410
 
         create_user("admin-live@example.com", "password123", role="admin")
         assert production_client.post(
@@ -716,10 +716,10 @@ def test_live_analysis_api_authorization_follows_existing_roles(monkeypatch, tmp
         assert production_client.post(
             "/api/live-analysis/configurations",
             json={"system_id": SYSTEM_ID},
-        ).status_code == 201
+        ).status_code == 410
         assert production_client.post(
             f"/api/live-analysis/systems/{SYSTEM_ID}/runs"
-        ).status_code == 200
+        ).status_code == 410
 
 
 def test_baseline_and_window_preparation_failures_are_durable(monkeypatch) -> None:

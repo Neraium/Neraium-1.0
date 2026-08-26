@@ -14,13 +14,15 @@ def build_client(tmp_path, monkeypatch=None) -> TestClient:
     if monkeypatch is not None:
         monkeypatch.setenv("NERAIUM_API_TOKEN", "expected-secret")
     settings = Settings(
-        app_env="production",
+        # Legacy process-local intake is compatibility-only and cannot run in production.
+        app_env="test",
         backend_host="127.0.0.1",
         backend_port=8010,
         cors_origins=["http://localhost:3010"],
         default_telemetry_url=TEST_DEFAULT_TELEMETRY_URL,
         cors_origin_regex=None,
         runtime_dir=tmp_path,
+        telemetry_legacy_compat_enabled=True,
     )
     client = TestClient(create_app(settings))
     client.headers.update({"X-Neraium-Access-Code": "expected-secret"})
@@ -127,6 +129,7 @@ def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tm
 
     activation = client.post("/api/data-connections/rest-telemetry-intake/poll-once")
     activation_latest = client.get("/api/data/latest-upload")
+    activation_facility = client.get("/api/facility/systems")
     active_poll = client.post("/api/data-connections/rest-telemetry-intake/poll-once")
     latest = client.get("/api/data/latest-upload")
     facility = client.get("/api/facility/systems")
@@ -136,6 +139,11 @@ def test_poll_once_builds_live_baseline_before_updating_facility(monkeypatch, tm
     assert activation.status_code == 200
     assert active_poll.status_code == 200
     assert activation_latest.json()["baseline_status"] == "active"
+    assert activation_latest.json()["baseline_samples_collected"] == BASELINE_SAMPLE_COUNT
+    assert activation_latest.json()["latest_result"]["ingestion_metadata"]["tick"] == 15
+    assert activation_latest.json()["latest_result"]["ingestion_metadata"]["scenario"] == "airflow_drift"
+    assert activation_facility.json()["intelligence"]["source"] == "rest_poll"
+    assert activation_facility.json()["intelligence"]["primary_room"] == "flower-room-1"
     assert latest.status_code == 200
 
     latest_payload = latest.json()

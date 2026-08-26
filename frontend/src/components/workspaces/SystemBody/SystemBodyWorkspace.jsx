@@ -586,7 +586,7 @@ export default function SystemBodyWorkspace({
               <p>Import a telemetry dataset or configure a connector to run SII and review operational insights.</p>
             </div>
             <div className="post-upload-actions" aria-label="Telemetry actions">
-              <button type="button" className="command-button" onClick={() => navigateWorkspace("data-connections")}>Import Dataset</button>
+              <button type="button" className="command-button" onClick={() => navigateWorkspace("data-connections")}>Add data source</button>
               {canResumePreviousUpload ? (
                 <button type="button" className="secondary-command-button" onClick={onResumePreviousUpload}>Resume Previous Analysis</button>
               ) : null}

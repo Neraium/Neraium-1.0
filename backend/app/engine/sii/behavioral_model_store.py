@@ -5,6 +5,8 @@ from threading import RLock
 from typing import Any, Callable
 
 from app.engine.sii.behavioral_model_contract import (
+    AuthenticatedPhase4Scope,
+    BehavioralModelScopeMismatch,
     BehavioralModelStorageUnavailable,
     BehavioralModelStore,
     BehavioralModelVersionConflict,
@@ -18,10 +20,15 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
         self._lock = RLock()
         self._state: dict[str, dict[str, Any]] = {}
 
-    def _model_state(self, model_id: str) -> dict[str, Any]:
+    def _model_state(self, scope: AuthenticatedPhase4Scope, model_id: str) -> dict[str, Any]:
+        key = _ledger_state_key(scope, model_id)
         return self._state.setdefault(
-            str(model_id),
+            key,
             {
+                "ledger_contract_version": "sii-behavioral-model-ledger-v2",
+                "authenticated_scope": scope.as_dict(),
+                "scope_digest": scope.scope_digest,
+                "model_id": str(model_id),
                 "models": {},
                 "active_model_version": None,
                 "snapshots": {},
@@ -37,48 +44,49 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
             },
         )
 
-    def load_model(self, model_id: str) -> dict[str, Any] | None:
+    def load_model(self, scope: AuthenticatedPhase4Scope, model_id: str) -> dict[str, Any] | None:
         with self._lock:
-            state = self._state.get(str(model_id))
+            state = self._state.get(_ledger_state_key(scope, model_id))
+            _validate_ledger_scope(state, scope, model_id)
             if not state or state.get("active_model_version") is None:
                 return None
             model = state["models"].get(str(state["active_model_version"]))
             return deepcopy(model) if isinstance(model, dict) else None
 
-    def save_model(self, model: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
+    def save_model(self, scope: AuthenticatedPhase4Scope, model: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
         model_id, version = _model_identity(model)
         with self._lock:
-            state = self._model_state(model_id)
+            state = self._model_state(scope, model_id)
             if version in state["models"]:
                 raise BehavioralModelVersionConflict(f"model_version_already_exists:{model_id}:{version}")
             active = state.get("active_model_version")
             if active is not None and _version_number(version) <= _version_number(str(active)):
                 raise BehavioralModelVersionConflict(f"model_version_not_forward:{model_id}:{version}")
-            stored = _attributed(model, source_run_id)
+            stored = _attributed(model, source_run_id, scope)
             state["models"][version] = stored
             state["active_model_version"] = version
             self._audit(state, "save_model", source_run_id, version)
             return deepcopy(stored)
 
-    def create_model(self, model: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
+    def create_model(self, scope: AuthenticatedPhase4Scope, model: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
         model_id, version = _model_identity(model)
         with self._lock:
-            state = self._model_state(model_id)
+            state = self._model_state(scope, model_id)
             if state["models"]:
                 raise BehavioralModelVersionConflict(f"model_already_exists:{model_id}")
-            stored = _attributed(model, source_run_id)
+            stored = _attributed(model, source_run_id, scope)
             state["models"][version] = stored
             state["active_model_version"] = version
             self._audit(state, "create_model", source_run_id, version)
             return deepcopy(stored)
 
-    def create_snapshot(self, snapshot: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
+    def create_snapshot(self, scope: AuthenticatedPhase4Scope, snapshot: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
         model_id = _required_text(snapshot, "model_id")
         snapshot_id = _required_text(snapshot, "snapshot_id")
         with self._lock:
-            state = self._model_state(model_id)
+            state = self._model_state(scope, model_id)
             existing = state["snapshots"].get(snapshot_id)
-            stored = _attributed(snapshot, source_run_id)
+            stored = _attributed(snapshot, source_run_id, scope)
             if existing is not None:
                 if existing == stored:
                     return deepcopy(existing)
@@ -88,15 +96,17 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
             self._audit(state, "create_snapshot", source_run_id, snapshot_id)
             return deepcopy(stored)
 
-    def load_snapshot(self, model_id: str, snapshot_id: str) -> dict[str, Any] | None:
+    def load_snapshot(self, scope: AuthenticatedPhase4Scope, model_id: str, snapshot_id: str) -> dict[str, Any] | None:
         with self._lock:
-            state = self._state.get(str(model_id))
+            state = self._state.get(_ledger_state_key(scope, model_id))
+            _validate_ledger_scope(state, scope, model_id)
             snapshot = state.get("snapshots", {}).get(str(snapshot_id)) if state else None
             return deepcopy(snapshot) if isinstance(snapshot, dict) else None
 
-    def list_snapshots(self, model_id: str) -> list[dict[str, Any]]:
+    def list_snapshots(self, scope: AuthenticatedPhase4Scope, model_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            state = self._state.get(str(model_id))
+            state = self._state.get(_ledger_state_key(scope, model_id))
+            _validate_ledger_scope(state, scope, model_id)
             if not state:
                 return []
             return [
@@ -105,11 +115,11 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
                 if snapshot_id in state["snapshots"]
             ]
 
-    def append_event(self, model_id: str, event: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
+    def append_event(self, scope: AuthenticatedPhase4Scope, model_id: str, event: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
         event_id = _required_text(event, "event_id")
         with self._lock:
-            state = self._model_state(model_id)
-            stored = _append_immutable(state["events"], event_id, event, source_run_id, "event")
+            state = self._model_state(scope, model_id)
+            stored = _append_immutable(state["events"], event_id, event, source_run_id, "event", scope)
             if event_id not in state["event_order"]:
                 state["event_order"].append(event_id)
                 self._audit(state, "append_event", source_run_id, event_id)
@@ -117,6 +127,7 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
 
     def record_learning_decision(
         self,
+        scope: AuthenticatedPhase4Scope,
         model_id: str,
         decision: dict[str, Any],
         *,
@@ -124,18 +135,19 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
     ) -> dict[str, Any]:
         decision_id = _required_text(decision, "decision_id")
         with self._lock:
-            state = self._model_state(model_id)
+            state = self._model_state(scope, model_id)
             stored = _append_immutable(
-                state["learning_decisions"], decision_id, decision, source_run_id, "learning_decision"
+                state["learning_decisions"], decision_id, decision, source_run_id, "learning_decision", scope
             )
             if decision_id not in state["decision_order"]:
                 state["decision_order"].append(decision_id)
                 self._audit(state, "record_learning_decision", source_run_id, decision_id)
             return stored
 
-    def list_learning_decisions(self, model_id: str) -> list[dict[str, Any]]:
+    def list_learning_decisions(self, scope: AuthenticatedPhase4Scope, model_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            state = self._state.get(str(model_id))
+            state = self._state.get(_ledger_state_key(scope, model_id))
+            _validate_ledger_scope(state, scope, model_id)
             if not state:
                 return []
             return [
@@ -146,6 +158,7 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
 
     def retire_relationship(
         self,
+        scope: AuthenticatedPhase4Scope,
         model_id: str,
         relationship_id: str,
         *,
@@ -153,7 +166,7 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
         reason: str,
     ) -> dict[str, Any]:
         with self._lock:
-            current = self.load_model(model_id)
+            current = self.load_model(scope, model_id)
             if current is None:
                 raise KeyError(f"model_not_found:{model_id}")
             relationships = current.get("relationship_memory")
@@ -168,11 +181,12 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
             current["relationship_memory"] = {**relationships, relationship_id: retired}
             current["model_version"] = _next_version(str(current.get("model_version") or "1"))
             current["source_run_id"] = str(source_run_id)
-            return self.save_model(current, source_run_id=source_run_id)
+            return self.save_model(scope, current, source_run_id=source_run_id)
 
-    def load_active_baseline(self, model_id: str) -> dict[str, Any] | None:
+    def load_active_baseline(self, scope: AuthenticatedPhase4Scope, model_id: str) -> dict[str, Any] | None:
         with self._lock:
-            state = self._state.get(str(model_id))
+            state = self._state.get(_ledger_state_key(scope, model_id))
+            _validate_ledger_scope(state, scope, model_id)
             if not state or state.get("active_baseline_version") is None:
                 return None
             baseline = state["activated_baselines"].get(str(state["active_baseline_version"]))
@@ -180,6 +194,7 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
 
     def save_candidate_baseline(
         self,
+        scope: AuthenticatedPhase4Scope,
         model_id: str,
         baseline: dict[str, Any],
         *,
@@ -187,15 +202,16 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
     ) -> dict[str, Any]:
         version = _required_text(baseline, "candidate_version")
         with self._lock:
-            state = self._model_state(model_id)
+            state = self._model_state(scope, model_id)
             stored = _append_immutable(
-                state["candidate_baselines"], version, baseline, source_run_id, "baseline_version"
+                state["candidate_baselines"], version, baseline, source_run_id, "baseline_version", scope
             )
             self._audit(state, "save_candidate_baseline", source_run_id, version)
             return stored
 
     def activate_baseline(
         self,
+        scope: AuthenticatedPhase4Scope,
         model_id: str,
         baseline_version: str,
         *,
@@ -203,7 +219,7 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
         approval: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         with self._lock:
-            state = self._model_state(model_id)
+            state = self._model_state(scope, model_id)
             baseline = state["candidate_baselines"].get(str(baseline_version))
             if baseline is None:
                 raise KeyError(f"candidate_baseline_not_found:{baseline_version}")
@@ -215,6 +231,7 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
             if approval:
                 activated["human_approval"] = deepcopy(approval)
             activated["activation_source_run_id"] = str(source_run_id)
+            activated = _bind_record_scope(activated, scope)
             existing_activation = state["activated_baselines"].get(str(baseline_version))
             if existing_activation is not None and existing_activation != activated:
                 raise BehavioralModelVersionConflict(
@@ -227,14 +244,15 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
 
     def restore_snapshot(
         self,
+        scope: AuthenticatedPhase4Scope,
         model_id: str,
         snapshot_id: str,
         *,
         source_run_id: str,
     ) -> dict[str, Any]:
         with self._lock:
-            snapshot = self.load_snapshot(model_id, snapshot_id)
-            current = self.load_model(model_id)
+            snapshot = self.load_snapshot(scope, model_id, snapshot_id)
+            current = self.load_model(scope, model_id)
             if snapshot is None:
                 raise KeyError(f"snapshot_not_found:{snapshot_id}")
             if current is None:
@@ -252,12 +270,14 @@ class InMemoryBehavioralModelStore(BehavioralModelStore):
                 "restored_from_snapshot_id": str(snapshot_id),
                 "source_run_id": str(source_run_id),
             }
-            return self.save_model(restored, source_run_id=source_run_id)
+            return self.save_model(scope, restored, source_run_id=source_run_id)
 
-    def export_state(self, model_id: str) -> dict[str, Any]:
+    def export_state(self, scope: AuthenticatedPhase4Scope, model_id: str) -> dict[str, Any]:
         """Return a defensive test-only view of all immutable records."""
         with self._lock:
-            return deepcopy(self._state.get(str(model_id), {}))
+            state = self._state.get(_ledger_state_key(scope, model_id), {})
+            _validate_ledger_scope(state, scope, model_id)
+            return deepcopy(state)
 
     @staticmethod
     def _audit(state: dict[str, Any], operation: str, source_run_id: str, reference: str) -> None:
@@ -274,7 +294,8 @@ class RuntimeBehavioralModelStore(InMemoryBehavioralModelStore):
     independent of SQLite.
     """
 
-    KEY_PREFIX = "sii_behavioral_model_ledger_v1::"
+    KEY_PREFIX = "sii_behavioral_model_ledger_v2::"
+    LEGACY_KEY_PREFIX = "sii_behavioral_model_ledger_v1::"
 
     def __init__(
         self,
@@ -301,57 +322,62 @@ class RuntimeBehavioralModelStore(InMemoryBehavioralModelStore):
         self._mutator = mutator
         self._loaded: set[str] = set()
 
-    def _model_state(self, model_id: str) -> dict[str, Any]:
-        self._load_ledger(model_id)
-        return super()._model_state(model_id)
+    def _model_state(self, scope: AuthenticatedPhase4Scope, model_id: str) -> dict[str, Any]:
+        self._load_ledger(scope, model_id)
+        return super()._model_state(scope, model_id)
 
-    def load_model(self, model_id: str) -> dict[str, Any] | None:
-        self._load_ledger(model_id)
-        return super().load_model(model_id)
+    def load_model(self, scope: AuthenticatedPhase4Scope, model_id: str) -> dict[str, Any] | None:
+        self._load_ledger(scope, model_id)
+        return super().load_model(scope, model_id)
 
-    def load_snapshot(self, model_id: str, snapshot_id: str) -> dict[str, Any] | None:
-        self._load_ledger(model_id)
-        return super().load_snapshot(model_id, snapshot_id)
+    def load_snapshot(self, scope: AuthenticatedPhase4Scope, model_id: str, snapshot_id: str) -> dict[str, Any] | None:
+        self._load_ledger(scope, model_id)
+        return super().load_snapshot(scope, model_id, snapshot_id)
 
-    def list_snapshots(self, model_id: str) -> list[dict[str, Any]]:
-        self._load_ledger(model_id)
-        return super().list_snapshots(model_id)
+    def list_snapshots(self, scope: AuthenticatedPhase4Scope, model_id: str) -> list[dict[str, Any]]:
+        self._load_ledger(scope, model_id)
+        return super().list_snapshots(scope, model_id)
 
-    def load_active_baseline(self, model_id: str) -> dict[str, Any] | None:
-        self._load_ledger(model_id)
-        return super().load_active_baseline(model_id)
+    def load_active_baseline(self, scope: AuthenticatedPhase4Scope, model_id: str) -> dict[str, Any] | None:
+        self._load_ledger(scope, model_id)
+        return super().load_active_baseline(scope, model_id)
 
-    def list_learning_decisions(self, model_id: str) -> list[dict[str, Any]]:
-        self._load_ledger(model_id)
-        return super().list_learning_decisions(model_id)
+    def list_learning_decisions(self, scope: AuthenticatedPhase4Scope, model_id: str) -> list[dict[str, Any]]:
+        self._load_ledger(scope, model_id)
+        return super().list_learning_decisions(scope, model_id)
 
-    def _load_ledger(self, model_id: str) -> None:
+    def _load_ledger(self, scope: AuthenticatedPhase4Scope, model_id: str) -> None:
         model_id = str(model_id)
+        state_key = _ledger_state_key(scope, model_id)
         with self._lock:
-            if model_id in self._loaded:
+            if state_key in self._loaded:
                 return
             try:
-                payload = self._reader(self.KEY_PREFIX + model_id)
+                payload = self._reader(_runtime_ledger_key(scope, model_id))
             except Exception as exc:
                 raise BehavioralModelStorageUnavailable(
                     f"behavioral_model_load_failed:{type(exc).__name__}:{exc}"
                 ) from exc
             if isinstance(payload, dict):
-                self._state[model_id] = deepcopy(payload)
-            self._loaded.add(model_id)
+                _validate_ledger_scope(payload, scope, model_id)
+                self._state[state_key] = deepcopy(payload)
+            self._loaded.add(state_key)
 
-    def _persist(self, model_id: str) -> None:
+    def _persist(self, scope: AuthenticatedPhase4Scope, model_id: str) -> None:
         try:
-            local = deepcopy(self._state[str(model_id)])
+            state_key = _ledger_state_key(scope, model_id)
+            local = deepcopy(self._state[state_key])
+            _validate_ledger_scope(local, scope, model_id)
             if self._mutator is not None:
                 merged = self._mutator(
-                    self.KEY_PREFIX + str(model_id),
+                    _runtime_ledger_key(scope, model_id),
                     lambda current: _merge_ledgers(current, local),
                 )
                 if isinstance(merged, dict):
-                    self._state[str(model_id)] = deepcopy(merged)
+                    _validate_ledger_scope(merged, scope, model_id)
+                    self._state[state_key] = deepcopy(merged)
             else:
-                self._writer(self.KEY_PREFIX + str(model_id), local)
+                self._writer(_runtime_ledger_key(scope, model_id), local)
         except BehavioralModelVersionConflict:
             raise
         except Exception as exc:
@@ -359,55 +385,115 @@ class RuntimeBehavioralModelStore(InMemoryBehavioralModelStore):
                 f"behavioral_model_write_failed:{type(exc).__name__}:{exc}"
             ) from exc
 
-    def _with_persist(self, model_id: str, operation: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    def _with_persist(self, scope: AuthenticatedPhase4Scope, model_id: str, operation: Callable[[], dict[str, Any]]) -> dict[str, Any]:
         result = operation()
-        self._persist(model_id)
+        self._persist(scope, model_id)
         return result
 
-    def save_model(self, model: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
+    def save_model(self, scope: AuthenticatedPhase4Scope, model: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
         model_id = _required_text(model, "model_id")
-        return self._with_persist(model_id, lambda: super(RuntimeBehavioralModelStore, self).save_model(model, source_run_id=source_run_id))
+        return self._with_persist(scope, model_id, lambda: super(RuntimeBehavioralModelStore, self).save_model(scope, model, source_run_id=source_run_id))
 
-    def create_model(self, model: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
+    def create_model(self, scope: AuthenticatedPhase4Scope, model: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
         model_id = _required_text(model, "model_id")
-        return self._with_persist(model_id, lambda: super(RuntimeBehavioralModelStore, self).create_model(model, source_run_id=source_run_id))
+        return self._with_persist(scope, model_id, lambda: super(RuntimeBehavioralModelStore, self).create_model(scope, model, source_run_id=source_run_id))
 
-    def create_snapshot(self, snapshot: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
+    def create_snapshot(self, scope: AuthenticatedPhase4Scope, snapshot: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
         model_id = _required_text(snapshot, "model_id")
-        return self._with_persist(model_id, lambda: super(RuntimeBehavioralModelStore, self).create_snapshot(snapshot, source_run_id=source_run_id))
+        return self._with_persist(scope, model_id, lambda: super(RuntimeBehavioralModelStore, self).create_snapshot(scope, snapshot, source_run_id=source_run_id))
 
-    def append_event(self, model_id: str, event: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
-        return self._with_persist(model_id, lambda: super(RuntimeBehavioralModelStore, self).append_event(model_id, event, source_run_id=source_run_id))
+    def append_event(self, scope: AuthenticatedPhase4Scope, model_id: str, event: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
+        return self._with_persist(scope, model_id, lambda: super(RuntimeBehavioralModelStore, self).append_event(scope, model_id, event, source_run_id=source_run_id))
 
     def record_learning_decision(
-        self, model_id: str, decision: dict[str, Any], *, source_run_id: str
+        self, scope: AuthenticatedPhase4Scope, model_id: str, decision: dict[str, Any], *, source_run_id: str
     ) -> dict[str, Any]:
-        return self._with_persist(model_id, lambda: super(RuntimeBehavioralModelStore, self).record_learning_decision(model_id, decision, source_run_id=source_run_id))
+        return self._with_persist(scope, model_id, lambda: super(RuntimeBehavioralModelStore, self).record_learning_decision(scope, model_id, decision, source_run_id=source_run_id))
 
     def retire_relationship(
-        self, model_id: str, relationship_id: str, *, source_run_id: str, reason: str
+        self, scope: AuthenticatedPhase4Scope, model_id: str, relationship_id: str, *, source_run_id: str, reason: str
     ) -> dict[str, Any]:
-        return self._with_persist(model_id, lambda: super(RuntimeBehavioralModelStore, self).retire_relationship(model_id, relationship_id, source_run_id=source_run_id, reason=reason))
+        return self._with_persist(scope, model_id, lambda: super(RuntimeBehavioralModelStore, self).retire_relationship(scope, model_id, relationship_id, source_run_id=source_run_id, reason=reason))
 
     def save_candidate_baseline(
-        self, model_id: str, baseline: dict[str, Any], *, source_run_id: str
+        self, scope: AuthenticatedPhase4Scope, model_id: str, baseline: dict[str, Any], *, source_run_id: str
     ) -> dict[str, Any]:
-        return self._with_persist(model_id, lambda: super(RuntimeBehavioralModelStore, self).save_candidate_baseline(model_id, baseline, source_run_id=source_run_id))
+        return self._with_persist(scope, model_id, lambda: super(RuntimeBehavioralModelStore, self).save_candidate_baseline(scope, model_id, baseline, source_run_id=source_run_id))
 
     def activate_baseline(
         self,
+        scope: AuthenticatedPhase4Scope,
         model_id: str,
         baseline_version: str,
         *,
         source_run_id: str,
         approval: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return self._with_persist(model_id, lambda: super(RuntimeBehavioralModelStore, self).activate_baseline(model_id, baseline_version, source_run_id=source_run_id, approval=approval))
+        return self._with_persist(scope, model_id, lambda: super(RuntimeBehavioralModelStore, self).activate_baseline(scope, model_id, baseline_version, source_run_id=source_run_id, approval=approval))
 
     def restore_snapshot(
-        self, model_id: str, snapshot_id: str, *, source_run_id: str
+        self, scope: AuthenticatedPhase4Scope, model_id: str, snapshot_id: str, *, source_run_id: str
     ) -> dict[str, Any]:
-        return self._with_persist(model_id, lambda: super(RuntimeBehavioralModelStore, self).restore_snapshot(model_id, snapshot_id, source_run_id=source_run_id))
+        return self._with_persist(scope, model_id, lambda: super(RuntimeBehavioralModelStore, self).restore_snapshot(scope, model_id, snapshot_id, source_run_id=source_run_id))
+
+    def migrate_legacy_ledger(
+        self,
+        scope: AuthenticatedPhase4Scope,
+        *,
+        legacy_model_id: str,
+        scoped_model_id: str,
+        verified_scope_mapping: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Explicitly copy a provably scoped v1 ledger into the v2 namespace.
+
+        No normal read path calls this method. The v1 payload remains unchanged,
+        and records without complete agreeing provenance remain inert.
+        """
+
+        _ledger_state_key(scope, scoped_model_id)
+        legacy_key = self.LEGACY_KEY_PREFIX + str(legacy_model_id)
+        try:
+            legacy = self._reader(legacy_key)
+        except Exception as exc:
+            raise BehavioralModelStorageUnavailable(
+                f"legacy_behavioral_model_load_failed:{type(exc).__name__}:{exc}"
+            ) from exc
+        classification = classify_legacy_ledger(
+            legacy,
+            scope,
+            verified_scope_mapping=verified_scope_mapping,
+        )
+        if classification["classification"] != "safely_mappable":
+            return {
+                **classification,
+                "disposition": "quarantined",
+                "legacy_key": legacy_key,
+                "migrated_key": None,
+            }
+        migrated = _migrated_v2_ledger(
+            legacy,
+            scope=scope,
+            legacy_model_id=str(legacy_model_id),
+            scoped_model_id=str(scoped_model_id),
+            legacy_key=legacy_key,
+            verified_scope_mapping=verified_scope_mapping or {},
+        )
+        destination = _runtime_ledger_key(scope, scoped_model_id)
+        existing = self._reader(destination)
+        if existing is not None and existing != migrated:
+            raise BehavioralModelVersionConflict(
+                f"migration_destination_already_exists:{destination}"
+            )
+        if existing is None:
+            self._writer(destination, migrated)
+        return {
+            **classification,
+            "disposition": "migrated",
+            "legacy_key": legacy_key,
+            "migrated_key": destination,
+            "original_model_id": str(legacy_model_id),
+            "scoped_model_id": str(scoped_model_id),
+        }
 
 
 def _model_identity(model: dict[str, Any]) -> tuple[str, str]:
@@ -421,10 +507,14 @@ def _required_text(payload: dict[str, Any], field: str) -> str:
     return value
 
 
-def _attributed(payload: dict[str, Any], source_run_id: str) -> dict[str, Any]:
+def _attributed(
+    payload: dict[str, Any],
+    source_run_id: str,
+    scope: AuthenticatedPhase4Scope,
+) -> dict[str, Any]:
     stored = deepcopy(payload)
     stored["source_run_id"] = str(source_run_id)
-    return stored
+    return _bind_record_scope(stored, scope)
 
 
 def _append_immutable(
@@ -433,8 +523,9 @@ def _append_immutable(
     payload: dict[str, Any],
     source_run_id: str,
     record_type: str,
+    scope: AuthenticatedPhase4Scope,
 ) -> dict[str, Any]:
-    stored = _attributed(payload, source_run_id)
+    stored = _attributed(payload, source_run_id, scope)
     existing = target.get(record_id)
     if existing is not None and existing != stored:
         raise BehavioralModelVersionConflict(f"{record_type}_already_exists:{record_id}")
@@ -457,6 +548,9 @@ def _merge_ledgers(current: Any, local: dict[str, Any]) -> dict[str, Any]:
 
     if not isinstance(current, dict):
         return deepcopy(local)
+    for field in ("ledger_contract_version", "authenticated_scope", "scope_digest", "model_id"):
+        if current.get(field) != local.get(field):
+            raise BehavioralModelScopeMismatch(f"runtime_ledger_scope_conflict:{field}")
     merged = deepcopy(current)
     mapping_fields = (
         "models",
@@ -498,3 +592,140 @@ def _merge_ledgers(current: Any, local: dict[str, Any]) -> dict[str, Any]:
     local_baseline = str(local.get("active_baseline_version") or "")
     merged["active_baseline_version"] = local_baseline or current_baseline or None
     return merged
+
+
+def _require_scope(scope: AuthenticatedPhase4Scope) -> AuthenticatedPhase4Scope:
+    if not isinstance(scope, AuthenticatedPhase4Scope):
+        raise BehavioralModelScopeMismatch("authenticated_scope_unavailable")
+    return scope
+
+
+def _ledger_state_key(scope: AuthenticatedPhase4Scope, model_id: str) -> str:
+    scope = _require_scope(scope)
+    model_id = str(model_id or "").strip()
+    if not model_id:
+        raise ValueError("missing_required_field:model_id")
+    expected_prefix = f"behavioral-model:{scope.model_id_scope}:"
+    if not model_id.startswith(expected_prefix):
+        raise BehavioralModelScopeMismatch("model_id_authenticated_scope_mismatch")
+    return f"{scope.scope_digest}::{model_id}"
+
+
+def _runtime_ledger_key(scope: AuthenticatedPhase4Scope, model_id: str) -> str:
+    _ledger_state_key(scope, model_id)
+    return f"{RuntimeBehavioralModelStore.KEY_PREFIX}{scope.scope_digest}::{model_id}"
+
+
+def _bind_record_scope(payload: dict[str, Any], scope: AuthenticatedPhase4Scope) -> dict[str, Any]:
+    expected = scope.as_dict()
+    existing = payload.get("authenticated_scope")
+    if existing is not None and existing != expected:
+        raise BehavioralModelScopeMismatch("record_authenticated_scope_mismatch")
+    existing_digest = payload.get("scope_digest")
+    if existing_digest is not None and str(existing_digest) != scope.scope_digest:
+        raise BehavioralModelScopeMismatch("record_scope_digest_mismatch")
+    payload["authenticated_scope"] = expected
+    payload["scope_digest"] = scope.scope_digest
+    return payload
+
+
+def _validate_ledger_scope(
+    state: dict[str, Any] | None,
+    scope: AuthenticatedPhase4Scope,
+    model_id: str,
+) -> None:
+    _ledger_state_key(scope, model_id)
+    if not state:
+        return
+    if state.get("ledger_contract_version") != "sii-behavioral-model-ledger-v2":
+        raise BehavioralModelScopeMismatch("unsupported_behavioral_model_ledger_version")
+    if state.get("authenticated_scope") != scope.as_dict():
+        raise BehavioralModelScopeMismatch("ledger_authenticated_scope_mismatch")
+    if str(state.get("scope_digest") or "") != scope.scope_digest:
+        raise BehavioralModelScopeMismatch("ledger_scope_digest_mismatch")
+    if str(state.get("model_id") or "") != str(model_id):
+        raise BehavioralModelScopeMismatch("ledger_model_id_mismatch")
+
+
+def classify_legacy_ledger(
+    ledger: Any,
+    scope: AuthenticatedPhase4Scope,
+    *,
+    verified_scope_mapping: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Classify v1 data without trusting ownership asserted by that data.
+
+    The mapping is deliberately a separate migration input. It must be built
+    by an operator from server-side upload/job authorization provenance; a v1
+    ledger's own fields can never attest its tenant or workspace ownership.
+    """
+
+    if not isinstance(ledger, dict) or not ledger:
+        return {"classification": "orphaned", "reasons": ["legacy_ledger_missing"]}
+    provenance = verified_scope_mapping
+    if not isinstance(provenance, dict):
+        return {
+            "classification": "ambiguous",
+            "reasons": ["verified_scope_mapping_missing"],
+        }
+    required = ("tenant_scope_id", "workspace_id", "resource_scope_id")
+    missing = [field for field in required if not str(provenance.get(field) or "").strip()]
+    if missing:
+        return {
+            "classification": "ambiguous",
+            "reasons": [f"scope_provenance_missing:{field}" for field in missing],
+        }
+    conflicts = [
+        field
+        for field in required
+        if str(provenance.get(field)).strip() != getattr(scope, field)
+    ]
+    if conflicts:
+        return {
+            "classification": "conflicting",
+            "reasons": [f"scope_provenance_conflict:{field}" for field in conflicts],
+        }
+    proof_reference = str(provenance.get("proof_reference") or "").strip()
+    if provenance.get("server_authenticated") is not True or not proof_reference:
+        return {
+            "classification": "ambiguous",
+            "reasons": ["verified_scope_mapping_not_server_authenticated"],
+        }
+    return {"classification": "safely_mappable", "reasons": []}
+
+
+def _migrated_v2_ledger(
+    ledger: dict[str, Any],
+    *,
+    scope: AuthenticatedPhase4Scope,
+    legacy_model_id: str,
+    scoped_model_id: str,
+    legacy_key: str,
+    verified_scope_mapping: dict[str, Any],
+) -> dict[str, Any]:
+    migrated = deepcopy(ledger)
+    migrated.pop("scope_provenance", None)
+    migrated["ledger_contract_version"] = "sii-behavioral-model-ledger-v2"
+    migrated["authenticated_scope"] = scope.as_dict()
+    migrated["scope_digest"] = scope.scope_digest
+    migrated["model_id"] = scoped_model_id
+    migrated["migration_provenance"] = {
+        "migration_contract_version": "phase4-ledger-v1-to-v2",
+        "legacy_key": legacy_key,
+        "original_model_id": legacy_model_id,
+        "original_record_ids_preserved": True,
+        "verified_scope_mapping": deepcopy(verified_scope_mapping),
+    }
+    for version, model in list((migrated.get("models") or {}).items()):
+        if isinstance(model, dict):
+            model["legacy_original_model_id"] = str(model.get("model_id") or legacy_model_id)
+            model["model_id"] = scoped_model_id
+            migrated["models"][version] = _bind_record_scope(model, scope)
+    for field in ("snapshots", "events", "learning_decisions", "candidate_baselines", "activated_baselines"):
+        for record_id, record in list((migrated.get(field) or {}).items()):
+            if isinstance(record, dict):
+                if "model_id" in record:
+                    record["legacy_original_model_id"] = str(record.get("model_id") or legacy_model_id)
+                    record["model_id"] = scoped_model_id
+                migrated[field][record_id] = _bind_record_scope(record, scope)
+    return migrated

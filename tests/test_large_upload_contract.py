@@ -57,7 +57,7 @@ def install_large_upload_fakes(monkeypatch, *, object_size=LARGE_FILE_SIZE):
         "etag": "large-etag",
     })
     monkeypatch.setattr(data_router, "queue_metrics", lambda: {"pending": 0, "processing": 0})
-    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda job_id: enqueued.append(job_id))
+    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda job_id, **_kwargs: enqueued.append(job_id))
     monkeypatch.setattr(data_router.upload_jobs, "write_job", lambda payload: jobs.__setitem__(payload["job_id"], dict(payload)))
     monkeypatch.setattr(data_router.upload_jobs, "read_upload_status", lambda job_id: jobs.get(job_id))
     monkeypatch.setattr(data_router, "record_audit_event", lambda **_kwargs: None)
@@ -227,7 +227,7 @@ def test_job_creation_failure_is_visible_and_retry_reuses_the_same_upload(monkey
     ).json()
     session_id = session["upload_session_id"]
 
-    def fail_enqueue(_job_id):
+    def fail_enqueue(_job_id, **_kwargs):
         raise RuntimeError("queue unavailable")
 
     monkeypatch.setattr(data_router, "enqueue_upload_job", fail_enqueue)
@@ -266,7 +266,7 @@ def test_job_creation_failure_is_visible_and_retry_reuses_the_same_upload(monkey
     assert sessions[session_id]["state"] == "job_pending"
     assert sessions[session_id]["job_id"] == failed_job_id
 
-    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda job_id: enqueued.append(job_id))
+    monkeypatch.setattr(data_router, "enqueue_upload_job", lambda job_id, **_kwargs: enqueued.append(job_id))
     retried = client.post(
         f"/api/data/upload-session/{session_id}/complete",
         headers=AUTH_HEADERS,

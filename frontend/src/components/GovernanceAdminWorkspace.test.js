@@ -12,7 +12,7 @@ const EmptyState = ({ title, body }) => h("section", {}, h("h2", {}, title), h("
 
 afterEach(() => { cleanup(); window.sessionStorage.clear(); vi.clearAllMocks(); });
 
-it("hosts telemetry connector setup in the administrator workspace", async () => {
+it("retires the legacy telemetry connector setup from the administrator workspace", async () => {
   const apiFetch = vi.fn(async (path) => {
     if (path.startsWith("/api/observability/evp-governance")) return reply({ records: [], total: 0, pass_count: 0, no_pass_count: 0 });
     if (path.startsWith("/api/observability/performance")) return reply({ queue_depth: 0, upload_duration_seconds: {}, cache: {} });
@@ -31,13 +31,10 @@ it("hosts telemetry connector setup in the administrator workspace", async () =>
     currentUser: { email: "admin@neraium.test", role: "admin" },
   }));
 
-  expect(await screen.findByRole("heading", { name: "Telemetry Connector Setup" })).toBeTruthy();
-  await waitFor(() => expect(screen.getByRole("button", { name: "Test connection" }).disabled).toBe(false));
-  expect(screen.getByLabelText("Connector type")).toBeTruthy();
-  expect(screen.getByLabelText("Source identifier")).toBeTruthy();
-  expect(screen.getByLabelText("System identifier")).toBeTruthy();
-  expect(screen.getByLabelText("Endpoint")).toBeTruthy();
-  expect(screen.getByLabelText("Sample response JSON")).toBeTruthy();
+  expect(await screen.findByRole("heading", { name: "Access & governance" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Telemetry Connector Setup" })).toBeNull();
+  expect(apiFetch).not.toHaveBeenCalledWith("/api/connectors/types", expect.anything());
+  expect(apiFetch).not.toHaveBeenCalledWith("/api/connectors/health", expect.anything());
 });
 
 it("manages current facility membership separately from account status", async () => {

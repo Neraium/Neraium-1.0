@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 
-import ConnectorSetupPanel from "./ConnectorSetupPanel";
 import InfrastructureHealthDashboard from "./InfrastructureHealthDashboard";
 
 function safeAdminError(value, fallback) {
@@ -75,7 +74,6 @@ export default function GovernanceAdminWorkspace({
     return (
       <section className="workspace-surface">
         <AdministrationHeader currentUser={currentUser} />
-        <ConnectorSetupPanel apiFetch={apiFetch} accessCode={accessCode} currentUser={currentUser} />
         <InfrastructureHealthDashboard apiFetch={apiFetch} accessCode={accessCode} Panel={Panel} />
         <Panel title="Evidence governance" subtitle="Loading governance records…" />
       </section>
@@ -86,7 +84,6 @@ export default function GovernanceAdminWorkspace({
     return (
       <section className="workspace-surface">
         <AdministrationHeader currentUser={currentUser} />
-        <ConnectorSetupPanel apiFetch={apiFetch} accessCode={accessCode} currentUser={currentUser} />
         <InfrastructureHealthDashboard apiFetch={apiFetch} accessCode={accessCode} Panel={Panel} />
         <EmptyState title="Intelligence Governance Unavailable" body={error} />
       </section>
@@ -97,7 +94,6 @@ export default function GovernanceAdminWorkspace({
   return (
     <section className="workspace-surface">
       <AdministrationHeader currentUser={currentUser} />
-      <ConnectorSetupPanel apiFetch={apiFetch} accessCode={accessCode} currentUser={currentUser} />
       <InfrastructureHealthDashboard apiFetch={apiFetch} accessCode={accessCode} Panel={Panel} />
       <div className="workspace-grid workspace-grid--two admin-summary-grid">
       <Panel

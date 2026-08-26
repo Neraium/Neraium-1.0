@@ -57,14 +57,18 @@ test.describe("Responsive engineering workspace", () => {
     }
   });
 
-  test("first-baseline action is visible without scrolling", async ({ page }) => {
-    await openPortfolio(page, { width: 390, height: 844 });
-    const action = page.getByRole("button", { name: "Import Historical Dataset" });
+  test("connection-first action is visible without scrolling", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/workspace/data-sources", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
+    await expect(page.getByRole("heading", { name: "Connect a physical system", level: 1 })).toBeVisible();
+    const action = page.getByRole("button", { name: "Add data source" }).first();
     await expect(action).toBeVisible();
     const box = await action.boundingBox();
     expect(box?.y ?? 9999).toBeLessThan(844);
     expect((box?.y ?? 9999) + (box?.height ?? 0)).toBeLessThanOrEqual(844);
-    await expect(page.getByText("Evidence insufficient")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Import Historical Dataset" })).toHaveCount(0);
+    await expect(page.getByTestId("csv-upload-input")).toHaveCount(0);
   });
 
   test("wider collapsed header retains the full Menu label", async ({ page }) => {

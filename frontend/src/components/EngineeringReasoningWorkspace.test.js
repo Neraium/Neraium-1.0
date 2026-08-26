@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EngineeringReasoningWorkspace from "./EngineeringReasoningWorkspace";
 
@@ -115,7 +115,6 @@ afterEach(() => {
   window.localStorage.clear();
   window.history.replaceState({}, "", "/");
 });
-
 describe("EngineeringReasoningWorkspace daily workflows", () => {
   it("switches among explicit facility workspaces from compact workspace controls", () => {
     const onWorkspaceChange = vi.fn();
@@ -130,29 +129,25 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(onWorkspaceChange).toHaveBeenCalledWith("default");
   });
 
-  it.each(["investigations", "evidence"])("never falls back to a default finding for an unknown %s deep link", async (routeName) => {
+  it.each(["findings", "investigations", "evidence"])("never falls back to a default finding for an unknown %s deep link", async (routeName) => {
     const apiFetch = vi.fn(async () => ({ ok: true, json: async () => ({ runs: [] }) }));
     renderWorkspace({ path: `/${routeName}/workspace-b-secret`, apiFetch });
-    expect(await screen.findByRole("heading", { name: "Finding unavailable" })).toBeTruthy();
-    expect(screen.getByText("This finding is unavailable in the current facility workspace.")).toBeTruthy();
+    const heading = routeName === "findings" ? "Finding unavailable" : routeName === "investigations" ? "Investigation unavailable" : "Evidence record unavailable";
+    expect(await screen.findByRole("heading", { name: heading })).toBeTruthy();
+    expect(screen.getAllByText(/unavailable/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Chiller 03 changed" })).toBeNull();
     expect(document.body.textContent).not.toContain("workspace-b-secret");
   });
 
-  it("launches first-baseline onboarding instead of an analytical empty dashboard", () => {
+  it("starts an empty production workspace at Data Connections", () => {
     const { onWorkspaceNavigate } = renderWorkspace({ result: null });
-    expect(screen.getByTestId("first-baseline-experience")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Create Your First Baseline" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Import Historical Dataset" }));
-    expect(onWorkspaceNavigate).toHaveBeenCalledWith("data-connections");
-  });
-
-  it("lets the operator exit onboarding into the baseline-needed workspace", () => {
-    renderWorkspace({ result: null });
-    fireEvent.click(screen.getByRole("button", { name: "Go to workspace" }));
     expect(screen.getByTestId("workspace-state-noDataset")).toBeTruthy();
-    expect(screen.getByText(/Operations Brief · Baseline Needed/)).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "No baseline available" })).toBeTruthy();
+    expect(screen.getByText(/Operations Brief · Setup needed/)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Connect a data source" })).toBeTruthy();
+    expect(screen.getByText(/map them into a defined physical system/i)).toBeTruthy();
+    expect(screen.queryByText(/historical dataset/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add data source" }));
+    expect(onWorkspaceNavigate).toHaveBeenCalledWith("data-connections");
   });
 
   it("withholds the Operations Brief for baseline-only, legacy, or incomplete data", () => {
@@ -171,14 +166,13 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
   it("opens on a restrained Operations Brief and hides empty sections", () => {
     renderWorkspace();
     expect(screen.getByTestId("operations-brief")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "1 finding awaiting review" })).toBeTruthy();
-    expect(screen.getByText(/North Plant · What deserves attention right now/)).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "New" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Monitoring" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Needs attention" })).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Recently resolved" })).toBeNull();
-    expect(screen.queryByText("New findings")).toBeNull();
-    expect(screen.getByText("1 finding awaiting review.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Analysis complete" })).toBeTruthy();
+    expect(screen.getByText("1 finding deserves review.")).toBeTruthy();
+    expect(screen.getByText("Findings for review").closest("div").textContent).toContain("1");
+    expect(screen.getByText("Systems represented").closest("div").textContent).toContain("1");
+    expect(screen.getByRole("heading", { name: "What to review" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Monitoring" })).toBeNull();
+    expect(screen.queryByText("Technical details")).toBeNull();
   });
 
   it("keeps the alert scannable and progressively discloses evidence", () => {
@@ -186,17 +180,16 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     const card = screen.getByTestId("compact-finding-card");
     const finding = within(card);
     expect(finding.getByText("Cooling system")).toBeTruthy();
-    expect(finding.getByRole("heading", { name: "Condenser-side behavior changed." })).toBeTruthy();
-    expect(finding.getByText("Equipment / system")).toBeTruthy();
-    for (const label of ["Finding", "Requested next action", "Why this needs attention", "Evidence and limitations"]) expect(finding.getByText(label)).toBeTruthy();
-    for (const label of ["Priority", "Assignment", "Change confidence"]) expect(finding.getByText(label)).toBeTruthy();
-    expect(finding.queryByText("Due")).toBeNull();
-    expect(finding.queryByText("Workflow")).toBeNull();
-    expect(finding.getByText("Condenser approach temperature increased 15.3%.")).toBeTruthy();
-    expect(finding.getByText("Compressor current increased 5.5%.")).toBeTruthy();
-    expect(finding.getByRole("button", { name: "Investigate" })).toBeTruthy();
-    expect(finding.getByText("Actions")).toBeTruthy();
-    expect(card.querySelector(".operational-finding__more").open).toBe(false);
+    expect(finding.getByRole("heading", { name: "Condenser-side behavior changed" })).toBeTruthy();
+    expect(finding.getByText("System / asset")).toBeTruthy();
+    for (const label of ["Finding", "Change confidence", "Important limitation"]) expect(finding.getByText(label)).toBeTruthy();
+    expect(finding.queryByText("Requested next action")).toBeNull();
+    expect(finding.queryByText("Evidence and limitations")).toBeNull();
+    expect(finding.queryByText("Condenser approach temperature increased 15.3%.")).toBeNull();
+    expect(finding.queryByText("Compressor current increased 5.5%.")).toBeNull();
+    expect(finding.getByRole("button", { name: "Review finding" })).toBeTruthy();
+    expect(within(card).getAllByRole("button")).toHaveLength(1);
+    expect(card.querySelector("details")).toBeNull();
   });
 
   it("renders a corroborated condition as the primary engineering object", () => {
@@ -241,21 +234,19 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
 
     const card = screen.getByTestId("compact-finding-card");
     const view = within(card);
-    expect(view.getByRole("heading", { name: "Pumping System relationship decreased." })).toBeTruthy();
+    expect(view.getByRole("heading", { name: "Pumping System relationship decreased" })).toBeTruthy();
     expect(view.getByText("Pumping System")).toBeTruthy();
-    expect(card.querySelector(".operational-finding__evidence")).toBeTruthy();
-    expect(view.getByText("3 relationship changes align through flow and discharge pressure.")).toBeTruthy();
-    expect(view.getByRole("button", { name: "Investigate" })).toBeTruthy();
-    expect(view.getByText("Actions")).toBeTruthy();
+    expect(card.querySelector(".operational-finding__evidence")).toBeNull();
+    expect(view.queryByText("3 relationship changes align through flow and discharge pressure.")).toBeNull();
+    expect(view.getByRole("button", { name: "Review finding" })).toBeTruthy();
 
-    fireEvent.click(view.getByRole("button", { name: "Investigate" }));
+    fireEvent.click(view.getByRole("button", { name: "Review finding" }));
     expect(window.location.pathname).toBe("/findings/condition-pump");
-    expect(screen.getByText("A persistent relationship change remains during comparable operating conditions and is not explained by available context.")).toBeTruthy();
+    expect(screen.getByText("Comparable operating evidence supports the condition.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
-    expect(screen.getByRole("heading", { name: "Support trend" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Comparable operation" })).toBeTruthy();
-    expect(screen.getByText("18 comparable periods")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Condition timeline" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Persistence and confidence" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Operating context" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Timeline" })).toBeTruthy();
   });
 
   it("keeps context-limited finding review concise and semantically consistent", () => {
@@ -295,112 +286,73 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     };
     renderWorkspace({ result: analysisResult({ analysis: { conditions: [condition] } }) });
 
-    expect(screen.getByRole("heading", { name: "Cooling Distribution relationship decreased." })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Cooling Distribution relationship decreased" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review finding" }));
 
-    expect(screen.getByText("Context-limited relationship change")).toBeTruthy();
     expect(screen.getAllByText("Not established").length).toBeGreaterThan(0);
-    expect(screen.getByText("The relationship changed, but recent operating conditions differ too much from the learned baseline to determine why.")).toBeTruthy();
-    expect(screen.queryByText("Evidence support is increasing, but like-for-like comparability is limited.")).toBeNull();
+    expect(screen.getByText("Operating conditions differed from baseline.")).toBeTruthy();
     expect(screen.queryByText(/^Trajectory$/)).toBeNull();
     expect(screen.queryByText(/Observed for 81 days/i)).toBeNull();
-    expect(screen.getByText(/Return temperature signal \/ Power signal changed from strong to weak coupling\. A second related relationship changed/)).toBeTruthy();
-    expect(document.querySelectorAll(".case-sections--review .classification-guidance > li")).toHaveLength(3);
+    expect(screen.getAllByText("Return temperature signal / Power signal changed from strong to weak coupling.").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".case-sections--review > section:last-child li")).toHaveLength(3);
     expect(screen.queryByText("This fourth action must not appear.")).toBeNull();
     const headings = [...document.querySelectorAll(".case-sections--review > section > h2")].map((node) => node.textContent);
-    expect(headings).toEqual(["What changed", "Why this deserves attention", "Important limitations", "What to check first"]);
+    expect(headings).toEqual(["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]);
     for (const paragraph of document.querySelectorAll(".case-sections--review p")) {
       expect(paragraph.textContent.length).toBeLessThanOrEqual(260);
     }
   });
 
-  it("moves an acknowledged investigation out of New without changing classification", async () => {
+  it("keeps workflow mutation out of analytical Results and Finding Review", () => {
     renderWorkspace();
-    fireEvent.click(screen.getByText("Actions"));
-    fireEvent.click(screen.getByRole("button", { name: "I’m checking this" }));
-    await waitFor(() => expect(screen.queryByRole("heading", { name: "New" })).toBeNull());
-    expect(screen.getByRole("heading", { name: "Monitoring" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "I’m checking this" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
-    expect(screen.getByText("Unexplained systemic change")).toBeTruthy();
-  });
-
-  it("normalizes a known condition into the existing feedback endpoint", async () => {
-    const apiFetch = vi.fn(async (url) => String(url).includes("/feedback")
-      ? { ok: true, json: async () => ({ latest_feedback_category: "expected_behavior" }) }
-      : { ok: true, json: async () => ({ runs: [] }) });
-    renderWorkspace({ apiFetch });
-    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
-    fireEvent.click(screen.getByRole("button", { name: "Known or explained" }));
-    expect(screen.getByLabelText("Known condition")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save explanation" }));
-    await waitFor(() => expect(screen.getByText("Explained.")).toBeTruthy());
-    const feedbackCall = apiFetch.mock.calls.find(([url]) => String(url).includes("/feedback"));
-    expect(feedbackCall[0]).toBe("/api/evidence/runs/run-42/feedback");
-    expect(JSON.parse(feedbackCall[1].body)).toEqual({ category: "expected_behavior", outcome: "Scheduled staging change", note: "Scheduled staging change" });
-    expect(screen.getAllByText("Explained").length).toBeGreaterThan(0);
-  });
-
-  it("records Not useful as presentation feedback without altering evidence", async () => {
-    const apiFetch = vi.fn(async (url) => String(url).includes("/feedback")
-      ? { ok: true, json: async () => ({ latest_feedback_category: "nothing_meaningful" }) }
-      : { ok: true, json: async () => ({ runs: [] }) });
-    renderWorkspace({ apiFetch });
-    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
-    fireEvent.click(screen.getByRole("button", { name: "Not useful" }));
-    await waitFor(() => expect(screen.getByText("Not useful.")).toBeTruthy());
-    expect(screen.getByText("Unexplained systemic change")).toBeTruthy();
-    const feedbackCall = apiFetch.mock.calls.find(([url]) => String(url).includes("/feedback"));
-    expect(JSON.parse(feedbackCall[1].body)).toEqual({ category: "nothing_meaningful", outcome: "Not useful", note: null });
+    expect(screen.queryByRole("button", { name: "I’m checking this" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Review finding" }));
+    expect(screen.queryByRole("button", { name: "I’m checking this" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Known or explained" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Not useful" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Open investigation" })).toBeTruthy();
   });
 
   it("orders finding review around change, importance, checks, timeline, and evidence", () => {
     renderWorkspace();
-    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review finding" }));
     expect(window.location.pathname).toBe("/findings/finding-1");
     const headings = [...document.querySelectorAll(".case-sections--review > section > h2")].map((node) => node.textContent);
-    expect(headings).toEqual(["What changed", "Why this deserves attention", "Important limitations", "What to check first"]);
-    expect(screen.getAllByRole("button", { name: "I’m checking this" }).length).toBeGreaterThan(0);
+    expect(headings).toEqual(["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]);
+    expect(screen.getByText("Cause / attribution")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open investigation" })).toBeTruthy();
   });
 
-  it("opens a progressive investigation and keeps technical depth collapsed", () => {
+  it("opens a progressive investigation without evidence-record audit internals", () => {
     renderWorkspace();
-    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review finding" }));
     fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
     expect(window.location.pathname).toBe("/investigations/finding-1");
     const headings = [...document.querySelectorAll(".case-sections--investigation > section > h2")].map((node) => node.textContent);
-    expect(headings).toEqual(["Primary relationship comparison", "Relationships changed", "Relationship timeline", "Operating context", "Supporting evidence records", "Data quality and comparability limits", "Source signals and lineage"]);
-    for (const label of ["Alternative explanations", "Certainty limits", "Audit, workflow, and replay", "Full classification reasoning", "Technical analysis metadata"]) {
-      expect(screen.getByText(label).closest("details").open).toBe(false);
-    }
+    expect(headings).toEqual(["Primary relationship comparison", "Relationship evidence", "Persistence and confidence", "Operating context", "System evidence channels", "Data quality and comparability", "Timeline", "Source signals and lineage"]);
+    for (const label of ["Audit history", "Engine and build", "Classification", "Evidence sufficiency"]) expect(screen.queryByRole("heading", { name: label })).toBeNull();
   });
 
   it("moves directly from finding to investigation to the evidence record", () => {
     renderWorkspace();
-    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review finding" }));
     fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
     fireEvent.click(screen.getByRole("button", { name: "Open evidence record" }));
     expect(window.location.pathname).toBe("/evidence/finding-1");
     expect(screen.getByTestId("evidence-record")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Source lineage" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Relationship comparison" })).toBeTruthy();
-    expect(screen.getByText("Correlation strength increased by 0.74 from the learned baseline.")).toBeTruthy();
-    expect(screen.getByText("0.09")).toBeTruthy();
-    expect(screen.getByText("0.83")).toBeTruthy();
-    expect(screen.getByText("+0.74")).toBeTruthy();
-    const technical = screen.getByText("Technical values and identifiers").closest("details");
-    expect(technical.open).toBe(false);
-    expect(technical.textContent).toContain("pearson_correlation");
-    expect(technical.textContent).toContain("0.739798");
-    expect(technical.textContent).toContain("No structured evidence records are linked. 3 supporting observations are shown in the evidence summary.");
+    for (const heading of ["Record identity", "Finding-owned relationships", "Finding provenance and lineage", "Evidence sufficiency", "Audit history"]) expect(screen.getAllByRole("heading", { name: heading }).length).toBeGreaterThan(0);
+    expect(document.body.textContent).toContain("pearson_correlation");
+    expect(document.body.textContent).toContain("0.094013");
+    expect(document.body.textContent).toContain("0.833811");
+    expect(document.body.textContent).toContain("0.739798");
   });
 
   it("supports direct workflow navigation and keyboard search", () => {
     renderWorkspace();
     const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
-    for (const label of ["System Status", "Live Monitoring", "Systems", "Analysis Findings", "Evidence & Outcomes", "Data"]) expect(within(navigation).getByRole("button", { name: label })).toBeTruthy();
+    for (const label of ["System Status", "Systems", "Analysis Findings", "Evidence & Outcomes", "Data"]) expect(within(navigation).getByRole("button", { name: label })).toBeTruthy();
+    expect(within(navigation).queryByRole("button", { name: "Live Monitoring" })).toBeNull();
     fireEvent.click(within(navigation).getByRole("button", { name: "Evidence & Outcomes" }));
     expect(window.location.pathname).toBe("/investigations");
     fireEvent.click(within(navigation).getByRole("button", { name: "Systems" }));
@@ -408,7 +360,8 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     const search = screen.getByRole("combobox", { name: /Search sites/i });
     fireEvent.change(search, { target: { value: "Cooling system" } });
     fireEvent.keyDown(search, { key: "Enter" });
-    expect(screen.getByRole("heading", { name: "Cooling system" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/systems/Cooling%20system");
+    expect(screen.getByText("Cooling system")).toBeTruthy();
   });
 
   it("routes canonical shared work independently and preserves engineer drill-down", async () => {
@@ -434,15 +387,37 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(window.location.pathname).toBe("/work/canonical-work-1");
     fireEvent.click(await screen.findByRole("button", { name: "Open investigation" }));
     expect(window.location.pathname).toBe("/investigations/finding-1");
-    expect(screen.getByRole("heading", { name: "Supporting evidence records" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Relationship evidence" })).toBeTruthy();
   });
 
   it("speaks confidently when the completed analysis has no meaningful changes", () => {
     const result = analysisResult({ analysis: { insights: [] }, result: { data_gaps: [], data_quality: { coverage_percent: 100, warnings: [] } } });
     renderWorkspace({ result });
-    expect(screen.getByText("No supported material change.")).toBeTruthy();
-    expect(screen.getByText("Measured relationships remain within the learned comparison boundary.")).toBeTruthy();
+    expect(screen.getAllByText("No supported material behavioral change.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("The available comparison remains within the learned system-behavior boundary.").length).toBeGreaterThan(0);
     expect(screen.queryByText("Evidence insufficient")).toBeNull();
+  });
+
+  it("keeps resolved findings out of every triage list without claiming the system is stable", () => {
+    window.localStorage.setItem("neraium.operations-brief.review-state.engineer@neraium.test-anonymous", JSON.stringify({
+      "finding-1": { state: "resolved" },
+    }));
+    renderWorkspace();
+    expect(screen.getByRole("heading", { name: "Analysis complete" })).toBeTruthy();
+    expect(screen.getByText("No findings currently deserve review from this completed analysis.")).toBeTruthy();
+    expect(screen.queryByTestId("compact-finding-card")).toBeNull();
+    expect(screen.queryByText("No supported material behavioral change.")).toBeNull();
+
+    const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
+    fireEvent.click(within(navigation).getByRole("button", { name: "Analysis Findings" }));
+    expect(screen.getByText("No findings currently deserve review from this completed analysis.")).toBeTruthy();
+    fireEvent.click(within(navigation).getByRole("button", { name: "Evidence & Outcomes" }));
+    expect(screen.getByText("No findings currently deserve review from this completed analysis.")).toBeTruthy();
+    fireEvent.click(within(navigation).getByRole("button", { name: "Systems" }));
+    expect(screen.getAllByText("0 for review").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /Cooling system/i }));
+    expect(screen.getByText("No findings currently deserve review for Cooling system.")).toBeTruthy();
+    expect(screen.queryByText("No supported material behavioral change.")).toBeNull();
   });
 
   it("keeps the multi-site portfolio available without replacing the default brief", async () => {

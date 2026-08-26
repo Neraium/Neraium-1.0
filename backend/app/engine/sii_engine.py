@@ -30,6 +30,7 @@ from app.engine.sii import (
 )
 from app.engine.sii_inputs import build_data_conditions, normalize_rows, numeric_columns
 from app.engine.sii.common import NumericRowCache
+from app.engine.sii.behavioral_model_contract import AuthenticatedPhase4Scope
 from app.engine.temporal_math import TemporalMathConfig, evaluate_temporal_math
 from app.services.baseline_analysis import build_baseline_analysis
 from app.services.operating_modes import apply_operating_mode_context, assess_operating_modes
@@ -57,6 +58,7 @@ def evaluate_sii(
     data_quality=None,
     sensor_health=None,
     operating_mode=None,
+    phase4_scope: AuthenticatedPhase4Scope | None = None,
     config=None,
     progress_callback=None,
 ) -> dict:
@@ -892,6 +894,7 @@ def evaluate_sii(
             multiscale_analysis=multiscale_analysis,
             physics_reasoning=physics_reasoning,
             covariance_analysis=covariance,
+            phase4_scope=phase4_scope,
             config=cfg,
             progress_callback=unit_progress(
                 "behavioral_model",

@@ -17,6 +17,12 @@ from app.services.dataset_scope import (
     dataset_scope_from_queue_routing,
     payload_matches_dataset_scope,
 )
+from app.services.phase4_scope import (
+    authenticated_phase4_scope_context,
+    authenticated_phase4_scope_from_queue_routing,
+    server_bound_system_identity_context,
+    server_bound_system_identity_from_queue_routing,
+)
 from app.services.runtime_db import (
     claim_next_upload_job_record,
     complete_upload_queue_job,
@@ -211,26 +217,50 @@ class UploadQueueLifecycleService:
                 reason,
             )
             return False
+        phase4_scope = authenticated_phase4_scope_from_queue_routing(
+            queue_entry,
+            dataset_scope=dataset_scope,
+        )
+        if phase4_scope is None:
+            self.logger.warning(
+                "upload_queue_phase4_scope_unavailable job_id=%s scope_storage_id=%s",
+                job_id,
+                dataset_scope.storage_id,
+            )
+        system_identity = server_bound_system_identity_from_queue_routing(
+            queue_entry,
+            dataset_scope=dataset_scope,
+            phase4_scope=phase4_scope,
+            job_id=job_id,
+        )
+        if system_identity is None:
+            self.logger.warning(
+                "upload_queue_phase4_system_identity_unavailable job_id=%s scope_storage_id=%s",
+                job_id,
+                dataset_scope.storage_id,
+            )
         with dataset_scope_context(dataset_scope):
-            heartbeat_stop, heartbeat_thread = self._start_claim_heartbeat(job_id)
-            try:
-                try:
-                    return self._process_claimed_upload_job(
-                        job_id,
-                        started_at,
-                        queue_entry=queue_entry,
-                        dataset_scope=dataset_scope,
-                    )
-                except Exception as exc:
-                    return self._record_worker_bootstrap_failure(
-                        job_id,
-                        started_at=started_at,
-                        dataset_scope=dataset_scope,
-                        error=exc,
-                    )
-            finally:
-                heartbeat_stop.set()
-                heartbeat_thread.join(timeout=1.0)
+            with authenticated_phase4_scope_context(phase4_scope):
+                with server_bound_system_identity_context(system_identity):
+                    heartbeat_stop, heartbeat_thread = self._start_claim_heartbeat(job_id)
+                    try:
+                        try:
+                            return self._process_claimed_upload_job(
+                                job_id,
+                                started_at,
+                                queue_entry=queue_entry,
+                                dataset_scope=dataset_scope,
+                            )
+                        except Exception as exc:
+                            return self._record_worker_bootstrap_failure(
+                                job_id,
+                                started_at=started_at,
+                                dataset_scope=dataset_scope,
+                                error=exc,
+                            )
+                    finally:
+                        heartbeat_stop.set()
+                        heartbeat_thread.join(timeout=1.0)
 
     def _record_worker_bootstrap_failure(
         self,

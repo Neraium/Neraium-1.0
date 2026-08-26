@@ -54,6 +54,10 @@ from app.services.upload_persistence import summarize_result as summarize_result
 from app.services.upload_queue_lifecycle import UploadQueueLifecycleService
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
 from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope, dataset_scope_from_payload, payload_matches_dataset_scope
+from app.services.phase4_scope import (
+    current_authenticated_phase4_scope,
+    current_server_bound_system_identity,
+)
 from app.services.upload_lifecycle import VISIBLE_UPLOAD_STATES, canonical_stage_payload
 from app.services.job_progress import (
     ProgressReporter,
@@ -383,6 +387,9 @@ def configure_runtime_dir(path: str | os.PathLike[str]) -> None:
     UPLOAD_DIR = state.upload_dir
     JOB_DIR = state.job_dir
     LEGACY_JOB_DIR = state.legacy_job_dir
+    # Keep late imports that validate production settings aligned with the
+    # explicit runtime boundary selected for this process.
+    os.environ["NERAIUM_RUNTIME_DIR"] = str(RUNTIME_DIR)
     from app.services.evidence_store import configure_runtime_dir as configure_evidence_dir
     from app.services.runtime_db import configure_runtime_dir as configure_runtime_db_dir, init_runtime_db
 
@@ -1324,6 +1331,8 @@ def _build_csv_result(
     if overall_urgency == "nominal" and max_room_drift > 0.08:
         overall_urgency = "review"
 
+    authenticated_phase4_scope = current_authenticated_phase4_scope()
+    phase4_system_identity = current_server_bound_system_identity()
     pipeline = run_structural_analysis_pipeline(
         job_id=job_id,
         filename=filename,
@@ -1356,6 +1365,8 @@ def _build_csv_result(
         build_upload_engine_result=_build_upload_engine_result,
         stage_notifier=_set_propagation_stage,
         progress_reporter=progress_reporter,
+        phase4_scope=authenticated_phase4_scope,
+        phase4_system_identity=phase4_system_identity,
     )
     result_finalization_started = time.perf_counter()
     result_finalization_cpu_started = time.process_time()
@@ -1404,6 +1415,22 @@ def _build_csv_result(
     )
     effective_urgency = "nominal" if mode_aware_suppressed else overall_urgency
 
+    phase4_system_identity_payload = (
+        phase4_system_identity.as_dict()
+        if phase4_system_identity is not None
+        else None
+    )
+    processing_trace["phase4_system_identity"] = {
+        "status": "available" if phase4_system_identity_payload else "unavailable",
+        "reason": None if phase4_system_identity_payload else "server_bound_system_identity_unavailable",
+        "identity": phase4_system_identity_payload,
+    }
+    if isinstance(replay, dict):
+        replay["meta"] = {
+            **(replay.get("meta") if isinstance(replay.get("meta"), dict) else {}),
+            "phase4_system_identity": phase4_system_identity_payload,
+        }
+
     job_scope = dataset_scope_from_payload(job_context) or current_dataset_scope()
     facility_context = read_facility_context()
     baseline_id = str(job_context.get("active_baseline_model_id") or "").strip() or None
@@ -1414,7 +1441,8 @@ def _build_csv_result(
     ]
     site_id = str(facility_context.get("site_id") or job_scope.workspace_id).strip()
     system_id = str(
-        job_context.get("active_baseline_system_id")
+        (phase4_system_identity.system_id if phase4_system_identity is not None else None)
+        or job_context.get("active_baseline_system_id")
         or (configured_systems[0].get("system_id") if configured_systems else None)
         or job_scope.workspace_id
     ).strip()
@@ -1523,9 +1551,14 @@ def _build_csv_result(
         "run_id": job_id,
         "upload_id": job_id,
         "organization_id": job_scope.tenant_id,
-        "portfolio_id": job_scope.workspace_id,
+        "portfolio_id": (
+            authenticated_phase4_scope.workspace_id
+            if authenticated_phase4_scope is not None
+            else job_scope.workspace_id
+        ),
         "site_id": site_id,
         "system_id": system_id,
+        "phase4_system_identity": phase4_system_identity_payload,
         "facility_context_reference": {
             "contract_version": facility_context.get("contract_version"),
             "site_id": site_id,
@@ -1726,6 +1759,7 @@ def _build_csv_result(
     summary["portfolio_id"] = result.get("portfolio_id")
     summary["site_id"] = result.get("site_id")
     summary["system_id"] = result.get("system_id")
+    summary["phase4_system_identity"] = result.get("phase4_system_identity")
     summary["facility_context_reference"] = result.get("facility_context_reference")
     summary["ingestion_trust"] = ingestion_summary(ingestion_trust)
     summary.update(comparison_identity)

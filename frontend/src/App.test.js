@@ -110,17 +110,11 @@ vi.mock("./components/EngineeringReasoningWorkspace", () => ({
         onChange: (event) => onCsvSelected?.(Array.from(event.target.files ?? [])),
       }),
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("data-connections") }, "Open telemetry intake"),
-      h("button", { type: "button", onClick: () => onWorkspaceNavigate("live-monitoring") }, "Open live monitoring"),
       h("button", { type: "button", onClick: () => onWorkspaceNavigate("observation-center") }, "Open insights"),
       h("button", { type: "button", onClick: onSignOut }, "Sign out test user"),
     );
   },
 }));
-
-vi.mock("./components/LiveMonitoringWorkspace", () => ({
-  default: () => h("div", { "data-testid": "live-monitoring-workspace" }, "Live Monitoring"),
-}));
-
 
 vi.mock("./components/ObservationCenterWorkspace", () => ({
   default: ({ canonicalFinding }) => h(
@@ -298,7 +292,7 @@ describe("App session initialization", () => {
   });
 
   it("replaces a stale selected workspace before mounting runtime and exposes authorized facility choices", async () => {
-    window.history.replaceState({}, "", "/workspace/live-monitoring");
+    window.history.replaceState({}, "", "/workspace/data-sources");
     window.localStorage.setItem("neraium.current_workspace_id", "ws-removed");
     fetchCurrentUser.mockResolvedValueOnce({
       authenticated: true,
@@ -313,7 +307,7 @@ describe("App session initialization", () => {
     render(h(App));
 
     await waitFor(() => expect(screen.queryByTestId("workspace-loading-state")).toBeNull());
-    expect(screen.getByTestId("live-monitoring-workspace")).toBeTruthy();
+    expect(screen.getByTestId("telemetry-workspace")).toBeTruthy();
     expect(window.localStorage.getItem("neraium.current_workspace_id")).toBe("default");
     const selector = screen.getByLabelText("Facility workspace");
     expect(selector.value).toBe("default");
@@ -380,24 +374,14 @@ it("opens the operational workspace only for direct workspace route entry", asyn
   expect(screen.queryByTestId("home-page")).toBeNull();
 });
 
-it("routes authenticated navigation to Live Monitoring without replacing historical workspaces", async () => {
-  render(h(App));
-  await launchWorkspace();
-
-  fireEvent.click(screen.getByRole("button", { name: "Open live monitoring" }));
-
-  expect(await screen.findByTestId("live-monitoring-workspace")).toBeTruthy();
-  expect(window.location.pathname).toBe("/workspace/live-monitoring");
-  expect(screen.getByRole("button", { name: "Back to Portfolio" })).toBeTruthy();
-});
-
-it("opens Live Monitoring from its direct authenticated route", async () => {
+it("retires the legacy Live Monitoring route into the Operations Brief", async () => {
   window.history.replaceState({}, "", "/workspace/live-monitoring");
 
   render(h(App));
 
-  expect(await screen.findByTestId("live-monitoring-workspace")).toBeTruthy();
-  expect(window.location.pathname).toBe("/workspace/live-monitoring");
+  expect(await screen.findByTestId("gate-workspace")).toBeTruthy();
+  expect(screen.queryByTestId("live-monitoring-workspace")).toBeNull();
+  expect(window.location.pathname).toBe("/sites/current");
 });
 
 it("routes Operations Brief CSV selections into the visible auto-start upload workflow", async () => {

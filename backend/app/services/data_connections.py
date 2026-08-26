@@ -24,8 +24,15 @@ from app.services.runtime_db import (
     upsert_latest_payload,
 )
 from app.services.upload_live_result import build_live_upload_result
-from app.services.upload_persistence import summarize_result
-from app.services.upload_state_repository import read_current_upload_result, reset_upload_state, write_latest_upload_result, write_latest_upload_summary
+from app.services.upload_persistence import project_result_for_transport, summarize_result
+from app.services.upload_state import build_session_scope
+from app.services.upload_state_repository import (
+    read_current_upload_result,
+    reset_upload_state,
+    write_latest_upload_result_payload,
+    write_latest_upload_summary,
+    write_upload_result,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -723,6 +730,54 @@ def summarize_connection_result(connection: dict[str, Any], result: dict[str, An
     return summary
 
 
+def publish_connection_result(
+    connection: dict[str, Any],
+    result: dict[str, Any],
+    summary: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Publish the latest completed poll without terminalizing the live feed."""
+    connection_id = str(connection["connection_id"])
+    published_result = {
+        **result,
+        "job_id": connection_id,
+        "run_id": connection_id,
+        "upload_id": connection_id,
+        "attempt_id": connection_id,
+    }
+    published_result["session_scope"] = build_session_scope(
+        connection_id,
+        filename=published_result.get("filename"),
+        status="active",
+        dataset_id=published_result.get("dataset_id"),
+    )
+    published_summary = {
+        **summary,
+        "job_id": connection_id,
+        "run_id": connection_id,
+        "upload_id": connection_id,
+        "attempt_id": connection_id,
+        # A poll analysis is complete, but the connection itself is an ongoing
+        # session. Keeping its status non-terminal allows the next poll to
+        # publish a fresh validated SII result under the same connection view.
+        "status": "PROCESSING",
+        "processing_state": "processing",
+    }
+    published_summary["session_scope"] = build_session_scope(
+        connection_id,
+        filename=published_summary.get("filename"),
+        status="active",
+        dataset_id=published_summary.get("dataset_id"),
+    )
+
+    # The SII upload job remains authoritative under its immutable job id.
+    # These scoped records are the bounded, ongoing data-connection view.
+    write_upload_result(connection_id, published_result)
+    write_latest_upload_summary(connection_id, published_summary)
+    transport_result = project_result_for_transport(published_result) or published_result
+    write_latest_upload_result_payload(transport_result)
+    return published_result, published_summary
+
+
 def current_state_fingerprint(summary: dict[str, Any]) -> dict[str, Any]:
     return {key: summary.get(key) for key in MEANINGFUL_STATE_KEYS}
 
@@ -1175,8 +1230,7 @@ def poll_data_connection_once(connection_id: str, *, transport: httpx.BaseTransp
         completed_at = now_iso()
         summary = summarize_connection_result(connection, result, completed_at, metadata)
         meaningful_change = has_meaningful_state_change(connection_id, summary)
-        write_latest_upload_result(connection_id, result)
-        write_latest_upload_summary(connection_id, summary, append_history=meaningful_change)
+        result, summary = publish_connection_result(connection, result, summary)
         connection = update_connection_health_fields(connection, metadata, status="polling", baseline_state=baseline_state)
         logger.info(
             "data_connection_poll_complete connection_id=%s readings_received=%s readings_accepted=%s sensors_detected=%s scenario=%s tick=%s meaningful_change=%s",

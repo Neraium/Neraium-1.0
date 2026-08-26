@@ -4,7 +4,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 DEFAULT_APP_ENV = "development"
 DEFAULT_BACKEND_HOST = "127.0.0.1"
@@ -36,6 +36,11 @@ DEFAULT_TELEMETRY_MAX_SIGNALS_PER_READING = 100
 DEFAULT_TELEMETRY_FUTURE_SKEW_SECONDS = 300.0
 DEFAULT_TELEMETRY_OUT_OF_ORDER_TOLERANCE_SECONDS = 300.0
 DEFAULT_TELEMETRY_DELAY_THRESHOLD_SECONDS = 900.0
+DEFAULT_TELEMETRY_DATABASE_URL = ""
+DEFAULT_TELEMETRY_LEGACY_COMPAT_ENABLED = False
+DEFAULT_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS = 2.0
+DEFAULT_TELEMETRY_SCHEDULER_LEASE_SECONDS = 120
+DEFAULT_TELEMETRY_WORKER_HEARTBEAT_INTERVAL_SECONDS = 30.0
 
 _VALID_APP_ENVS = {"development", "test", "staging", "prod", "production"}
 _VALID_PROCESS_ROLES = {"api", "worker", "all", "monolith"}
@@ -81,6 +86,25 @@ class Settings:
     infrastructure_monitor_interval_seconds: float = 60.0
     worker_heartbeat_timeout_seconds: float = 180.0
     baseline_approval_required: bool = True
+    telemetry_database_url: str = field(default=DEFAULT_TELEMETRY_DATABASE_URL, repr=False)
+    telemetry_secret_region: str = ""
+    telemetry_dynamic_secret_writes_enabled: bool = False
+    telemetry_controlled_egress_enabled: bool = False
+    telemetry_legacy_compat_enabled: bool = DEFAULT_TELEMETRY_LEGACY_COMPAT_ENABLED
+    telemetry_scheduler_poll_interval_seconds: float = (
+        DEFAULT_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS
+    )
+    telemetry_scheduler_lease_seconds: int = DEFAULT_TELEMETRY_SCHEDULER_LEASE_SECONDS
+    telemetry_worker_heartbeat_interval_seconds: float = (
+        DEFAULT_TELEMETRY_WORKER_HEARTBEAT_INTERVAL_SECONDS
+    )
+
+    def __post_init__(self) -> None:
+        # The process-local legacy connection implementation is intentionally
+        # unavailable in shared environments, even if a stale deployment flag
+        # attempts to turn it back on.
+        if self.app_env.strip().lower() not in {"development", "test"}:
+            object.__setattr__(self, "telemetry_legacy_compat_enabled", False)
 
 
 def get_settings() -> Settings:
@@ -191,6 +215,42 @@ def get_settings() -> Settings:
             True,
             name="NERAIUM_BASELINE_APPROVAL_REQUIRED",
         ),
+        telemetry_database_url=parse_postgresql_url(
+            os.getenv("NERAIUM_TELEMETRY_DATABASE_URL"),
+            name="NERAIUM_TELEMETRY_DATABASE_URL",
+            allow_empty=True,
+        ),
+        telemetry_secret_region=str(os.getenv("NERAIUM_TELEMETRY_SECRET_REGION", "")).strip(),
+        telemetry_dynamic_secret_writes_enabled=parse_bool(
+            os.getenv("NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES"),
+            False,
+            name="NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES",
+        ),
+        telemetry_controlled_egress_enabled=parse_bool(
+            os.getenv("NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED"),
+            False,
+            name="NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED",
+        ),
+        telemetry_legacy_compat_enabled=parse_bool(
+            os.getenv("NERAIUM_TELEMETRY_LEGACY_COMPAT"),
+            DEFAULT_TELEMETRY_LEGACY_COMPAT_ENABLED,
+            name="NERAIUM_TELEMETRY_LEGACY_COMPAT",
+        ),
+        telemetry_scheduler_poll_interval_seconds=parse_positive_float(
+            os.getenv("NERAIUM_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS"),
+            DEFAULT_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS,
+            name="NERAIUM_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS",
+        ),
+        telemetry_scheduler_lease_seconds=parse_positive_int(
+            os.getenv("NERAIUM_TELEMETRY_SCHEDULER_LEASE_SECONDS"),
+            DEFAULT_TELEMETRY_SCHEDULER_LEASE_SECONDS,
+            name="NERAIUM_TELEMETRY_SCHEDULER_LEASE_SECONDS",
+        ),
+        telemetry_worker_heartbeat_interval_seconds=parse_positive_float(
+            os.getenv("NERAIUM_TELEMETRY_WORKER_HEARTBEAT_INTERVAL_SECONDS"),
+            DEFAULT_TELEMETRY_WORKER_HEARTBEAT_INTERVAL_SECONDS,
+            name="NERAIUM_TELEMETRY_WORKER_HEARTBEAT_INTERVAL_SECONDS",
+        ),
     )
     validate_settings(settings)
     return settings
@@ -288,6 +348,27 @@ def parse_default_telemetry_url(raw_value: str | None, app_env: str) -> str:
     return DEFAULT_TELEMETRY_URL
 
 
+def parse_postgresql_url(
+    raw_value: str | None, *, name: str, allow_empty: bool = False
+) -> str:
+    value = str(raw_value or "").strip()
+    if not value and allow_empty:
+        return ""
+    parsed = urlsplit(value)
+    try:
+        port = parsed.port
+    except ValueError:
+        port = -1
+    if (
+        parsed.scheme not in {"postgres", "postgresql"}
+        or not parsed.hostname
+        or not parsed.path.strip("/")
+        or port == -1
+    ):
+        raise ValueError(f"{name} must be an absolute PostgreSQL URL with a host and database name.")
+    return value
+
+
 def parse_positive_int(raw_value: str | None, default: int, *, name: str = "setting") -> int:
     if raw_value is None or raw_value.strip() == "":
         return default
@@ -358,6 +439,30 @@ def validate_settings(settings: Settings) -> None:
     if not settings.cors_origins:
         raise ValueError("CORS_ORIGINS must contain at least one origin.")
     parse_cors_origin_regex(settings.cors_origin_regex)
+    if not 0.1 <= float(settings.telemetry_scheduler_poll_interval_seconds) <= 60.0:
+        raise ValueError(
+            "NERAIUM_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS must be between 0.1 and 60."
+        )
+    if not 30 <= int(settings.telemetry_scheduler_lease_seconds) <= 3600:
+        raise ValueError(
+            "NERAIUM_TELEMETRY_SCHEDULER_LEASE_SECONDS must be between 30 and 3600."
+        )
+    if not 1.0 <= float(settings.telemetry_worker_heartbeat_interval_seconds) <= 300.0:
+        raise ValueError(
+            "NERAIUM_TELEMETRY_WORKER_HEARTBEAT_INTERVAL_SECONDS must be between 1 and 300."
+        )
+    if settings.telemetry_database_url:
+        parse_postgresql_url(
+            settings.telemetry_database_url,
+            name="NERAIUM_TELEMETRY_DATABASE_URL",
+        )
+        if app_env in {"prod", "production"}:
+            telemetry_db = urlsplit(settings.telemetry_database_url)
+            sslmode = (parse_qs(telemetry_db.query).get("sslmode") or [""])[0]
+            if sslmode not in {"require", "verify-ca", "verify-full"}:
+                raise ValueError(
+                    "NERAIUM_TELEMETRY_DATABASE_URL must require PostgreSQL TLS in production."
+                )
 
     if settings.notification_webhook_url:
         webhook = urlsplit(settings.notification_webhook_url)

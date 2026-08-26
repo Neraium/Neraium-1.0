@@ -7,7 +7,7 @@ This guide defines the production operating contract for the Neraium backend. It
 Production uses two process roles from the same image:
 
 - `api`: serves HTTP and writes accepted uploads to shared state.
-- `worker`: claims and processes queued uploads. It does not run Uvicorn.
+- `worker`: claims and processes queued historical-import work and due production telemetry connections. It does not run Uvicorn.
 - `all` or `monolith`: local/single-process mode; the API also starts its upload worker.
 
 Startup validates configuration before binding the HTTP port or entering the worker loop. Required runtime database initialization, default connection initialization, and explicitly enabled worker/poller startup are fail-fast. A failed API deployment should never become ready. Startup proceeds in this order:
@@ -18,8 +18,8 @@ Startup validates configuration before binding the HTTP port or entering the wor
 4. Recover stale queue claims and prune retention-bound records.
 5. Connect and migrate the authentication store (PostgreSQL in production API roles).
 6. Warm the latest-upload cache.
-7. Initialize the default data connection.
-8. Start enabled background services.
+7. Initialize compatibility connection state and construct the production telemetry runtime.
+8. Verify the telemetry schema when a telemetry database is configured and start enabled background services.
 9. Mark startup complete and begin serving.
 
 For split-role production, both tasks must use the same `NERAIUM_UPLOAD_STATE_BUCKET`. Local runtime files are not shared across ECS tasks.
@@ -96,7 +96,7 @@ Bootstrap passwords, API tokens, SMTP passwords, webhook URLs, and authenticated
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `LOG_FORMAT` | `json` | `json` for production, `console` for local use |
 | `NERAIUM_START_BACKGROUND_WORKERS` | role-dependent | Defaults true for `all`, `monolith`, and `worker` |
-| `NERAIUM_START_DATA_POLLER` | `false` | Start scheduled telemetry polling |
+| `NERAIUM_START_DATA_POLLER` | `false` | Legacy compatibility poller only; keep false in production |
 | `NERAIUM_SHUTDOWN_TIMEOUT_SECONDS` | `30` | Per-service graceful join budget |
 | `NERAIUM_MAX_UPLOAD_SIZE_BYTES` | 250 MiB | Multipart request limit for the API path |
 | `NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES` | 512 MiB | CSV limit for presigned browser-to-S3 uploads |
@@ -110,7 +110,24 @@ Bootstrap passwords, API tokens, SMTP passwords, webhook URLs, and authenticated
 | `NERAIUM_SII_RECENT_VECTOR_TAIL` | `512` | Recent vector tail, minimum 100 |
 | `NERAIUM_INLINE_REPLAY_GENERATION` | test-dependent | Explicit true/false for deployment clarity |
 | `NERAIUM_UPLOAD_STATE_PREFIX` | `upload-state/` | S3 key namespace |
-| `NERAIUM_DEFAULT_TELEMETRY_URL` | empty | Optional default REST telemetry source |
+| `NERAIUM_DEFAULT_TELEMETRY_URL` | empty | Legacy/local REST compatibility source; not part of production Data Connections |
+
+### Production telemetry settings
+
+Production telemetry is optional until its separately approved database, IAM, and egress prerequisites exist. Once enabled, API and worker tasks must use the same shared PostgreSQL authority.
+
+| Variable | Default / allowed | Operational purpose |
+|---|---|---|
+| `NERAIUM_TELEMETRY_DATABASE_URL` | empty; PostgreSQL DSN with TLS required in production | Shared connection, signal, observation, lease, checkpoint, health, audit, and analysis-window authority. Inject as a task secret, never plain environment text. |
+| `NERAIUM_TELEMETRY_SECRET_REGION` | empty / AWS SDK default | Region for telemetry connection secrets; set explicitly when task-region discovery is not the intended contract. |
+| `NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES` | `false` | Enables customer credential create/update only after scoped Secrets Manager IAM is approved. With false, credential submission fails closed unless an internal pre-provisioned binding workflow is used. |
+| `NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED` | `false` | Required as `true` for the HTTPS provider in staging/production, but only after the network egress control is actually deployed and verified. This flag is an assertion, not a firewall. |
+| `NERAIUM_TELEMETRY_LEGACY_COMPAT` | `false` | Local connector compatibility only. Shared environments hard-disable the full legacy connector router; unscoped `/api/telemetry/*` and `/api/live-analysis/*` APIs are also always retired there. |
+| `NERAIUM_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS` | `2.0`, range `0.1..60` | Worker interval for looking for due leased work. |
+| `NERAIUM_TELEMETRY_SCHEDULER_LEASE_SECONDS` | `120`, range `30..3600` | Transactional lease lifetime. Size above the normal page fetch/persist duration; SII execution renews the lease while running. |
+| `NERAIUM_TELEMETRY_WORKER_HEARTBEAT_INTERVAL_SECONDS` | `30`, range `1..300` | Publication interval for safe worker health. |
+
+Do not configure the telemetry DSN on only one process role. API tasks need it for scoped connection lifecycle and schema readiness; workers need the same authority for claims, ingestion, health, and SII handoff. API tasks should not run the legacy poller. Production worker tasks run the durable scheduler as part of the existing worker loop.
 
 ### Notification settings
 
@@ -142,9 +159,59 @@ At minimum alert on:
 - runtime filesystem usage above 70% and memory/RSS growth
 - absence of `sii_state_published` after completed upload work
 
+For production telemetry, additionally alert on:
+
+- absence or degraded status of the telemetry worker heartbeat;
+- repeated `telemetry_scheduler_iteration_failed` or `telemetry_ingestion_run_failed` events;
+- enabled connections with no `last_success_at` or `last_telemetry_at` beyond cadence;
+- stale/missing worker checkpoints or expired-lease recovery spikes;
+- high retry, rejection, unmapped-signal, or stale-signal ratios;
+- `telemetry_secret_*` and controlled-egress failures;
+- schema-readiness or telemetry-runtime configuration failures;
+- analysis windows repeatedly becoming ineligible because authority, coverage, or quality is missing.
+
 Scrape `/api/observability/metrics` with an admin credential over TLS. The current metrics are process-generated snapshots and are not a durable metrics store; use Prometheus/CloudWatch collection and retention outside the application.
 
 Recommended dashboard dimensions are process role, build SHA, task/container ID, event, HTTP status, request ID, upload session ID, and job ID. Never make secrets or raw telemetry dashboard dimensions.
+
+## Production telemetry operations
+
+The complete architecture and safety contract is [Production Telemetry Connections](TELEMETRY_CONNECTIONS.md). Use the following production-facing sequence; do not substitute frontend polling or database edits.
+
+### Connection enablement
+
+1. Confirm the customer is in an explicit authorized facility workspace and the intended system/equipment authority exists.
+2. Confirm the provider reports available. `https_telemetry` requires controlled egress; `historian_template` remains unavailable until server startup registers a reviewed template/executor.
+3. Create safe metadata, submit credentials one way, and validate. Treat reachability and authentication as separate facts.
+4. Discover tags. Leave unused tags unmapped and disabled.
+5. Map approved tags to the system/asset and canonical concept with explicit source unit, timezone, cadence, actor, and provenance.
+6. Review mapping completeness, unit compatibility, time handling, and system coverage.
+7. If supported, request a timezone-aware UTC backfill of at most 31 days per run to prepare reference history.
+8. Enable the connection and verify worker/checkpoint progress, telemetry arrival, and data quality before calling it healthy.
+
+### Health interpretation
+
+Connection health has independent reachability, authentication, telemetry-freshness, mapping-completeness, data-quality, and worker/checkpoint facets. A successful validation does not make an enabled connection healthy. Diagnose the aggregate through facets in this order:
+
+1. worker heartbeat and checkpoint age;
+2. last attempt, last success, retry state, and safe run error;
+3. reachability and authentication version;
+4. last telemetry relative to polling and signal cadence;
+5. mapped/discovered/healthy/stale counts and rejection reasons;
+6. post-ingestion analysis status or ineligibility reason.
+
+### Safe recovery
+
+- For a transient failed or partial run, use the scoped retry endpoint. Do not delete a checkpoint.
+- For a mapping/unit/time error, correct the mapping, then request a bounded retry/backfill as appropriate. Previously rejected data remains auditable.
+- Disable a connection before planned source maintenance. Re-enable only after validation; disabling releases the lease but does not delete observations or history.
+- An expired lease is restart recovery state. Let the repository reclaim it; do not clear lease columns manually.
+- An insufficient-evidence analysis is an expected product outcome. Improve history, coverage, quality, or context rather than forcing a finding.
+- If a secret rotated and authentication failed, the provider bypasses its bounded secret cache once. Repeated failures require checking the secret version, ownership tags, IAM, and source-side credential.
+
+### Structured telemetry events
+
+Useful events include `worker_telemetry_result`, `telemetry_scheduler_iteration_failed`, `telemetry_worker_heartbeat_publish_failed`, `telemetry_schema_readiness_failure`, `telemetry_runtime_configuration_failed`, and sanitized `telemetry_secret_*` failures. `telemetry_secret_binding_reconciliation_required` means Secrets Manager accepted a create/rotation but the atomic database binding-plus-audit transaction failed; alert immediately and reconcile the connection-owned secret tags/version against the scoped binding before retrying. The event contains no secret reference or value. `telemetry_legacy_scope_quarantined` means the worker disabled an old malformed/global connection before assigning any lease or run; repair it only through an approved scope migration, never by guessing a tenant/facility. Connection/run counters are the durable source for accepted/rejected/duplicate/out-of-order totals. Logs must not contain full telemetry pages, request headers, URLs with sensitive queries, DSNs, secret ARNs/references, or connector exception payloads.
 
 ## Deployment safety
 

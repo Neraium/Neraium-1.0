@@ -1,10 +1,18 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from json import JSONDecodeError
+from typing import Annotated, Any, Literal, TypeVar
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, ValidationError
 
-from app.core.security import require_admin_role, require_api_access, require_operator_role
+from app.core.security import (
+    require_admin_role,
+    require_api_access,
+    require_legacy_global_telemetry_access,
+    require_operator_role,
+)
 from app.models.api_models import (
     LiveAnalysisConfigurationCreateRequest,
     LiveAnalysisConfigurationResponse,
@@ -36,8 +44,12 @@ from app.services.live_analysis import (
 router = APIRouter(
     prefix="/live-analysis",
     tags=["live-analysis"],
-    dependencies=[Depends(require_api_access)],
+    dependencies=[
+        Depends(require_api_access),
+        Depends(require_legacy_global_telemetry_access),
+    ],
 )
+LegacyAnalysisRequest = TypeVar("LegacyAnalysisRequest", bound=BaseModel)
 
 IdentifierPath = Annotated[
     str,
@@ -49,15 +61,28 @@ OptionalIdentifierQuery = Annotated[
 ]
 
 
+async def parse_legacy_analysis_request(
+    request: Request,
+    model: type[LegacyAnalysisRequest],
+) -> LegacyAnalysisRequest:
+    try:
+        return model.model_validate(await request.json())
+    except ValidationError as error:
+        raise RequestValidationError(error.errors()) from None
+    except (JSONDecodeError, UnicodeDecodeError):
+        raise RequestValidationError(
+            [{"type": "json_invalid", "loc": ("body",), "msg": "Invalid JSON body.", "input": None}]
+        ) from None
+
+
 @router.post(
     "/configurations",
     response_model=LiveAnalysisConfigurationResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_admin_role)],
 )
-def create_configuration(
-    payload: LiveAnalysisConfigurationCreateRequest,
-) -> dict[str, Any]:
+async def create_configuration(request: Request) -> dict[str, Any]:
+    payload = await parse_legacy_analysis_request(request, LiveAnalysisConfigurationCreateRequest)
     try:
         return create_live_analysis_configuration(payload.model_dump())
     except LiveAnalysisConflictError as error:
@@ -88,10 +113,11 @@ def read_configuration(system_id: IdentifierPath) -> dict[str, Any]:
     response_model=LiveAnalysisConfigurationResponse,
     dependencies=[Depends(require_admin_role)],
 )
-def update_configuration(
+async def update_configuration(
     system_id: IdentifierPath,
-    payload: LiveAnalysisConfigurationUpdateRequest,
+    request: Request,
 ) -> dict[str, Any]:
+    payload = await parse_legacy_analysis_request(request, LiveAnalysisConfigurationUpdateRequest)
     updates = {
         key: value
         for key, value in payload.model_dump().items()

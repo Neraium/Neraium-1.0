@@ -1,10 +1,18 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from json import JSONDecodeError
+from typing import Annotated, Any, TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, ValidationError
 
-from app.core.security import require_admin_role, require_api_access, require_operator_role
+from app.core.security import (
+    require_admin_role,
+    require_api_access,
+    require_legacy_global_telemetry_access,
+    require_operator_role,
+)
 from app.models.api_models import (
     TelemetryIngestionHealthListResponse,
     TelemetryIngestionRequest,
@@ -28,7 +36,14 @@ from app.services.live_telemetry import (
 )
 
 
-router = APIRouter(tags=["telemetry"], dependencies=[Depends(require_api_access)])
+router = APIRouter(
+    tags=["telemetry"],
+    dependencies=[
+        Depends(require_api_access),
+        Depends(require_legacy_global_telemetry_access),
+    ],
+)
+LegacyTelemetryRequest = TypeVar("LegacyTelemetryRequest", bound=BaseModel)
 
 MappingIdPath = Annotated[
     str,
@@ -40,15 +55,27 @@ OptionalIdentifierQuery = Annotated[
 ]
 
 
+async def parse_legacy_telemetry_request(
+    request: Request,
+    model: type[LegacyTelemetryRequest],
+) -> LegacyTelemetryRequest:
+    try:
+        return model.model_validate(await request.json())
+    except ValidationError as error:
+        raise RequestValidationError(error.errors()) from None
+    except (JSONDecodeError, UnicodeDecodeError):
+        raise RequestValidationError(
+            [{"type": "json_invalid", "loc": ("body",), "msg": "Invalid JSON body.", "input": None}]
+        ) from None
+
+
 @router.post(
     "/telemetry/ingest",
     response_model=TelemetryIngestionResponse,
     dependencies=[Depends(require_operator_role)],
 )
-def ingest_live_telemetry(
-    payload: TelemetryIngestionRequest,
-    request: Request,
-) -> dict[str, Any]:
+async def ingest_live_telemetry(request: Request) -> dict[str, Any]:
+    payload = await parse_legacy_telemetry_request(request, TelemetryIngestionRequest)
     try:
         return ingest_telemetry_batch(payload.model_dump(), settings=request.app.state.settings)
     except TelemetryLimitError as exc:
@@ -63,9 +90,8 @@ def ingest_live_telemetry(
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_admin_role)],
 )
-def create_live_telemetry_signal_mapping(
-    payload: TelemetrySignalMappingCreateRequest,
-) -> dict[str, Any]:
+async def create_live_telemetry_signal_mapping(request: Request) -> dict[str, Any]:
+    payload = await parse_legacy_telemetry_request(request, TelemetrySignalMappingCreateRequest)
     try:
         return create_signal_mapping(payload.model_dump())
     except TelemetryConflictError as exc:
@@ -104,10 +130,11 @@ def read_live_telemetry_signal_mapping(mapping_id: MappingIdPath) -> dict[str, A
     response_model=TelemetrySignalMappingResponse,
     dependencies=[Depends(require_admin_role)],
 )
-def update_live_telemetry_signal_mapping(
+async def update_live_telemetry_signal_mapping(
     mapping_id: MappingIdPath,
-    payload: TelemetrySignalMappingUpdateRequest,
+    request: Request,
 ) -> dict[str, Any]:
+    payload = await parse_legacy_telemetry_request(request, TelemetrySignalMappingUpdateRequest)
     updates = {
         key: value
         for key, value in payload.model_dump().items()

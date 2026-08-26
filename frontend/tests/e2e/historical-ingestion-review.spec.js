@@ -46,7 +46,7 @@ const ingestionProfile = {
 test.describe("Historical ingestion review", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("surfaces only focused uncertainty in the completed mobile upload flow", async ({ page }) => {
+  test("surfaces only focused uncertainty on an exact stored-baseline route", async ({ page }) => {
     await installStoredBaselineUpload(page, {
       jobId: "historical-review-mobile",
       completeWhenPolled: true,
@@ -58,17 +58,10 @@ test.describe("Historical ingestion review", () => {
       body: JSON.stringify(ingestionProfile),
     }));
 
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/baselines/historical-review-mobile-model/ready", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
-    await page.getByRole("button", { name: "Import Historical Dataset" }).click();
-    await page.getByTestId("csv-upload-input").setInputFiles({
-      name: "historical-review-mobile.csv",
-      mimeType: "text/csv",
-      buffer: Buffer.from("Timestamp,Loop Flow\n2026-05-01T08:00:00Z,100\n", "utf8"),
-    });
-    await page.getByRole("button", { name: "Continue" }).click();
-
-    await expect(page).toHaveURL(/\/baselines\/historical-review-mobile-model\/ready$/, { timeout: 30000 });
+    await expect(page).toHaveURL(/\/baselines\/historical-review-mobile-model\/ready$/);
+    await expect(page.getByTestId("csv-upload-input")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Ready with documented limitations" })).toBeVisible();
     await expect(page.getByLabel("Ingestion trust summary")).toContainText("12");
     await expect(page.getByLabel("Confirmed source unit for Loop Flow")).toBeVisible();

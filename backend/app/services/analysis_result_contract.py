@@ -20,6 +20,9 @@ from app.services.telemetry_classification import (
 CONTRACT_VERSION = "analysis-result-v1"
 CONDITION_CONTRACT_VERSION = "condition-v1"
 NORMALIZED_RECORD_LIMIT = 500
+SII_RELATIONSHIP_LIMIT = 12
+SII_OBSERVATION_LIMIT = 8
+SII_SENSOR_LIMIT = 32
 PLACEHOLDER_TEXT = {
     "placeholder",
     "structural drift observed",
@@ -59,7 +62,12 @@ def ensure_analysis_result(result: dict[str, Any] | None) -> dict[str, Any]:
         return empty_analysis_result()
     candidate = result.get("analysis_result")
     if is_canonical_analysis_result(candidate):
-        return candidate
+        if isinstance(candidate.get("sii_evidence"), dict):
+            return candidate
+        return {
+            **candidate,
+            "sii_evidence": build_sii_evidence_projection(result),
+        }
     return build_analysis_result(result, normalized_telemetry=result.get("normalized_telemetry"))
 
 
@@ -137,6 +145,7 @@ def empty_analysis_result(
             "contract_version": CONTRACT_VERSION,
             "source": "empty",
         },
+        "sii_evidence": empty_sii_evidence_projection(),
     }
 
 
@@ -258,7 +267,19 @@ def build_analysis_result(
         return empty_analysis_result()
 
     analysis_id = first_present(result.get("analysis_id"), result.get("run_id"), result.get("job_id"))
-    upload_id = first_present(result.get("upload_id"), result.get("job_id"), analysis_id)
+    source_kind = clean_text(result.get("source_kind"))
+    source_type_value = result.get("source_type") or (
+        result.get("ingestion_metadata") or {}
+    ).get("source_type")
+    source_type = clean_text(source_type_value)
+    connector_analysis = source_kind in {"connector", "telemetry_connector"} or source_type == "telemetry_connector"
+    # Historical uploads retain their established fallback. Connector analysis
+    # must not synthesize an upload identity for an ongoing telemetry window.
+    upload_id = (
+        clean_text(result.get("upload_id"))
+        if connector_analysis
+        else first_present(result.get("upload_id"), result.get("job_id"), analysis_id)
+    )
     source_file = first_present(result.get("source_file"), result.get("filename"))
     generated_at = first_present(result.get("completed_at"), result.get("last_processed_at"), now_iso())
     errors = dedupe_text([*to_list(result.get("errors")), result.get("error")])
@@ -329,7 +350,11 @@ def build_analysis_result(
             "time_window": build_time_window(result),
             "confidence": confidence_from_data_quality(data_quality),
             "confidence_score": data_quality.get("reliability_score"),
-            "calculation_method": "Baseline/current window split over uploaded CSV telemetry.",
+            "calculation_method": (
+                "Baseline/current window split over canonical normalized observations."
+                if connector_analysis
+                else "Baseline/current window split over uploaded CSV telemetry."
+            ),
         },
     )
 
@@ -584,52 +609,635 @@ def build_analysis_result(
         insights=insights,
         normalized_telemetry=normalized_telemetry,
     )
+    sii_evidence = build_sii_evidence_projection(result)
 
-    return sanitize_payload(
-        {
-            "schema_version": CONTRACT_VERSION,
-            "status": "complete",
-            "analysis_id": clean_text(analysis_id),
-            "upload_id": clean_text(upload_id),
-            "source_file": clean_text(source_file),
-            "generated_at": clean_text(generated_at),
-            "change_onset": behavior_windows.get("change_onset", ""),
-            "stable_window": behavior_windows.get("stable_window", {}),
-            "deviation_window": behavior_windows.get("deviation_window", {}),
-            "current_state_window": behavior_windows.get("current_state_window", {}),
-            "data_quality": data_quality,
-            "executive_summary": executive_summary,
-            "systems": systems,
-            "conditions": conditions,
-            "primary_object": "condition" if conditions else "finding",
-            "relationships": relationships,
-            "relationship_graph": relationship_model.get("relationship_graph", {}),
-            "water_intelligence": result.get("water_intelligence") if isinstance(result.get("water_intelligence"), dict) else {},
-            "fingerprint": fingerprint,
-            "insights": insights,
-            "recommendations": recommendations,
-            "evidence_index": evidence_index,
-            "warnings": warnings,
-            "errors": errors,
-            "telemetry_signals": telemetry_signals,
-            "analysis_metadata": {
-                "contract_version": CONTRACT_VERSION,
-                "job_id": result.get("job_id"),
-                "run_id": result.get("run_id") or result.get("job_id"),
-                "upload_id": upload_id,
-                "source_type": result.get("source_type") or (result.get("ingestion_metadata") or {}).get("source_type"),
-                "row_count": result.get("row_count"),
-                "column_count": result.get("column_count"),
-                "generated_from": "uploaded_csv_telemetry",
-                "processing_time_seconds": result.get("processing_time_seconds"),
-                "telemetry_signal_count": len(telemetry_signals),
-                "condition_contract_version": CONDITION_CONTRACT_VERSION,
-                "condition_count": len(conditions),
-            },
-            "normalized_telemetry": normalized_telemetry,
+    analysis_metadata = {
+        "contract_version": CONTRACT_VERSION,
+        "job_id": result.get("job_id"),
+        "run_id": result.get("run_id") or result.get("job_id"),
+        "upload_id": upload_id,
+        "source_type": source_type if connector_analysis else source_type_value,
+        "row_count": result.get("row_count"),
+        "column_count": result.get("column_count"),
+        "generated_from": (
+            "canonical_normalized_observations"
+            if connector_analysis
+            else "uploaded_csv_telemetry"
+        ),
+        "processing_time_seconds": result.get("processing_time_seconds"),
+        "telemetry_signal_count": len(telemetry_signals),
+        "condition_contract_version": CONDITION_CONTRACT_VERSION,
+        "condition_count": len(conditions),
+    }
+    telemetry_lineage = (
+        dict(result.get("telemetry_lineage"))
+        if connector_analysis and isinstance(result.get("telemetry_lineage"), dict)
+        else None
+    )
+    if telemetry_lineage is not None:
+        analysis_metadata["lineage_digest"] = telemetry_lineage.get("lineage_digest")
+        analysis_metadata["lineage_observation_count"] = telemetry_lineage.get("observation_count")
+        analysis_metadata["lineage_observation_sample"] = telemetry_lineage.get("observation_sample")
+
+    payload = {
+        "schema_version": CONTRACT_VERSION,
+        "status": "complete",
+        "analysis_id": clean_text(analysis_id),
+        "upload_id": clean_text(upload_id),
+        "source_file": clean_text(source_file),
+        "generated_at": clean_text(generated_at),
+        "change_onset": behavior_windows.get("change_onset", ""),
+        "stable_window": behavior_windows.get("stable_window", {}),
+        "deviation_window": behavior_windows.get("deviation_window", {}),
+        "current_state_window": behavior_windows.get("current_state_window", {}),
+        "data_quality": data_quality,
+        "executive_summary": executive_summary,
+        "systems": systems,
+        "conditions": conditions,
+        "primary_object": "condition" if conditions else "finding",
+        "relationships": relationships,
+        "relationship_graph": relationship_model.get("relationship_graph", {}),
+        "water_intelligence": result.get("water_intelligence")
+        if isinstance(result.get("water_intelligence"), dict)
+        else {},
+        "fingerprint": fingerprint,
+        "insights": insights,
+        "recommendations": recommendations,
+        "evidence_index": evidence_index,
+        "warnings": warnings,
+        "errors": errors,
+        "telemetry_signals": telemetry_signals,
+        "analysis_metadata": analysis_metadata,
+        "sii_evidence": sii_evidence,
+        "normalized_telemetry": normalized_telemetry,
+    }
+    if telemetry_lineage is not None:
+        payload["telemetry_lineage"] = telemetry_lineage
+    return sanitize_payload(payload)
+
+
+def empty_sii_evidence_projection(
+    *,
+    provenance: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return an explicit empty projection without asserting absent evidence."""
+
+    return {
+        "source": "sii_result",
+        "source_path": "sii_result",
+        "authority": {
+            "scope": "canonical_engine_evidence",
+            "finding_classification": False,
+        },
+        "status": "unavailable",
+        "engine": {},
+        "relationship_changes": [],
+        "operating_context": {},
+        "persistence": {},
+        "uncertainty": {"status": "unavailable", "limitations": []},
+        "data_quality": {},
+        "sensor_health": {"signals": []},
+        "configured_prior_observations": [],
+        "phase_4": {
+            "status": "unavailable",
+            "available": False,
+            "limitations": [],
+            "behavioral_evolution": {},
+            "propagation": {},
+        },
+        "provenance": provenance or {},
+    }
+
+
+def build_sii_evidence_projection(result: dict[str, Any] | None) -> dict[str, Any]:
+    """Select bounded canonical SII evidence without changing its authority."""
+
+    payload = result if isinstance(result, dict) else {}
+    provenance = _sii_provenance(payload)
+    sii = _sii_map(payload.get("sii_result"))
+    if not sii:
+        return empty_sii_evidence_projection(provenance=provenance)
+
+    conditions = _sii_map(sii.get("data_conditions"))
+    model = _sii_map(sii.get("behavioral_model"))
+    evolution = _sii_map(sii.get("behavioral_evolution"))
+    propagation = _sii_map(sii.get("propagation_analysis"))
+    phase_statuses = [
+        str(section.get("status") or "")
+        for section in (model, evolution, propagation)
+        if section
+    ]
+    phase_available = any(status == "complete" for status in phase_statuses)
+    phase_status = (
+        "complete"
+        if phase_available
+        else phase_statuses[0]
+        if phase_statuses
+        else "unavailable"
+    )
+    phase_limitations = _sii_texts(
+        [
+            *_sii_items(model.get("limitations")),
+            *_sii_items(evolution.get("limitations")),
+            *_sii_items(propagation.get("limitations")),
+            model.get("reason"),
+            evolution.get("reason"),
+            propagation.get("reason"),
+        ],
+        8,
+    )
+    return {
+        "source": "sii_result",
+        "source_path": "sii_result",
+        "authority": {
+            "scope": "canonical_engine_evidence",
+            "finding_classification": False,
+        },
+        "status": str(sii.get("status") or "unavailable"),
+        "engine": _sii_pick(_sii_map(sii.get("engine")), ("name", "version")),
+        "relationship_changes": [
+            _sii_relationship(item)
+            for item in _sii_dicts(
+                _sii_map(sii.get("relationship_graph")).get("changed_edges"),
+                SII_RELATIONSHIP_LIMIT,
+            )
+        ],
+        "operating_context": _sii_operating(_sii_map(sii.get("operating_modes"))),
+        "persistence": _sii_persistence(_sii_map(sii.get("persistence_analysis"))),
+        "uncertainty": _sii_uncertainty(_sii_map(sii.get("uncertainty"))),
+        "data_quality": _sii_quality(_sii_map(conditions.get("data_quality"))),
+        "sensor_health": _sii_health(_sii_map(conditions.get("sensor_health"))),
+        "configured_prior_observations": [
+            _sii_prior_observation(item)
+            for item in _sii_dicts(
+                _sii_map(sii.get("evidence_fusion")).get("observations"),
+                SII_OBSERVATION_LIMIT,
+            )
+        ],
+        "phase_4": {
+            "status": phase_status,
+            "available": phase_available,
+            "limitations": phase_limitations,
+            "behavioral_evolution": _sii_evolution(evolution),
+            "propagation": _sii_propagation(propagation),
+        },
+        "provenance": provenance,
+    }
+
+
+def _sii_map(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _sii_items(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _sii_dicts(value: Any, limit: int) -> list[dict[str, Any]]:
+    return [item for item in _sii_items(value) if isinstance(item, dict)][:limit]
+
+
+def _sii_pick(value: dict[str, Any], fields: tuple[str, ...]) -> dict[str, Any]:
+    """Copy only scalar values and bounded lists of scalar values."""
+
+    output: dict[str, Any] = {}
+    for field in fields:
+        item = value.get(field)
+        if isinstance(item, (str, int, float, bool)) or item is None:
+            if field in value:
+                output[field] = item
+        elif isinstance(item, list):
+            output[field] = [
+                child
+                for child in item
+                if isinstance(child, (str, int, float, bool)) or child is None
+            ][:12]
+    return output
+
+
+def _sii_scalar_map(value: Any, limit: int = 12) -> dict[str, Any]:
+    mapping = _sii_map(value)
+    return _sii_pick(mapping, tuple(list(mapping)[:limit]))
+
+
+def _sii_texts(values: list[Any], limit: int) -> list[str]:
+    output: list[str] = []
+    for value in values:
+        text = clean_text(value)
+        if text and text not in output:
+            output.append(text)
+        if len(output) >= limit:
+            break
+    return output
+
+
+def _sii_relationship(item: dict[str, Any]) -> dict[str, Any]:
+    projected = _sii_pick(
+        item,
+        (
+            "id", "relationship_id", "source", "target", "source_signal",
+            "target_signal", "columns", "relationship", "relationship_type",
+            "change_type", "baseline_correlation", "current_correlation",
+            "recent_correlation", "correlation_delta", "signed_correlation_delta",
+            "baseline_strength", "current_strength", "signed_change",
+            "absolute_change", "change_percent", "confidence", "confidence_level",
+            "persistence", "status",
+        ),
+    )
+    refs = []
+    for ref in _sii_items(item.get("evidence_refs"))[:8]:
+        if isinstance(ref, str):
+            refs.append(ref)
+        elif isinstance(ref, dict):
+            refs.append(
+                _sii_pick(
+                    ref,
+                    (
+                        "evidence_id", "source", "source_reference",
+                        "originating_module", "column", "window", "source_row",
+                        "timestamp",
+                    ),
+                )
+            )
+    if refs:
+        projected["evidence_refs"] = refs
+    window = _sii_scalar_map(item.get("time_window"), 8)
+    if window:
+        projected["time_window"] = window
+    return projected
+
+
+def _sii_operating(value: dict[str, Any]) -> dict[str, Any]:
+    if not value:
+        return {}
+    projected = _sii_pick(
+        value,
+        ("status", "reason", "baseline_mode", "recent_mode", "match", "confidence"),
+    )
+    projected["limitations"] = _sii_texts(_sii_items(value.get("limitations")), 6)
+    conditioned = _sii_map(value.get("mode_conditioned_baseline"))
+    if not conditioned:
+        return projected
+    summary = _sii_pick(
+        conditioned,
+        (
+            "status", "reason", "method", "used_global_fallback",
+            "fallback_reason", "selection_confidence",
+            "selection_confidence_level",
+        ),
+    )
+    summary["limitations"] = _sii_texts(
+        _sii_items(conditioned.get("limitations")), 6
+    )
+    mode = _sii_map(conditioned.get("selected_operating_mode"))
+    if mode:
+        summary["selected_operating_mode"] = {
+            **_sii_pick(
+                mode,
+                (
+                    "mode_id", "mode_label", "minimum_feature_support",
+                    "ambiguous", "confidence", "confidence_level",
+                    "reported_recent_mode",
+                ),
+            ),
+            "features": _sii_scalar_map(mode.get("features"), 8),
         }
+    selection = _sii_map(conditioned.get("selection"))
+    if selection:
+        summary["selection"] = _sii_pick(
+            selection,
+            (
+                "historical_start_index", "historical_end_index_exclusive",
+                "recent_start_index", "recent_end_index_exclusive",
+                "selected_baseline_rows", "recent_rows",
+                "minimum_baseline_rows", "minimum_recent_rows",
+                "minimum_recent_mode_purity",
+            ),
+        )
+    projected["mode_conditioned_baseline"] = summary
+    return projected
+
+
+def _sii_persistence_detail(item: dict[str, Any]) -> dict[str, Any]:
+    return _sii_pick(
+        item,
+        (
+            "column", "direction", "recent_values_checked",
+            "supporting_recent_rows", "support_percent", "persistent",
+            "observations", "supporting_observations",
+            "observed_duration_seconds", "supporting_duration_seconds",
+            "support_fraction", "satisfied", "required_observations",
+        ),
     )
 
+
+def _sii_persistence(value: dict[str, Any]) -> dict[str, Any]:
+    if not value:
+        return {}
+    fixed = _sii_map(value.get("fixed_row_support"))
+    adaptive = _sii_map(value.get("adaptive_persistence"))
+    baseline = _sii_map(value.get("baseline_signal_persistence"))
+    return {
+        **_sii_pick(value, ("status", "method")),
+        "fixed_row_support": {
+            **_sii_pick(
+                fixed,
+                ("status", "reason", "persistent_columns", "columns_assessed"),
+            ),
+            "limitations": _sii_texts(_sii_items(fixed.get("limitations")), 6),
+            "details": [
+                _sii_persistence_detail(item)
+                for item in _sii_dicts(fixed.get("details"), 12)
+            ],
+        },
+        "baseline_signal_persistence": {
+            "signals": [
+                _sii_pick(item, ("column", "persistence_score", "drift_flag"))
+                for item in _sii_dicts(baseline.get("signals"), 24)
+            ]
+        },
+        "covariance_gates": _sii_scalar_map(value.get("covariance_gates"), 8),
+        "adaptive_persistence": {
+            **_sii_pick(
+                adaptive,
+                (
+                    "status", "reason", "method", "persistence_basis",
+                    "elapsed_time_available", "used_row_fallback",
+                    "sampling_regular", "observed_duration_seconds",
+                    "required_observations", "persistent_columns",
+                ),
+            ),
+            "limitations": _sii_texts(
+                _sii_items(adaptive.get("limitations")), 6
+            ),
+            "actual_persistence": _sii_scalar_map(
+                adaptive.get("actual_persistence"), 8
+            ),
+            "details": [
+                _sii_persistence_detail(item)
+                for item in _sii_dicts(adaptive.get("details"), 12)
+            ],
+        },
+    }
+
+
+def _sii_uncertainty(value: dict[str, Any]) -> dict[str, Any]:
+    if not value:
+        return {"status": "unavailable", "limitations": []}
+    components = {}
+    for name, component in list(_sii_map(value.get("components")).items())[:6]:
+        if not isinstance(component, dict):
+            continue
+        components[str(name)] = {
+            **_sii_pick(component, ("status", "not_probability", "source_references")),
+            "traceable_metrics": _sii_scalar_map(
+                component.get("traceable_metrics"), 10
+            ),
+            "limitations": _sii_texts(
+                _sii_items(component.get("limitations")), 6
+            ),
+        }
+    confidence = _sii_map(value.get("data_confidence"))
+    return {
+        **_sii_pick(value, ("status",)),
+        "data_confidence": _sii_pick(
+            confidence, ("rating", "score", "method", "not_probability")
+        ),
+        "module_failures": [
+            _sii_pick(item, ("module", "status", "reason"))
+            for item in _sii_dicts(value.get("module_failures"), 8)
+        ],
+        "components": components,
+        "limitations": _sii_texts(_sii_items(value.get("limitations")), 8),
+    }
+
+
+def _sii_quality(value: dict[str, Any]) -> dict[str, Any]:
+    if not value:
+        return {}
+    confidence = _sii_map(value.get("data_confidence"))
+    return {
+        **_sii_pick(
+            value,
+            (
+                "status", "readiness", "analysis_gate_state",
+                "reliability_score", "reliability_rating",
+                "rows_received", "rows_used", "rows_dropped",
+            ),
+        ),
+        "data_confidence": _sii_pick(
+            confidence, ("rating", "score", "method", "not_probability")
+        ),
+        "quality_metrics": _sii_scalar_map(value.get("quality_metrics"), 12),
+        "warnings": _sii_texts(_sii_items(value.get("warnings")), 8),
+        "limitations": _sii_texts(_sii_items(value.get("limitations")), 8),
+    }
+
+
+def _sii_health(value: dict[str, Any]) -> dict[str, Any]:
+    if not value:
+        return {"signals": []}
+    return {
+        **_sii_pick(value, ("status", "reason")),
+        "limitations": _sii_texts(_sii_items(value.get("limitations")), 8),
+        "signals": [
+            {
+                **_sii_pick(
+                    item,
+                    (
+                        "signal", "column", "health", "status", "confidence",
+                        "missing_fraction", "constant_or_stuck",
+                        "non_numeric_count",
+                    ),
+                ),
+                "conditions": _sii_texts(
+                    _sii_items(item.get("conditions")), 6
+                ),
+            }
+            for item in _sii_dicts(value.get("signals"), SII_SENSOR_LIMIT)
+        ],
+    }
+
+
+def _sii_prior_observation(item: dict[str, Any]) -> dict[str, Any]:
+    trace = _sii_map(item.get("processing_trace"))
+    return {
+        **_sii_pick(
+            item,
+            (
+                "observation_id", "behavioral_status",
+                "contributing_analytical_modules",
+                "evaluated_engineering_priors", "human_review_required",
+                "causal_interpretation_provided",
+                "maintenance_recommendation_provided",
+            ),
+        ),
+        **_sii_pick(trace, ("prior_id", "prior_status")),
+        "supporting_evidence_ids": _sii_pick(
+            trace, ("supporting_evidence_ids",)
+        ).get("supporting_evidence_ids", []),
+        "limiting_evidence_ids": _sii_pick(
+            trace, ("limiting_evidence_ids",)
+        ).get("limiting_evidence_ids", []),
+        "contradictory_evidence_ids": _sii_pick(
+            trace, ("contradictory_evidence_ids",)
+        ).get("contradictory_evidence_ids", []),
+    }
+
+
+def _sii_evolution_item(item: dict[str, Any]) -> dict[str, Any]:
+    return _sii_pick(
+        item,
+        (
+            "id", "type", "signal_id", "relationship_id", "source_signal",
+            "target_signal", "columns", "operating_mode", "classification",
+            "change_type", "status", "direction", "persistence",
+            "persistent_across_references", "historical_center",
+            "current_center", "normalized_change", "history_support",
+            "source_model_version", "decision_id", "baseline_version",
+            "human_validation_required",
+        ),
+    )
+
+
+def _sii_evolution(value: dict[str, Any]) -> dict[str, Any]:
+    if not value:
+        return {}
+    projected = {
+        **_sii_pick(value, ("status", "reason", "evidence_classification")),
+        "limitations": _sii_texts(_sii_items(value.get("limitations")), 8),
+    }
+    for field in (
+        "signal_changes", "relationship_changes", "operating_mode_changes",
+        "recovery_evidence", "adaptation_evidence", "unresolved_changes",
+    ):
+        projected[field] = [
+            _sii_evolution_item(item)
+            for item in _sii_dicts(value.get(field), 8)
+        ]
+    graph = _sii_map(value.get("graph_changes"))
+    if graph:
+        projected["graph_changes"] = {
+            **_sii_pick(
+                graph,
+                ("structural_change_scope", "persistent_topology_change"),
+            ),
+            "fragmentation": _sii_scalar_map(graph.get("fragmentation"), 8),
+        }
+    return projected
+
+
+def _sii_propagation(value: dict[str, Any]) -> dict[str, Any]:
+    if not value:
+        return {}
+    paths = []
+    for item in _sii_dicts(value.get("candidate_paths"), 6):
+        paths.append(
+            {
+                **_sii_pick(
+                    item,
+                    (
+                        "path_id", "nodes", "edges", "compatibility",
+                        "not_probability", "causal_claim",
+                    ),
+                ),
+                "observed_times": _sii_scalar_map(
+                    item.get("observed_times"), 8
+                ),
+                "lag_consistency": _sii_scalar_map(
+                    item.get("lag_consistency"), 8
+                ),
+                "confidence_factors": _sii_scalar_map(
+                    item.get("confidence_factors"), 8
+                ),
+            }
+        )
+    uncertainty = _sii_map(value.get("uncertainty"))
+    propagation_uncertainty = _sii_map(
+        uncertainty.get("propagation_uncertainty")
+    )
+    return {
+        **_sii_pick(
+            value,
+            (
+                "status", "reason", "evidence_classification",
+                "activated_nodes", "activated_edges",
+                "downstream_consistent_changes",
+            ),
+        ),
+        "candidate_paths": paths,
+        "earliest_observed_changes": [
+            _sii_pick(item, ("signal", "timestamp"))
+            for item in _sii_dicts(value.get("earliest_observed_changes"), 12)
+        ],
+        "unsupported_segments": [
+            {
+                **_sii_pick(
+                    item,
+                    (
+                        "relationship_id", "source_signal", "target_signal",
+                        "reasons",
+                    ),
+                )
+            }
+            for item in _sii_dicts(value.get("unsupported_segments"), 6)
+        ],
+        "competing_path_count": len(_sii_items(value.get("competing_paths"))),
+        "propagation_confidence": _sii_scalar_map(
+            value.get("propagation_confidence"), 8
+        ),
+        "uncertainty": {
+            **_sii_pick(
+                uncertainty,
+                (
+                    "not_probability", "cause_selected",
+                    "alternative_paths_retained",
+                ),
+            ),
+            "propagation_uncertainty": _sii_scalar_map(
+                propagation_uncertainty, 8
+            ),
+        },
+        "limitations": _sii_texts(_sii_items(value.get("limitations")), 8),
+        "reasoning_trace": _sii_pick(
+            _sii_map(value.get("reasoning_trace")),
+            (
+                "temporal_precedence_required", "lag_evidence_required",
+                "path_lag_consistency_evaluated", "causal_proof_claimed",
+                "root_cause_selected",
+            ),
+        ),
+    }
+
+
+def _sii_provenance(result: dict[str, Any]) -> dict[str, Any]:
+    traceability = _sii_map(result.get("traceability"))
+    provenance = _sii_map(traceability.get("provenance"))
+    if not provenance:
+        provenance = _sii_map(result.get("provenance"))
+    selected = _sii_pick(
+        provenance,
+        (
+            "schema_version", "analysis_run_id", "upload_id", "dataset_id",
+            "input_hash", "baseline_id", "baseline_dataset_id",
+            "baseline_version", "baseline_hash", "engine_name",
+            "engine_version", "build_commit", "configuration_hash",
+            "result_hash",
+        ),
+    )
+    ingestion = _sii_map(result.get("ingestion_report"))
+    fallbacks = {
+        "analysis_run_id": result.get("run_id") or result.get("job_id"),
+        "upload_id": result.get("upload_id") or result.get("job_id"),
+        "dataset_id": result.get("dataset_id") or result.get("comparison_dataset_id"),
+        "input_hash": ingestion.get("input_hash") or result.get("input_hash"),
+        "baseline_id": result.get("baseline_id"),
+        "baseline_dataset_id": result.get("baseline_dataset_id"),
+    }
+    for key, value in fallbacks.items():
+        if key not in selected and value is not None:
+            selected[key] = value
+    return selected
 
 def build_condition_contracts(
     *,
