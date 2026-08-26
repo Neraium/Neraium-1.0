@@ -1,5 +1,7 @@
 # SII Structural Cognition Graph
 
+> Classification: internal/experimental. It is distinct from qualified production relationship/path evidence and is not customer-authoritative causality. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 The structural cognition graph captures infrastructure behavior evolution, not raw telemetry snapshots.
 
 ## Graph components

@@ -1,5 +1,7 @@
 # SII Distributed Cognition Network
 
+> Classification: future/internal research. No production distributed or cross-facility cognition network is established by the default product path. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Neraium’s distributed cognition network enables infrastructure entities to exchange structural understanding while preserving privacy and read-only boundaries.
 
 ## Core objectives
@@ -16,4 +18,3 @@ Neraium’s distributed cognition network enables infrastructure entities to exc
 
 ## Operational boundary
 The distributed network is non-actuating and operator-review oriented.
-

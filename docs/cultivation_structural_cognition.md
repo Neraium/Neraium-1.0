@@ -1,5 +1,7 @@
 # Cultivation Structural Cognition
 
+> Classification: internal/domain research. The structural-cognition packaging described here is not part of the default customer result. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Neraium for controlled cannabis cultivation environments is an explainable, replayable structural cognition system.
 
 It models how environmental relationships evolve across temperature, humidity, airflow, dehumidification, and VPD loops before deterioration becomes operationally obvious.
@@ -31,4 +33,3 @@ It models how environmental relationships evolve across temperature, humidity, a
 
 Neraium does not control cultivation infrastructure and does not replace growers.  
 It provides evidence-backed structural understanding so operators can review how cultivation environments are evolving over time.
-

@@ -1,5 +1,7 @@
 # SII Read-Only Integration Standard
 
+> Classification: static reference. Production integration authority remains governed by the active telemetry and evidence contracts. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 All partner adapters are interface-first and explicitly read-only:
 - `bms_adapter`
 - `scada_adapter`

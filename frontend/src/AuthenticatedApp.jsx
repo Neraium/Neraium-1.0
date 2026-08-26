@@ -260,11 +260,7 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
 
   const liveOps = useMemo(() => {
     const intelligence = effectiveLatestUploadResult?.sii_intelligence ?? null;
-    const governance =
-      intelligence?.aletheia_gate
-      ?? intelligence?.distributed_cognition_governance
-      ?? effectiveLatestUploadResult?.distributed_cognition_governance
-      ?? null;
+    const governance = intelligence?.aletheia_gate ?? null;
     const admittedState = String(governance?.admitted_state ?? "").toUpperCase();
     const gateOutcome = String(governance?.gate_outcome ?? "").toUpperCase();
     const hasPass = ENABLE_ADMISSION_GATE && gateOutcome === "PASS" && ["WATCH", "ALERT"].includes(admittedState);
@@ -335,7 +331,7 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
           relationshipEvidence: canonicalFinding.supportingEvidence ?? [],
         }] : []),
       relationshipRows: effectiveLatestUploadResult?.baseline_analysis?.relationship_drift ?? [],
-      distributed_cognition_governance: governance,
+      governance,
       sourceIntelligence: intelligence,
       latestUploadResult: effectiveLatestUploadResult,
       latestUploadSnapshot: effectiveLatestUploadSnapshot,

@@ -196,13 +196,12 @@ export function deriveUploadSignal(latestUploadResult, { reviewReady = true } = 
   return { systemState: null, label: "", statusLight: null };
 }
 
+export function resolveProductionGovernance(liveOps) {
+  return liveOps?.sourceIntelligence?.aletheia_gate ?? liveOps?.governance ?? null;
+}
+
 function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
-  const intelligence = liveOps?.sourceIntelligence ?? null;
-  const governance =
-    intelligence?.aletheia_gate
-    ?? intelligence?.distributed_cognition_governance
-    ?? liveOps?.distributed_cognition_governance
-    ?? null;
+  const governance = resolveProductionGovernance(liveOps);
 
   const outcome = gateOutcome(governance);
   const admittedState = String(governance?.admitted_state ?? "").toUpperCase();
@@ -419,4 +418,3 @@ function concise(value, max = 80) {
   if (text.length <= max) return text;
   return `${text.slice(0, Math.max(0, max - 1)).trimEnd()}...`;
 }
-

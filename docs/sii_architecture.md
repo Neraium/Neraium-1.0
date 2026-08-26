@@ -6,6 +6,8 @@ Phase 1 established `backend/app/engine/sii_engine.py::evaluate_sii` as the sing
 
 Neraium is read-only and human-in-the-loop. The engine records persistent behavioral change and supporting evidence. It does not control equipment, diagnose root cause, prescribe repairs, assert causality, or predict an exact failure time. No generative-AI or LLM interpretation is part of the analytical engine.
 
+Customer authority and repository research/reference boundaries are defined in [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md). The structural-cognition facade is not part of the default upload authority.
+
 ## Authoritative call path
 
 ```text
@@ -148,7 +150,7 @@ Phase 1 keeps these public upload fields unchanged:
 - `operating_state`
 - `drift_status`
 
-They are populated from `sii_result.compatibility`. This preserves frontend and evidence-persistence consumers while establishing the canonical source. Compatibility aliases named `projected_time_to_failure*` remain only because older clients expect the keys; their values are the existing conditional engineering-review window, not a failure-time prediction. New code must use `review_window*`.
+They are populated from `sii_result.compatibility`. This preserves frontend and evidence-persistence consumers while establishing the canonical source. Compatibility aliases named `projected_time_to_failure*` remain only inside internal canonical compatibility objects for older server-side consumers. Customer upload and runner projections omit them. New code must use the non-predictive `review_window*` fields.
 
 ## Processing trace
 

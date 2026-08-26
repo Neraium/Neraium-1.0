@@ -1,5 +1,7 @@
 # SII Runtime Standard
 
+> Classification: static reference. This document does not make structural-cognition research packages part of the default runtime result. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 The SII runtime layer is implemented by `SIIRuntime`, `SIIRuntimeState`, and `SIIRuntimeContract`.
 
 ## Runtime responsibilities

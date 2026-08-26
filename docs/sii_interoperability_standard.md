@@ -1,5 +1,7 @@
 # SII Interoperability Standard
 
+> Classification: static reference. Repository interoperability vocabulary does not establish production federation or exchange. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 SII interoperability provides graph-friendly exchange contracts for structural cognition data.
 
 ## Interoperability artifacts

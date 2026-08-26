@@ -1,5 +1,7 @@
 # SII Ecosystem Standard
 
+> Classification: static reference. This standard is not a per-run production evidence package. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Neraium is the read-only platform. Its Systemic Infrastructure Intelligence (SII) analyzes context from BMS, SCADA, historians, telemetry pipelines, and digital-twin environments.
 
 ## Core principles

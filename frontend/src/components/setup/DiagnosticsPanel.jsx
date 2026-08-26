@@ -37,7 +37,7 @@ function replaySummaryFromFrames(frames) {
       driftAcceleration: DASH,
       structuralRead: DASH,
       evidenceConfidence: DASH,
-      leadTime: DASH,
+      reviewWindow: DASH,
       previewRange: DASH,
       story: "Not available",
     };
@@ -52,7 +52,7 @@ function replaySummaryFromFrames(frames) {
     driftAcceleration: classifyDriftAcceleration(last?.drift_acceleration ?? last?.propagation_state?.propagation_acceleration),
     structuralRead: formatStructuralRead(last?.topology_state?.stability_state ?? last?.cognition_state?.facility_state),
     evidenceConfidence: String(last?.evidence_confidence ?? last?.cognition_state?.confidence_tier ?? DASH),
-    leadTime: String(last?.continuation_window?.window ?? DASH),
+    reviewWindow: String(last?.review_window?.window ?? last?.continuation_window?.window ?? DASH),
     previewRange: `${first?.timestamp_range?.start ?? first?.timestamp ?? DASH} -> ${last?.timestamp_range?.end ?? last?.timestamp ?? DASH}`,
     story: "Available",
   };
@@ -68,7 +68,7 @@ function replaySummaryFromResult(result) {
     driftAcceleration: DASH,
     structuralRead: formatStructuralRead(intelligence?.facility_state),
     evidenceConfidence: String(intelligence?.confidence_basis ?? DASH),
-    leadTime: String(intelligence?.intervention_window ?? DASH),
+    reviewWindow: String(intelligence?.review_window ?? intelligence?.intervention_window ?? DASH),
     previewRange: String(result?.timestamp_profile?.first_timestamp && result?.timestamp_profile?.last_timestamp
       ? `${result.timestamp_profile.first_timestamp} -> ${result.timestamp_profile.last_timestamp}`
       : DASH),
@@ -138,7 +138,7 @@ export default function DiagnosticsPanel({
     { label: "Evidence focus", value: contributors },
     { label: "Confidence", value: summary.evidenceConfidence },
     { label: "Analysis details", value: summary.replay },
-    { label: "Review Window", value: summary.leadTime },
+    { label: "Operational review window", value: summary.reviewWindow },
     { label: "Preview Range", value: summary.previewRange },
   ] : [
     { label: "Behavior timeline", value: DASH },
@@ -150,7 +150,7 @@ export default function DiagnosticsPanel({
     { label: "Evidence focus", value: DASH },
     { label: "Confidence", value: DASH },
     { label: "Analysis details", value: "Not available" },
-    { label: "Review Window", value: DASH },
+    { label: "Operational review window", value: DASH },
     { label: "Preview Range", value: DASH },
   ];
 
@@ -158,7 +158,7 @@ export default function DiagnosticsPanel({
     ? {
         topology: latestUploadResult?.sii_intelligence?.facility_state ?? DASH,
         propagation: latestUploadResult?.sii_intelligence?.urgency ?? DASH,
-        recovery: latestUploadResult?.sii_intelligence?.review_window ?? latestUploadResult?.sii_intelligence?.intervention_window ?? latestUploadResult?.sii_intelligence?.projected_time_to_failure ?? DASH,
+        recovery: latestUploadResult?.sii_intelligence?.review_window ?? latestUploadResult?.sii_intelligence?.intervention_window ?? DASH,
         confidence: latestUploadResult?.sii_intelligence?.confidence_basis ?? DASH,
       }
     : { topology: DASH, propagation: DASH, recovery: DASH, confidence: DASH };
@@ -204,7 +204,7 @@ export default function DiagnosticsPanel({
               metrics={[
                 { label: "System behavior", value: topology.topology },
                 { label: "Change direction", value: topology.propagation },
-                { label: "Review window", value: topology.recovery },
+                { label: "Operational review window", value: topology.recovery },
                 { label: "Confidence", value: topology.confidence },
               ]}
               compact

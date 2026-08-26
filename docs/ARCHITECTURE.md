@@ -4,6 +4,8 @@
 
 Neraium is a full-stack platform for commercial water-system operators. Systemic Infrastructure Intelligence (SII) is the intelligence Neraium applies to infrastructure telemetry.
 
+Production analytical authority is defined in [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md). Structural-cognition research packages, static standards/reference assets, and future cross-system capabilities do not participate in the normal customer upload result merely because implementations exist in the repository.
+
 - A FastAPI backend exposes authenticated API endpoints under `/api`.
 - A Vite React frontend provides operator, administration, and evidence-review workspaces.
 - Role-based access distinguishes viewers, operators, and administrators.
@@ -66,6 +68,8 @@ The ongoing production workspace is organized around distinct product objects:
 - **Evidence Records** preserve complete metrics, timestamps, identities, lineage, engine/version metadata, and audit context.
 
 The production hierarchy is Results / Operations Brief -> Finding Review -> Investigation -> Evidence Record. The brief stays restrained; deeper evidence is disclosed on demand. Stable and insufficient-evidence states use calm system-level language and do not imply that every sensor is normal. Data Connections is the primary onboarding surface. Shared frontend normalization keeps older saved findings readable without silently strengthening their classification. Historical import is hidden from normal navigation and retained only for permission-gated compatibility. Help & Status explains the product language and service state. Administration provides governance records, user access, and session controls.
+
+Frontend projections do not reconstruct research-only facade fields when they are absent. Investigation and Evidence Record retain the legitimate upload replay and qualified lineage; they do not expose heuristic causality, counterfactuals, synthetic fleet structures, ephemeral cognition memory, aggregate twin packaging, or failure-prediction aliases.
 
 ## Local Integration
 

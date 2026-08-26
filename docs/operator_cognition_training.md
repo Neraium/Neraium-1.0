@@ -1,5 +1,7 @@
 # Operator Cognition Training
 
+> Classification: internal training/reference. This curriculum is not per-run customer evidence. See [SII authority boundaries](SII_AUTHORITY_BOUNDARIES.md).
+
 Operator cognition training builds structural interpretation capability through replay-based exercises and evidence inspection tasks.
 
 Curriculum focus:
@@ -13,4 +15,3 @@ Curriculum focus:
 - recognizing subsystem fragmentation
 
 This is operator enablement and interpretation support, not automation.
-
