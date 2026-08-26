@@ -521,7 +521,9 @@ class ExternalSignalRecord(PublicTelemetryRecord):
     mapping_status: SignalMappingStatus = SignalMappingStatus.UNMAPPED
     last_observed_at: datetime | None = None
     quality_state: TelemetryQualityState = TelemetryQualityState.MAPPING_REQUIRED
-    metadata: Mapping[str, Any] = MappingProxyType({})
+    metadata: Mapping[str, Any] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
     def __post_init__(self) -> None:
         _required_text(
@@ -696,7 +698,9 @@ class TelemetryAuditEventRecord(PublicTelemetryRecord):
     occurred_at: datetime
     before_digest: str | None = None
     after_digest: str | None = None
-    detail: Mapping[str, Any] = MappingProxyType({})
+    detail: Mapping[str, Any] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
     def __post_init__(self) -> None:
         _required_text(self, "event_id", "connection_id", "actor_id")
