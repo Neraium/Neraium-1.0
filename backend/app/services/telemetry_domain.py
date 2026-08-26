@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime
 from enum import StrEnum
 import re
@@ -455,7 +455,9 @@ class DataConnectionRecord(PublicTelemetryRecord):
     connector_type: ConnectorType
     lifecycle_status: ConnectionLifecycleStatus = ConnectionLifecycleStatus.DRAFT
     enabled: bool = False
-    safe_configuration: Mapping[str, Any] = MappingProxyType({})
+    safe_configuration: Mapping[str, Any] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
     timezone: str = "UTC"
     polling_interval_seconds: int = 300
     capabilities: tuple[ConnectorCapability, ...] = ()

@@ -105,6 +105,19 @@ def test_public_connection_record_is_immutable_and_has_no_secret_reference() -> 
         connection.safe_configuration["origin"] = "https://changed.test"  # type: ignore[index]
 
 
+def test_connection_record_default_safe_configuration_is_read_only() -> None:
+    connection = DataConnectionRecord(
+        connection_id="connection-1",
+        scope=_scope(),
+        name="Synthetic HTTPS telemetry",
+        connector_type="https_telemetry",
+    )
+
+    assert connection.safe_configuration == {}
+    with pytest.raises(TypeError):
+        connection.safe_configuration["origin"] = "https://changed.test"  # type: ignore[index]
+
+
 def test_connector_type_is_authoritative_and_rejects_unknown_providers() -> None:
     assert {item.value for item in ConnectorType} == {
         "https_telemetry",
