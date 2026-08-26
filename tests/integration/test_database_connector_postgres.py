@@ -213,6 +213,7 @@ def test_sanitized_failure_persists_offline_health(postgres_databases, tmp_path:
         backend_port=8010,
         cors_origins=["http://localhost:5173"],
         runtime_dir=tmp_path,
+        telemetry_legacy_compat_enabled=True,
     )
     client = TestClient(create_app(settings))
     response = client.post(
