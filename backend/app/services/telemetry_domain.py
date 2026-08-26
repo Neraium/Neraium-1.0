@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime
 from enum import StrEnum
 import re
@@ -455,7 +455,9 @@ class DataConnectionRecord(PublicTelemetryRecord):
     connector_type: ConnectorType
     lifecycle_status: ConnectionLifecycleStatus = ConnectionLifecycleStatus.DRAFT
     enabled: bool = False
-    safe_configuration: Mapping[str, Any] = MappingProxyType({})
+    safe_configuration: Mapping[str, Any] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
     timezone: str = "UTC"
     polling_interval_seconds: int = 300
     capabilities: tuple[ConnectorCapability, ...] = ()
@@ -519,7 +521,9 @@ class ExternalSignalRecord(PublicTelemetryRecord):
     mapping_status: SignalMappingStatus = SignalMappingStatus.UNMAPPED
     last_observed_at: datetime | None = None
     quality_state: TelemetryQualityState = TelemetryQualityState.MAPPING_REQUIRED
-    metadata: Mapping[str, Any] = MappingProxyType({})
+    metadata: Mapping[str, Any] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
     def __post_init__(self) -> None:
         _required_text(
@@ -694,7 +698,9 @@ class TelemetryAuditEventRecord(PublicTelemetryRecord):
     occurred_at: datetime
     before_digest: str | None = None
     after_digest: str | None = None
-    detail: Mapping[str, Any] = MappingProxyType({})
+    detail: Mapping[str, Any] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
     def __post_init__(self) -> None:
         _required_text(self, "event_id", "connection_id", "actor_id")

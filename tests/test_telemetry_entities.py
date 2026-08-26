@@ -14,7 +14,10 @@ from app.services.telemetry_domain import (
     ConnectorType,
     ConnectorCapability,
     DataConnectionRecord,
+    ExternalSignalRecord,
     InvalidLifecycleTransition,
+    TelemetryAuditAction,
+    TelemetryAuditEventRecord,
     TelemetryScopeRef,
     can_transition_connection,
     require_connection_transition,
@@ -103,6 +106,78 @@ def test_public_connection_record_is_immutable_and_has_no_secret_reference() -> 
         connection.name = "changed"  # type: ignore[misc]
     with pytest.raises(TypeError):
         connection.safe_configuration["origin"] = "https://changed.test"  # type: ignore[index]
+
+
+def test_connection_record_default_safe_configuration_is_read_only() -> None:
+    first_connection = DataConnectionRecord(
+        connection_id="connection-1",
+        scope=_scope(),
+        name="Synthetic HTTPS telemetry",
+        connector_type="https_telemetry",
+    )
+    second_connection = DataConnectionRecord(
+        connection_id="connection-2",
+        scope=_scope(),
+        name="Second synthetic HTTPS telemetry",
+        connector_type="https_telemetry",
+    )
+
+    assert first_connection.safe_configuration == {}
+    assert (
+        first_connection.safe_configuration
+        is not second_connection.safe_configuration
+    )
+    with pytest.raises(TypeError):
+        first_connection.safe_configuration["origin"] = (  # type: ignore[index]
+            "https://changed.test"
+        )
+
+
+def test_external_signal_default_metadata_is_read_only() -> None:
+    first_signal = ExternalSignalRecord(
+        signal_id="signal-1",
+        scope=_scope(),
+        connection_id="connection-1",
+        external_tag_id="tag-1",
+        external_tag_name="Supply temperature",
+    )
+    second_signal = ExternalSignalRecord(
+        signal_id="signal-2",
+        scope=_scope(),
+        connection_id="connection-1",
+        external_tag_id="tag-2",
+        external_tag_name="Return temperature",
+    )
+
+    assert first_signal.metadata == {}
+    assert first_signal.metadata is not second_signal.metadata
+    with pytest.raises(TypeError):
+        first_signal.metadata["source"] = "changed"  # type: ignore[index]
+
+
+def test_telemetry_audit_event_default_detail_is_read_only() -> None:
+    occurred_at = datetime(2026, 8, 26, tzinfo=UTC)
+    first_event = TelemetryAuditEventRecord(
+        event_id="event-1",
+        scope=_scope(),
+        connection_id="connection-1",
+        actor_id="operator-1",
+        action=TelemetryAuditAction.CONNECTION_CREATED,
+        occurred_at=occurred_at,
+    )
+    second_event = TelemetryAuditEventRecord(
+        event_id="event-2",
+        scope=_scope(),
+        connection_id="connection-1",
+        actor_id="operator-1",
+        action=TelemetryAuditAction.CONNECTION_UPDATED,
+        occurred_at=occurred_at,
+    )
+
+    assert first_event.detail == {}
+    assert first_event.detail is not second_event.detail
+    with pytest.raises(TypeError):
+        first_event.detail["reason"] = "changed"  # type: ignore[index]
 
 
 def test_connector_type_is_authoritative_and_rejects_unknown_providers() -> None:
