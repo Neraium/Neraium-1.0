@@ -299,6 +299,88 @@ class IngestionRunActionResponse(TelemetryApiModel):
     message: str
 
 
+class CanonicalAnalysisResultSummaryResponse(TelemetryApiModel):
+    result_id: UUID
+    analysis_window_id: UUID
+    connection_id: UUID
+    source_run_id: UUID
+    facility_id: str = Field(min_length=1, max_length=512)
+    system_id: str = Field(min_length=1, max_length=512)
+    asset_id: str | None = Field(default=None, max_length=512)
+    window_start: datetime
+    window_end: datetime
+    analytical_status: str = Field(min_length=1, max_length=64)
+    artifact_schema_version: str = Field(min_length=1, max_length=160)
+    execution_contract_version: str = Field(min_length=1, max_length=160)
+    analysis_schema_version: str = Field(min_length=1, max_length=160)
+    analysis_contract_version: str = Field(min_length=1, max_length=160)
+    engine_name: str | None = Field(default=None, max_length=512)
+    engine_version: str | None = Field(default=None, max_length=512)
+    observation_count: int = Field(ge=0, le=5_000)
+    observation_lineage_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    finding_count: int = Field(ge=0)
+    evidence_count: int = Field(ge=0)
+    payload_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    payload_uncompressed_bytes: int = Field(gt=0, le=268_435_456)
+    payload_stored_bytes: int = Field(gt=0)
+    serialization_ms: float = Field(ge=0)
+    created_at: datetime | None = None
+
+
+class CanonicalAnalysisResultsListResponse(TelemetryApiModel):
+    results: list[CanonicalAnalysisResultSummaryResponse] = Field(max_length=200)
+
+
+class CanonicalAnalysisResultResponse(CanonicalAnalysisResultSummaryResponse):
+    authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reference_metadata: dict[str, Any] = Field(default_factory=dict)
+    payload_encoding: Literal["zlib+canonical-json.v1"]
+    projection_bytes: int = Field(ge=0, le=3_407_872)
+    shared_envelope_bytes: int = Field(ge=0, le=1_048_576)
+    technical_channels_bytes: int = Field(ge=0, le=2_097_152)
+    evidence_audit_bytes: int = Field(ge=0, le=262_144)
+    projection_serialization_ms: float = Field(ge=0)
+    retrieval_ms: float = Field(ge=0)
+    lineage_verified: Literal[True]
+    product_result: dict[str, Any]
+
+
+class CanonicalAnalysisLineageRecordResponse(TelemetryApiModel):
+    contract_version: str = Field(min_length=1, max_length=160)
+    observation_id: UUID
+    connection_id: UUID
+    ingestion_run_id: UUID
+    external_signal_id: UUID
+    mapping_id: UUID
+    mapping_revision: int = Field(ge=1)
+    canonical_signal_id: UUID
+    canonical_signal_name: str = Field(min_length=1, max_length=2_048)
+    system_id: str = Field(min_length=1, max_length=2_048)
+    asset_id: str | None = Field(default=None, max_length=2_048)
+    external_tag_id: str = Field(min_length=1, max_length=2_048)
+    source_timestamp_raw: str = Field(min_length=1, max_length=2_048)
+    source_timezone: str = Field(min_length=1, max_length=2_048)
+    source_offset: str | None = Field(default=None, max_length=2_048)
+    timestamp_normalization_version: str = Field(min_length=1, max_length=2_048)
+    observed_at_utc: datetime
+    original_unit: str | None = Field(default=None, max_length=2_048)
+    canonical_unit: str = Field(min_length=1, max_length=2_048)
+    conversion_id: str = Field(min_length=1, max_length=2_048)
+    conversion_version: str = Field(min_length=1, max_length=2_048)
+    source_record_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    mapping_authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class CanonicalAnalysisLineageResponse(TelemetryApiModel):
+    result_id: UUID
+    analysis_window_id: UUID
+    observation_count: int = Field(ge=0, le=5_000)
+    observation_lineage_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    lineage_verified: Literal[True]
+    records: list[CanonicalAnalysisLineageRecordResponse] = Field(max_length=5_000)
+    next_cursor: str | None = Field(default=None, max_length=512)
+
+
 class SignalPublicResponse(TelemetryApiModel):
     signal_id: UUID
     connection_id: UUID

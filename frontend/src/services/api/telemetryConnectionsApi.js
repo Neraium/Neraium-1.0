@@ -136,6 +136,35 @@ export function listTelemetryRuns({ apiFetch, accessCode, connectionId, limit = 
   return request(apiFetch, accessCode, `/api/data-connections/${encodeId(connectionId)}/runs?limit=${limit}&offset=${offset}`, { signal, cache: "no-store" });
 }
 
+export function listTelemetryRunAnalysisResults({ apiFetch, accessCode, connectionId, runId, signal }) {
+  return request(apiFetch, accessCode, `/api/data-connections/${encodeId(connectionId)}/runs/${encodeId(runId)}/analysis-results`, { signal, cache: "no-store" });
+}
+
+export function getTelemetryAnalysisResult({ apiFetch, accessCode, connectionId, runId, systemId, resultId, assetId = null, signal }) {
+  const query = new URLSearchParams();
+  if (assetId !== null && assetId !== undefined && String(assetId).trim()) query.set("asset_id", String(assetId).trim());
+  const suffix = query.size ? `?${query}` : "";
+  return request(
+    apiFetch,
+    accessCode,
+    `/api/data-connections/${encodeId(connectionId)}/runs/${encodeId(runId)}/systems/${encodeId(systemId)}/analysis-results/${encodeId(resultId)}${suffix}`,
+    { signal, cache: "no-store" },
+  );
+}
+
+export function getTelemetryAnalysisResultLineage({ apiFetch, accessCode, connectionId, runId, systemId, resultId, assetId = null, limit = 100, cursor = null, signal }) {
+  const query = new URLSearchParams();
+  if (assetId !== null && assetId !== undefined && String(assetId).trim()) query.set("asset_id", String(assetId).trim());
+  query.set("limit", String(Math.min(Math.max(Number(limit) || 100, 1), 5000)));
+  if (cursor !== null && cursor !== undefined && String(cursor).trim()) query.set("cursor", String(cursor).trim());
+  return request(
+    apiFetch,
+    accessCode,
+    `/api/data-connections/${encodeId(connectionId)}/runs/${encodeId(runId)}/systems/${encodeId(systemId)}/analysis-results/${encodeId(resultId)}/lineage?${query}`,
+    { signal, cache: "no-store" },
+  );
+}
+
 export function listTelemetryErrors({ apiFetch, accessCode, connectionId, limit = 50, offset = 0, signal }) {
   return request(apiFetch, accessCode, `/api/data-connections/${encodeId(connectionId)}/errors?limit=${limit}&offset=${offset}`, { signal, cache: "no-store" });
 }

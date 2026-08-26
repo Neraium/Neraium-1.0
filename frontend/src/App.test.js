@@ -85,7 +85,7 @@ vi.mock("./hooks/useFacilityRuntime", () => ({
 }));
 
 vi.mock("./components/EngineeringReasoningWorkspace", () => ({
-  default: ({ liveOps, onWorkspaceNavigate, onResumePreviousSession, onSignOut, gateProcessing, onCsvSelected, resultsNavigationKey }) => {
+  default: ({ liveOps, canonicalConnectorResult, onWorkspaceNavigate, onResumePreviousSession, onSignOut, gateProcessing, onCsvSelected, resultsNavigationKey }) => {
     if (runtimeState.throwGateError) {
       throw new Error("gate render failed");
     }
@@ -93,6 +93,7 @@ vi.mock("./components/EngineeringReasoningWorkspace", () => ({
       "div",
       { "data-testid": "gate-workspace" },
       h("span", { "data-testid": "gate-result" }, liveOps.latestUploadResult?.job_id ?? "empty"),
+      h("span", { "data-testid": "gate-connector-result" }, canonicalConnectorResult?.result_id ?? "empty"),
       h("span", { "data-testid": "gate-session-job" }, liveOps.currentSession?.sessionJobId ?? "empty"),
       h("span", { "data-testid": "gate-finding-summary" }, liveOps.canonicalFinding?.summary ?? "none"),
       h("span", { "data-testid": "gate-finding-confidence" }, liveOps.canonicalFinding?.confidence ?? "none"),
@@ -126,7 +127,7 @@ vi.mock("./components/ObservationCenterWorkspace", () => ({
 }));
 
 vi.mock("./components/DataConnectionsWorkspace", () => ({
-  default: ({ onUploadComplete, onResetDemo, initialSelectedFiles = [], autoStartInitialFiles = false, activeUploadAttempt = null, latestUploadResult = null, latestUploadSnapshot = null }) => h(
+  default: ({ onUploadComplete, onOpenAnalysisResult, onResetDemo, initialSelectedFiles = [], autoStartInitialFiles = false, activeUploadAttempt = null, latestUploadResult = null, latestUploadSnapshot = null }) => h(
     "div",
     { "data-testid": "telemetry-workspace" },
     h("span", { "data-testid": "telemetry-initial-file-count" }, String(initialSelectedFiles.length)),
@@ -134,6 +135,20 @@ vi.mock("./components/DataConnectionsWorkspace", () => ({
     h("span", { "data-testid": "telemetry-attempt" }, activeUploadAttempt?.attemptId ?? "none"),
     h("span", { "data-testid": "telemetry-visible-job" }, latestUploadResult?.job_id ?? "none"),
     h("span", { "data-testid": "telemetry-visible-status" }, latestUploadSnapshot?.status ?? "none"),
+    h("button", {
+      type: "button",
+      onClick: () => onOpenAnalysisResult({
+        result_id: "connector-result-7",
+        analysis_window_id: "connector-window-7",
+        connection_id: "connector-7",
+        source_run_id: "connector-run-7",
+        facility_id: "default",
+        system_id: "system-7",
+        payload_digest: "a".repeat(64),
+        lineage_verified: true,
+        product_result: { result_id: "connector-result-7", analysis_result: {}, sii_result: {} },
+      }),
+    }, "Open canonical connector result"),
     h("button", {
       type: "button",
       onClick: () => onUploadComplete({
@@ -483,6 +498,25 @@ it("opens a completed persisted analysis without explicit resume", async () => {
 });
 
 describe("App telemetry completion navigation", () => {
+  it("releases connector result authority when a manual analysis completes", async () => {
+    render(h(App));
+    await launchWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open telemetry intake" }));
+    await waitFor(() => expect(screen.getByTestId("telemetry-workspace")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Open canonical connector result" }));
+    await waitFor(() => expect(screen.getByTestId("gate-connector-result").textContent).toBe("connector-result-7"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open telemetry intake" }));
+    await waitFor(() => expect(screen.getByTestId("telemetry-workspace")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Finish analysis" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-42");
+      expect(screen.getByTestId("gate-connector-result").textContent).toBe("empty");
+    });
+  });
+
   it("refreshes persisted upload state and returns to the Gate", async () => {
     render(h(App));
     await launchWorkspace();

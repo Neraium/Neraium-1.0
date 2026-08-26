@@ -96,6 +96,7 @@ export default function AppWorkspaceRouter({
   gateProcessing,
   effectiveLatestUploadResult,
   effectiveLatestUploadSnapshot,
+  canonicalConnectorResult = null,
   hasActiveSession,
   hasCurrentUploadResult,
   hasResumedSession,
@@ -107,6 +108,7 @@ export default function AppWorkspaceRouter({
   handleBackToGate,
   handleRetryWorkspace,
   handleGateUploadComplete,
+  handleOpenConnectorAnalysisResult = () => {},
   activeUploadAttempt = null,
   handleUploadAttemptStarted = () => null,
   handleUploadAttemptIdentified = () => {},
@@ -136,7 +138,8 @@ export default function AppWorkspaceRouter({
 }) {
   const errorContext = extractTelemetryBoundaryMeta(effectiveLatestUploadSnapshot, effectiveLatestUploadResult);
   const currentResultIdentity = String(
-    effectiveLatestUploadResult?.dataset_id
+    canonicalConnectorResult?.result_id
+      ?? effectiveLatestUploadResult?.dataset_id
       ?? effectiveLatestUploadResult?.job_id
       ?? effectiveLatestUploadResult?.run_id
       ?? effectiveLatestUploadSnapshot?.dataset_id
@@ -189,6 +192,7 @@ export default function AppWorkspaceRouter({
             hasRealSiiOutput={hasRealSiiOutput}
             roomContext={roomContext}
             onUploadComplete={handleGateUploadComplete}
+            onOpenAnalysisResult={handleOpenConnectorAnalysisResult}
             activeUploadAttempt={activeUploadAttempt}
             onUploadAttemptStarted={handleUploadAttemptStarted}
             onUploadAttemptIdentified={handleUploadAttemptIdentified}
@@ -367,6 +371,7 @@ export default function AppWorkspaceRouter({
             canonicalFinding={canonicalFinding}
             effectiveLatestUploadResult={effectiveLatestUploadResult}
             effectiveLatestUploadSnapshot={effectiveLatestUploadSnapshot}
+            canonicalConnectorResult={canonicalConnectorResult}
             roomContext={roomContext}
             domainMode={domainMode}
             domainDetection={domainDetection}

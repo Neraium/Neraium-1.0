@@ -26,6 +26,18 @@ from db.migrations.extend_telemetry_ingestion_runtime import (
     downgrade as downgrade_ingestion_extension,
     verify as verify_ingestion_extension,
 )
+from db.migrations.persist_canonical_analysis_results import (
+    DDL as RESULT_ARTIFACT_DDL,
+    EXPECTED_COLUMNS as RESULT_ARTIFACT_COLUMNS,
+    EXPECTED_CONSTRAINTS as RESULT_ARTIFACT_CONSTRAINTS,
+    EXPECTED_INDEXES as RESULT_ARTIFACT_INDEXES,
+    EXPECTED_TRIGGERS as RESULT_ARTIFACT_TRIGGERS,
+    MIGRATION_ID as RESULT_ARTIFACT_MIGRATION_ID,
+    REQUIRED_MIGRATIONS as RESULT_ARTIFACT_PREREQUISITES,
+    apply as apply_result_artifact_migration,
+    downgrade as downgrade_result_artifact_migration,
+    verify as verify_result_artifact_migration,
+)
 
 
 class _MigrationCursor:
@@ -301,6 +313,133 @@ def test_ingestion_extension_contract_against_explicit_postgres() -> None:
     assert report["migration_id"] == INGESTION_MIGRATION_ID
 
 
+class _ResultArtifactCursor:
+    def __init__(self, connection: "_ResultArtifactConnection") -> None:
+        self.connection = connection
+        self._one: Any = None
+        self._many: list[Any] = []
+
+    def __enter__(self) -> "_ResultArtifactCursor":
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def execute(self, sql: str, params: object = None) -> None:
+        self.connection.statements.append((sql, params))
+        normalized = " ".join(sql.split())
+        self._one = None
+        self._many = []
+        if normalized.startswith("SELECT migration_id FROM telemetry.schema_migrations"):
+            self._many = [(item,) for item in self.connection.prerequisites]
+        elif normalized.startswith("SELECT 1 FROM telemetry.schema_migrations"):
+            self._one = (1,) if self.connection.applied else None
+        elif normalized.startswith("INSERT INTO telemetry.schema_migrations"):
+            self.connection.applied = True
+        elif "FROM information_schema.columns" in normalized:
+            self._many = [(column,) for column in RESULT_ARTIFACT_COLUMNS]
+        elif "FROM pg_indexes" in normalized:
+            self._many = [(item,) for item in RESULT_ARTIFACT_INDEXES]
+        elif "FROM information_schema.table_constraints" in normalized:
+            self._many = [(item,) for item in RESULT_ARTIFACT_CONSTRAINTS]
+        elif "FROM information_schema.triggers" in normalized:
+            self._many = [(item,) for item in RESULT_ARTIFACT_TRIGGERS]
+
+    def fetchone(self) -> Any:
+        return self._one
+
+    def fetchall(self) -> list[Any]:
+        return list(self._many)
+
+
+class _ResultArtifactConnection:
+    def __init__(
+        self,
+        *,
+        prerequisites: tuple[str, ...] = RESULT_ARTIFACT_PREREQUISITES,
+        applied: bool = False,
+    ) -> None:
+        self.prerequisites = prerequisites
+        self.applied = applied
+        self.statements: list[tuple[str, object]] = []
+        self.commits = 0
+
+    def cursor(self) -> _ResultArtifactCursor:
+        return _ResultArtifactCursor(self)
+
+    def commit(self) -> None:
+        self.commits += 1
+
+
+def test_result_artifact_migration_is_scoped_bounded_and_immutable() -> None:
+    assert RESULT_ARTIFACT_MIGRATION_ID == "005_persist_canonical_analysis_results"
+    assert "CREATE TABLE IF NOT EXISTS telemetry.analysis_result_artifacts" in (
+        RESULT_ARTIFACT_DDL
+    )
+    for column in RESULT_ARTIFACT_COLUMNS:
+        assert column in RESULT_ARTIFACT_DDL
+    for required_scope in (
+        "tenant_scope_id TEXT NOT NULL",
+        "workspace_id TEXT NOT NULL",
+        "resource_scope_id TEXT NOT NULL",
+        "facility_id TEXT NOT NULL",
+        "connection_id UUID NOT NULL",
+        "system_id TEXT NOT NULL",
+    ):
+        assert required_scope in RESULT_ARTIFACT_DDL
+    assert "payload_uncompressed_bytes <= 268435456" in RESULT_ARTIFACT_DDL
+    assert "payload_stored_bytes <= 268435456" in RESULT_ARTIFACT_DDL
+    assert "payload_stored_bytes = octet_length(payload)" in RESULT_ARTIFACT_DDL
+    assert "payload_encoding = 'zlib+canonical-json.v1'" in RESULT_ARTIFACT_DDL
+    assert "BEFORE UPDATE OR DELETE" in RESULT_ARTIFACT_DDL
+    assert "analysis_window.asset_id IS NOT DISTINCT FROM NEW.asset_id" in (
+        RESULT_ARTIFACT_DDL
+    )
+    assert "ON DELETE RESTRICT" in RESULT_ARTIFACT_DDL
+    lowered = RESULT_ARTIFACT_DDL.lower()
+    assert "delete from" not in lowered
+    assert "drop table" not in lowered
+    assert "drop column" not in lowered
+    assert "normalized_telemetry" not in lowered
+
+
+def test_result_artifact_migration_requires_runtime_and_is_idempotent() -> None:
+    missing = _ResultArtifactConnection(prerequisites=())
+    with pytest.raises(RuntimeError, match="prerequisite_missing"):
+        apply_result_artifact_migration(missing)
+
+    connection = _ResultArtifactConnection()
+    apply_result_artifact_migration(connection)
+    apply_result_artifact_migration(connection)
+    all_sql = "\n".join(sql for sql, _ in connection.statements)
+    assert all_sql.count("CREATE TABLE IF NOT EXISTS telemetry.analysis_result_artifacts") == 1
+    assert "pg_advisory_xact_lock" in all_sql
+    assert connection.commits == 2
+
+
+def test_result_artifact_migration_verify_and_forward_only_downgrade() -> None:
+    connection = _ResultArtifactConnection(applied=True)
+    report = verify_result_artifact_migration(connection)
+    assert report["migration_id"] == RESULT_ARTIFACT_MIGRATION_ID
+    assert set(report["columns"]) == RESULT_ARTIFACT_COLUMNS
+    assert set(report["indexes"]) == RESULT_ARTIFACT_INDEXES
+    assert set(report["constraints"]) == RESULT_ARTIFACT_CONSTRAINTS
+    assert set(report["triggers"]) == RESULT_ARTIFACT_TRIGGERS
+    with pytest.raises(RuntimeError, match="downgrade_unsupported"):
+        downgrade_result_artifact_migration(connection)
+
+
+def test_result_artifact_contract_against_explicit_postgres() -> None:
+    dsn = os.environ.get("NERAIUM_TEST_POSTGRES_DSN", "").strip()
+    if not dsn:
+        pytest.skip("NERAIUM_TEST_POSTGRES_DSN is not configured")
+    import psycopg
+
+    with psycopg.connect(dsn, connect_timeout=5) as connection:
+        report = verify_result_artifact_migration(connection)
+    assert report["migration_id"] == RESULT_ARTIFACT_MIGRATION_ID
+
+
 def _ready_runtime(repository: object) -> TelemetryRuntime:
     return TelemetryRuntime(
         repository=repository,
@@ -336,12 +475,17 @@ def test_runtime_readiness_runs_every_structural_migration_verifier(monkeypatch)
         "db.migrations.extend_telemetry_ingestion_runtime.verify",
         lambda candidate: calls.append(("runtime", candidate)),
     )
+    monkeypatch.setattr(
+        "db.migrations.persist_canonical_analysis_results.verify",
+        lambda candidate: calls.append(("results", candidate)),
+    )
 
     assert _ready_runtime(Repository()).verify_readiness() is True
     assert calls == [
         ("base", connection),
         ("catalog", connection),
         ("runtime", connection),
+        ("results", connection),
         ("close", connection),
     ]
 

@@ -11,6 +11,7 @@ from app.services.telemetry_analysis_service import (
     run_post_ingestion_analysis,
 )
 from app.services.telemetry_domain import TelemetryScopeRef
+from app.services.telemetry_result_artifact import decode_canonical_result_artifact
 
 
 DIGEST = "a" * 64
@@ -199,6 +200,7 @@ class FakeAnalysisRepository:
         result_digest=None,
         result_metadata=None,
         evidence_lineage=None,
+        result_artifact=None,
     ):
         record = self.windows[window_id]
         assert record["status"] == "running"
@@ -207,6 +209,12 @@ class FakeAnalysisRepository:
         record["result_digest"] = result_digest
         record["result_metadata"] = dict(result_metadata or {})
         record["evidence_lineage"] = dict(evidence_lineage or {})
+        record["result_artifact"] = result_artifact
+        if result_artifact is not None:
+            record["result_metadata"].update(
+                canonical_result_id=result_artifact.result_id,
+                artifact_payload_digest=result_artifact.payload_digest,
+            )
         if reason_code is not None:
             record.setdefault("quality_summary", {})["status_reason_code"] = reason_code
         self.transitions.append(("running", target_status))
@@ -266,6 +274,17 @@ def test_operational_service_persists_lineage_and_calls_sii_once(monkeypatch) ->
     ]["finding_ids"]
     assert result.execution is not None
     assert result.execution.analysis_result["upload_id"] == ""
+    artifact = repository.windows[result.window_id]["result_artifact"]
+    assert result.result_id == artifact.result_id
+    assert result.artifact_digest == artifact.payload_digest
+    assert decode_canonical_result_artifact(artifact) == result.execution.as_dict()
+    assert repository.windows[result.window_id]["result_digest"] == artifact.payload_digest
+    assert repository.windows[result.window_id]["result_metadata"][
+        "analysis_schema_version"
+    ] == result.execution.analysis_result["schema_version"]
+    assert repository.windows[result.window_id]["result_metadata"][
+        "analysis_contract_version"
+    ] == result.execution.analysis_result["analysis_metadata"]["contract_version"]
 
 
 def test_completed_window_is_idempotent_without_second_sii_call(monkeypatch) -> None:
@@ -291,7 +310,46 @@ def test_completed_window_is_idempotent_without_second_sii_call(monkeypatch) -> 
 
     assert first.status == second.status == "completed"
     assert second.reused_existing is True
+    assert second.result_id == first.result_id
+    assert second.artifact_digest == first.artifact_digest
     assert len(calls) == 1
+
+
+def test_artifact_write_failure_cannot_claim_retrievable_completion(
+    monkeypatch,
+) -> None:
+    start = datetime(2026, 8, 25, tzinfo=UTC)
+    repository = FakeAnalysisRepository(
+        [_observation(0, start), _observation(1, start + timedelta(minutes=1))]
+    )
+    calls: list[dict] = []
+
+    def fail_artifact(_execution):
+        raise ValueError("canonical_result_payload_not_json")
+
+    monkeypatch.setattr(
+        "app.services.telemetry_analysis_service.build_canonical_result_artifact",
+        fail_artifact,
+    )
+    result = run_post_ingestion_analysis(
+        repository=repository,
+        scope=_scope(),
+        connection_id="connection-a",
+        source_run_id="run-a",
+        system_id="system-a",
+        asset_id="asset-a",
+        window_start=start,
+        window_end=start + timedelta(minutes=2),
+        persisted_authority_digest=DIGEST,
+        evaluator=_engine(calls),
+    )
+
+    assert len(calls) == 1
+    assert result.status == "failed"
+    assert result.result_id is None
+    assert result.reason_code == "telemetry_analysis_result_persistence_failed"
+    assert repository.windows[result.window_id]["status"] == "failed"
+    assert repository.windows[result.window_id].get("result_artifact") is None
 
 
 def test_stale_authority_persists_ineligible_without_sii(monkeypatch) -> None:

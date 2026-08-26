@@ -6,7 +6,7 @@ function countLabel(value, singular, plural) {
   return `${value} ${value === 1 ? singular : plural}`;
 }
 
-export default function OperationsBrief({ projection, onReview, onOpenEvidence }) {
+export default function OperationsBrief({ projection, onReview, onOpenInvestigation, onOpenEvidence }) {
   if (!projection || projection.variant === "unavailable") {
     return (
       <section className="operations-brief operational-overview operations-result-state" data-testid="operations-brief">
@@ -36,9 +36,9 @@ export default function OperationsBrief({ projection, onReview, onOpenEvidence }
         <p>{projection.explanation}</p>
         {noReviewable ? <dl className="operations-brief__counts" aria-label="Analysis result counts"><div><dt>Findings for review</dt><dd>0</dd></div><div><dt>Systems represented</dt><dd>0</dd></div></dl> : null}
         {insufficient && projection.improvement ? <small>{projection.improvement}</small> : null}
-        {insufficient && projection.auditAction ? (
+        {projection.auditAction ? (
           <div className="operations-result-state__action">
-            <button type="button" className="forensic-button forensic-button--secondary" onClick={() => onOpenEvidence?.(projection.auditAction.findingKey)}>{projection.auditAction.label}</button>
+            <button type="button" className="forensic-button forensic-button--secondary" onClick={() => projection.auditAction.target === "investigation" ? onOpenInvestigation?.(projection.auditAction.findingKey) : onOpenEvidence?.(projection.auditAction.findingKey)}>{projection.auditAction.label}</button>
           </div>
         ) : null}
       </section>

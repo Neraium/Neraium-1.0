@@ -151,6 +151,9 @@ class TelemetryRuntime:
             from db.migrations.extend_telemetry_ingestion_runtime import (
                 verify as verify_ingestion_runtime,
             )
+            from db.migrations.persist_canonical_analysis_results import (
+                verify as verify_canonical_results,
+            )
             from db.migrations.seed_telemetry_canonical_signal_concepts import (
                 verify as verify_signal_catalog,
             )
@@ -159,6 +162,7 @@ class TelemetryRuntime:
                 verify_connection_schema,
                 verify_signal_catalog,
                 verify_ingestion_runtime,
+                verify_canonical_results,
             ):
                 verifier(connection)
             return True

@@ -16,10 +16,10 @@ export const REVIEW_KEYS = Object.freeze([
   "contractVersion", "depth", "variant", "identity", "header", "whatChanged", "whyAttention", "assessment", "materialLimitation", "checks", "primaryAction",
 ]);
 export const INVESTIGATION_KEYS = Object.freeze([
-  "contractVersion", "depth", "variant", "identity", "header", "primaryComparison", "relationships", "relationshipMap", "systemEvidence", "persistence", "operatingContext", "dataQuality", "timeline", "sourceSignals", "lineageSummary", "primaryAction",
+  "contractVersion", "depth", "variant", "identity", "header", "primaryComparison", "relationships", "relationshipMap", "systemEvidence", "persistence", "operatingContext", "dataQuality", "timeline", "sourceSignals", "lineageSummary", "projectionQualification", "primaryAction",
 ]);
 export const EVIDENCE_KEYS = Object.freeze([
-  "contractVersion", "depth", "variant", "identity", "header", "timestamps", "signals", "exactRelationships", "supportingEvidence", "channels", "classifications", "sufficiency", "limitations", "lineage", "engine", "package", "audit", "actions",
+  "contractVersion", "depth", "variant", "identity", "header", "timestamps", "signals", "exactRelationships", "supportingEvidence", "channels", "classifications", "sufficiency", "limitations", "lineage", "engine", "package", "audit", "projectionQualification", "actions",
 ]);
 
 const asArray = (value) => Array.isArray(value) ? value : [];
@@ -185,7 +185,6 @@ function sourceBackedImprovement(model) {
 }
 
 export function projectResults(model, reviewRecords = {}, options = {}) {
-  void options;
   if (!isObject(model)) return unavailable("results");
   if (own(model, "processing") === true) {
     return { contractVersion: CONTRACT_VERSION, depth: "results", variant: "processing", headline: "Analysis in progress", explanation: "Neraium is evaluating the available operating history." };
@@ -195,6 +194,10 @@ export function projectResults(model, reviewRecords = {}, options = {}) {
   const sourceFindings = own(model, "findings");
   if (sourceFindings.some((finding) => !isPlainObject(finding) || !firstText(own(finding, "id")))) return unavailable("results");
   const records = isObject(reviewRecords) ? reviewRecords : {};
+  const requestedAnalysisResultId = firstText(own(options, "analysisResultId"));
+  const analysisResultId = requestedAnalysisResultId && requestedAnalysisResultId === firstText(ownPath(model, "result.result_id"))
+    ? requestedAnalysisResultId
+    : null;
   const findings = reviewableFindings(sourceFindings, records);
   const cards = findings.map((finding) => cardFor(finding, model, reviewRecordAt(records, String(own(finding, "id")))));
   const systemsRepresented = new Set(cards.map((card) => card.systemContext).filter(Boolean)).size;
@@ -216,7 +219,11 @@ export function projectResults(model, reviewRecords = {}, options = {}) {
       systemLabel: firstText(ownPath(model, "site.name"), "Current system"),
       counts: { findingsForReview: 0, systemsRepresented: insufficientSystems },
       improvement: sourceBackedImprovement(model),
-      auditAction: scoped ? { label: "Open evidence record", route: route("evidence", own(scoped, "id")), findingKey: String(own(scoped, "id")) } : null,
+      auditAction: scoped
+        ? { label: "Open evidence record", route: route("evidence", own(scoped, "id")), findingKey: String(own(scoped, "id")) }
+        : analysisResultId
+          ? { label: "Open investigation", route: route("investigations", analysisResultId), findingKey: analysisResultId, target: "investigation" }
+          : null,
     };
   }
   const stable = status === "Normal";
@@ -235,6 +242,9 @@ export function projectResults(model, reviewRecords = {}, options = {}) {
     systemLabel: firstText(ownPath(model, "site.name"), "Current system"),
     counts: { findingsForReview: cards.length, systemsRepresented },
     cards,
+    ...(cards.length || !analysisResultId ? {} : {
+      auditAction: { label: "Open investigation", route: route("investigations", analysisResultId), findingKey: analysisResultId, target: "investigation" },
+    }),
   };
 }
 
@@ -366,6 +376,94 @@ function reviewChecks(finding) {
   return uniqueText(guidance.map((item) => bounded(item, 140)).filter((item) => item && item !== "[object Object]"), 3).map((item) => ({ label: item }));
 }
 
+function canonicalResultContext(result) {
+  const canonical = isObject(result?.canonical_result) ? result.canonical_result : {};
+  const identity = isObject(canonical.identity) ? canonical.identity : {};
+  const resultId = firstText(result?.result_id, identity.result_id);
+  if (!resultId) return null;
+  return { canonical, identity, resultId };
+}
+
+function canonicalRouteIdentity(result) {
+  const context = canonicalResultContext(result);
+  if (!context) return {};
+  return {
+    resultId: context.resultId,
+    analysisId: firstText(result?.analysis_id, context.identity.analysis_id) || null,
+    analysisWindowId: firstText(result?.analysis_window_id, context.identity.analysis_window_id) || null,
+    sourceRunId: firstText(result?.source_run_id, context.identity.source_ingestion_run_id) || null,
+    connectionId: firstText(result?.connection_id, context.identity.connection_id) || null,
+    facilityId: firstText(result?.facility_id, context.identity.facility_id) || null,
+    systemId: firstText(result?.system_id, context.identity.system_id) || null,
+    assetId: firstText(result?.asset_id, context.identity.asset_id) || null,
+    payloadDigest: firstText(result?.payload_digest, context.identity.payload_digest) || null,
+    observationCount: finite(result?.observation_count, context.identity.observation_count),
+    observationLineageDigest: firstText(result?.observation_lineage_digest, context.identity.observation_lineage_digest) || null,
+  };
+}
+
+function qualificationBlock(value) {
+  if (!isObject(value)) return null;
+  return {
+    sourcePath: firstText(value.source_path) || null,
+    truncated: value.truncated === true,
+    omittedValues: finite(value.omitted_values),
+    originalItems: finite(value.original_items),
+    selectedItems: finite(value.selected_items),
+    originalBytes: finite(value.original_bytes),
+    selectedBytes: finite(value.selected_bytes),
+    transported: value.transported !== false,
+  };
+}
+
+function canonicalProjectionQualification(result) {
+  const context = canonicalResultContext(result);
+  const projection = isObject(result?.projection) ? result.projection : null;
+  if (!context || !projection) return null;
+  const technical = isObject(projection.technical_channels) ? projection.technical_channels : {};
+  const technicalChannels = {};
+  for (const [key, value] of Object.entries(technical)) {
+    const qualified = qualificationBlock(value);
+    if (qualified) technicalChannels[key] = qualified;
+  }
+  const shared = qualificationBlock(projection.shared);
+  const evidenceAudit = qualificationBlock(projection.evidence_audit);
+  const truncatedSources = uniqueText([
+    ...(shared?.truncated ? [shared.sourcePath] : []),
+    ...(evidenceAudit?.truncated ? [evidenceAudit.sourcePath] : []),
+    ...Object.values(technicalChannels).filter((item) => item.truncated || !item.transported).map((item) => item.sourcePath),
+  ]);
+  return {
+    contractVersion: firstText(projection.contract_version) || null,
+    canonicalResultId: firstText(projection.canonical_result_id, context.resultId) || null,
+    canonicalPayloadDigest: firstText(projection.canonical_payload_digest, context.identity.payload_digest, result?.payload_digest) || null,
+    referenceMetadata: copyJsonSafe(context.canonical.reference_metadata ?? {}),
+    shared,
+    evidenceAudit,
+    technicalChannels,
+    truncated: truncatedSources.length > 0,
+    truncatedSources,
+  };
+}
+
+function technicalQualification(result, sourcePath) {
+  const projection = canonicalProjectionQualification(result);
+  if (!projection) return null;
+  const canonicalPath = firstText(sourcePath).replace(/^model\.result\./, "");
+  const channelKey = canonicalPath.startsWith("sii_result.") ? canonicalPath.split(".")[1] : "";
+  const channel = channelKey ? projection.technicalChannels[channelKey] : null;
+  return channel ? { ...channel, canonicalResultId: projection.canonicalResultId, canonicalPayloadDigest: projection.canonicalPayloadDigest } : null;
+}
+
+function canonicalIdValues(value) {
+  if (Array.isArray(value)) return uniqueText(value);
+  if (!isObject(value)) return [];
+  for (const key of ["items", "ids", "values"]) {
+    if (Array.isArray(value[key])) return uniqueText(value[key]);
+  }
+  return [];
+}
+
 export function projectFindingReview(model, requestedFindingId, reviewRecord = {}) {
   const finding = exactFinding(model, requestedFindingId);
   if (!finding) return unavailable("review");
@@ -380,7 +478,7 @@ export function projectFindingReview(model, requestedFindingId, reviewRecord = {
     contractVersion: CONTRACT_VERSION,
     depth: "review",
     variant: insufficient ? "insufficient" : "ready",
-    identity: { findingKey: key },
+    identity: { findingKey: key, ...canonicalRouteIdentity(model?.result) },
     header: reviewHeader(finding, model, reviewRecord),
     whatChanged: insufficient
       ? "A supported material behavioral change cannot be shown from the available evidence."
@@ -401,7 +499,7 @@ function channelState(payload, reason = "This evidence channel was not supplied 
   return available ? { state: "available", reason: "" } : { state: "unavailable", reason };
 }
 
-function scopedChannel({ key, label: channelLabel, payload, sourcePath, scope = "run", summary = "", metrics = [] }) {
+function scopedChannel({ key, label: channelLabel, payload, sourcePath, scope = "run", summary = "", metrics = [], qualification = null }) {
   const scopeLabel = {
     finding: "Finding-scoped evidence",
     relationship: "Relationship-scoped evidence",
@@ -415,7 +513,8 @@ function scopedChannel({ key, label: channelLabel, payload, sourcePath, scope = 
     state: channelState(safePayload),
     scope,
     scopeLabel,
-    sourcePath,
+    sourcePath: qualification?.sourcePath || sourcePath,
+    qualification,
     summary: bounded(summary || own(safePayload, "summary") || own(safePayload, "description") || own(safePayload, "status"), 240),
     metrics: copyJsonSafe(asArray(metrics)),
   };
@@ -483,7 +582,7 @@ function investigationChannels(model) {
     ["propagation", "Propagation evidence", resultPropagation ?? ownPath(model, "siiEvidence.phase_4.propagation"), resultPropagation ? "model.result.sii_result.propagation_analysis" : "model.siiEvidence.phase_4.propagation"],
     ["physics", "Physics-informed evidence", resultPhysics ?? resultPhysicsEvidence ?? ownPath(model, "siiEvidence.phase_4.physics"), resultPhysics ? "model.result.sii_result.physics_reasoning" : resultPhysicsEvidence ? "model.result.sii_result.physics_evidence" : "model.siiEvidence.phase_4.physics"],
   ];
-  return paths.map(([key, channelLabel, payload, sourcePath]) => scopedChannel({ key, label: channelLabel, payload, sourcePath }));
+  return paths.map(([key, channelLabel, payload, sourcePath]) => scopedChannel({ key, label: channelLabel, payload, sourcePath, qualification: technicalQualification(result, sourcePath) }));
 }
 
 function investigationContext(finding) {
@@ -522,7 +621,7 @@ export function projectInvestigation(model, requestedFindingId, reviewRecord = {
     contractVersion: CONTRACT_VERSION,
     depth: "investigation",
     variant: insufficient ? "insufficient" : "ready",
-    identity: { findingKey: key },
+    identity: { findingKey: key, ...canonicalRouteIdentity(model?.result) },
     header: reviewHeader(finding, model, reviewRecord),
     primaryComparison: relationships[0] ?? null,
     relationships,
@@ -537,6 +636,98 @@ export function projectInvestigation(model, requestedFindingId, reviewRecord = {
     timeline: asArray(finding?.activityTimeline).filter(isObject).map((item) => ({ label: firstText(item.label, item.title, item.event), detail: firstText(item.detail, item.description, item.summary) })),
     sourceSignals: uniqueText(relationships.flatMap((item) => [item.source.sourceId, item.target.sourceId]).concat(asArray(finding.rawVariables))).map((sourceId, index) => ({ display: firstText(asArray(finding.variables)[index], sourceId), sourceId })),
     lineageSummary: { source: firstText(model?.result?.source_name, model?.result?.filename), baselineWindow: firstText(finding?.comparison?.baseline), currentWindow: firstText(finding?.comparison?.current), evidenceRefs: uniqueText(asArray(finding?.relationships).flatMap((item) => asArray(item?.evidenceRefs))) },
+    projectionQualification: canonicalProjectionQualification(model?.result),
+    primaryAction: { label: "Open evidence record", route: route("evidence", key) },
+  };
+}
+
+function exactAnalysisResult(model, requestedResultId) {
+  if (!isPlainObject(model) || !isPlainObject(model.result)) return null;
+  const requested = firstText(requestedResultId);
+  const actual = firstText(model.result.result_id);
+  return requested && actual && requested === actual ? model.result : null;
+}
+
+function analysisHeader(model) {
+  const status = firstText(model?.status);
+  return {
+    systemContext: firstText(model?.result?.system_name, model?.result?.system_id, model?.site?.name, "Mapped system"),
+    title: status === "Normal"
+      ? "No supported material behavioral change"
+      : status === "Evidence insufficient"
+        ? "Insufficient evidence"
+        : "Completed connector analysis",
+    reviewState: "Completed",
+  };
+}
+
+function analysisLimitations(result) {
+  const analysis = analysisSource(result);
+  return uniqueText([
+    ...asArray(result?.warnings),
+    ...asArray(result?.errors),
+    ...asArray(result?.data_conditions),
+    ...asArray(analysis?.warnings),
+    ...asArray(analysis?.errors),
+  ], 32);
+}
+
+export function projectAnalysisInvestigation(model, requestedResultId) {
+  const result = exactAnalysisResult(model, requestedResultId);
+  if (!result) return unavailable("investigation");
+  const key = String(result.result_id);
+  const relationships = asArray(model?.relationships).map(relationshipProjection).filter(Boolean);
+  const nodes = relationships.flatMap((item) => [item.source, item.target]);
+  const nodeMap = new Map(nodes.filter((item) => item.sourceId || item.display).map((item) => [item.sourceId || item.display, { id: item.sourceId || item.display, label: item.display }]));
+  const persistence = ownPath(result, "sii_result.persistence_analysis") ?? ownPath(model, "siiEvidence.persistence");
+  const operating = ownPath(result, "sii_result.operating_modes") ?? ownPath(model, "siiEvidence.operating_context");
+  const quality = result?.data_quality ?? ownPath(result, "sii_result.data_conditions") ?? ownPath(model, "siiEvidence.data_quality");
+  const limitations = analysisLimitations(result);
+  const canonicalContext = canonicalResultContext(result);
+  const evidenceIndex = analysisSource(result)?.evidence_index;
+  const evidenceItems = isObject(evidenceIndex) ? Object.values(evidenceIndex).filter(isObject) : asArray(evidenceIndex).filter(isObject);
+  const evidenceRefs = uniqueText(evidenceItems.flatMap((item) => firstText(item?.evidence_id, item?.id)));
+  return {
+    contractVersion: CONTRACT_VERSION,
+    depth: "investigation",
+    variant: model?.status === "Evidence insufficient" ? "insufficient" : "ready",
+    identity: { findingKey: key, scope: "analysis", ...canonicalRouteIdentity(result), resultId: key },
+    header: analysisHeader(model),
+    primaryComparison: relationships[0] ?? null,
+    relationships,
+    relationshipMap: relationships.length ? {
+      nodes: [...nodeMap.values()],
+      edges: relationships.map((item) => ({ id: item.id, sourceId: item.source.sourceId || item.source.display, targetId: item.target.sourceId || item.target.display, state: item.direction })),
+    } : null,
+    systemEvidence: investigationChannels(model),
+    persistence: {
+      state: channelState(persistence),
+      summary: firstText(persistence?.summary, persistence?.status),
+      supportTrend: firstText(persistence?.support_trend, persistence?.trend),
+      windowDescription: firstText(persistence?.window_description, persistence?.window),
+    },
+    operatingContext: {
+      state: channelState(operating),
+      baselineMode: firstText(operating?.baseline_mode_label, operating?.baseline_mode),
+      currentMode: firstText(operating?.recent_mode_label, operating?.current_mode, operating?.recent_mode),
+      comparability: firstText(operating?.match, operating?.status),
+      reasons: uniqueText(asArray(operating?.reasons), 4),
+    },
+    dataQuality: {
+      state: channelState(quality),
+      summary: firstText(quality?.summary, quality?.status),
+      limitations,
+      signalHealth: asArray(quality?.signals).filter(isObject).map((item) => ({ signal: firstText(item.signal, item.name, item.id), status: firstText(item.status, item.health, item.rating) })),
+    },
+    timeline: asArray(analysisSource(result)?.timeline).filter(isObject).map((item) => ({ label: firstText(item.label, item.title, item.event), detail: firstText(item.detail, item.description, item.summary) })),
+    sourceSignals: uniqueText(asArray(model?.relationships).flatMap((item) => [item?.rawSource, item?.rawTarget])).map((sourceId) => ({ display: sourceId, sourceId })),
+    lineageSummary: {
+      source: firstText(result.source_name, result.connection_id),
+      baselineWindow: firstText(result.baseline_window, result.window_start),
+      currentWindow: firstText(result.current_window, result.window_end),
+      evidenceRefs: evidenceRefs.length ? evidenceRefs : canonicalIdValues(canonicalContext?.canonical?.evidence_ids),
+    },
+    projectionQualification: canonicalProjectionQualification(result),
     primaryAction: { label: "Open evidence record", route: route("evidence", key) },
   };
 }
@@ -604,10 +795,10 @@ function pathValue(root, path) {
   return ownPath(root, path);
 }
 
-function evidenceChannel(key, channelLabel, payload, sourcePath, scope = "run") {
+function evidenceChannel(key, channelLabel, payload, sourcePath, scope = "run", qualification = null) {
   const safePayload = copyChannelPayload(payload);
-  const base = scopedChannel({ key, label: channelLabel, payload: safePayload, sourcePath, scope });
-  return { key: base.key, label: base.label, state: base.state, scope: base.scope, scopeLabel: base.scopeLabel, sourcePath: base.sourcePath, payload: safePayload };
+  const base = scopedChannel({ key, label: channelLabel, payload: safePayload, sourcePath, scope, qualification });
+  return { key: base.key, label: base.label, state: base.state, scope: base.scope, scopeLabel: base.scopeLabel, sourcePath: base.sourcePath, qualification: base.qualification, payload: safePayload };
 }
 
 function evidenceChannels(model, finding) {
@@ -616,11 +807,12 @@ function evidenceChannels(model, finding) {
   const exactRelationships = asArray(finding?.relationships);
   channels.push(evidenceChannel("finding_relationships", "Finding-owned relationships", exactRelationships.length ? exactRelationships : undefined, "finding.relationships", "relationship"));
   for (const [key, channelLabel, path] of EVIDENCE_CHANNELS) {
-    channels.push(evidenceChannel(key, channelLabel, pathValue(result, path), `model.result.${path}`));
+    const sourcePath = `model.result.${path}`;
+    channels.push(evidenceChannel(key, channelLabel, pathValue(result, path), sourcePath, "run", technicalQualification(result, sourcePath)));
   }
   const temporal = temporalSource(result);
-  channels.push(evidenceChannel("lag", "Lag evidence", own(temporal[0], "lagged_relationships"), `${temporal[1]}.lagged_relationships`));
-  channels.push(evidenceChannel("mutual_information", "Mutual-information evidence", own(temporal[0], "mutual_information_drift"), `${temporal[1]}.mutual_information_drift`));
+  channels.push(evidenceChannel("lag", "Lag evidence", own(temporal[0], "lagged_relationships"), `${temporal[1]}.lagged_relationships`, "run", technicalQualification(result, `${temporal[1]}.lagged_relationships`)));
+  channels.push(evidenceChannel("mutual_information", "Mutual-information evidence", own(temporal[0], "mutual_information_drift"), `${temporal[1]}.mutual_information_drift`, "run", technicalQualification(result, `${temporal[1]}.mutual_information_drift`)));
   const siiSections = ["relationship_changes", "operating_context", "persistence", "uncertainty", "data_quality", "sensor_health", "configured_prior_observations", "phase_4", "provenance"];
   for (const section of siiSections) channels.push(evidenceChannel(`sii_${section}`, `SII ${label(section)}`, ownPath(model, `siiEvidence.${section}`), `model.siiEvidence.${section}`));
   channels.push(evidenceChannel("traceability", "Traceability", own(result, "traceability"), "model.result.traceability"));
@@ -659,6 +851,7 @@ export function projectEvidenceRecord(model, requestedFindingId, reviewRecord = 
   const evidenceWindows = asArray(finding?.sourceTimeRanges).map((item) => copyJsonSafe(item));
   const evidenceRefs = uniqueText(asArray(finding?.relationships).flatMap((item) => asArray(item?.evidenceRefs)).concat(asArray(raw?.evidence_refs)));
   const runId = resultRunId(result) || null;
+  const canonicalContext = canonicalResultContext(result);
   return {
     contractVersion: CONTRACT_VERSION,
     depth: "evidence",
@@ -674,6 +867,7 @@ export function projectEvidenceRecord(model, requestedFindingId, reviewRecord = 
       baselineId: firstText(result?.baseline_id) || null,
       systemId: firstText(finding?.technicalIdentity?.systemId, raw?.system_id) || null,
       assetId: firstText(finding?.technicalIdentity?.assetId, raw?.asset_id, raw?.equipment_id) || null,
+      ...canonicalRouteIdentity(result),
     },
     header: reviewHeader(finding, model, reviewRecord),
     timestamps: { generatedAt: firstText(finding?.generatedAt, result?.completed_at, result?.processed_at) || null, firstDetectedAt: firstText(finding?.firstDetectedAt) || null, sourceRanges: evidenceWindows.map((item) => copyJsonSafe(item)) },
@@ -687,10 +881,99 @@ export function projectEvidenceRecord(model, requestedFindingId, reviewRecord = 
     classifications: { classification: isObject(finding?.classification) ? copyJsonSafe(finding.classification) : null, confidenceContract: isObject(finding?.confidenceContract) ? copyJsonSafe(finding.confidenceContract) : null, alternatives: uniqueText(asArray(finding?.alternativeExplanations)) },
     sufficiency: { status: firstText(finding?.confidenceContract?.evidence_sufficiency?.status, insufficient ? "Insufficient" : "Supported for review"), reasons: uniqueText(asArray(finding?.confidenceContract?.evidence_sufficiency?.reasons).concat(insufficient ? asArray(finding?.limitations) : [])) },
     limitations: { material: uniqueText(asArray(finding?.limitations).concat(finding?.primaryLimitation ? [finding.primaryLimitation] : [])), technical: uniqueText(asArray(finding?.technicalLimitations).concat(asArray(finding?.dataLimitations))), contradictions: uniqueText(asArray(finding?.contradictions)) },
-    lineage: { sourceRows, evidenceWindows, evidenceRefs, traceability: isObject(result?.traceability) ? copyJsonSafe(result.traceability) : null, findingProvenance: isObject(raw?.provenance) || Array.isArray(raw?.provenance) ? copyJsonSafe(raw.provenance) : null },
-    engine: { name: firstText(result?.engine_name, result?.engine?.name) || null, version: firstText(result?.engine_version, result?.model_version, result?.engine?.version) || null, schemaVersion: firstText(result?.schema_version) || null, buildCommit: firstText(result?.build_commit, result?.engine?.build_commit) || null, configurationHash: firstText(result?.configuration_hash, result?.config_hash) || null, inputHash: firstText(result?.input_hash) || null, resultHash: firstText(result?.result_hash) || null },
+    lineage: { sourceRows, evidenceWindows, evidenceRefs, traceability: isObject(result?.traceability) ? copyJsonSafe(result.traceability) : null, findingProvenance: isObject(raw?.provenance) || Array.isArray(raw?.provenance) ? copyJsonSafe(raw.provenance) : null, canonical: canonicalContext ? { identity: copyJsonSafe(canonicalContext.identity), referenceMetadata: copyJsonSafe(canonicalContext.canonical.reference_metadata), lineage: copyJsonSafe(result.lineage) } : null },
+    engine: { name: firstText(result?.engine_name, result?.engine?.name) || null, version: firstText(result?.engine_version, result?.model_version, result?.engine?.version) || null, schemaVersion: firstText(result?.analysis_schema_version, result?.schema_version) || null, contractVersion: firstText(result?.analysis_contract_version, canonicalContext?.identity?.analysis_contract_version) || null, executionContractVersion: firstText(result?.execution_contract_version, canonicalContext?.identity?.execution_contract_version) || null, artifactSchemaVersion: firstText(result?.artifact_schema_version, canonicalContext?.identity?.artifact_schema_version) || null, buildCommit: firstText(result?.build_commit, result?.engine?.build_commit) || null, configurationHash: firstText(result?.configuration_hash, result?.config_hash) || null, inputHash: firstText(result?.input_hash) || null, resultHash: firstText(result?.payload_digest, result?.result_hash) || null },
     package: packageAssociation,
-    audit: { caseState: firstText(finding?.caseState) || null, caseHistory: asArray(finding?.caseHistory).map((item) => copyJsonSafe(item)), outcome: isObject(finding?.outcome) ? copyJsonSafe(finding.outcome) : null, review: isObject(reviewRecord) ? copyJsonSafe(reviewRecord) : null, trace: asArray(model?.trace).map((item) => copyJsonSafe(item)) },
+    audit: { caseState: firstText(finding?.caseState) || null, caseHistory: asArray(finding?.caseHistory).map((item) => copyJsonSafe(item)), outcome: isObject(finding?.outcome) ? copyJsonSafe(finding.outcome) : null, review: isObject(reviewRecord) ? copyJsonSafe(reviewRecord) : null, trace: asArray(model?.trace).map((item) => copyJsonSafe(item)), canonicalResult: canonicalContext ? { resultId: canonicalContext.resultId, payloadDigest: firstText(result?.payload_digest, canonicalContext.identity.payload_digest) || null, projectionContractVersion: firstText(result?.projection?.contract_version) || null } : null },
+    projectionQualification: canonicalProjectionQualification(result),
     actions: { exportRunId: runId, exportScopeLabel: runId ? "Analysis-run export; not finding-specific" : null, traceRoute: asArray(model?.trace).length ? "/trace" : null },
+  };
+}
+
+export function projectAnalysisEvidenceRecord(model, requestedResultId) {
+  const result = exactAnalysisResult(model, requestedResultId);
+  if (!result) return unavailable("evidence");
+  const key = String(result.result_id);
+  const analysis = analysisSource(result);
+  const limitations = analysisLimitations(result);
+  const insufficient = model?.status === "Evidence insufficient";
+  const signalCatalog = [
+    analysis?.signal_catalog,
+    analysis?.telemetry_signals,
+    analysis?.normalized_telemetry?.signals,
+    result?.signal_catalog,
+  ].map((value) => asArray(value).filter(isObject)).find((value) => value.length) ?? [];
+  const evidenceIndex = analysis?.evidence_index;
+  const evidenceItems = (isObject(evidenceIndex) ? Object.values(evidenceIndex) : asArray(evidenceIndex)).filter(isObject).map((item) => copyJsonSafe(item));
+  const exactRelationships = asArray(model?.relationships).map(relationshipProjection).filter(Boolean);
+  const canonicalContext = canonicalResultContext(result);
+  const canonicalEvidenceIds = canonicalIdValues(canonicalContext?.canonical?.evidence_ids);
+  return {
+    contractVersion: CONTRACT_VERSION,
+    depth: "evidence",
+    variant: insufficient ? "insufficient" : "ready",
+    identity: {
+      findingKey: key,
+      scope: "analysis",
+      ...canonicalRouteIdentity(result),
+      resultId: key,
+      runId: firstText(result.source_run_id) || null,
+    },
+    header: analysisHeader(model),
+    timestamps: {
+      generatedAt: firstText(result.generated_at, result.completed_at) || null,
+      firstDetectedAt: null,
+      sourceRanges: result.window_start || result.window_end ? [{ start: result.window_start ?? null, end: result.window_end ?? null }] : [],
+    },
+    signals: signalCatalog.map((signal) => ({
+      display: firstText(signal.display_name, signal.name, signal.tag_name, signal.normalized_name, signal.canonical_signal_id, signal.signal_id),
+      rawId: firstText(signal.source_signal_id, signal.external_tag_id, signal.source_column, signal.raw_id, signal.signal_id) || null,
+      canonicalId: firstText(signal.canonical_signal_id, signal.canonical_id, signal.normalized_name) || null,
+    })),
+    exactRelationships,
+    supportingEvidence: { statements: [], items: evidenceItems },
+    channels: evidenceChannels(model, null),
+    classifications: { classification: null, confidenceContract: null, alternatives: [] },
+    sufficiency: {
+      status: insufficient ? "Insufficient" : firstText(result.evidence_status, model?.status) || "Completed",
+      reasons: insufficient ? limitations : [],
+    },
+    limitations: { material: limitations, technical: [], contradictions: [] },
+    lineage: {
+      sourceRows: [],
+      evidenceWindows: result.window_start || result.window_end ? [{ start: result.window_start ?? null, end: result.window_end ?? null }] : [],
+      evidenceRefs: canonicalEvidenceIds.length ? canonicalEvidenceIds : uniqueText(asArray(result.evidence_ids)),
+      traceability: isObject(result.traceability) ? copyJsonSafe(result.traceability) : null,
+      observationCount: finite(result.observation_count, canonicalContext?.identity?.observation_count),
+      observationLineageDigest: firstText(result.observation_lineage_digest, canonicalContext?.identity?.observation_lineage_digest) || null,
+      lineageVerified: result.lineage_verified === true,
+    },
+    engine: {
+      name: firstText(result.engine_name, result?.engine?.name) || null,
+      version: firstText(result.engine_version, result?.engine?.version) || null,
+      schemaVersion: firstText(result.analysis_schema_version, result.schema_version) || null,
+      contractVersion: firstText(result.analysis_contract_version) || null,
+      executionContractVersion: firstText(result.execution_contract_version) || null,
+      artifactSchemaVersion: firstText(result.artifact_schema_version) || null,
+      buildCommit: firstText(result.build_commit, result?.engine?.build_commit) || null,
+      configurationHash: firstText(result.configuration_hash, result.config_hash) || null,
+      inputHash: firstText(result.input_hash) || null,
+      resultHash: firstText(result.payload_digest, result.result_hash) || null,
+    },
+    package: { scope: "unavailable", scopeLabel: "No finding-specific evidence package applies to this analysis result", sourcePath: null, packageId: null, immutableDetails: null, relationshipLink: { state: "unavailable", sourcePath: null, relationshipId: null } },
+    audit: {
+      resultId: key,
+      analysisWindowId: firstText(result.analysis_window_id) || null,
+      payloadDigest: firstText(result.payload_digest) || null,
+      lineageVerified: result.lineage_verified === true,
+      artifactSchemaVersion: firstText(result.artifact_schema_version) || null,
+      executionContractVersion: firstText(result.execution_contract_version) || null,
+      analysisSchemaVersion: firstText(result.analysis_schema_version, result.schema_version) || null,
+      analysisContractVersion: firstText(result.analysis_contract_version) || null,
+      referenceMetadata: canonicalContext ? copyJsonSafe(canonicalContext.canonical.reference_metadata) : null,
+      evidenceAudit: canonicalContext ? copyJsonSafe(canonicalContext.canonical.evidence_audit) : null,
+    },
+    projectionQualification: canonicalProjectionQualification(result),
+    actions: { exportRunId: null, exportScopeLabel: null, traceRoute: null },
   };
 }

@@ -84,6 +84,47 @@ function evidenceProjection(scope = "run") {
   };
 }
 
+function canonicalEvidenceProjection() {
+  return {
+    ...evidenceProjection("unavailable"),
+    identity: {
+      findingKey: "finding-a",
+      findingId: "FINDING_A",
+      resultId: "77777777-7777-4777-8777-777777777777",
+      analysisWindowId: "88888888-8888-4888-8888-888888888888",
+      sourceRunId: "44444444-4444-4444-8444-444444444444",
+      connectionId: "11111111-1111-4111-8111-111111111111",
+      systemId: "cooling-loop",
+      assetId: "chiller-03",
+      payloadDigest: "a".repeat(64),
+      observationCount: 2,
+      observationLineageDigest: "d".repeat(64),
+    },
+    channels: [{
+      key: "temporal",
+      label: "Temporal evidence",
+      state: { state: "available", reason: "" },
+      scope: "run",
+      scopeLabel: "Analysis-run evidence; not finding-specific",
+      sourcePath: "sii_result.temporal_analysis",
+      qualification: { sourcePath: "sii_result.temporal_analysis", truncated: true, transported: true },
+      payload: { status: "changed" },
+    }],
+    projectionQualification: {
+      contractVersion: "telemetry-canonical-result-product.v1",
+      canonicalResultId: "77777777-7777-4777-8777-777777777777",
+      canonicalPayloadDigest: "a".repeat(64),
+      referenceMetadata: { model_id: "model-17" },
+      truncated: true,
+      truncatedSources: ["sii_result.temporal_analysis"],
+    },
+  };
+}
+
+function response(payload, status = 200) {
+  return { ok: status >= 200 && status < 300, status, json: async () => payload };
+}
+
 describe("progressive results hierarchy", () => {
   it("keeps Finding Review decision-oriented and preserves independent confidence dimensions", () => {
     render(React.createElement(FindingReviewWorkspace, { projection: reviewProjection() }));
@@ -122,5 +163,41 @@ describe("progressive results hierarchy", () => {
     expect(screen.getByRole("heading", { name: "Package explicitly linked to this finding" })).toBeTruthy();
     await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
     expect(apiFetch.mock.calls[0][0]).toContain("PACKAGE_A");
+  });
+
+  it("loads every exact scoped lineage page before rendering canonical provenance", async () => {
+    const resultId = "77777777-7777-4777-8777-777777777777";
+    const windowId = "88888888-8888-4888-8888-888888888888";
+    const digest = "d".repeat(64);
+    const records = ["obs-1", "obs-2"].map((observation_id) => ({ observation_id, connection_id: "11111111-1111-4111-8111-111111111111", system_id: "cooling-loop", asset_id: "chiller-03" }));
+    const apiFetch = vi.fn(async (path) => {
+      if (path.includes("cursor=next-page")) return response({ result_id: resultId, analysis_window_id: windowId, observation_count: 2, observation_lineage_digest: digest, lineage_verified: true, records: [records[1]], next_cursor: null });
+      return response({ result_id: resultId, analysis_window_id: windowId, observation_count: 2, observation_lineage_digest: digest, lineage_verified: true, records: [records[0]], next_cursor: "next-page" });
+    });
+
+    render(React.createElement(EvidenceRecordWorkspace, { projection: canonicalEvidenceProjection(), apiFetch }));
+
+    await waitFor(() => expect(screen.getByText(/2 observations verified/)).toBeTruthy());
+    expect(document.body.textContent).toContain("obs-1");
+    expect(document.body.textContent).toContain("obs-2");
+    expect(document.body.textContent).toContain("model-17");
+    expect(screen.getAllByText(/bounded projection/i).length).toBeGreaterThan(0);
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+    expect(apiFetch.mock.calls[0][0]).toBe(`/api/data-connections/11111111-1111-4111-8111-111111111111/runs/44444444-4444-4444-8444-444444444444/systems/cooling-loop/analysis-results/${resultId}/lineage?asset_id=chiller-03&limit=2`);
+    expect(apiFetch.mock.calls[1][0]).toBe(`/api/data-connections/11111111-1111-4111-8111-111111111111/runs/44444444-4444-4444-8444-444444444444/systems/cooling-loop/analysis-results/${resultId}/lineage?asset_id=chiller-03&limit=2&cursor=next-page`);
+  });
+
+  it("fails lineage display opaquely and discards partial pages when identity changes", async () => {
+    const projection = canonicalEvidenceProjection();
+    const apiFetch = vi.fn(async (path) => path.includes("cursor=next-page")
+      ? response({ result_id: "99999999-9999-4999-8999-999999999999", analysis_window_id: projection.identity.analysisWindowId, observation_count: 2, observation_lineage_digest: projection.identity.observationLineageDigest, lineage_verified: true, records: [{ observation_id: "must-not-render" }], next_cursor: null })
+      : response({ result_id: projection.identity.resultId, analysis_window_id: projection.identity.analysisWindowId, observation_count: 2, observation_lineage_digest: projection.identity.observationLineageDigest, lineage_verified: true, records: [{ observation_id: "partial-must-not-render", connection_id: projection.identity.connectionId, system_id: projection.identity.systemId, asset_id: projection.identity.assetId }], next_cursor: "next-page" }));
+
+    render(React.createElement(EvidenceRecordWorkspace, { projection, apiFetch }));
+
+    await waitFor(() => expect(screen.getByText("Exact canonical observation lineage is unavailable for this scoped result.")).toBeTruthy());
+    expect(document.body.textContent).not.toContain("partial-must-not-render");
+    expect(document.body.textContent).not.toContain("must-not-render");
+    expect(document.body.textContent).not.toContain("canonical_lineage_identity_mismatch");
   });
 });

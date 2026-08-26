@@ -12,6 +12,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 import json
+import logging
 import re
 from typing import Any, Protocol
 import uuid
@@ -27,6 +28,10 @@ from app.services.telemetry_analysis_window import (
 from app.services.telemetry_domain import TelemetryScopeRef
 from app.services.telemetry_lineage import project_analysis_window_persistence
 from app.services.telemetry_lineage import build_durable_result_lineage
+from app.services.telemetry_result_artifact import (
+    CanonicalResultArtifactError,
+    build_canonical_result_artifact,
+)
 from app.services.phase4_scope import ServerBoundSystemIdentityV2
 
 
@@ -37,6 +42,7 @@ ANALYSIS_EXECUTION_CLAIM_TTL = timedelta(minutes=10)
 _SAFE_REASON = re.compile(r"^[a-z0-9_.:-]{1,160}$")
 _WINDOW_NAMESPACE = uuid.UUID("1a77b935-9e8c-59a8-b8a6-5282f13b6c91")
 _TERMINAL_STATUSES = frozenset({"completed", "failed", "ineligible"})
+logger = logging.getLogger(__name__)
 
 
 class TelemetryAnalysisRepository(Protocol):
@@ -97,6 +103,8 @@ class TelemetryAnalysisRepository(Protocol):
 class TelemetryAnalysisServiceResult:
     window_id: str
     status: str
+    result_id: str | None = None
+    artifact_digest: str | None = None
     execution: AnalysisWindowExecution | None = None
     reason_code: str | None = None
     reused_existing: bool = False
@@ -108,6 +116,8 @@ class TelemetryAnalysisServiceResult:
             "contract_version": self.contract_version,
             "window_id": self.window_id,
             "status": self.status,
+            "result_id": self.result_id,
+            "artifact_digest": self.artifact_digest,
             "reason_code": self.reason_code,
             "reused_existing": self.reused_existing,
             "persisted": self.persisted,
@@ -214,9 +224,18 @@ def _existing_result(
 ) -> TelemetryAnalysisServiceResult | None:
     status = _status(record)
     if status in _TERMINAL_STATUSES:
+        metadata = (record or {}).get("result_metadata")
+        metadata = metadata if isinstance(metadata, Mapping) else {}
         return TelemetryAnalysisServiceResult(
             window_id=window_id,
             status=status,
+            result_id=str(metadata.get("canonical_result_id") or "") or None,
+            artifact_digest=str(
+                metadata.get("artifact_payload_digest")
+                or (record or {}).get("result_digest")
+                or ""
+            )
+            or None,
             reason_code=(record or {}).get("reason_code"),
             reused_existing=True,
         )
@@ -550,28 +569,74 @@ def run_post_ingestion_analysis(
             reason_code="telemetry_analysis_execution_failed",
         )
 
-    result_metadata, evidence_lineage, result_digest = build_durable_result_lineage(
-        window_id=window_id,
-        source_run_id=source_run_id,
-        lineage=window.observation_lineage,
-        sii_result=execution.sii_result,
-        analysis_result=execution.analysis_result,
-    )
-    completed = repository.finish_analysis_window_execution(
-        scope,
-        window_id=window_id,
-        claim_token=claim_token,
-        completed_at=_aware_utc(clock(), "telemetry_analysis_clock_invalid"),
-        target_status="completed",
-        result_digest=result_digest,
-        result_metadata=result_metadata,
-        evidence_lineage=evidence_lineage,
-    )
+    try:
+        result_artifact = build_canonical_result_artifact(execution)
+        result_metadata, evidence_lineage, _bounded_digest = (
+            build_durable_result_lineage(
+                window_id=window_id,
+                source_run_id=source_run_id,
+                lineage=window.observation_lineage,
+                sii_result=execution.sii_result,
+                analysis_result=execution.analysis_result,
+            )
+        )
+        completed = repository.finish_analysis_window_execution(
+            scope,
+            window_id=window_id,
+            claim_token=claim_token,
+            completed_at=_aware_utc(clock(), "telemetry_analysis_clock_invalid"),
+            target_status="completed",
+            result_digest=result_artifact.payload_digest,
+            result_metadata=result_metadata,
+            evidence_lineage=evidence_lineage,
+            result_artifact=result_artifact,
+        )
+    except Exception as error:
+        error_code = _safe_reason(
+            error, "telemetry_analysis_result_persistence_failed"
+        )
+        if isinstance(error, CanonicalResultArtifactError) and any(
+            marker in error_code for marker in ("schema", "contract", "version")
+        ):
+            logger.warning(
+                "telemetry_canonical_result_schema_mismatch",
+                extra={
+                    "event": "telemetry_canonical_result_schema_mismatch",
+                    "window_id": window_id,
+                    "source_run_id": source_run_id,
+                    "error_code": error_code,
+                },
+            )
+        logger.error(
+            "telemetry_canonical_result_persistence_failed",
+            extra={
+                "event": "telemetry_canonical_result_persistence_failed",
+                "window_id": window_id,
+                "source_run_id": source_run_id,
+                "error_type": type(error).__name__,
+                "error_code": error_code,
+            },
+        )
+        repository.finish_analysis_window_execution(
+            scope,
+            window_id=window_id,
+            claim_token=claim_token,
+            completed_at=_aware_utc(clock(), "telemetry_analysis_clock_invalid"),
+            target_status="failed",
+            reason_code="telemetry_analysis_result_persistence_failed",
+        )
+        return TelemetryAnalysisServiceResult(
+            window_id=window_id,
+            status="failed",
+            reason_code="telemetry_analysis_result_persistence_failed",
+        )
     if _status(completed) != "completed":
         raise RuntimeError("telemetry_analysis_completed_transition_invalid")
     return TelemetryAnalysisServiceResult(
         window_id=window_id,
         status="completed",
+        result_id=result_artifact.result_id,
+        artifact_digest=result_artifact.payload_digest,
         execution=execution,
     )
 

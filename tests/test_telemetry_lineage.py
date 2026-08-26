@@ -129,13 +129,24 @@ def test_durable_result_lineage_keeps_only_bounded_ids_and_digests() -> None:
             "findings": [{"finding_id": "finding-a", "raw_payload": "forbidden"}],
             "config": {"token": "must-not-survive"},
         },
-        analysis_result={"contract_version": "analysis-result.v1"},
+        analysis_result={
+            "schema_version": "analysis-schema.v1",
+            "analysis_metadata": {"contract_version": "analysis-result.v1"},
+            "conditions": [{"id": "condition-generated-a"}],
+            "insights": [{"id": "insight-generated-a"}],
+        },
     )
 
     assert lineage["contributing_ingestion_run_ids"] == ["run-a", "run-b"]
     assert lineage["evidence_ids"] == ["evidence-a"]
-    assert lineage["finding_ids"] == ["finding-a"]
+    assert lineage["finding_ids"] == [
+        "condition-generated-a",
+        "finding-a",
+        "insight-generated-a",
+    ]
     assert len(digest) == 64
     assert metadata["reference_digest"] == lineage["reference_digest"]
+    assert metadata["analysis_schema_version"] == "analysis-schema.v1"
+    assert metadata["analysis_contract_version"] == "analysis-result.v1"
     assert "raw_payload" not in repr((metadata, lineage))
     assert "must-not-survive" not in repr((metadata, lineage))

@@ -34,6 +34,10 @@ from app.services.phase4_scope import (
     ServerBoundSystemIdentityV2,
     build_telemetry_server_bound_system_identity,
 )
+from app.services.telemetry_result_artifact import (
+    CanonicalResultArtifact,
+    canonical_result_id,
+)
 from app.engine.sii.behavioral_model_contract import AuthenticatedPhase4Scope
 
 
@@ -55,6 +59,10 @@ class TelemetryCheckpointConflict(TelemetryRepositoryError):
 
 class TelemetryMappingConflict(TelemetryRepositoryError):
     """A mapping revision or enabled canonical hierarchy conflicts."""
+
+
+class TelemetryResultArtifactConflict(TelemetryRepositoryError):
+    """An immutable result identity already names different artifact bytes."""
 
 
 TelemetryRepositoryScope = TelemetryScopeRef
@@ -241,6 +249,9 @@ def _row_dict(cursor: Any, row: Any) -> dict[str, Any] | None:
         "authority_snapshot",
         "result_metadata",
         "evidence_lineage",
+        "reference_metadata",
+        "finding_ids",
+        "evidence_ids",
     ):
         if isinstance(result.get(key), str):
             try:
@@ -3867,22 +3878,72 @@ class PostgreSQLTelemetryRepository:
         result_digest: str | None = None,
         result_metadata: Mapping[str, Any] | None = None,
         evidence_lineage: Mapping[str, Any] | None = None,
+        result_artifact: CanonicalResultArtifact | None = None,
     ) -> dict[str, Any]:
-        """Atomically CAS terminal status and bounded durable result lineage."""
+        """Atomically publish the canonical artifact and terminal window state."""
         if target_status not in {"completed", "failed", "ineligible"}:
             raise ValueError("telemetry_analysis_window_status_transition_invalid")
         if completed_at.tzinfo is None or completed_at.utcoffset() is None:
             raise ValueError("telemetry_analysis_completion_time_invalid")
         if target_status == "completed":
-            digest = str(result_digest or "").strip().lower()
+            if not isinstance(result_artifact, CanonicalResultArtifact):
+                raise ValueError("telemetry_analysis_result_artifact_required")
+            normalized_window_id = _require_uuid(
+                window_id, "telemetry_analysis_window_id_invalid"
+            )
+            artifact_window_id = _require_uuid(
+                result_artifact.analysis_window_id,
+                "telemetry_analysis_result_window_id_invalid",
+            )
+            if artifact_window_id != normalized_window_id:
+                raise ValueError("telemetry_analysis_result_window_id_mismatch")
+            artifact_source_run_id = _require_uuid(
+                result_artifact.source_run_id,
+                "telemetry_analysis_result_source_run_id_invalid",
+            )
+            if result_artifact.result_id != canonical_result_id(
+                window_id=artifact_window_id,
+                execution_contract_version=(
+                    result_artifact.execution_contract_version
+                ),
+            ):
+                raise ValueError("telemetry_analysis_result_id_mismatch")
+            digest = result_artifact.payload_digest
             if not _SHA256_DIGEST.fullmatch(digest):
                 raise ValueError("telemetry_analysis_result_digest_invalid")
+            supplied_digest = str(result_digest or digest).strip().lower()
+            if supplied_digest != digest:
+                raise ValueError("telemetry_analysis_result_digest_mismatch")
             if not isinstance(result_metadata, Mapping) or not isinstance(
                 evidence_lineage, Mapping
             ):
                 raise ValueError("telemetry_analysis_result_metadata_required")
+            lineage_count = evidence_lineage.get("observation_count")
+            lineage_digest = str(
+                evidence_lineage.get("observation_lineage_digest") or ""
+            ).lower()
+            if (
+                int(lineage_count if lineage_count is not None else -1)
+                != result_artifact.observation_count
+                or lineage_digest != result_artifact.observation_lineage_digest
+            ):
+                raise ValueError("telemetry_analysis_result_lineage_mismatch")
+            completion_metadata = {
+                **dict(result_metadata),
+                "canonical_result_id": result_artifact.result_id,
+                "artifact_schema_version": result_artifact.artifact_schema_version,
+                "execution_contract_version": result_artifact.execution_contract_version,
+                "analysis_schema_version": result_artifact.analysis_schema_version,
+                "analysis_contract_version": result_artifact.analysis_contract_version,
+                "artifact_payload_digest": result_artifact.payload_digest,
+                "artifact_payload_uncompressed_bytes": (
+                    result_artifact.payload_uncompressed_bytes
+                ),
+                "artifact_payload_stored_bytes": result_artifact.payload_stored_bytes,
+                "artifact_serialization_ms": result_artifact.serialization_ms,
+            }
             metadata_json = _safe_json(
-                result_metadata,
+                completion_metadata,
                 code="telemetry_analysis_result_metadata_invalid",
                 reject_sensitive=True,
             )
@@ -3893,8 +3954,29 @@ class PostgreSQLTelemetryRepository:
             )
             if len(lineage_json.encode("utf-8")) > 65_536:
                 raise ValueError("telemetry_analysis_evidence_lineage_invalid")
+            reference_json = _safe_json(
+                result_artifact.reference_metadata,
+                code="telemetry_analysis_result_reference_metadata_invalid",
+                reject_sensitive=True,
+            )
+            if len(reference_json.encode("utf-8")) > 32_768:
+                raise ValueError("telemetry_analysis_result_reference_metadata_invalid")
+            finding_ids_json = _safe_json(
+                result_artifact.finding_ids,
+                code="telemetry_analysis_result_finding_ids_invalid",
+            )
+            evidence_ids_json = _safe_json(
+                result_artifact.evidence_ids,
+                code="telemetry_analysis_result_evidence_ids_invalid",
+            )
+            if len(finding_ids_json.encode("utf-8")) + len(
+                evidence_ids_json.encode("utf-8")
+            ) > 65_536:
+                raise ValueError("telemetry_analysis_result_ids_invalid")
             reason_code = None
         else:
+            if result_artifact is not None:
+                raise ValueError("telemetry_analysis_result_artifact_status_invalid")
             digest = None
             metadata_json = "{}"
             lineage_json = "{}"
@@ -3902,7 +3984,154 @@ class PostgreSQLTelemetryRepository:
                 str(reason_code or ""),
                 "telemetry_analysis_window_reason_invalid",
             )
+        artifact_inserted = False
         with self._connection() as connection, connection.cursor() as cursor:
+            if result_artifact is not None:
+                cursor.execute(
+                    """
+                    INSERT INTO telemetry.analysis_result_artifacts (
+                        id, tenant_scope_id, workspace_id, resource_scope_id,
+                        facility_id, analysis_window_id, connection_id,
+                        source_ingestion_run_id, system_id, asset_id,
+                        window_start, window_end, authority_digest,
+                        artifact_schema_version, execution_contract_version,
+                        analysis_schema_version, analysis_contract_version,
+                        engine_name, engine_version, reference_metadata,
+                        observation_count, observation_lineage_digest,
+                        finding_ids, evidence_ids, payload_encoding,
+                        payload_digest, payload_uncompressed_bytes,
+                        payload_stored_bytes, serialization_ms, payload
+                    )
+                    SELECT %s::UUID, w.tenant_scope_id, w.workspace_id,
+                           w.resource_scope_id, w.facility_id, w.id,
+                           r.connection_id, w.source_ingestion_run_id,
+                           w.system_id, w.asset_id, w.window_start, w.window_end,
+                           w.authority_digest, %s, %s, %s, %s, %s, %s,
+                           %s::JSONB, %s, %s, %s::JSONB, %s::JSONB, %s,
+                           %s, %s, %s, %s, %s
+                    FROM telemetry.analysis_windows w
+                    JOIN telemetry.ingestion_runs r
+                      ON r.resource_scope_id = w.resource_scope_id
+                     AND r.tenant_scope_id = w.tenant_scope_id
+                     AND r.workspace_id = w.workspace_id
+                     AND r.facility_id = w.facility_id
+                     AND r.id = w.source_ingestion_run_id
+                    WHERE w.resource_scope_id = %s AND w.tenant_scope_id = %s
+                      AND w.workspace_id = %s AND w.facility_id = %s
+                      AND w.id = %s::UUID AND w.status = 'running'
+                      AND w.source_ingestion_run_id = %s::UUID
+                      AND w.execution_claim_token = %s::UUID
+                      AND w.execution_claim_expires_at > %s
+                    ON CONFLICT (resource_scope_id, tenant_scope_id,
+                                 workspace_id, facility_id,
+                                 analysis_window_id) DO NOTHING
+                    RETURNING id
+                    """,
+                    (
+                        result_artifact.result_id,
+                        result_artifact.artifact_schema_version,
+                        result_artifact.execution_contract_version,
+                        result_artifact.analysis_schema_version,
+                        result_artifact.analysis_contract_version,
+                        result_artifact.engine_name,
+                        result_artifact.engine_version,
+                        reference_json,
+                        result_artifact.observation_count,
+                        result_artifact.observation_lineage_digest,
+                        finding_ids_json,
+                        evidence_ids_json,
+                        result_artifact.payload_encoding,
+                        result_artifact.payload_digest,
+                        result_artifact.payload_uncompressed_bytes,
+                        result_artifact.payload_stored_bytes,
+                        result_artifact.serialization_ms,
+                        result_artifact.payload,
+                        *_scope_parameters(scope),
+                        normalized_window_id,
+                        artifact_source_run_id,
+                        _require_uuid(
+                            claim_token,
+                            "telemetry_analysis_execution_claim_invalid",
+                        ),
+                        completed_at,
+                    ),
+                )
+                artifact_inserted = cursor.fetchone() is not None
+                cursor.execute(
+                    """
+                    SELECT a.id, a.analysis_window_id,
+                           a.source_ingestion_run_id,
+                           a.artifact_schema_version,
+                           a.execution_contract_version,
+                           a.analysis_schema_version,
+                           a.analysis_contract_version, a.engine_name,
+                           a.engine_version, a.reference_metadata,
+                           a.observation_count,
+                           a.observation_lineage_digest, a.finding_ids,
+                           a.evidence_ids, a.payload_encoding,
+                           a.payload_digest, a.payload_uncompressed_bytes,
+                           a.payload_stored_bytes, a.serialization_ms,
+                           a.payload
+                    FROM telemetry.analysis_result_artifacts a
+                    WHERE a.resource_scope_id = %s
+                      AND a.tenant_scope_id = %s
+                      AND a.workspace_id = %s AND a.facility_id = %s
+                      AND a.analysis_window_id = %s::UUID
+                    FOR UPDATE
+                    """,
+                    (
+                        *_scope_parameters(scope),
+                        _require_uuid(
+                            window_id, "telemetry_analysis_window_id_invalid"
+                        ),
+                    ),
+                )
+                existing_artifact = _row_dict(cursor, cursor.fetchone())
+                if existing_artifact is None:
+                    raise TelemetryCheckpointConflict(
+                        "telemetry_analysis_execution_completion_conflict"
+                    )
+                stored_payload = existing_artifact.get("payload")
+                if isinstance(stored_payload, memoryview):
+                    stored_payload = stored_payload.tobytes()
+                expected_artifact = {
+                    "id": result_artifact.result_id,
+                    "analysis_window_id": _require_uuid(
+                        window_id, "telemetry_analysis_window_id_invalid"
+                    ),
+                    "source_ingestion_run_id": artifact_source_run_id,
+                    "artifact_schema_version": result_artifact.artifact_schema_version,
+                    "execution_contract_version": result_artifact.execution_contract_version,
+                    "analysis_schema_version": result_artifact.analysis_schema_version,
+                    "analysis_contract_version": result_artifact.analysis_contract_version,
+                    "engine_name": result_artifact.engine_name,
+                    "engine_version": result_artifact.engine_version,
+                    "reference_metadata": dict(result_artifact.reference_metadata),
+                    "observation_count": result_artifact.observation_count,
+                    "observation_lineage_digest": result_artifact.observation_lineage_digest,
+                    "finding_ids": dict(result_artifact.finding_ids),
+                    "evidence_ids": dict(result_artifact.evidence_ids),
+                    "payload_encoding": result_artifact.payload_encoding,
+                    "payload_digest": result_artifact.payload_digest,
+                    "payload_uncompressed_bytes": result_artifact.payload_uncompressed_bytes,
+                    "payload_stored_bytes": result_artifact.payload_stored_bytes,
+                    "payload": result_artifact.payload,
+                }
+                actual_artifact = {
+                    key: existing_artifact.get(key) for key in expected_artifact
+                }
+                actual_artifact["id"] = str(actual_artifact["id"])
+                actual_artifact["analysis_window_id"] = str(
+                    actual_artifact["analysis_window_id"]
+                )
+                actual_artifact["source_ingestion_run_id"] = str(
+                    actual_artifact["source_ingestion_run_id"]
+                )
+                actual_artifact["payload"] = stored_payload
+                if actual_artifact != expected_artifact:
+                    raise TelemetryResultArtifactConflict(
+                        "telemetry_analysis_result_artifact_conflict"
+                    )
             cursor.execute(
                 """
                 UPDATE telemetry.analysis_windows w
@@ -3952,7 +4181,313 @@ class PostgreSQLTelemetryRepository:
                 raise TelemetryCheckpointConflict(
                     "telemetry_analysis_execution_completion_conflict"
                 )
-            return result
+        if result_artifact is not None:
+            logger.info(
+                "telemetry_canonical_result_persisted"
+                if artifact_inserted
+                else "telemetry_canonical_result_already_exists",
+                extra={
+                    "event": (
+                        "telemetry_canonical_result_persisted"
+                        if artifact_inserted
+                        else "telemetry_canonical_result_already_exists"
+                    ),
+                    "result_id": result_artifact.result_id,
+                    "window_id": window_id,
+                    "payload_digest": result_artifact.payload_digest,
+                    "payload_uncompressed_bytes": (
+                        result_artifact.payload_uncompressed_bytes
+                    ),
+                    "payload_stored_bytes": result_artifact.payload_stored_bytes,
+                    "serialization_ms": result_artifact.serialization_ms,
+                },
+            )
+            result["canonical_result_id"] = result_artifact.result_id
+        return result
+
+    def list_analysis_result_artifacts(
+        self,
+        scope: TelemetryRepositoryScope,
+        *,
+        connection_id: str,
+        source_run_id: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """List bounded immutable-result identities for one exact scoped run."""
+        connection_uuid = _require_uuid(
+            connection_id, "telemetry_connection_id_invalid"
+        )
+        run_uuid = _require_uuid(
+            source_run_id, "telemetry_ingestion_run_id_invalid"
+        )
+        bounded_limit = min(max(int(limit), 1), 200)
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT a.id, a.analysis_window_id, a.connection_id,
+                       a.source_ingestion_run_id, a.facility_id, a.system_id,
+                       a.asset_id, a.window_start, a.window_end,
+                       a.artifact_schema_version,
+                       a.execution_contract_version,
+                       a.analysis_schema_version,
+                       a.analysis_contract_version, a.engine_name,
+                       a.engine_version, a.reference_metadata,
+                       a.observation_count,
+                       a.observation_lineage_digest, a.finding_ids,
+                       a.evidence_ids, a.payload_encoding, a.payload_digest,
+                       a.payload_uncompressed_bytes, a.payload_stored_bytes,
+                       a.serialization_ms, a.created_at, w.result_metadata
+                FROM telemetry.analysis_result_artifacts a
+                JOIN telemetry.analysis_windows w
+                  ON w.resource_scope_id = a.resource_scope_id
+                 AND w.tenant_scope_id = a.tenant_scope_id
+                 AND w.workspace_id = a.workspace_id
+                 AND w.facility_id = a.facility_id
+                 AND w.id = a.analysis_window_id
+                 AND w.status = 'completed'
+                 AND w.result_digest = a.payload_digest
+                WHERE a.resource_scope_id = %s AND a.tenant_scope_id = %s
+                  AND a.workspace_id = %s AND a.facility_id = %s
+                  AND a.connection_id = %s::UUID
+                  AND a.source_ingestion_run_id = %s::UUID
+                ORDER BY a.window_start DESC, a.system_id,
+                         COALESCE(a.asset_id, ''), a.id
+                LIMIT %s
+                """,
+                (
+                    *_scope_parameters(scope),
+                    connection_uuid,
+                    run_uuid,
+                    bounded_limit,
+                ),
+            )
+            return [_row_dict(cursor, row) or {} for row in cursor.fetchall()]
+
+    def get_analysis_result_artifact(
+        self,
+        scope: TelemetryRepositoryScope,
+        *,
+        connection_id: str,
+        source_run_id: str,
+        system_id: str,
+        asset_id: str | None,
+        result_id: str,
+    ) -> dict[str, Any] | None:
+        """Read one artifact only through its complete authorized identity."""
+        connection_uuid = _require_uuid(
+            connection_id, "telemetry_connection_id_invalid"
+        )
+        run_uuid = _require_uuid(
+            source_run_id, "telemetry_ingestion_run_id_invalid"
+        )
+        result_uuid = _require_uuid(result_id, "telemetry_analysis_result_id_invalid")
+        system = _require_public_identifier(
+            system_id, "telemetry_analysis_system_id_invalid"
+        )
+        asset = (
+            _require_public_identifier(
+                asset_id, "telemetry_analysis_asset_id_invalid"
+            )
+            if asset_id is not None
+            else None
+        )
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT a.id, a.tenant_scope_id, a.workspace_id,
+                       a.resource_scope_id, a.facility_id,
+                       a.analysis_window_id, a.connection_id,
+                       a.source_ingestion_run_id, a.system_id, a.asset_id,
+                       a.window_start, a.window_end, a.authority_digest,
+                       a.artifact_schema_version,
+                       a.execution_contract_version,
+                       a.analysis_schema_version,
+                       a.analysis_contract_version, a.engine_name,
+                       a.engine_version, a.reference_metadata,
+                       a.observation_count,
+                       a.observation_lineage_digest, a.finding_ids,
+                       a.evidence_ids, a.payload_encoding, a.payload_digest,
+                       a.payload_uncompressed_bytes, a.payload_stored_bytes,
+                       a.serialization_ms, a.payload, a.created_at
+                FROM telemetry.analysis_result_artifacts a
+                JOIN telemetry.analysis_windows w
+                  ON w.resource_scope_id = a.resource_scope_id
+                 AND w.tenant_scope_id = a.tenant_scope_id
+                 AND w.workspace_id = a.workspace_id
+                 AND w.facility_id = a.facility_id
+                 AND w.id = a.analysis_window_id
+                 AND w.status = 'completed'
+                 AND w.result_digest = a.payload_digest
+                WHERE a.resource_scope_id = %s AND a.tenant_scope_id = %s
+                  AND a.workspace_id = %s AND a.facility_id = %s
+                  AND a.connection_id = %s::UUID
+                  AND a.source_ingestion_run_id = %s::UUID
+                  AND a.system_id = %s
+                  AND a.asset_id IS NOT DISTINCT FROM %s
+                  AND a.id = %s::UUID
+                """,
+                (
+                    *_scope_parameters(scope),
+                    connection_uuid,
+                    run_uuid,
+                    system,
+                    asset,
+                    result_uuid,
+                ),
+            )
+            return _row_dict(cursor, cursor.fetchone())
+
+    def get_analysis_result_artifact_metadata(
+        self,
+        scope: TelemetryRepositoryScope,
+        *,
+        connection_id: str,
+        source_run_id: str,
+        system_id: str,
+        asset_id: str | None,
+        result_id: str,
+    ) -> dict[str, Any] | None:
+        """Read immutable identity metadata without loading artifact bytes."""
+        connection_uuid = _require_uuid(
+            connection_id, "telemetry_connection_id_invalid"
+        )
+        run_uuid = _require_uuid(
+            source_run_id, "telemetry_ingestion_run_id_invalid"
+        )
+        result_uuid = _require_uuid(result_id, "telemetry_analysis_result_id_invalid")
+        system = _require_public_identifier(
+            system_id, "telemetry_analysis_system_id_invalid"
+        )
+        asset = (
+            _require_public_identifier(
+                asset_id, "telemetry_analysis_asset_id_invalid"
+            )
+            if asset_id is not None
+            else None
+        )
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT a.id, a.analysis_window_id, a.connection_id,
+                       a.source_ingestion_run_id, a.system_id, a.asset_id,
+                       a.authority_digest, a.observation_count,
+                       a.observation_lineage_digest, a.payload_digest
+                FROM telemetry.analysis_result_artifacts a
+                JOIN telemetry.analysis_windows w
+                  ON w.resource_scope_id = a.resource_scope_id
+                 AND w.tenant_scope_id = a.tenant_scope_id
+                 AND w.workspace_id = a.workspace_id
+                 AND w.facility_id = a.facility_id
+                 AND w.id = a.analysis_window_id
+                 AND w.status = 'completed'
+                 AND w.result_digest = a.payload_digest
+                WHERE a.resource_scope_id = %s AND a.tenant_scope_id = %s
+                  AND a.workspace_id = %s AND a.facility_id = %s
+                  AND a.connection_id = %s::UUID
+                  AND a.source_ingestion_run_id = %s::UUID
+                  AND a.system_id = %s
+                  AND a.asset_id IS NOT DISTINCT FROM %s
+                  AND a.id = %s::UUID
+                """,
+                (
+                    *_scope_parameters(scope),
+                    connection_uuid,
+                    run_uuid,
+                    system,
+                    asset,
+                    result_uuid,
+                ),
+            )
+            return _row_dict(cursor, cursor.fetchone())
+
+    def list_analysis_result_lineage_records(
+        self,
+        scope: TelemetryRepositoryScope,
+        *,
+        connection_id: str,
+        source_run_id: str,
+        system_id: str,
+        asset_id: str | None,
+        result_id: str,
+    ) -> list[dict[str, Any]]:
+        """Load the exact membership used by one fully scoped result."""
+        connection_uuid = _require_uuid(
+            connection_id, "telemetry_connection_id_invalid"
+        )
+        run_uuid = _require_uuid(
+            source_run_id, "telemetry_ingestion_run_id_invalid"
+        )
+        result_uuid = _require_uuid(result_id, "telemetry_analysis_result_id_invalid")
+        system = _require_public_identifier(
+            system_id, "telemetry_analysis_system_id_invalid"
+        )
+        asset = (
+            _require_public_identifier(
+                asset_id, "telemetry_analysis_asset_id_invalid"
+            )
+            if asset_id is not None
+            else None
+        )
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT o.id AS observation_id, o.connection_id,
+                       o.ingestion_run_id, o.external_signal_id, o.mapping_id,
+                       o.mapping_revision,
+                       o.canonical_concept_id AS canonical_signal_id,
+                       o.canonical_signal_name, o.system_id, o.asset_id,
+                       o.external_tag_id, o.source_timestamp_raw,
+                       o.source_timezone, o.source_offset,
+                       o.timestamp_normalization_version,
+                       o.observed_at_utc, o.original_unit, o.canonical_unit,
+                       o.conversion_id, o.conversion_version,
+                       o.source_record_digest, o.mapping_authority_digest
+                FROM telemetry.analysis_result_artifacts a
+                JOIN telemetry.analysis_windows w
+                  ON w.resource_scope_id = a.resource_scope_id
+                 AND w.tenant_scope_id = a.tenant_scope_id
+                 AND w.workspace_id = a.workspace_id
+                 AND w.facility_id = a.facility_id
+                 AND w.id = a.analysis_window_id
+                 AND w.status = 'completed'
+                 AND w.result_digest = a.payload_digest
+                JOIN telemetry.analysis_window_observations link
+                  ON link.resource_scope_id = a.resource_scope_id
+                 AND link.tenant_scope_id = a.tenant_scope_id
+                 AND link.workspace_id = a.workspace_id
+                 AND link.facility_id = a.facility_id
+                 AND link.analysis_window_id = a.analysis_window_id
+                JOIN telemetry.normalized_observations o
+                  ON o.resource_scope_id = link.resource_scope_id
+                 AND o.tenant_scope_id = link.tenant_scope_id
+                 AND o.workspace_id = link.workspace_id
+                 AND o.facility_id = link.facility_id
+                 AND o.id = link.observation_id
+                WHERE a.resource_scope_id = %s AND a.tenant_scope_id = %s
+                  AND a.workspace_id = %s AND a.facility_id = %s
+                  AND a.connection_id = %s::UUID
+                  AND a.source_ingestion_run_id = %s::UUID
+                  AND a.system_id = %s
+                  AND a.asset_id IS NOT DISTINCT FROM %s
+                  AND a.id = %s::UUID
+                ORDER BY o.id
+                LIMIT 5001
+                """,
+                (
+                    *_scope_parameters(scope),
+                    connection_uuid,
+                    run_uuid,
+                    system,
+                    asset,
+                    result_uuid,
+                ),
+            )
+            rows = [_row_dict(cursor, row) or {} for row in cursor.fetchall()]
+        if len(rows) > 5_000:
+            raise TelemetryRepositoryError(
+                "telemetry_analysis_result_lineage_limit_exceeded"
+            )
+        return rows
 
     def load_connection_health_inputs(
         self,

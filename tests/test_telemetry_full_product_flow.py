@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+import json
+from pathlib import Path
+import subprocess
 from typing import Any, Mapping
 import uuid
 
@@ -19,6 +22,7 @@ from app.engine.sii.behavioral_model_contract import (
     AuthenticatedPhase4Scope,
     canonical_phase4_resource_scope_id,
 )
+from app.engine.sii_engine import evaluate_sii as authoritative_evaluate_sii
 from app.models.telemetry_api_models import (
     ConnectionCreateRequest,
     CredentialPutRequest,
@@ -42,6 +46,7 @@ from app.services.telemetry_ingestion import prepare_connector_page
 from app.services.telemetry_runtime import TelemetryProviderRegistry, TelemetryRuntime
 from app.services.telemetry_scheduler import TelemetryScheduler
 from app.services.telemetry_secrets import MemoryTelemetrySecretStore, SecretBinding
+from app.services.telemetry_result_service import TelemetryCanonicalResultService
 from app.services.upload_persistence import project_result_for_transport
 
 
@@ -51,6 +56,7 @@ SYSTEM_ID = "chilled-water-loop-a"
 ASSET_ID = "primary-pump-a"
 PRESSURE_CONCEPT_ID = "9fa5d454-6b13-5f59-99d1-7f6fb0a3e07f"
 FLOW_CONCEPT_ID = "a19db5be-5ca1-5373-a9e4-6957e9f54c43"
+POWER_CONCEPT_ID = "4385267d-f840-59c4-ba65-06a6726e3189"
 
 
 def _scope() -> TelemetryScopeRef:
@@ -113,6 +119,7 @@ class SyntheticReadOnlyConnector(TelemetryConnector):
             signals=(
                 DiscoveredSignal("PUMP-A.PRESSURE", "Pump discharge pressure", reported_unit="psi"),
                 DiscoveredSignal("PUMP-A.FLOW", "Primary loop flow", reported_unit="GPM"),
+                DiscoveredSignal("PUMP-A.POWER", "Pump active power", reported_unit="kW"),
                 DiscoveredSignal("PUMP-A.VIBRATION", "Pump vibration", reported_unit="percent"),
             )
         )
@@ -121,14 +128,26 @@ class SyntheticReadOnlyConnector(TelemetryConnector):
         assert context.secret_binding is not None
         self.fetch_count += 1
         observations: list[RawObservationEnvelope] = []
-        for index, timestamp in enumerate((NOW - timedelta(minutes=2), NOW - timedelta(minutes=1))):
+        for index in range(120):
+            timestamp = NOW - timedelta(minutes=119 - index)
+            flow = 500.0 + index * 2.0
+            pressure = (
+                25.0 + flow * 0.1
+                if index < 84
+                else 95.0 + ((index * 17) % 11)
+            )
+            power = (
+                10.0 + flow * 0.05
+                if index < 84
+                else 35.0 + ((index * 29) % 23)
+            )
             observations.extend(
                 (
                     RawObservationEnvelope(
                         external_tag_id="PUMP-A.PRESSURE",
                         external_tag_name="Pump discharge pressure",
                         source_timestamp=timestamp,
-                        raw_value=100.0 + index,
+                        raw_value=pressure,
                         reported_unit="psi",
                         reported_quality="good",
                         provider_event_id=f"pressure-{index}",
@@ -137,10 +156,19 @@ class SyntheticReadOnlyConnector(TelemetryConnector):
                         external_tag_id="PUMP-A.FLOW",
                         external_tag_name="Primary loop flow",
                         source_timestamp=timestamp,
-                        raw_value=500.0 + index,
+                        raw_value=flow,
                         reported_unit="GPM",
                         reported_quality="good",
                         provider_event_id=f"flow-{index}",
+                    ),
+                    RawObservationEnvelope(
+                        external_tag_id="PUMP-A.POWER",
+                        external_tag_name="Pump active power",
+                        source_timestamp=timestamp,
+                        raw_value=power,
+                        reported_unit="kW",
+                        reported_quality="good",
+                        provider_event_id=f"power-{index}",
                     ),
                     RawObservationEnvelope(
                         external_tag_id="PUMP-A.VIBRATION",
@@ -771,10 +799,116 @@ class InMemoryProductFlowRepository:
             result_digest=values.get("result_digest"),
             result_metadata=deepcopy(values.get("result_metadata") or {}),
             evidence_lineage=deepcopy(values.get("evidence_lineage") or {}),
+            result_artifact=values.get("result_artifact"),
         )
         if values.get("reason_code"):
             record.setdefault("quality_summary", {})["status_reason_code"] = values["reason_code"]
         return deepcopy(record)
+
+    def get_ingestion_run(
+        self, scope: TelemetryScopeRef, *, run_id: str
+    ) -> dict[str, Any] | None:
+        self._assert_scope(scope)
+        record = self.runs.get(run_id)
+        return deepcopy(record) if record is not None else None
+
+    def _canonical_result_row(self, window: Mapping[str, Any]) -> dict[str, Any]:
+        artifact = window["result_artifact"]
+        run = self.runs[window["source_ingestion_run_id"]]
+        return {
+            "id": artifact.result_id,
+            **self.scope.as_public_dict(),
+            "analysis_window_id": window["id"],
+            "connection_id": run["connection_id"],
+            "source_ingestion_run_id": window["source_ingestion_run_id"],
+            "system_id": window["system_id"],
+            "asset_id": window["asset_id"],
+            "window_start": window["window_start"],
+            "window_end": window["window_end"],
+            "authority_digest": window["authority_digest"],
+            "artifact_schema_version": artifact.artifact_schema_version,
+            "execution_contract_version": artifact.execution_contract_version,
+            "analysis_schema_version": artifact.analysis_schema_version,
+            "analysis_contract_version": artifact.analysis_contract_version,
+            "engine_name": artifact.engine_name,
+            "engine_version": artifact.engine_version,
+            "reference_metadata": dict(artifact.reference_metadata),
+            "observation_count": artifact.observation_count,
+            "observation_lineage_digest": artifact.observation_lineage_digest,
+            "finding_ids": dict(artifact.finding_ids),
+            "evidence_ids": dict(artifact.evidence_ids),
+            "payload_encoding": artifact.payload_encoding,
+            "payload_digest": artifact.payload_digest,
+            "payload_uncompressed_bytes": artifact.payload_uncompressed_bytes,
+            "payload_stored_bytes": artifact.payload_stored_bytes,
+            "serialization_ms": artifact.serialization_ms,
+            "payload": artifact.payload,
+            "created_at": window["completed_at"],
+            "result_metadata": deepcopy(window["result_metadata"]),
+        }
+
+    def list_analysis_result_artifacts(
+        self,
+        scope: TelemetryScopeRef,
+        *,
+        connection_id: str,
+        source_run_id: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        self._assert_scope(scope)
+        rows = []
+        for window in self.windows.values():
+            row = self._canonical_result_row(window)
+            if (
+                row["connection_id"] == connection_id
+                and row["source_ingestion_run_id"] == source_run_id
+            ):
+                row.pop("payload")
+                rows.append(row)
+        return rows[:limit]
+
+    def get_analysis_result_artifact(
+        self, scope: TelemetryScopeRef, **identity: Any
+    ) -> dict[str, Any] | None:
+        self._assert_scope(scope)
+        for window in self.windows.values():
+            row = self._canonical_result_row(window)
+            if all(
+                identity[key] == row[column]
+                for key, column in {
+                    "connection_id": "connection_id",
+                    "source_run_id": "source_ingestion_run_id",
+                    "system_id": "system_id",
+                    "asset_id": "asset_id",
+                    "result_id": "id",
+                }.items()
+            ):
+                return row
+        return None
+
+    def get_analysis_result_artifact_metadata(
+        self, scope: TelemetryScopeRef, **identity: Any
+    ) -> dict[str, Any] | None:
+        row = self.get_analysis_result_artifact(scope, **identity)
+        if row is not None:
+            row.pop("payload")
+        return row
+
+    def list_analysis_result_lineage_records(
+        self, scope: TelemetryScopeRef, **identity: Any
+    ) -> list[dict[str, Any]]:
+        row = self.get_analysis_result_artifact(scope, **identity)
+        if row is None:
+            return []
+        window = self.windows[row["analysis_window_id"]]
+        linked = {
+            item["observation_id"] for item in window["observation_links"]
+        }
+        return [
+            deepcopy(item)
+            for item in sorted(self.observations, key=lambda item: item["id"])
+            if item["id"] in linked
+        ]
 
 
 def test_full_telemetry_product_flow_reaches_one_system_scoped_sii_result() -> None:
@@ -904,32 +1038,51 @@ def test_full_telemetry_product_flow_reaches_one_system_scoped_sii_result() -> N
         ),
         actor_id=ACTOR,
     )
+    mapped_power = connections.map_signal(
+        scope,
+        connection_id,
+        by_tag["PUMP-A.POWER"]["signal_id"],
+        SignalMappingPutRequest(
+            system_id=SYSTEM_ID,
+            asset_id=ASSET_ID,
+            canonical_signal_id=POWER_CONCEPT_ID,
+            source_unit="kW",
+            source_timezone="UTC",
+            expected_cadence_seconds=60,
+            provenance="manual",
+        ),
+        actor_id=ACTOR,
+    )
     enabled = connections.set_enabled(scope, connection_id, enabled=True, actor_id=ACTOR)
 
     sii_calls: list[dict[str, Any]] = []
 
     def evaluate_sii(**kwargs: Any) -> dict[str, Any]:
-        sii_calls.append(kwargs)
-        return {
-            "status": "limited",
-            "compatibility": {},
-            "processing_trace": {"engine_version": "synthetic-integration-v1"},
-            "evidence_fusion": {
-                "evidence_inventory": [
-                    {
-                        "evidence_id": "evidence-system-change-1",
-                        "evidence_type": "multivariate_behavioral_change",
-                    }
-                ]
+        engine_kwargs = {
+            **kwargs,
+            "sensor_health": {
+                "signals": [
+                    {"signal": signal_id, "health": "healthy", "conditions": []}
+                    for signal_id in kwargs["config"]["numeric_columns"]
+                ],
+                "source_conditions": [],
+                "population_rows": 120,
+                "assessed_rows": 120,
+                "sampled_for_signal_health": False,
+                "assessment_method": "deterministic_acceptance_fixture",
             },
-            "findings": [
-                {
-                    "finding_id": "finding-system-change-1",
-                    "system_id": SYSTEM_ID,
-                    "cause_established": False,
-                }
-            ],
+            "operating_mode": {
+                "match": "strong",
+                "baseline_mode": "mid_load",
+                "recent_mode": "mid_load",
+                "baseline_mode_label": "Mid load",
+                "recent_mode_label": "Mid load",
+                "confidence": "high",
+                "reasons": ["The deterministic acceptance windows share one mode."],
+            },
         }
+        sii_calls.append(engine_kwargs)
+        return authoritative_evaluate_sii(**engine_kwargs)
 
     analysis_results: list[Any] = []
 
@@ -968,26 +1121,38 @@ def test_full_telemetry_product_flow_reaches_one_system_scoped_sii_result() -> N
         "code": "validated",
     }
     assert validated_connection["resource_scope_id"] == scope.resource_scope_id
-    assert discovery["discovered_count"] == discovery["registered_count"] == 3
-    assert mapped_pressure["system_id"] == mapped_flow["system_id"] == SYSTEM_ID
-    assert mapped_pressure["asset_id"] == mapped_flow["asset_id"] == ASSET_ID
-    assert mapped_pressure["provenance"] == mapped_flow["provenance"] == "manual"
+    assert discovery["discovered_count"] == discovery["registered_count"] == 4
+    assert {
+        mapped_pressure["system_id"],
+        mapped_flow["system_id"],
+        mapped_power["system_id"],
+    } == {SYSTEM_ID}
+    assert {
+        mapped_pressure["asset_id"],
+        mapped_flow["asset_id"],
+        mapped_power["asset_id"],
+    } == {ASSET_ID}
+    assert {
+        mapped_pressure["provenance"],
+        mapped_flow["provenance"],
+        mapped_power["provenance"],
+    } == {"manual"}
     assert by_tag["PUMP-A.VIBRATION"]["mapping_status"] == "unmapped"
     assert enabled["enabled"] is True
 
     assert scheduled.outcome == "processed"
     assert scheduled.analysis_status == "completed"
     assert provider.fetch_count == 1
-    assert len(repository.observations) == 4
-    assert len(repository.rejections) == 2
+    assert len(repository.observations) == 360
+    assert len(repository.rejections) == 120
     assert {item["reason_code"] for item in repository.rejections} == {"mapping_not_approved"}
     assert all(item["external_tag_id"] != "PUMP-A.VIBRATION" for item in repository.observations)
     assert all(item["tenant_scope_id"] == scope.tenant_scope_id for item in repository.observations)
     assert all(item["facility_id"] == scope.facility_id for item in repository.observations)
     assert all(item["system_id"] == SYSTEM_ID for item in repository.observations)
     assert all(item["asset_id"] == ASSET_ID for item in repository.observations)
-    assert {item["canonical_unit"] for item in repository.observations} == {"kPa", "L/s"}
-    assert {item["original_unit"] for item in repository.observations} == {"psi", "GPM"}
+    assert {item["canonical_unit"] for item in repository.observations} == {"kPa", "L/s", "kW"}
+    assert {item["original_unit"] for item in repository.observations} == {"psi", "GPM", "kW"}
     assert all(item["source_timezone"] == "UTC" for item in repository.observations)
     assert all(item["observed_at_utc"].tzinfo is UTC for item in repository.observations)
 
@@ -995,6 +1160,7 @@ def test_full_telemetry_product_flow_reaches_one_system_scoped_sii_result() -> N
     assert set(sii_calls[0]["config"]["numeric_columns"]) == {
         PRESSURE_CONCEPT_ID,
         FLOW_CONCEPT_ID,
+        POWER_CONCEPT_ID,
     }
     assert "PUMP-A.VIBRATION" not in repr(sii_calls[0])
     assert sii_calls[0]["config"]["infrastructure_identity"] == {
@@ -1020,7 +1186,7 @@ def test_full_telemetry_product_flow_reaches_one_system_scoped_sii_result() -> N
         }
     )
     assert transport is not None
-    assert transport["analysis_result"]["sii_evidence"]["status"] == "limited"
+    assert transport["analysis_result"]["sii_evidence"]["status"] == "complete"
 
     durable_window = repository.windows[analysis.windows[0].window_id]
     assert durable_window["status"] == "completed"
@@ -1030,17 +1196,16 @@ def test_full_telemetry_product_flow_reaches_one_system_scoped_sii_result() -> N
     assert durable_window["asset_id"] == ASSET_ID
     assert durable_window["source_ingestion_run_id"] == scheduled.run_id
     assert durable_window["execution_attempt_count"] == 1
-    assert durable_window["result_metadata"]["finding_id_count"] == 1
+    assert durable_window["result_metadata"]["finding_id_count"] >= 1
     assert durable_window["result_metadata"]["evidence_id_count"] >= 1
-    assert durable_window["evidence_lineage"]["finding_ids"] == [
-        "finding-system-change-1"
-    ]
-    assert "evidence-system-change-1" in durable_window["evidence_lineage"][
-        "evidence_ids"
-    ]
+    assert durable_window["evidence_lineage"]["finding_ids"]
+    assert durable_window["evidence_lineage"]["evidence_ids"]
     assert durable_window["evidence_lineage"]["contributing_ingestion_run_ids"] == [
         scheduled.run_id
     ]
+    canonical_artifact = durable_window["result_artifact"]
+    assert analysis.windows[0].result_id == canonical_artifact.result_id
+    assert analysis.windows[0].artifact_digest == canonical_artifact.payload_digest
     linked_observation_ids = {
         item["observation_id"] for item in durable_window["observation_links"]
     }
@@ -1055,3 +1220,119 @@ def test_full_telemetry_product_flow_reaches_one_system_scoped_sii_result() -> N
         "credential_binding_changed",
         "validation_completed",
     }
+
+    # Binding restart acceptance: discard every live analysis object, recreate
+    # the retrieval service, and load only the durable canonical bytes/joins.
+    persisted_result_id = canonical_artifact.result_id
+    persisted_digest = canonical_artifact.payload_digest
+    analysis_results.clear()
+    execution = None
+    sii_call_count = len(sii_calls)
+    restarted_runtime = TelemetryRuntime(
+        repository=repository,
+        secret_store=secret_store,
+        providers=providers,
+        signal_registry=registry,
+        health_service=health,
+        scheduler=object(),
+    )
+    restarted_results = TelemetryCanonicalResultService(restarted_runtime)
+    listed_results = restarted_results.list_results(
+        scope,
+        connection_id=connection_id,
+        source_run_id=scheduled.run_id,
+    )
+    retrieved_result = restarted_results.get_result(
+        scope,
+        connection_id=connection_id,
+        source_run_id=scheduled.run_id,
+        system_id=SYSTEM_ID,
+        asset_id=ASSET_ID,
+        result_id=persisted_result_id,
+    )
+    retrieved_lineage = restarted_results.get_lineage_page(
+        scope,
+        connection_id=connection_id,
+        source_run_id=scheduled.run_id,
+        system_id=SYSTEM_ID,
+        asset_id=ASSET_ID,
+        result_id=persisted_result_id,
+        limit=100,
+        cursor=None,
+    )
+
+    assert len(sii_calls) == sii_call_count
+    assert listed_results[0]["result_id"] == persisted_result_id
+    assert retrieved_result["result_id"] == persisted_result_id
+    assert retrieved_result["payload_digest"] == persisted_digest
+    assert retrieved_result["lineage_verified"] is True
+    assert retrieved_result["product_result"]["result_id"] == persisted_result_id
+    assert retrieved_result["product_result"]["payload_digest"] == persisted_digest
+    assert retrieved_result["product_result"]["analysis_window_id"] == durable_window["id"]
+    assert retrieved_result["product_result"]["source_run_id"] == scheduled.run_id
+    assert retrieved_lineage["result_id"] == persisted_result_id
+    assert retrieved_lineage["observation_lineage_digest"] == (
+        canonical_artifact.observation_lineage_digest
+    )
+    lineage_records = list(retrieved_lineage["records"])
+    lineage_cursor = retrieved_lineage["next_cursor"]
+    while lineage_cursor:
+        lineage_page = restarted_results.get_lineage_page(
+            scope,
+            connection_id=connection_id,
+            source_run_id=scheduled.run_id,
+            system_id=SYSTEM_ID,
+            asset_id=ASSET_ID,
+            result_id=persisted_result_id,
+            limit=100,
+            cursor=lineage_cursor,
+        )
+        assert lineage_page["observation_lineage_digest"] == (
+            canonical_artifact.observation_lineage_digest
+        )
+        lineage_records.extend(lineage_page["records"])
+        lineage_cursor = lineage_page["next_cursor"]
+    assert {item["observation_id"] for item in lineage_records} == linked_observation_ids
+
+    # Cross-layer acceptance: feed the exact post-restart durable response to
+    # the production frontend model and progressive-disclosure projectors.
+    # This subprocess receives no Python analysis objects and cannot invoke SII.
+    frontend_assertion = (
+        Path(__file__).parents[1]
+        / "frontend"
+        / "scripts"
+        / "assert-canonical-result-routing.mjs"
+    )
+    frontend_loader = frontend_assertion.with_name("extension-loader.mjs")
+    projected = subprocess.run(
+        [
+            "node",
+            "--no-warnings",
+            "--experimental-loader",
+            str(frontend_loader),
+            str(frontend_assertion),
+        ],
+        cwd=frontend_assertion.parents[1],
+        input=json.dumps(retrieved_result, default=str),
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=30,
+    )
+    assert projected.returncode == 0, projected.stderr
+    routing_proof = json.loads(projected.stdout)
+    assert routing_proof["result_id"] == persisted_result_id
+    assert routing_proof["payload_digest"] == persisted_digest
+    assert routing_proof["observation_lineage_digest"] == (
+        canonical_artifact.observation_lineage_digest
+    )
+    assert routing_proof["finding_id"] in durable_window["evidence_lineage"][
+        "finding_ids"
+    ]
+    assert routing_proof["depths"] == [
+        "results",
+        "review",
+        "investigation",
+        "evidence",
+    ]
+    assert len(sii_calls) == sii_call_count

@@ -233,6 +233,73 @@ describe("results presentation contracts", () => {
     expect(JSON.stringify(b.lineage)).not.toContain("PACKAGE_RESULTS_CANARY_A");
   });
 
+  it("preserves canonical projection truncation and exact source/reference qualification", () => {
+    const result = fixtureResult();
+    Object.assign(result, {
+      result_id: "77777777-7777-4777-8777-777777777777",
+      analysis_window_id: "88888888-8888-4888-8888-888888888888",
+      source_run_id: "44444444-4444-4444-8444-444444444444",
+      connection_id: "11111111-1111-4111-8111-111111111111",
+      facility_id: "facility-a",
+      system_id: "SYSTEM_A",
+      asset_id: "chiller-03",
+      payload_digest: "a".repeat(64),
+      canonical_result: {
+        identity: {
+          result_id: "77777777-7777-4777-8777-777777777777",
+          analysis_window_id: "88888888-8888-4888-8888-888888888888",
+          source_ingestion_run_id: "44444444-4444-4444-8444-444444444444",
+          connection_id: "11111111-1111-4111-8111-111111111111",
+          facility_id: "facility-a",
+          system_id: "SYSTEM_A",
+          asset_id: "chiller-03",
+          payload_digest: "a".repeat(64),
+          observation_count: 2,
+          observation_lineage_digest: "d".repeat(64),
+        },
+        reference_metadata: { model_id: "model-17", baseline_snapshot_id: "snapshot-9" },
+      },
+      projection: {
+        contract_version: "telemetry-canonical-result-product.v1",
+        canonical_result_id: "77777777-7777-4777-8777-777777777777",
+        canonical_payload_digest: "a".repeat(64),
+        shared: { source_path: "analysis_result", truncated: false, omitted_values: 0 },
+        technical_channels: {
+          covariance_analysis: { source_path: "sii_result.covariance_analysis", original_items: 140, selected_items: 32, original_bytes: 300000, selected_bytes: 100000, truncated: true, transported: true },
+        },
+        evidence_audit: { source_path: "analysis_result.conditions|analysis_result.insights", truncated: false, omitted_values: 0 },
+      },
+    });
+    const model = modelFrom(result);
+    const investigation = projectInvestigation(model, A);
+    const evidence = projectEvidenceRecord(model, A);
+
+    expect(investigation.projectionQualification).toMatchObject({
+      contractVersion: "telemetry-canonical-result-product.v1",
+      canonicalResultId: result.result_id,
+      truncated: true,
+      referenceMetadata: { model_id: "model-17", baseline_snapshot_id: "snapshot-9" },
+      truncatedSources: ["sii_result.covariance_analysis"],
+    });
+    expect(investigation.systemEvidence.find((channel) => channel.key === "multivariate")).toMatchObject({
+      sourcePath: "sii_result.covariance_analysis",
+      qualification: { truncated: true, originalItems: 140, selectedItems: 32, canonicalResultId: result.result_id },
+    });
+    expect(evidence.channels.find((channel) => channel.key === "multivariate")).toMatchObject({
+      sourcePath: "sii_result.covariance_analysis",
+      qualification: { truncated: true, canonicalPayloadDigest: "a".repeat(64) },
+    });
+    expect(evidence.identity).toMatchObject({
+      resultId: result.result_id,
+      connectionId: result.connection_id,
+      sourceRunId: result.source_run_id,
+      systemId: result.system_id,
+      assetId: result.asset_id,
+      observationCount: 2,
+      observationLineageDigest: "d".repeat(64),
+    });
+  });
+
   it("does not treat an index-generated relationship display ID as source ownership", () => {
     const result = fixtureResult();
     result.analysis_explanation.conditions[1].supporting_relationships = [];

@@ -29,6 +29,7 @@ export default function DataConnectionsWorkspace(props) {
       currentUser={props.currentUser}
       currentWorkspace={props.currentWorkspace}
       datasetScopeKey={props.datasetScopeKey}
+      onOpenAnalysisResult={props.onOpenAnalysisResult}
     />
   );
 }
