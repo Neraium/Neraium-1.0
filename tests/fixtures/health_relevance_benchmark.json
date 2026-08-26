@@ -1,0 +1,330 @@
+{
+  "schema_version": "health-relevance-benchmark.v1",
+  "fixture_id": "synthetic-health-relevance-cases-a-p-v1",
+  "method_config": {
+    "bayesian_shrinkage_v1": {},
+    "outcome_conditioned_information_v1": {
+      "permutation_seed": 918273,
+      "permutation_iterations": 300
+    }
+  },
+  "cases": [
+    {
+      "id": "A",
+      "title": "Repeated degradation",
+      "dimensions": ["stability", "interpretability"],
+      "language_samples": ["relationship-r recurred_with validated degradation outcomes"],
+      "variants": [
+        {
+          "id": "five_degradations",
+          "groups": [
+            {
+              "count": 5,
+              "treatment": "positive",
+              "information_cell": "a",
+              "authority_tiers": ["A", "B"],
+              "incident_count": 3,
+              "episode_count": 3,
+              "outcome_family": "degradation_or_fault"
+            }
+          ],
+          "expected": {
+            "states": {"all": "emerging_relevance"},
+            "summary": {
+              "eligible_outcome_count": 5,
+              "canonical_incident_count": 3,
+              "positive_count": 3,
+              "positive_family_count": 1
+            },
+            "reasons_include": ["outcome_diversity_not_met"],
+        "bayesian": {"primary_directional": 3},
+        "information": {"table": {"a": 3, "b": 0, "c": 0, "d": 0}}
+          }
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "title": "Isolated event",
+      "dimensions": ["sparse_data_behavior", "interpretability"],
+      "language_samples": ["relationship-r was observed_during one validated outcome"],
+      "variants": [
+        {
+          "id": "isolated",
+          "groups": [
+            {"count": 1, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 1, "episode_count": 1}
+          ],
+          "expected": {
+            "states": {"all": "insufficient_outcome_evidence"},
+            "summary": {"eligible_outcome_count": 1, "canonical_incident_count": 1},
+            "reasons_include": ["emerging_outcome_minimum_not_met"],
+            "bayesian": {"primary_directional": 1},
+            "information": {"table": {"a": 1, "b": 0, "c": 0, "d": 0}}
+          }
+        }
+      ]
+    },
+    {
+      "id": "C",
+      "title": "Repeated false positives",
+      "dimensions": ["negative_evidence", "false_positive_resistance"],
+      "language_samples": ["relationship-r was associated_with repeated validated not-useful outcomes"],
+      "variants": [
+        {
+          "id": "repeated_false_positive",
+          "groups": [
+            {"count": 1, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 1},
+            {"count": 4, "treatment": "negative", "information_cell": "b", "authority_tiers": ["A", "B"], "incident_count": 4, "health_disposition": "not_useful", "outcome_family": "not_useful_or_false_positive"}
+          ],
+          "expected": {
+            "states": {"all": "not_supported_by_outcomes"},
+            "summary": {"positive_count": 1, "negative_count": 4},
+            "bayesian": {"primary_directional": 5},
+            "information": {"table": {"a": 1, "b": 4, "c": 0, "d": 0}}
+          }
+        }
+      ]
+    },
+    {
+      "id": "D",
+      "title": "Context specificity",
+      "dimensions": ["context_specificity"],
+      "language_samples": ["relationship-r recurred_with outcomes in the high-load context"],
+      "variants": [
+        {
+          "id": "high_load_only",
+          "context_fingerprint": "context-high-load",
+          "groups": [
+            {"count": 5, "treatment": "positive", "information_cell": "a", "authority_tiers": ["A", "B"], "incident_count": 3, "episode_count": 2}
+          ],
+          "expected": {
+            "states": {"all": "emerging_relevance"},
+            "summary": {"eligible_outcome_count": 5, "canonical_incident_count": 3}
+          }
+        }
+      ]
+    },
+    {
+      "id": "E",
+      "title": "Contradictory evidence boundaries",
+      "dimensions": ["contradictory_evidence", "stability"],
+      "language_samples": ["relationship-r was associated_with both supporting and contradictory outcomes"],
+      "variants": [
+        {
+          "id": "q_0_40",
+          "groups": [
+            {"count": 2, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 2},
+            {"count": 3, "treatment": "negative", "information_cell": "b", "authority_tier": "B", "incident_count": 3}
+          ],
+          "expected": {"states": {"all": "contradictory_evidence"}, "summary": {"positive_count": 2, "negative_count": 3}}
+        },
+        {
+          "id": "q_0_50",
+          "groups": [
+            {"count": 3, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 3},
+            {"count": 3, "treatment": "negative", "information_cell": "b", "authority_tier": "B", "incident_count": 3}
+          ],
+          "expected": {"states": {"all": "contradictory_evidence"}, "summary": {"positive_count": 3, "negative_count": 3}}
+        },
+        {
+          "id": "q_0_60",
+          "groups": [
+            {"count": 3, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 3},
+            {"count": 2, "treatment": "negative", "information_cell": "b", "authority_tier": "B", "incident_count": 2}
+          ],
+          "expected": {"states": {"all": "contradictory_evidence"}, "summary": {"positive_count": 3, "negative_count": 2}}
+        }
+      ]
+    },
+    {
+      "id": "F",
+      "title": "Recovery association",
+      "dimensions": ["interpretability"],
+      "language_samples": ["relationship-r returned_toward_reference_after the recorded intervention"],
+      "variants": [
+        {
+          "id": "recovery",
+          "groups": [
+            {"count": 1, "treatment": "neutral", "authority_tier": "A", "incident_count": 1, "outcome_family": "maintenance_or_intervention", "temporal_role": "post_intervention"},
+            {"count": 1, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 1, "outcome_family": "recovery", "temporal_role": "recovery", "outcome_type": "return_toward_expected_behavior", "health_disposition": "recovery_observed"}
+          ],
+          "expected": {"states": {"all": "insufficient_outcome_evidence"}, "summary": {"eligible_outcome_count": 2, "positive_family_count": 1}}
+        }
+      ]
+    },
+    {
+      "id": "G",
+      "title": "Frequent irrelevant signal",
+      "dimensions": ["false_positive_resistance", "negative_evidence"],
+      "language_samples": ["signal-s was observed_during outcome and explicit comparison windows"],
+      "variants": [
+        {
+          "id": "balanced_frequency",
+          "subject_type": "signal",
+          "subject_id": "signal-s",
+          "groups": [
+            {"count": 20, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 20},
+            {"count": 20, "treatment": "negative", "information_cell": "b", "authority_tier": "A", "incident_count": 20},
+            {"count": 20, "treatment": "comparison", "information_cell": "c", "authority_tier": "A", "incident_count": 20},
+            {"count": 20, "treatment": "comparison", "information_cell": "d", "authority_tier": "A", "incident_count": 20}
+          ],
+          "expected": {
+            "states": {"all": "contradictory_evidence"},
+            "summary": {"positive_count": 20, "negative_count": 20, "comparison_window_count": 20},
+            "information": {"table": {"a": 20, "b": 20, "c": 20, "d": 20}, "max_adjusted": 0.000000000001}
+          }
+        }
+      ]
+    },
+    {
+      "id": "H",
+      "title": "Sparse context",
+      "dimensions": ["context_specificity", "sparse_data_behavior"],
+      "language_samples": ["relationship-r was observed_during a narrow context episode"],
+      "variants": [
+        {
+          "id": "incomplete_context",
+          "groups": [
+            {"count": 2, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 2, "episode_count": 1},
+            {"count": 1, "treatment": "excluded", "eligible": false, "authority_tier": "A", "incident_count": 1, "context_complete_count": 0, "exclusion_reason": "context_metadata_incomplete"}
+          ],
+          "expected": {
+            "states": {"all": "insufficient_outcome_evidence"},
+            "summary": {"eligible_outcome_count": 2, "context_episode_count": 1},
+            "reasons_include": ["identity_context_or_provenance_incomplete"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "I",
+      "title": "Authority provenance",
+      "dimensions": ["authority_weighting", "interpretability"],
+      "language_samples": ["independent records remain distinguishable from operator confirmations after review"],
+      "variants": [
+        {
+          "id": "independent",
+          "groups": [
+            {"count": 15, "treatment": "positive", "information_cell": "a", "authority_tiers": ["A", "B"], "incident_count": 15, "episode_count": 3, "outcome_families": ["degradation_or_fault", "inspection_confirmation"]},
+            {"count": 4, "treatment": "comparison", "information_cell": "d", "authority_tiers": ["A", "B"], "incident_count": 4, "episode_count": 3, "health_disposition": "stable_observation", "outcome_family": "expected_or_no_fault", "temporal_role": "stable_comparison"}
+          ],
+          "expected": {"states": {"all": "supported_relevance"}, "summary": {"independent_count": 19, "tier_d_count": 0, "comparison_window_count": 4, "positive_family_count": 2}}
+        },
+        {
+          "id": "neraium_influenced",
+          "groups": [
+            {"count": 15, "treatment": "positive", "information_cell": "a", "authority_tier": "D", "incident_count": 15, "episode_count": 3, "outcome_families": ["degradation_or_fault", "inspection_confirmation"]},
+            {"count": 4, "treatment": "comparison", "information_cell": "d", "authority_tier": "D", "incident_count": 4, "episode_count": 3, "health_disposition": "stable_observation", "outcome_family": "expected_or_no_fault", "temporal_role": "stable_comparison"}
+          ],
+          "expected": {"states": {"all": "emerging_relevance"}, "summary": {"independent_count": 0, "tier_d_count": 19, "comparison_window_count": 4}, "reasons_include": ["independent_evidence_not_met"]}
+        }
+      ]
+    },
+    {
+      "id": "J",
+      "title": "Explicit stable denominator",
+      "dimensions": ["negative_evidence", "false_positive_resistance"],
+      "language_samples": ["only explicit protocol windows supply comparison units"],
+      "variants": [
+        {
+          "id": "silence_only",
+          "groups": [],
+          "expected": {"states": {"all": "insufficient_outcome_evidence"}, "summary": {"comparison_window_count": 0, "eligible_outcome_count": 0}}
+        },
+        {
+          "id": "two_protocol_windows",
+          "protocol_schedules": {"protocol-v1": [2, 2]},
+          "groups": [
+            {"count": 2, "treatment": "comparison", "information_cell": "d", "authority_tier": "A", "incident_count": 2, "health_disposition": "stable_observation", "outcome_family": "expected_or_no_fault", "temporal_role": "stable_comparison"}
+          ],
+          "expected": {"states": {"all": "insufficient_outcome_evidence"}, "summary": {"comparison_window_count": 2, "eligible_outcome_count": 2, "protocol_completion": 1.0}}
+        }
+      ]
+    },
+    {
+      "id": "K",
+      "title": "Conservative deterministic deduplication",
+      "dimensions": ["stability", "false_positive_resistance"],
+      "language_samples": ["three outcome families were observed_during one canonical incident"],
+      "variants": [
+        {
+          "id": "canonical_and_quarantined",
+          "replay_sequence": [
+            {"key": "source-record-1", "fingerprint": "payload-a"},
+            {"key": "source-record-1", "fingerprint": "payload-a"}
+          ],
+          "groups": [
+            {"count": 3, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 1, "outcome_families": ["degradation_or_fault", "repair_or_replacement", "recovery"]},
+            {"count": 1, "treatment": "excluded", "eligible": false, "authority_tier": "A", "incident_count": 1, "exclusion_reason": "possible_duplicate_unresolved"}
+          ],
+          "expected": {"states": {"all": "insufficient_outcome_evidence"}, "summary": {"canonical_incident_count": 1, "positive_family_count": 3, "duplicate_suppressed_count": 2, "excluded_count": 1}, "bayesian": {"primary_directional": 1}, "information": {"table": {"a": 1, "b": 0, "c": 0, "d": 0}}, "replay_results": ["created", "replay"]}
+        }
+      ]
+    },
+    {
+      "id": "L",
+      "title": "Identity and version binding",
+      "dimensions": ["context_specificity", "version_stability"],
+      "language_samples": ["compatible references share only their approved compatibility epoch"],
+      "variants": [
+        {
+          "id": "compatible_epoch",
+          "compatibility_epoch": "epoch-compatible-v1",
+          "groups": [
+            {"count": 4, "treatment": "positive", "information_cell": "a", "authority_tiers": ["A", "B"], "incident_count": 3, "behavioral_model_version": "2"}
+          ],
+          "expected": {"states": {"all": "emerging_relevance"}, "summary": {"eligible_outcome_count": 4}}
+        },
+        {
+          "id": "material_change",
+          "compatibility_epoch": "epoch-material-change-v2",
+          "subject_mapping_version": "mapping-v2",
+          "groups": [
+            {"count": 1, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 1, "behavioral_model_version": "3", "telemetry_schema_fingerprint": "telemetry-synthetic-v2"}
+          ],
+          "expected": {"states": {"all": "insufficient_outcome_evidence"}, "summary": {"eligible_outcome_count": 1}}
+        }
+      ]
+    },
+    {
+      "id": "M",
+      "title": "Correction and retraction",
+      "dimensions": ["version_stability", "negative_evidence"],
+      "language_samples": ["the retracted revision is excluded from the next snapshot"],
+      "variants": [
+        {"id": "original", "outcome_watermark": "revision-1", "groups": [{"count": 1, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 1}], "expected": {"states": {"all": "insufficient_outcome_evidence"}, "summary": {"eligible_outcome_count": 1, "negative_count": 0}}},
+        {"id": "corrected", "outcome_watermark": "revision-2", "groups": [{"count": 1, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 1, "outcome_family": "inspection_confirmation"}], "expected": {"states": {"all": "insufficient_outcome_evidence"}, "summary": {"eligible_outcome_count": 1, "negative_count": 0}}},
+        {"id": "retracted", "outcome_watermark": "revision-3", "groups": [{"count": 1, "treatment": "excluded", "eligible": false, "authority_tier": "A", "incident_count": 1, "exclusion_reason": "outcome_not_validated"}], "expected": {"states": {"all": "insufficient_outcome_evidence"}, "summary": {"eligible_outcome_count": 0, "negative_count": 0, "excluded_count": 1}}}
+      ]
+    },
+    {
+      "id": "N",
+      "title": "Staleness boundary",
+      "dimensions": ["version_stability", "stability"],
+      "language_samples": ["historical association evidence is qualified by freshness"],
+      "variants": [
+        {"id": "exactly_180_days", "last_evidence_at": "2026-01-01T00:00:00+00:00", "as_of": "2026-06-30T00:00:00+00:00", "groups": [{"count": 1, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 1}], "expected": {"states": {"all": "insufficient_outcome_evidence"}, "freshness": "current"}},
+        {"id": "after_180_days", "last_evidence_at": "2026-01-01T00:00:00+00:00", "as_of": "2026-06-30T00:00:00.000001+00:00", "groups": [{"count": 1, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 1}], "expected": {"states": {"all": "insufficient_outcome_evidence"}, "freshness": "stale"}}
+      ]
+    },
+    {
+      "id": "O",
+      "title": "Source replay and idempotency",
+      "dimensions": ["stability", "version_stability"],
+      "language_samples": ["the same source payload is replayed without adding evidence"],
+      "variants": [
+        {"id": "created_replay_conflict", "replay_sequence": [{"key": "source-key-1", "fingerprint": "payload-a"}, {"key": "source-key-1", "fingerprint": "payload-a"}, {"key": "source-key-1", "fingerprint": "payload-b"}], "groups": [{"count": 1, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 1}], "expected": {"states": {"all": "insufficient_outcome_evidence"}, "summary": {"raw_outcome_count": 1, "eligible_outcome_count": 1}, "replay_results": ["created", "replay", "conflict"]}}
+      ]
+    },
+    {
+      "id": "P",
+      "title": "Tenant isolation",
+      "dimensions": ["context_specificity", "version_stability"],
+      "language_samples": ["matching logical IDs remain isolated by exact scope"],
+      "variants": [
+        {"id": "tenant_a", "scope_storage_id": "scope-tenant-a", "tenant_id": "tenant-a", "facility_id": "facility-a", "system_id": "system-a", "groups": [{"count": 1, "treatment": "positive", "information_cell": "a", "authority_tier": "A", "incident_count": 1}], "expected": {"states": {"all": "insufficient_outcome_evidence"}, "summary": {"eligible_outcome_count": 1}}},
+        {"id": "tenant_b", "scope_storage_id": "scope-tenant-b", "tenant_id": "tenant-b", "facility_id": "facility-b", "system_id": "system-b", "groups": [{"count": 1, "treatment": "negative", "information_cell": "b", "authority_tier": "A", "incident_count": 1}], "expected": {"states": {"all": "insufficient_outcome_evidence"}, "summary": {"eligible_outcome_count": 1}}}
+      ]
+    }
+  ]
+}

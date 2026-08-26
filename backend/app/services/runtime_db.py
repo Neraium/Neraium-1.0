@@ -269,6 +269,7 @@ RUNTIME_SCHEMA_MIGRATIONS = (
     "010_workspace_evidence_scope",
     "011_workspace_live_analysis_scope",
     "012_upload_queue_phase4_scope",
+    "013_internal_health_relevance",
 )
 
 
@@ -1132,6 +1133,565 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
         connection.execute(
             "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
             ("012_upload_queue_phase4_scope", now_iso()),
+        )
+
+    if "013_internal_health_relevance" not in applied:
+        # Health Relevance is an isolated, internal-only, append-only learning
+        # sidecar. This migration is deliberately additive: it creates no
+        # production-table columns, performs no backfill, and establishes no
+        # write path back into findings, evidence ordering, SII, or behavioral
+        # reference evolution.
+        _execute_transactional_script(
+            connection,
+            """
+            CREATE TABLE validated_outcomes (
+                outcome_revision_id TEXT PRIMARY KEY,
+                outcome_id TEXT NOT NULL,
+                revision INTEGER NOT NULL CHECK (revision > 0),
+                supersedes_revision_id TEXT,
+                scope_storage_id TEXT NOT NULL CHECK (length(trim(scope_storage_id)) > 0),
+                tenant_id TEXT NOT NULL CHECK (length(trim(tenant_id)) > 0),
+                facility_id TEXT NOT NULL CHECK (length(trim(facility_id)) > 0),
+                system_id TEXT NOT NULL CHECK (length(trim(system_id)) > 0),
+                asset_equipment_id TEXT,
+                outcome_schema_version TEXT NOT NULL,
+                outcome_type TEXT NOT NULL CHECK (outcome_type IN (
+                    'confirmed_maintenance_event', 'inspection_result',
+                    'confirmed_fault', 'confirmed_degraded_condition', 'repair',
+                    'component_replacement', 'operator_confirmed_explanation',
+                    'return_toward_expected_behavior',
+                    'expected_no_fault_confirmation', 'false_positive_not_useful',
+                    'stable_operation_observation'
+                )),
+                outcome_family TEXT NOT NULL CHECK (outcome_family IN (
+                    'degradation_or_fault', 'inspection_confirmation',
+                    'maintenance_or_intervention', 'repair_or_replacement',
+                    'recovery', 'expected_or_no_fault',
+                    'not_useful_or_false_positive', 'validated_explanation'
+                )),
+                health_disposition TEXT NOT NULL CHECK (health_disposition IN (
+                    'degraded', 'fault_confirmed', 'expected_behavior', 'no_fault',
+                    'not_useful', 'explained', 'intervention_recorded',
+                    'recovery_observed', 'unrelated_maintenance',
+                    'no_observed_behavior_change', 'stable_observation',
+                    'indeterminate'
+                )),
+                validation_status TEXT NOT NULL CHECK (validation_status IN (
+                    'pending', 'validated', 'rejected', 'retracted', 'superseded'
+                )),
+                occurred_start_at TEXT NOT NULL,
+                occurred_end_at TEXT NOT NULL,
+                windows_json TEXT CHECK (
+                    windows_json IS NULL OR (
+                        json_valid(windows_json) AND json_type(windows_json) = 'object'
+                    )
+                ),
+                source_category TEXT NOT NULL,
+                source_system TEXT,
+                source_record_id TEXT,
+                source_record_version TEXT,
+                source_recorded_at TEXT,
+                source_identity_hash TEXT,
+                reported_by TEXT NOT NULL,
+                reported_at TEXT NOT NULL,
+                validated_by TEXT,
+                validated_at TEXT,
+                validation_basis_json TEXT NOT NULL CHECK (
+                    json_valid(validation_basis_json)
+                    AND json_type(validation_basis_json) = 'object'
+                ),
+                provenance_categories_json TEXT NOT NULL CHECK (
+                    json_valid(provenance_categories_json)
+                    AND json_type(provenance_categories_json) = 'array'
+                ),
+                authority_tier TEXT NOT NULL CHECK (authority_tier IN ('A', 'B', 'C', 'D')),
+                reliability_class TEXT NOT NULL,
+                reliability_basis_json TEXT NOT NULL CHECK (
+                    json_valid(reliability_basis_json)
+                    AND json_type(reliability_basis_json) = 'object'
+                ),
+                canonical_incident_key TEXT,
+                dedup_status TEXT NOT NULL CHECK (dedup_status IN (
+                    'canonical', 'confirmed_distinct', 'possible_duplicate',
+                    'confirmed_duplicate', 'unadjudicated'
+                )),
+                possible_duplicate_of_json TEXT NOT NULL DEFAULT '[]' CHECK (
+                    json_valid(possible_duplicate_of_json)
+                    AND json_type(possible_duplicate_of_json) = 'array'
+                ),
+                dedup_basis_json TEXT NOT NULL CHECK (
+                    json_valid(dedup_basis_json)
+                    AND json_type(dedup_basis_json) = 'object'
+                ),
+                observation_protocol_json TEXT CHECK (
+                    observation_protocol_json IS NULL OR (
+                        json_valid(observation_protocol_json)
+                        AND json_type(observation_protocol_json) = 'object'
+                    )
+                ),
+                structured_metadata_json TEXT NOT NULL CHECK (
+                    json_valid(structured_metadata_json)
+                    AND json_type(structured_metadata_json) = 'object'
+                ),
+                metadata_schema_version TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                idempotency_key TEXT,
+                request_fingerprint TEXT,
+                UNIQUE(scope_storage_id, tenant_id, facility_id, system_id, outcome_id, revision),
+                UNIQUE(scope_storage_id, tenant_id, facility_id, system_id, outcome_id, outcome_revision_id),
+                FOREIGN KEY(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    outcome_id, supersedes_revision_id
+                ) REFERENCES validated_outcomes(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    outcome_id, outcome_revision_id
+                ) ON DELETE RESTRICT,
+                CHECK (occurred_end_at >= occurred_start_at),
+                CHECK (
+                    (revision = 1 AND supersedes_revision_id IS NULL)
+                    OR (revision > 1 AND supersedes_revision_id IS NOT NULL)
+                ),
+                CHECK (
+                    (validation_status = 'pending' AND validated_by IS NULL AND validated_at IS NULL)
+                    OR (validation_status <> 'pending' AND validated_by IS NOT NULL AND validated_at IS NOT NULL)
+                ),
+                CHECK (
+                    outcome_type <> 'stable_operation_observation'
+                    OR observation_protocol_json IS NOT NULL
+                ),
+                CHECK (idempotency_key IS NULL OR request_fingerprint IS NOT NULL)
+            );
+
+            CREATE TABLE validated_outcome_links (
+                link_revision_id TEXT PRIMARY KEY,
+                link_id TEXT NOT NULL,
+                revision INTEGER NOT NULL CHECK (revision > 0),
+                supersedes_revision_id TEXT,
+                outcome_id TEXT NOT NULL,
+                outcome_revision_id TEXT NOT NULL,
+                scope_storage_id TEXT NOT NULL CHECK (length(trim(scope_storage_id)) > 0),
+                tenant_id TEXT NOT NULL CHECK (length(trim(tenant_id)) > 0),
+                facility_id TEXT NOT NULL CHECK (length(trim(facility_id)) > 0),
+                system_id TEXT NOT NULL CHECK (length(trim(system_id)) > 0),
+                asset_equipment_id TEXT,
+                finding_id TEXT,
+                evidence_run_id TEXT,
+                evidence_package_id TEXT,
+                evidence_package_revision INTEGER CHECK (
+                    evidence_package_revision IS NULL OR evidence_package_revision > 0
+                ),
+                evidence_content_hash TEXT,
+                subject_type TEXT NOT NULL CHECK (subject_type IN (
+                    'signal', 'relationship', 'asset_equipment', 'subsystem'
+                )),
+                subject_id TEXT NOT NULL,
+                subject_mapping_version TEXT NOT NULL,
+                behavioral_model_id TEXT,
+                behavioral_model_version TEXT,
+                behavioral_snapshot_id TEXT,
+                baseline_reference_id TEXT,
+                baseline_reference_version TEXT,
+                telemetry_schema_fingerprint TEXT,
+                system_configuration_fingerprint TEXT,
+                compatibility_epoch TEXT,
+                context_schema_version TEXT NOT NULL,
+                context_json TEXT NOT NULL CHECK (
+                    json_valid(context_json) AND json_type(context_json) = 'object'
+                ),
+                context_fingerprint TEXT NOT NULL,
+                context_episode_id TEXT NOT NULL,
+                context_source_refs_json TEXT NOT NULL CHECK (
+                    json_valid(context_source_refs_json)
+                    AND json_type(context_source_refs_json) = 'array'
+                ),
+                temporal_role TEXT NOT NULL CHECK (temporal_role IN (
+                    'pre_outcome', 'outcome_period', 'post_intervention',
+                    'recovery', 'stable_comparison'
+                )),
+                window_start_at TEXT NOT NULL,
+                window_end_at TEXT NOT NULL,
+                link_origin TEXT NOT NULL CHECK (link_origin IN (
+                    'direct_source', 'human_reviewed', 'deterministic_reference'
+                )),
+                link_confidence TEXT NOT NULL CHECK (link_confidence IN (
+                    'direct', 'reviewed', 'limited'
+                )),
+                link_basis_json TEXT NOT NULL CHECK (
+                    json_valid(link_basis_json) AND json_type(link_basis_json) = 'object'
+                ),
+                linked_by TEXT NOT NULL,
+                linked_at TEXT NOT NULL,
+                retrospective_window_selection INTEGER NOT NULL DEFAULT 0 CHECK (
+                    retrospective_window_selection IN (0, 1)
+                ),
+                subject_state TEXT NOT NULL CHECK (subject_state IN (
+                    'active_changed', 'present_aligned', 'absent_evaluable', 'not_evaluable'
+                )),
+                observation_basis_json TEXT NOT NULL CHECK (
+                    json_valid(observation_basis_json)
+                    AND json_type(observation_basis_json) = 'object'
+                ),
+                link_status TEXT NOT NULL CHECK (link_status IN (
+                    'pending', 'active', 'rejected', 'retracted', 'superseded'
+                )),
+                actor TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                idempotency_key TEXT,
+                request_fingerprint TEXT,
+                FOREIGN KEY(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    outcome_id, outcome_revision_id
+                ) REFERENCES validated_outcomes(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    outcome_id, outcome_revision_id
+                ) ON DELETE RESTRICT,
+                UNIQUE(scope_storage_id, tenant_id, facility_id, system_id, link_id, revision),
+                UNIQUE(scope_storage_id, tenant_id, facility_id, system_id, link_id, link_revision_id),
+                FOREIGN KEY(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    link_id, supersedes_revision_id
+                ) REFERENCES validated_outcome_links(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    link_id, link_revision_id
+                ) ON DELETE RESTRICT,
+                CHECK (window_end_at >= window_start_at),
+                CHECK (
+                    (revision = 1 AND supersedes_revision_id IS NULL)
+                    OR (revision > 1 AND supersedes_revision_id IS NOT NULL)
+                ),
+                CHECK (
+                    finding_id IS NOT NULL OR evidence_run_id IS NOT NULL
+                    OR evidence_content_hash IS NOT NULL
+                    OR behavioral_snapshot_id IS NOT NULL
+                    OR baseline_reference_id IS NOT NULL
+                ),
+                CHECK (idempotency_key IS NULL OR request_fingerprint IS NOT NULL)
+            );
+
+            CREATE TABLE health_relevance_versions (
+                relevance_version_id TEXT PRIMARY KEY,
+                state_key_hash TEXT NOT NULL,
+                version INTEGER NOT NULL CHECK (version > 0),
+                scope_storage_id TEXT NOT NULL CHECK (length(trim(scope_storage_id)) > 0),
+                tenant_id TEXT NOT NULL CHECK (length(trim(tenant_id)) > 0),
+                facility_id TEXT NOT NULL CHECK (length(trim(facility_id)) > 0),
+                system_id TEXT NOT NULL CHECK (length(trim(system_id)) > 0),
+                asset_equipment_id TEXT,
+                subject_type TEXT NOT NULL CHECK (subject_type IN (
+                    'signal', 'relationship', 'asset_equipment', 'subsystem'
+                )),
+                subject_id TEXT NOT NULL,
+                subject_mapping_version TEXT NOT NULL,
+                context_schema_version TEXT NOT NULL,
+                context_json TEXT NOT NULL CHECK (
+                    json_valid(context_json) AND json_type(context_json) = 'object'
+                ),
+                context_fingerprint TEXT NOT NULL,
+                compatibility_epoch TEXT NOT NULL,
+                method_class TEXT NOT NULL CHECK (method_class IN (
+                    'bayesian_shrinkage_v1', 'outcome_conditioned_information_v1'
+                )),
+                method_version TEXT NOT NULL,
+                method_config_version TEXT NOT NULL,
+                input_snapshot_id TEXT NOT NULL,
+                input_manifest_hash TEXT NOT NULL,
+                outcome_watermark TEXT NOT NULL,
+                link_watermark TEXT NOT NULL,
+                previous_version_id TEXT,
+                raw_outcome_count INTEGER NOT NULL CHECK (raw_outcome_count >= 0),
+                eligible_outcome_count INTEGER NOT NULL CHECK (eligible_outcome_count >= 0),
+                canonical_incident_count INTEGER NOT NULL CHECK (canonical_incident_count >= 0),
+                recurrence_count INTEGER NOT NULL CHECK (recurrence_count >= 0),
+                positive_count INTEGER NOT NULL CHECK (positive_count >= 0),
+                negative_count INTEGER NOT NULL CHECK (negative_count >= 0),
+                neutral_count INTEGER NOT NULL CHECK (neutral_count >= 0),
+                comparison_window_count INTEGER NOT NULL CHECK (comparison_window_count >= 0),
+                excluded_count INTEGER NOT NULL CHECK (excluded_count >= 0),
+                duplicate_suppressed_count INTEGER NOT NULL CHECK (duplicate_suppressed_count >= 0),
+                outcome_family_counts_json TEXT NOT NULL CHECK (
+                    json_valid(outcome_family_counts_json)
+                    AND json_type(outcome_family_counts_json) = 'object'
+                ),
+                context_metadata_completeness REAL NOT NULL CHECK (
+                    context_metadata_completeness >= 0.0
+                    AND context_metadata_completeness <= 1.0
+                ),
+                context_episode_count INTEGER NOT NULL CHECK (context_episode_count >= 0),
+                protocol_completion REAL CHECK (
+                    protocol_completion IS NULL
+                    OR (protocol_completion >= 0.0 AND protocol_completion <= 1.0)
+                ),
+                temporal_consistency REAL CHECK (
+                    temporal_consistency IS NULL
+                    OR (temporal_consistency >= 0.0 AND temporal_consistency <= 1.0)
+                ),
+                tier_a_count INTEGER NOT NULL CHECK (tier_a_count >= 0),
+                tier_b_count INTEGER NOT NULL CHECK (tier_b_count >= 0),
+                tier_c_count INTEGER NOT NULL CHECK (tier_c_count >= 0),
+                tier_d_count INTEGER NOT NULL CHECK (tier_d_count >= 0),
+                independent_count INTEGER NOT NULL CHECK (independent_count >= 0),
+                neraium_influenced_count INTEGER NOT NULL CHECK (neraium_influenced_count >= 0),
+                same_actor_validation_count INTEGER NOT NULL CHECK (same_actor_validation_count >= 0),
+                evidence_state TEXT NOT NULL CHECK (evidence_state IN (
+                    'insufficient_outcome_evidence', 'emerging_relevance',
+                    'supported_relevance', 'contradictory_evidence',
+                    'not_supported_by_outcomes'
+                )),
+                evidence_direction TEXT NOT NULL CHECK (evidence_direction IN (
+                    'positive_dominant', 'negative_dominant', 'mixed', 'indeterminate'
+                )),
+                state_reason_codes_json TEXT NOT NULL CHECK (
+                    json_valid(state_reason_codes_json)
+                    AND json_type(state_reason_codes_json) = 'array'
+                ),
+                freshness_status TEXT NOT NULL CHECK (freshness_status IN (
+                    'current', 'stale', 'superseded_epoch'
+                )),
+                method_components_json TEXT NOT NULL CHECK (
+                    json_valid(method_components_json)
+                    AND json_type(method_components_json) = 'object'
+                ),
+                uncertainty_json TEXT NOT NULL CHECK (
+                    json_valid(uncertainty_json) AND json_type(uncertainty_json) = 'object'
+                ),
+                outcome_schema_version TEXT NOT NULL,
+                threshold_config_version TEXT NOT NULL,
+                threshold_config_json TEXT NOT NULL CHECK (
+                    json_valid(threshold_config_json)
+                    AND json_type(threshold_config_json) = 'object'
+                ),
+                authority_rules_version TEXT NOT NULL,
+                dedup_rules_version TEXT NOT NULL,
+                compatibility_rules_version TEXT NOT NULL,
+                configuration_hash TEXT NOT NULL,
+                first_evidence_at TEXT,
+                last_evidence_at TEXT,
+                computed_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                code_build_version TEXT NOT NULL,
+                UNIQUE(state_key_hash, version),
+                UNIQUE(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    relevance_version_id
+                ),
+                UNIQUE(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    state_key_hash, relevance_version_id
+                ),
+                FOREIGN KEY(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    state_key_hash, previous_version_id
+                ) REFERENCES health_relevance_versions(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    state_key_hash, relevance_version_id
+                ) ON DELETE RESTRICT,
+                CHECK (
+                    (version = 1 AND previous_version_id IS NULL)
+                    OR (version > 1 AND previous_version_id IS NOT NULL)
+                ),
+                CHECK (
+                    (first_evidence_at IS NULL AND last_evidence_at IS NULL)
+                    OR (first_evidence_at IS NOT NULL AND last_evidence_at IS NOT NULL
+                        AND last_evidence_at >= first_evidence_at)
+                )
+            );
+
+            CREATE TABLE health_relevance_contributions (
+                contribution_id TEXT PRIMARY KEY,
+                relevance_version_id TEXT NOT NULL,
+                outcome_id TEXT NOT NULL,
+                outcome_revision_id TEXT NOT NULL,
+                link_id TEXT NOT NULL,
+                link_revision_id TEXT NOT NULL,
+                scope_storage_id TEXT NOT NULL CHECK (length(trim(scope_storage_id)) > 0),
+                tenant_id TEXT NOT NULL CHECK (length(trim(tenant_id)) > 0),
+                facility_id TEXT NOT NULL CHECK (length(trim(facility_id)) > 0),
+                system_id TEXT NOT NULL CHECK (length(trim(system_id)) > 0),
+                asset_equipment_id TEXT,
+                subject_type TEXT NOT NULL CHECK (subject_type IN (
+                    'signal', 'relationship', 'asset_equipment', 'subsystem'
+                )),
+                subject_id TEXT NOT NULL,
+                subject_mapping_version TEXT NOT NULL,
+                context_fingerprint TEXT NOT NULL,
+                compatibility_epoch TEXT NOT NULL,
+                canonical_incident_key TEXT,
+                outcome_family TEXT NOT NULL CHECK (outcome_family IN (
+                    'degradation_or_fault', 'inspection_confirmation',
+                    'maintenance_or_intervention', 'repair_or_replacement',
+                    'recovery', 'expected_or_no_fault',
+                    'not_useful_or_false_positive', 'validated_explanation'
+                )),
+                evidence_treatment TEXT NOT NULL CHECK (evidence_treatment IN (
+                    'positive', 'negative', 'neutral', 'comparison',
+                    'contradictory', 'excluded', 'duplicate_suppressed'
+                )),
+                subject_state TEXT NOT NULL CHECK (subject_state IN (
+                    'active_changed', 'present_aligned', 'absent_evaluable', 'not_evaluable'
+                )),
+                temporal_role TEXT NOT NULL CHECK (temporal_role IN (
+                    'pre_outcome', 'outcome_period', 'post_intervention',
+                    'recovery', 'stable_comparison'
+                )),
+                authority_tier TEXT NOT NULL CHECK (authority_tier IN ('A', 'B', 'C', 'D')),
+                provenance_categories_json TEXT NOT NULL CHECK (
+                    json_valid(provenance_categories_json)
+                    AND json_type(provenance_categories_json) = 'array'
+                ),
+                method_input_cell TEXT NOT NULL DEFAULT 'not_applicable',
+                method_component_json TEXT NOT NULL CHECK (
+                    json_valid(method_component_json)
+                    AND json_type(method_component_json) = 'object'
+                ),
+                reason_code TEXT NOT NULL,
+                finding_id TEXT,
+                evidence_run_id TEXT,
+                evidence_package_id TEXT,
+                evidence_content_hash TEXT,
+                behavioral_model_id TEXT,
+                behavioral_model_version TEXT,
+                behavioral_snapshot_id TEXT,
+                baseline_reference_id TEXT,
+                baseline_reference_version TEXT,
+                telemetry_schema_fingerprint TEXT,
+                system_configuration_fingerprint TEXT,
+                input_manifest_hash TEXT NOT NULL,
+                configuration_hash TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    relevance_version_id
+                ) REFERENCES health_relevance_versions(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    relevance_version_id
+                ) ON DELETE RESTRICT,
+                FOREIGN KEY(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    outcome_id, outcome_revision_id
+                ) REFERENCES validated_outcomes(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    outcome_id, outcome_revision_id
+                ) ON DELETE RESTRICT,
+                FOREIGN KEY(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    link_id, link_revision_id
+                ) REFERENCES validated_outcome_links(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    link_id, link_revision_id
+                ) ON DELETE RESTRICT,
+                UNIQUE(
+                    relevance_version_id, outcome_revision_id, link_revision_id,
+                    evidence_treatment, method_input_cell
+                )
+            );
+
+            CREATE INDEX idx_validated_outcomes_latest
+                ON validated_outcomes(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    outcome_id, revision DESC
+                );
+            CREATE INDEX idx_validated_outcomes_status_time
+                ON validated_outcomes(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    validation_status, occurred_start_at DESC
+                );
+            CREATE INDEX idx_validated_outcomes_incident
+                ON validated_outcomes(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    canonical_incident_key, occurred_start_at DESC
+                );
+            CREATE UNIQUE INDEX uq_validated_outcomes_source_identity
+                ON validated_outcomes(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    source_identity_hash
+                ) WHERE source_identity_hash IS NOT NULL AND revision = 1;
+            CREATE UNIQUE INDEX uq_validated_outcomes_idempotency
+                ON validated_outcomes(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    idempotency_key
+                ) WHERE idempotency_key IS NOT NULL;
+
+            CREATE INDEX idx_validated_outcome_links_latest
+                ON validated_outcome_links(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    link_id, revision DESC
+                );
+            CREATE INDEX idx_validated_outcome_links_outcome
+                ON validated_outcome_links(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    outcome_id, outcome_revision_id
+                );
+            CREATE INDEX idx_validated_outcome_links_subject
+                ON validated_outcome_links(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    subject_type, subject_id, context_fingerprint, compatibility_epoch
+                );
+            CREATE INDEX idx_validated_outcome_links_lineage
+                ON validated_outcome_links(finding_id, evidence_run_id, evidence_content_hash);
+            CREATE UNIQUE INDEX uq_validated_outcome_links_idempotency
+                ON validated_outcome_links(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    idempotency_key
+                ) WHERE idempotency_key IS NOT NULL;
+
+            CREATE INDEX idx_health_relevance_versions_latest
+                ON health_relevance_versions(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    subject_type, subject_id, context_fingerprint,
+                    compatibility_epoch, method_class, version DESC
+                );
+            CREATE INDEX idx_health_relevance_versions_snapshot
+                ON health_relevance_versions(input_snapshot_id, input_manifest_hash, method_class);
+            CREATE UNIQUE INDEX uq_health_relevance_versions_input
+                ON health_relevance_versions(
+                    state_key_hash, input_snapshot_id, input_manifest_hash,
+                    method_class, method_version, configuration_hash, code_build_version
+                );
+
+            CREATE INDEX idx_health_relevance_contributions_version
+                ON health_relevance_contributions(relevance_version_id, evidence_treatment);
+            CREATE INDEX idx_health_relevance_contributions_outcome
+                ON health_relevance_contributions(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    outcome_id, outcome_revision_id
+                );
+            CREATE INDEX idx_health_relevance_contributions_link
+                ON health_relevance_contributions(
+                    scope_storage_id, tenant_id, facility_id, system_id,
+                    link_id, link_revision_id
+                );
+
+            CREATE TRIGGER trg_validated_outcomes_no_update
+            BEFORE UPDATE ON validated_outcomes
+            BEGIN SELECT RAISE(ABORT, 'validated_outcomes_append_only'); END;
+            CREATE TRIGGER trg_validated_outcomes_no_delete
+            BEFORE DELETE ON validated_outcomes
+            BEGIN SELECT RAISE(ABORT, 'validated_outcomes_append_only'); END;
+            CREATE TRIGGER trg_validated_outcome_links_no_update
+            BEFORE UPDATE ON validated_outcome_links
+            BEGIN SELECT RAISE(ABORT, 'validated_outcome_links_append_only'); END;
+            CREATE TRIGGER trg_validated_outcome_links_no_delete
+            BEFORE DELETE ON validated_outcome_links
+            BEGIN SELECT RAISE(ABORT, 'validated_outcome_links_append_only'); END;
+            CREATE TRIGGER trg_health_relevance_versions_no_update
+            BEFORE UPDATE ON health_relevance_versions
+            BEGIN SELECT RAISE(ABORT, 'health_relevance_versions_append_only'); END;
+            CREATE TRIGGER trg_health_relevance_versions_no_delete
+            BEFORE DELETE ON health_relevance_versions
+            BEGIN SELECT RAISE(ABORT, 'health_relevance_versions_append_only'); END;
+            CREATE TRIGGER trg_health_relevance_contributions_no_update
+            BEFORE UPDATE ON health_relevance_contributions
+            BEGIN SELECT RAISE(ABORT, 'health_relevance_contributions_append_only'); END;
+            CREATE TRIGGER trg_health_relevance_contributions_no_delete
+            BEFORE DELETE ON health_relevance_contributions
+            BEGIN SELECT RAISE(ABORT, 'health_relevance_contributions_append_only'); END;
+            """
+        )
+        connection.execute(
+            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+            ("013_internal_health_relevance", now_iso()),
         )
 
 
