@@ -1,0 +1,2393 @@
+{
+  "fixture_contract": "reconciled-authority-identity-vectors.v1",
+  "fixture_only_notice": "All timestamps, labels, versions, digests, and identifiers except the delegated P0.1 vector are test fixtures, not production policy values.",
+  "p0_1_delegation": {
+    "execution_contract_version": "analysis-window-execution.v1",
+    "expected_result_id": "701d3bbf-9bf6-58cf-8c5d-8bd31ce86502",
+    "namespace": "existing/delegated",
+    "window_id": "00000000-0000-5000-8000-000000000101"
+  },
+  "scope_case": {
+    "asset_id": null,
+    "asset_semantics": "exact_null_not_wildcard",
+    "connection_id": "connection-fixture-a",
+    "facility_id": "facility-fixture",
+    "level": "asset",
+    "resource_scope_id": "resource-fixture",
+    "system_id": "system-fixture",
+    "tenant_id": "tenant-fixture",
+    "workspace_id": "workspace-fixture"
+  },
+  "vectors": {
+    "analytical_finding": {
+      "canonical_components": [
+        {
+          "name": "authority_execution_id",
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        {
+          "name": "determination_contract.contract",
+          "type": "contract",
+          "value": "finding-determination"
+        },
+        {
+          "name": "determination_contract.version",
+          "type": "version",
+          "value": "1"
+        },
+        {
+          "name": "finding_type",
+          "type": "text",
+          "value": "structural_change"
+        },
+        {
+          "name": "scope.contract",
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        {
+          "name": "scope.level",
+          "type": "text",
+          "value": "asset"
+        },
+        {
+          "name": "scope.tenant_id",
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        {
+          "name": "scope.workspace_id",
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        {
+          "name": "scope.resource_scope_id",
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        {
+          "name": "scope.facility_id",
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        {
+          "name": "scope.connection_id",
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        {
+          "name": "scope.system_id",
+          "type": "text",
+          "value": "system-fixture"
+        },
+        {
+          "name": "scope.asset_id",
+          "type": "null",
+          "value": ""
+        },
+        {
+          "name": "subject_identity",
+          "type": "text",
+          "value": "subject-fixture"
+        },
+        {
+          "name": "relationship_metric_identities.count",
+          "type": "integer",
+          "value": "2"
+        },
+        {
+          "name": "relationship_metric_identities.0",
+          "type": "text",
+          "value": "metric.alpha"
+        },
+        {
+          "name": "relationship_metric_identities.1",
+          "type": "text",
+          "value": "metric.beta"
+        },
+        {
+          "name": "analytical_reference_id",
+          "type": "uuid",
+          "value": "fa606ddb-01c4-58b0-9508-674622acde29"
+        }
+      ],
+      "canonical_inputs": {
+        "analytical_reference_id": {
+          "type": "uuid",
+          "value": "fa606ddb-01c4-58b0-9508-674622acde29"
+        },
+        "authority_execution_id": {
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        "determination_contract.contract": {
+          "type": "contract",
+          "value": "finding-determination"
+        },
+        "determination_contract.version": {
+          "type": "version",
+          "value": "1"
+        },
+        "finding_type": {
+          "type": "text",
+          "value": "structural_change"
+        },
+        "relationship_metric_identities.0": {
+          "type": "text",
+          "value": "metric.alpha"
+        },
+        "relationship_metric_identities.1": {
+          "type": "text",
+          "value": "metric.beta"
+        },
+        "relationship_metric_identities.count": {
+          "type": "integer",
+          "value": "2"
+        },
+        "scope.asset_id": {
+          "type": "null",
+          "value": ""
+        },
+        "scope.connection_id": {
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        "scope.contract": {
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        "scope.facility_id": {
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        "scope.level": {
+          "type": "text",
+          "value": "asset"
+        },
+        "scope.resource_scope_id": {
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        "scope.system_id": {
+          "type": "text",
+          "value": "system-fixture"
+        },
+        "scope.tenant_id": {
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        "scope.workspace_id": {
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        "subject_identity": {
+          "type": "text",
+          "value": "subject-fixture"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631323a313832323a617574686f726974795f657865637574696f6e5f6964343a7575696433363a61386139623630622d346332322d353564622d616435342d62363937636539383533363033313a64657465726d696e6174696f6e5f636f6e74726163742e636f6e7472616374383a636f6e747261637432313a66696e64696e672d64657465726d696e6174696f6e33303a64657465726d696e6174696f6e5f636f6e74726163742e76657273696f6e373a76657273696f6e313a3131323a66696e64696e675f74797065343a7465787431373a7374727563747572616c5f6368616e676531343a73636f70652e636f6e7472616374343a7465787431383a617574686f726974792d73636f70652e763131313a73636f70652e6c6576656c343a74657874353a617373657431353a73636f70652e74656e616e745f6964343a7465787431343a74656e616e742d6669787475726531383a73636f70652e776f726b73706163655f6964343a7465787431373a776f726b73706163652d6669787475726532333a73636f70652e7265736f757263655f73636f70655f6964343a7465787431363a7265736f757263652d6669787475726531373a73636f70652e666163696c6974795f6964343a7465787431363a666163696c6974792d6669787475726531393a73636f70652e636f6e6e656374696f6e5f6964343a7465787432303a636f6e6e656374696f6e2d666978747572652d6131353a73636f70652e73797374656d5f6964343a7465787431343a73797374656d2d6669787475726531343a73636f70652e61737365745f6964343a6e756c6c303a31363a7375626a6563745f6964656e74697479343a7465787431353a7375626a6563742d6669787475726533363a72656c6174696f6e736869705f6d65747269635f6964656e7469746965732e636f756e74373a696e7465676572313a3233323a72656c6174696f6e736869705f6d65747269635f6964656e7469746965732e30343a7465787431323a6d65747269632e616c70686133323a72656c6174696f6e736869705f6d65747269635f6964656e7469746965732e31343a7465787431313a6d65747269632e6265746132333a616e616c79746963616c5f7265666572656e63655f6964343a7575696433363a66613630366464622d303163342d353862302d393530382d363734363232616364653239"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "analytical-finding.v1",
+      "contract_version": "v1",
+      "expected_id": "544def97-13f2-5f9f-8095-a9af0e33a8ce",
+      "mutation": {
+        "expected_different_id": "93c0a6da-dd82-5e6c-ab9b-962c877220d1",
+        "field": "subject_identity",
+        "mutated": "subject-fixture-mutated",
+        "name": "analytical_finding.subject_identity",
+        "original": "subject-fixture"
+      },
+      "namespace": "9f971629-8335-53e7-83d6-38cca5416216",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "analytical_reference": {
+      "canonical_components": [
+        {
+          "name": "scope.contract",
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        {
+          "name": "scope.level",
+          "type": "text",
+          "value": "asset"
+        },
+        {
+          "name": "scope.tenant_id",
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        {
+          "name": "scope.workspace_id",
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        {
+          "name": "scope.resource_scope_id",
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        {
+          "name": "scope.facility_id",
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        {
+          "name": "scope.connection_id",
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        {
+          "name": "scope.system_id",
+          "type": "text",
+          "value": "system-fixture"
+        },
+        {
+          "name": "scope.asset_id",
+          "type": "null",
+          "value": ""
+        },
+        {
+          "name": "producer_family",
+          "type": "text",
+          "value": "sii"
+        },
+        {
+          "name": "model_id",
+          "type": "text",
+          "value": "fixture-model"
+        },
+        {
+          "name": "model_version",
+          "type": "text",
+          "value": "3"
+        },
+        {
+          "name": "learning_generation",
+          "type": "integer",
+          "value": "7"
+        },
+        {
+          "name": "configuration_generation",
+          "type": "integer",
+          "value": "4"
+        },
+        {
+          "name": "snapshot_id",
+          "type": "text",
+          "value": "snapshot-fixture"
+        },
+        {
+          "name": "snapshot_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "snapshot_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.snapshot.v1"
+        },
+        {
+          "name": "snapshot_digest.value",
+          "type": "digest_value",
+          "value": "4489fb1b2d96fabf2f5d204193ea012977a094ff07d29bdb3830620bbd05f246"
+        },
+        {
+          "name": "causal_frontier_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "causal_frontier_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.frontier.v1"
+        },
+        {
+          "name": "causal_frontier_digest.value",
+          "type": "digest_value",
+          "value": "33b2b08d1ff990ab4a567d72fd74a3ada8b1942d7917189d294c600c923cd6f9"
+        },
+        {
+          "name": "chronology_binding_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "chronology_binding_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.chronology-binding.v1"
+        },
+        {
+          "name": "chronology_binding_digest.value",
+          "type": "digest_value",
+          "value": "a9c31385ce6d7cb822e39c2d669bb8d53645551318fe46af36813721cd2d7a1f"
+        },
+        {
+          "name": "method_identity.contract",
+          "type": "contract",
+          "value": "fixture-analysis-method"
+        },
+        {
+          "name": "method_identity.version",
+          "type": "version",
+          "value": "3"
+        },
+        {
+          "name": "configuration_identity.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "configuration_identity.contract",
+          "type": "digest_contract",
+          "value": "fixture.analysis-config.v1"
+        },
+        {
+          "name": "configuration_identity.value",
+          "type": "digest_value",
+          "value": "1720fa809e2d2a6231ddbae13c3fd99252792dc29607b811ae275882bbbbf3cc"
+        },
+        {
+          "name": "integrity_identity.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "integrity_identity.contract",
+          "type": "digest_contract",
+          "value": "fixture.reference-integrity.v1"
+        },
+        {
+          "name": "integrity_identity.value",
+          "type": "digest_value",
+          "value": "3ef8d6211ee0eea36d8bb50dcaf42ec75661e2e251e3fedb053f59a4b41d227b"
+        }
+      ],
+      "canonical_inputs": {
+        "causal_frontier_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "causal_frontier_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.frontier.v1"
+        },
+        "causal_frontier_digest.value": {
+          "type": "digest_value",
+          "value": "33b2b08d1ff990ab4a567d72fd74a3ada8b1942d7917189d294c600c923cd6f9"
+        },
+        "chronology_binding_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "chronology_binding_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.chronology-binding.v1"
+        },
+        "chronology_binding_digest.value": {
+          "type": "digest_value",
+          "value": "a9c31385ce6d7cb822e39c2d669bb8d53645551318fe46af36813721cd2d7a1f"
+        },
+        "configuration_generation": {
+          "type": "integer",
+          "value": "4"
+        },
+        "configuration_identity.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "configuration_identity.contract": {
+          "type": "digest_contract",
+          "value": "fixture.analysis-config.v1"
+        },
+        "configuration_identity.value": {
+          "type": "digest_value",
+          "value": "1720fa809e2d2a6231ddbae13c3fd99252792dc29607b811ae275882bbbbf3cc"
+        },
+        "integrity_identity.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "integrity_identity.contract": {
+          "type": "digest_contract",
+          "value": "fixture.reference-integrity.v1"
+        },
+        "integrity_identity.value": {
+          "type": "digest_value",
+          "value": "3ef8d6211ee0eea36d8bb50dcaf42ec75661e2e251e3fedb053f59a4b41d227b"
+        },
+        "learning_generation": {
+          "type": "integer",
+          "value": "7"
+        },
+        "method_identity.contract": {
+          "type": "contract",
+          "value": "fixture-analysis-method"
+        },
+        "method_identity.version": {
+          "type": "version",
+          "value": "3"
+        },
+        "model_id": {
+          "type": "text",
+          "value": "fixture-model"
+        },
+        "model_version": {
+          "type": "text",
+          "value": "3"
+        },
+        "producer_family": {
+          "type": "text",
+          "value": "sii"
+        },
+        "scope.asset_id": {
+          "type": "null",
+          "value": ""
+        },
+        "scope.connection_id": {
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        "scope.contract": {
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        "scope.facility_id": {
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        "scope.level": {
+          "type": "text",
+          "value": "asset"
+        },
+        "scope.resource_scope_id": {
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        "scope.system_id": {
+          "type": "text",
+          "value": "system-fixture"
+        },
+        "scope.tenant_id": {
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        "scope.workspace_id": {
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        "snapshot_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "snapshot_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.snapshot.v1"
+        },
+        "snapshot_digest.value": {
+          "type": "digest_value",
+          "value": "4489fb1b2d96fabf2f5d204193ea012977a094ff07d29bdb3830620bbd05f246"
+        },
+        "snapshot_id": {
+          "type": "text",
+          "value": "snapshot-fixture"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631323a333231343a73636f70652e636f6e7472616374343a7465787431383a617574686f726974792d73636f70652e763131313a73636f70652e6c6576656c343a74657874353a617373657431353a73636f70652e74656e616e745f6964343a7465787431343a74656e616e742d6669787475726531383a73636f70652e776f726b73706163655f6964343a7465787431373a776f726b73706163652d6669787475726532333a73636f70652e7265736f757263655f73636f70655f6964343a7465787431363a7265736f757263652d6669787475726531373a73636f70652e666163696c6974795f6964343a7465787431363a666163696c6974792d6669787475726531393a73636f70652e636f6e6e656374696f6e5f6964343a7465787432303a636f6e6e656374696f6e2d666978747572652d6131353a73636f70652e73797374656d5f6964343a7465787431343a73797374656d2d6669787475726531343a73636f70652e61737365745f6964343a6e756c6c303a31353a70726f64756365725f66616d696c79343a74657874333a736969383a6d6f64656c5f6964343a7465787431333a666978747572652d6d6f64656c31333a6d6f64656c5f76657273696f6e343a74657874313a3331393a6c6561726e696e675f67656e65726174696f6e373a696e7465676572313a3732343a636f6e66696775726174696f6e5f67656e65726174696f6e373a696e7465676572313a3431313a736e617073686f745f6964343a7465787431363a736e617073686f742d6669787475726532353a736e617073686f745f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353632343a736e617073686f745f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637431393a666978747572652e736e617073686f742e763132313a736e617073686f745f6469676573742e76616c756531323a6469676573745f76616c756536343a3434383966623162326439366661626632663564323034313933656130313239373761303934666630376432396264623338333036323062626430356632343633323a63617573616c5f66726f6e746965725f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633313a63617573616c5f66726f6e746965725f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637431393a666978747572652e66726f6e746965722e763132383a63617573616c5f66726f6e746965725f6469676573742e76616c756531323a6469676573745f76616c756536343a3333623262303864316666393930616234613536376437326664373461336164613862313934326437393137313839643239346336303063393233636436663933353a6368726f6e6f6c6f67795f62696e64696e675f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633343a6368726f6e6f6c6f67795f62696e64696e675f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637432393a666978747572652e6368726f6e6f6c6f67792d62696e64696e672e763133313a6368726f6e6f6c6f67795f62696e64696e675f6469676573742e76616c756531323a6469676573745f76616c756536343a6139633331333835636536643763623832326533396332643636396262386435333634353535313331386665343661663336383133373231636432643761316632343a6d6574686f645f6964656e746974792e636f6e7472616374383a636f6e747261637432333a666978747572652d616e616c797369732d6d6574686f6432333a6d6574686f645f6964656e746974792e76657273696f6e373a76657273696f6e313a3333323a636f6e66696775726174696f6e5f6964656e746974792e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633313a636f6e66696775726174696f6e5f6964656e746974792e636f6e747261637431353a6469676573745f636f6e747261637432363a666978747572652e616e616c797369732d636f6e6669672e763132383a636f6e66696775726174696f6e5f6964656e746974792e76616c756531323a6469676573745f76616c756536343a3137323066613830396532643261363233316464626165313363336664393932353237393264633239363037623831316165323735383832626262626633636332383a696e746567726974795f6964656e746974792e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353632373a696e746567726974795f6964656e746974792e636f6e747261637431353a6469676573745f636f6e747261637433303a666978747572652e7265666572656e63652d696e746567726974792e763132343a696e746567726974795f6964656e746974792e76616c756531323a6469676573745f76616c756536343a33656638643632313165653065656133366438626235306463616634326563373536363165326532353165336665646230353366353961346234316432323762"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "analytical-reference.v1",
+      "contract_version": "v1",
+      "expected_id": "fa606ddb-01c4-58b0-9508-674622acde29",
+      "mutation": {
+        "expected_different_id": "c3400842-0842-52da-a30d-74e55d075cd4",
+        "field": "snapshot_id",
+        "mutated": "snapshot-fixture-mutated",
+        "name": "analytical_reference.snapshot_id",
+        "original": "snapshot-fixture"
+      },
+      "namespace": "aedc4a14-c202-500f-9145-528f48a7ca77",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "authority_execution": {
+      "canonical_components": [
+        {
+          "name": "scope.contract",
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        {
+          "name": "scope.level",
+          "type": "text",
+          "value": "asset"
+        },
+        {
+          "name": "scope.tenant_id",
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        {
+          "name": "scope.workspace_id",
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        {
+          "name": "scope.resource_scope_id",
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        {
+          "name": "scope.facility_id",
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        {
+          "name": "scope.connection_id",
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        {
+          "name": "scope.system_id",
+          "type": "text",
+          "value": "system-fixture"
+        },
+        {
+          "name": "scope.asset_id",
+          "type": "null",
+          "value": ""
+        },
+        {
+          "name": "source_kind",
+          "type": "text",
+          "value": "connector"
+        },
+        {
+          "name": "native_terminal_source_id",
+          "type": "uuid",
+          "value": "701d3bbf-9bf6-58cf-8c5d-8bd31ce86502"
+        },
+        {
+          "name": "native_terminal_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "native_terminal_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.native-terminal.v1"
+        },
+        {
+          "name": "native_terminal_digest.value",
+          "type": "digest_value",
+          "value": "15990d645d9fc677081f6db5a6d1fd37f7b033bb56e3a1ddc82786b1ab97de89"
+        },
+        {
+          "name": "chronology_execution_id",
+          "type": "uuid",
+          "value": "410a0df4-bcfd-57f4-9672-5c4267f59c37"
+        },
+        {
+          "name": "versions.count",
+          "type": "integer",
+          "value": "4"
+        },
+        {
+          "name": "versions.0.contract",
+          "type": "contract",
+          "value": "analytical-authority"
+        },
+        {
+          "name": "versions.0.version",
+          "type": "version",
+          "value": "1"
+        },
+        {
+          "name": "versions.1.contract",
+          "type": "contract",
+          "value": "authority-configuration"
+        },
+        {
+          "name": "versions.1.version",
+          "type": "version",
+          "value": "1"
+        },
+        {
+          "name": "versions.2.contract",
+          "type": "contract",
+          "value": "chronology-reference"
+        },
+        {
+          "name": "versions.2.version",
+          "type": "version",
+          "value": "1"
+        },
+        {
+          "name": "versions.3.contract",
+          "type": "contract",
+          "value": "finding-determination"
+        },
+        {
+          "name": "versions.3.version",
+          "type": "version",
+          "value": "1"
+        }
+      ],
+      "canonical_inputs": {
+        "chronology_execution_id": {
+          "type": "uuid",
+          "value": "410a0df4-bcfd-57f4-9672-5c4267f59c37"
+        },
+        "native_terminal_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "native_terminal_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.native-terminal.v1"
+        },
+        "native_terminal_digest.value": {
+          "type": "digest_value",
+          "value": "15990d645d9fc677081f6db5a6d1fd37f7b033bb56e3a1ddc82786b1ab97de89"
+        },
+        "native_terminal_source_id": {
+          "type": "uuid",
+          "value": "701d3bbf-9bf6-58cf-8c5d-8bd31ce86502"
+        },
+        "scope.asset_id": {
+          "type": "null",
+          "value": ""
+        },
+        "scope.connection_id": {
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        "scope.contract": {
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        "scope.facility_id": {
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        "scope.level": {
+          "type": "text",
+          "value": "asset"
+        },
+        "scope.resource_scope_id": {
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        "scope.system_id": {
+          "type": "text",
+          "value": "system-fixture"
+        },
+        "scope.tenant_id": {
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        "scope.workspace_id": {
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        "source_kind": {
+          "type": "text",
+          "value": "connector"
+        },
+        "versions.0.contract": {
+          "type": "contract",
+          "value": "analytical-authority"
+        },
+        "versions.0.version": {
+          "type": "version",
+          "value": "1"
+        },
+        "versions.1.contract": {
+          "type": "contract",
+          "value": "authority-configuration"
+        },
+        "versions.1.version": {
+          "type": "version",
+          "value": "1"
+        },
+        "versions.2.contract": {
+          "type": "contract",
+          "value": "chronology-reference"
+        },
+        "versions.2.version": {
+          "type": "version",
+          "value": "1"
+        },
+        "versions.3.contract": {
+          "type": "contract",
+          "value": "finding-determination"
+        },
+        "versions.3.version": {
+          "type": "version",
+          "value": "1"
+        },
+        "versions.count": {
+          "type": "integer",
+          "value": "4"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631323a323431343a73636f70652e636f6e7472616374343a7465787431383a617574686f726974792d73636f70652e763131313a73636f70652e6c6576656c343a74657874353a617373657431353a73636f70652e74656e616e745f6964343a7465787431343a74656e616e742d6669787475726531383a73636f70652e776f726b73706163655f6964343a7465787431373a776f726b73706163652d6669787475726532333a73636f70652e7265736f757263655f73636f70655f6964343a7465787431363a7265736f757263652d6669787475726531373a73636f70652e666163696c6974795f6964343a7465787431363a666163696c6974792d6669787475726531393a73636f70652e636f6e6e656374696f6e5f6964343a7465787432303a636f6e6e656374696f6e2d666978747572652d6131353a73636f70652e73797374656d5f6964343a7465787431343a73797374656d2d6669787475726531343a73636f70652e61737365745f6964343a6e756c6c303a31313a736f757263655f6b696e64343a74657874393a636f6e6e6563746f7232353a6e61746976655f7465726d696e616c5f736f757263655f6964343a7575696433363a37303164336262662d396266362d353863662d386335642d38626433316365383635303233323a6e61746976655f7465726d696e616c5f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633313a6e61746976655f7465726d696e616c5f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637432363a666978747572652e6e61746976652d7465726d696e616c2e763132383a6e61746976655f7465726d696e616c5f6469676573742e76616c756531323a6469676573745f76616c756536343a3135393930643634356439666336373730383166366462356136643166643337663762303333626235366533613164646338323738366231616239376465383932333a6368726f6e6f6c6f67795f657865637574696f6e5f6964343a7575696433363a34313061306466342d626366642d353766342d393637322d35633432363766353963333731343a76657273696f6e732e636f756e74373a696e7465676572313a3431393a76657273696f6e732e302e636f6e7472616374383a636f6e747261637432303a616e616c79746963616c2d617574686f7269747931383a76657273696f6e732e302e76657273696f6e373a76657273696f6e313a3131393a76657273696f6e732e312e636f6e7472616374383a636f6e747261637432333a617574686f726974792d636f6e66696775726174696f6e31383a76657273696f6e732e312e76657273696f6e373a76657273696f6e313a3131393a76657273696f6e732e322e636f6e7472616374383a636f6e747261637432303a6368726f6e6f6c6f67792d7265666572656e636531383a76657273696f6e732e322e76657273696f6e373a76657273696f6e313a3131393a76657273696f6e732e332e636f6e7472616374383a636f6e747261637432313a66696e64696e672d64657465726d696e6174696f6e31383a76657273696f6e732e332e76657273696f6e373a76657273696f6e313a31"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "authority-execution.v1",
+      "contract_version": "v1",
+      "expected_id": "a8a9b60b-4c22-55db-ad54-b697ce985360",
+      "mutation": {
+        "expected_different_id": "16e448e9-0988-5483-a344-6a09d0d2b793",
+        "field": "source_kind",
+        "mutated": "telemetry_connector",
+        "name": "authority_execution.source_kind",
+        "original": "connector"
+      },
+      "namespace": "b7ca28a9-0b87-5128-b920-066f3fa8b42e",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "canonical_observation": {
+      "canonical_components": [
+        {
+          "name": "scope.contract",
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        {
+          "name": "scope.level",
+          "type": "text",
+          "value": "asset"
+        },
+        {
+          "name": "scope.tenant_id",
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        {
+          "name": "scope.workspace_id",
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        {
+          "name": "scope.resource_scope_id",
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        {
+          "name": "scope.facility_id",
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        {
+          "name": "scope.connection_id",
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        {
+          "name": "scope.system_id",
+          "type": "text",
+          "value": "system-fixture"
+        },
+        {
+          "name": "scope.asset_id",
+          "type": "null",
+          "value": ""
+        },
+        {
+          "name": "existing_observation_id",
+          "type": "uuid",
+          "value": "00000000-0000-5000-8000-000000000201"
+        }
+      ],
+      "canonical_inputs": {
+        "existing_observation_id": {
+          "type": "uuid",
+          "value": "00000000-0000-5000-8000-000000000201"
+        },
+        "scope.asset_id": {
+          "type": "null",
+          "value": ""
+        },
+        "scope.connection_id": {
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        "scope.contract": {
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        "scope.facility_id": {
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        "scope.level": {
+          "type": "text",
+          "value": "asset"
+        },
+        "scope.resource_scope_id": {
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        "scope.system_id": {
+          "type": "text",
+          "value": "system-fixture"
+        },
+        "scope.tenant_id": {
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        "scope.workspace_id": {
+          "type": "text",
+          "value": "workspace-fixture"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631323a313031343a73636f70652e636f6e7472616374343a7465787431383a617574686f726974792d73636f70652e763131313a73636f70652e6c6576656c343a74657874353a617373657431353a73636f70652e74656e616e745f6964343a7465787431343a74656e616e742d6669787475726531383a73636f70652e776f726b73706163655f6964343a7465787431373a776f726b73706163652d6669787475726532333a73636f70652e7265736f757263655f73636f70655f6964343a7465787431363a7265736f757263652d6669787475726531373a73636f70652e666163696c6974795f6964343a7465787431363a666163696c6974792d6669787475726531393a73636f70652e636f6e6e656374696f6e5f6964343a7465787432303a636f6e6e656374696f6e2d666978747572652d6131353a73636f70652e73797374656d5f6964343a7465787431343a73797374656d2d6669787475726531343a73636f70652e61737365745f6964343a6e756c6c303a32333a6578697374696e675f6f62736572766174696f6e5f6964343a7575696433363a30303030303030302d303030302d353030302d383030302d303030303030303030323031"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "canonical-observation-existing.v1",
+      "contract_version": "v1",
+      "expected_id": "00000000-0000-5000-8000-000000000201",
+      "mutation": {
+        "expected_different_id": "00000000-0000-5000-8000-000000000202",
+        "field": "existing_observation_id",
+        "mutated": "00000000-0000-5000-8000-000000000202",
+        "name": "canonical_observation.existing_observation_id",
+        "original": "00000000-0000-5000-8000-000000000201"
+      },
+      "namespace": "existing/delegated",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "canonical_package": {
+      "canonical_components": [
+        {
+          "name": "authority_execution_id",
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        {
+          "name": "package_schema.contract",
+          "type": "contract",
+          "value": "fixture-canonical-package"
+        },
+        {
+          "name": "package_schema.version",
+          "type": "version",
+          "value": "1"
+        },
+        {
+          "name": "generation",
+          "type": "integer",
+          "value": "1"
+        }
+      ],
+      "canonical_inputs": {
+        "authority_execution_id": {
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        "generation": {
+          "type": "integer",
+          "value": "1"
+        },
+        "package_schema.contract": {
+          "type": "contract",
+          "value": "fixture-canonical-package"
+        },
+        "package_schema.version": {
+          "type": "version",
+          "value": "1"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631313a3432323a617574686f726974795f657865637574696f6e5f6964343a7575696433363a61386139623630622d346332322d353564622d616435342d62363937636539383533363032333a7061636b6167655f736368656d612e636f6e7472616374383a636f6e747261637432353a666978747572652d63616e6f6e6963616c2d7061636b61676532323a7061636b6167655f736368656d612e76657273696f6e373a76657273696f6e313a3131303a67656e65726174696f6e373a696e7465676572313a31"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "canonical-authority-package.v1",
+      "contract_version": "v1",
+      "expected_id": "84d625c7-080e-59c2-be98-4bc68ba45425",
+      "mutation": {
+        "expected_different_id": "480f25ec-d85f-5ef0-954f-b8fd73cadfee",
+        "field": "package_schema.version",
+        "mutated": "2",
+        "name": "canonical_package.package_schema.version",
+        "original": "1"
+      },
+      "namespace": "51e2dee9-8dba-5c2b-93b1-80d273583f60",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "chronology_execution": {
+      "canonical_components": [
+        {
+          "name": "chronology_slot_id",
+          "type": "uuid",
+          "value": "a3b0e507-aa13-5a2a-9879-bee4456cd759"
+        },
+        {
+          "name": "analysis_generation",
+          "type": "integer",
+          "value": "3"
+        },
+        {
+          "name": "execution_mode",
+          "type": "text",
+          "value": "active"
+        },
+        {
+          "name": "manifest_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "manifest_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.manifest.v1"
+        },
+        {
+          "name": "manifest_digest.value",
+          "type": "digest_value",
+          "value": "2dcda6e1af63e310bd56dbc702d7a4ce89c5d19df2790bd61608c5fc5667f48d"
+        },
+        {
+          "name": "analytical_input_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "analytical_input_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.analytical-input.v1"
+        },
+        {
+          "name": "analytical_input_digest.value",
+          "type": "digest_value",
+          "value": "3b2b744fefe4fb85fdb82b51c319be1fe5b30c6cee1d9bf78f8ea00c48922c66"
+        },
+        {
+          "name": "expected_progress_revision",
+          "type": "integer",
+          "value": "11"
+        },
+        {
+          "name": "predecessor_reference_id",
+          "type": "uuid",
+          "value": "fa606ddb-01c4-58b0-9508-674622acde29"
+        },
+        {
+          "name": "predecessor_reference_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "predecessor_reference_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.predecessor-reference.v1"
+        },
+        {
+          "name": "predecessor_reference_digest.value",
+          "type": "digest_value",
+          "value": "f1bc6890388c2f9d0d6b23933e1ad5c32d3ffd478d8f60c0f31a92cd4ad73509"
+        },
+        {
+          "name": "authority_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "authority_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.chronology-authority.v1"
+        },
+        {
+          "name": "authority_digest.value",
+          "type": "digest_value",
+          "value": "2ee21426b3b7e19153436f30703724e4a36b6d6f06630534dc55cf2e33db28b6"
+        },
+        {
+          "name": "configuration_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "configuration_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.chronology-config.v1"
+        },
+        {
+          "name": "configuration_digest.value",
+          "type": "digest_value",
+          "value": "1720fa809e2d2a6231ddbae13c3fd99252792dc29607b811ae275882bbbbf3cc"
+        }
+      ],
+      "canonical_inputs": {
+        "analysis_generation": {
+          "type": "integer",
+          "value": "3"
+        },
+        "analytical_input_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "analytical_input_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.analytical-input.v1"
+        },
+        "analytical_input_digest.value": {
+          "type": "digest_value",
+          "value": "3b2b744fefe4fb85fdb82b51c319be1fe5b30c6cee1d9bf78f8ea00c48922c66"
+        },
+        "authority_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "authority_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.chronology-authority.v1"
+        },
+        "authority_digest.value": {
+          "type": "digest_value",
+          "value": "2ee21426b3b7e19153436f30703724e4a36b6d6f06630534dc55cf2e33db28b6"
+        },
+        "chronology_slot_id": {
+          "type": "uuid",
+          "value": "a3b0e507-aa13-5a2a-9879-bee4456cd759"
+        },
+        "configuration_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "configuration_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.chronology-config.v1"
+        },
+        "configuration_digest.value": {
+          "type": "digest_value",
+          "value": "1720fa809e2d2a6231ddbae13c3fd99252792dc29607b811ae275882bbbbf3cc"
+        },
+        "execution_mode": {
+          "type": "text",
+          "value": "active"
+        },
+        "expected_progress_revision": {
+          "type": "integer",
+          "value": "11"
+        },
+        "manifest_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "manifest_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.manifest.v1"
+        },
+        "manifest_digest.value": {
+          "type": "digest_value",
+          "value": "2dcda6e1af63e310bd56dbc702d7a4ce89c5d19df2790bd61608c5fc5667f48d"
+        },
+        "predecessor_reference_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "predecessor_reference_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.predecessor-reference.v1"
+        },
+        "predecessor_reference_digest.value": {
+          "type": "digest_value",
+          "value": "f1bc6890388c2f9d0d6b23933e1ad5c32d3ffd478d8f60c0f31a92cd4ad73509"
+        },
+        "predecessor_reference_id": {
+          "type": "uuid",
+          "value": "fa606ddb-01c4-58b0-9508-674622acde29"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631323a323031383a6368726f6e6f6c6f67795f736c6f745f6964343a7575696433363a61336230653530372d616131332d356132612d393837392d62656534343536636437353931393a616e616c797369735f67656e65726174696f6e373a696e7465676572313a3331343a657865637574696f6e5f6d6f6465343a74657874363a61637469766532353a6d616e69666573745f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353632343a6d616e69666573745f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637431393a666978747572652e6d616e69666573742e763132313a6d616e69666573745f6469676573742e76616c756531323a6469676573745f76616c756536343a3264636461366531616636336533313062643536646263373032643761346365383963356431396466323739306264363136303863356663353636376634386433333a616e616c79746963616c5f696e7075745f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633323a616e616c79746963616c5f696e7075745f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637432373a666978747572652e616e616c79746963616c2d696e7075742e763132393a616e616c79746963616c5f696e7075745f6469676573742e76616c756531323a6469676573745f76616c756536343a3362326237343466656665346662383566646238326235316333313962653166653562333063366365653164396266373866386561303063343839323263363632363a65787065637465645f70726f67726573735f7265766973696f6e373a696e7465676572323a313132343a7072656465636573736f725f7265666572656e63655f6964343a7575696433363a66613630366464622d303163342d353862302d393530382d36373436323261636465323933383a7072656465636573736f725f7265666572656e63655f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633373a7072656465636573736f725f7265666572656e63655f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637433323a666978747572652e7072656465636573736f722d7265666572656e63652e763133343a7072656465636573736f725f7265666572656e63655f6469676573742e76616c756531323a6469676573745f76616c756536343a6631626336383930333838633266396430643662323339333365316164356333326433666664343738643866363063306633316139326364346164373335303932363a617574686f726974795f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353632353a617574686f726974795f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637433313a666978747572652e6368726f6e6f6c6f67792d617574686f726974792e763132323a617574686f726974795f6469676573742e76616c756531323a6469676573745f76616c756536343a3265653231343236623362376531393135333433366633303730333732346534613336623664366630363633303533346463353563663265333364623238623633303a636f6e66696775726174696f6e5f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353632393a636f6e66696775726174696f6e5f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637432383a666978747572652e6368726f6e6f6c6f67792d636f6e6669672e763132363a636f6e66696775726174696f6e5f6469676573742e76616c756531323a6469676573745f76616c756536343a31373230666138303965326432613632333164646261653133633366643939323532373932646332393630376238313161653237353838326262626266336363"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "chronology-execution.v1",
+      "contract_version": "v1",
+      "expected_id": "410a0df4-bcfd-57f4-9672-5c4267f59c37",
+      "mutation": {
+        "expected_different_id": "5966fe4c-09ed-5477-885b-ca11062e00d7",
+        "field": "expected_progress_revision",
+        "mutated": "12",
+        "name": "chronology_execution.expected_progress_revision",
+        "original": "11"
+      },
+      "namespace": "cae8a932-e8b1-5349-962b-9737b0d5d4c1",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "chronology_slot": {
+      "canonical_components": [
+        {
+          "name": "scope.contract",
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        {
+          "name": "scope.level",
+          "type": "text",
+          "value": "asset"
+        },
+        {
+          "name": "scope.tenant_id",
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        {
+          "name": "scope.workspace_id",
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        {
+          "name": "scope.resource_scope_id",
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        {
+          "name": "scope.facility_id",
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        {
+          "name": "scope.connection_id",
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        {
+          "name": "scope.system_id",
+          "type": "text",
+          "value": "system-fixture"
+        },
+        {
+          "name": "scope.asset_id",
+          "type": "null",
+          "value": ""
+        },
+        {
+          "name": "authority_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "authority_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.chronology-authority.v1"
+        },
+        {
+          "name": "authority_digest.value",
+          "type": "digest_value",
+          "value": "2ee21426b3b7e19153436f30703724e4a36b6d6f06630534dc55cf2e33db28b6"
+        },
+        {
+          "name": "analysis_config_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "analysis_config_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.analysis-config.v1"
+        },
+        {
+          "name": "analysis_config_digest.value",
+          "type": "digest_value",
+          "value": "1720fa809e2d2a6231ddbae13c3fd99252792dc29607b811ae275882bbbbf3cc"
+        },
+        {
+          "name": "cadence_origin",
+          "type": "utc_datetime",
+          "value": "2026-01-01T00:00:00.000000Z"
+        },
+        {
+          "name": "evaluation_endpoint",
+          "type": "utc_datetime",
+          "value": "2026-01-02T12:00:00.000000Z"
+        },
+        {
+          "name": "contribution_start",
+          "type": "utc_datetime",
+          "value": "2026-01-02T11:00:00.000000Z"
+        },
+        {
+          "name": "contribution_end",
+          "type": "utc_datetime",
+          "value": "2026-01-02T12:00:00.000000Z"
+        },
+        {
+          "name": "lookback_start",
+          "type": "utc_datetime",
+          "value": "2026-01-01T12:00:00.000000Z"
+        },
+        {
+          "name": "lookback_end",
+          "type": "utc_datetime",
+          "value": "2026-01-02T12:00:00.000000Z"
+        },
+        {
+          "name": "learning_generation",
+          "type": "integer",
+          "value": "7"
+        }
+      ],
+      "canonical_inputs": {
+        "analysis_config_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "analysis_config_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.analysis-config.v1"
+        },
+        "analysis_config_digest.value": {
+          "type": "digest_value",
+          "value": "1720fa809e2d2a6231ddbae13c3fd99252792dc29607b811ae275882bbbbf3cc"
+        },
+        "authority_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "authority_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.chronology-authority.v1"
+        },
+        "authority_digest.value": {
+          "type": "digest_value",
+          "value": "2ee21426b3b7e19153436f30703724e4a36b6d6f06630534dc55cf2e33db28b6"
+        },
+        "cadence_origin": {
+          "type": "utc_datetime",
+          "value": "2026-01-01T00:00:00.000000Z"
+        },
+        "contribution_end": {
+          "type": "utc_datetime",
+          "value": "2026-01-02T12:00:00.000000Z"
+        },
+        "contribution_start": {
+          "type": "utc_datetime",
+          "value": "2026-01-02T11:00:00.000000Z"
+        },
+        "evaluation_endpoint": {
+          "type": "utc_datetime",
+          "value": "2026-01-02T12:00:00.000000Z"
+        },
+        "learning_generation": {
+          "type": "integer",
+          "value": "7"
+        },
+        "lookback_end": {
+          "type": "utc_datetime",
+          "value": "2026-01-02T12:00:00.000000Z"
+        },
+        "lookback_start": {
+          "type": "utc_datetime",
+          "value": "2026-01-01T12:00:00.000000Z"
+        },
+        "scope.asset_id": {
+          "type": "null",
+          "value": ""
+        },
+        "scope.connection_id": {
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        "scope.contract": {
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        "scope.facility_id": {
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        "scope.level": {
+          "type": "text",
+          "value": "asset"
+        },
+        "scope.resource_scope_id": {
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        "scope.system_id": {
+          "type": "text",
+          "value": "system-fixture"
+        },
+        "scope.tenant_id": {
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        "scope.workspace_id": {
+          "type": "text",
+          "value": "workspace-fixture"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631323a323231343a73636f70652e636f6e7472616374343a7465787431383a617574686f726974792d73636f70652e763131313a73636f70652e6c6576656c343a74657874353a617373657431353a73636f70652e74656e616e745f6964343a7465787431343a74656e616e742d6669787475726531383a73636f70652e776f726b73706163655f6964343a7465787431373a776f726b73706163652d6669787475726532333a73636f70652e7265736f757263655f73636f70655f6964343a7465787431363a7265736f757263652d6669787475726531373a73636f70652e666163696c6974795f6964343a7465787431363a666163696c6974792d6669787475726531393a73636f70652e636f6e6e656374696f6e5f6964343a7465787432303a636f6e6e656374696f6e2d666978747572652d6131353a73636f70652e73797374656d5f6964343a7465787431343a73797374656d2d6669787475726531343a73636f70652e61737365745f6964343a6e756c6c303a32363a617574686f726974795f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353632353a617574686f726974795f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637433313a666978747572652e6368726f6e6f6c6f67792d617574686f726974792e763132323a617574686f726974795f6469676573742e76616c756531323a6469676573745f76616c756536343a3265653231343236623362376531393135333433366633303730333732346534613336623664366630363633303533346463353563663265333364623238623633323a616e616c797369735f636f6e6669675f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633313a616e616c797369735f636f6e6669675f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637432363a666978747572652e616e616c797369732d636f6e6669672e763132383a616e616c797369735f636f6e6669675f6469676573742e76616c756531323a6469676573745f76616c756536343a3137323066613830396532643261363233316464626165313363336664393932353237393264633239363037623831316165323735383832626262626633636331343a636164656e63655f6f726967696e31323a7574635f6461746574696d6532373a323032362d30312d30315430303a30303a30302e3030303030305a31393a6576616c756174696f6e5f656e64706f696e7431323a7574635f6461746574696d6532373a323032362d30312d30325431323a30303a30302e3030303030305a31383a636f6e747269627574696f6e5f737461727431323a7574635f6461746574696d6532373a323032362d30312d30325431313a30303a30302e3030303030305a31363a636f6e747269627574696f6e5f656e6431323a7574635f6461746574696d6532373a323032362d30312d30325431323a30303a30302e3030303030305a31343a6c6f6f6b6261636b5f737461727431323a7574635f6461746574696d6532373a323032362d30312d30315431323a30303a30302e3030303030305a31323a6c6f6f6b6261636b5f656e6431323a7574635f6461746574696d6532373a323032362d30312d30325431323a30303a30302e3030303030305a31393a6c6561726e696e675f67656e65726174696f6e373a696e7465676572313a37"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "chronology-slot.v1",
+      "contract_version": "v1",
+      "expected_id": "a3b0e507-aa13-5a2a-9879-bee4456cd759",
+      "mutation": {
+        "expected_different_id": "21636247-55e4-5ddb-831b-cafff51586f8",
+        "field": "learning_generation",
+        "mutated": "8",
+        "name": "chronology_slot.learning_generation",
+        "original": "7"
+      },
+      "namespace": "72140aad-46db-5c9f-a4ff-ea2c629c7d10",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "classification_binding": {
+      "canonical_components": [
+        {
+          "name": "analytical_finding_id",
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        {
+          "name": "classifier_rule.contract",
+          "type": "contract",
+          "value": "finding-classification"
+        },
+        {
+          "name": "classifier_rule.version",
+          "type": "version",
+          "value": "deterministic_finding_classification_v3"
+        },
+        {
+          "name": "input_contract.contract",
+          "type": "contract",
+          "value": "fixture-classification-input"
+        },
+        {
+          "name": "input_contract.version",
+          "type": "version",
+          "value": "1"
+        },
+        {
+          "name": "ordered_binding_set_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "ordered_binding_set_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.ordered-evidence-bindings.v1.typed-length-prefixed-utf8.v1"
+        },
+        {
+          "name": "ordered_binding_set_digest.value",
+          "type": "digest_value",
+          "value": "aa6cca91ad3c4536e06da99b4a5905c58eca70569705516a49bb704324e910cb"
+        }
+      ],
+      "canonical_inputs": {
+        "analytical_finding_id": {
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        "classifier_rule.contract": {
+          "type": "contract",
+          "value": "finding-classification"
+        },
+        "classifier_rule.version": {
+          "type": "version",
+          "value": "deterministic_finding_classification_v3"
+        },
+        "input_contract.contract": {
+          "type": "contract",
+          "value": "fixture-classification-input"
+        },
+        "input_contract.version": {
+          "type": "version",
+          "value": "1"
+        },
+        "ordered_binding_set_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "ordered_binding_set_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.ordered-evidence-bindings.v1.typed-length-prefixed-utf8.v1"
+        },
+        "ordered_binding_set_digest.value": {
+          "type": "digest_value",
+          "value": "aa6cca91ad3c4536e06da99b4a5905c58eca70569705516a49bb704324e910cb"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631313a3832313a616e616c79746963616c5f66696e64696e675f6964343a7575696433363a35343464656639372d313366322d356639662d383039352d61396166306533336138636532343a636c61737369666965725f72756c652e636f6e7472616374383a636f6e747261637432323a66696e64696e672d636c617373696669636174696f6e32333a636c61737369666965725f72756c652e76657273696f6e373a76657273696f6e33393a64657465726d696e69737469635f66696e64696e675f636c617373696669636174696f6e5f763332333a696e7075745f636f6e74726163742e636f6e7472616374383a636f6e747261637432383a666978747572652d636c617373696669636174696f6e2d696e70757432323a696e7075745f636f6e74726163742e76657273696f6e373a76657273696f6e313a3133363a6f7264657265645f62696e64696e675f7365745f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633353a6f7264657265645f62696e64696e675f7365745f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637436363a666978747572652e6f7264657265642d65766964656e63652d62696e64696e67732e76312e74797065642d6c656e6774682d70726566697865642d757466382e763133323a6f7264657265645f62696e64696e675f7365745f6469676573742e76616c756531323a6469676573745f76616c756536343a61613663636139316164336334353336653036646139396234613539303563353865636137303536393730353531366134396262373034333234653931306362"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "classification-binding.v1",
+      "contract_version": "v1",
+      "expected_id": "72ec7c5c-3a24-5308-85c1-300f7106e18d",
+      "mutation": {
+        "expected_different_id": "a5fb452a-7094-5e8d-9a3e-c73a458ceb13",
+        "field": "input_contract.version",
+        "mutated": "2",
+        "name": "classification_binding.input_contract.version",
+        "original": "1"
+      },
+      "namespace": "a499bd0d-dd23-58a4-a8b3-43eb12006b1e",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "confidence_binding": {
+      "canonical_components": [
+        {
+          "name": "analytical_finding_id",
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        {
+          "name": "confidence_contract.contract",
+          "type": "contract",
+          "value": "finding-confidence"
+        },
+        {
+          "name": "confidence_contract.version",
+          "type": "version",
+          "value": "finding-confidence-v1"
+        },
+        {
+          "name": "exact_input_set_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "exact_input_set_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.confidence-input-set.v1"
+        },
+        {
+          "name": "exact_input_set_digest.value",
+          "type": "digest_value",
+          "value": "8d25407ad19adee970d9be6db5c25197a602f9c8401eb4d013701d59a50f52f1"
+        },
+        {
+          "name": "persistence_assessment_id",
+          "type": "uuid",
+          "value": "f98482e5-c94c-57e3-a7ac-a83abc6d534b"
+        }
+      ],
+      "canonical_inputs": {
+        "analytical_finding_id": {
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        "confidence_contract.contract": {
+          "type": "contract",
+          "value": "finding-confidence"
+        },
+        "confidence_contract.version": {
+          "type": "version",
+          "value": "finding-confidence-v1"
+        },
+        "exact_input_set_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "exact_input_set_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.confidence-input-set.v1"
+        },
+        "exact_input_set_digest.value": {
+          "type": "digest_value",
+          "value": "8d25407ad19adee970d9be6db5c25197a602f9c8401eb4d013701d59a50f52f1"
+        },
+        "persistence_assessment_id": {
+          "type": "uuid",
+          "value": "f98482e5-c94c-57e3-a7ac-a83abc6d534b"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631313a3732313a616e616c79746963616c5f66696e64696e675f6964343a7575696433363a35343464656639372d313366322d356639662d383039352d61396166306533336138636532383a636f6e666964656e63655f636f6e74726163742e636f6e7472616374383a636f6e747261637431383a66696e64696e672d636f6e666964656e636532373a636f6e666964656e63655f636f6e74726163742e76657273696f6e373a76657273696f6e32313a66696e64696e672d636f6e666964656e63652d763133323a65786163745f696e7075745f7365745f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633313a65786163745f696e7075745f7365745f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637433313a666978747572652e636f6e666964656e63652d696e7075742d7365742e763132383a65786163745f696e7075745f7365745f6469676573742e76616c756531323a6469676573745f76616c756536343a3864323534303761643139616465653937306439626536646235633235313937613630326639633834303165623464303133373031643539613530663532663132353a70657273697374656e63655f6173736573736d656e745f6964343a7575696433363a66393834383265352d633934632d353765332d613761632d613833616263366435333462"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "confidence-binding.v1",
+      "contract_version": "v1",
+      "expected_id": "b3294174-ab2d-5d95-8b70-728aa8102931",
+      "mutation": {
+        "expected_different_id": "eb76e036-68d8-5acc-a917-150f2523a8de",
+        "field": "exact_input_set_digest.fixture_marker",
+        "mutated": "confidence-mutated",
+        "name": "confidence_binding.exact_input_set_digest",
+        "original": "confidence"
+      },
+      "namespace": "05b2b6dd-5083-59b5-922a-7cb07ca15e9e",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "evidence_binding": {
+      "canonical_components": [
+        {
+          "name": "authority_execution_id",
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        {
+          "name": "analytical_finding_id",
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        {
+          "name": "evidence_fact_id",
+          "type": "uuid",
+          "value": "2149dc1c-fe56-5d81-b67b-e1168926273c"
+        },
+        {
+          "name": "role",
+          "type": "text",
+          "value": "supporting"
+        },
+        {
+          "name": "qualification",
+          "type": "text",
+          "value": "admitted"
+        },
+        {
+          "name": "qualification_contract.contract",
+          "type": "contract",
+          "value": "fixture-qualification"
+        },
+        {
+          "name": "qualification_contract.version",
+          "type": "version",
+          "value": "1"
+        },
+        {
+          "name": "limitation_set_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "limitation_set_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.limitation-set.v1"
+        },
+        {
+          "name": "limitation_set_digest.value",
+          "type": "digest_value",
+          "value": "5a12fef87d6e66242abcbe4d8763a8f8fdca091b94074a7c476cfe58a30a2f23"
+        }
+      ],
+      "canonical_inputs": {
+        "analytical_finding_id": {
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        "authority_execution_id": {
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        "evidence_fact_id": {
+          "type": "uuid",
+          "value": "2149dc1c-fe56-5d81-b67b-e1168926273c"
+        },
+        "limitation_set_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "limitation_set_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.limitation-set.v1"
+        },
+        "limitation_set_digest.value": {
+          "type": "digest_value",
+          "value": "5a12fef87d6e66242abcbe4d8763a8f8fdca091b94074a7c476cfe58a30a2f23"
+        },
+        "qualification": {
+          "type": "text",
+          "value": "admitted"
+        },
+        "qualification_contract.contract": {
+          "type": "contract",
+          "value": "fixture-qualification"
+        },
+        "qualification_contract.version": {
+          "type": "version",
+          "value": "1"
+        },
+        "role": {
+          "type": "text",
+          "value": "supporting"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631323a313032323a617574686f726974795f657865637574696f6e5f6964343a7575696433363a61386139623630622d346332322d353564622d616435342d62363937636539383533363032313a616e616c79746963616c5f66696e64696e675f6964343a7575696433363a35343464656639372d313366322d356639662d383039352d61396166306533336138636531363a65766964656e63655f666163745f6964343a7575696433363a32313439646331632d666535362d356438312d623637622d653131363839323632373363343a726f6c65343a7465787431303a737570706f7274696e6731333a7175616c696669636174696f6e343a74657874383a61646d697474656433313a7175616c696669636174696f6e5f636f6e74726163742e636f6e7472616374383a636f6e747261637432313a666978747572652d7175616c696669636174696f6e33303a7175616c696669636174696f6e5f636f6e74726163742e76657273696f6e373a76657273696f6e313a3133313a6c696d69746174696f6e5f7365745f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633303a6c696d69746174696f6e5f7365745f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637432353a666978747572652e6c696d69746174696f6e2d7365742e763132373a6c696d69746174696f6e5f7365745f6469676573742e76616c756531323a6469676573745f76616c756536343a35613132666566383764366536363234326162636265346438373633613866386664636130393162393430373461376334373663666535386133306132663233"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "evidence-binding.v1",
+      "contract_version": "v1",
+      "expected_id": "c610cf25-435d-53cb-8e54-38218ced5a00",
+      "mutation": {
+        "expected_different_id": "3b9e458d-837d-53e6-acd4-f0f1d07b03d8",
+        "field": "role",
+        "mutated": "contradictory",
+        "name": "evidence_binding.role",
+        "original": "supporting"
+      },
+      "namespace": "661e47c4-a09a-59d3-9888-49d02af5ed1a",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "evidence_fact": {
+      "canonical_components": [
+        {
+          "name": "authority_execution_id",
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        {
+          "name": "fact_type",
+          "type": "text",
+          "value": "relationship_delta"
+        },
+        {
+          "name": "producer_schema.contract",
+          "type": "contract",
+          "value": "fixture-evidence-fact"
+        },
+        {
+          "name": "producer_schema.version",
+          "type": "version",
+          "value": "1"
+        },
+        {
+          "name": "scope.contract",
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        {
+          "name": "scope.level",
+          "type": "text",
+          "value": "asset"
+        },
+        {
+          "name": "scope.tenant_id",
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        {
+          "name": "scope.workspace_id",
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        {
+          "name": "scope.resource_scope_id",
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        {
+          "name": "scope.facility_id",
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        {
+          "name": "scope.connection_id",
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        {
+          "name": "scope.system_id",
+          "type": "text",
+          "value": "system-fixture"
+        },
+        {
+          "name": "scope.asset_id",
+          "type": "null",
+          "value": ""
+        },
+        {
+          "name": "subject_identity",
+          "type": "text",
+          "value": "subject-fixture"
+        },
+        {
+          "name": "dimensions.count",
+          "type": "integer",
+          "value": "2"
+        },
+        {
+          "name": "dimensions.0.name",
+          "type": "text",
+          "value": "signal_a"
+        },
+        {
+          "name": "dimensions.0.value",
+          "type": "text",
+          "value": "pressure"
+        },
+        {
+          "name": "dimensions.1.name",
+          "type": "text",
+          "value": "signal_b"
+        },
+        {
+          "name": "dimensions.1.value",
+          "type": "text",
+          "value": "flow"
+        },
+        {
+          "name": "value_unit_event_time_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "value_unit_event_time_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.fact-value.v1"
+        },
+        {
+          "name": "value_unit_event_time_digest.value",
+          "type": "digest_value",
+          "value": "e098857ba169300e82ad13770783c4459e1bb0491ef0d69c9579a42d678a248a"
+        },
+        {
+          "name": "analytical_reference_id",
+          "type": "uuid",
+          "value": "fa606ddb-01c4-58b0-9508-674622acde29"
+        }
+      ],
+      "canonical_inputs": {
+        "analytical_reference_id": {
+          "type": "uuid",
+          "value": "fa606ddb-01c4-58b0-9508-674622acde29"
+        },
+        "authority_execution_id": {
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        "dimensions.0.name": {
+          "type": "text",
+          "value": "signal_a"
+        },
+        "dimensions.0.value": {
+          "type": "text",
+          "value": "pressure"
+        },
+        "dimensions.1.name": {
+          "type": "text",
+          "value": "signal_b"
+        },
+        "dimensions.1.value": {
+          "type": "text",
+          "value": "flow"
+        },
+        "dimensions.count": {
+          "type": "integer",
+          "value": "2"
+        },
+        "fact_type": {
+          "type": "text",
+          "value": "relationship_delta"
+        },
+        "producer_schema.contract": {
+          "type": "contract",
+          "value": "fixture-evidence-fact"
+        },
+        "producer_schema.version": {
+          "type": "version",
+          "value": "1"
+        },
+        "scope.asset_id": {
+          "type": "null",
+          "value": ""
+        },
+        "scope.connection_id": {
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        "scope.contract": {
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        "scope.facility_id": {
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        "scope.level": {
+          "type": "text",
+          "value": "asset"
+        },
+        "scope.resource_scope_id": {
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        "scope.system_id": {
+          "type": "text",
+          "value": "system-fixture"
+        },
+        "scope.tenant_id": {
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        "scope.workspace_id": {
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        "subject_identity": {
+          "type": "text",
+          "value": "subject-fixture"
+        },
+        "value_unit_event_time_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "value_unit_event_time_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.fact-value.v1"
+        },
+        "value_unit_event_time_digest.value": {
+          "type": "digest_value",
+          "value": "e098857ba169300e82ad13770783c4459e1bb0491ef0d69c9579a42d678a248a"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631323a323332323a617574686f726974795f657865637574696f6e5f6964343a7575696433363a61386139623630622d346332322d353564622d616435342d623639376365393835333630393a666163745f74797065343a7465787431383a72656c6174696f6e736869705f64656c746132343a70726f64756365725f736368656d612e636f6e7472616374383a636f6e747261637432313a666978747572652d65766964656e63652d6661637432333a70726f64756365725f736368656d612e76657273696f6e373a76657273696f6e313a3131343a73636f70652e636f6e7472616374343a7465787431383a617574686f726974792d73636f70652e763131313a73636f70652e6c6576656c343a74657874353a617373657431353a73636f70652e74656e616e745f6964343a7465787431343a74656e616e742d6669787475726531383a73636f70652e776f726b73706163655f6964343a7465787431373a776f726b73706163652d6669787475726532333a73636f70652e7265736f757263655f73636f70655f6964343a7465787431363a7265736f757263652d6669787475726531373a73636f70652e666163696c6974795f6964343a7465787431363a666163696c6974792d6669787475726531393a73636f70652e636f6e6e656374696f6e5f6964343a7465787432303a636f6e6e656374696f6e2d666978747572652d6131353a73636f70652e73797374656d5f6964343a7465787431343a73797374656d2d6669787475726531343a73636f70652e61737365745f6964343a6e756c6c303a31363a7375626a6563745f6964656e74697479343a7465787431353a7375626a6563742d6669787475726531363a64696d656e73696f6e732e636f756e74373a696e7465676572313a3231373a64696d656e73696f6e732e302e6e616d65343a74657874383a7369676e616c5f6131383a64696d656e73696f6e732e302e76616c7565343a74657874383a707265737375726531373a64696d656e73696f6e732e312e6e616d65343a74657874383a7369676e616c5f6231383a64696d656e73696f6e732e312e76616c7565343a74657874343a666c6f7733383a76616c75655f756e69745f6576656e745f74696d655f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633373a76616c75655f756e69745f6576656e745f74696d655f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637432313a666978747572652e666163742d76616c75652e763133343a76616c75655f756e69745f6576656e745f74696d655f6469676573742e76616c756531323a6469676573745f76616c756536343a6530393838353762613136393330306538326164313337373037383363343435396531626230343931656630643639633935373961343264363738613234386132333a616e616c79746963616c5f7265666572656e63655f6964343a7575696433363a66613630366464622d303163342d353862302d393530382d363734363232616364653239"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "evidence-fact.v1",
+      "contract_version": "v1",
+      "expected_id": "2149dc1c-fe56-5d81-b67b-e1168926273c",
+      "mutation": {
+        "expected_different_id": "f623806e-2d2a-5b4c-b391-26c54ff3e5b0",
+        "field": "fact_type",
+        "mutated": "relationship_delta_mutated",
+        "name": "evidence_fact.fact_type",
+        "original": "relationship_delta"
+      },
+      "namespace": "0402d6f5-32a2-58e9-b60d-29b16a5cfa87",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "native_result": {
+      "canonical_components": [
+        {
+          "name": "scope.contract",
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        {
+          "name": "scope.level",
+          "type": "text",
+          "value": "native_result"
+        },
+        {
+          "name": "scope.tenant_id",
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        {
+          "name": "scope.workspace_id",
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        {
+          "name": "scope.resource_scope_id",
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        {
+          "name": "scope.facility_id",
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        {
+          "name": "scope.connection_id",
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        {
+          "name": "scope.system_id",
+          "type": "text",
+          "value": "system-fixture"
+        },
+        {
+          "name": "scope.asset_id",
+          "type": "null",
+          "value": ""
+        },
+        {
+          "name": "scope.native_result_id",
+          "type": "uuid",
+          "value": "701d3bbf-9bf6-58cf-8c5d-8bd31ce86502"
+        },
+        {
+          "name": "native_result_id",
+          "type": "uuid",
+          "value": "701d3bbf-9bf6-58cf-8c5d-8bd31ce86502"
+        }
+      ],
+      "canonical_inputs": {
+        "native_result_id": {
+          "type": "uuid",
+          "value": "701d3bbf-9bf6-58cf-8c5d-8bd31ce86502"
+        },
+        "scope.asset_id": {
+          "type": "null",
+          "value": ""
+        },
+        "scope.connection_id": {
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        "scope.contract": {
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        "scope.facility_id": {
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        "scope.level": {
+          "type": "text",
+          "value": "native_result"
+        },
+        "scope.native_result_id": {
+          "type": "uuid",
+          "value": "701d3bbf-9bf6-58cf-8c5d-8bd31ce86502"
+        },
+        "scope.resource_scope_id": {
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        "scope.system_id": {
+          "type": "text",
+          "value": "system-fixture"
+        },
+        "scope.tenant_id": {
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        "scope.workspace_id": {
+          "type": "text",
+          "value": "workspace-fixture"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631323a313131343a73636f70652e636f6e7472616374343a7465787431383a617574686f726974792d73636f70652e763131313a73636f70652e6c6576656c343a7465787431333a6e61746976655f726573756c7431353a73636f70652e74656e616e745f6964343a7465787431343a74656e616e742d6669787475726531383a73636f70652e776f726b73706163655f6964343a7465787431373a776f726b73706163652d6669787475726532333a73636f70652e7265736f757263655f73636f70655f6964343a7465787431363a7265736f757263652d6669787475726531373a73636f70652e666163696c6974795f6964343a7465787431363a666163696c6974792d6669787475726531393a73636f70652e636f6e6e656374696f6e5f6964343a7465787432303a636f6e6e656374696f6e2d666978747572652d6131353a73636f70652e73797374656d5f6964343a7465787431343a73797374656d2d6669787475726531343a73636f70652e61737365745f6964343a6e756c6c303a32323a73636f70652e6e61746976655f726573756c745f6964343a7575696433363a37303164336262662d396266362d353863662d386335642d38626433316365383635303231363a6e61746976655f726573756c745f6964343a7575696433363a37303164336262662d396266362d353863662d386335642d386264333163653836353032"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "telemetry-canonical-result-artifact.v1",
+      "contract_version": "v1",
+      "expected_id": "701d3bbf-9bf6-58cf-8c5d-8bd31ce86502",
+      "mutation": {
+        "expected_different_id": "b9b6093b-3201-5762-9703-50559fadd05f",
+        "field": "window_id",
+        "mutated": "00000000-0000-5000-8000-000000000102",
+        "name": "native_result.window_id",
+        "original": "00000000-0000-5000-8000-000000000101"
+      },
+      "namespace": "existing/delegated",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "persistence_assessment": {
+      "canonical_components": [
+        {
+          "name": "analytical_finding_id",
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        {
+          "name": "method.contract",
+          "type": "contract",
+          "value": "fixture-persistence-method"
+        },
+        {
+          "name": "method.version",
+          "type": "version",
+          "value": "1"
+        },
+        {
+          "name": "chronology_execution_id",
+          "type": "uuid",
+          "value": "410a0df4-bcfd-57f4-9672-5c4267f59c37"
+        },
+        {
+          "name": "event_time_window_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "event_time_window_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.event-time-window.v1"
+        },
+        {
+          "name": "event_time_window_digest.value",
+          "type": "digest_value",
+          "value": "7ea80a96cd7dc1adbcc24c10c4fbc8ec743ed146425ab5ee5047bb348737944d"
+        },
+        {
+          "name": "exact_fact_set_digest.algorithm",
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        {
+          "name": "exact_fact_set_digest.contract",
+          "type": "digest_contract",
+          "value": "fixture.exact-fact-set.v1"
+        },
+        {
+          "name": "exact_fact_set_digest.value",
+          "type": "digest_value",
+          "value": "cde8fedb996ff9110ee750194044b8547897bb7c66509af039a38ae6319a113d"
+        }
+      ],
+      "canonical_inputs": {
+        "analytical_finding_id": {
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        "chronology_execution_id": {
+          "type": "uuid",
+          "value": "410a0df4-bcfd-57f4-9672-5c4267f59c37"
+        },
+        "event_time_window_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "event_time_window_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.event-time-window.v1"
+        },
+        "event_time_window_digest.value": {
+          "type": "digest_value",
+          "value": "7ea80a96cd7dc1adbcc24c10c4fbc8ec743ed146425ab5ee5047bb348737944d"
+        },
+        "exact_fact_set_digest.algorithm": {
+          "type": "digest_algorithm",
+          "value": "sha256"
+        },
+        "exact_fact_set_digest.contract": {
+          "type": "digest_contract",
+          "value": "fixture.exact-fact-set.v1"
+        },
+        "exact_fact_set_digest.value": {
+          "type": "digest_value",
+          "value": "cde8fedb996ff9110ee750194044b8547897bb7c66509af039a38ae6319a113d"
+        },
+        "method.contract": {
+          "type": "contract",
+          "value": "fixture-persistence-method"
+        },
+        "method.version": {
+          "type": "version",
+          "value": "1"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631323a313032313a616e616c79746963616c5f66696e64696e675f6964343a7575696433363a35343464656639372d313366322d356639662d383039352d61396166306533336138636531353a6d6574686f642e636f6e7472616374383a636f6e747261637432363a666978747572652d70657273697374656e63652d6d6574686f6431343a6d6574686f642e76657273696f6e373a76657273696f6e313a3132333a6368726f6e6f6c6f67795f657865637574696f6e5f6964343a7575696433363a34313061306466342d626366642d353766342d393637322d35633432363766353963333733343a6576656e745f74696d655f77696e646f775f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633333a6576656e745f74696d655f77696e646f775f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637432383a666978747572652e6576656e742d74696d652d77696e646f772e763133303a6576656e745f74696d655f77696e646f775f6469676573742e76616c756531323a6469676573745f76616c756536343a3765613830613936636437646331616462636332346331306334666263386563373433656431343634323561623565653530343762623334383733373934346433313a65786163745f666163745f7365745f6469676573742e616c676f726974686d31363a6469676573745f616c676f726974686d363a73686132353633303a65786163745f666163745f7365745f6469676573742e636f6e747261637431353a6469676573745f636f6e747261637432353a666978747572652e65786163742d666163742d7365742e763132373a65786163745f666163745f7365745f6469676573742e76616c756531323a6469676573745f76616c756536343a63646538666564623939366666393131306565373530313934303434623835343738393762623763363635303961663033396133386165363331396131313364"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "persistence-assessment.v1",
+      "contract_version": "v1",
+      "expected_id": "f98482e5-c94c-57e3-a7ac-a83abc6d534b",
+      "mutation": {
+        "expected_different_id": "09ed780e-4e1e-5327-ab89-d28846a5cd54",
+        "field": "exact_fact_set_digest.fixture_marker",
+        "mutated": "facts-mutated",
+        "name": "persistence_assessment.exact_fact_set_digest",
+        "original": "facts"
+      },
+      "namespace": "c011c1d2-cbac-5e96-b159-0054d6b5c28b",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "section": {
+      "canonical_components": [
+        {
+          "name": "package_id",
+          "type": "uuid",
+          "value": "84d625c7-080e-59c2-be98-4bc68ba45425"
+        },
+        {
+          "name": "section_family",
+          "type": "text",
+          "value": "findings"
+        },
+        {
+          "name": "section_schema.contract",
+          "type": "contract",
+          "value": "fixture-findings-section"
+        },
+        {
+          "name": "section_schema.version",
+          "type": "version",
+          "value": "1"
+        },
+        {
+          "name": "sequence_number",
+          "type": "integer",
+          "value": "1"
+        }
+      ],
+      "canonical_inputs": {
+        "package_id": {
+          "type": "uuid",
+          "value": "84d625c7-080e-59c2-be98-4bc68ba45425"
+        },
+        "section_family": {
+          "type": "text",
+          "value": "findings"
+        },
+        "section_schema.contract": {
+          "type": "contract",
+          "value": "fixture-findings-section"
+        },
+        "section_schema.version": {
+          "type": "version",
+          "value": "1"
+        },
+        "sequence_number": {
+          "type": "integer",
+          "value": "1"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631313a3531303a7061636b6167655f6964343a7575696433363a38346436323563372d303830652d353963322d626539382d34626336386261343534323531343a73656374696f6e5f66616d696c79343a74657874383a66696e64696e677332333a73656374696f6e5f736368656d612e636f6e7472616374383a636f6e747261637432343a666978747572652d66696e64696e67732d73656374696f6e32323a73656374696f6e5f736368656d612e76657273696f6e373a76657273696f6e313a3131353a73657175656e63655f6e756d626572373a696e7465676572313a31"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "authority-section.v1",
+      "contract_version": "v1",
+      "expected_id": "347f7314-39fd-5140-a1e9-fdc499ed087f",
+      "mutation": {
+        "expected_different_id": "090f1fb7-25dc-5bd4-af58-be4f07b08389",
+        "field": "sequence_number",
+        "mutated": "2",
+        "name": "section.sequence_number",
+        "original": "1"
+      },
+      "namespace": "64965672-3f31-50cb-8f28-f402b05e0f21",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    },
+    "workflow_case": {
+      "canonical_components": [
+        {
+          "name": "scope.contract",
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        {
+          "name": "scope.level",
+          "type": "text",
+          "value": "finding"
+        },
+        {
+          "name": "scope.tenant_id",
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        {
+          "name": "scope.workspace_id",
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        {
+          "name": "scope.resource_scope_id",
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        {
+          "name": "scope.facility_id",
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        {
+          "name": "scope.connection_id",
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        {
+          "name": "scope.system_id",
+          "type": "text",
+          "value": "system-fixture"
+        },
+        {
+          "name": "scope.asset_id",
+          "type": "null",
+          "value": ""
+        },
+        {
+          "name": "scope.native_result_id",
+          "type": "uuid",
+          "value": "701d3bbf-9bf6-58cf-8c5d-8bd31ce86502"
+        },
+        {
+          "name": "scope.authority_execution_id",
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        {
+          "name": "scope.finding_id",
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        {
+          "name": "authority_execution_id",
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        {
+          "name": "analytical_finding_id",
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        {
+          "name": "workflow_contract.contract",
+          "type": "contract",
+          "value": "fixture-workflow"
+        },
+        {
+          "name": "workflow_contract.version",
+          "type": "version",
+          "value": "1"
+        }
+      ],
+      "canonical_inputs": {
+        "analytical_finding_id": {
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        "authority_execution_id": {
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        "scope.asset_id": {
+          "type": "null",
+          "value": ""
+        },
+        "scope.authority_execution_id": {
+          "type": "uuid",
+          "value": "a8a9b60b-4c22-55db-ad54-b697ce985360"
+        },
+        "scope.connection_id": {
+          "type": "text",
+          "value": "connection-fixture-a"
+        },
+        "scope.contract": {
+          "type": "text",
+          "value": "authority-scope.v1"
+        },
+        "scope.facility_id": {
+          "type": "text",
+          "value": "facility-fixture"
+        },
+        "scope.finding_id": {
+          "type": "uuid",
+          "value": "544def97-13f2-5f9f-8095-a9af0e33a8ce"
+        },
+        "scope.level": {
+          "type": "text",
+          "value": "finding"
+        },
+        "scope.native_result_id": {
+          "type": "uuid",
+          "value": "701d3bbf-9bf6-58cf-8c5d-8bd31ce86502"
+        },
+        "scope.resource_scope_id": {
+          "type": "text",
+          "value": "resource-fixture"
+        },
+        "scope.system_id": {
+          "type": "text",
+          "value": "system-fixture"
+        },
+        "scope.tenant_id": {
+          "type": "text",
+          "value": "tenant-fixture"
+        },
+        "scope.workspace_id": {
+          "type": "text",
+          "value": "workspace-fixture"
+        },
+        "workflow_contract.contract": {
+          "type": "contract",
+          "value": "fixture-workflow"
+        },
+        "workflow_contract.version": {
+          "type": "version",
+          "value": "1"
+        }
+      },
+      "canonical_serialized": {
+        "encoding": "hex",
+        "value": "32393a74797065642d6c656e6774682d70726566697865642d757466382e7631323a313631343a73636f70652e636f6e7472616374343a7465787431383a617574686f726974792d73636f70652e763131313a73636f70652e6c6576656c343a74657874373a66696e64696e6731353a73636f70652e74656e616e745f6964343a7465787431343a74656e616e742d6669787475726531383a73636f70652e776f726b73706163655f6964343a7465787431373a776f726b73706163652d6669787475726532333a73636f70652e7265736f757263655f73636f70655f6964343a7465787431363a7265736f757263652d6669787475726531373a73636f70652e666163696c6974795f6964343a7465787431363a666163696c6974792d6669787475726531393a73636f70652e636f6e6e656374696f6e5f6964343a7465787432303a636f6e6e656374696f6e2d666978747572652d6131353a73636f70652e73797374656d5f6964343a7465787431343a73797374656d2d6669787475726531343a73636f70652e61737365745f6964343a6e756c6c303a32323a73636f70652e6e61746976655f726573756c745f6964343a7575696433363a37303164336262662d396266362d353863662d386335642d38626433316365383635303232383a73636f70652e617574686f726974795f657865637574696f6e5f6964343a7575696433363a61386139623630622d346332322d353564622d616435342d62363937636539383533363031363a73636f70652e66696e64696e675f6964343a7575696433363a35343464656639372d313366322d356639662d383039352d61396166306533336138636532323a617574686f726974795f657865637574696f6e5f6964343a7575696433363a61386139623630622d346332322d353564622d616435342d62363937636539383533363032313a616e616c79746963616c5f66696e64696e675f6964343a7575696433363a35343464656639372d313366322d356639662d383039352d61396166306533336138636532363a776f726b666c6f775f636f6e74726163742e636f6e7472616374383a636f6e747261637431363a666978747572652d776f726b666c6f7732353a776f726b666c6f775f636f6e74726163742e76657273696f6e373a76657273696f6e313a31"
+      },
+      "canonicalization": "typed-length-prefixed-utf8.v1",
+      "contract": "workflow-case.v2",
+      "contract_version": "v2",
+      "expected_id": "46bf357e-a532-56a7-ab82-b11aedd9d15d",
+      "mutation": {
+        "expected_different_id": "4fbf3004-f7e5-54a9-9072-0f98496b53de",
+        "field": "workflow_contract.version",
+        "mutated": "2",
+        "name": "workflow_case.workflow_contract.version",
+        "original": "1"
+      },
+      "namespace": "77a45704-9bd1-5595-bbdc-268853350f04",
+      "stability": {
+        "expected": "identical",
+        "repeat_runs": 3
+      }
+    }
+  }
+}
