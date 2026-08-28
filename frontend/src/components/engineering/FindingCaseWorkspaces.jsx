@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getTelemetryAnalysisResultLineage } from "../../services/api/telemetryConnectionsApi";
+import EvidenceDashboard from "./EvidenceDashboard";
 import EvidencePackageExport from "./EvidencePackageExport";
 import RelatedEvidencePackages from "./RelatedEvidencePackages";
+import { projectEvidenceDashboardSummary } from "./evidenceDashboardProjection";
 
 const ASSESSMENT_LABELS = Object.freeze([
   ["changeConfidence", "Change confidence"],
@@ -262,12 +264,17 @@ export function EvidenceRecordWorkspace({ projection, apiFetch, onTrace, onBack 
   if (!projection || projection.variant === "unavailable") return <ProjectionUnavailable projection={projection} onBack={onBack} />;
   const linkedPackage = projection.package.scope === "finding";
   const analysisScoped = projection.identity?.scope === "analysis";
+  const dashboardSummary = projectEvidenceDashboardSummary(projection);
   const identityRows = Object.entries(projection.identity).filter(([key]) => key !== "findingKey");
   const engineRows = Object.entries(projection.engine).filter(([, value]) => value !== null);
   return (
     <div className="case-workspace evidence-record-workspace" data-testid="evidence-record">
       <button type="button" className="evidence-back" onClick={onBack}>Back to investigation</button>
-      <CaseHeader eyebrow="Evidence record" header={projection.header} />
+      <EvidenceDashboard summary={dashboardSummary} variant={projection.variant} />
+      <details className="evidence-record-technical" open={!dashboardSummary}>
+        <summary>Technical evidence and audit trail</summary>
+        <div className="evidence-record-technical__body">
+      {analysisScoped ? <CaseHeader eyebrow="Evidence record" header={projection.header} /> : null}
       <p className="evidence-record-intro">{analysisScoped ? "Complete analysis identity, provenance, and available run-scoped technical channels from the persisted connector result." : "Complete finding evidence and explicitly labeled supporting analysis context. Analysis-run and system-scoped channels are not finding provenance."}</p>
       <ProjectionQualification qualification={projection.projectionQualification} depth="evidence" />
       <div className="evidence-record-grid evidence-record-grid--audit">
@@ -295,6 +302,8 @@ export function EvidenceRecordWorkspace({ projection, apiFetch, onTrace, onBack 
         <section><h2>Audit history</h2><JsonValue value={projection.audit} /></section>
       </div>
       <section className="evidence-record-actions"><div>{projection.actions.exportScopeLabel ? <p className="evidence-scope-note"><strong>{projection.actions.exportScopeLabel}</strong></p> : null}<EvidencePackageExport runId={projection.actions.exportRunId} apiFetch={apiFetch} disabled={!projection.actions.exportRunId} /></div>{projection.actions.traceRoute ? <button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open trace mode</button> : null}</section>
+        </div>
+      </details>
     </div>
   );
 }
