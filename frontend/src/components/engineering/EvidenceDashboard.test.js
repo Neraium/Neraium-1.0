@@ -11,7 +11,11 @@ function summary(overrides = {}) {
     title: "Authoritative hydraulic response finding",
     system: "Primary chilled-water plant",
     status: "Persistent change detected",
-    evidenceWindow: { label: "Aug 20 – Aug 25, 2026", start: "2026-08-20T00:00:00Z", end: "2026-08-25T05:23:56Z" },
+    evidenceWindow: {
+      label: "Aug 20 – Aug 25, 2026",
+      start: "2026-08-20T00:00:00Z",
+      end: "2026-08-25T05:23:56Z",
+    },
     metrics: {
       magnitude: { value: 0.125, signed: true, description: "relationship shift" },
       persistence: { value: "Sustained", description: "across evaluation window" },
@@ -19,7 +23,17 @@ function summary(overrides = {}) {
       confidence: { value: "Strong", description: "supporting evidence" },
     },
     relationships: [
-      { id: "one", label: "Flow ↔ Pressure", magnitude: 0.125, signed: true, sparkline: [{ timestamp: "2026-08-22T00:00:00Z", value: 4 }, { timestamp: "2026-08-20T00:00:00Z", value: 2 }, { timestamp: "2026-08-21T00:00:00Z", value: 3 }] },
+      {
+        id: "one",
+        label: "Flow ↔ Pressure",
+        magnitude: 0.125,
+        signed: true,
+        sparkline: [
+          { timestamp: "2026-08-22T00:00:00Z", value: 4 },
+          { timestamp: "2026-08-20T00:00:00Z", value: 2 },
+          { timestamp: "2026-08-21T00:00:00Z", value: 3 },
+        ],
+      },
       { id: "two", label: "Pump power ↔ Flow", magnitude: -0.32, signed: true, sparkline: null },
       { id: "three", label: "Valve position ↔ Demand", magnitude: null, signed: false, sparkline: [] },
       { id: "four", label: "Never ↔ Rendered", magnitude: 9, signed: true },
@@ -29,16 +43,37 @@ function summary(overrides = {}) {
   };
 }
 
+function renderDashboard(summaryOverrides = {}, dashboardProps = {}) {
+  return render(React.createElement(EvidenceDashboard, {
+    ...dashboardProps,
+    summary: summary(summaryOverrides),
+  }));
+}
+
 describe("EvidenceDashboard", () => {
   it("renders the exact compact dashboard hierarchy and truthful signed relationship values", () => {
-    const { container } = render(React.createElement(EvidenceDashboard, { summary: summary() }));
+    const { container } = renderDashboard();
     expect(screen.getByText("Finding")).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 1, name: "Authoritative hydraulic response finding" })).toBeTruthy();
+    expect(screen.getByRole("heading", {
+      level: 1,
+      name: "Authoritative hydraulic response finding",
+    })).toBeTruthy();
     const context = screen.getByLabelText("Finding context");
-    for (const value of ["Primary chilled-water plant", "Persistent change detected", "Aug 20 – Aug 25, 2026"]) expect(within(context).getByText(value)).toBeTruthy();
+    for (const value of [
+      "Primary chilled-water plant",
+      "Persistent change detected",
+      "Aug 20 – Aug 25, 2026",
+    ]) {
+      expect(within(context).getByText(value)).toBeTruthy();
+    }
     const metrics = screen.getByLabelText("Evidence metrics");
-    for (const value of ["+0.13", "Sustained", "Comparable", "Strong"]) expect(within(metrics).getByText(value)).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 2, name: "Strongest Relationship Changes" })).toBeTruthy();
+    for (const value of ["+0.13", "Sustained", "Comparable", "Strong"]) {
+      expect(within(metrics).getByText(value)).toBeTruthy();
+    }
+    expect(screen.getByRole("heading", {
+      level: 2,
+      name: "Strongest Relationship Changes",
+    })).toBeTruthy();
     expect(screen.getAllByText("+0.13")).toHaveLength(2);
     expect(screen.getByText("-0.32")).toBeTruthy();
     expect(screen.getByText("Not supplied")).toBeTruthy();
@@ -49,8 +84,10 @@ describe("EvidenceDashboard", () => {
   });
 
   it("draws only real valid sparkline points with an accessible chronological summary", () => {
-    const { container } = render(React.createElement(EvidenceDashboard, { summary: summary() }));
-    const sparkline = screen.getByRole("img", { name: "Flow ↔ Pressure trend rises across 3 chronological evidence points." });
+    const { container } = renderDashboard();
+    const sparkline = screen.getByRole("img", {
+      name: "Flow ↔ Pressure trend rises across 3 chronological evidence points.",
+    });
     expect(sparkline).toBeTruthy();
     expect(sparkline.querySelector("polyline")?.getAttribute("points")).toBe("4,26 50,16 96,6");
     expect(container.querySelectorAll(".evidence-dashboard__sparkline")).toHaveLength(1);
@@ -59,14 +96,23 @@ describe("EvidenceDashboard", () => {
   });
 
   it("omits malformed sparkline evidence instead of fabricating a decorative trend", () => {
-    const invalid = summary({ relationships: [{ id: "bad", label: "Flow ↔ Pressure", magnitude: null, sparkline: [{ timestamp: "not-a-date", value: 1 }, { timestamp: "2026-08-21T00:00:00Z", value: 2 }] }] });
-    const { container } = render(React.createElement(EvidenceDashboard, { summary: invalid }));
+    const { container } = renderDashboard({
+      relationships: [{
+        id: "bad",
+        label: "Flow ↔ Pressure",
+        magnitude: null,
+        sparkline: [
+          { timestamp: "not-a-date", value: 1 },
+          { timestamp: "2026-08-21T00:00:00Z", value: 2 },
+        ],
+      }],
+    });
     expect(container.querySelector(".evidence-dashboard__sparkline")).toBeNull();
     expect(screen.getByText("Not supplied")).toBeTruthy();
   });
 
   it("uses explicit unsupported states and never strengthens missing evidence", () => {
-    const unsupported = summary({
+    const unsupported = {
       metrics: {
         magnitude: { value: null, label: "Not established", description: "relationship magnitude unavailable" },
         persistence: { value: "Not established", description: "persistence evidence unavailable" },
@@ -75,8 +121,8 @@ describe("EvidenceDashboard", () => {
       },
       relationships: [],
       cause: {},
-    });
-    render(React.createElement(EvidenceDashboard, { summary: unsupported }));
+    };
+    renderDashboard(unsupported);
     expect(screen.getAllByText("Not established")).toHaveLength(2);
     expect(screen.getByText("Insufficient evidence")).toBeTruthy();
     expect(screen.getByText("Unavailable")).toBeTruthy();
@@ -86,13 +132,23 @@ describe("EvidenceDashboard", () => {
   });
 
   it("shows confirmed cause language only when the supplied cause contract confirms it", () => {
-    render(React.createElement(EvidenceDashboard, { summary: summary({ cause: { established: true, label: "Yes — confirmed in evidence" } }) }));
+    renderDashboard({
+      cause: {
+        established: true,
+        label: "Yes — confirmed in evidence",
+      },
+    });
     const answer = screen.getByText("Yes — confirmed in evidence");
     expect(answer.getAttribute("data-established")).toBe("true");
   });
 
   it("renders a reduced insufficient record without unsupported finding metrics or cause claims", () => {
-    render(React.createElement(EvidenceDashboard, { variant: "insufficient", summary: summary({ insufficient: { title: "Insufficient evidence", description: "Comparable operating history was not available." } }) }));
+    renderDashboard({
+      insufficient: {
+        title: "Insufficient evidence",
+        description: "Comparable operating history was not available.",
+      },
+    }, { variant: "insufficient" });
     expect(screen.getByRole("heading", { level: 1, name: "Insufficient evidence" })).toBeTruthy();
     expect(screen.getByText("Comparable operating history was not available.")).toBeTruthy();
     expect(screen.queryByLabelText("Evidence metrics")).toBeNull();
