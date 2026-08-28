@@ -111,6 +111,21 @@ describe("EvidenceDashboard", () => {
     expect(screen.getByText("Not supplied")).toBeTruthy();
   });
 
+  it("preserves numeric display formatting while trimming only fractional zeros", () => {
+    renderDashboard({
+      metrics: {
+        magnitude: { value: 100, signed: true, description: "relationship shift" },
+      },
+      relationships: [
+        { id: "integer", label: "Flow ↔ Pressure", magnitude: 100, signed: true },
+        { id: "decimal", label: "Pump power ↔ Flow", magnitude: 1.2, signed: true },
+      ],
+    });
+
+    expect(screen.getAllByText("+100")).toHaveLength(2);
+    expect(screen.getByText("+1.2")).toBeTruthy();
+  });
+
   it("uses explicit unsupported states and never strengthens missing evidence", () => {
     const unsupported = {
       metrics: {

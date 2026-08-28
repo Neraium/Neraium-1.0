@@ -6,8 +6,8 @@ Post-merge code-quality refactor of the Evidence Dashboard presentation layer. T
 
 ## Automated verification
 
-- Focused unit/component coverage: 3 files, 32 tests passed.
-- Full `npm run verify`: lint passed, production build passed, performance budgets passed, 61 files and 512 tests passed.
+- Focused unit/component coverage: 3 files, 33 tests passed.
+- Full `npm run verify`: lint passed, production build passed, performance budgets passed, 61 files and 513 tests passed.
 - Chromium Evidence Record E2E: 9 tests passed.
 - `git diff --check`: passed.
 
@@ -54,9 +54,17 @@ The screenshot artifact directory is ignored and is not staged. The optional `ar
 The current repository budget passed without weakening:
 
 - Engineering workspace raw: 588,365 / 588,800 bytes
-- Engineering workspace gzip: 150,233 / 158,720 bytes
+- Engineering workspace gzip: 150,234 / 158,720 bytes
 
-Raw bytes are unchanged from merged main; gzip is 5 bytes lower.
+Raw bytes are unchanged from merged main.
+
+## SonarCloud cleanup
+
+- `javascript:S7727`: the relationship projector is invoked through an explicit indexed callback.
+- `javascript:S8786`: fractional zeros are trimmed with bounded string operations rather than a backtracking regular expression.
+- `javascript:S3358`: the previously reported nested ternary remains replaced by the named sparkline-direction helper.
+
+No Sonar rules were suppressed.
 
 ## Verdict
 

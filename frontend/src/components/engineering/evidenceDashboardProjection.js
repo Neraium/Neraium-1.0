@@ -167,7 +167,7 @@ export function projectEvidenceDashboardSummary(projection) {
 
   const relationships = asArray(projection.exactRelationships)
     .slice(0, 3)
-    .map(summaryRelationship)
+    .map((relationship, index) => summaryRelationship(relationship, index))
     .filter(Boolean);
   const relationshipWindows = asArray(projection.exactRelationships)
     .flatMap((relationship) => asArray(relationship?.windows));

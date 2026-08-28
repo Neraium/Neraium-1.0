@@ -73,12 +73,22 @@ function Icon({ name }) {
   );
 }
 
+function trimFractionZeros(value) {
+  const decimalIndex = value.indexOf(".");
+  if (decimalIndex === -1) return value;
+
+  let end = value.length;
+  while (end > decimalIndex + 1 && value[end - 1] === "0") end -= 1;
+  if (end === decimalIndex + 1) end = decimalIndex;
+  return value.slice(0, end);
+}
+
 function numericValue(value, signed) {
   if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   if (!Number.isFinite(number)) return null;
   const precision = Math.abs(number) > 0 && Math.abs(number) < 0.01 ? 3 : 2;
-  const formatted = number.toFixed(precision).replace(/\.?0+$/, "");
+  const formatted = trimFractionZeros(number.toFixed(precision));
   return signed && number > 0 ? `+${formatted}` : formatted;
 }
 
