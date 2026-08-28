@@ -68,9 +68,10 @@ function evidenceProjection(scope = "run") {
     contractVersion: "results-presentation.v1", depth: "evidence", variant: "ready",
     identity: { findingKey: "finding-a", findingId: "FINDING_A", workflowFindingId: null, conditionId: null, runId: "RUN_A", uploadId: "UPLOAD_A", datasetId: "DATASET_A", baselineId: "BASELINE_A", systemId: "SYSTEM_A", assetId: null },
     header,
+    dashboardIdentity: { title: "RAW AUTHORITATIVE EVIDENCE TITLE", system: "RAW AUTHORITATIVE SYSTEM", status: "Change detected", causeEstablished: false },
     timestamps: { generatedAt: "2026-08-25T05:23:56.206210+00:00", firstDetectedAt: null, sourceRanges: [] },
     signals: [{ display: "Return temperature", rawId: "RAW_SIGNAL_A", canonicalId: "CANONICAL_SIGNAL_A" }],
-    exactRelationships: [{ id: "RELATIONSHIP_A", baseline: 0.918273, current: 0.314159 }],
+    exactRelationships: [{ id: "RELATIONSHIP_A", source: "Return temperature", target: "Chiller power", baseline: 0.918273, current: 0.314159, signedChange: -0.604114 }],
     supportingEvidence: { statements: ["SUPPORTING_EVIDENCE_A"], items: [{ id: "EVIDENCE_ITEM_A" }] },
     channels: [{ key: "multivariate", label: "Multivariate evidence", state: { state: "available", reason: "" }, scope: "run", scopeLabel: "Analysis-run evidence; not finding-specific", sourcePath: "model.result.sii_result.covariance_analysis", payload: { usable: false, missing: 0 } }],
     classifications: { classification: { type: "CLASSIFICATION_A" }, confidenceContract: { version: "CONFIDENCE_A" }, alternatives: [] },
@@ -154,6 +155,11 @@ describe("progressive results hierarchy", () => {
     for (const value of ["FINDING_A", "RAW_SIGNAL_A", "CANONICAL_SIGNAL_A", "RELATIONSHIP_A", "0.918273", "0.314159", "SUPPORTING_EVIDENCE_A", "EVIDENCE_ITEM_A", "LINEAGE_A", "ENGINE_A", "PACKAGE_A", '"usable": false', '"missing": 0']) expect(document.body.textContent).toContain(value);
     expect(screen.getByRole("heading", { name: "Related package for this analysis run" })).toBeTruthy();
     expect(screen.getAllByText(/not finding provenance/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { level: 1, name: "RAW AUTHORITATIVE EVIDENCE TITLE" })).toBeTruthy();
+    expect(screen.getByText("RAW AUTHORITATIVE SYSTEM")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Strongest Relationship Changes" })).toBeTruthy();
+    expect(screen.getByText("No — investigation required")).toBeTruthy();
+    expect(screen.getByText("Technical evidence and audit trail")).toBeTruthy();
     expect(apiFetch).not.toHaveBeenCalled();
   });
 

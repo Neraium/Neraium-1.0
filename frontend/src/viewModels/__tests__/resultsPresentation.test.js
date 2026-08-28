@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildEngineeringReasoningModel } from "../engineeringReasoning";
+import { projectEvidenceDashboardSummary } from "../../components/engineering/evidenceDashboardProjection";
 import {
   EVIDENCE_KEYS,
   INVESTIGATION_KEYS,
@@ -215,6 +216,93 @@ describe("results presentation contracts", () => {
     expect(projection.channels.find((channel) => channel.key === "data_quality").payload).toEqual({ usable: false, missing: 0 });
   });
 
+  it("builds the primary evidence summary only from authoritative finding fields", () => {
+    const result = fixtureResult();
+    const raw = result.analysis_explanation.conditions[0];
+    raw.title = "RAW AUTHORITATIVE FINDING TITLE";
+    raw.system = "RAW AUTHORITATIVE SYSTEM";
+    raw.source_time_ranges[0].current_start = "2026-08-20T00:00:00+00:00";
+    const model = modelFrom(result);
+    expect(model.findings[0].title).not.toBe(raw.title);
+
+    const projection = projectEvidenceRecord(model, A);
+    expect(projectEvidenceDashboardSummary(projection)).toMatchObject({
+      title: "RAW AUTHORITATIVE FINDING TITLE",
+      system: "RAW AUTHORITATIVE SYSTEM",
+      status: "Change detected",
+      evidenceWindow: {
+        label: "Aug 20 – Aug 25, 2026",
+        start: "2026-08-20T00:00:00+00:00",
+        end: "2026-08-25T05:23:56.206210+00:00",
+      },
+      metrics: {
+        magnitude: { value: -0.604114, signed: true, description: "relationship shift" },
+        persistence: { value: "Persistent" },
+        operatingContext: { value: "Comparable" },
+        confidence: { value: "High" },
+      },
+      cause: { established: false, label: "No — investigation required" },
+    });
+  });
+
+  it("uses a finding-owned relationship window when the finding-level window is absent", () => {
+    const result = fixtureResult();
+    delete result.analysis_explanation.conditions[0].source_time_ranges;
+    const projection = projectEvidenceRecord(modelFrom(result), A);
+    expect(projectEvidenceDashboardSummary(projection).evidenceWindow).toEqual({
+      label: "Aug 20 – Aug 25, 2026",
+      start: "2026-08-20T00:00:00+00:00",
+      end: "2026-08-25T05:23:56.206210+00:00",
+    });
+  });
+
+  it("preserves authoritative relationship order, signs, missing values, and the three-row limit", () => {
+    const result = fixtureResult();
+    const raw = result.analysis_explanation.conditions[0];
+    raw.supporting_relationships = [
+      { ...raw.supporting_relationships[0], id: "ORDERED_1", source_display_name: "Flow", target_display_name: "Pressure", baseline_value: 0.2, current_value: 0.7 },
+      { ...raw.supporting_relationships[0], id: "ORDERED_2", source_display_name: "Power", target_display_name: "Flow", baseline_value: 0.8, current_value: 0.3 },
+      { ...raw.supporting_relationships[0], id: "ORDERED_3", source_display_name: "Valve", target_display_name: "Demand", baseline_value: null, current_value: null },
+      { ...raw.supporting_relationships[0], id: "ORDERED_4", source_display_name: "Hidden", target_display_name: "Fourth", baseline_value: 0.1, current_value: 0.9 },
+    ];
+    const summary = projectEvidenceDashboardSummary(projectEvidenceRecord(modelFrom(result), A));
+    expect(summary.relationships).toHaveLength(3);
+    expect(summary.relationships.map((relationship) => relationship.id)).toEqual(["ORDERED_1", "ORDERED_2", "ORDERED_3"]);
+    expect(summary.relationships.map((relationship) => relationship.label)).toEqual([
+      "Flow ↔ Pressure", "Power ↔ Flow", "Valve ↔ Demand",
+    ]);
+    expect(summary.relationships[0].magnitude).toBeCloseTo(0.5);
+    expect(summary.relationships[0].signed).toBe(true);
+    expect(summary.relationships[1].magnitude).toBeCloseTo(-0.5);
+    expect(summary.relationships[1].signed).toBe(true);
+    expect(summary.relationships[2]).toMatchObject({ magnitude: null });
+  });
+
+  it("fails closed for unsupported summary metrics and only confirms an explicit cause", () => {
+    const unsupported = fixtureResult();
+    const raw = unsupported.analysis_explanation.conditions[0];
+    raw.supporting_relationships = [];
+    delete raw.persistence;
+    delete raw.finding_confidence_v1.persistence;
+    delete raw.finding_confidence_v1.operating_context;
+    delete raw.finding_confidence_v1.change_detection;
+    delete raw.confidence_tier;
+    delete raw.operating_mode;
+    delete raw.comparable_operation;
+    raw.reliable = false;
+    const summary = projectEvidenceDashboardSummary(projectEvidenceRecord(modelFrom(unsupported), A));
+    expect(summary.metrics.magnitude).toMatchObject({ value: null, label: "Not established" });
+    expect(summary.metrics.persistence.value).toBe("Not established");
+    expect(summary.metrics.operatingContext.value).toBe("Not established");
+    expect(summary.metrics.confidence.value).not.toMatch(/strong|confirmed/i);
+    expect(summary.relationships).toEqual([]);
+    expect(summary.cause).toEqual({ established: false, label: "No — investigation required" });
+
+    const confirmed = fixtureResult();
+    confirmed.analysis_explanation.conditions[0].cause_established = true;
+    expect(projectEvidenceDashboardSummary(projectEvidenceRecord(modelFrom(confirmed), A)).cause).toEqual({ established: true, label: "Yes — confirmed in evidence" });
+  });
+
   it("prevents cross-finding relationship, lineage, and package attribution", () => {
     const model = modelFrom();
     const a = projectEvidenceRecord(model, A);
@@ -353,7 +441,10 @@ describe("results presentation contracts", () => {
       route: `/evidence/${A}`,
       findingKey: A,
     });
-    expect(projectEvidenceRecord(insufficientModel, A)).toMatchObject({ variant: "insufficient", identity: { findingKey: A } });
+    const insufficientEvidence = projectEvidenceRecord(insufficientModel, A);
+    expect(insufficientEvidence).toMatchObject({ variant: "insufficient", identity: { findingKey: A } });
+    expect(projectEvidenceDashboardSummary(insufficientEvidence)).toMatchObject({ insufficient: { title: "Insufficient evidence" } });
+    expect(projectEvidenceDashboardSummary(insufficientEvidence).relationships).toHaveLength(1);
   });
 
   it("separates supported findings from insufficient evidence and resolved workflow", () => {

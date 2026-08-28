@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect, governedComparisonResult, test } from "./fixtures.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const screenshotDirectory = path.resolve(here, "../../../.planning/screenshots/results-progressive-disclosure");
+const screenshotDirectory = path.resolve(here, "../../../.planning/screenshots/evidence-reference-match-clean");
 
 function reasoningPayload() {
   const analysis = {
@@ -141,13 +141,17 @@ async function openSite(page, viewport, payload = reasoningPayload()) {
 
 test.describe("Results progressive disclosure", () => {
   test.beforeAll(() => {
-    for (const name of ["phone", "tablet", "desktop"]) mkdirSync(path.join(screenshotDirectory, name), { recursive: true });
+    mkdirSync(screenshotDirectory, { recursive: true });
   });
 
   const viewports = [
-    { name: "phone", width: 390, height: 844 },
-    { name: "tablet", width: 768, height: 1024 },
-    { name: "desktop", width: 1440, height: 900 },
+    { name: "390x844", width: 390, height: 844 },
+    { name: "430x932", width: 430, height: 932 },
+    { name: "768x1024", width: 768, height: 1024 },
+    { name: "1024x768", width: 1024, height: 768 },
+    { name: "1366x768", width: 1366, height: 768 },
+    { name: "1440x900", width: 1440, height: 900 },
+    { name: "1920x1080", width: 1920, height: 1080 },
   ];
 
   for (const viewport of viewports) {
@@ -168,16 +172,12 @@ test.describe("Results progressive disclosure", () => {
       }));
       expect(resultsMetrics.cardHeight).toBeLessThanOrEqual(340);
       expect(resultsMetrics.scrollWidth).toBeLessThanOrEqual(resultsMetrics.viewportWidth + 1);
-      await page.screenshot({ path: path.join(screenshotDirectory, viewport.name, "results.png"), fullPage: true });
-
       await card.getByRole("button", { name: "Review finding" }).click();
       for (const heading of ["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]) await expect(page.getByRole("heading", { name: heading })).toBeVisible();
       for (const label of ["Change confidence", "Evidence quality", "Cause / attribution", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) await expect(page.getByText(label, { exact: true })).toBeVisible();
       await expect(page.getByText("Cause / attribution").locator("..")).toContainText("hypothesis");
       await expect(page.getByTestId("finding-review")).not.toContainText("Chiller-03");
       await expect(page.getByTestId("finding-review")).not.toContainText("Flow-01");
-      await page.screenshot({ path: path.join(screenshotDirectory, viewport.name, "review.png"), fullPage: true });
-
       await page.getByRole("button", { name: "Open investigation" }).click();
       for (const heading of ["Primary relationship comparison", "Relationship evidence", "Persistence and confidence", "Operating context", "System evidence channels", "Data quality and comparability", "Timeline", "Source signals and lineage"]) await expect(page.getByRole("heading", { name: heading })).toBeVisible();
       await expect(page.getByText("0.82").first()).toBeVisible();
@@ -187,9 +187,20 @@ test.describe("Results progressive disclosure", () => {
       await expect(page.getByRole("heading", { name: "Audit history" })).toHaveCount(0);
       const investigationWidth = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth }));
       expect(investigationWidth.scrollWidth).toBeLessThanOrEqual(investigationWidth.viewportWidth + 1);
-      await page.screenshot({ path: path.join(screenshotDirectory, viewport.name, "investigation.png"), fullPage: true });
-
       await page.getByRole("button", { name: "Open evidence record" }).click();
+      const dashboard = page.locator(".evidence-dashboard");
+      await expect(dashboard).toBeVisible();
+      await expect(dashboard.getByText("Finding", { exact: true })).toBeVisible();
+      await expect(dashboard.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(dashboard.getByLabel("Finding context")).toBeVisible();
+      await expect(dashboard.getByLabel("Evidence metrics")).toBeVisible();
+      await expect(dashboard.getByRole("heading", { name: "Strongest Relationship Changes" })).toBeVisible();
+      await expect(dashboard.getByText("Cause established?", { exact: true })).toBeVisible();
+      await expect(dashboard.getByText("No — investigation required", { exact: true })).toBeVisible();
+      await page.screenshot({ path: path.join(screenshotDirectory, `${viewport.name}.png`) });
+      const technicalEvidence = page.getByText("Technical evidence and audit trail", { exact: true });
+      await expect(technicalEvidence).toBeVisible();
+      await technicalEvidence.click();
       for (const heading of ["Record identity", "Finding-owned relationships", "Finding provenance and lineage", "Evidence sufficiency", "Audit history"]) await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
       await expect(page.getByTestId("evidence-record")).toContainText("pearson_correlation");
       await expect(page.getByTestId("evidence-record")).toContainText("Chiller-03");
@@ -197,7 +208,6 @@ test.describe("Results progressive disclosure", () => {
       await expect(page.getByTestId("evidence-record")).toContainText("Analysis-run evidence; not finding-specific");
       const evidenceWidth = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth }));
       expect(evidenceWidth.scrollWidth).toBeLessThanOrEqual(evidenceWidth.viewportWidth + 1);
-      await page.screenshot({ path: path.join(screenshotDirectory, viewport.name, "evidence.png"), fullPage: true });
     });
   }
 
