@@ -16,7 +16,7 @@ else
   echo "pytest executable not found. Set PYTEST_BIN or create .venv/backend/.venv." >&2
   exit 127
 fi
-"$pytest_bin" -q
+PYTHONPATH="$repo_root${PYTHONPATH:+:$PYTHONPATH}" "$pytest_bin" -q
 npm --prefix frontend run lint:ci
 npm --prefix frontend test -- --run
 npm --prefix frontend run build
