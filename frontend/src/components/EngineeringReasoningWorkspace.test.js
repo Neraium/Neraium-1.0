@@ -366,7 +366,7 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     for (const dimension of ["Change confidence", "Evidence quality", "Cause / attribution", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) {
       expect(screen.getAllByText(dimension).length).toBeGreaterThan(0);
     }
-    expect(screen.getByText("No — investigation required")).toBeTruthy();
+    expect(screen.getByText("No, investigation required")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open investigation" })).toBeTruthy();
   });
 

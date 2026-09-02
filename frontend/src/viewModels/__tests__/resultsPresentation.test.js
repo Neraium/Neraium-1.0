@@ -183,7 +183,7 @@ describe("results presentation contracts", () => {
     });
     expect(projectEvidenceDashboardSummary(projection)).toMatchObject({
       evidenceWindow: { label: "Aug 25, 2026" },
-      cause: { established: false, label: "No — investigation required" },
+      cause: { established: false, label: "No, investigation required" },
     });
     expect(projection.whyAttention.length).toBeGreaterThanOrEqual(1);
     expect(projection.whyAttention.length).toBeLessThanOrEqual(3);
