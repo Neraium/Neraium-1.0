@@ -44,6 +44,9 @@ describe("EvidenceDashboard", () => {
     expect(screen.getByText("Not supplied")).toBeTruthy();
     expect(screen.queryByText("Never ↔ Rendered")).toBeNull();
     expect(screen.getByText("No — investigation required")).toBeTruthy();
+    expect(screen.getByText("Behavior change evidence")).toBeTruthy();
+    expect(screen.getAllByText("Review-safe relationship summary")).toHaveLength(3);
+    expect(document.body.textContent).not.toMatch(/baseline|sample count|signal id|lineage/i);
     expect(container.querySelectorAll(".evidence-dashboard__context-cell")).toHaveLength(3);
     expect(container.querySelectorAll(".evidence-dashboard__metric")).toHaveLength(4);
   });

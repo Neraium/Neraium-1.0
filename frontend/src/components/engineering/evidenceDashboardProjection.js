@@ -70,6 +70,33 @@ function operatingContextLabel(value) {
 }
 
 export function projectEvidenceDashboardSummary(projection) {
+  if (projection?.depth === "review" && projection?.dashboardSummary) {
+    const dashboard = projection.dashboardSummary;
+    const relationships = asArray(dashboard.relationships).slice(0, 3).map((relationship, index) => ({
+      id: `review-relationship-${index + 1}`,
+      label: firstText(relationship?.label, `Relationship change ${index + 1}`),
+      magnitude: finite(relationship?.magnitude),
+      signed: relationship?.signed === true,
+      sparkline: null,
+    }));
+    const evidenceWindow = currentEvidenceWindow([dashboard.evidenceWindow]);
+    return {
+      title: dashboard.title || "Finding title unavailable",
+      system: dashboard.system || "System not supplied",
+      status: dashboard.status || "Unavailable",
+      evidenceWindow,
+      metrics: {
+        magnitude: { value: finite(dashboard.magnitude), signed: dashboard.magnitudeSigned === true, label: dashboard.magnitude === null ? "Not established" : null, description: dashboard.magnitude === null ? "relationship magnitude unavailable" : "largest supported relationship shift" },
+        persistence: { value: firstText(dashboard.assessment?.persistence, "Not established"), description: "persistence evidence" },
+        operatingContext: { value: firstText(dashboard.assessment?.operatingContext, "Not established"), description: "operating conditions" },
+        confidence: { value: firstText(dashboard.assessment?.changeConfidence, "Not established"), description: "change confidence" },
+      },
+      relationships,
+      relationshipStatus: relationships.length ? "Ranked relationship-change summary" : "Relationship detail available in Investigation",
+      cause: { established: dashboard.causeEstablished === true, label: dashboard.causeEstablished === true ? "Yes — established by supplied evidence" : "No — investigation required" },
+      insufficient: projection.variant === "insufficient" ? { title: "Insufficient evidence", description: projection.whatChanged } : null,
+    };
+  }
   if (!projection?.dashboardIdentity) return null;
   const relationships = asArray(projection.exactRelationships).slice(0, 3).map(summaryRelationship).filter(Boolean);
   const relationshipWindows = asArray(projection.exactRelationships).flatMap((relationship) => asArray(relationship?.windows));

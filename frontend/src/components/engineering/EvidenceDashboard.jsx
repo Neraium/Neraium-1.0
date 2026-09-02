@@ -77,6 +77,14 @@ export default function EvidenceDashboard({ summary, variant = "ready" }) {
     && /\b(?:change|shift|persistent|material|attention|review|degrad)/i.test(status);
   return (
     <section className="evidence-dashboard" aria-labelledby="evidence-dashboard-title">
+      <div className="evidence-dashboard__brief">
+        <aside className="evidence-dashboard__orientation" aria-label="Evidence brief context">
+          <span className="evidence-dashboard__brand">NERAIUM / FINDINGS</span>
+          <p>Neraium surfaces evidence when learned system behavior changes.</p>
+          <div className="evidence-dashboard__detected"><span aria-hidden="true" />{summary.relationshipStatus || "Behavior change evidence"}</div>
+          <small>Evidence supports investigation. It is not an automated diagnosis.</small>
+        </aside>
+        <div className="evidence-dashboard__record">
       <header className="evidence-dashboard__header">
         <span className="evidence-dashboard__kicker">Finding</span>
         <h1 id="evidence-dashboard-title">{summary.title || "Finding title unavailable"}</h1>
@@ -92,7 +100,7 @@ export default function EvidenceDashboard({ summary, variant = "ready" }) {
         <Metric icon="magnitude" label="Magnitude" metric={metrics.magnitude} tone="change" />
         <Metric icon="persistence" label="Persistence" metric={metrics.persistence} tone="persistence" />
         <Metric icon="context" label="Operating context" metric={metrics.operatingContext} tone="context" />
-        <Metric icon="confidence" label="Confidence" metric={metrics.confidence} tone="confidence" />
+        <Metric icon="confidence" label="Change confidence" metric={metrics.confidence} tone="confidence" />
       </div>
 
       <section className="evidence-dashboard__relationships" aria-labelledby="evidence-relationships-title">
@@ -104,7 +112,7 @@ export default function EvidenceDashboard({ summary, variant = "ready" }) {
               return (
                 <li key={relationship.id || index}>
                   <span className="evidence-dashboard__rank" aria-label={`Rank ${index + 1}`}>{index + 1}</span>
-                  <strong>{relationship.label}</strong>
+                  <div className="evidence-dashboard__relationship-name"><strong>{relationship.label}</strong><small>Review-safe relationship summary</small></div>
                   <Sparkline data={relationship.sparkline} relationshipLabel={relationship.label} />
                   <span className="evidence-dashboard__relationship-value">{magnitude ?? "Not supplied"}</span>
                 </li>
@@ -117,6 +125,9 @@ export default function EvidenceDashboard({ summary, variant = "ready" }) {
       <div className="evidence-dashboard__cause">
         <div><Icon name="cause" /><strong>Cause established?</strong></div>
         <span data-established={summary.cause?.established === true}>{summary.cause?.label || "No \u2014 investigation required"}</span>
+      </div>
+      <p className="evidence-dashboard__disclaimer">This record describes observed evidence and its limits. Confirm equipment condition and cause through investigation before taking corrective action.</p>
+        </div>
       </div>
     </section>
   );

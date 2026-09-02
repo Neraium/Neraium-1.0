@@ -121,14 +121,15 @@ function RelationshipList({ relationships }) {
 
 export function FindingReviewWorkspace({ projection, onOpenInvestigation, onBack }) {
   if (!projection || projection.variant === "unavailable") return <ProjectionUnavailable projection={projection} onBack={onBack} />;
+  const dashboardSummary = projectEvidenceDashboardSummary(projection);
   return (
     <div className="case-workspace finding-review-workspace" data-testid="finding-review">
       <button type="button" className="evidence-back" onClick={onBack}>Back to Operations Brief</button>
-      <CaseHeader eyebrow="Finding review" header={projection.header} />
-      <div className="case-sections case-sections--review">
+      <EvidenceDashboard summary={dashboardSummary} variant={projection.variant} />
+      <div className="case-sections case-sections--review evidence-next-steps">
         <section><h2>What changed</h2><p className="case-lead">{projection.whatChanged}</p></section>
         <section><h2>Why this deserves attention</h2><ul>{projection.whyAttention.map((reason) => <li key={reason}>{reason}</li>)}</ul></section>
-        <section className="evidence-assessment"><h2>Evidence assessment</h2><dl>{ASSESSMENT_LABELS.map(([key, assessmentLabel]) => <div key={key} data-state={projection.assessment[key].state}><dt>{assessmentLabel}</dt><dd>{projection.assessment[key].value}</dd></div>)}</dl></section>
+        <section className="evidence-assessment evidence-assessment--secondary"><h2>Evidence assessment</h2><dl>{ASSESSMENT_LABELS.map(([key, assessmentLabel]) => <div key={key} data-state={projection.assessment[key].state}><dt>{assessmentLabel}</dt><dd>{projection.assessment[key].value}</dd></div>)}</dl></section>
         <section><h2>Important limitation</h2><p>{projection.materialLimitation || "No material limitation was recorded at this review depth."}</p></section>
         <section><h2>Where to investigate next</h2>{projection.checks.length ? <ol>{projection.checks.map((item) => <li key={item.label}>{item.label}</li>)}</ol> : <p>No evidence-linked investigation check was recorded.</p>}</section>
       </div>
