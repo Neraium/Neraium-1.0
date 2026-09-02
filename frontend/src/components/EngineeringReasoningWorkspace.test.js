@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EngineeringReasoningWorkspace from "./EngineeringReasoningWorkspace";
 
@@ -149,6 +149,47 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(screen.queryByText(/historical dataset/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add data source" }));
     expect(onWorkspaceNavigate).toHaveBeenCalledWith("data-connections");
+  });
+
+  it("does not activate completed evidence history when an ordinary workspace route hydrates", async () => {
+    let releaseHistory;
+    const historyResponse = new Promise((resolve) => { releaseHistory = resolve; });
+    const oldRun = {
+      run_id: "old-run",
+      adaptive_site_key: "site::default",
+      site_name: "Old Plant",
+      status: "completed",
+      observation_status: "open",
+      rows_received: 100,
+      rows_accepted: 100,
+      evidence_summary: ["Old persisted operating evidence."],
+      condition: {
+        object_type: "condition",
+        condition_id: "old-condition",
+        headline: "Old persisted analysis",
+        confidence: "high",
+        affected_signals: ["Pump power", "Flow"],
+        localization: { system: "Pumping System" },
+        supporting_evidence: ["Old persisted operating evidence."],
+      },
+    };
+    const apiFetch = vi.fn((path) => {
+      if (path === "/api/evidence/runs?limit=100") return historyResponse;
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+
+    renderWorkspace({ path: "/sites/site%3A%3Adefault", result: null, apiFetch });
+    expect(screen.getByTestId("workspace-state-noDataset")).toBeTruthy();
+    expect(screen.queryByTestId("operations-brief")).toBeNull();
+
+    await act(async () => {
+      releaseHistory({ ok: true, json: async () => ({ runs: [oldRun] }) });
+      await historyResponse;
+    });
+
+    await waitFor(() => expect(screen.getByTestId("workspace-state-noDataset")).toBeTruthy());
+    expect(screen.queryByTestId("operations-brief")).toBeNull();
+    expect(document.body.textContent).not.toContain("Old persisted analysis");
   });
 
   it("withholds the Operations Brief for baseline-only, legacy, or incomplete data", () => {
@@ -325,7 +366,7 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     for (const dimension of ["Change confidence", "Evidence quality", "Cause / attribution", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) {
       expect(screen.getAllByText(dimension).length).toBeGreaterThan(0);
     }
-    expect(screen.getByText("No — investigation required")).toBeTruthy();
+    expect(screen.getByText("No, investigation required")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open investigation" })).toBeTruthy();
   });
 

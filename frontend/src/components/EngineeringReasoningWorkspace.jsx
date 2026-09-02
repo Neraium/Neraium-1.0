@@ -184,7 +184,6 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const mobileMenuButtonRef = useRef(null);
   const mobileSidebarRef = useRef(null);
   const restoreScrollRef = useRef(0);
-  const [selectedSiteId, setSelectedSiteId] = useState(() => pathIdentity(["sites"]) || null);
   const [portfolioRuns, setPortfolioRuns] = useState([]);
   const [facilityLabelContext, setFacilityLabelContext] = useState({});
   const [findingWorkflowRecords, setFindingWorkflowRecords] = useState({});
@@ -215,7 +214,9 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     return persisted.length ? persisted : [currentModel];
   }, [currentModel, facilityLabelContext, portfolioRuns]);
   const portfolioSites = useMemo(() => portfolioModels.map((item) => item.site), [portfolioModels]);
-  const model = portfolioModels.find((item) => item.site.id === selectedSiteId) ?? currentModel;
+  // Completed evidence runs inform history and portfolio summaries, but only an
+  // explicitly activated result may own the Operational Brief.
+  const model = currentModel;
   const exactSelectedFinding = selectedFindingId && selectedFindingId !== "__overview__"
     ? model.findings.find((finding) => finding.id === selectedFindingId)
     : null;
@@ -297,7 +298,6 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
       setRoute(routeFromLocation());
       setSelectedFindingId(pathIdentity(["findings", "evidence", "investigations"]));
       setSelectedSystemName(pathIdentity(["systems"]));
-      setSelectedSiteId(pathIdentity(["sites"]) || null);
       restoreScrollRef.current = Number(event.state?.scrollY ?? 0);
       window.requestAnimationFrame?.(() => scrollWindowTo(restoreScrollRef.current));
     };
@@ -434,7 +434,6 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   }
 
   function handleSelectSite(site) {
-    setSelectedSiteId(site.id);
     pushRoute(`/sites/${encodeURIComponent(site.id)}`, "site");
   }
 
