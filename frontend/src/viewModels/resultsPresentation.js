@@ -13,7 +13,7 @@ export const SYSTEM_CARD_KEYS = Object.freeze([
   "systemKey", "name", "locationLabel", "status", "evidenceQuality", "findingsForReview", "primaryAction", "results",
 ]);
 export const REVIEW_KEYS = Object.freeze([
-  "contractVersion", "depth", "variant", "identity", "header", "whatChanged", "whyAttention", "assessment", "materialLimitation", "checks", "primaryAction",
+  "contractVersion", "depth", "variant", "identity", "header", "dashboardSummary", "whatChanged", "whyAttention", "assessment", "materialLimitation", "checks", "primaryAction",
 ]);
 export const INVESTIGATION_KEYS = Object.freeze([
   "contractVersion", "depth", "variant", "identity", "header", "primaryComparison", "relationships", "relationshipMap", "systemEvidence", "persistence", "operatingContext", "dataQuality", "timeline", "sourceSignals", "lineageSummary", "projectionQualification", "primaryAction",
@@ -376,6 +376,36 @@ function reviewChecks(finding) {
   return uniqueText(guidance.map((item) => bounded(item, 140)).filter((item) => item && item !== "[object Object]"), 3).map((item) => ({ label: item }));
 }
 
+function reviewEvidenceWindow(finding) {
+  const ranges = asArray(finding?.sourceTimeRanges);
+  const range = ranges.find((item) => firstText(item?.current_start, item?.currentStart, item?.start, item?.start_time)
+    || firstText(item?.current_end, item?.currentEnd, item?.end, item?.end_time));
+  if (!range) return { start: null, end: null };
+  return {
+    start: firstText(range?.current_start, range?.currentStart, range?.start, range?.start_time) || null,
+    end: firstText(range?.current_end, range?.currentEnd, range?.end, range?.end_time) || null,
+  };
+}
+
+function reviewRelationshipName(relationship, index) {
+  const source = firstText(relationship?.source);
+  const target = firstText(relationship?.target);
+  const rawSource = firstText(relationship?.rawSource);
+  const rawTarget = firstText(relationship?.rawTarget);
+  const sameIdentifier = (display, raw) => display && raw && display.toLowerCase().replace(/[^a-z0-9]/g, "") === raw.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const unsafe = (value) => /\b(?:RAW|CANONICAL|SIGNAL|TAG)[_-]|(?:^|[_-])ID(?:$|[_-])|^[A-Z0-9]+(?:_[A-Z0-9]+){2,}$/i.test(value);
+  if (!source || !target || unsafe(source) || unsafe(target) || sameIdentifier(source, rawSource) || sameIdentifier(target, rawTarget)) return `Relationship change ${index + 1}`;
+  return `${bounded(source, 60)} ↔ ${bounded(target, 60)}`;
+}
+
+function reviewRelationshipSummaries(finding) {
+  return asArray(finding?.relationships).slice(0, 3).map((relationship, index) => ({
+    label: reviewRelationshipName(relationship, index),
+    magnitude: finite(relationship?.signedChange, relationship?.absoluteChange, relationship?.delta),
+    signed: finite(relationship?.signedChange) !== null,
+  }));
+}
+
 function canonicalResultContext(result) {
   const canonical = isObject(result?.canonical_result) ? result.canonical_result : {};
   const identity = isObject(canonical.identity) ? canonical.identity : {};
@@ -467,6 +497,7 @@ function canonicalIdValues(value) {
 export function projectFindingReview(model, requestedFindingId, reviewRecord = {}) {
   const finding = exactFinding(model, requestedFindingId);
   if (!finding) return unavailable("review");
+  const raw = rawFinding(model, finding) ?? {};
   const insufficient = finding.status === "Evidence insufficient" || ["Deferred", "Withheld"].includes(finding.tier);
   const reasons = uniqueText([
     reviewReason(finding?.whyItMatters),
@@ -474,17 +505,36 @@ export function projectFindingReview(model, requestedFindingId, reviewRecord = {
     ...asArray(finding?.visibleSupporting).map(reviewReason),
   ], 3);
   const key = String(finding.id);
+  const assessment = reviewAssessment(finding, insufficient);
+  const relationships = reviewRelationshipSummaries(finding);
+  const attribution = firstText(finding?.confidenceDimensions?.causeAttribution?.value, assessment.causeAttribution.value).toLowerCase();
+  const causeEstablished = raw?.cause_established === true || raw?.cause_confirmed === true || /^(?:confirmed|established)$/.test(attribution);
   return {
     contractVersion: CONTRACT_VERSION,
     depth: "review",
     variant: insufficient ? "insufficient" : "ready",
     identity: { findingKey: key, ...canonicalRouteIdentity(model?.result) },
     header: reviewHeader(finding, model, reviewRecord),
+    dashboardSummary: {
+      title: bounded(reviewReason(finding?.observedChange) || finding?.title, 120) || null,
+      system: systemContext(finding, model) || null,
+      status: firstText(finding?.status) || null,
+      evidenceWindow: reviewEvidenceWindow(finding),
+      magnitude: relationships.find((item) => item.magnitude !== null)?.magnitude ?? null,
+      magnitudeSigned: relationships.find((item) => item.magnitude !== null)?.signed ?? false,
+      relationships,
+      assessment: {
+        changeConfidence: assessment.changeConfidence.value,
+        persistence: assessment.persistence.value,
+        operatingContext: assessment.operatingContext.value,
+      },
+      causeEstablished,
+    },
     whatChanged: insufficient
       ? "A supported material behavioral change cannot be shown from the available evidence."
       : bounded(finding?.observedChange, 220) || "A change in learned system behavior is supported for review.",
     whyAttention: reasons.length ? reasons : [insufficient ? "The evidence boundary is not sufficient for a reliable conclusion." : "The learned system behavior differs from the comparison period."],
-    assessment: reviewAssessment(finding, insufficient),
+    assessment,
     materialLimitation: bounded(finding?.primaryLimitation, 180) || null,
     checks: insufficient ? [] : reviewChecks(finding),
     primaryAction: insufficient && !asArray(finding.relationships).length

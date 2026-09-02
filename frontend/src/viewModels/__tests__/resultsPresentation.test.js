@@ -172,11 +172,24 @@ describe("results presentation contracts", () => {
     ]);
     expect(projection.assessment.changeConfidence.value).toBe("High");
     expect(projection.assessment.causeAttribution.value).toBe("Not established");
+    expect(projection.dashboardSummary).toMatchObject({
+      title: "The learned system response A changed during comparable operation.",
+      system: "Cooling system A",
+      status: "Change detected",
+      magnitude: -0.604114,
+      magnitudeSigned: true,
+      relationships: [{ label: "Source A ↔ Target A", magnitude: -0.604114, signed: true }],
+      causeEstablished: false,
+    });
+    expect(projectEvidenceDashboardSummary(projection)).toMatchObject({
+      evidenceWindow: { label: "Aug 25, 2026" },
+      cause: { established: false, label: "No — investigation required" },
+    });
     expect(projection.whyAttention.length).toBeGreaterThanOrEqual(1);
     expect(projection.whyAttention.length).toBeLessThanOrEqual(3);
     expect(projection.checks.length).toBeLessThanOrEqual(3);
     const rendered = JSON.stringify(projection);
-    for (const forbidden of ["RAW_SIGNAL_RESULTS_CANARY", "pearson_correlation", "0.918273", "997", "LINEAGE_RESULTS_CANARY", "ENGINE_RESULTS_CANARY", "PACKAGE_RESULTS_CANARY", "CLASSIFICATION_RESULTS_CANARY"]) expect(rendered).not.toContain(forbidden);
+    for (const forbidden of ["RAW_SIGNAL_RESULTS_CANARY", "pearson_correlation", "0.918273", "0.314159", "997", "443", "LINEAGE_RESULTS_CANARY", "ENGINE_RESULTS_CANARY", "PACKAGE_RESULTS_CANARY", "CLASSIFICATION_RESULTS_CANARY", "SUFFICIENCY_RESULTS_CANARY"]) expect(rendered).not.toContain(forbidden);
   });
 
   it("materially deepens finding-owned evidence in Investigation with explicit run scope", () => {
