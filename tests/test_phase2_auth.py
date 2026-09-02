@@ -59,6 +59,26 @@ def test_production_login_rate_limit_returns_429(monkeypatch, tmp_path) -> None:
     assert response.headers.get("Retry-After")
 
 
+def test_production_login_rate_limit_ignores_spoofed_forwarded_ips(monkeypatch, tmp_path) -> None:
+    clear_rate_limits()
+    client = _production_client(monkeypatch, tmp_path)
+
+    response = None
+    for attempt in range(6):
+        response = client.post(
+            "/api/auth/login",
+            json={
+                "email": f"missing-{attempt}@example.com",
+                "password": "wrongpass123",
+            },
+            headers={"X-Forwarded-For": f"198.51.100.{attempt + 1}"},
+        )
+
+    assert response is not None
+    assert response.status_code == 429
+    assert response.headers.get("Retry-After")
+
+
 def test_invalid_login_returns_auth_specific_message(monkeypatch, tmp_path) -> None:
     clear_rate_limits()
     client = _production_client(monkeypatch, tmp_path)
