@@ -7,7 +7,8 @@ from app.main import create_app
 from app.routers import data as data_router
 from app.routers.data import rebuild_upload_replay_from_source
 from app.services import upload_jobs
-from app.services.upload_jobs import read_job, write_job, write_latest_upload_result
+from app.services.upload_jobs import read_job, write_job
+from app.services.upload_state_repository import write_latest_upload_result
 
 
 def test_rebuild_upload_replay_from_source(tmp_path: Path) -> None:

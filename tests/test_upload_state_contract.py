@@ -275,20 +275,6 @@ def test_upload_jobs_write_job_delegates_progress_persistence_to_repository(monk
     assert keep_result is False
 
 
-def test_upload_jobs_compatibility_write_helpers_remain_stable() -> None:
-    job_id = "upload-jobs-compat-write"
-    result = _persisted_result(job_id, filename="compat.csv")
-
-    upload_jobs.write_latest_upload_result(job_id, result)
-
-    assert upload_state_repository.read_latest_upload_result()["job_id"] == job_id
-    assert upload_state_repository.read_latest_upload_summary()["job_id"] == job_id
-    record = upload_state_repository.read_latest_upload_record()
-    assert record is not None
-    assert record["job_id"] == job_id
-    assert read_current_upload_result()["job_id"] == job_id
-
-
 def test_upload_state_replay_lookup_resolves_correct_upload_identity() -> None:
     first_job = "upload-state-replay-first"
     second_job = "upload-state-replay-second"

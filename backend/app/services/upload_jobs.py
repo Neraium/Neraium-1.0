@@ -95,8 +95,6 @@ from app.services.upload_state_repository import (
     write_upload_completion as repository_write_upload_completion,
     write_upload_status_progress as repository_write_upload_status_progress,
     write_latest_upload_record as repository_write_latest_upload_record,
-    write_latest_upload_result as repository_write_latest_upload_result,
-    write_latest_upload_summary as repository_write_latest_upload_summary,
     write_local_json as repository_write_local_json,
     write_shared_state as repository_write_shared_state,
     write_upload_result,
@@ -1987,14 +1985,6 @@ def reset_latest_upload_state(*, purge_job_records: bool = False) -> None:
 
 def summarize_result(result: dict[str, Any]) -> dict[str, Any]:
     return summarize_result_payload(result)
-
-
-def write_latest_upload_result(*args) -> None:
-    repository_write_latest_upload_result(*args)
-
-
-def write_latest_upload_summary(*args, **kwargs) -> None:
-    repository_write_latest_upload_summary(*args, **kwargs)
 
 
 def read_upload_history(limit: int = 100) -> list[dict[str, Any]]:
