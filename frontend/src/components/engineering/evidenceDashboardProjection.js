@@ -93,7 +93,7 @@ export function projectEvidenceDashboardSummary(projection) {
       },
       relationships,
       relationshipStatus: relationships.length ? "Ranked relationship-change summary" : "Relationship detail available in Investigation",
-      cause: { established: dashboard.causeEstablished === true, label: dashboard.causeEstablished === true ? "Yes — established by supplied evidence" : "No — investigation required" },
+      cause: { established: dashboard.causeEstablished === true, label: dashboard.causeEstablished === true ? "Yes, established by supplied evidence" : "No, investigation required" },
       insufficient: projection.variant === "insufficient" ? { title: "Insufficient evidence", description: projection.whatChanged } : null,
     };
   }
