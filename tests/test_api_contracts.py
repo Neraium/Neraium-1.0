@@ -292,7 +292,7 @@ def test_openapi_covers_runtime_routes_and_contract_metadata(client: TestClient)
         if method in {"get", "post", "put", "patch", "delete"}
     }
     runtime_operation_keys = [
-        (method.lower(), route.path)
+        (method.lower(), route.path_format)
         for route in client.app.routes
         if getattr(route, "methods", None)
         and getattr(route, "include_in_schema", False)
