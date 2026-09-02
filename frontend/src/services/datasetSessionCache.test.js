@@ -153,4 +153,41 @@ describe("dataset session cache scoping", () => {
     expect(() => clearDatasetSessionCache()).not.toThrow();
     expect(setCurrentWorkspaceId("north-plant")).toBe("north-plant");
   });
+
+  it("keeps workspace session behavior usable when resolving storage properties is denied", () => {
+    const denied = () => {
+      throw new DOMException("Storage denied", "SecurityError");
+    };
+    vi.spyOn(window, "localStorage", "get").mockImplementation(denied);
+    vi.spyOn(window, "sessionStorage", "get").mockImplementation(denied);
+
+    expect(getCurrentWorkspaceId()).toBe("default");
+    expect(resolveAuthorizedWorkspaceSelection({
+      user: { email: "alice@example.com" },
+      default_workspace_id: "central-plant",
+      workspaces: [{ workspace_id: "central-plant", display_name: "Central Plant", is_active: true }],
+    }).workspaceId).toBe("central-plant");
+    expect(activateDatasetCacheScope({ email: "alice@example.com" }, "central-plant")).toEqual({
+      changed: true,
+      scopeKey: "alice@example.com::central-plant",
+      workspaceId: "central-plant",
+    });
+    expect(() => clearDatasetSessionCache()).not.toThrow();
+    expect(setCurrentWorkspaceId("north-plant")).toBe("north-plant");
+  });
+
+  it.each(["length", "key"])("keeps cache clearing usable when prefix %s access is denied", (operation) => {
+    window.localStorage.setItem("neraium.baseline_selection.default", "stale");
+    if (operation === "length") {
+      vi.spyOn(Storage.prototype, "length", "get").mockImplementation(() => {
+        throw new DOMException("Storage denied", "SecurityError");
+      });
+    } else {
+      vi.spyOn(Storage.prototype, "key").mockImplementation(() => {
+        throw new DOMException("Storage denied", "SecurityError");
+      });
+    }
+
+    expect(() => clearDatasetSessionCache()).not.toThrow();
+  });
 });
