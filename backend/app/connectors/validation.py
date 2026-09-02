@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import math
 from typing import Any
 
 from app.connectors.models import SUPPORTED_UNITS, NormalizedTelemetryRecord, ValidationIssue
@@ -30,9 +31,10 @@ def validate_numeric_value(raw_value: Any) -> float | None:
     if raw_value is None or raw_value == "":
         return None
     try:
-        return float(raw_value)
+        numeric_value = float(raw_value)
     except (TypeError, ValueError):
         return None
+    return numeric_value if math.isfinite(numeric_value) else None
 
 
 def validate_unit(unit: str) -> bool:

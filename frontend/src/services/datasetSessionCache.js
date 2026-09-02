@@ -36,6 +36,14 @@ function normalizeUserId(user) {
   return String(user?.email ?? user?.id ?? user ?? "").trim().toLowerCase();
 }
 
+function resolveBrowserStorage(storageName) {
+  try {
+    return window[storageName];
+  } catch {
+    return null;
+  }
+}
+
 function readStorageItem(storage, key) {
   try {
     return storage?.getItem(key) ?? null;
@@ -62,7 +70,7 @@ function removeStorageItem(storage, key) {
 
 export function getCurrentWorkspaceId() {
   if (typeof window === "undefined") return DEFAULT_DATA_WORKSPACE_ID;
-  return normalizeWorkspaceId(readStorageItem(window.localStorage, CURRENT_WORKSPACE_STORAGE_KEY));
+  return normalizeWorkspaceId(readStorageItem(resolveBrowserStorage("localStorage"), CURRENT_WORKSPACE_STORAGE_KEY));
 }
 
 export function datasetCacheScopeKey(user, workspaceId = getCurrentWorkspaceId()) {
@@ -98,14 +106,20 @@ export function activateAuthorizedWorkspaceSession(session) {
 
 export function clearDatasetSessionCache({ clearScopeOwner = true, clearWorkspace = true } = {}) {
   if (typeof window === "undefined") return;
-  LOCAL_DATASET_CACHE_KEYS.forEach((key) => removeStorageItem(window.localStorage, key));
-  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
-    const key = window.localStorage.key(index);
-    if (key?.startsWith(BASELINE_SELECTION_STORAGE_PREFIX)) removeStorageItem(window.localStorage, key);
+  const localStorage = resolveBrowserStorage("localStorage");
+  const sessionStorage = resolveBrowserStorage("sessionStorage");
+  LOCAL_DATASET_CACHE_KEYS.forEach((key) => removeStorageItem(localStorage, key));
+  try {
+    for (let index = localStorage?.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(BASELINE_SELECTION_STORAGE_PREFIX)) removeStorageItem(localStorage, key);
+    }
+  } catch {
+    // Prefix cleanup is best effort when browser storage is unavailable.
   }
-  SESSION_DATASET_CACHE_KEYS.forEach((key) => removeStorageItem(window.sessionStorage, key));
-  if (clearScopeOwner) removeStorageItem(window.localStorage, DATASET_CACHE_SCOPE_STORAGE_KEY);
-  if (clearWorkspace) removeStorageItem(window.localStorage, CURRENT_WORKSPACE_STORAGE_KEY);
+  SESSION_DATASET_CACHE_KEYS.forEach((key) => removeStorageItem(sessionStorage, key));
+  if (clearScopeOwner) removeStorageItem(localStorage, DATASET_CACHE_SCOPE_STORAGE_KEY);
+  if (clearWorkspace) removeStorageItem(localStorage, CURRENT_WORKSPACE_STORAGE_KEY);
 }
 
 export function activateDatasetCacheScope(user, workspaceId = null) {
@@ -115,17 +129,18 @@ export function activateDatasetCacheScope(user, workspaceId = null) {
     const scopeKey = datasetCacheScopeKey(user, resolvedWorkspaceId);
     return { changed: false, scopeKey, workspaceId: resolvedWorkspaceId };
   }
-  const previousScopeKey = readStorageItem(window.localStorage, DATASET_CACHE_SCOPE_STORAGE_KEY);
+  const localStorage = resolveBrowserStorage("localStorage");
+  const previousScopeKey = readStorageItem(localStorage, DATASET_CACHE_SCOPE_STORAGE_KEY);
   const previousUserId = String(previousScopeKey ?? "").split("::", 1)[0];
   const nextUserId = normalizeUserId(user);
   if (!hasExplicitWorkspace && previousUserId && previousUserId !== nextUserId) {
-    removeStorageItem(window.localStorage, CURRENT_WORKSPACE_STORAGE_KEY);
+    removeStorageItem(localStorage, CURRENT_WORKSPACE_STORAGE_KEY);
     resolvedWorkspaceId = DEFAULT_DATA_WORKSPACE_ID;
   }
   const scopeKey = datasetCacheScopeKey(user, resolvedWorkspaceId);
   const changed = previousScopeKey !== scopeKey;
   if (changed) clearDatasetSessionCache({ clearScopeOwner: false, clearWorkspace: false });
-  writeStorageItem(window.localStorage, DATASET_CACHE_SCOPE_STORAGE_KEY, scopeKey);
+  writeStorageItem(localStorage, DATASET_CACHE_SCOPE_STORAGE_KEY, scopeKey);
   return { changed, scopeKey, workspaceId: resolvedWorkspaceId };
 }
 
@@ -133,7 +148,7 @@ export function setCurrentWorkspaceId(workspaceId) {
   const normalized = normalizeWorkspaceId(workspaceId);
   if (typeof window === "undefined") return normalized;
   const previous = getCurrentWorkspaceId();
-  writeStorageItem(window.localStorage, CURRENT_WORKSPACE_STORAGE_KEY, normalized);
+  writeStorageItem(resolveBrowserStorage("localStorage"), CURRENT_WORKSPACE_STORAGE_KEY, normalized);
   if (previous !== normalized) {
     clearDatasetSessionCache({ clearWorkspace: false });
     window.dispatchEvent(new CustomEvent("neraium:workspace-changed", { detail: { workspaceId: normalized } }));

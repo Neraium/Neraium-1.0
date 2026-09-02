@@ -100,9 +100,9 @@ def _clear_session_cookie(response: Response, request: Request) -> None:
 
 
 def _client_ip(request: Request) -> str:
-    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
-    if forwarded_for:
-        return forwarded_for
+    # Trusted proxy middleware may normalize this value. Reading the raw
+    # forwarding header here would let direct clients choose their rate-limit
+    # bucket and audit identity.
     if request.client and request.client.host:
         return str(request.client.host)
     return "unknown"

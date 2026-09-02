@@ -10,7 +10,7 @@ const h = React.createElement;
 
 vi.mock("../services/api/authApi", () => ({ loginUser: vi.fn() }));
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); window.localStorage.clear(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); window.localStorage.clear(); });
 
 describe("AuthScreen", () => {
   it("shows actionable validation and prevents duplicate sign-in submissions", async () => {
@@ -42,5 +42,32 @@ describe("AuthScreen", () => {
     resolveLogin(session);
     await waitFor(() => expect(onAuthenticated).toHaveBeenCalledTimes(1));
     expect(onAuthenticated).toHaveBeenCalledWith(session);
+  });
+
+  it("completes successful authentication when saving the email is denied", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Storage denied", "SecurityError");
+    });
+    const session = { authenticated: true, user: { email: "admin@example.com", role: "admin" } };
+    loginUser.mockResolvedValue(session);
+    const onAuthenticated = vi.fn();
+    render(h(AuthScreen, { onAuthenticated }));
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "Admin@Example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => expect(onAuthenticated).toHaveBeenCalledWith(session));
+    expect(screen.getByLabelText("Password").value).toBe("");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("renders without a saved email when resolving localStorage is denied", () => {
+    vi.spyOn(window, "localStorage", "get").mockImplementation(() => {
+      throw new DOMException("Storage denied", "SecurityError");
+    });
+
+    expect(() => render(h(AuthScreen, { onAuthenticated: vi.fn() }))).not.toThrow();
+    expect(screen.getByLabelText("Email").value).toBe("");
   });
 });
