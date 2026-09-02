@@ -467,10 +467,10 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
       const scope = activateDatasetCacheScope(currentUser, selection.workspaceId);
       setCurrentWorkspaceIdState(selection.workspaceId);
       clearUploadSessionState();
-      setAllowPersistedLatest(true);
+      setAllowPersistedLatest(false);
       setDatasetScopeKey(scope.scopeKey);
-      void loadLatestUploadState({ includePersisted: true, forceRefresh: true });
-      void loadFacilitySystems({ forceRefresh: true });
+      void loadLatestUploadState({ includePersisted: false, forceRefresh: true });
+      void loadFacilitySystems({ includePersisted: false, forceRefresh: true });
     };
     const handleStorage = (event) => {
       if (event.key === CURRENT_WORKSPACE_STORAGE_KEY) applyWorkspaceChange();

@@ -40,12 +40,14 @@ function readStoredSessionIntent() {
 }
 
 export function readStoredAllowPersistedLatest() {
-  if (typeof window === "undefined") return true;
+  if (typeof window === "undefined") return false;
   try {
-    return window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY) !== "0";
+    const explicitlyAllowed = window.localStorage.getItem(ALLOW_PERSISTED_LATEST_STORAGE_KEY) === "1";
+    const continuationIntent = window.sessionStorage.getItem(SESSION_INTENT_STORAGE_KEY);
+    return explicitlyAllowed && (continuationIntent === "current" || continuationIntent === "resumed");
   } catch (error) {
     logStorageWarning("read-persisted-latest", error);
-    return true;
+    return false;
   }
 }
 
@@ -90,6 +92,12 @@ export default function useWorkspaceSessionController({
     setAnalysisHistory(readAnalysisHistory());
   }, [datasetScopeKey]);
 
+  useEffect(() => {
+    if (!activeBaselineIdentity?.analysisRunId) return;
+    setAllowPersistedLatest(true);
+    setSessionIntent("resumed");
+  }, [activeBaselineIdentity?.analysisRunId, setAllowPersistedLatest]);
+
   const canonicalLatestUploadJobId = sessionStore?.jobId ?? null;
   const canonicalLatestUploadSnapshot = sessionStore?.latestUploadSnapshot ?? null;
   const pendingUploadJobId = uploadStateView.resolveCurrentUploadJobId(postUploadPendingSnapshot);
@@ -129,10 +137,6 @@ export default function useWorkspaceSessionController({
     }),
     [guardedLatestUploadResult, guardedLatestUploadSnapshot, historianReplayState.frame],
   );
-  const hasCompletedAnalysisAvailable = isCompletedAnalysisPayload({
-    result: guardedLatestUploadResult,
-    snapshot: guardedLatestUploadSnapshot,
-  });
   const sessionActivity = useMemo(
     () => deriveSessionActivity({
       telemetrySession: observableTelemetrySession,
@@ -140,9 +144,8 @@ export default function useWorkspaceSessionController({
       gateUploadCompleteSeen,
       hasCompletedUploadOverride: Boolean(completedUploadOverride),
       resetGuardActive,
-      autoResumeCompleted: hasCompletedAnalysisAvailable,
     }),
-    [completedUploadOverride, gateUploadCompleteSeen, hasCompletedAnalysisAvailable, resetGuardActive, sessionIntent, observableTelemetrySession],
+    [completedUploadOverride, gateUploadCompleteSeen, resetGuardActive, sessionIntent, observableTelemetrySession],
   );
   const effectiveSessionIntent = sessionActivity.effectiveIntent;
 
@@ -364,7 +367,7 @@ export default function useWorkspaceSessionController({
       setCompletedUploadOverride(refreshedResult);
     }
     setSessionIntent("current");
-    const facilityRefreshed = await loadFacilitySystems({ forceRefresh: true });
+    const facilityRefreshed = await loadFacilitySystems({ includePersisted: true, forceRefresh: true });
     console.info("[neraium] state hydration completed", { jobId: expectedJobId, facilityRefreshed });
     if (!facilityRefreshed) {
       throw new Error("Facility state refresh failed after results were saved.");
@@ -398,7 +401,7 @@ export default function useWorkspaceSessionController({
       setGateUploadCompleteSeen(false);
     }
     setSessionIntent(hasResult ? "resumed" : "neutral");
-    await loadFacilitySystems();
+    await loadFacilitySystems({ includePersisted: true });
     setActiveWorkspace("system-body");
   }, [loadFacilitySystems, loadLatestUploadState, setActiveWorkspace, setAllowPersistedLatest]);
 
@@ -470,7 +473,7 @@ export default function useWorkspaceSessionController({
     }
     setHistorianReplayState({ enabled: false, frame: null, meta: null });
     await loadLatestUploadState({ includePersisted: false });
-    await loadFacilitySystems();
+    await loadFacilitySystems({ includePersisted: false });
   }, [accessCode, apiFetch, clearUploadSessionState, loadFacilitySystems, loadLatestUploadState, setAllowPersistedLatest, setIsDemoMode]);
 
   const handleBackToGate = useCallback(async () => {
@@ -481,13 +484,13 @@ export default function useWorkspaceSessionController({
       setGateUploadCompleteSeen(false);
       setSessionIntent("neutral");
     }
-    const hasResult = await loadLatestUploadState({ includePersisted: true, forceRefresh: true });
+    const hasResult = await loadLatestUploadState({ includePersisted: hasActiveSession, forceRefresh: true });
     if (!hasResult) {
       setCompletedUploadOverride(null);
       setPostUploadPendingSnapshot(null);
       setPostUploadExpectedJobId(null);
     }
-    await loadFacilitySystems();
+    await loadFacilitySystems({ includePersisted: hasActiveSession });
     setActiveWorkspace("system-body");
   }, [hasActiveSession, hasCurrentUploadResult, hasResumedSession, loadFacilitySystems, loadLatestUploadState, setActiveWorkspace]);
 
@@ -495,10 +498,10 @@ export default function useWorkspaceSessionController({
     console.info("[neraium] route retry requested", { workspace: activeWorkspace });
     setErrorBoundaryResetKey((current) => current + 1);
     if (activeWorkspace === "system-body") {
-      void loadLatestUploadState({ includePersisted: true, forceRefresh: true });
-      void loadFacilitySystems({ forceRefresh: true });
+      void loadLatestUploadState({ includePersisted: hasActiveSession, forceRefresh: true });
+      void loadFacilitySystems({ includePersisted: hasActiveSession, forceRefresh: true });
     }
-  }, [activeWorkspace, loadFacilitySystems, loadLatestUploadState]);
+  }, [activeWorkspace, hasActiveSession, loadFacilitySystems, loadLatestUploadState]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

@@ -1,12 +1,12 @@
 /* @vitest-environment jsdom */
 import React, { useCallback, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import useFacilityRuntime from "./useFacilityRuntime";
 import useWorkspaceSessionController from "./useWorkspaceSessionController";
 import { fetchLatestUploadState } from "../services/api/uploadApi";
-import { fetchFacilitySystems } from "../services/api/systemApi";
+import { fetchDomainMode, fetchFacilitySystems } from "../services/api/systemApi";
 
 const h = React.createElement;
 const formatClockTime = () => "now";
@@ -170,7 +170,28 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+beforeEach(() => {
+  fetchDomainMode.mockImplementation(() => new Promise(() => {}));
+});
+
 describe("terminal latest-upload runtime ownership", () => {
+  it("uses non-persisted requests during ordinary startup", async () => {
+    fetchDomainMode.mockResolvedValueOnce({ mode: "aquatic", source: "default" });
+    fetchLatestUploadState.mockResolvedValueOnce({ snapshot: { status: "empty" }, latestResult: null });
+    render(h(RuntimeScopeHarness));
+
+    await waitFor(() => expect(fetchLatestUploadState).toHaveBeenCalled());
+
+    expect(fetchLatestUploadState).toHaveBeenCalledWith(expect.objectContaining({
+      scopeKey: "scope-a",
+      includePersisted: false,
+    }));
+    expect(fetchFacilitySystems).toHaveBeenCalledWith(expect.objectContaining({
+      scopeKey: "scope-a",
+      includePersisted: false,
+    }));
+  });
+
   it("keeps Results and canonical completion after intake unmount and delayed stale refetches", async () => {
     fetchLatestUploadState.mockResolvedValue(staleProcessingPayload());
     render(h(RuntimeHandoffHarness));

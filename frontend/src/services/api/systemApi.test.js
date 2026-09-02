@@ -36,4 +36,14 @@ describe("facility systems cache ownership", () => {
     expect(apiFetch.mock.calls[0][1].headers["X-Neraium-Workspace-Id"]).toBe("north");
     expect(apiFetch.mock.calls[1][1].headers["X-Neraium-Workspace-Id"]).toBe("south");
   });
+
+  it("does not request persisted facility results unless explicitly enabled", async () => {
+    const apiFetch = vi.fn().mockResolvedValue(response("current-system"));
+
+    await fetchFacilitySystems({ apiFetch, scopeKey: "user-a", portfolioId: "north" });
+    await fetchFacilitySystems({ apiFetch, scopeKey: "user-a", portfolioId: "north", includePersisted: true });
+
+    expect(apiFetch.mock.calls[0][0]).toContain("include_persisted=0");
+    expect(apiFetch.mock.calls[1][0]).toContain("include_persisted=1");
+  });
 });
