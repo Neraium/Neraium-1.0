@@ -112,8 +112,8 @@ Remaining compatibility exports in `upload_jobs.py`:
   Reason: queue/file processing entrypoints still live in the facade.
 - `write_job`, `read_job`, `read_upload_status`, `reset_latest_upload_state`
   Reason: queue lifecycle callers still depend on the facade surface, and a few tests still verify reset compatibility directly.
-- `write_latest_upload_result`, `write_latest_upload_summary`, `read_latest_upload_record`, `read_upload_result_by_job_id`
-  Reason: preserved for compatibility while tests and callers continue migrating off legacy imports.
+- `read_latest_upload_record`, `read_upload_result_by_job_id`
+  Reason: queue/file processing callers still consume these repository-owned read contracts through the facade.
 - `read_upload_cache_stats`
   Reason: compatibility stub remains for older internal callers.
 
@@ -138,7 +138,7 @@ Benchmark status:
 
 ## Future Refactor Opportunities
 
-1. Migrate the remaining `write_latest_upload_result`, `write_latest_upload_summary`, and reset compatibility imports in tests and services onto `upload_state_repository.py` or a dedicated reset service.
+1. Move the remaining reset compatibility imports onto a dedicated reset service. Latest-result and latest-summary writers now import `upload_state_repository.py` directly.
 2. Remove legacy `latest_result` contract fields only after all downstream callers and persisted-response tests are fully migrated.
 3. Convert `runtime_db.py` queue/shared-state clients to explicit ownership/injection.
 4. Consolidate replay/evidence/latest-upload resolution behind one backend current-upload helper layer.

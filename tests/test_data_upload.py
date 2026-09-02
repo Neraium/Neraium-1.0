@@ -15,7 +15,8 @@ from app.services import evidence_store
 from app.services.runtime_db import claim_next_upload_job, db_connection, read_upload_queue_job, upsert_latest_payload
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services import sii_runner, upload_jobs
-from app.services.upload_jobs import UploadTooLargeError, create_upload_job, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, read_latest_upload_summary, write_job, write_latest_upload_result, write_latest_upload_summary
+from app.services.upload_jobs import UploadTooLargeError, create_upload_job, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, read_latest_upload_summary, write_job
+from app.services.upload_state_repository import write_latest_upload_result, write_latest_upload_summary
 
 
 REQUIRED_COMPLETION_ARTIFACT_KEYS = (
