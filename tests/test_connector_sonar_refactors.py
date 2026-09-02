@@ -179,6 +179,33 @@ def test_csv_invalid_values_missing_values_and_duplicates_keep_warning_contract(
     ]
 
 
+def test_csv_nonfinite_values_follow_invalid_reading_contract() -> None:
+    connector = CSVConnector({"filename": "nonfinite.csv"})
+
+    batch = connector.normalize(
+        [
+            {"timestamp": "2026-05-01T08:00:00Z", "temperature": "74.5"},
+            {"timestamp": "2026-05-01T08:05:00Z", "temperature": "NaN"},
+            {"timestamp": "2026-05-01T08:10:00Z", "temperature": "Infinity"},
+            {"timestamp": "2026-05-01T08:15:00Z", "temperature": "-Infinity"},
+        ]
+    )
+
+    assert [record.value for record in batch.records] == [74.5]
+    assert [issue.model_dump() for issue in batch.errors] == [
+        {
+            "row_number": row_number,
+            "field": "temperature",
+            "message": "Sensor value for temperature must be numeric.",
+        }
+        for row_number in (3, 4, 5)
+    ]
+    assert batch.warnings == [
+        f"Row {row_number}: Sensor value for temperature must be numeric."
+        for row_number in (3, 4, 5)
+    ]
+
+
 def test_rest_post_preserves_headers_query_auth_body_and_timeout() -> None:
     captured: dict[str, object] = {}
 
