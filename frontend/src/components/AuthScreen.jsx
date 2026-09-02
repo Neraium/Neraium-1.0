@@ -6,8 +6,25 @@ import { PRODUCT_NAME } from "../content/productLanguage";
 
 const LAST_EMAIL_KEY = "neraium.auth.last_email";
 
+function readLastEmail() {
+  if (typeof window === "undefined") return "";
+  try {
+    return String(window.localStorage.getItem(LAST_EMAIL_KEY) ?? "");
+  } catch {
+    return "";
+  }
+}
+
+function rememberLastEmail(email) {
+  try {
+    window.localStorage.setItem(LAST_EMAIL_KEY, email);
+  } catch {
+    // Remembering an email is optional and must not affect authentication.
+  }
+}
+
 export default function AuthScreen({ notice = "", onAuthenticated }) {
-  const [email, setEmail] = useState(() => typeof window === "undefined" ? "" : String(window.localStorage.getItem(LAST_EMAIL_KEY) ?? ""));
+  const [email, setEmail] = useState(readLastEmail);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -23,8 +40,8 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
     setError("");
     try {
       const payload = await loginUser({ email: email.trim(), password });
-      window.localStorage.setItem(LAST_EMAIL_KEY, email.trim().toLowerCase());
       setPassword("");
+      rememberLastEmail(email.trim().toLowerCase());
       onAuthenticated?.(payload);
     } catch (submitError) {
       setError(String(submitError?.message ?? "Sign in failed. Check your credentials and try again."));
