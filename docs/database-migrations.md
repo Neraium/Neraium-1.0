@@ -33,10 +33,11 @@ The telemetry migrations are forward-only and must run in this exact order:
 1. `002_create_telemetry_connection_tables` from `backend/db/migrations/create_telemetry_connection_tables.py`
 2. `003_seed_telemetry_canonical_signal_concepts_v1` from `backend/db/migrations/seed_telemetry_canonical_signal_concepts.py`
 3. `004_extend_telemetry_ingestion_runtime` from `backend/db/migrations/extend_telemetry_ingestion_runtime.py`
+4. `005_persist_canonical_analysis_results` from `backend/db/migrations/persist_canonical_analysis_results.py`
 
-Migration 002 creates the scoped connection, secret-binding, signal, mapping, ingestion, checkpoint, observation/rejection, health, audit, and analysis-window tables. Migration 003 inserts the immutable v1 canonical concept identities. Migration 004 adds durable retry/backfill lineage, worker and analysis claims, authority snapshots, constraints, and indexes. Migration 004 refuses to run until 002 and 003 are recorded.
+Migration 002 creates the scoped connection, secret-binding, signal, mapping, ingestion, checkpoint, observation/rejection, health, audit, and analysis-window tables. Migration 003 inserts the immutable v1 canonical concept identities. Migration 004 adds durable retry/backfill lineage, worker and analysis claims, authority snapshots, constraints, and indexes. Migration 005 adds immutable canonical analysis result artifacts. Migrations 004 and 005 refuse to run until their required predecessors are recorded.
 
-Application startup never applies these migrations. When `NERAIUM_TELEMETRY_DATABASE_URL` is configured, startup runs all three structural verifiers and fails readiness/startup if the ledger, required tables, columns, indexes, constraints, or canonical catalog are incomplete.
+Application startup never applies these migrations. When `NERAIUM_TELEMETRY_DATABASE_URL` is configured, startup runs all four structural verifiers and fails readiness/startup if the ledger, required tables, columns, indexes, constraints, canonical catalog, or result-artifact contract are incomplete.
 
 ### Separately approved production migration procedure
 
@@ -50,7 +51,9 @@ Preconditions:
 4. Use a dedicated migration identity with only the DDL rights needed to create/alter the `telemetry` schema and its objects. Do not use an RDS master credential in application task definitions.
 5. Run the repository migration tests and a disposable PostgreSQL rehearsal first. Set `NERAIUM_TEST_POSTGRES_DSN` only in the controlled test environment.
 
-Apply and immediately verify all migrations:
+Apply and immediately verify all migrations. The production one-off task also
+opens the application DSN and repeats these verifiers before either ECS service
+is updated, proving that the runtime identity reaches the migrated authority:
 
 ```bash
 PYTHONPATH=backend ./.venv/bin/python - <<'PY'
@@ -63,15 +66,19 @@ from db.migrations.seed_telemetry_canonical_signal_concepts import apply as appl
 from db.migrations.seed_telemetry_canonical_signal_concepts import verify as verify_003
 from db.migrations.extend_telemetry_ingestion_runtime import apply as apply_004
 from db.migrations.extend_telemetry_ingestion_runtime import verify as verify_004
+from db.migrations.persist_canonical_analysis_results import apply as apply_005
+from db.migrations.persist_canonical_analysis_results import verify as verify_005
 
 dsn = os.environ["NERAIUM_TELEMETRY_DATABASE_URL"]
 with psycopg.connect(dsn, connect_timeout=5) as connection:
     apply_002(connection)
     apply_003(connection)
     apply_004(connection)
+    apply_005(connection)
     verify_002(connection)
     verify_003(connection)
     verify_004(connection)
+    verify_005(connection)
 print("telemetry migrations applied and verified")
 PY
 ```
@@ -86,9 +93,10 @@ import psycopg
 from db.migrations.create_telemetry_connection_tables import verify as verify_002
 from db.migrations.seed_telemetry_canonical_signal_concepts import verify as verify_003
 from db.migrations.extend_telemetry_ingestion_runtime import verify as verify_004
+from db.migrations.persist_canonical_analysis_results import verify as verify_005
 
 with psycopg.connect(os.environ["NERAIUM_TELEMETRY_DATABASE_URL"], connect_timeout=5) as connection:
-    for verify in (verify_002, verify_003, verify_004):
+    for verify in (verify_002, verify_003, verify_004, verify_005):
         verify(connection)
 print("telemetry application identity verified")
 PY

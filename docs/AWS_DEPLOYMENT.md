@@ -2,7 +2,7 @@
 
 This document captures the active AWS deployment path for Neraium-1.0. Production bootstrap and ECS deployment are handled by a checked-in AWS CLI script plus GitHub Actions. Terraform is inactive and not the production source of truth.
 
-The checked-in production bootstrap/deploy workflow does **not** yet provision or inject the new production telemetry database, scoped telemetry Secrets Manager permissions, controlled connector egress, historian templates, or telemetry-specific alarms. The [production telemetry section](#production-telemetry-connections-separate-approval-required) is a required handoff, not a claim about deployed AWS state.
+The checked-in production bootstrap/deploy workflow now accepts pre-provisioned telemetry application and migration DSN secret ARNs, grants the ECS execution role access to those exact secrets, applies migrations 002-005 in a one-off task, verifies the resulting schema through the application DSN in that same task, and injects the application DSN secret into both API and worker revisions. It does **not** create the database identities or secrets, grant PostgreSQL privileges, change RDS networking, enable controlled connector egress, register historian templates, or provision telemetry-specific alarms. The [production telemetry section](#production-telemetry-connections-separate-approval-required) remains a required handoff, not a claim about deployed AWS state.
 
 ## Targets
 
@@ -171,7 +171,7 @@ Use separate identities where the deployment supports them:
 - migration identity: the bounded DDL permissions needed to create/alter the `telemetry` schema and its objects;
 - application API/worker identity or identities: connect plus only the schema/table/sequence DML needed by the repository, with no schema drop/owner/superuser rights.
 
-The exact forward-only migration and verifier commands are in [Database migrations](database-migrations.md#production-telemetry-schema). Apply 002, 003, then 004 before any task receives `NERAIUM_TELEMETRY_DATABASE_URL`. Application startup verifies but never applies migrations.
+The exact forward-only migration and verifier commands are in [Database migrations](database-migrations.md#production-telemetry-schema). Apply 002, 003, 004, then the current readiness-required 005 before any task receives `NERAIUM_TELEMETRY_DATABASE_URL`. Application startup verifies but never applies migrations.
 
 ### Secrets Manager and IAM prerequisites
 
@@ -344,7 +344,7 @@ Invoke-RestMethod http://127.0.0.1:8080/api/health
 
 ## Deployment Boundaries
 
-The existing AWS bootstrap does not provision the production telemetry database schema, telemetry connection secrets/IAM, controlled egress, historian provider registration, or telemetry alarms. Those remain separately approved prerequisites. AWS bootstrap and ECS deployment automation otherwise live in checked-in scripts and GitHub workflows. Terraform remains deprecated and should not be used for active production ECS changes.
+The existing AWS bootstrap does not create telemetry database identities or secrets, grant PostgreSQL privileges, change RDS networking, enable controlled egress, register a historian provider, or create telemetry-specific alarms. It only parameterizes exact DSN secret references and the scoped read policies needed by ECS. The deploy workflow applies the telemetry schema through a one-off migration task after those prerequisites exist. AWS bootstrap and ECS deployment automation otherwise live in checked-in scripts and GitHub workflows. Terraform remains deprecated and should not be used for active production ECS changes.
 
 ## Production Bootstrap
 
@@ -358,6 +358,8 @@ API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secre
 AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<legacy-postgres-dsn-secret> \
 AUTH_DATABASE_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<rds-managed-secret> \
 AUTH_DATABASE_KMS_KEY_ARN=arn:aws:kms:us-east-2:<account-id>:key/<rds-secret-key-id> \
+TELEMETRY_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<telemetry-application-dsn-secret> \
+TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<telemetry-migration-dsn-secret> \
 NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<bootstrap-admin-password-secret> \
 TASK_EXECUTION_ROLE_NAME=neraium-prod-ecs-task-execution-role \
 API_LOG_GROUP=/ecs/neraium-prod-api \
@@ -372,6 +374,8 @@ secret: NERAIUM_UPLOAD_STATE_BUCKET=<shared-s3-bucket>
 NERAIUM_APP_TASK_ROLE_NAME=neraium-prod-task-app-role
 NERAIUM_API_TOKEN_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<secret-name>
 NERAIUM_AUTH_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<legacy-postgres-dsn-secret>  # rollback compatibility
+NERAIUM_TELEMETRY_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<telemetry-application-dsn-secret>
+NERAIUM_TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<telemetry-migration-dsn-secret>
 NERAIUM_BOOTSTRAP_ADMIN_EMAIL=<pilot-admin-email>
 NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN=arn:aws:secretsmanager:us-east-2:<account-id>:secret:<bootstrap-admin-password-secret>
 ```
