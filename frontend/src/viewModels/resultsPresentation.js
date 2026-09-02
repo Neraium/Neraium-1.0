@@ -19,7 +19,26 @@ export const INVESTIGATION_KEYS = Object.freeze([
   "contractVersion", "depth", "variant", "identity", "header", "primaryComparison", "relationships", "relationshipMap", "systemEvidence", "persistence", "operatingContext", "dataQuality", "timeline", "sourceSignals", "lineageSummary", "projectionQualification", "primaryAction",
 ]);
 export const EVIDENCE_KEYS = Object.freeze([
-  "contractVersion", "depth", "variant", "identity", "header", "dashboardIdentity", "timestamps", "signals", "exactRelationships", "supportingEvidence", "channels", "classifications", "sufficiency", "limitations", "lineage", "engine", "package", "audit", "projectionQualification", "actions",
+  "contractVersion",
+  "depth",
+  "variant",
+  "identity",
+  "header",
+  "dashboardIdentity",
+  "timestamps",
+  "signals",
+  "exactRelationships",
+  "supportingEvidence",
+  "channels",
+  "classifications",
+  "sufficiency",
+  "limitations",
+  "lineage",
+  "engine",
+  "package",
+  "audit",
+  "projectionQualification",
+  "actions",
 ]);
 
 const asArray = (value) => Array.isArray(value) ? value : [];
@@ -872,9 +891,20 @@ export function projectEvidenceRecord(model, requestedFindingId, reviewRecord = 
     header: reviewHeader(finding, model, reviewRecord),
     dashboardIdentity: {
       title: firstText(raw?.headline, raw?.title, raw?.finding_title) || null,
-      system: firstText(raw?.system_display_name, raw?.system_name, raw?.system, raw?.localization?.system_display_name, raw?.localization?.system) || null,
+      system: firstText(
+        raw?.system_display_name,
+        raw?.system_name,
+        raw?.system,
+        raw?.localization?.system_display_name,
+        raw?.localization?.system,
+      ) || null,
       status: firstText(finding?.status) || null,
-      operatingContext: firstText(finding?.comparableOperation?.status, finding?.comparableOperation?.evidence_summary, finding?.confidenceDimensions?.operatingContext?.status, finding?.operatingMode?.match) || null,
+      operatingContext: firstText(
+        finding?.comparableOperation?.status,
+        finding?.comparableOperation?.evidence_summary,
+        finding?.confidenceDimensions?.operatingContext?.status,
+        finding?.operatingMode?.match,
+      ) || null,
       causeEstablished: raw?.cause_established === true || raw?.cause_confirmed === true,
     },
     timestamps: { generatedAt: firstText(finding?.generatedAt, result?.completed_at, result?.processed_at) || null, firstDetectedAt: firstText(finding?.firstDetectedAt) || null, sourceRanges: evidenceWindows.map((item) => copyJsonSafe(item)) },

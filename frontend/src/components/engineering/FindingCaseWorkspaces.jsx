@@ -260,49 +260,236 @@ function CanonicalObservationLineage({ projection, apiFetch }) {
   );
 }
 
-export function EvidenceRecordWorkspace({ projection, apiFetch, onTrace, onBack }) {
-  if (!projection || projection.variant === "unavailable") return <ProjectionUnavailable projection={projection} onBack={onBack} />;
+function evidencePackageHeading(scope) {
+  if (scope === "finding") return "Package explicitly linked to this finding";
+  if (scope === "run") return "Related package for this analysis run";
+  if (scope === "related") return "Related evidence package";
+  return "Evidence package unavailable";
+}
+
+function EvidenceRecordTechnicalDetails({ projection, apiFetch, onTrace }) {
   const linkedPackage = projection.package.scope === "finding";
   const analysisScoped = projection.identity?.scope === "analysis";
-  const dashboardSummary = projectEvidenceDashboardSummary(projection);
   const identityRows = Object.entries(projection.identity).filter(([key]) => key !== "findingKey");
   const engineRows = Object.entries(projection.engine).filter(([, value]) => value !== null);
+
+  return (
+    <div className="evidence-record-technical__body">
+      {analysisScoped ? <CaseHeader eyebrow="Evidence record" header={projection.header} /> : null}
+      <p className="evidence-record-intro">
+        {analysisScoped
+          ? "Complete analysis identity, provenance, and available run-scoped technical channels from the persisted connector result."
+          : "Complete finding evidence and explicitly labeled supporting analysis context. Analysis-run and system-scoped channels are not finding provenance."}
+      </p>
+      <ProjectionQualification qualification={projection.projectionQualification} depth="evidence" />
+      <div className="evidence-record-grid evidence-record-grid--audit">
+        <section>
+          <h2>Record identity</h2>
+          <dl className="classification-detail-grid">
+            {identityRows.map(([key, value]) => (
+              <div key={key}>
+                <dt>{displayLabel(key)}</dt>
+                <dd>{value ?? "Not supplied"}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+        <section>
+          <h2>Recorded times</h2>
+          <dl className="classification-detail-grid">
+            <div>
+              <dt>Generated</dt>
+              <dd>{projection.timestamps.generatedAt ?? "Not supplied"}</dd>
+            </div>
+            <div>
+              <dt>First detected</dt>
+              <dd>{projection.timestamps.firstDetectedAt ?? "Not supplied"}</dd>
+            </div>
+          </dl>
+          <RecordList
+            items={projection.timestamps.sourceRanges}
+            empty="No source time ranges were recorded."
+          />
+        </section>
+        <section>
+          <h2>Signals</h2>
+          {projection.signals.length ? (
+            <dl className="classification-detail-grid">
+              {projection.signals.map((signal) => (
+                <div key={signal.rawId || signal.display}>
+                  <dt>{signal.display}</dt>
+                  <dd>
+                    <code>{signal.rawId || "Raw ID not supplied"}</code>
+                    <br />
+                    Canonical: <code>{signal.canonicalId || "Not supplied"}</code>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="case-unavailable">
+              No finding-scoped signal identity was recorded.
+            </p>
+          )}
+        </section>
+        <section>
+          <h2>{analysisScoped ? "Analysis relationships" : "Finding-owned relationships"}</h2>
+          <RecordList
+            items={projection.exactRelationships}
+            empty={analysisScoped
+              ? "No result-level relationship record was supplied at this depth."
+              : "No finding-owned relationship record was supplied."}
+          />
+        </section>
+        <section>
+          <h2>Supporting evidence</h2>
+          <RecordList
+            items={projection.supportingEvidence.statements}
+            empty={analysisScoped
+              ? "No separate result-level supporting statements were supplied."
+              : "No finding-owned supporting statements were supplied."}
+          />
+          <h3>Evidence items</h3>
+          <RecordList
+            items={projection.supportingEvidence.items}
+            empty={analysisScoped
+              ? "No separate result-level evidence items were supplied."
+              : "No structured finding evidence items were supplied."}
+          />
+        </section>
+      </div>
+      <section
+        className={`evidence-package-association evidence-package-association--${projection.package.scope}`}
+      >
+        <h2>{evidencePackageHeading(projection.package.scope)}</h2>
+        <ScopeNote
+          scopeLabel={projection.package.scopeLabel}
+          sourcePath={projection.package.sourcePath}
+        />
+        {projection.package.packageId ? (
+          <p>
+            Package ID <code>{projection.package.packageId}</code>
+          </p>
+        ) : null}
+        {projection.package.immutableDetails ? (
+          <JsonValue value={projection.package.immutableDetails} />
+        ) : null}
+      </section>
+      {linkedPackage ? (
+        <RelatedEvidencePackages
+          packageId={projection.package.packageId}
+          apiFetch={apiFetch}
+        />
+      ) : null}
+      <div className="evidence-channel-grid">
+        {projection.channels.map((channel) => (
+          <EvidenceChannel
+            key={`${channel.key}-${channel.sourcePath}`}
+            channel={channel}
+          />
+        ))}
+      </div>
+      <div className="evidence-record-grid evidence-record-grid--audit">
+        <section>
+          <h2>Classification</h2>
+          <JsonValue value={projection.classifications.classification} />
+          <h3>Confidence contract</h3>
+          <JsonValue value={projection.classifications.confidenceContract} />
+          <h3>Alternative explanations</h3>
+          <RecordList
+            items={projection.classifications.alternatives}
+            empty="No alternative explanations were recorded."
+          />
+        </section>
+        <section>
+          <h2>Evidence sufficiency</h2>
+          <p>{projection.sufficiency.status || "Unavailable"}</p>
+          <RecordList
+            items={projection.sufficiency.reasons}
+            empty="No additional sufficiency reasons were recorded."
+          />
+        </section>
+        <section>
+          <h2>Limitations</h2>
+          <h3>Material</h3>
+          <RecordList items={projection.limitations.material} empty="None recorded." />
+          <h3>Technical</h3>
+          <RecordList items={projection.limitations.technical} empty="None recorded." />
+          <h3>Contradictions</h3>
+          <RecordList items={projection.limitations.contradictions} empty="None recorded." />
+        </section>
+        <section>
+          <h2>Finding provenance and lineage</h2>
+          <JsonValue value={projection.lineage} />
+        </section>
+        <CanonicalObservationLineage projection={projection} apiFetch={apiFetch} />
+        <section>
+          <h2>Engine and build</h2>
+          {engineRows.length ? (
+            <dl className="classification-detail-grid">
+              {engineRows.map(([key, value]) => (
+                <div key={key}>
+                  <dt>{displayLabel(key)}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="case-unavailable">Engine metadata was not supplied.</p>
+          )}
+        </section>
+        <section>
+          <h2>Audit history</h2>
+          <JsonValue value={projection.audit} />
+        </section>
+      </div>
+      <section className="evidence-record-actions">
+        <div>
+          {projection.actions.exportScopeLabel ? (
+            <p className="evidence-scope-note">
+              <strong>{projection.actions.exportScopeLabel}</strong>
+            </p>
+          ) : null}
+          <EvidencePackageExport
+            runId={projection.actions.exportRunId}
+            apiFetch={apiFetch}
+            disabled={!projection.actions.exportRunId}
+          />
+        </div>
+        {projection.actions.traceRoute ? (
+          <button
+            type="button"
+            className="forensic-button forensic-button--secondary"
+            onClick={onTrace}
+          >
+            Open trace mode
+          </button>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+export function EvidenceRecordWorkspace({ projection, apiFetch, onTrace, onBack }) {
+  if (!projection || projection.variant === "unavailable") {
+    return <ProjectionUnavailable projection={projection} onBack={onBack} />;
+  }
+
+  const dashboardSummary = projectEvidenceDashboardSummary(projection);
+
   return (
     <div className="case-workspace evidence-record-workspace" data-testid="evidence-record">
-      <button type="button" className="evidence-back" onClick={onBack}>Back to investigation</button>
+      <button type="button" className="evidence-back" onClick={onBack}>
+        Back to investigation
+      </button>
       <EvidenceDashboard summary={dashboardSummary} variant={projection.variant} />
       <details className="evidence-record-technical" open={!dashboardSummary}>
         <summary>Technical evidence and audit trail</summary>
-        <div className="evidence-record-technical__body">
-      {analysisScoped ? <CaseHeader eyebrow="Evidence record" header={projection.header} /> : null}
-      <p className="evidence-record-intro">{analysisScoped ? "Complete analysis identity, provenance, and available run-scoped technical channels from the persisted connector result." : "Complete finding evidence and explicitly labeled supporting analysis context. Analysis-run and system-scoped channels are not finding provenance."}</p>
-      <ProjectionQualification qualification={projection.projectionQualification} depth="evidence" />
-      <div className="evidence-record-grid evidence-record-grid--audit">
-        <section><h2>Record identity</h2><dl className="classification-detail-grid">{identityRows.map(([key, value]) => <div key={key}><dt>{displayLabel(key)}</dt><dd>{value ?? "Not supplied"}</dd></div>)}</dl></section>
-        <section><h2>Recorded times</h2><dl className="classification-detail-grid"><div><dt>Generated</dt><dd>{projection.timestamps.generatedAt ?? "Not supplied"}</dd></div><div><dt>First detected</dt><dd>{projection.timestamps.firstDetectedAt ?? "Not supplied"}</dd></div></dl><RecordList items={projection.timestamps.sourceRanges} empty="No source time ranges were recorded." /></section>
-        <section><h2>Signals</h2>{projection.signals.length ? <dl className="classification-detail-grid">{projection.signals.map((signal) => <div key={signal.rawId || signal.display}><dt>{signal.display}</dt><dd><code>{signal.rawId || "Raw ID not supplied"}</code><br />Canonical: <code>{signal.canonicalId || "Not supplied"}</code></dd></div>)}</dl> : <p className="case-unavailable">No finding-scoped signal identity was recorded.</p>}</section>
-        <section><h2>{analysisScoped ? "Analysis relationships" : "Finding-owned relationships"}</h2><RecordList items={projection.exactRelationships} empty={analysisScoped ? "No result-level relationship record was supplied at this depth." : "No finding-owned relationship record was supplied."} /></section>
-        <section><h2>Supporting evidence</h2><RecordList items={projection.supportingEvidence.statements} empty={analysisScoped ? "No separate result-level supporting statements were supplied." : "No finding-owned supporting statements were supplied."} /><h3>Evidence items</h3><RecordList items={projection.supportingEvidence.items} empty={analysisScoped ? "No separate result-level evidence items were supplied." : "No structured finding evidence items were supplied."} /></section>
-      </div>
-      <section className={`evidence-package-association evidence-package-association--${projection.package.scope}`}>
-        <h2>{linkedPackage ? "Package explicitly linked to this finding" : projection.package.scope === "run" ? "Related package for this analysis run" : projection.package.scope === "related" ? "Related evidence package" : "Evidence package unavailable"}</h2>
-        <ScopeNote scopeLabel={projection.package.scopeLabel} sourcePath={projection.package.sourcePath} />
-        {projection.package.packageId ? <p>Package ID <code>{projection.package.packageId}</code></p> : null}
-        {projection.package.immutableDetails ? <JsonValue value={projection.package.immutableDetails} /> : null}
-      </section>
-      {linkedPackage ? <RelatedEvidencePackages packageId={projection.package.packageId} apiFetch={apiFetch} /> : null}
-      <div className="evidence-channel-grid">{projection.channels.map((channel) => <EvidenceChannel key={`${channel.key}-${channel.sourcePath}`} channel={channel} />)}</div>
-      <div className="evidence-record-grid evidence-record-grid--audit">
-        <section><h2>Classification</h2><JsonValue value={projection.classifications.classification} /><h3>Confidence contract</h3><JsonValue value={projection.classifications.confidenceContract} /><h3>Alternative explanations</h3><RecordList items={projection.classifications.alternatives} empty="No alternative explanations were recorded." /></section>
-        <section><h2>Evidence sufficiency</h2><p>{projection.sufficiency.status || "Unavailable"}</p><RecordList items={projection.sufficiency.reasons} empty="No additional sufficiency reasons were recorded." /></section>
-        <section><h2>Limitations</h2><h3>Material</h3><RecordList items={projection.limitations.material} empty="None recorded." /><h3>Technical</h3><RecordList items={projection.limitations.technical} empty="None recorded." /><h3>Contradictions</h3><RecordList items={projection.limitations.contradictions} empty="None recorded." /></section>
-        <section><h2>Finding provenance and lineage</h2><JsonValue value={projection.lineage} /></section>
-        <CanonicalObservationLineage projection={projection} apiFetch={apiFetch} />
-        <section><h2>Engine and build</h2>{engineRows.length ? <dl className="classification-detail-grid">{engineRows.map(([key, value]) => <div key={key}><dt>{displayLabel(key)}</dt><dd>{value}</dd></div>)}</dl> : <p className="case-unavailable">Engine metadata was not supplied.</p>}</section>
-        <section><h2>Audit history</h2><JsonValue value={projection.audit} /></section>
-      </div>
-      <section className="evidence-record-actions"><div>{projection.actions.exportScopeLabel ? <p className="evidence-scope-note"><strong>{projection.actions.exportScopeLabel}</strong></p> : null}<EvidencePackageExport runId={projection.actions.exportRunId} apiFetch={apiFetch} disabled={!projection.actions.exportRunId} /></div>{projection.actions.traceRoute ? <button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open trace mode</button> : null}</section>
-        </div>
+        <EvidenceRecordTechnicalDetails
+          projection={projection}
+          apiFetch={apiFetch}
+          onTrace={onTrace}
+        />
       </details>
     </div>
   );
