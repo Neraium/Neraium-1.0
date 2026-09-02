@@ -449,7 +449,7 @@ it("establishes a new attempt before routing and rejects delayed previous-result
   expect(screen.getByTestId("telemetry-visible-status").textContent).toBe("uploading");
 });
 
-it("automatically restores a completed persisted latest analysis", async () => {
+it("keeps a completed persisted latest analysis inactive after login", async () => {
   runtimeState.latestUploadResult = {
     job_id: "persisted-job-42",
     row_count: 51841,
@@ -466,16 +466,15 @@ it("automatically restores a completed persisted latest analysis", async () => {
   render(h(App));
   await launchWorkspace();
 
-  await waitFor(() => {
-    expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-42");
-  });
-  expect(screen.getByTestId("gate-session-job").textContent).toBe("persisted-job-42");
-  expect(screen.getByTestId("gate-previous-upload").textContent).toBe("none");
-  expect(screen.queryByRole("button", { name: "Resume Previous Analysis" })).toBeNull();
-  expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Data stream active");
+  expect(screen.getByTestId("gate-result").textContent).toBe("empty");
+  expect(screen.getByTestId("gate-session-job").textContent).toBe("empty");
+  expect(screen.getByTestId("gate-finding-summary").textContent).toBe("No active insights.");
+  expect(screen.getByTestId("gate-previous-upload").textContent).toBe("persisted-job-42");
+  expect(screen.getByRole("button", { name: "Resume Previous Analysis" })).toBeTruthy();
+  expect(screen.getByTestId("gate-heartbeat-status").textContent).toBe("Awaiting telemetry data");
 });
 
-it("opens a completed persisted analysis without explicit resume", async () => {
+it("opens an authorized persisted analysis only after explicit resume", async () => {
   runtimeState.latestUploadResult = {
     job_id: "persisted-job-99",
     sii_reliable_enough_to_show: true,
@@ -491,10 +490,12 @@ it("opens a completed persisted analysis without explicit resume", async () => {
   render(h(App));
   await launchWorkspace();
 
-  await waitFor(() => {
-    expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-99");
-  });
+  expect(screen.getByTestId("gate-result").textContent).toBe("empty");
+  fireEvent.click(screen.getByRole("button", { name: "Resume Previous Analysis" }));
+
+  await waitFor(() => expect(screen.getByTestId("gate-result").textContent).toBe("persisted-job-99"));
   expect(screen.queryByRole("button", { name: "Resume Previous Analysis" })).toBeNull();
+  expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
 });
 
 describe("App telemetry completion navigation", () => {
@@ -612,7 +613,7 @@ describe("App telemetry completion navigation", () => {
     await waitFor(() => {
       expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true, returnPayload: true });
     });
-    expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledWith({ forceRefresh: true });
+    expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
   });
 
   it("shows analysis pending instead of a blank screen when canonical state is still settling", async () => {
@@ -675,8 +676,8 @@ describe("App telemetry completion navigation", () => {
       await waitFor(() => {
         expect(screen.getByTestId("gate-workspace")).toBeTruthy();
       });
-      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: true, forceRefresh: true });
-      expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledWith({ forceRefresh: true });
+      expect(runtimeMocks.loadLatestUploadState).toHaveBeenCalledWith({ includePersisted: false, forceRefresh: true });
+      expect(runtimeMocks.loadFacilitySystems).toHaveBeenCalledWith({ includePersisted: false, forceRefresh: true });
       expectOnlyExpectedRenderErrors(consoleErrorSpy);
     } finally {
       restoreWindowError();
@@ -733,9 +734,10 @@ describe("App telemetry completion navigation", () => {
       },
     };
 
-    window.sessionStorage.setItem("neraium.session_intent", "current");
     render(h(App));
     await launchWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Resume Previous Analysis" }));
+    await waitFor(() => expect(screen.getByTestId("gate-result").textContent).toBe("finding-job-9"));
 
     const gateSummary = screen.getByTestId("gate-finding-summary").textContent;
     expect(gateSummary).toMatch(/historical operating pattern/i);
@@ -800,9 +802,10 @@ describe("App telemetry completion navigation", () => {
       },
     };
 
-    window.sessionStorage.setItem("neraium.session_intent", "current");
     render(h(App));
     await launchWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Resume Previous Analysis" }));
+    await waitFor(() => expect(screen.getByTestId("gate-result").textContent).toBe("pending-job-3"));
 
     expect(screen.getByTestId("gate-finding-summary").textContent).toBe("Insights are not ready.");
 

@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import useWorkspaceSessionController from "./useWorkspaceSessionController";
+import useWorkspaceSessionController, { readStoredAllowPersistedLatest } from "./useWorkspaceSessionController";
 
 const h = React.createElement;
 
@@ -48,7 +48,7 @@ function completedStore(result) {
   };
 }
 
-function AttemptHarness({ previousResult, currentResult }) {
+function AttemptHarness({ previousResult, currentResult, activeBaselineIdentity = null }) {
   const [sessionStore, setSessionStore] = useState(() => completedStore(previousResult));
   const loadLatestUploadState = vi.fn(async () => ({
     hasRuntimeData: true,
@@ -69,6 +69,7 @@ function AttemptHarness({ previousResult, currentResult }) {
     commitCompletedUploadState: vi.fn(() => true),
     clearUploadSessionState: vi.fn(),
     setIsDemoMode: vi.fn(),
+    activeBaselineIdentity,
   });
   const visibleTrust = controller.effectiveLatestUploadResult?.ingestion_trust ?? null;
   const visibleCondition = controller.effectiveLatestUploadResult?.conditions?.[0] ?? null;
@@ -140,6 +141,8 @@ describe("workspace upload-attempt presentation ownership", () => {
   it("suppresses stale readiness through delayed hydration and restores intentional history", async () => {
     const previousResult = completedResult("previous-job", "previous-dataset", "ready_with_limitations");
     const currentResult = completedResult("current-job", "current-dataset", "ready");
+    window.localStorage.setItem("neraium.allow_persisted_latest", "1");
+    window.sessionStorage.setItem("neraium.session_intent", "resumed");
     render(h(AttemptHarness, { previousResult, currentResult }));
 
     await waitFor(() => expect(screen.getByTestId("visible-job").textContent).toBe("previous-job"));
@@ -193,5 +196,26 @@ describe("workspace upload-attempt presentation ownership", () => {
     expect(screen.getByTestId("attempt-id").textContent).toBe("none");
     expect(screen.getByTestId("visible-job").textContent).toBe("previous-job");
     expect(screen.getByTestId("visible-trust").textContent).toBe("ready_with_limitations");
+  });
+
+  it("requires both an explicit persisted opt-in and continuation intent", () => {
+    expect(readStoredAllowPersistedLatest()).toBe(false);
+
+    window.localStorage.setItem("neraium.allow_persisted_latest", "1");
+    expect(readStoredAllowPersistedLatest()).toBe(false);
+
+    window.sessionStorage.setItem("neraium.session_intent", "resumed");
+    expect(readStoredAllowPersistedLatest()).toBe(true);
+  });
+
+  it("activates an explicitly selected persisted analysis route", async () => {
+    const previousResult = completedResult("selected-job", "selected-dataset", "ready");
+    render(h(AttemptHarness, {
+      previousResult,
+      currentResult: completedResult("other-job", "other-dataset", "ready"),
+      activeBaselineIdentity: { analysisRunId: "selected-job" },
+    }));
+
+    await waitFor(() => expect(screen.getByTestId("visible-job").textContent).toBe("selected-job"));
   });
 });

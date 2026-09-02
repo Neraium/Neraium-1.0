@@ -31,7 +31,7 @@ export default function useFacilityRuntime({
   formatClockTime,
   formatEndpoint,
   buildProtectedRequestMessage,
-  initialAllowPersistedLatest = true,
+  initialAllowPersistedLatest = false,
   datasetScopeKey = "anonymous",
   activeAnalysisIdentity = null,
 }) {
@@ -180,7 +180,7 @@ export default function useFacilityRuntime({
     }
   }, [accessCode, formatClockTime, formatEndpoint, hasAccess]);
 
-  const loadFacilitySystems = useCallback(async ({ forceRefresh = false } = {}) => {
+  const loadFacilitySystems = useCallback(async ({ forceRefresh = false, includePersisted = allowPersistedLatest } = {}) => {
     if (!hasAccess) return false;
     const requestIdentityKey = workspaceIdentityKey;
     if (systemsRequestInFlightRef.current === requestIdentityKey) return false;
@@ -193,7 +193,7 @@ export default function useFacilityRuntime({
     }
 
     try {
-      const payload = await fetchSystemFacility({ apiFetch, accessCode, scopeKey: datasetScopeKey, portfolioId: getCurrentWorkspaceId(), domainMode, forceRefresh });
+      const payload = await fetchSystemFacility({ apiFetch, accessCode, scopeKey: datasetScopeKey, portfolioId: getCurrentWorkspaceId(), domainMode, includePersisted, forceRefresh });
       if (systemsRequestVersionRef.current !== requestVersion || workspaceIdentityRef.current !== requestIdentityKey) return false;
       const rawDomainMode = payload.domain_mode ?? null;
       setSystemsOwnerKey(requestIdentityKey);
@@ -230,7 +230,7 @@ export default function useFacilityRuntime({
     } finally {
       if (systemsRequestVersionRef.current === requestVersion) systemsRequestInFlightRef.current = null;
     }
-  }, [accessCode, buildProtectedRequestMessage, datasetScopeKey, domainMode, hasAccess, workspaceIdentityKey]);
+  }, [accessCode, allowPersistedLatest, buildProtectedRequestMessage, datasetScopeKey, domainMode, hasAccess, workspaceIdentityKey]);
 
   // Contract sentinel: const loadLatestUploadState = useCallback(async ({ includePersisted } = {}) => {
   const loadLatestUploadState = useCallback(async ({ includePersisted, forceRefresh = false, returnPayload = false } = {}) => {
@@ -411,10 +411,10 @@ export default function useFacilityRuntime({
   const retryBackendConnection = useCallback(async () => {
     const isHealthy = await checkApiHealth("retry");
     if (isHealthy) {
-      await loadLatestUploadState({ includePersisted: true });
-      await loadFacilitySystems();
+      await loadLatestUploadState({ includePersisted: allowPersistedLatest });
+      await loadFacilitySystems({ includePersisted: allowPersistedLatest });
     }
-  }, [checkApiHealth, loadFacilitySystems, loadLatestUploadState]);
+  }, [allowPersistedLatest, checkApiHealth, loadFacilitySystems, loadLatestUploadState]);
 
   const updateAllowPersistedLatest = useCallback((value) => {
     setAllowPersistedLatest((current) => {
@@ -460,9 +460,9 @@ export default function useFacilityRuntime({
   useEffect(() => {
     if (!hasAccess || !domainModeResolved) return;
     if (isUploadInProgress() || isUploadJobLocked()) return;
-    loadLatestUploadState({ includePersisted: true });
-    loadFacilitySystems();
-  }, [domainMode, domainModeResolved, hasAccess, loadFacilitySystems, loadLatestUploadState]);
+    loadLatestUploadState({ includePersisted: allowPersistedLatest });
+    loadFacilitySystems({ includePersisted: allowPersistedLatest });
+  }, [allowPersistedLatest, domainMode, domainModeResolved, hasAccess, loadFacilitySystems, loadLatestUploadState]);
 
   useEffect(() => {
     if (!hasAccess) return;
@@ -473,8 +473,8 @@ export default function useFacilityRuntime({
     void checkApiHealth("interval");
     if (isUploadInProgress() || isUploadJobLocked()) return;
     void Promise.all([
-      loadLatestUploadState({ includePersisted: true }),
-      loadFacilitySystems(),
+      loadLatestUploadState({ includePersisted: allowPersistedLatest }),
+      loadFacilitySystems({ includePersisted: allowPersistedLatest }),
     ]);
   }, LIVE_REFRESH_INTERVAL_MS, hasAccess);
 
