@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "../styles/auth-premium.css";
 
 import { loginUser, registerEmployee } from "../services/api/authApi";
 import { PRODUCT_NAME } from "../content/productLanguage";
 
 const LAST_EMAIL_KEY = "neraium.auth.last_email";
+
+function readInviteToken() {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.hash.replace(/^#/, "")).get("invite") || "";
+}
 
 function readLastEmail() {
   if (typeof window === "undefined") return "";
@@ -24,16 +29,21 @@ function rememberLastEmail(email) {
 }
 
 export default function AuthScreen({ notice = "", onAuthenticated }) {
-  const [mode, setMode] = useState("login");
+  const [inviteToken] = useState(readInviteToken);
+  const [mode, setMode] = useState(() => readInviteToken() ? "request" : "login");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState(readLastEmail);
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
-  const [employeeAccessCode, setEmployeeAccessCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!inviteToken || typeof window === "undefined") return;
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  }, [inviteToken]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -54,18 +64,17 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
       setError("Passwords do not match.");
       return;
     }
-    if (mode === "request" && !employeeAccessCode) {
-      setError("Enter your employee access code.");
+    if (mode === "request" && !inviteToken) {
+      setError("Open the employee invitation link provided by your administrator.");
       return;
     }
     setBusy(true);
     setError("");
     try {
       if (mode === "request") {
-        const payload = await registerEmployee({ firstName, lastName, email, password, passwordConfirmation, employeeAccessCode });
+        const payload = await registerEmployee({ firstName, lastName, email, password, passwordConfirmation, inviteToken });
         setPassword("");
         setPasswordConfirmation("");
-        setEmployeeAccessCode("");
         rememberLastEmail(email.trim().toLowerCase());
         onAuthenticated?.(payload);
         return;
@@ -87,7 +96,6 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
     setError("");
     setPassword("");
     setPasswordConfirmation("");
-    setEmployeeAccessCode("");
     setShowPassword(false);
   }
 
@@ -109,7 +117,7 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
             <h1 id="auth-title">{mode === "login" ? "Welcome back" : "Create your profile"}</h1>
             <p className="auth-copy">
               {mode === "login" && "Sign in to continue."}
-              {mode === "request" && "Use your employer-issued access code to join the PPC App."}
+              {mode === "request" && "Complete your profile using your single-use employee invitation."}
             </p>
           </div>
 
@@ -132,8 +140,6 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
             {mode === "request" ? <>
               <label htmlFor="auth-password-confirmation">Confirm password</label>
               <input id="auth-password-confirmation" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} type={showPassword ? "text" : "password"} autoComplete="new-password" disabled={busy} />
-              <label htmlFor="auth-employee-access-code">Employee access code</label>
-              <input id="auth-employee-access-code" value={employeeAccessCode} onChange={(event) => setEmployeeAccessCode(event.target.value)} type="password" autoComplete="off" disabled={busy} />
             </> : null}
             <label className="auth-password-toggle">
               <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} disabled={busy} />

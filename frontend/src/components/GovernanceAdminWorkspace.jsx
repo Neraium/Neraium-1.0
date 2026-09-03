@@ -144,6 +144,8 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
   const [users, setUsers] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [members, setMembers] = useState([]);
+  const [invitations, setInvitations] = useState([]);
+  const [inviteLink, setInviteLink] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
@@ -160,12 +162,17 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
         apiFetch("/api/auth/users?include_inactive=true", { accessCode, cache: "no-store" }),
         apiFetch("/api/auth/sessions?include_revoked=false", { accessCode, cache: "no-store" }),
       ];
-      if (isFacilityWorkspace) requests.push(apiFetch("/api/workspaces/current/members", { accessCode, cache: "no-store" }));
-      const [userResponse, sessionResponse, memberResponse] = await Promise.all(requests);
+      if (isFacilityWorkspace) {
+        requests.push(apiFetch("/api/auth/invitations", { accessCode, cache: "no-store" }));
+        requests.push(apiFetch("/api/workspaces/current/members", { accessCode, cache: "no-store" }));
+      }
+      const [userResponse, sessionResponse, invitationResponse, memberResponse] = await Promise.all(requests);
       const userPayload = await read(userResponse); const sessionPayload = await read(sessionResponse);
+      const invitationPayload = invitationResponse ? await read(invitationResponse) : { invitations: [] };
       const memberPayload = memberResponse ? await read(memberResponse) : { members: [] };
-      if (!userResponse.ok || !sessionResponse.ok || (memberResponse && !memberResponse.ok)) throw new Error(safeAdminError(userPayload?.detail || sessionPayload?.detail || memberPayload?.detail, "User access records could not be loaded. Refresh and retry."));
+      if (!userResponse.ok || !sessionResponse.ok || (invitationResponse && !invitationResponse.ok) || (memberResponse && !memberResponse.ok)) throw new Error(safeAdminError(userPayload?.detail || sessionPayload?.detail || invitationPayload?.detail || memberPayload?.detail, "User access records could not be loaded. Refresh and retry."));
       setUsers(userPayload.users || []); setSessions(sessionPayload.sessions || []);
+      setInvitations(invitationPayload.invitations || []);
       setMembers(memberPayload.members || []);
     } catch (loadError) { setError(safeAdminError(loadError?.message || loadError, "User access records could not be loaded. Refresh and retry.")); }
     finally { setLoading(false); }
@@ -181,7 +188,7 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
       if (!response.ok) throw new Error(safeAdminError(payload?.detail, response.status === 403 ? "Administrator access is required." : "The action could not be completed. Review the account and retry."));
       setNotice(payload?.message || "Access settings updated.");
       await loadAccess();
-      return true;
+      return payload;
     } catch (actionError) { setError(safeAdminError(actionError?.message || actionError, "The action could not be completed. Review the account and retry.")); return false; }
     finally { setBusy(""); }
   }
@@ -203,6 +210,14 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
     if (added) setMemberEmail("");
   }
 
+  async function createInvitation() {
+    if (!isFacilityWorkspace) return;
+    const invitation = await mutate("invite-create", "/api/auth/invitations");
+    if (invitation?.invite_token) {
+      setInviteLink(`${window.location.origin}${window.location.pathname}#invite=${encodeURIComponent(invitation.invite_token)}`);
+    }
+  }
+
   const activeMemberIds = new Set(members.filter((member) => member.is_active).map((member) => member.member_id));
   const availableAccounts = users.filter((user) => user.is_active && !activeMemberIds.has(user.email));
 
@@ -212,6 +227,28 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
       subtitle={`Signed in as ${currentUser?.email || "administrator"}.`}
     >
       {loading ? <p role="status">Loading user accounts and active sessions...</p> : null}
+      <section className="admin-membership-block" aria-labelledby="employee-invitations-title">
+        <div className="admin-membership-block__header">
+          <div>
+            <h3 id="employee-invitations-title">Employee invitations</h3>
+            <p>Create a single-use link for the selected facility. Links expire after seven days.</p>
+          </div>
+          <button className="secondary-command-button" type="button" disabled={Boolean(busy) || !isFacilityWorkspace} onClick={() => void createInvitation()}>
+            {busy === "invite-create" ? "Creating link..." : "Create invite link"}
+          </button>
+        </div>
+        {inviteLink ? <label className="admin-invite-link"><span>New invitation link — copy and send it now</span><input readOnly value={inviteLink} onFocus={(event) => event.target.select()} /></label> : null}
+        {!isFacilityWorkspace ? <p>Select a facility workspace to create and manage its invitations.</p> : null}
+        <div className="admin-access-list" aria-label="Employee invitations">
+          {invitations.map((invitation) => {
+            const status = invitation.used_at ? "used" : invitation.revoked_at ? "revoked" : new Date(invitation.expires_at) <= new Date() ? "expired" : "active";
+            return <article key={invitation.invite_id}>
+              <div><strong>Employee invitation</strong><small>{status} · expires {invitation.expires_at}</small></div>
+              <button type="button" className="operational-link-button operational-link-button--danger" disabled={Boolean(busy) || status !== "active"} onClick={() => void mutate(`invite-revoke-${invitation.invite_id}`, `/api/auth/invitations/${encodeURIComponent(invitation.invite_id)}/revoke`)}>Revoke</button>
+            </article>;
+          })}
+        </div>
+      </section>
       <section className="admin-membership-block" aria-labelledby="current-facility-membership-title">
         <div className="admin-membership-block__header">
           <div>

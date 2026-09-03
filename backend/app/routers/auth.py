@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-import hmac
 import logging
-import os
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
@@ -18,6 +16,8 @@ from app.models.api_models import (
     AuthUserCreateRequest,
     AuthUserResponse,
     AuthUsersListResponse,
+    EmployeeInvitationResponse,
+    EmployeeInvitationsListResponse,
     EmployeeRegistrationRequest,
 )
 from app.services.auth_store import (
@@ -26,13 +26,16 @@ from app.services.auth_store import (
     auth_summary,
     create_session,
     create_user,
+    create_employee_invitation,
     deactivate_user,
     delete_session,
     get_session_record,
     get_user_by_session,
     list_sessions,
     list_users,
+    list_employee_invitations,
     register_employee,
+    revoke_employee_invitation,
     revoke_session,
     session_cookie_name,
     workspace_session_summary,
@@ -74,6 +77,10 @@ class AuthSessionRevokeRequest(ContractModel):
 
 
 EmailPath = Annotated[str, Path(min_length=5, max_length=320, pattern=r"^[^/\s@]+@[^/\s@]+\.[^/\s@]+$")]
+EmployeeInvitationIdPath = Annotated[
+    str,
+    Path(min_length=39, max_length=39, pattern=r"^ei-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
+]
 
 
 def _session_cookie_secure(request: Request) -> bool:
@@ -237,29 +244,19 @@ def register_employee_account(
             detail="Too many registration attempts. Wait and try again.",
             headers={"Retry-After": str(retry_after)},
         )
-    configured_code = str(os.getenv("NERAIUM_EMPLOYEE_ONBOARDING_CODE", "") or "")
-    workspace_id = str(os.getenv("NERAIUM_EMPLOYEE_ONBOARDING_WORKSPACE_ID", "") or "").strip()
-    if not configured_code or not workspace_id:
-        raise HTTPException(status_code=503, detail="Employee registration is unavailable.")
-    if not hmac.compare_digest(
-        payload.employee_access_code.encode("utf-8"), configured_code.encode("utf-8")
-    ):
-        raise HTTPException(status_code=403, detail="Invalid employee access code.")
     try:
-        user = register_employee(
+        user, workspace_id = register_employee(
             payload.email,
             payload.password,
             first_name=payload.first_name,
             last_name=payload.last_name,
-            workspace_id=workspace_id,
+            invite_token=payload.invite_token,
         )
     except ValueError as error:
         message = str(error)
-        if "workspace is unavailable" in message.lower():
-            status_code = 503
-            message = "Employee registration is unavailable."
-        else:
-            status_code = 409 if "already exists" in message.lower() else 400
+        status_code = 409 if "already exists" in message.lower() else 403
+        if status_code == 403:
+            message = "Employee invitation is invalid or expired."
         raise HTTPException(status_code=status_code, detail=message) from error
     try:
         session_id = create_session(user["email"])
@@ -279,6 +276,62 @@ def register_employee_account(
         "session": session,
         **workspace_session_summary(user["email"]),
     }
+
+
+def _current_facility_workspace_id(request: Request) -> str:
+    context = getattr(request.state, "workspace_context", {})
+    workspace_id = str(context.get("workspace_id") or "") if isinstance(context, dict) else ""
+    if not workspace_id.startswith("ws-"):
+        raise HTTPException(status_code=409, detail="Select a facility workspace first.")
+    return workspace_id
+
+
+@router.get(
+    "/auth/invitations",
+    response_model=EmployeeInvitationsListResponse,
+    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
+)
+def read_employee_invitations(request: Request) -> EmployeeInvitationsListResponse:
+    workspace_id = _current_facility_workspace_id(request)
+    return EmployeeInvitationsListResponse(
+        invitations=[EmployeeInvitationResponse(**item) for item in list_employee_invitations(workspace_id)]
+    )
+
+
+@router.post(
+    "/auth/invitations",
+    response_model=EmployeeInvitationResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
+)
+def create_employee_invite(request: Request) -> EmployeeInvitationResponse:
+    workspace_id = _current_facility_workspace_id(request)
+    try:
+        invitation = create_employee_invitation(workspace_id, created_by=_request_actor(request))
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail="The selected workspace cannot accept invitations.") from error
+    _record_admin_auth_event(
+        actor=_request_actor(request), action="auth.employee_invitation.created",
+        request=request, resource_id=invitation["invite_id"], detail={"workspace_id": workspace_id},
+    )
+    return EmployeeInvitationResponse(**invitation)
+
+
+@router.post(
+    "/auth/invitations/{invite_id}/revoke",
+    response_model=EmployeeInvitationResponse,
+    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
+)
+def revoke_employee_invite(invite_id: EmployeeInvitationIdPath, request: Request) -> EmployeeInvitationResponse:
+    workspace_id = _current_facility_workspace_id(request)
+    invitation = revoke_employee_invitation(invite_id, workspace_id)
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Employee invitation not found.")
+    _record_admin_auth_event(
+        actor=_request_actor(request), action="auth.employee_invitation.revoked",
+        request=request, resource_id=invite_id, detail={"workspace_id": workspace_id},
+    )
+    return EmployeeInvitationResponse(**invitation)
 
 
 @router.get(

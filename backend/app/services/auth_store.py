@@ -167,6 +167,20 @@ AUTH_SCHEMA_STATEMENTS = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS auth_employee_invitations (
+        invite_id TEXT PRIMARY KEY,
+        token_hash TEXT NOT NULL UNIQUE,
+        workspace_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        used_at TEXT,
+        used_by TEXT,
+        revoked_at TEXT,
+        FOREIGN KEY(workspace_id) REFERENCES auth_workspaces(workspace_id) ON DELETE RESTRICT
+    )
+    """,
+    """
     CREATE INDEX IF NOT EXISTS idx_auth_users_role_active ON auth_users(role, is_active)
     """,
     """
@@ -182,6 +196,10 @@ AUTH_SCHEMA_STATEMENTS = (
     """
     CREATE INDEX IF NOT EXISTS idx_auth_workspace_members_workspace_active
     ON auth_workspace_members(workspace_id, is_active)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_auth_employee_invitations_workspace
+    ON auth_employee_invitations(workspace_id, created_at DESC)
     """,
 )
 
@@ -241,17 +259,33 @@ POSTGRES_AUTH_SCHEMA_STATEMENTS = (
         FOREIGN KEY(email) REFERENCES auth_users(email) ON DELETE CASCADE
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS auth_employee_invitations (
+        invite_id TEXT PRIMARY KEY,
+        token_hash TEXT NOT NULL UNIQUE,
+        workspace_id TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_by TEXT NOT NULL,
+        used_at TIMESTAMPTZ,
+        used_by TEXT,
+        revoked_at TIMESTAMPTZ,
+        FOREIGN KEY(workspace_id) REFERENCES auth_workspaces(workspace_id) ON DELETE RESTRICT
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_auth_users_role_active ON auth_users(role, is_active)",
     "CREATE INDEX IF NOT EXISTS idx_auth_sessions_email ON auth_sessions(email, expires_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked ON auth_sessions(revoked_at, expires_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_auth_workspace_members_email_active ON auth_workspace_members(email, is_active)",
     "CREATE INDEX IF NOT EXISTS idx_auth_workspace_members_workspace_active ON auth_workspace_members(workspace_id, is_active)",
+    "CREATE INDEX IF NOT EXISTS idx_auth_employee_invitations_workspace ON auth_employee_invitations(workspace_id, created_at DESC)",
 )
 
 AUTH_SCHEMA_MIGRATIONS = (
     "001_auth_integrity",
     "002_single_active_session",
     "003_workspace_membership",
+    "004_employee_invitations",
 )
 
 
@@ -355,6 +389,12 @@ def _apply_auth_schema_migrations(connection: Any, *, dialect: str, placeholder:
         connection.execute(
             f"INSERT INTO auth_schema_migrations (migration_id, applied_at) VALUES ({placeholder}, {placeholder})",
             ("003_workspace_membership", _now_iso()),
+        )
+
+    if "004_employee_invitations" not in applied:
+        connection.execute(
+            f"INSERT INTO auth_schema_migrations (migration_id, applied_at) VALUES ({placeholder}, {placeholder})",
+            ("004_employee_invitations", _now_iso()),
         )
 
 
@@ -522,17 +562,63 @@ class _BaseAuthBackend:
         self._execute(sql, (bool(is_active), deactivated_at, timestamp, email))
         return self.read_user(email)
 
-    def register_employee(self, payload: dict[str, Any], *, workspace_id: str) -> bool:
+    def create_employee_invitation(self, payload: dict[str, Any]) -> None:
+        self._execute(
+            f"""
+            INSERT INTO auth_employee_invitations (
+                invite_id, token_hash, workspace_id, created_at, expires_at, created_by,
+                used_at, used_by, revoked_at
+            ) VALUES ({self._placeholders(9)})
+            """,
+            (
+                payload["invite_id"], payload["token_hash"], payload["workspace_id"],
+                payload["created_at"], payload["expires_at"], payload["created_by"],
+                None, None, None,
+            ),
+        )
+
+    def list_employee_invitations(self, workspace_id: str, *, limit: int = 200) -> list[dict[str, Any]]:
+        return self._fetch_all(
+            f"SELECT * FROM auth_employee_invitations WHERE workspace_id = {self.placeholder} ORDER BY created_at DESC LIMIT {self.placeholder}",
+            (workspace_id, limit),
+        )
+
+    def revoke_employee_invitation(self, invite_id: str, workspace_id: str) -> dict[str, Any] | None:
+        self._execute(
+            f"UPDATE auth_employee_invitations SET revoked_at = {self.placeholder} WHERE invite_id = {self.placeholder} AND workspace_id = {self.placeholder} AND used_at IS NULL AND revoked_at IS NULL",
+            (_now_iso(), invite_id, workspace_id),
+        )
+        return self._fetch_one(
+            f"SELECT * FROM auth_employee_invitations WHERE invite_id = {self.placeholder} AND workspace_id = {self.placeholder}",
+            (invite_id, workspace_id),
+        )
+
+    def register_employee(self, payload: dict[str, Any], *, token_hash: str) -> str:
         with self._connect() as connection:
             if self.dialect == "sqlite":
                 connection.execute("BEGIN IMMEDIATE")
-            workspace_cursor = connection.execute(
-                f"SELECT is_active FROM auth_workspaces WHERE workspace_id = {self.placeholder}",
-                (workspace_id,),
+            lock_clause = " FOR UPDATE" if self.dialect == "postgresql" else ""
+            invite_cursor = connection.execute(
+                f"""
+                SELECT i.*, w.is_active AS workspace_is_active
+                FROM auth_employee_invitations i
+                JOIN auth_workspaces w ON w.workspace_id = i.workspace_id
+                WHERE i.token_hash = {self.placeholder}{lock_clause}
+                """,
+                (token_hash,),
             )
-            workspace = self._row_to_dict(workspace_cursor, workspace_cursor.fetchone())
-            if not workspace or not bool(workspace.get("is_active", True)):
-                raise ValueError("Employee registration workspace is unavailable.")
+            invitation = self._row_to_dict(invite_cursor, invite_cursor.fetchone())
+            expires_at = _parse_iso(invitation.get("expires_at")) if invitation else None
+            if (
+                not invitation
+                or invitation.get("used_at")
+                or invitation.get("revoked_at")
+                or not expires_at
+                or expires_at <= datetime.now(timezone.utc)
+                or not bool(invitation.get("workspace_is_active", True))
+            ):
+                raise ValueError("Employee invitation is invalid or expired.")
+            workspace_id = str(invitation["workspace_id"])
             user_cursor = connection.execute(
                 f"""
                 INSERT INTO auth_users (
@@ -560,7 +646,11 @@ class _BaseAuthBackend:
                     payload["created_at"], None, "employee-self-registration",
                 ),
             )
-        return True
+            connection.execute(
+                f"UPDATE auth_employee_invitations SET used_at = {self.placeholder}, used_by = {self.placeholder} WHERE invite_id = {self.placeholder}",
+                (payload["created_at"], payload["email"], invitation["invite_id"]),
+            )
+        return workspace_id
 
     def create_workspace(self, workspace: dict[str, Any], first_member: dict[str, Any]) -> None:
         with self._connect() as connection:
@@ -1131,6 +1221,23 @@ def sanitize_session_record(session: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _hash_invite_token(token: str) -> str:
+    return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
+
+
+def sanitize_employee_invitation(invitation: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "invite_id": str(invitation.get("invite_id") or ""),
+        "workspace_id": str(invitation.get("workspace_id") or ""),
+        "created_at": _serialize_timestamp(invitation.get("created_at")),
+        "expires_at": _serialize_timestamp(invitation.get("expires_at")),
+        "created_by": _normalize_email(invitation.get("created_by", "")),
+        "used_at": _serialize_timestamp(invitation.get("used_at")),
+        "used_by": _normalize_email(invitation.get("used_by", "")) or None,
+        "revoked_at": _serialize_timestamp(invitation.get("revoked_at")),
+    }
+
+
 def _upsert_user_record(
     backend: _BaseAuthBackend,
     *,
@@ -1381,9 +1488,42 @@ def create_user(email: str, password: str, name: str | None = None, role: str = 
         return sanitize_user_record(user)
 
 
+def create_employee_invitation(workspace_id: str, *, created_by: str) -> dict[str, Any]:
+    backend = _get_backend()
+    workspace = backend.read_workspace(str(workspace_id or "").strip())
+    if not workspace or not bool(workspace.get("is_active", True)):
+        raise ValueError("Workspace not found.")
+    token = secrets.token_urlsafe(32)
+    created_at = _now_iso()
+    payload = {
+        "invite_id": f"ei-{uuid.uuid4()}",
+        "token_hash": _hash_invite_token(token),
+        "workspace_id": str(workspace_id).strip(),
+        "created_at": created_at,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+        "created_by": _normalize_email(created_by),
+    }
+    backend.create_employee_invitation(payload)
+    return {**sanitize_employee_invitation(payload), "invite_token": token}
+
+
+def list_employee_invitations(workspace_id: str) -> list[dict[str, Any]]:
+    return [
+        sanitize_employee_invitation(item)
+        for item in _get_backend().list_employee_invitations(str(workspace_id or "").strip())
+    ]
+
+
+def revoke_employee_invitation(invite_id: str, workspace_id: str) -> dict[str, Any] | None:
+    invitation = _get_backend().revoke_employee_invitation(
+        str(invite_id or "").strip(), str(workspace_id or "").strip()
+    )
+    return sanitize_employee_invitation(invitation) if invitation else None
+
+
 def register_employee(
-    email: str, password: str, *, first_name: str, last_name: str, workspace_id: str
-) -> dict[str, Any]:
+    email: str, password: str, *, first_name: str, last_name: str, invite_token: str
+) -> tuple[dict[str, Any], str]:
     backend = _get_backend()
     normalized_email = _normalize_email(email)
     normalized_first_name = str(first_name or "").strip()
@@ -1403,11 +1543,11 @@ def register_employee(
             "password_hash": _hash_password(password, salt),
             "created_at": _now_iso(),
         }
-        backend.register_employee(payload, workspace_id=str(workspace_id or "").strip())
+        workspace_id = backend.register_employee(payload, token_hash=_hash_invite_token(invite_token))
         user = backend.read_user(normalized_email)
         if not user:
             raise RuntimeError("auth_user_write_failed")
-        return sanitize_user_record(user)
+        return sanitize_user_record(user), workspace_id
 
 
 def list_users(*, include_inactive: bool = True) -> list[dict[str, Any]]:

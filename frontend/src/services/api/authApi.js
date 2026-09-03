@@ -221,7 +221,7 @@ export async function loginUser({ email, password }) {
   return payload;
 }
 
-export async function registerEmployee({ firstName, lastName, email, password, passwordConfirmation, employeeAccessCode }) {
+export async function registerEmployee({ firstName, lastName, email, password, passwordConfirmation, inviteToken }) {
   const normalizedEmail = String(email ?? "").trim().toLowerCase();
   const response = await authFetch(
     "/api/auth/register",
@@ -234,7 +234,7 @@ export async function registerEmployee({ firstName, lastName, email, password, p
         email: normalizedEmail,
         password,
         password_confirmation: passwordConfirmation,
-        employee_access_code: employeeAccessCode,
+        invite_token: inviteToken,
       }),
       timeoutMs: AUTH_WRITE_TIMEOUT_MS,
     },

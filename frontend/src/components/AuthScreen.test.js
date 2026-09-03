@@ -10,7 +10,7 @@ const h = React.createElement;
 
 vi.mock("../services/api/authApi", () => ({ loginUser: vi.fn(), registerEmployee: vi.fn() }));
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); window.localStorage.clear(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); window.localStorage.clear(); window.history.replaceState(null, "", "/"); });
 
 describe("AuthScreen", () => {
   it("shows actionable validation and prevents duplicate sign-in submissions", async () => {
@@ -71,20 +71,19 @@ describe("AuthScreen", () => {
     expect(screen.getByLabelText("Email").value).toBe("");
   });
 
-  it("uses the employee access code and authenticates after profile creation", async () => {
+  it("uses the employee invitation and authenticates after profile creation", async () => {
+    window.history.replaceState(null, "", "/#invite=single-use-token-abcdefghijklmnopqrstuvwxyz");
     const session = { authenticated: true, user: { email: "taylor@example.com", role: "viewer" } };
     registerEmployee.mockResolvedValue(session);
     const onAuthenticated = vi.fn();
     render(h(AuthScreen, { onAuthenticated }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Create Profile" }));
     expect(screen.getByRole("heading", { name: "Create your profile" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Taylor" } });
     fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Employee" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "Taylor@Example.com" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "safe-password" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "different-password" } });
-    fireEvent.change(screen.getByLabelText("Employee access code"), { target: { value: "employer-code" } });
     fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
     expect(screen.getByRole("alert").textContent).toContain("Passwords do not match");
     expect(registerEmployee).not.toHaveBeenCalled();
@@ -97,8 +96,9 @@ describe("AuthScreen", () => {
       email: "Taylor@Example.com",
       password: "safe-password",
       passwordConfirmation: "safe-password",
-      employeeAccessCode: "employer-code",
+      inviteToken: "single-use-token-abcdefghijklmnopqrstuvwxyz",
     }));
     expect(onAuthenticated).toHaveBeenCalledWith(session);
+    expect(window.location.hash).toBe("");
   });
 });

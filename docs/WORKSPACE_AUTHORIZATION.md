@@ -64,13 +64,11 @@ membership. Disabling is a soft update and the last active admin cannot be remov
 Service-token access to an explicit facility requires the exact ID in
 `NERAIUM_API_TOKEN_WORKSPACE_IDS`; there is no wildcard.
 
-Employee self-registration requires both `NERAIUM_EMPLOYEE_ONBOARDING_CODE` and
-`NERAIUM_EMPLOYEE_ONBOARDING_WORKSPACE_ID` on the API process. Store the code in
-the deployment secret manager. The configured workspace ID must identify one active
-`auth_workspaces` row. Registration fails closed when either value is absent or the
-workspace is inactive or missing; it never falls back to the personal workspace or
-another facility. New employees receive the standard internal `operator` permission
-and membership only in that configured facility; onboarding exposes no role choice.
+Employee onboarding uses administrator-created, seven-day, single-use invitation links.
+Each invitation is bound to the administrator's selected facility workspace. Only the
+token digest is stored; the raw token is shown once when the link is created. Registration
+atomically consumes the invitation, creates the standard CPO account, and grants only the
+bound facility membership. Onboarding exposes no role or workspace choice.
 
 ## Product behavior
 

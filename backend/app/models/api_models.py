@@ -592,13 +592,29 @@ class EmployeeRegistrationRequest(ContractModel):
     email: EmailAddress
     password: Annotated[str, StringConstraints(min_length=8, max_length=1024)]
     password_confirmation: Annotated[str, StringConstraints(min_length=8, max_length=1024)]
-    employee_access_code: Annotated[str, StringConstraints(min_length=1, max_length=1024)]
+    invite_token: Annotated[str, StringConstraints(min_length=32, max_length=512)]
 
     @model_validator(mode="after")
     def passwords_match(self):
         if self.password != self.password_confirmation:
             raise ValueError("Passwords do not match.")
         return self
+
+
+class EmployeeInvitationResponse(BaseModel):
+    invite_id: str
+    workspace_id: str
+    created_at: str
+    expires_at: str
+    created_by: str
+    used_at: str | None = None
+    used_by: str | None = None
+    revoked_at: str | None = None
+    invite_token: str | None = None
+
+
+class EmployeeInvitationsListResponse(BaseModel):
+    invitations: list[EmployeeInvitationResponse] = Field(default_factory=list)
 
 
 class WorkspaceSummaryResponse(BaseModel):

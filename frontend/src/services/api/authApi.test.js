@@ -156,7 +156,7 @@ describe("authApi", () => {
 
     await expect(registerEmployee({
       firstName: " Taylor ", lastName: " Employee ", email: " Taylor@Example.com ",
-      password: "safe-password", passwordConfirmation: "safe-password", employeeAccessCode: "employer-code",
+      password: "safe-password", passwordConfirmation: "safe-password", inviteToken: "single-use-invite-token",
     })).resolves.toEqual(session);
 
     expect(apiFetch).toHaveBeenCalledWith("/api/auth/register", expect.objectContaining({
@@ -164,7 +164,7 @@ describe("authApi", () => {
       body: JSON.stringify({
         first_name: "Taylor", last_name: "Employee", email: "taylor@example.com",
         password: "safe-password", password_confirmation: "safe-password",
-        employee_access_code: "employer-code",
+        invite_token: "single-use-invite-token",
       }),
     }));
     expect(window.localStorage.getItem("neraium.local_auth.session")).toBe("taylor@example.com");

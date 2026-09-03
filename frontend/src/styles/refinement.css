@@ -408,6 +408,8 @@ summary { min-height: 44px; align-content: center; cursor: pointer; }
 .admin-membership-form label { display: grid; flex: 1 1 260px; gap: var(--space-6); color: var(--text-secondary); font-size: var(--type-body-sm); font-weight: 650; }
 .admin-membership-form select { min-height: 42px; border: 1px solid var(--surface-border-strong); border-radius: var(--control-radius); background: var(--surface-b); color: var(--text-primary); }
 .admin-membership-form button { min-height: 42px; }
+.admin-invite-link { display: grid; gap: var(--space-6); color: var(--text-secondary); font-size: var(--type-body-sm); font-weight: 650; }
+.admin-invite-link input { min-height: 42px; border: 1px solid var(--surface-border-strong); border-radius: var(--control-radius); background: var(--surface-b); color: var(--text-primary); padding: 0 var(--space-12); }
 
 .admin-access-form .command-button {
   align-self: end;
