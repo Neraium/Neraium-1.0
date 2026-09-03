@@ -18,7 +18,6 @@ it("retires the legacy telemetry connector setup from the administrator workspac
     if (path.startsWith("/api/observability/performance")) return reply({ queue_depth: 0, upload_duration_seconds: {}, cache: {} });
     if (path.startsWith("/api/auth/users")) return reply({ users: [] });
     if (path.startsWith("/api/auth/sessions")) return reply({ sessions: [] });
-    if (path === "/api/auth/account-requests") return reply({ requests: [] });
     if (path === "/api/connectors/types") return reply({ types: [{ connector_type: "rest", display_name: "REST API", functional: true }] });
     if (path === "/api/connectors/health") return reply({ connectors: [] });
     throw new Error(`Unexpected request: ${path}`);
@@ -49,7 +48,6 @@ it("manages current facility membership separately from account status", async (
       { email: "inactive@neraium.test", name: "Inactive", role: "viewer", is_active: false },
     ] });
     if (path.startsWith("/api/auth/sessions")) return reply({ sessions: [] });
-    if (path === "/api/auth/account-requests") return reply({ requests: [] });
     if (path === "/api/workspaces/current/members") return reply({ workspace_id: "ws-central", members: [
       { member_id: "admin@neraium.test", display_name: "Admin", role: "admin", is_active: true },
       { member_id: "tech@neraium.test", display_name: "Taylor Tech", role: "viewer", is_active: true },
@@ -86,42 +84,4 @@ it("manages current facility membership separately from account status", async (
     expect.objectContaining({ method: "POST" }),
   ));
   expect(screen.getAllByText(/account active/i).length).toBeGreaterThan(0);
-});
-
-it("approves a pending employee with an explicit role and current facility", async () => {
-  const requestId = "ar-00000000-0000-0000-0000-000000000001";
-  let pending = true;
-  const apiFetch = vi.fn(async (path, options = {}) => {
-    if (path.startsWith("/api/observability/evp-governance")) return reply({ records: [], total: 0, pass_count: 0, no_pass_count: 0 });
-    if (path.startsWith("/api/observability/performance")) return reply({ queue_depth: 0, upload_duration_seconds: {}, cache: {} });
-    if (path.startsWith("/api/auth/users")) return reply({ users: [] });
-    if (path.startsWith("/api/auth/sessions")) return reply({ sessions: [] });
-    if (path === "/api/auth/account-requests") return reply({ requests: pending ? [{ request_id: requestId, first_name: "Taylor", last_name: "Employee", email: "employee@example.com", created_at: "2026-09-02T00:00:00Z", status: "pending" }] : [] });
-    if (path === "/api/workspaces/current/members") return reply({ workspace_id: "ws-central", members: [] });
-    if (path === `/api/auth/account-requests/${requestId}/approve` && options.method === "POST") {
-      pending = false;
-      return reply({ request_id: requestId, status: "approved", message: "Employee account approved." });
-    }
-    throw new Error(`Unexpected request: ${path}`);
-  });
-
-  render(h(GovernanceAdminWorkspace, {
-    apiFetch,
-    accessCode: "",
-    Panel,
-    EmptyState,
-    currentUser: { email: "admin@neraium.test", role: "admin" },
-    currentWorkspace: { workspace_id: "ws-central", display_name: "Central Plant", kind: "facility" },
-  }));
-
-  expect(await screen.findByText("Taylor Employee")).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("Role for employee@example.com"), { target: { value: "operator" } });
-  fireEvent.click(screen.getByRole("button", { name: "Approve" }));
-  await waitFor(() => expect(apiFetch).toHaveBeenCalledWith(
-    `/api/auth/account-requests/${requestId}/approve`,
-    expect.objectContaining({
-      method: "POST",
-      body: JSON.stringify({ role: "operator", workspace_id: "ws-central" }),
-    }),
-  ));
 });

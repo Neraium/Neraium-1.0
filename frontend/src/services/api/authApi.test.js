@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiFetch } from "../../config";
-import { fetchCurrentUser, loginUser, logoutUser, requestEmployeeAccount, SESSION_INITIALIZATION_ERROR_KIND } from "./authApi";
+import { fetchCurrentUser, loginUser, logoutUser, registerEmployee, SESSION_INITIALIZATION_ERROR_KIND } from "./authApi";
 
 vi.mock("../../config", () => ({ apiFetch: vi.fn() }));
 
@@ -150,22 +150,24 @@ describe("authApi", () => {
       .rejects.toThrow(/sign-in service is temporarily unavailable/i);
   });
 
-  it("normalizes and submits an employee request without creating local auth state", async () => {
-    apiFetch.mockResolvedValue(reply({ request_id: "ar-test", status: "pending" }, 201));
+  it("submits the onboarding code and records only the returned authenticated session marker", async () => {
+    const session = { authenticated: true, user: { email: "taylor@example.com", role: "viewer" } };
+    apiFetch.mockResolvedValue(reply(session, 201));
 
-    await expect(requestEmployeeAccount({
+    await expect(registerEmployee({
       firstName: " Taylor ", lastName: " Employee ", email: " Taylor@Example.com ",
-      password: "safe-password", passwordConfirmation: "safe-password",
-    })).resolves.toEqual({ request_id: "ar-test", status: "pending" });
+      password: "safe-password", passwordConfirmation: "safe-password", employeeAccessCode: "employer-code",
+    })).resolves.toEqual(session);
 
-    expect(apiFetch).toHaveBeenCalledWith("/api/auth/account-requests", expect.objectContaining({
+    expect(apiFetch).toHaveBeenCalledWith("/api/auth/register", expect.objectContaining({
       method: "POST",
       body: JSON.stringify({
         first_name: "Taylor", last_name: "Employee", email: "taylor@example.com",
         password: "safe-password", password_confirmation: "safe-password",
+        employee_access_code: "employer-code",
       }),
     }));
-    expect(window.localStorage.getItem("neraium.local_auth.session")).toBeNull();
+    expect(window.localStorage.getItem("neraium.local_auth.session")).toBe("taylor@example.com");
   });
 
   it("clears the local marker after the server revokes the session", async () => {

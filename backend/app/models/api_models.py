@@ -586,47 +586,19 @@ class AuthUserCreateRequest(ContractModel):
     role: Literal["viewer", "operator", "admin"] = "operator"
 
 
-class AccountRequestCreateRequest(ContractModel):
+class EmployeeRegistrationRequest(ContractModel):
     first_name: Annotated[str, StringConstraints(min_length=1, max_length=100)]
     last_name: Annotated[str, StringConstraints(min_length=1, max_length=100)]
     email: EmailAddress
     password: Annotated[str, StringConstraints(min_length=8, max_length=1024)]
     password_confirmation: Annotated[str, StringConstraints(min_length=8, max_length=1024)]
+    employee_access_code: Annotated[str, StringConstraints(min_length=1, max_length=1024)]
 
     @model_validator(mode="after")
     def passwords_match(self):
         if self.password != self.password_confirmation:
             raise ValueError("Passwords do not match.")
         return self
-
-
-class AccountRequestResponse(BaseModel):
-    request_id: str
-    email: str
-    first_name: str
-    last_name: str
-    status: Literal["pending", "approved", "rejected"]
-    created_at: str
-    reviewed_at: str | None = None
-    reviewed_by: str | None = None
-    approved_role: Literal["viewer", "operator", "admin"] | None = None
-    approved_workspace_id: str | None = None
-
-
-class AccountRequestsListResponse(BaseModel):
-    requests: list[AccountRequestResponse] = Field(default_factory=list)
-
-
-class AccountRequestApprovalRequest(ContractModel):
-    role: Literal["viewer", "operator", "admin"] = "viewer"
-    workspace_id: Annotated[
-        str,
-        StringConstraints(
-            min_length=39,
-            max_length=39,
-            pattern=r"^ws-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-        ),
-    ]
 
 
 class WorkspaceSummaryResponse(BaseModel):

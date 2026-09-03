@@ -221,30 +221,33 @@ export async function loginUser({ email, password }) {
   return payload;
 }
 
-export async function requestEmployeeAccount({ firstName, lastName, email, password, passwordConfirmation }) {
+export async function registerEmployee({ firstName, lastName, email, password, passwordConfirmation, employeeAccessCode }) {
+  const normalizedEmail = String(email ?? "").trim().toLowerCase();
   const response = await authFetch(
-    "/api/auth/account-requests",
+    "/api/auth/register",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         first_name: String(firstName ?? "").trim(),
         last_name: String(lastName ?? "").trim(),
-        email: String(email ?? "").trim().toLowerCase(),
+        email: normalizedEmail,
         password,
         password_confirmation: passwordConfirmation,
+        employee_access_code: employeeAccessCode,
       }),
       timeoutMs: AUTH_WRITE_TIMEOUT_MS,
     },
-    "The account request service is temporarily unavailable. Try again.",
+    "Employee registration is temporarily unavailable. Try again.",
   );
   const payload = await readJson(response);
   if (!response.ok) {
-    if (response.status >= 500) throw new Error("The account request service is temporarily unavailable. Try again.");
-    if (response.status === 429) throw new Error(detailMessage(payload, "Too many account requests. Wait and try again."));
-    if (response.status === 409) throw new Error(detailMessage(payload, "An account or pending request already exists for this email."));
+    if (response.status >= 500) throw new Error("Employee registration is temporarily unavailable. Try again.");
+    if (response.status === 429) throw new Error(detailMessage(payload, "Too many registration attempts. Wait and try again."));
+    if (response.status === 409) throw new Error(detailMessage(payload, "An account already exists for this email."));
     throw new Error(detailMessage(payload, "Review your details and try again."));
   }
+  setLocalSessionEmail(normalizedEmail);
   return payload;
 }
 

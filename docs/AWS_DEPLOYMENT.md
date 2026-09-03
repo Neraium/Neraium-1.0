@@ -65,6 +65,8 @@ NERAIUM_AUTH_DATABASE_HOST=<rds-endpoint>
 NERAIUM_AUTH_DATABASE_PORT=5432
 NERAIUM_AUTH_DATABASE_NAME=postgres
 NERAIUM_AUTH_DATABASE_SSLMODE=require
+NERAIUM_EMPLOYEE_ONBOARDING_CODE=<inject from Secrets Manager into the API task only>
+NERAIUM_EMPLOYEE_ONBOARDING_WORKSPACE_ID=ws-<active-production-facility-uuid>
 ```
 
 The ECS deployment workflow registers both task definitions directly with AWS CLI. It expects the production ECS cluster, API service, worker service, and both task-definition families to already exist, validates those resources before image build, and fails fast if any are missing or inactive. New revisions pin the entrypoint, process role, CORS, upload limits, JSON logging, build SHA, runtime path, shared-state bucket, log group, and secret references.

@@ -254,26 +254,6 @@
   outline-offset: 2px;
 }
 
-.auth-pending {
-  display: grid;
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid rgba(46, 168, 255, 0.28);
-  border-radius: 8px;
-  background: rgba(22, 140, 255, 0.08);
-  color: #b6bfce;
-  font-size: 0.88rem;
-  line-height: 1.5;
-}
-
-.auth-pending p {
-  margin: 0;
-}
-
-.auth-pending strong {
-  color: #f5f7fa;
-}
-
 .auth-shell--premium .auth-notice,
 .auth-shell--premium .auth-error {
   border-radius: 8px;

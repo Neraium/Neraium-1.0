@@ -167,23 +167,6 @@ AUTH_SCHEMA_STATEMENTS = (
     )
     """,
     """
-    CREATE TABLE IF NOT EXISTS auth_account_requests (
-        request_id TEXT PRIMARY KEY,
-        email TEXT NOT NULL,
-        first_name TEXT NOT NULL,
-        last_name TEXT NOT NULL,
-        salt TEXT NOT NULL,
-        password_hash TEXT NOT NULL,
-        status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
-        created_at TEXT NOT NULL,
-        reviewed_at TEXT,
-        reviewed_by TEXT,
-        approved_role TEXT CHECK (approved_role IS NULL OR approved_role IN ('viewer', 'operator', 'admin')),
-        approved_workspace_id TEXT,
-        FOREIGN KEY(approved_workspace_id) REFERENCES auth_workspaces(workspace_id) ON DELETE RESTRICT
-    )
-    """,
-    """
     CREATE INDEX IF NOT EXISTS idx_auth_users_role_active ON auth_users(role, is_active)
     """,
     """
@@ -199,14 +182,6 @@ AUTH_SCHEMA_STATEMENTS = (
     """
     CREATE INDEX IF NOT EXISTS idx_auth_workspace_members_workspace_active
     ON auth_workspace_members(workspace_id, is_active)
-    """,
-    """
-    CREATE UNIQUE INDEX IF NOT EXISTS uq_auth_account_requests_pending_email
-    ON auth_account_requests(email) WHERE status = 'pending'
-    """,
-    """
-    CREATE INDEX IF NOT EXISTS idx_auth_account_requests_status_created
-    ON auth_account_requests(status, created_at DESC)
     """,
 )
 
@@ -266,37 +241,17 @@ POSTGRES_AUTH_SCHEMA_STATEMENTS = (
         FOREIGN KEY(email) REFERENCES auth_users(email) ON DELETE CASCADE
     )
     """,
-    """
-    CREATE TABLE IF NOT EXISTS auth_account_requests (
-        request_id TEXT PRIMARY KEY,
-        email TEXT NOT NULL,
-        first_name TEXT NOT NULL,
-        last_name TEXT NOT NULL,
-        salt TEXT NOT NULL,
-        password_hash TEXT NOT NULL,
-        status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
-        created_at TIMESTAMPTZ NOT NULL,
-        reviewed_at TIMESTAMPTZ,
-        reviewed_by TEXT,
-        approved_role TEXT CHECK (approved_role IS NULL OR approved_role IN ('viewer', 'operator', 'admin')),
-        approved_workspace_id TEXT,
-        FOREIGN KEY(approved_workspace_id) REFERENCES auth_workspaces(workspace_id) ON DELETE RESTRICT
-    )
-    """,
     "CREATE INDEX IF NOT EXISTS idx_auth_users_role_active ON auth_users(role, is_active)",
     "CREATE INDEX IF NOT EXISTS idx_auth_sessions_email ON auth_sessions(email, expires_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked ON auth_sessions(revoked_at, expires_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_auth_workspace_members_email_active ON auth_workspace_members(email, is_active)",
     "CREATE INDEX IF NOT EXISTS idx_auth_workspace_members_workspace_active ON auth_workspace_members(workspace_id, is_active)",
-    "CREATE UNIQUE INDEX IF NOT EXISTS uq_auth_account_requests_pending_email ON auth_account_requests(email) WHERE status = 'pending'",
-    "CREATE INDEX IF NOT EXISTS idx_auth_account_requests_status_created ON auth_account_requests(status, created_at DESC)",
 )
 
 AUTH_SCHEMA_MIGRATIONS = (
     "001_auth_integrity",
     "002_single_active_session",
     "003_workspace_membership",
-    "004_employee_account_requests",
 )
 
 
@@ -400,12 +355,6 @@ def _apply_auth_schema_migrations(connection: Any, *, dialect: str, placeholder:
         connection.execute(
             f"INSERT INTO auth_schema_migrations (migration_id, applied_at) VALUES ({placeholder}, {placeholder})",
             ("003_workspace_membership", _now_iso()),
-        )
-
-    if "004_employee_account_requests" not in applied:
-        connection.execute(
-            f"INSERT INTO auth_schema_migrations (migration_id, applied_at) VALUES ({placeholder}, {placeholder})",
-            ("004_employee_account_requests", _now_iso()),
         )
 
 
@@ -573,126 +522,45 @@ class _BaseAuthBackend:
         self._execute(sql, (bool(is_active), deactivated_at, timestamp, email))
         return self.read_user(email)
 
-    def insert_account_request_if_absent(self, payload: dict[str, Any]) -> bool:
-        return self._execute(
-            f"""
-            INSERT INTO auth_account_requests (
-                request_id, email, first_name, last_name, salt, password_hash,
-                status, created_at, reviewed_at, reviewed_by,
-                approved_role, approved_workspace_id
-            ) VALUES ({self._placeholders(12)})
-            ON CONFLICT DO NOTHING
-            """,
-            (
-                payload["request_id"], payload["email"], payload["first_name"],
-                payload["last_name"], payload["salt"], payload["password_hash"],
-                "pending", payload["created_at"], None, None, None, None,
-            ),
-        ) == 1
-
-    def read_pending_account_request(self, email: str) -> dict[str, Any] | None:
-        return self._fetch_one(
-            f"SELECT * FROM auth_account_requests WHERE email = {self.placeholder} AND status = 'pending'",
-            (email,),
-        )
-
-    def list_account_requests(self, *, status: str = "pending", limit: int = 200) -> list[dict[str, Any]]:
-        return self._fetch_all(
-            f"SELECT * FROM auth_account_requests WHERE status = {self.placeholder} ORDER BY created_at ASC LIMIT {self.placeholder}",
-            (status, limit),
-        )
-
-    def reject_account_request(self, request_id: str, *, reviewed_by: str) -> dict[str, Any] | None:
-        timestamp = _now_iso()
-        self._execute(
-            f"""
-            UPDATE auth_account_requests
-            SET status = 'rejected', reviewed_at = {self.placeholder}, reviewed_by = {self.placeholder}
-            WHERE request_id = {self.placeholder} AND status = 'pending'
-            """,
-            (timestamp, reviewed_by, request_id),
-        )
-        return self._fetch_one(
-            f"SELECT * FROM auth_account_requests WHERE request_id = {self.placeholder}",
-            (request_id,),
-        )
-
-    def approve_account_request(
-        self, request_id: str, *, role: str, workspace_id: str, reviewed_by: str
-    ) -> dict[str, Any] | None:
-        timestamp = _now_iso()
+    def register_employee(self, payload: dict[str, Any], *, workspace_id: str) -> bool:
         with self._connect() as connection:
             if self.dialect == "sqlite":
                 connection.execute("BEGIN IMMEDIATE")
-            request_cursor = connection.execute(
-                f"SELECT * FROM auth_account_requests WHERE request_id = {self.placeholder}",
-                (request_id,),
+            workspace_cursor = connection.execute(
+                f"SELECT is_active FROM auth_workspaces WHERE workspace_id = {self.placeholder}",
+                (workspace_id,),
             )
-            account_request = self._row_to_dict(request_cursor, request_cursor.fetchone())
-            if not account_request or account_request.get("status") != "pending":
-                return account_request
-            email = str(account_request["email"])
-            existing_cursor = connection.execute(
-                f"SELECT * FROM auth_users WHERE email = {self.placeholder}", (email,)
+            workspace = self._row_to_dict(workspace_cursor, workspace_cursor.fetchone())
+            if not workspace or not bool(workspace.get("is_active", True)):
+                raise ValueError("Employee registration workspace is unavailable.")
+            user_cursor = connection.execute(
+                f"""
+                INSERT INTO auth_users (
+                    email, name, role, salt, password_hash, created_at, updated_at,
+                    last_login_at, is_active, deactivated_at, bootstrap_managed
+                ) VALUES ({self._placeholders(11)})
+                ON CONFLICT(email) DO NOTHING
+                """,
+                (
+                    payload["email"], payload["name"], "viewer", payload["salt"],
+                    payload["password_hash"], payload["created_at"], payload["created_at"],
+                    None, True, None, False,
+                ),
             )
-            existing_user = self._row_to_dict(existing_cursor, existing_cursor.fetchone())
-            if existing_user and bool(existing_user.get("is_active", True)):
+            if int(getattr(user_cursor, "rowcount", 0) or 0) != 1:
                 raise ValueError("An account with this email already exists.")
-            display_name = f"{account_request['first_name']} {account_request['last_name']}"
-            if existing_user:
-                connection.execute(
-                    f"""
-                    UPDATE auth_users
-                    SET name = {self.placeholder}, role = {self.placeholder}, salt = {self.placeholder},
-                        password_hash = {self.placeholder}, updated_at = {self.placeholder},
-                        is_active = {self.placeholder}, deactivated_at = NULL
-                    WHERE email = {self.placeholder} AND NOT is_active
-                    """,
-                    (
-                        display_name, role, account_request["salt"],
-                        account_request["password_hash"], timestamp, True, email,
-                    ),
-                )
-            else:
-                connection.execute(
-                    f"""
-                    INSERT INTO auth_users (
-                        email, name, role, salt, password_hash, created_at, updated_at,
-                        last_login_at, is_active, deactivated_at, bootstrap_managed
-                    ) VALUES ({self._placeholders(11)})
-                    """,
-                    (
-                        email, display_name, role, account_request["salt"],
-                        account_request["password_hash"], timestamp, timestamp,
-                        None, True, None, False,
-                    ),
-                )
             connection.execute(
                 f"""
                 INSERT INTO auth_workspace_members (
                     workspace_id, email, is_active, added_at, updated_at, disabled_at, added_by
                 ) VALUES ({self._placeholders(7)})
-                ON CONFLICT(workspace_id, email) DO UPDATE SET
-                    is_active=excluded.is_active,
-                    updated_at=excluded.updated_at,
-                    disabled_at=excluded.disabled_at,
-                    added_by=excluded.added_by
                 """,
-                (workspace_id, email, True, timestamp, timestamp, None, reviewed_by),
+                (
+                    workspace_id, payload["email"], True, payload["created_at"],
+                    payload["created_at"], None, "employee-self-registration",
+                ),
             )
-            connection.execute(
-                f"""
-                UPDATE auth_account_requests
-                SET status = 'approved', reviewed_at = {self.placeholder}, reviewed_by = {self.placeholder},
-                    approved_role = {self.placeholder}, approved_workspace_id = {self.placeholder}
-                WHERE request_id = {self.placeholder} AND status = 'pending'
-                """,
-                (timestamp, reviewed_by, role, workspace_id, request_id),
-            )
-        return self._fetch_one(
-            f"SELECT * FROM auth_account_requests WHERE request_id = {self.placeholder}",
-            (request_id,),
-        )
+        return True
 
     def create_workspace(self, workspace: dict[str, Any], first_member: dict[str, Any]) -> None:
         with self._connect() as connection:
@@ -1263,21 +1131,6 @@ def sanitize_session_record(session: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def sanitize_account_request(request: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "request_id": str(request.get("request_id") or ""),
-        "email": _normalize_email(request.get("email", "")),
-        "first_name": str(request.get("first_name") or ""),
-        "last_name": str(request.get("last_name") or ""),
-        "status": str(request.get("status") or "pending"),
-        "created_at": _serialize_timestamp(request.get("created_at")),
-        "reviewed_at": _serialize_timestamp(request.get("reviewed_at")),
-        "reviewed_by": _normalize_email(request.get("reviewed_by", "")) or None,
-        "approved_role": request.get("approved_role"),
-        "approved_workspace_id": request.get("approved_workspace_id"),
-    }
-
-
 def _upsert_user_record(
     backend: _BaseAuthBackend,
     *,
@@ -1528,86 +1381,33 @@ def create_user(email: str, password: str, name: str | None = None, role: str = 
         return sanitize_user_record(user)
 
 
-def create_account_request(
-    email: str, password: str, *, first_name: str, last_name: str
+def register_employee(
+    email: str, password: str, *, first_name: str, last_name: str, workspace_id: str
 ) -> dict[str, Any]:
     backend = _get_backend()
     normalized_email = _normalize_email(email)
     normalized_first_name = str(first_name or "").strip()
     normalized_last_name = str(last_name or "").strip()
     if "@" not in normalized_email or len(normalized_email) < 5:
-        raise ValueError("Enter a valid work email address.")
+        raise ValueError("Enter a valid email address.")
     if not normalized_first_name or not normalized_last_name:
         raise ValueError("First and last name are required.")
     if len(password or "") < 8:
         raise ValueError("Password must be at least 8 characters.")
     with _STORE_LOCK:
-        existing_user = backend.read_user(normalized_email)
-        if (
-            (existing_user and bool(existing_user.get("is_active", True)))
-            or backend.read_pending_account_request(normalized_email)
-        ):
-            raise ValueError("An account or pending request already exists for this email.")
         salt = secrets.token_hex(16)
         payload = {
-            "request_id": f"ar-{uuid.uuid4()}",
             "email": normalized_email,
-            "first_name": normalized_first_name,
-            "last_name": normalized_last_name,
+            "name": f"{normalized_first_name} {normalized_last_name}",
             "salt": salt,
             "password_hash": _hash_password(password, salt),
             "created_at": _now_iso(),
         }
-        if not backend.insert_account_request_if_absent(payload):
-            raise ValueError("An account or pending request already exists for this email.")
-        stored = backend.read_pending_account_request(normalized_email)
-        if not stored:
-            raise RuntimeError("auth_account_request_write_failed")
-        return sanitize_account_request(stored)
-
-
-def list_account_requests(*, status: str = "pending") -> list[dict[str, Any]]:
-    normalized_status = str(status or "pending").strip().lower()
-    if normalized_status not in {"pending", "approved", "rejected"}:
-        raise ValueError("Invalid account request status.")
-    return [
-        sanitize_account_request(item)
-        for item in _get_backend().list_account_requests(status=normalized_status)
-    ]
-
-
-def pending_account_request_matches(email: str, password: str) -> bool:
-    request = _get_backend().read_pending_account_request(_normalize_email(email))
-    if not request:
-        return False
-    return hmac.compare_digest(
-        str(request.get("password_hash") or ""),
-        _hash_password(password, str(request.get("salt") or "")),
-    )
-
-
-def approve_account_request(
-    request_id: str, *, role: str, workspace_id: str, reviewed_by: str
-) -> dict[str, Any] | None:
-    normalized_role = normalize_role(role, "viewer")
-    if normalized_role != str(role or "").strip().lower():
-        raise ValueError("Invalid account role.")
-    with _STORE_LOCK:
-        request = _get_backend().approve_account_request(
-            str(request_id or "").strip(),
-            role=normalized_role,
-            workspace_id=str(workspace_id or "").strip(),
-            reviewed_by=_normalize_email(reviewed_by),
-        )
-    return sanitize_account_request(request) if request else None
-
-
-def reject_account_request(request_id: str, *, reviewed_by: str) -> dict[str, Any] | None:
-    with _STORE_LOCK:
-        request = _get_backend().reject_account_request(
-            str(request_id or "").strip(), reviewed_by=_normalize_email(reviewed_by)
-        )
-    return sanitize_account_request(request) if request else None
+        backend.register_employee(payload, workspace_id=str(workspace_id or "").strip())
+        user = backend.read_user(normalized_email)
+        if not user:
+            raise RuntimeError("auth_user_write_failed")
+        return sanitize_user_record(user)
 
 
 def list_users(*, include_inactive: bool = True) -> list[dict[str, Any]]:

@@ -4,11 +4,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import AuthScreen from "./AuthScreen";
-import { loginUser, requestEmployeeAccount } from "../services/api/authApi";
+import { loginUser, registerEmployee } from "../services/api/authApi";
 
 const h = React.createElement;
 
-vi.mock("../services/api/authApi", () => ({ loginUser: vi.fn(), requestEmployeeAccount: vi.fn() }));
+vi.mock("../services/api/authApi", () => ({ loginUser: vi.fn(), registerEmployee: vi.fn() }));
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); window.localStorage.clear(); });
 
@@ -71,9 +71,11 @@ describe("AuthScreen", () => {
     expect(screen.getByLabelText("Email").value).toBe("");
   });
 
-  it("exposes Create Profile, validates confirmation, and shows pending approval", async () => {
-    requestEmployeeAccount.mockResolvedValue({ request_id: "ar-test", status: "pending" });
-    render(h(AuthScreen, { onAuthenticated: vi.fn() }));
+  it("uses the employee access code and authenticates after profile creation", async () => {
+    const session = { authenticated: true, user: { email: "taylor@example.com", role: "viewer" } };
+    registerEmployee.mockResolvedValue(session);
+    const onAuthenticated = vi.fn();
+    render(h(AuthScreen, { onAuthenticated }));
 
     fireEvent.click(screen.getByRole("button", { name: "Create Profile" }));
     expect(screen.getByRole("heading", { name: "Create your profile" })).toBeTruthy();
@@ -82,21 +84,21 @@ describe("AuthScreen", () => {
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "Taylor@Example.com" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "safe-password" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "different-password" } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit account request" }));
+    fireEvent.change(screen.getByLabelText("Employee access code"), { target: { value: "employer-code" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
     expect(screen.getByRole("alert").textContent).toContain("Passwords do not match");
-    expect(requestEmployeeAccount).not.toHaveBeenCalled();
+    expect(registerEmployee).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "safe-password" } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit account request" }));
-    await waitFor(() => expect(requestEmployeeAccount).toHaveBeenCalledWith({
+    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
+    await waitFor(() => expect(registerEmployee).toHaveBeenCalledWith({
       firstName: "Taylor",
       lastName: "Employee",
       email: "Taylor@Example.com",
       password: "safe-password",
       passwordConfirmation: "safe-password",
+      employeeAccessCode: "employer-code",
     }));
-    expect(await screen.findByRole("heading", { name: "Request received" })).toBeTruthy();
-    expect(screen.getByText(/awaiting administrator approval/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Back to login" })).toBeTruthy();
+    expect(onAuthenticated).toHaveBeenCalledWith(session);
   });
 });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import "../styles/auth-premium.css";
 
-import { loginUser, requestEmployeeAccount } from "../services/api/authApi";
+import { loginUser, registerEmployee } from "../services/api/authApi";
 import { PRODUCT_NAME } from "../content/productLanguage";
 
 const LAST_EMAIL_KEY = "neraium.auth.last_email";
@@ -30,6 +30,7 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
   const [email, setEmail] = useState(readLastEmail);
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [employeeAccessCode, setEmployeeAccessCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,7 +43,7 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
       return;
     }
     if (!email.trim() || !password) {
-      setError(mode === "request" ? "Enter your work email and password." : "Enter your email and password to continue.");
+      setError(mode === "request" ? "Enter your email and password." : "Enter your email and password to continue.");
       return;
     }
     if (mode === "request" && password.length < 8) {
@@ -53,14 +54,20 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
       setError("Passwords do not match.");
       return;
     }
+    if (mode === "request" && !employeeAccessCode) {
+      setError("Enter your employee access code.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       if (mode === "request") {
-        await requestEmployeeAccount({ firstName, lastName, email, password, passwordConfirmation });
+        const payload = await registerEmployee({ firstName, lastName, email, password, passwordConfirmation, employeeAccessCode });
         setPassword("");
         setPasswordConfirmation("");
-        setMode("pending");
+        setEmployeeAccessCode("");
+        rememberLastEmail(email.trim().toLowerCase());
+        onAuthenticated?.(payload);
         return;
       }
       const payload = await loginUser({ email: email.trim(), password });
@@ -80,6 +87,7 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
     setError("");
     setPassword("");
     setPasswordConfirmation("");
+    setEmployeeAccessCode("");
     setShowPassword(false);
   }
 
@@ -98,22 +106,15 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
           <div className="auth-divider" aria-hidden="true" />
           <div className="auth-panel__header">
             <p className="auth-access-label"><span aria-hidden="true" /> Secure Employee Access</p>
-            <h1 id="auth-title">{mode === "login" ? "Welcome back" : mode === "request" ? "Create your profile" : "Request received"}</h1>
+            <h1 id="auth-title">{mode === "login" ? "Welcome back" : "Create your profile"}</h1>
             <p className="auth-copy">
               {mode === "login" && "Sign in to continue."}
-              {mode === "request" && "Request employee access. An administrator will assign your role and facility."}
-              {mode === "pending" && "Your profile request is awaiting administrator approval. You can sign in after it is approved."}
+              {mode === "request" && "Use your employer-issued access code to join the PPC App."}
             </p>
           </div>
 
           {mode === "login" && notice ? <p className="auth-notice" role="status">{notice}</p> : null}
-          {mode === "pending" ? (
-            <div className="auth-pending" role="status">
-              <p><strong>Approval required</strong></p>
-              <p>No account or workspace access has been activated yet.</p>
-              <button type="button" className="auth-switch" onClick={() => switchMode("login")}>Back to login</button>
-            </div>
-          ) : <form className="auth-form" onSubmit={handleSubmit} aria-busy={busy}>
+          <form className="auth-form" onSubmit={handleSubmit} aria-busy={busy}>
             {mode === "request" ? (
               <div className="auth-name-grid">
                 <label htmlFor="auth-first-name">First name
@@ -131,20 +132,22 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
             {mode === "request" ? <>
               <label htmlFor="auth-password-confirmation">Confirm password</label>
               <input id="auth-password-confirmation" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} type={showPassword ? "text" : "password"} autoComplete="new-password" disabled={busy} />
+              <label htmlFor="auth-employee-access-code">Employee access code</label>
+              <input id="auth-employee-access-code" value={employeeAccessCode} onChange={(event) => setEmployeeAccessCode(event.target.value)} type="password" autoComplete="off" disabled={busy} />
             </> : null}
             <label className="auth-password-toggle">
               <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} disabled={busy} />
               <span>Show password{mode === "request" ? "s" : ""}</span>
             </label>
             {error ? <p className="auth-error" role="alert">{error}</p> : null}
-            <button type="submit" className="command-button auth-submit" disabled={busy} aria-label={busy ? (mode === "request" ? "Submitting request..." : "Signing in...") : (mode === "request" ? "Submit account request" : "Sign in")}>
-              <span>{busy ? (mode === "request" ? "Submitting request..." : "Signing in...") : (mode === "request" ? "Submit request" : "Sign in")}</span>
+            <button type="submit" className="command-button auth-submit" disabled={busy} aria-label={busy ? (mode === "request" ? "Creating profile..." : "Signing in...") : (mode === "request" ? "Create profile" : "Sign in")}>
+              <span>{busy ? (mode === "request" ? "Creating profile..." : "Signing in...") : (mode === "request" ? "Create profile" : "Sign in")}</span>
               <span aria-hidden="true">→</span>
             </button>
             <button type="button" className="auth-switch" disabled={busy} onClick={() => switchMode(mode === "login" ? "request" : "login")}>
               {mode === "login" ? "Create Profile" : "Back to login"}
             </button>
-          </form>}
+          </form>
           <div className="auth-security-note">
             <span aria-hidden="true">◇</span>
             <p><strong>Protected environment</strong><br />Encrypted session · Authorized personnel only</p>

@@ -141,7 +141,6 @@ export default function GovernanceAdminWorkspace({
 
 
 function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWorkspace }) {
-  const [accountRequests, setAccountRequests] = useState([]);
   const [users, setUsers] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [members, setMembers] = useState([]);
@@ -150,7 +149,6 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState({ email: "", name: "", password: "", role: "operator" });
-  const [requestRoles, setRequestRoles] = useState({});
   const [memberEmail, setMemberEmail] = useState("");
   const isFacilityWorkspace = currentWorkspace?.kind === "facility";
 
@@ -161,16 +159,13 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
       const requests = [
         apiFetch("/api/auth/users?include_inactive=true", { accessCode, cache: "no-store" }),
         apiFetch("/api/auth/sessions?include_revoked=false", { accessCode, cache: "no-store" }),
-        apiFetch("/api/auth/account-requests", { accessCode, cache: "no-store" }),
       ];
       if (isFacilityWorkspace) requests.push(apiFetch("/api/workspaces/current/members", { accessCode, cache: "no-store" }));
-      const [userResponse, sessionResponse, accountRequestResponse, memberResponse] = await Promise.all(requests);
+      const [userResponse, sessionResponse, memberResponse] = await Promise.all(requests);
       const userPayload = await read(userResponse); const sessionPayload = await read(sessionResponse);
-      const accountRequestPayload = await read(accountRequestResponse);
       const memberPayload = memberResponse ? await read(memberResponse) : { members: [] };
-      if (!userResponse.ok || !sessionResponse.ok || !accountRequestResponse.ok || (memberResponse && !memberResponse.ok)) throw new Error(safeAdminError(userPayload?.detail || sessionPayload?.detail || accountRequestPayload?.detail || memberPayload?.detail, "User access records could not be loaded. Refresh and retry."));
+      if (!userResponse.ok || !sessionResponse.ok || (memberResponse && !memberResponse.ok)) throw new Error(safeAdminError(userPayload?.detail || sessionPayload?.detail || memberPayload?.detail, "User access records could not be loaded. Refresh and retry."));
       setUsers(userPayload.users || []); setSessions(sessionPayload.sessions || []);
-      setAccountRequests(accountRequestPayload.requests || []);
       setMembers(memberPayload.members || []);
     } catch (loadError) { setError(safeAdminError(loadError?.message || loadError, "User access records could not be loaded. Refresh and retry.")); }
     finally { setLoading(false); }
@@ -208,21 +203,6 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
     if (added) setMemberEmail("");
   }
 
-  async function reviewAccountRequest(accountRequest, decision) {
-    const options = decision === "approve" ? {
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        role: requestRoles[accountRequest.request_id] || "viewer",
-        workspace_id: currentWorkspace?.workspace_id,
-      }),
-    } : {};
-    await mutate(
-      `request-${decision}-${accountRequest.request_id}`,
-      `/api/auth/account-requests/${encodeURIComponent(accountRequest.request_id)}/${decision}`,
-      options,
-    );
-  }
-
   const activeMemberIds = new Set(members.filter((member) => member.is_active).map((member) => member.member_id));
   const availableAccounts = users.filter((user) => user.is_active && !activeMemberIds.has(user.email));
 
@@ -232,41 +212,6 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
       subtitle={`Signed in as ${currentUser?.email || "administrator"}.`}
     >
       {loading ? <p role="status">Loading user accounts and active sessions...</p> : null}
-      <section className="admin-membership-block" aria-labelledby="employee-account-requests-title">
-        <div className="admin-membership-block__header">
-          <div>
-            <h3 id="employee-account-requests-title">Employee account requests</h3>
-            <p>Approve identity and assign the employee to the selected facility workspace.</p>
-          </div>
-          <span className="status-badge">{accountRequests.length} pending</span>
-        </div>
-        {!isFacilityWorkspace ? <p>Select a facility workspace before approving an employee request. Rejections remain available.</p> : null}
-        <div className="admin-access-list" aria-label="Pending employee account requests">
-          {accountRequests.length === 0 && !loading ? <p>No pending employee account requests.</p> : null}
-          {accountRequests.map((accountRequest) => (
-            <article key={accountRequest.request_id}>
-              <div>
-                <strong>{accountRequest.first_name} {accountRequest.last_name}</strong>
-                <small>{accountRequest.email} · requested {accountRequest.created_at}</small>
-              </div>
-              <div>
-                <select
-                  aria-label={`Role for ${accountRequest.email}`}
-                  value={requestRoles[accountRequest.request_id] || "viewer"}
-                  onChange={(event) => setRequestRoles({ ...requestRoles, [accountRequest.request_id]: event.target.value })}
-                  disabled={Boolean(busy)}
-                >
-                  <option value="viewer">Viewer</option>
-                  <option value="operator">Operator</option>
-                  <option value="admin">Administrator</option>
-                </select>
-                <button className="secondary-command-button" type="button" disabled={Boolean(busy) || !isFacilityWorkspace} onClick={() => void reviewAccountRequest(accountRequest, "approve")}>Approve</button>
-                <button className="operational-link-button operational-link-button--danger" type="button" disabled={Boolean(busy)} onClick={() => void reviewAccountRequest(accountRequest, "reject")}>Reject</button>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
       <section className="admin-membership-block" aria-labelledby="current-facility-membership-title">
         <div className="admin-membership-block__header">
           <div>

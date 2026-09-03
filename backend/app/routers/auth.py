@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import hmac
 import logging
+import os
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
@@ -11,34 +13,26 @@ from app.contracts import ContractModel, EmailAddress, SecretText
 
 from app.core.security import _strict_auth_mode, require_admin_role, require_api_access
 from app.models.api_models import (
-    AccountRequestApprovalRequest,
-    AccountRequestCreateRequest,
-    AccountRequestResponse,
-    AccountRequestsListResponse,
     AuthSessionResponse,
     AuthSessionsListResponse,
     AuthUserCreateRequest,
     AuthUserResponse,
     AuthUsersListResponse,
+    EmployeeRegistrationRequest,
 )
 from app.services.auth_store import (
-    approve_account_request,
     activate_user,
     authenticate_user,
     auth_summary,
-    create_account_request,
     create_session,
     create_user,
     deactivate_user,
     delete_session,
     get_session_record,
-    get_authorized_workspace,
     get_user_by_session,
-    list_account_requests,
     list_sessions,
     list_users,
-    pending_account_request_matches,
-    reject_account_request,
+    register_employee,
     revoke_session,
     session_cookie_name,
     workspace_session_summary,
@@ -52,10 +46,10 @@ _LOGIN_IP_LIMIT = 5
 _LOGIN_IP_WINDOW_SECONDS = 300
 _LOGIN_EMAIL_LIMIT = 10
 _LOGIN_EMAIL_WINDOW_SECONDS = 900
-_ACCOUNT_REQUEST_IP_LIMIT = 3
-_ACCOUNT_REQUEST_IP_WINDOW_SECONDS = 3600
-_ACCOUNT_REQUEST_EMAIL_LIMIT = 3
-_ACCOUNT_REQUEST_EMAIL_WINDOW_SECONDS = 86400
+_REGISTRATION_IP_LIMIT = 5
+_REGISTRATION_IP_WINDOW_SECONDS = 3600
+_REGISTRATION_EMAIL_LIMIT = 5
+_REGISTRATION_EMAIL_WINDOW_SECONDS = 86400
 
 
 class LoginRequest(ContractModel):
@@ -80,10 +74,6 @@ class AuthSessionRevokeRequest(ContractModel):
 
 
 EmailPath = Annotated[str, Path(min_length=5, max_length=320, pattern=r"^[^/\s@]+@[^/\s@]+\.[^/\s@]+$")]
-AccountRequestIdPath = Annotated[
-    str,
-    Path(min_length=39, max_length=39, pattern=r"^ar-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
-]
 
 
 def _session_cookie_secure(request: Request) -> bool:
@@ -182,18 +172,18 @@ def _reset_login_rate_limit(request: Request, email: str) -> None:
     reset_rate_limit("auth.login.email", str(email or "").strip().lower())
 
 
-def _enforce_account_request_rate_limit(request: Request, email: str) -> int | None:
+def _enforce_registration_rate_limit(request: Request, email: str) -> int | None:
     if not _strict_auth_mode(request):
         return None
     allowed, retry_after = consume_rate_limit(
-        "auth.account_request.ip", _client_ip(request),
-        limit=_ACCOUNT_REQUEST_IP_LIMIT, window_seconds=_ACCOUNT_REQUEST_IP_WINDOW_SECONDS,
+        "auth.registration.ip", _client_ip(request),
+        limit=_REGISTRATION_IP_LIMIT, window_seconds=_REGISTRATION_IP_WINDOW_SECONDS,
     )
     if not allowed:
         return retry_after
     allowed, retry_after = consume_rate_limit(
-        "auth.account_request.email", str(email or "").strip().lower(),
-        limit=_ACCOUNT_REQUEST_EMAIL_LIMIT, window_seconds=_ACCOUNT_REQUEST_EMAIL_WINDOW_SECONDS,
+        "auth.registration.email", str(email or "").strip().lower(),
+        limit=_REGISTRATION_EMAIL_LIMIT, window_seconds=_REGISTRATION_EMAIL_WINDOW_SECONDS,
     )
     return None if allowed else retry_after
 
@@ -234,109 +224,61 @@ def read_auth_me(request: Request) -> dict[str, Any]:
 
 
 @router.post(
-    "/auth/account-requests",
-    response_model=AccountRequestResponse,
+    "/auth/register",
     status_code=status.HTTP_201_CREATED,
 )
-def submit_account_request(
-    payload: AccountRequestCreateRequest, request: Request
-) -> AccountRequestResponse:
-    retry_after = _enforce_account_request_rate_limit(request, payload.email)
+def register_employee_account(
+    payload: EmployeeRegistrationRequest, request: Request, response: Response
+) -> dict[str, Any]:
+    retry_after = _enforce_registration_rate_limit(request, payload.email)
     if retry_after is not None:
         raise HTTPException(
             status_code=429,
-            detail="Too many account requests. Wait and try again.",
+            detail="Too many registration attempts. Wait and try again.",
             headers={"Retry-After": str(retry_after)},
         )
+    configured_code = str(os.getenv("NERAIUM_EMPLOYEE_ONBOARDING_CODE", "") or "")
+    workspace_id = str(os.getenv("NERAIUM_EMPLOYEE_ONBOARDING_WORKSPACE_ID", "") or "").strip()
+    if not configured_code or not workspace_id:
+        raise HTTPException(status_code=503, detail="Employee registration is unavailable.")
+    if not hmac.compare_digest(
+        payload.employee_access_code.encode("utf-8"), configured_code.encode("utf-8")
+    ):
+        raise HTTPException(status_code=403, detail="Invalid employee access code.")
     try:
-        account_request = create_account_request(
+        user = register_employee(
             payload.email,
             payload.password,
             first_name=payload.first_name,
             last_name=payload.last_name,
+            workspace_id=workspace_id,
         )
     except ValueError as error:
         message = str(error)
-        status_code = 409 if "already exists" in message.lower() else 400
+        if "workspace is unavailable" in message.lower():
+            status_code = 503
+            message = "Employee registration is unavailable."
+        else:
+            status_code = 409 if "already exists" in message.lower() else 400
         raise HTTPException(status_code=status_code, detail=message) from error
-    _record_auth_event(
-        actor=account_request["email"],
-        action="auth.account_request.created",
-        request=request,
-        detail={"client_ip": _client_ip(request), "request_id": account_request["request_id"]},
-    )
-    return AccountRequestResponse(**account_request)
-
-
-@router.get(
-    "/auth/account-requests",
-    response_model=AccountRequestsListResponse,
-    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
-)
-def read_account_requests() -> AccountRequestsListResponse:
-    return AccountRequestsListResponse(
-        requests=[AccountRequestResponse(**item) for item in list_account_requests(status="pending")]
-    )
-
-
-@router.post(
-    "/auth/account-requests/{request_id}/approve",
-    response_model=AccountRequestResponse,
-    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
-)
-def approve_employee_account_request(
-    request_id: AccountRequestIdPath,
-    payload: AccountRequestApprovalRequest,
-    request: Request,
-) -> AccountRequestResponse:
-    actor = _request_actor(request)
-    if not get_authorized_workspace(payload.workspace_id, actor):
-        raise HTTPException(status_code=404, detail="Workspace not found.")
     try:
-        result = approve_account_request(
-            request_id,
-            role=payload.role,
-            workspace_id=payload.workspace_id,
-            reviewed_by=actor,
-        )
-    except ValueError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    if not result:
-        raise HTTPException(status_code=404, detail="Account request not found.")
-    if result["status"] != "approved":
-        raise HTTPException(status_code=409, detail="Account request has already been reviewed.")
-    _record_admin_auth_event(
-        actor=actor,
-        action="auth.account_request.approved",
+        session_id = create_session(user["email"])
+        session = get_session_record(session_id)
+    except Exception as error:
+        _raise_auth_store_unavailable("create_registration_session", request, error)
+    _apply_session_cookie(response, session_id, request)
+    _record_auth_event(
+        actor=user["email"],
+        action="auth.employee.registered",
         request=request,
-        resource_id=request_id,
-        detail={"email": result["email"], "role": payload.role, "workspace_id": payload.workspace_id},
+        detail={"client_ip": _client_ip(request), "role": "viewer", "workspace_id": workspace_id},
     )
-    return AccountRequestResponse(**result)
-
-
-@router.post(
-    "/auth/account-requests/{request_id}/reject",
-    response_model=AccountRequestResponse,
-    dependencies=[Depends(require_api_access), Depends(require_admin_role)],
-)
-def reject_employee_account_request(
-    request_id: AccountRequestIdPath, request: Request
-) -> AccountRequestResponse:
-    actor = _request_actor(request)
-    result = reject_account_request(request_id, reviewed_by=actor)
-    if not result:
-        raise HTTPException(status_code=404, detail="Account request not found.")
-    if result["status"] != "rejected":
-        raise HTTPException(status_code=409, detail="Account request has already been reviewed.")
-    _record_admin_auth_event(
-        actor=actor,
-        action="auth.account_request.rejected",
-        request=request,
-        resource_id=request_id,
-        detail={"email": result["email"]},
-    )
-    return AccountRequestResponse(**result)
+    return {
+        "authenticated": True,
+        "user": user,
+        "session": session,
+        **workspace_session_summary(user["email"]),
+    }
 
 
 @router.get(
@@ -457,15 +399,6 @@ def login(payload: LoginRequest, request: Request, response: Response) -> dict[s
     except Exception as error:
         _raise_auth_store_unavailable("authenticate_user", request, error)
     if not user:
-        try:
-            awaiting_approval = pending_account_request_matches(payload.email, payload.password)
-        except Exception as error:
-            _raise_auth_store_unavailable("verify_pending_account_request", request, error)
-        if awaiting_approval:
-            raise HTTPException(
-                status_code=403,
-                detail="Your account is awaiting administrator approval.",
-            )
         _record_auth_event(
             actor=str(payload.email or "").strip().lower() or "unknown",
             action="auth.login.failed",
