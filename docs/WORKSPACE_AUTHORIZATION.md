@@ -64,11 +64,11 @@ membership. Disabling is a soft update and the last active admin cannot be remov
 Service-token access to an explicit facility requires the exact ID in
 `NERAIUM_API_TOKEN_WORKSPACE_IDS`; there is no wildcard.
 
-Employee onboarding uses administrator-created, seven-day, single-use invitation links.
-Each invitation is bound to the administrator's selected facility workspace. Only the
-token digest is stored; the raw token is shown once when the link is created. Registration
-atomically consumes the invitation, creates the standard CPO account, and grants only the
-bound facility membership. Onboarding exposes no role or workspace choice.
+Employee onboarding uses one administrator-created, seven-day company signup link.
+The link can create multiple accounts until it expires or an administrator revokes or
+replaces it. Only the token digest is stored; the raw link is shown once when created.
+Registration gives each account its existing private `default` workspace and no facility
+membership. Onboarding exposes no role or workspace choice.
 
 ## Product behavior
 

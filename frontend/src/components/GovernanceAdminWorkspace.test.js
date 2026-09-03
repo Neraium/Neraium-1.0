@@ -88,8 +88,8 @@ it("manages current facility membership separately from account status", async (
   expect(screen.getAllByText(/account active/i).length).toBeGreaterThan(0);
 });
 
-it("creates a single-use employee invitation link for the current facility", async () => {
-  const token = "single-use-invite-token-abcdefghijklmnopqrstuvwxyz";
+it("creates a reusable company signup link without a selected facility", async () => {
+  const token = "company-signup-link-token-abcdefghijklmnopqrstuvwxyz";
   const apiFetch = vi.fn(async (path, options = {}) => {
     if (path.startsWith("/api/observability/evp-governance")) return reply({ records: [], total: 0, pass_count: 0, no_pass_count: 0 });
     if (path.startsWith("/api/observability/performance")) return reply({ queue_depth: 0, upload_duration_seconds: {}, cache: {} });
@@ -97,13 +97,12 @@ it("creates a single-use employee invitation link for the current facility", asy
     if (path.startsWith("/api/auth/sessions")) return reply({ sessions: [] });
     if (path === "/api/auth/invitations" && options.method === "POST") return reply({ invite_id: "ei-test", invite_token: token });
     if (path === "/api/auth/invitations") return reply({ invitations: [] });
-    if (path === "/api/workspaces/current/members") return reply({ workspace_id: "ws-central", members: [] });
     throw new Error(`Unexpected request: ${path}`);
   });
   render(h(GovernanceAdminWorkspace, {
     apiFetch, accessCode: "", Panel, EmptyState,
     currentUser: { email: "admin@neraium.test", role: "admin" },
-    currentWorkspace: { workspace_id: "ws-central", display_name: "Central Plant", kind: "facility" },
+    currentWorkspace: { workspace_id: "default", display_name: "Personal workspace", kind: "personal" },
   }));
 
   fireEvent.click(await screen.findByRole("button", { name: "Create invite link" }));

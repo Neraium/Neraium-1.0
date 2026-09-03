@@ -72,7 +72,7 @@ describe("AuthScreen", () => {
   });
 
   it("uses the employee invitation and authenticates after profile creation", async () => {
-    window.history.replaceState(null, "", "/#invite=single-use-token-abcdefghijklmnopqrstuvwxyz");
+    window.history.replaceState(null, "", "/#invite=company-signup-token-abcdefghijklmnopqrstuvwxyz");
     const session = { authenticated: true, user: { email: "taylor@example.com", role: "viewer" } };
     registerEmployee.mockResolvedValue(session);
     const onAuthenticated = vi.fn();
@@ -96,7 +96,7 @@ describe("AuthScreen", () => {
       email: "Taylor@Example.com",
       password: "safe-password",
       passwordConfirmation: "safe-password",
-      inviteToken: "single-use-token-abcdefghijklmnopqrstuvwxyz",
+      inviteToken: "company-signup-token-abcdefghijklmnopqrstuvwxyz",
     }));
     expect(onAuthenticated).toHaveBeenCalledWith(session);
     expect(window.location.hash).toBe("");

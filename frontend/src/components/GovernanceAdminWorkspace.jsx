@@ -162,8 +162,8 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
         apiFetch("/api/auth/users?include_inactive=true", { accessCode, cache: "no-store" }),
         apiFetch("/api/auth/sessions?include_revoked=false", { accessCode, cache: "no-store" }),
       ];
+      requests.push(apiFetch("/api/auth/invitations", { accessCode, cache: "no-store" }));
       if (isFacilityWorkspace) {
-        requests.push(apiFetch("/api/auth/invitations", { accessCode, cache: "no-store" }));
         requests.push(apiFetch("/api/workspaces/current/members", { accessCode, cache: "no-store" }));
       }
       const [userResponse, sessionResponse, invitationResponse, memberResponse] = await Promise.all(requests);
@@ -211,7 +211,6 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
   }
 
   async function createInvitation() {
-    if (!isFacilityWorkspace) return;
     const invitation = await mutate("invite-create", "/api/auth/invitations");
     if (invitation?.invite_token) {
       setInviteLink(`${window.location.origin}${window.location.pathname}#invite=${encodeURIComponent(invitation.invite_token)}`);
@@ -231,19 +230,18 @@ function AccessAdminPanel({ apiFetch, accessCode, Panel, currentUser, currentWor
         <div className="admin-membership-block__header">
           <div>
             <h3 id="employee-invitations-title">Employee invitations</h3>
-            <p>Create a single-use link for the selected facility. Links expire after seven days.</p>
+            <p>Create one company-wide signup link. It can be reused until it expires or is revoked.</p>
           </div>
-          <button className="secondary-command-button" type="button" disabled={Boolean(busy) || !isFacilityWorkspace} onClick={() => void createInvitation()}>
+          <button className="secondary-command-button" type="button" disabled={Boolean(busy)} onClick={() => void createInvitation()}>
             {busy === "invite-create" ? "Creating link..." : "Create invite link"}
           </button>
         </div>
         {inviteLink ? <label className="admin-invite-link"><span>New invitation link — copy and send it now</span><input readOnly value={inviteLink} onFocus={(event) => event.target.select()} /></label> : null}
-        {!isFacilityWorkspace ? <p>Select a facility workspace to create and manage its invitations.</p> : null}
         <div className="admin-access-list" aria-label="Employee invitations">
           {invitations.map((invitation) => {
-            const status = invitation.used_at ? "used" : invitation.revoked_at ? "revoked" : new Date(invitation.expires_at) <= new Date() ? "expired" : "active";
+            const status = invitation.revoked_at ? "revoked" : new Date(invitation.expires_at) <= new Date() ? "expired" : "active";
             return <article key={invitation.invite_id}>
-              <div><strong>Employee invitation</strong><small>{status} · expires {invitation.expires_at}</small></div>
+              <div><strong>Company signup link</strong><small>{status} · {invitation.use_count || 0} account(s) created · expires {invitation.expires_at}</small></div>
               <button type="button" className="operational-link-button operational-link-button--danger" disabled={Boolean(busy) || status !== "active"} onClick={() => void mutate(`invite-revoke-${invitation.invite_id}`, `/api/auth/invitations/${encodeURIComponent(invitation.invite_id)}/revoke`)}>Revoke</button>
             </article>;
           })}

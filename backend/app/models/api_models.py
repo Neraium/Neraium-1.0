@@ -603,12 +603,11 @@ class EmployeeRegistrationRequest(ContractModel):
 
 class EmployeeInvitationResponse(BaseModel):
     invite_id: str
-    workspace_id: str
     created_at: str
     expires_at: str
     created_by: str
-    used_at: str | None = None
-    used_by: str | None = None
+    use_count: int = 0
+    last_used_at: str | None = None
     revoked_at: str | None = None
     invite_token: str | None = None
 

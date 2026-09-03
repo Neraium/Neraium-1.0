@@ -117,7 +117,7 @@ export default function AuthScreen({ notice = "", onAuthenticated }) {
             <h1 id="auth-title">{mode === "login" ? "Welcome back" : "Create your profile"}</h1>
             <p className="auth-copy">
               {mode === "login" && "Sign in to continue."}
-              {mode === "request" && "Complete your profile using your single-use employee invitation."}
+              {mode === "request" && "Complete your profile using your company signup link."}
             </p>
           </div>
 

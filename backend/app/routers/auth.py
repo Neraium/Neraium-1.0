@@ -278,23 +278,14 @@ def register_employee_account(
     }
 
 
-def _current_facility_workspace_id(request: Request) -> str:
-    context = getattr(request.state, "workspace_context", {})
-    workspace_id = str(context.get("workspace_id") or "") if isinstance(context, dict) else ""
-    if not workspace_id.startswith("ws-"):
-        raise HTTPException(status_code=409, detail="Select a facility workspace first.")
-    return workspace_id
-
-
 @router.get(
     "/auth/invitations",
     response_model=EmployeeInvitationsListResponse,
     dependencies=[Depends(require_api_access), Depends(require_admin_role)],
 )
 def read_employee_invitations(request: Request) -> EmployeeInvitationsListResponse:
-    workspace_id = _current_facility_workspace_id(request)
     return EmployeeInvitationsListResponse(
-        invitations=[EmployeeInvitationResponse(**item) for item in list_employee_invitations(workspace_id)]
+        invitations=[EmployeeInvitationResponse(**item) for item in list_employee_invitations()]
     )
 
 
@@ -305,14 +296,10 @@ def read_employee_invitations(request: Request) -> EmployeeInvitationsListRespon
     dependencies=[Depends(require_api_access), Depends(require_admin_role)],
 )
 def create_employee_invite(request: Request) -> EmployeeInvitationResponse:
-    workspace_id = _current_facility_workspace_id(request)
-    try:
-        invitation = create_employee_invitation(workspace_id, created_by=_request_actor(request))
-    except ValueError as error:
-        raise HTTPException(status_code=409, detail="The selected workspace cannot accept invitations.") from error
+    invitation = create_employee_invitation(created_by=_request_actor(request))
     _record_admin_auth_event(
         actor=_request_actor(request), action="auth.employee_invitation.created",
-        request=request, resource_id=invitation["invite_id"], detail={"workspace_id": workspace_id},
+        request=request, resource_id=invitation["invite_id"], detail={"scope": "company"},
     )
     return EmployeeInvitationResponse(**invitation)
 
@@ -323,13 +310,12 @@ def create_employee_invite(request: Request) -> EmployeeInvitationResponse:
     dependencies=[Depends(require_api_access), Depends(require_admin_role)],
 )
 def revoke_employee_invite(invite_id: EmployeeInvitationIdPath, request: Request) -> EmployeeInvitationResponse:
-    workspace_id = _current_facility_workspace_id(request)
-    invitation = revoke_employee_invitation(invite_id, workspace_id)
+    invitation = revoke_employee_invitation(invite_id)
     if not invitation:
         raise HTTPException(status_code=404, detail="Employee invitation not found.")
     _record_admin_auth_event(
         actor=_request_actor(request), action="auth.employee_invitation.revoked",
-        request=request, resource_id=invite_id, detail={"workspace_id": workspace_id},
+        request=request, resource_id=invite_id, detail={"scope": "company"},
     )
     return EmployeeInvitationResponse(**invitation)
 
