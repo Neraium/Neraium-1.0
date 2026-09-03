@@ -542,7 +542,7 @@ class _BaseAuthBackend:
                 ON CONFLICT(email) DO NOTHING
                 """,
                 (
-                    payload["email"], payload["name"], "viewer", payload["salt"],
+                    payload["email"], payload["name"], "operator", payload["salt"],
                     payload["password_hash"], payload["created_at"], payload["created_at"],
                     None, True, None, False,
                 ),

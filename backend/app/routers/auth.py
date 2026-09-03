@@ -271,7 +271,7 @@ def register_employee_account(
         actor=user["email"],
         action="auth.employee.registered",
         request=request,
-        detail={"client_ip": _client_ip(request), "role": "viewer", "workspace_id": workspace_id},
+        detail={"client_ip": _client_ip(request), "role": "operator", "workspace_id": workspace_id},
     )
     return {
         "authenticated": True,

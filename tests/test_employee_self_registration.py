@@ -46,7 +46,7 @@ def _payload(**overrides) -> dict:
     return payload
 
 
-def test_valid_code_registers_personal_email_as_viewer_in_only_configured_workspace(monkeypatch, tmp_path) -> None:
+def test_valid_code_registers_personal_email_as_cpo_in_only_configured_workspace(monkeypatch, tmp_path) -> None:
     client = _client(monkeypatch, tmp_path)
     workspace = _configure_workspace(monkeypatch)
 
@@ -58,7 +58,7 @@ def test_valid_code_registers_personal_email_as_viewer_in_only_configured_worksp
     assert payload["user"] == {
         "email": "personal.user@example.net",
         "name": "Taylor Employee",
-        "role": "viewer",
+        "role": "operator",
         "created_at": payload["user"]["created_at"],
         "last_login_at": None,
         "is_active": True,
@@ -162,7 +162,7 @@ def test_password_is_hashed_and_access_code_is_not_stored_or_returned(monkeypatc
         assert user is not None
         assert user[0] != _payload()["password"]
         assert user[1] != _payload()["password"]
-        assert user[2] == "viewer"
+        assert user[2] == "operator"
         schema = " ".join(
             row[0] or "" for row in connection.execute("SELECT sql FROM sqlite_master")
         )

@@ -69,8 +69,8 @@ Employee self-registration requires both `NERAIUM_EMPLOYEE_ONBOARDING_CODE` and
 the deployment secret manager. The configured workspace ID must identify one active
 `auth_workspaces` row. Registration fails closed when either value is absent or the
 workspace is inactive or missing; it never falls back to the personal workspace or
-another facility. New employees receive the global `viewer` role and membership only
-in that configured facility.
+another facility. New employees receive the standard internal `operator` permission
+and membership only in that configured facility; onboarding exposes no role choice.
 
 ## Product behavior
 
