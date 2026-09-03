@@ -221,6 +221,33 @@ export async function loginUser({ email, password }) {
   return payload;
 }
 
+export async function requestEmployeeAccount({ firstName, lastName, email, password, passwordConfirmation }) {
+  const response = await authFetch(
+    "/api/auth/account-requests",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        first_name: String(firstName ?? "").trim(),
+        last_name: String(lastName ?? "").trim(),
+        email: String(email ?? "").trim().toLowerCase(),
+        password,
+        password_confirmation: passwordConfirmation,
+      }),
+      timeoutMs: AUTH_WRITE_TIMEOUT_MS,
+    },
+    "The account request service is temporarily unavailable. Try again.",
+  );
+  const payload = await readJson(response);
+  if (!response.ok) {
+    if (response.status >= 500) throw new Error("The account request service is temporarily unavailable. Try again.");
+    if (response.status === 429) throw new Error(detailMessage(payload, "Too many account requests. Wait and try again."));
+    if (response.status === 409) throw new Error(detailMessage(payload, "An account or pending request already exists for this email."));
+    throw new Error(detailMessage(payload, "Review your details and try again."));
+  }
+  return payload;
+}
+
 export async function logoutUser() {
   const response = await authFetch(
     "/api/auth/logout",

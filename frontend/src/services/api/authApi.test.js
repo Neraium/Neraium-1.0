@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiFetch } from "../../config";
-import { fetchCurrentUser, loginUser, logoutUser, SESSION_INITIALIZATION_ERROR_KIND } from "./authApi";
+import { fetchCurrentUser, loginUser, logoutUser, requestEmployeeAccount, SESSION_INITIALIZATION_ERROR_KIND } from "./authApi";
 
 vi.mock("../../config", () => ({ apiFetch: vi.fn() }));
 
@@ -148,6 +148,24 @@ describe("authApi", () => {
 
     await expect(loginUser({ email: "Craig@neraium.com", password: "password123" }))
       .rejects.toThrow(/sign-in service is temporarily unavailable/i);
+  });
+
+  it("normalizes and submits an employee request without creating local auth state", async () => {
+    apiFetch.mockResolvedValue(reply({ request_id: "ar-test", status: "pending" }, 201));
+
+    await expect(requestEmployeeAccount({
+      firstName: " Taylor ", lastName: " Employee ", email: " Taylor@Example.com ",
+      password: "safe-password", passwordConfirmation: "safe-password",
+    })).resolves.toEqual({ request_id: "ar-test", status: "pending" });
+
+    expect(apiFetch).toHaveBeenCalledWith("/api/auth/account-requests", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        first_name: "Taylor", last_name: "Employee", email: "taylor@example.com",
+        password: "safe-password", password_confirmation: "safe-password",
+      }),
+    }));
+    expect(window.localStorage.getItem("neraium.local_auth.session")).toBeNull();
   });
 
   it("clears the local marker after the server revokes the session", async () => {
