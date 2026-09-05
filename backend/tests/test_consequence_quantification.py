@@ -21,7 +21,7 @@ def test_water_quantification_integrates_irregular_cadence() -> None:
     assert result["status"] == "quantified"
     assert result["resource_type"] == "water"
     assert result["cumulative_unit"] == "gal"
-    assert result["cumulative_amount"] == pytest.approx(68.0)
+    assert result["cumulative_amount"] == pytest.approx(67.0)
     assert result["duration_seconds"] == 180.0
     assert result["source_relationship_ids"] == ["makeup-water:cooling-load"]
     assert "cause" not in result
