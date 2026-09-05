@@ -8,7 +8,6 @@ import { projectEvidenceDashboardSummary } from "./evidenceDashboardProjection";
 const ASSESSMENT_LABELS = Object.freeze([
   ["changeConfidence", "Change confidence"],
   ["evidenceQuality", "Evidence quality"],
-  ["causeAttribution", "Cause / attribution"],
   ["persistence", "Persistence"],
   ["operatingContext", "Operating context"],
   ["corroboration", "Corroboration"],

@@ -116,13 +116,6 @@ def analyze_subsystem_motifs(
     if persistent_family_count == 0 and corroboration_level != "strong":
         return None
 
-    likely_driver = motif.title
-    secondary_phrases = [phrase for _family, phrase, _hits in matched_secondaries[:2]]
-    if secondary_phrases:
-        likely_driver = f"{likely_driver} coincides with {' and '.join(secondary_phrases)}."
-    else:
-        likely_driver = f"{likely_driver} is showing multi-signal infrastructure divergence."
-
     supporting_evidence = list(motif.base_evidence)
     for family_name, _phrase, _hits in matched_secondaries:
         if family_name == "makeup":
@@ -142,7 +135,7 @@ def analyze_subsystem_motifs(
     severity = "action" if corroboration_level == "strong" and persistent_family_count >= 2 else "review"
     return {
         "driver_category": motif.driver_category,
-        "likely_driver": likely_driver,
+        "likely_driver": None,
         "contributing_signals": sorted(primary_hits | set().union(*(hits for _family, _phrase, hits in matched_secondaries))),
         "supporting_evidence": supporting_evidence[:4],
         "confidence_basis": motif.confidence_basis,

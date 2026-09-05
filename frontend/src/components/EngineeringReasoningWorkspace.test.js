@@ -362,11 +362,11 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(window.location.pathname).toBe("/findings/finding-1");
     const headings = [...document.querySelectorAll(".case-sections--review > section > h2")].map((node) => node.textContent);
     expect(headings).toEqual(["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]);
-    expect(screen.getByText("Cause / attribution")).toBeTruthy();
-    for (const dimension of ["Change confidence", "Evidence quality", "Cause / attribution", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) {
+    expect(screen.queryByText("Cause / attribution")).toBeNull();
+    for (const dimension of ["Change confidence", "Evidence quality", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) {
       expect(screen.getAllByText(dimension).length).toBeGreaterThan(0);
     }
-    expect(screen.getByText("No, investigation required")).toBeTruthy();
+    expect(screen.queryByText("Cause established?")).toBeNull();
     expect(screen.getByRole("button", { name: "Open investigation" })).toBeTruthy();
   });
 

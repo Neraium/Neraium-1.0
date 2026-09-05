@@ -28,7 +28,7 @@ describe("RelatedEvidencePackages", () => {
     expect(screen.getByText("Related evidence")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Related evidence package" })).toBeTruthy();
     expect(screen.getByText(/overlapping observation windows/)).toBeTruthy();
-    expect(screen.getByText("Related evidence does not establish cause, propagation, diagnosis, or equipment failure.")).toBeTruthy();
+    expect(screen.getByText("Related evidence describes recorded associations and their limits.")).toBeTruthy();
     const correlationTrace = screen.getByText("Correlation trace").closest("details");
     const technicalReferences = screen.getByText("Technical references").closest("details");
     expect(correlationTrace.open).toBe(false);

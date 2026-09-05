@@ -163,15 +163,15 @@ describe("results presentation contracts", () => {
     }
   });
 
-  it("keeps Review decision-oriented and the seven dimensions independent", () => {
+  it("keeps Review decision-oriented and the six evidence dimensions independent", () => {
     const projection = projectFindingReview(modelFrom(), A, { state: "investigating" });
     expect(keys(projection)).toEqual([...REVIEW_KEYS].sort());
     expect(projection.variant).toBe("ready");
     expect(Object.keys(projection.assessment)).toEqual([
-      "changeConfidence", "evidenceQuality", "causeAttribution", "persistence", "operatingContext", "corroboration", "evidenceSufficiency",
+      "changeConfidence", "evidenceQuality", "persistence", "operatingContext", "corroboration", "evidenceSufficiency",
     ]);
     expect(projection.assessment.changeConfidence.value).toBe("High");
-    expect(projection.assessment.causeAttribution.value).toBe("Not established");
+    expect(projection.assessment).not.toHaveProperty("causeAttribution");
     expect(projection.dashboardSummary).toMatchObject({
       title: "The learned system response A changed during comparable operation.",
       system: "Cooling system A",
@@ -179,11 +179,9 @@ describe("results presentation contracts", () => {
       magnitude: -0.604114,
       magnitudeSigned: true,
       relationships: [{ label: "Source A ↔ Target A", magnitude: -0.604114, signed: true }],
-      causeEstablished: false,
     });
     expect(projectEvidenceDashboardSummary(projection)).toMatchObject({
       evidenceWindow: { label: "Aug 25, 2026" },
-      cause: { established: false, label: "No, investigation required" },
     });
     expect(projection.whyAttention.length).toBeGreaterThanOrEqual(1);
     expect(projection.whyAttention.length).toBeLessThanOrEqual(3);
@@ -254,7 +252,6 @@ describe("results presentation contracts", () => {
         operatingContext: { value: "Comparable" },
         confidence: { value: "High" },
       },
-      cause: { established: false, label: "No — investigation required" },
     });
   });
 
@@ -291,7 +288,7 @@ describe("results presentation contracts", () => {
     expect(summary.relationships[2]).toMatchObject({ magnitude: null });
   });
 
-  it("fails closed for unsupported summary metrics and only confirms an explicit cause", () => {
+  it("fails closed for unsupported metrics and excludes legacy cause assertions", () => {
     const unsupported = fixtureResult();
     const raw = unsupported.analysis_explanation.conditions[0];
     raw.supporting_relationships = [];
@@ -309,11 +306,11 @@ describe("results presentation contracts", () => {
     expect(summary.metrics.operatingContext.value).toBe("Not established");
     expect(summary.metrics.confidence.value).not.toMatch(/strong|confirmed/i);
     expect(summary.relationships).toEqual([]);
-    expect(summary.cause).toEqual({ established: false, label: "No — investigation required" });
+    expect(summary).not.toHaveProperty("cause");
 
     const confirmed = fixtureResult();
     confirmed.analysis_explanation.conditions[0].cause_established = true;
-    expect(projectEvidenceDashboardSummary(projectEvidenceRecord(modelFrom(confirmed), A)).cause).toEqual({ established: true, label: "Yes — confirmed in evidence" });
+    expect(projectEvidenceDashboardSummary(projectEvidenceRecord(modelFrom(confirmed), A))).not.toHaveProperty("cause");
   });
 
   it("prevents cross-finding relationship, lineage, and package attribution", () => {
@@ -587,4 +584,25 @@ it("projects the canonical consequence through review and evidence without borro
     expect(a.measurableConsequence).not.toHaveProperty("provenance");
     expect(b.measurableConsequence).toEqual({ status: "not_quantifiable", statement: "Consequence not quantifiable from available evidence." });
   }
+});
+
+
+describe("historical attribution boundary", () => {
+  it("does not expose retired values at any current evidence depth", () => {
+    const legacy = fixtureResult();
+    const finding = legacy.analysis_explanation.conditions[0];
+    finding.likely_cause = "RETIRED_CAUSE_CANARY";
+    finding.diagnosis = "RETIRED_DIAGNOSIS_CANARY";
+    finding.possible_explanations = ["RETIRED_MECHANISM_CANARY"];
+    finding.finding_confidence_v1.interpretation = { attribution_status: "confirmed" };
+    const before = JSON.stringify(legacy);
+    const model = modelFrom(legacy);
+    for (const view of [projectResults(model), projectFindingReview(model, A), projectInvestigation(model, A), projectEvidenceRecord(model, A)]) {
+      const encoded = JSON.stringify(view);
+      expect(encoded).not.toContain("RETIRED_");
+      expect(encoded).not.toMatch(/likely_cause|diagnosis|attribution_status|causeEstablished|causeAttribution/);
+    }
+    expect(JSON.stringify(legacy)).toBe(before);
+    expect(projectEvidenceRecord(model, A).exactRelationships.length).toBeGreaterThan(0);
+  });
 });

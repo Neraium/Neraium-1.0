@@ -80,3 +80,13 @@ def test_interpreter_uses_converse_without_changing_authoritative_role() -> None
     assert result["authoritative_source"] == "neraium_evidence_package"
     assert result["model_role"] == "interpretation_only"
     assert result["usage"]["total_tokens"] == 113
+
+
+@pytest.mark.parametrize("text", ["Likely cause: blocked filter", "A diagnosis is pump failure", "The likely mechanism is valve leakage", "Corrective action: replace the pump"])
+def test_interpreter_rejects_retired_conclusions(text):
+    class RetiredOutputClient:
+        def converse(self, **kwargs):
+            assert "Do not produce causes" in kwargs["system"][0]["text"]
+            return {"output": {"message": {"content": [{"text": text}]}}}
+    with pytest.raises(BedrockInterpretationError, match="retired analytical attribution"):
+        interpret_evidence_package({"governance": {"raw_telemetry_included": False}}, config=_config(), client=RetiredOutputClient())

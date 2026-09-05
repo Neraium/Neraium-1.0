@@ -11,7 +11,6 @@ function Icon({ name }) {
     persistence: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     context: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2" /></>,
     confidence: <><path d="M12 3 20 6v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3Z" /><path d="m8 12 3 3 5-6" /></>,
-    cause: <><circle cx="12" cy="12" r="9" /><path d="M9.8 9a2.4 2.4 0 1 1 3.3 2.2c-.8.4-1.1.9-1.1 1.8M12 17h.01" /></>,
   };
   return <svg className="evidence-dashboard__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -84,7 +83,7 @@ export default function EvidenceDashboard({ summary, variant = "ready" }) {
           <span className="evidence-dashboard__brand">NERAIUM / FINDINGS</span>
           <p>Neraium surfaces evidence when learned system behavior changes.</p>
           <div className="evidence-dashboard__detected"><span aria-hidden="true" />{summary.relationshipStatus || "Behavior change evidence"}</div>
-          <small>Evidence supports investigation. It is not an automated diagnosis.</small>
+          <small>Evidence supports human review.</small>
         </aside>
         <div className="evidence-dashboard__record">
       <header className="evidence-dashboard__header">
@@ -126,11 +125,7 @@ export default function EvidenceDashboard({ summary, variant = "ready" }) {
 
       <MeasurableConsequence result={summary.measurableConsequence} />
 
-      <div className="evidence-dashboard__cause">
-        <div><Icon name="cause" /><strong>Cause established?</strong></div>
-        <span data-established={summary.cause?.established === true}>{summary.cause?.label || "No \u2014 investigation required"}</span>
-      </div>
-      <p className="evidence-dashboard__disclaimer">This record describes observed evidence and its limits. Confirm equipment condition and cause through investigation before taking corrective action.</p>
+      <p className="evidence-dashboard__disclaimer">This record describes observed evidence and its limits. Human review remains authoritative.</p>
         </div>
       </div>
     </section>

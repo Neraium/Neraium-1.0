@@ -226,8 +226,7 @@ def _build_water_insight(*, prior: RelationshipPrior, finding: dict[str, Any], f
     first_detected, last_observed = _finding_times(finding, context)
     affected_system = _affected_system(prior)
     observed_evidence = _observed_evidence(prior, finding, signal_matches, graph_trust, context)
-    explanations = _possible_explanations(prior, derived_metrics, active_confounders)
-    checks = _recommended_checks(prior, active_confounders, parameters)
+    checks = []  # Compatibility only; no inferred action is produced.
     insight_id = f"water-{_slug(prior.prior_id)}-{_slug(_finding_id(finding, finding_index))}"
     what_changed = _what_changed(prior, finding)
     why_matters = _why_it_matters(prior)
@@ -251,18 +250,15 @@ def _build_water_insight(*, prior: RelationshipPrior, finding: dict[str, Any], f
         "hypothesis_state": HYPOTHESIS_OBSERVED,
         "observed_evidence": observed_evidence,
         "derived_metrics": derived_metrics,
-        "possible_explanations": explanations,
+        "possible_explanations": [],
         "confounding_conditions": active_confounders,
         "recommended_checks": checks,
         "confidence_and_uncertainty": confidence,
-        "water_interpretation": {"schema_version": SCHEMA_VERSION, "generated_at": generated_at, "prior": prior.as_dict(), "strict_separation": {"observed_evidence": "Observed SII relationship drift and source telemetry context.", "possible_explanations": "Hypotheses to investigate; not confirmed causes.", "confirmation": "Telemetry alone never sets operator_confirmed."}},
+        "water_interpretation": {"schema_version": SCHEMA_VERSION, "generated_at": generated_at, "prior": {key: value for key, value in prior.as_dict().items() if key not in {"possible_explanations", "recommended_checks"}}, "strict_separation": {"observed_evidence": "Observed SII relationship drift and source telemetry context.", "confirmation": "Telemetry alone never sets operator_confirmed."}},
         "what_changed": what_changed,
         "what_happened": what_changed,
         "why_it_matters": why_matters,
-        "why_neraium_thinks_it_happened": "SII detected relationship drift; Water Intelligence mapped the affected signals to a conditional water-system prior without assigning a confirmed cause.",
         "possible_operational_consequence": why_matters,
-        "possible_operational_causes": [item["explanation"] for item in explanations],
-        "likely_causes": [item["explanation"] for item in explanations],
         "recommended_operator_check": checks[0]["check"] if checks else None,
         "recommended_investigation": [item["check"] for item in checks],
         "operator_check": checks[0]["check"] if checks else None,
@@ -425,7 +421,7 @@ def _active_confounders(prior: RelationshipPrior, context: WaterIntelligenceCont
             active = True; source = "missing_balance_term"
         elif "conductivity" in normalized and prior.prior_id == "water.cooling_tower_mass_balance":
             active = _conductivity_confounder_active(context, signal_matches); source = "conductivity_context"
-        conditions.append({"condition": confounder, "state": "active" if active else "possible", "source": source, "confidence_effect": "reduces" if active else "context", "explanation": f"{confounder} {'is active or directly indicated' if active else 'is a known confounder to check before confirming a cause'}."})
+        conditions.append({"condition": confounder, "state": "active" if active else "possible", "source": source, "confidence_effect": "reduces" if active else "context", "explanation": f"{confounder} {'is active or directly indicated' if active else 'is recorded as a context limitation in the relationship prior'}."})
     for signal_name, matches in signal_matches.items():
         for match in matches:
             if match.unit_status in {"unknown", "incompatible"}:
@@ -584,18 +580,6 @@ def _confidence_dimensions(*, prior: RelationshipPrior, finding: dict[str, Any],
 def _observed_evidence(prior: RelationshipPrior, finding: dict[str, Any], signal_matches: dict[str, list[SignalMatch]], graph_trust: dict[str, Any], context: WaterIntelligenceContext) -> list[dict[str, Any]]:
     columns = _finding_columns(finding)
     return [{"type": "observed_sii_relationship_drift", "summary": finding.get("summary") or finding.get("what_changed") or f"SII reported relationship drift involving {', '.join(columns)}.", "source": finding.get("sii_source"), "source_columns": columns, "matched_water_signals": sorted(_finding_signal_names(finding, signal_matches)), "relationship_type": finding.get("relationship_type"), "change_type": finding.get("change_type"), "baseline_strength": finding.get("baseline_strength"), "current_strength": finding.get("current_strength") or finding.get("strength"), "correlation_delta": finding.get("correlation_delta") or finding.get("change"), "sii_confidence": _sii_confidence(finding), "graph_trust": graph_trust, "time_window": finding.get("time_window") or _build_time_window(context), "source_rows": finding.get("source_rows"), "evidence_refs": finding.get("evidence_refs"), "separation": "observed_evidence"}]
-
-
-def _possible_explanations(prior: RelationshipPrior, derived_metrics: list[dict[str, Any]], active_confounders: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    context_text = " ".join(str(item.get("condition") or "") for item in active_confounders if item.get("state") == "active") + " " + " ".join(str(item.get("name") or "") + " " + str(item.get("explanation") or "") for item in derived_metrics)
-    tokens = _tokens(context_text)
-    return [{"explanation": explanation, "hypothesis_state": "supported" if _tokens(explanation) & tokens else HYPOTHESIS_SUSPECTED, "confirmation_state": "not_confirmed", "separation": "hypothesis", "note": "This is a possible operational explanation to investigate, not a confirmed cause."} for explanation in prior.possible_explanations]
-
-
-def _recommended_checks(prior: RelationshipPrior, active_confounders: list[dict[str, Any]], parameters: dict[str, Any]) -> list[dict[str, Any]]:
-    checks = [{"check": check, "purpose": "Separate observed relationship drift from possible causes before confirmation.", "confirmation_required": "operator confirmation, physical inspection, maintenance/work-order evidence, validated diagnostic test, or authoritative equipment/control event", "separation": "recommended_check"} for check in prior.recommended_checks]
-    checks.extend({"check": "Resolve or document confounder: " + str(item.get("condition")) + ".", "purpose": item.get("explanation"), "confirmation_required": "operator review", "separation": "recommended_check"} for item in active_confounders if item.get("state") == "active")
-    return _dedupe_dicts(checks, key="check")[:_int_param(parameters, "max_recommended_checks")]
 
 
 def _window_stat(signal_matches: dict[str, list[SignalMatch]], context: WaterIntelligenceContext, signal_name: str, parameters: dict[str, Any]) -> dict[str, Any] | None:

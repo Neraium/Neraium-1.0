@@ -406,7 +406,6 @@ export default function SystemBodyWorkspace({
                     <h3>Summary</h3>
                     {findingBriefing.summary.map((line) => <p key={line}>{line}</p>)}
                   </section>
-                  <ResultList title="Possible Operational Contributors" items={findingBriefing.possibleCauses} />
                   <ResultList title="Relationships Involved" items={findingBriefing.relationships} />
                   <ResultList title="Recommended First Checks" items={findingBriefing.investigation} />
                   <details className="technical-details-panel finding-evidence-drawer">
@@ -631,7 +630,6 @@ function ResultList({ title, items, empty = "" }) {
 function buildFindingBriefing(finding, evidenceReport) {
   return {
     summary: buildFindingSummaryLines(finding),
-    possibleCauses: buildPossibleOperationalCauses(finding, evidenceReport),
     relationships: buildFindingRelationships(finding, evidenceReport),
     investigation: buildRecommendedInvestigation(finding, evidenceReport),
   };
@@ -640,18 +638,6 @@ function buildFindingBriefing(finding, evidenceReport) {
 function buildFindingSummaryLines(finding) {
   const lines = splitSentences(finding?.summary).slice(0, 2);
   return lines.length ? lines : ["The subsystem no longer follows its historical operating pattern."];
-}
-
-function buildPossibleOperationalCauses(finding, evidenceReport) {
-  const text = briefingSearchText(finding, evidenceReport);
-  const causes = [];
-  if (/filter|pressure|dp|differential/.test(text)) causes.push("Filter fouling", "Increased hydraulic resistance");
-  if (/pump|speed|vfd|flow/.test(text)) causes.push("Pump efficiency degradation", "Instrument drift");
-  if (/valve|damper/.test(text)) causes.push("Valve position changed");
-  if (/temperature|cool|chw|thermal/.test(text)) causes.push("Heat transfer changed", "Process load changed");
-  if (/sensor|missing|timestamp|telemetry/.test(text)) causes.push("Sensor calibration drift", "Telemetry quality issue");
-  causes.push("Demand shift", "Recent maintenance activity", "Operating setpoint changed");
-  return dedupeText(causes).slice(0, 6);
 }
 
 function buildFindingRelationships(finding, evidenceReport) {

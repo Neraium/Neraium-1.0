@@ -7,6 +7,8 @@ analysis or derives new analytical claims.
 
 from __future__ import annotations
 
+from app.services.product_evidence_contract import product_evidence
+
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -194,6 +196,8 @@ def build_canonical_result_projection(
         "canonical_result_projection_sii_result_required",
     )
 
+    analysis_result = product_evidence(analysis_result)
+    sii_result = product_evidence(sii_result)
     shared_analysis, shared_selection = _build_shared_analysis(analysis_result)
     shared_envelope = {
         "identity": identity,

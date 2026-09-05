@@ -31,9 +31,10 @@ def test_uploaded_csv_analysis_returns_evidence_backed_outputs() -> None:
         assert 0 < insight["confidence_score"] <= 1
         assert insight["affected_systems"]
         assert insight["what_changed"]
-        assert insight["why_neraium_thinks_it_happened"]
+        assert "why_neraium_thinks_it_happened" not in insight
+        assert "likely_cause" not in insight
         assert insight["possible_operational_consequence"]
-        assert insight["recommended_operator_check"]
+        assert "possible_operational_causes" not in insight
         assert insight["evidence_summary"]
         assert insight["evidence_items"]
         assert insight["source_time_ranges"]

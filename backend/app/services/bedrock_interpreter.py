@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -75,10 +76,11 @@ def _system_prompt() -> str:
     return (
         "You are the interpretation layer for Neraium Systemic Infrastructure Intelligence. "
         "The supplied Evidence Package is authoritative. Never recalculate findings, invent telemetry, "
-        "upgrade confidence, assert a root cause that the evidence does not support, or convert a hypothesis "
-        "into a fact. Preserve all uncertainty and limitations. Explain the finding for an engineering/operator "
-        "audience in concise language. Return exactly four sections: Observed change, Evidence, Plausible "
-        "interpretation, Recommended review. Clearly label unsupported causal explanations as hypotheses."
+        "upgrade confidence, or attribute a physical cause. Do not produce causes, diagnoses, hypotheses "
+        "about why equipment behavior changed, corrective actions, or recommendations. Do not rename "
+        "attribution as a driver, culprit, mechanism, reason, or explanation. Preserve all uncertainty "
+        "and limitations. Summarize only recorded observations for an engineering/operator audience. "
+        "Return exactly four sections: Observed change, Relationship evidence, Operating context, Limitations."
     )
 
 
@@ -130,6 +132,9 @@ def interpret_evidence_package(
     ).strip()
     if not text:
         raise BedrockInterpretationError("Amazon Bedrock returned no interpretation text.")
+
+    if re.search(r"\b(?:causes?|caused|causing|diagnos\w*|culprit|root[ _-]?cause|(?:likely|suspected|probable)\s+(?:driver|mechanism|issue)|corrective action)\b", text, re.IGNORECASE):
+        raise BedrockInterpretationError("Model response contains retired analytical attribution.")
 
     usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
     return {
