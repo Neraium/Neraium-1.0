@@ -27,9 +27,11 @@ Move Neraium from usable beta toward industrial-grade telemetry intelligence by 
 
 | Upload size | Default target | Test behavior |
 |---|---:|---|
-| 10k rows | <= 20s | Runs in default benchmark matrix |
-| 100k rows | <= 60s | Runs by default |
+| 10k rows | 20s reference | Observed in default robustness matrix; not an absolute CI assertion |
+| 100k rows | <= 60s | Required guard for both reported processing time and complete public-call wall time |
 | 1M rows | <= 300s | Runs when `NERAIUM_RUN_1M_BENCHMARK=1` |
+
+The robustness matrix retains timing observations and analytical assertions. See [Dataset processing performance](DATASET_PROCESSING_PERFORMANCE.md#robustness-matrix-and-upload-performance-guards) for the measurement boundary and dedicated guard policy.
 
 The 1M guard is intentionally opt-in for normal CI because it creates a large in-memory synthetic CSV. Release validation should run it before production deployments.
 
