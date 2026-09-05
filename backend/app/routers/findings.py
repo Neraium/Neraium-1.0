@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from pydantic import BaseModel, Field
 
 from app.core.security import _strict_auth_mode, require_api_access, require_operator_role
 from app.models.api_models import (
@@ -16,6 +17,7 @@ from app.models.api_models import (
     FindingWorkflowUpdateRequest,
 )
 from app.services.auth_store import list_workflow_members, list_workspace_members
+from app.services.consequence_quantification import RESOURCE_PROFILES, quantify_consequence
 from app.services.evidence_store import validation_outcome_for_category
 from app.services.finding_workflow import (
     FindingNotFoundError,
@@ -43,6 +45,22 @@ FindingIdPath = Annotated[
     str,
     Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$"),
 ]
+
+
+class ConsequenceObservation(BaseModel):
+    timestamp: str | float
+    observed: float
+    expected: float
+    valid: bool = True
+
+
+class ConsequenceQuantificationRequest(BaseModel):
+    profile_key: str
+    observations: list[ConsequenceObservation] = Field(min_length=2)
+    max_gap_seconds: float | None = Field(default=None, gt=0)
+    source_relationship_ids: list[str] = Field(default_factory=list)
+    source_tag_ids: list[str] = Field(default_factory=list)
+    support_level: str | None = None
 
 
 def _actor(request: Request) -> tuple[str, str | None]:
@@ -132,6 +150,38 @@ def get_finding_workflow_members() -> dict[str, Any]:
         )
         members = [personal_member] if personal_member else []
     return {"members": members}
+
+
+@router.get("/consequence/profiles")
+def get_consequence_profiles() -> dict[str, Any]:
+    return {
+        "profiles": {
+            key: {
+                "resource_type": value.resource_type,
+                "rate_unit": value.rate_unit,
+                "cumulative_unit": value.cumulative_unit,
+                "rate_period_seconds": value.rate_period_seconds,
+            }
+            for key, value in RESOURCE_PROFILES.items()
+        }
+    }
+
+
+@router.post("/consequence/quantify")
+def quantify_finding_consequence(payload: ConsequenceQuantificationRequest) -> dict[str, Any]:
+    """Quantify consequence from evidence already established by the finding pipeline.
+
+    This endpoint performs no anomaly detection and no cause attribution. It only
+    integrates observed-minus-expected engineering rates over valid evidence intervals.
+    """
+    return quantify_consequence(
+        (item.model_dump() for item in payload.observations),
+        profile_key=payload.profile_key,
+        max_gap_seconds=payload.max_gap_seconds,
+        source_relationship_ids=payload.source_relationship_ids,
+        source_tag_ids=payload.source_tag_ids,
+        support_level=payload.support_level,
+    )
 
 
 @router.get("/{finding_id}", response_model=FindingCaseResponse)
