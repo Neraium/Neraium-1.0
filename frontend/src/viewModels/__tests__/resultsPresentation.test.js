@@ -574,3 +574,17 @@ describe("results presentation contracts", () => {
     expect(compacted.channels.find((channel) => channel.key === "mutual_information").state.state).toBe("unavailable");
   });
 });
+
+it("projects the canonical consequence through review and evidence without borrowing a sibling's amount", async () => {
+  const { default: consequence } = await import("../../../tests/fixtures/measurable-consequence.json");
+  const result = fixtureResult();
+  result.analysis_result = { conditions: [{ id: A, measurable_consequence: consequence }] };
+  const model = modelFrom(result);
+  for (const project of [projectFindingReview, projectEvidenceRecord]) {
+    const a = projectEvidenceDashboardSummary(project(model, A));
+    const b = projectEvidenceDashboardSummary(project(model, B));
+    expect(a.measurableConsequence).toMatchObject({ status: "quantified", cumulative_amount: consequence.cumulative_amount, source_relationship_ids: ["water:load"] });
+    expect(a.measurableConsequence).not.toHaveProperty("provenance");
+    expect(b.measurableConsequence).toEqual({ status: "not_quantifiable", statement: "Consequence not quantifiable from available evidence." });
+  }
+});

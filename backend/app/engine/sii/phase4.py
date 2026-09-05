@@ -126,6 +126,7 @@ def evaluate_phase4(
         sensor_health=sensor_health,
         source_model_version=str(active_model.get("model_version")) if active_model else None,
         evaluation_time=observed_at,
+        timestamp_column=timestamp_column,
         config=phase4_cfg.get("expected_behavior_config") if isinstance(phase4_cfg.get("expected_behavior_config"), dict) else None,
     )
     if progress_callback:

@@ -97,6 +97,7 @@ _SHARED_ANALYSIS_FIELDS = (
 
 _FINDING_AUDIT_FIELDS = frozenset(
     {
+        "measurable_consequence",
         "id",
         "finding_id",
         "finding_key",

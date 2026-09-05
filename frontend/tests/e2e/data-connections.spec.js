@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./fixtures";
 
@@ -299,4 +300,49 @@ test("persisted connector result routes through every evidence depth without rer
     { method: "GET", path: `/api/data-connections/${CONNECTION_ID}/runs/${RUN_ID}/systems/chw-loop/analysis-results/${RESULT_ID}/lineage` },
   ]);
   expect(analysisMutations).toEqual([]);
+});
+
+
+const measuredWaterConsequence = JSON.parse(fs.readFileSync(new URL("../fixtures/measurable-consequence.json", import.meta.url), "utf8"));
+
+async function openMeasuredFinding(page, consequence) {
+  const detail = canonicalResultDetail();
+  detail.product_result.analysis_result.insights[0].measurable_consequence = { ...consequence, finding_id: FINDING_ID };
+  await mockTelemetryApi(page, {
+    existingConnection: connection({ enabled: true, lifecycle_status: "enabled" }),
+    runs: [{ run_id: RUN_ID, connection_id: CONNECTION_ID, mode: "incremental", status: "succeeded", started_at: "2026-08-26T09:00:00Z", completed_at: "2026-08-26T10:05:00Z", observations_accepted: 1 }],
+    canonicalResult: detail,
+  });
+  await page.goto("/workspace/data-sources");
+  await page.getByRole("button", { name: "Review results" }).click();
+  await page.getByTestId("compact-finding-card").getByRole("button", { name: "Review finding" }).click();
+  await expect(page.getByRole("region", { name: "Measurable consequence" })).toBeVisible();
+}
+
+for (const width of [1440, 390]) {
+  test(`measurable consequence survives canonical Findings and Evidence navigation at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await openMeasuredFinding(page, measuredWaterConsequence);
+    const section = page.getByRole("region", { name: "Measurable consequence" });
+    await expect(section.getByText("Water use above expected")).toBeVisible();
+    await expect(section.getByText("12,840 gal")).toBeVisible();
+    await expect(section.getByText("6.0 hours")).toBeVisible();
+    await expect(section.getByText("High", { exact: true })).toBeVisible();
+    await expect(section.getByText("water:load", { exact: true })).not.toBeVisible();
+    await section.getByText("Technical evidence", { exact: true }).click();
+    await expect(section.getByText("water:load", { exact: true })).toBeVisible();
+    await expect(section.getByText("water-flow / cooling-load")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)).toBe(false);
+    await section.screenshot({ path: `test-results/measurable-consequence-${width}.png` });
+    await page.getByRole("button", { name: "Open investigation" }).click();
+    await page.getByRole("button", { name: "Open evidence record" }).click();
+    await expect(section.getByText("12,840 gal")).toBeVisible();
+  });
+}
+
+test("insufficient consequence remains explicit in canonical Findings review", async ({ page }) => {
+  await openMeasuredFinding(page, { status: "not_quantifiable", statement: "Consequence not quantifiable from available evidence." });
+  const section = page.getByRole("region", { name: "Measurable consequence" });
+  await expect(section.getByText("Consequence not quantifiable from available evidence.")).toBeVisible();
+  await expect(section.getByText("0 gal")).toHaveCount(0);
 });

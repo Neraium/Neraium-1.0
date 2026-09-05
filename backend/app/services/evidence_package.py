@@ -7,6 +7,8 @@ from uuid import UUID, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.services.measurable_consequence import recorded_measurable_consequence
+
 
 SCHEMA_VERSION = "evidence-package-v1"
 PACKAGE_NAMESPACE = UUID("873d640e-f7c7-4c40-9fac-c09957ee49e8")
@@ -329,6 +331,10 @@ class OperatingContext(StrictModel):
 
 
 class EvidencePackage(StrictModel):
+    measurable_consequence: dict[str, Any] = Field(default_factory=lambda: {
+        "status": "not_quantifiable",
+        "statement": "Consequence not quantifiable from available evidence.",
+    })
     id: str
     package_number: str
     schema_version: str
@@ -933,6 +939,7 @@ def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
         finding_confidence=finding_confidence, evidence_ids={item.id for item in evidence},
     )
     package = EvidencePackage(
+        measurable_consequence=recorded_measurable_consequence(finding, result),
         id=package_uuid, package_number=package_number, schema_version=SCHEMA_VERSION, revision=1,
         analysis_id=analysis_id, organization_id=organization_id,
         portfolio_id=result.get("portfolio_id"), site_id=result.get("site_id"), system_id=result.get("system_id"),
@@ -993,6 +1000,7 @@ def legacy_findings(package: dict[str, Any], original: list[dict[str, Any]]) -> 
     projected[0].update({
         "id": projected[0].get("id") or package["id"], "headline": projected[0].get("headline") or package["title"],
         "system": projected[0].get("system") or package["system_label"], "status": projected[0].get("status") or "open",
+        "measurable_consequence": package["measurable_consequence"],
         "evidence_package_id": package["id"], "relationship": primary["relationship_label"],
         "change_direction": primary["change_direction"], "baseline_strength": primary["baseline_strength"],
         "comparison_strength": primary["comparison_strength"], "absolute_change": primary["absolute_change"],

@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
-from pydantic import BaseModel, Field
+from neraium_consequence import RESOURCE_PROFILES, quantify_consequence
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.security import _strict_auth_mode, require_api_access, require_operator_role
 from app.models.api_models import (
@@ -17,7 +18,6 @@ from app.models.api_models import (
     FindingWorkflowUpdateRequest,
 )
 from app.services.auth_store import list_workflow_members, list_workspace_members
-from app.services.consequence_quantification import RESOURCE_PROFILES, quantify_consequence
 from app.services.evidence_store import validation_outcome_for_category
 from app.services.finding_workflow import (
     FindingNotFoundError,
@@ -48,19 +48,23 @@ FindingIdPath = Annotated[
 
 
 class ConsequenceObservation(BaseModel):
-    timestamp: str | float
-    observed: float
-    expected: float
-    valid: bool = True
+    model_config = ConfigDict(extra="allow")
+    timestamp: Any = None
+    observed: Any = None
+    expected: Any = None
+    valid: Any = True
 
 
 class ConsequenceQuantificationRequest(BaseModel):
     profile_key: str
-    observations: list[ConsequenceObservation] = Field(min_length=2)
-    max_gap_seconds: float | None = Field(default=None, gt=0)
+    observations: list[ConsequenceObservation] = Field(default_factory=list, max_length=100_000)
+    max_gap_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     source_relationship_ids: list[str] = Field(default_factory=list)
     source_tag_ids: list[str] = Field(default_factory=list)
     support_level: str | None = None
+    finding_id: str | None = None
+    evidence_id: str | None = None
+    analysis_run_id: str | None = None
 
 
 def _actor(request: Request) -> tuple[str, str | None]:
@@ -175,12 +179,15 @@ def quantify_finding_consequence(payload: ConsequenceQuantificationRequest) -> d
     integrates observed-minus-expected engineering rates over valid evidence intervals.
     """
     return quantify_consequence(
-        (item.model_dump() for item in payload.observations),
+        (item.model_dump(exclude_unset=True) for item in payload.observations),
         profile_key=payload.profile_key,
         max_gap_seconds=payload.max_gap_seconds,
         source_relationship_ids=payload.source_relationship_ids,
         source_tag_ids=payload.source_tag_ids,
         support_level=payload.support_level,
+        finding_id=payload.finding_id,
+        evidence_id=payload.evidence_id,
+        analysis_run_id=payload.analysis_run_id,
     )
 
 

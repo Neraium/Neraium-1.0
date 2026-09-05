@@ -239,3 +239,20 @@ def test_decode_rejects_digest_or_noncanonical_payload() -> None:
         CanonicalResultArtifactError, match="canonical_result_payload_digest_mismatch"
     ):
         decode_canonical_result_artifact(replace(artifact, payload_digest="0" * 64))
+
+
+def test_canonical_artifact_replays_full_consequence_provenance():
+    from neraium_consequence import quantify_consequence
+    execution = _execution()
+    analysis = deepcopy(dict(execution.analysis_result))
+    consequence = dict(quantify_consequence(
+        [{"timestamp": "1970-01-01T01:00:00+01:00", "observed": 30, "expected": 20},
+         {"timestamp": 60, "observed": 30, "expected": 20}],
+        profile_key="water_gpm", source_relationship_ids=["rel: exact "], finding_id="condition-1",
+    ))
+    analysis["conditions"][0]["measurable_consequence"] = consequence
+    execution = replace(execution, analysis_result=MappingProxyType(analysis))
+    artifact = build_canonical_result_artifact(execution)
+    replay = decode_canonical_result_artifact(artifact)
+    assert replay["analysis_result"]["conditions"][0]["measurable_consequence"] == consequence
+    assert build_canonical_result_artifact(execution).payload_digest == artifact.payload_digest

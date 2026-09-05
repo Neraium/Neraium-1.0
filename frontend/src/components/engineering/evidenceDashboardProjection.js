@@ -81,6 +81,7 @@ export function projectEvidenceDashboardSummary(projection) {
     }));
     const evidenceWindow = currentEvidenceWindow([dashboard.evidenceWindow]);
     return {
+      measurableConsequence: dashboard.measurableConsequence,
       title: dashboard.title || "Finding title unavailable",
       system: dashboard.system || "System not supplied",
       status: dashboard.status || "Unavailable",
@@ -109,6 +110,7 @@ export function projectEvidenceDashboardSummary(projection) {
   const attribution = normalizedState(contract?.interpretation?.attribution_status);
   const causeEstablished = projection.dashboardIdentity.causeEstablished || ["confirmed", "established"].includes(attribution);
   return {
+    measurableConsequence: projection.dashboardIdentity.measurableConsequence,
     title: projection.dashboardIdentity.title || "Finding title unavailable",
     system: projection.dashboardIdentity.system || "System not supplied",
     status: projection.dashboardIdentity.status || "Unavailable",

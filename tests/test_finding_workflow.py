@@ -295,3 +295,20 @@ def test_workflow_tables_enforce_append_only_identity_and_survive_evidence_prune
             )
         connection.execute("DELETE FROM evidence_runs WHERE run_id = 'retained-run'")
     assert read_finding_case(finding_id)["evidence"]["source_run_id"] == "retained-run"
+
+
+def test_finding_case_preserves_measurable_consequence_and_sibling_isolation() -> None:
+    from neraium_consequence import quantify_consequence
+    record = _record("consequence-workflow-run", ("condition-a", "condition-b"))
+    consequence = dict(quantify_consequence(
+        [{"timestamp": 0, "observed": 30, "expected": 20},
+         {"timestamp": 60, "observed": 30, "expected": 20}],
+        profile_key="water_gpm", finding_id="condition-a", source_tag_ids=["tag: exact "],
+    ))
+    record["finding_identity_snapshot"][0]["finding"]["measurable_consequence"] = consequence
+    evidence_store.upsert_evidence_run(record)
+    a = read_finding_case(evidence_finding_id(record["run_id"], "condition-a"))
+    b = read_finding_case(evidence_finding_id(record["run_id"], "condition-b"))
+    assert a["measurable_consequence"] == consequence
+    assert a["evidence"]["finding"]["measurable_consequence"] == consequence
+    assert b["measurable_consequence"]["status"] == "not_quantifiable"
