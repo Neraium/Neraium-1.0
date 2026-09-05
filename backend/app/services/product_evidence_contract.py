@@ -8,6 +8,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+_ATOMIC_TYPES = frozenset({str, int, float, bool, type(None)})
+
 _RETIRED = frozenset({
     "cause", "causes", "likelycause", "likelycauses", "probablecause",
     "suspectedcause", "rootcause", "rootcauseconclusion", "rootcauseconclusions",
@@ -30,6 +32,9 @@ _PRESERVED = frozenset({
 
 def product_evidence(value: Any) -> Any:
     """Copy a product payload, excluding obsolete conclusion fields at every depth."""
+    # JSON scalars are immutable; deepcopy adds overhead for every measured value.
+    if type(value) in _ATOMIC_TYPES:
+        return value
     if isinstance(value, dict):
         return {
             key: deepcopy(item) if key in _PRESERVED else product_evidence(item)

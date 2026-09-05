@@ -69,7 +69,15 @@ Chromium covers seven viewport sizes, progressive disclosure, evidence navigatio
 unknown-identity isolation, accessibility, and quantified/insufficient consequence
 rendering. The old browser fixture now explicitly selects its saved analysis,
 matching main's existing rule that persisted latest results must not auto-activate.
-The full configured backend suite and PR checks are recorded separately in the PR.
+The full configured backend CI suite passed 1,838 tests (3 conditional skips,
+20 configured exclusions) before the scalar-copy optimization. Its subsequent
+focused validation passed 64 tests. The projection returns immutable JSON scalars
+directly; dictionaries, lists and non-JSON values retain copy isolation.
+Regression fixtures re-query workspace controls after remount and await canonical
+identity activation before testing delayed stale responses. Their expected values
+and stale-response checks are unchanged; all 539 frontend tests pass with CI's
+Node 20.20.2 as well as the original Node 24 validation environment.
+Final-head CI results are available in the PR checks.
 
 After this correction is merged, the separate consequence workstream still needs
 fresh Cases A/B/C, explicit connector resource configuration, acquisition-specific
