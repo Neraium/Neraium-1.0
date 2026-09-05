@@ -199,7 +199,8 @@ def test_chilled_water_flow_rises_while_delta_t_falls_is_hypothesis_not_confirma
     assert insight["relationship_prior_id"] == "water.chilled_water_thermal_behavior"
     assert any(metric["name"] in {"derived_delta_t", "reported_delta_t", "thermal_load_proxy"} for metric in insight["derived_metrics"])
     assert insight["status"] != "operator_confirmed"
-    assert any("Bypass flow" == item["explanation"] for item in insight["possible_explanations"])
+    assert insight["possible_explanations"] == []
+    assert "likely_causes" not in insight
 
 
 def test_filter_dp_rise_at_similar_flow_supports_only_hypothesis():
@@ -235,13 +236,15 @@ def test_prior_version_persists_into_evidence_record():
     assert record["water_prior_versions"][0]["relationship_prior_version"] == "1.0.0"
 
 
-def test_analysis_result_serializes_all_six_water_insight_fields():
+def test_analysis_result_retains_water_evidence_without_physical_hypotheses():
     water = interpret_water_intelligence(_pump_fixture())
     result = {"job_id": "water-analysis", "run_id": "water-analysis", "upload_id": "water-analysis", "filename": "water.csv", "data_quality": {"readiness": "ready"}, "timestamp_profile": {}, "baseline_analysis": {}, "relationship_model": {}, "operator_report": {}, "water_intelligence": water, "analysis_explanation": {"insights": water["insights"], "relationships": [], "systems": [], "recommendations": [], "fingerprint": {}, "executive_summary": {}}}
     analysis = build_analysis_result(result)
     insight = analysis["insights"][0]
-    for field in ["observed_evidence", "derived_metrics", "possible_explanations", "confounding_conditions", "recommended_checks", "confidence_and_uncertainty"]:
+    for field in ["observed_evidence", "derived_metrics", "confounding_conditions", "confidence_and_uncertainty"]:
         assert field in insight
+    assert not insight.get("recommended_checks")
+    assert "possible_explanations" not in insight
     assert insight["relationship_prior_id"] == "water.pump_hydraulic_behavior"
     assert analysis["water_intelligence"]["insights"]
 

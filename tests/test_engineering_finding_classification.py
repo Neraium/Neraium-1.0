@@ -485,9 +485,10 @@ def test_canonical_result_preserves_new_finding_fields_and_legacy_fields() -> No
         "investigation_guidance",
         "what_changed",
         "why_it_matters",
-        "recommended_check",
         "evidence_refs",
     }
+    assert "likely_cause" not in insight
+    assert not insight.get("recommended_check")
     assert insight["investigation_guidance"]
     assert insight["finding_confidence_v1"]["schema_version"] == "finding-confidence-v1"
     assert insight["relationship_comparison"] == insight["finding_confidence_v1"]["relationship_comparison"]

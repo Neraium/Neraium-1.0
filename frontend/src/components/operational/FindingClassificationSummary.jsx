@@ -66,13 +66,6 @@ function operatingContextLabel(dimension, fallback) {
   return displayLabel(status ?? legacyMatch, fallback);
 }
 
-function causeLabel(dimension, classificationType = "") {
-  const status = String(dimension?.attribution_status ?? "").toLowerCase();
-  if (["confirmed", "supported"].includes(status) || classificationType === "known_operational_change") return "Established";
-  if (status === "hypothesis" || classificationType === "possible_instrumentation_issue") return "Under review";
-  return "Not established";
-}
-
 function CompactSummary({ finding, presentation, ariaLabel }) {
   const confidence = confidenceLabel(finding, presentation);
   const status = statusLabel(finding, presentation);
@@ -95,7 +88,6 @@ function CompactSummary({ finding, presentation, ariaLabel }) {
           <span className="sr-only">Classification: </span>{presentation.label}
         </li>
         {dimensions.changeDetection ? <li className="finding-classification__chip"><span className="sr-only">Change detection confidence: </span>Change {displayLabel(dimensions.changeDetection.level)}</li> : <li className="finding-classification__chip"><span className="sr-only">Confidence: </span>{confidence} confidence</li>}
-        <li className="finding-classification__chip"><span className="sr-only">Cause status: </span>Cause {causeLabel(dimensions.interpretation, presentation.type)}</li>
         {supportTrend ? <li className="finding-classification__chip"><span className="sr-only">Support trend: </span>{evidenceTrendPhrase(supportTrend)}</li> : null}
         {corroborationStrength ? <li className="finding-classification__chip"><span className="sr-only">Corroboration: </span>{corroborationStrength}{relationshipCount ? ` · ${relationshipCount}` : ""}</li> : null}
         <li className="finding-classification__chip">
@@ -113,7 +105,6 @@ export default function FindingClassificationSummary({ finding, presentation: su
   const ariaLabel = [
     `Classification: ${presentation.label}`,
     dimensions.changeDetection ? `Change detection confidence: ${displayLabel(dimensions.changeDetection.level)}` : `Classification confidence: ${presentation.classificationConfidence}`,
-    `Cause: ${causeLabel(dimensions.interpretation, presentation.type)}`,
     `Data confidence: ${presentation.dataConfidence.rating}`,
     `Operating context: ${operatingContextLabel(dimensions.operatingContext, presentation.operatingMode.match)}`,
     `Persistence: ${presentation.persistence.label}`,
@@ -136,7 +127,6 @@ export default function FindingClassificationSummary({ finding, presentation: su
       </div>
       <dl className="finding-classification__facts">
         {dimensions.changeDetection ? <div><dt>Change confidence</dt><dd>{displayLabel(dimensions.changeDetection.level)}</dd></div> : <div><dt>Evidence confidence</dt><dd>{detailedConfidenceLabel(finding, presentation)}</dd></div>}
-        <div><dt>Cause</dt><dd>{causeLabel(dimensions.interpretation, presentation.type)}</dd></div>
         <div><dt>Evidence quality</dt><dd>{displayLabel(dimensions.evidenceQuality?.level, presentation.dataConfidence.rating)}</dd></div>
         <div><dt>Operating context</dt><dd>{operatingContextLabel(dimensions.operatingContext, presentation.operatingMode.match)}</dd></div>
         <div><dt>Persistence</dt><dd>{presentation.persistence.label}</dd></div>

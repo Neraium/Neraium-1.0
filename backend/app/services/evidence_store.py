@@ -8,6 +8,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
+from app.services.product_evidence_contract import product_evidence
 from app.core.config import get_settings
 from app.services.dataset_scope import attach_dataset_scope, current_dataset_scope, dataset_scope_from_payload
 from app.services.finding_workflow import (
@@ -226,9 +227,9 @@ def tag_evidence_for_audit(run_id: str, actor: str, tagged_at: str) -> dict[str,
     return updated_record
 
 def build_evidence_export(record: dict[str, Any]) -> str:
+    record = product_evidence(record)
     warnings = record.get("warnings") or []
     errors = record.get("errors") or []
-    drivers = record.get("primary_drivers") or []
     evidence_summary = record.get("evidence_summary") or []
     archetypes = record.get("structural_archetypes") or []
     feedback_history = record.get("operator_feedback_history") or []
@@ -278,11 +279,6 @@ def build_evidence_export(record: dict[str, Any]) -> str:
         lines.append("- None recorded")
     lines.extend(["", "## Data Conditions"])
     lines.extend([f"- {item}" for item in (record.get("data_conditions") or [])] or ["- None recorded"])
-    lines.extend([
-        "",
-        "## Primary Drivers",
-    ])
-    lines.extend([f"- {item}" for item in drivers] or ["- None recorded"])
     lines.extend(["", "## Interpretive Archetypes"])
     lines.extend([f"- {item}" for item in archetypes] or ["- None recorded"])
     lines.extend(["", "## Evidence Summary"])
@@ -311,10 +307,11 @@ def build_evidence_export(record: dict[str, Any]) -> str:
 
 
 def build_evidence_export_payload(record: dict[str, Any]) -> dict[str, Any]:
-    return dict(record)
+    return product_evidence(record)
 
 
 def build_evidence_export_csv(record: dict[str, Any]) -> str:
+    record = product_evidence(record)
     flat = {
         "run_id": record.get("run_id"),
         "source_type": record.get("source_type"),
@@ -354,6 +351,7 @@ def build_evidence_export_csv(record: dict[str, Any]) -> str:
 
 def build_evidence_package_payload(record: dict[str, Any]) -> dict[str, Any]:
     """Build a governance-bounded evidence package from persisted evidence only."""
+    record = product_evidence(record)
     governance = record.get("governance_boundary") if isinstance(record.get("governance_boundary"), dict) else {}
     raw_export_allowed = governance.get("raw_telemetry_export_allowed") is True
     traceability = record.get("traceability") if isinstance(record.get("traceability"), dict) else {}
@@ -625,7 +623,7 @@ def _annotate_and_sort_evidence_runs(items: list[dict[str, Any]]) -> list[dict[s
         annotated.append(_annotate_evidence_record_indexed(item, history_index))
         _index_annotation_history(item, history_index)
     annotated.sort(key=_evidence_sort_key, reverse=True)
-    return annotated
+    return product_evidence(annotated)
 
 
 def _new_annotation_history_index() -> dict[str, Any]:

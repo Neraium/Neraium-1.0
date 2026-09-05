@@ -82,7 +82,7 @@ export default function HelpChangelogWorkspace({
             <li><strong>Insight severity:</strong> Critical, High, Moderate, or Low investigation priority.</li>
             <li><strong>Connector health:</strong> Healthy, Degraded, Offline, or Not configured.</li>
             <li><strong>Facility state:</strong> Stable, Investigation recommended, Urgent investigation, Baseline needed, or Analyzing.</li>
-            <li>Evidence supports an interpretation but does not prove root cause.</li>
+            <li>Evidence describes observed behavior and its limits.</li>
           </ul>
         </Panel>
 

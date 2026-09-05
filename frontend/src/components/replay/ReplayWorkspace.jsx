@@ -156,17 +156,6 @@ export default function ReplayWorkspace({
       <Panel title="Evidence" className="span-6 system-story-card">
         <ul className="system-story-list">{story.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
       </Panel>
-      <Panel title="Possible Operational Causes" className="span-6 system-story-card">
-        <div className="system-story-hypotheses">
-          {story.hypotheses.map((item) => (
-            <section key={`${item.rank}-${item.label}`}>
-              <span>{item.rank}</span>
-              <strong>{item.label}</strong>
-              <p>{item.detail}</p>
-            </section>
-          ))}
-        </div>
-      </Panel>
       <Panel title="What To Inspect" className="span-6 system-story-card">
         <div className="system-story-checklist">
           {story.checklist.map((item) => (
@@ -316,7 +305,6 @@ function buildSystemStory({ timeline, frame, frameIndex, canonicalFinding, curre
     whatHappened,
     summary: pendingState ? pendingState.detail : `This story summarizes ${frames.length || "the current"} observation window in operator language and points the engineer to the next inspection steps.`,
     evidence,
-    hypotheses: buildHypotheses({ variables, evidence, domainMode }),
     checklist: buildChecklist({ variables, domainMode }),
     development: buildDevelopmentTimeline({ frames, frameIndex, formatClockTime, pendingState }),
     trends: buildTrendModels({ frames, variables }),
@@ -346,17 +334,6 @@ function buildEvidenceBullets({ evidenceRun, finding, activeFrame, variables }) 
   if (Number.isFinite(strength) && strength >= 0.24) generated.push("Current behavior stayed outside the historical operating band.");
   if (Array.isArray(activeFrame?.primary_contributors) && activeFrame.primary_contributors.length) generated.push(`${sanitizeOperatorList(activeFrame.primary_contributors).slice(0, 3).map(humanize).join(", ")} contributed most to the change.`);
   return sanitizeOperatorList([...supplied, ...generated]).slice(0, 5);
-}
-
-function buildHypotheses({ variables, evidence, domainMode }) {
-  const text = `${variables.join(" ")} ${evidence.join(" ")} ${domainMode ?? ""}`.toLowerCase();
-  const hypotheses = [];
-  if (text.includes("valve") || text.includes("flow") || text.includes("chw")) hypotheses.push({ rank: "Most likely", label: "Valve control issue", detail: "Flow response appears inconsistent with the expected command or load pattern." });
-  if (text.includes("pump") || text.includes("vfd") || text.includes("speed")) hypotheses.push({ rank: hypotheses.length ? "Possible" : "Most likely", label: "Pump or VFD response change", detail: "Pump behavior may no longer match its historical response curve." });
-  if (text.includes("temperature") || text.includes("sensor") || text.includes("humidity")) hypotheses.push({ rank: hypotheses.length ? "Possible" : "Most likely", label: "Sensor drift", detail: "A measurement point may be biasing the interpretation if calibration has shifted." });
-  hypotheses.push({ rank: hypotheses.length ? "Possible" : "Most likely", label: "Reduced flow", detail: "Hydraulic or process movement may be lower than expected for the current operating condition." });
-  hypotheses.push({ rank: "Possible", label: "Changing load conditions", detail: "A real load change may explain the new pattern without an equipment fault." });
-  return hypotheses.slice(0, 4);
 }
 
 function buildChecklist({ variables, domainMode }) {

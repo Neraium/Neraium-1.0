@@ -7,6 +7,7 @@ from uuid import UUID, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.services.product_evidence_contract import product_evidence
 from app.services.measurable_consequence import recorded_measurable_consequence
 
 
@@ -827,6 +828,7 @@ def _limitations(
 
 def build_evidence_package(result: dict[str, Any]) -> dict[str, Any] | None:
     """Formalize one existing comparison finding without adding analytical claims."""
+    result = product_evidence(result)
     analysis_id = str(result.get("comparison_analysis_id") or result.get("analysis_run_id") or "").strip()
     baseline_id = str(result.get("baseline_id") or _mapping(result.get("active_baseline_reference")).get("model_id") or "").strip()
     dataset_id = str(result.get("comparison_dataset_id") or result.get("dataset_id") or "").strip()

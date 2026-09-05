@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from app.services.product_evidence_contract import product_evidence
 from app.services.auth_store import workflow_member, workspace_assignment_member
 from app.services.dataset_scope import current_dataset_scope, dataset_scope_context, dataset_scope_from_payload
 from app.services.measurable_consequence import unavailable_consequence
@@ -112,7 +113,7 @@ def _source_finding_candidates(record: dict[str, Any]) -> list[tuple[str, dict[s
             {
                 "object_type": "observation",
                 "id": "run-observation",
-                "title": record.get("finding_title") or (record.get("primary_drivers") or [None])[0],
+                "title": record.get("finding_title"),
                 "observation_type": record.get("observation_type"),
                 "variables": list(record.get("variables") or []),
             },
@@ -337,7 +338,7 @@ def _events(finding_id: str) -> list[dict[str, Any]]:
 
 
 def _default_workflow(case: dict[str, Any]) -> dict[str, Any]:
-    snapshot = case["source_snapshot"]
+    snapshot = product_evidence(case["source_snapshot"])
     recommended = snapshot.get("recommended_priority")
     return {
         "version": 0,
@@ -503,7 +504,7 @@ def validate_status_transition(
 
 
 def _case_response(case: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
-    snapshot = case["source_snapshot"]
+    snapshot = product_evidence(case["source_snapshot"])
     latest_at = events[-1].get("recorded_at") if events else None
     return {
         "finding_id": case["finding_id"],

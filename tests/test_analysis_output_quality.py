@@ -93,9 +93,9 @@ def test_analysis_explanation_builds_operator_interpretation_report() -> None:
     assert report["subsystem"] == "Flow & Pressure"
     assert "2 operational relationships changed" in report["what_changed"]
     assert {"label": "Pump Power <-> Filter differential pressure"} in report["relationship_changes"]
-    assert analysis["insights"][0]["why_it_matters"].startswith("The hydraulic response no longer matches")
-    assert "operating-mode change" in analysis["insights"][0]["why_it_matters"]
-    assert "Operating setpoint modification" in report["potential_operational_causes"]
+    assert analysis["insights"][0]["why_it_matters"] == "The measured relationship differs from its reference window."
+    assert "operating-mode change" not in analysis["insights"][0]["why_it_matters"]
+    assert "potential_operational_causes" not in report
     assert "Operator logs" in report["recommended_review"]
     assert any("Pump Power <-> Filter differential pressure shifted" in item for item in report["advanced_details"]["raw_relationship_identifiers"])
 
@@ -158,9 +158,10 @@ def test_analysis_output_narratives_and_contributors_are_distinct_and_deduped() 
     analysis = result["analysis_result"]
 
     for insight in analysis["insights"]:
+        assert "why_neraium_thinks_it_happened" not in insight
+        assert "likely_cause" not in insight
         fields = [
             insight.get("what_happened") or insight.get("what_changed"),
-            insight.get("why_neraium_thinks_it_happened") or insight.get("why_it_matters"),
             insight.get("possible_operational_consequence") or insight.get("possible_consequence"),
         ]
         assert len({field for field in fields if field}) == len([field for field in fields if field])

@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from app.services.product_evidence_contract import product_evidence
 from app.services.measurable_consequence import attach_measurable_consequences
 from app.services.analysis_explanations import build_analysis_explanation
 from app.services.condition_corroboration import ConditionCorroborationService
@@ -55,13 +56,19 @@ def attach_analysis_result(
     payload["analysis_id"] = payload["analysis_result"]["analysis_id"]
     if normalized_telemetry is not None:
         payload["normalized_telemetry"] = normalized_telemetry
-    return payload
+    projected = product_evidence(payload)
+    # Completion still appends operational timing stages to these shared records.
+    # They are lifecycle bookkeeping, not finding conclusions.
+    for key in ("processing_trace", "processing_stats"):
+        if key in payload:
+            projected[key] = payload[key]
+    return projected
 
 
 def ensure_analysis_result(result: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(result, dict):
         return empty_analysis_result()
-    candidate = result.get("analysis_result")
+    candidate = product_evidence(result.get("analysis_result"))
     if is_canonical_analysis_result(candidate):
         if isinstance(candidate.get("sii_evidence"), dict):
             return candidate
@@ -267,6 +274,7 @@ def build_analysis_result(
     if not isinstance(result, dict):
         return empty_analysis_result()
 
+    result = product_evidence(result)
     analysis_id = first_present(result.get("analysis_id"), result.get("run_id"), result.get("job_id"))
     source_kind = clean_text(result.get("source_kind"))
     source_type_value = result.get("source_type") or (
@@ -506,7 +514,6 @@ def build_analysis_result(
                     "hypothesis_state": item.get("hypothesis_state"),
                     "observed_evidence": to_list(item.get("observed_evidence")),
                     "derived_metrics": to_list(item.get("derived_metrics")),
-                    "possible_explanations": to_list(item.get("possible_explanations")),
                     "confounding_conditions": to_list(item.get("confounding_conditions")),
                     "recommended_checks": to_list(item.get("recommended_checks")),
                     "investigation_guidance": to_list(item.get("investigation_guidance")),
@@ -525,15 +532,6 @@ def build_analysis_result(
                         item.get("why_it_matters"),
                         item.get("possible_operational_consequence"),
                         item.get("possible_consequence"),
-                        item.get("why_neraium_thinks_it_happened"),
-                        item.get("why_neraium_thinks"),
-                        item.get("likely_cause"),
-                    ),
-                    "why_neraium_thinks_it_happened": first_present(
-                        item.get("why_neraium_thinks_it_happened"),
-                        item.get("why_neraium_thinks"),
-                        item.get("likely_cause"),
-                        item.get("why_it_matters"),
                     ),
                     "likely_contributors": likely_contributors,
                     "contributing_relationships": to_list(item.get("contributing_relationships")),
@@ -674,7 +672,7 @@ def build_analysis_result(
     }
     if telemetry_lineage is not None:
         payload["telemetry_lineage"] = telemetry_lineage
-    payload = sanitize_payload(payload)
+    payload = product_evidence(sanitize_payload(payload))
     # Attach after presentation sanitization to preserve exact calculation provenance.
     attach_measurable_consequences(
         payload, source=result, original_findings=[*raw_conditions, *raw_insights],

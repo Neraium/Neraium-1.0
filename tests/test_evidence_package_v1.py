@@ -660,9 +660,10 @@ def test_multiple_persisted_explanations_do_not_become_hypotheses() -> None:
 
     package = build_evidence_package(result)
 
-    assert [item["category"] for item in package["limitations"]] == ["multiple_plausible_explanations"]
+    assert "Operating-mode difference" not in str(package)
+    assert "Instrumentation condition" not in str(package)
     assert package["hypotheses"] == []
-    assert package["limitations"][0]["supporting_evidence_refs"] == ["ev-supported-alternatives"]
+    assert "ev-supported-alternatives" not in str(package)
 
 
 def test_unknown_comparability_and_physics_unavailability_are_supported() -> None:

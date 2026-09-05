@@ -5,7 +5,6 @@ from typing import Any
 from app.services.finding_confidence import (
     build_finding_confidence,
     normalize_persistence_status,
-    reconcile_alternative_explanations,
 )
 
 
@@ -88,12 +87,7 @@ def classify_finding(
         reasons: list[str],
         certainty_limit: str,
     ) -> dict[str, Any]:
-        alternatives = reconcile_alternative_explanations(
-            classification_type=classification_type,
-            sensor_health=sensor_health,
-            operating_mode=operating_mode,
-            persistence=persistence,
-        )
+        alternatives = []  # Compatibility field; no physical attribution is generated.
         payload = classification_payload(
             classification_type,
             confidence=confidence,

@@ -385,17 +385,13 @@ def _build_primary_finding_chain(
         f"with {int((engine_result.get('system_evidence') or {}).get('categories_showing_meaningful_change') or 0)} affected categories "
         f"and {len(persistent_columns)} persistent columns."
     )
-    attribution_detail = (
-        f"Driver attribution selected '{driver or driver_attribution.get('likely_driver') or 'Unknown'}' "
-        f"because {supporting[0] if supporting else 'the evidence cluster remained the strongest available chain.'}"
-    )
     conclusion_detail = (
         f"Operator conclusion '{label}' surfaced as '{summary_text}' with {relationship_divergence.get('confidence') or intelligence.get('attribution_confidence') or 'unknown'} confidence."
     )
     return {
         "finding_id": "primary_conclusion",
         "finding_type": "primary_conclusion",
-        "title": driver or driver_attribution.get("likely_driver") or "Primary conclusion",
+        "title": "Observed relationship change",
         "conclusion": label,
         "operator_summary": summary_text,
         "confidence": str(relationship_divergence.get("confidence") or intelligence.get("attribution_confidence") or "unknown"),
@@ -405,7 +401,6 @@ def _build_primary_finding_chain(
         "evidence_chain": [
             _stage("baseline_comparison", baseline_detail, evidence_refs=refs, source_rows=source_rows),
             _stage("engine_corroboration", engine_detail),
-            _stage("driver_attribution", attribution_detail),
             _stage("operator_conclusion", conclusion_detail),
         ],
     }

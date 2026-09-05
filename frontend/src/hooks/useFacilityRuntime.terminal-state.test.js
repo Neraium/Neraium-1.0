@@ -198,14 +198,17 @@ describe("terminal latest-upload runtime ownership", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Complete upload" }));
 
-    await waitFor(() => expect(screen.getByTestId("results")).toBeTruthy());
-    expect(screen.queryByTestId("data-connections")).toBeNull();
-    expect(screen.getByTestId("effective-status").textContent).toBe("COMPLETE");
-    expect(screen.getByTestId("canonical-status").textContent).toBe("COMPLETE");
-    expect(screen.getByTestId("canonical-job").textContent).toBe("job-monotonic");
-    expect(screen.getByTestId("canonical-ui-state").textContent).toBe("verified");
-    expect(screen.getByTestId("canonical-processing").textContent).toBe("false");
-    expect(screen.getByTestId("gate-processing").textContent).toBe("false");
+    // Route mounting and canonical identity activation settle in separate effects.
+    await waitFor(() => {
+      expect(screen.getByTestId("results")).toBeTruthy();
+      expect(screen.queryByTestId("data-connections")).toBeNull();
+      expect(screen.getByTestId("effective-status").textContent).toBe("COMPLETE");
+      expect(screen.getByTestId("canonical-status").textContent).toBe("COMPLETE");
+      expect(screen.getByTestId("canonical-job").textContent).toBe("job-monotonic");
+      expect(screen.getByTestId("canonical-ui-state").textContent).toBe("verified");
+      expect(screen.getByTestId("canonical-processing").textContent).toBe("false");
+      expect(screen.getByTestId("gate-processing").textContent).toBe("false");
+    });
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Run background refetch" }));

@@ -25,7 +25,7 @@ export function buildStructuralExplanation(item) {
     return [
       `${item.likelyDriver} is the strongest available explanation at this time.`,
       item.confidenceBasis ?? "Supporting evidence is being compared across variable relationships.",
-      "Neraium is describing a change, not assigning root cause.",
+      "Neraium describes observed changes and their evidence.",
     ];
   }
   if (item?.tone === "unstable") {

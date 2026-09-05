@@ -327,7 +327,7 @@ describe("App session initialization", () => {
     const selector = screen.getByLabelText("Facility workspace");
     expect(selector.value).toBe("default");
     fireEvent.change(selector, { target: { value: "ws-central" } });
-    await waitFor(() => expect(selector.value).toBe("ws-central"));
+    await waitFor(() => expect(screen.getByLabelText("Facility workspace").value).toBe("ws-central"));
     expect(window.localStorage.getItem("neraium.current_workspace_id")).toBe("ws-central");
   });
 });
