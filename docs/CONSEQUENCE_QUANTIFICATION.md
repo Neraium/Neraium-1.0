@@ -1,76 +1,95 @@
-# Consequence Quantification
+# Measurable consequence
 
-Consequence Quantification extends Neraium's existing relationship-evidence pipeline. It is not a separate anomaly detector, leak detector, diagnostic engine, or recommendation engine.
+The sole consequence engine is the standalone `neraium-consequence` package,
+extracted from this repository's PR #124 / merge
+`74a7d4bf86d2f55f51a8a4cded2bef612cffbe3e`. The original
+`app.services.consequence_quantification` implementation is removed.
 
-## Boundary
+## Data flow
 
-The layer receives evidence that already contains an observed engineering rate and an expected engineering rate for aligned timestamps. It may quantify the physical magnitude associated with that deviation when the telemetry is sufficient.
+Telemetry -> quality gates -> operating context -> validated expected relationship
+model -> persistent finding with an exact evidence window -> timestamped
+observed/expected rates -> `neraium_consequence.quantify_consequence` -> canonical
+finding `measurable_consequence` -> immutable canonical artifact -> bounded product
+projection -> Finding Review / Evidence Record `EvidenceDashboard`.
 
-It does **not** infer cause.
+`expected_behavior.evaluate_expected_behavior` exposes a time series from the
+already selected, validated, operating-mode-matched expected-response model.
+It retains invalid/missing predictor rows. It performs no consequence integration.
+Models with a nonzero sample lag withhold the series until timestamp-based lag
+alignment is supported. A median expected value is never expanded into a series.
 
-Valid outcomes are:
+`services.measurable_consequence` checks persistence, ownership of every source
+relationship, exactly one mapped resource series, and an exact single finding
+window. It excludes observations outside that window without interpolating new
+boundary samples. Unknown resources, ambiguous multiple resource series, missing
+units, absent persistence, or insufficient intervals produce `not_quantifiable`.
 
-1. `quantified` — enough valid aligned evidence exists to calculate a measurable consequence.
-2. `not_quantifiable` — the relationship finding may remain valid, but the available evidence does not support a physical accumulation.
+Resource mapping requires an explicit catalog `consequence_profile_key` plus
+matching `canonical_unit`/`engineering_units`/`unit`, or an explicit `resource_type`
+plus matching rate unit. The existing canonical `electrical.active_power` identity
+with `kW` also maps exactly. Raw tag names and correlation deltas never establish
+resource identity. Connector catalog admission continues to enforce its existing
+canonical schema; adding resource identities to that catalog is separate work.
+Upload/catalog callers can use explicit metadata for all five package profiles.
 
-A relationship finding must never be downgraded merely because the consequence cannot be quantified.
+Supported profiles: `water_gpm`, `electricity_kw`, `steam_lb_per_hr`,
+`chemical_feed_gal_per_hr`, `compressed_air_scfm`. Historical API aliases
+`steam_lb_hr` and `chemical_gal_hr` remain available.
 
-## Current integration
+## Contract and evidence boundary
 
-The implementation lives in `backend/app/services/consequence_quantification.py` and is exposed through the existing Findings router:
+`measurable_consequence` is recorded on canonical conditions/insights, retained by
+Evidence Package serialization and finding workflow snapshots, and exposed in the
+Findings API. Historical records without it receive an explicit insufficient state;
+read paths do not reconstruct historical amounts with a newer model.
+
+Both outcomes retain package methodology/version and supplied provenance. The
+adapter also retains the exact expected-model evidence, signal mapping, and finding
+window. Canonical attachment runs after presentation text sanitization to avoid
+rewriting source identifiers. Product projections may bound detailed evidence;
+the existing projection qualification and canonical artifact remain authoritative.
+The frontend selects summary fields and never integrates truncated observations.
+
+The result contains no inferred cause, probable cause, root cause, diagnosis,
+automated corrective action, optimization advice, or monetary savings. Existing
+legacy fields in surrounding platform code are not extended by this integration.
+Support level is preserved when explicitly supplied; it is not synthesized from a
+model score. Missing support displays as "Not supplied".
+
+## API
 
 - `GET /api/findings/consequence/profiles`
 - `POST /api/findings/consequence/quantify`
 
-This keeps consequence calculation downstream of the existing finding/evidence path.
+These authenticated calculation endpoints delegate directly to the package. A POST
+calculates supplied evidence; it does not mutate a finding or bypass the canonical
+pipeline's ownership gates. Zero or one observation returns `not_quantifiable`.
+Observation values are preserved through request parsing so invalid numeric and
+quality values reach package validation rather than being silently coerced.
 
-## Calculation
+Quantified summary (full result also contains interval decisions and provenance):
 
-For each valid adjacent observation pair, Neraium computes the residual:
+```json
+{"status":"quantified","resource_type":"water","direction":"above_expected","cumulative_amount":12840.0,"cumulative_unit":"gal","duration_seconds":21600,"support_level":"high","methodology":"timestamp_aware_trapezoidal_integration","methodology_version":"1.0.0"}
+```
 
-`observed - expected`
+Insufficient summary:
 
-It then applies timestamp-aware trapezoidal integration using the resource profile's rate period. This supports irregular cadence without pretending missing evidence exists.
+```json
+{"status":"not_quantifiable","statement":"Consequence not quantifiable from available evidence."}
+```
 
-Invalid observations are removed. Intervals beyond a configured maximum gap are excluded rather than interpolated.
+A supported zero is quantified. Amounts retain their sign; mixed deviations may
+cancel. Duration sums contributing intervals, while the calculation window can
+span excluded gaps. The default maximum gap is 3600 seconds; acquisition systems
+should provide their stricter continuity limit through expected-behavior config.
 
-The result records the exact contributing intervals, source relationship IDs, and source tag IDs so the final amount can be reproduced from evidence.
+## Dependency and deployment
 
-## Initial resource profiles
-
-| Profile | Rate | Accumulated unit |
-| --- | --- | --- |
-| `water_gpm` | gpm | gal |
-| `electricity_kw` | kW | kWh |
-| `steam_lb_hr` | lb/hr | lb |
-| `chemical_gal_hr` | gal/hr | gal |
-| `compressed_air_scfm` | scfm | scf |
-
-Profiles are deliberately generic. Wastewater and chilled-water systems are applications of the same engine, not separate product modes.
-
-## Evidence language
-
-Supported language includes:
-
-- associated measurable deviation
-- observed excess relative to expected behavior
-- associated cumulative volume
-- associated additional electrical consumption
-
-Do not convert this into causal language such as leak volume, failure loss, root cause, probable cause, suspected cause, or cause not determined.
-
-## Platform UI contract
-
-When a canonical finding includes a `consequence` object with `status: quantified`, the evidence dashboard should render a **Measurable Consequence** block containing only values actually supplied by the evidence package, such as:
-
-- observed deviation
-- persistence duration
-- cumulative amount and unit
-- support level
-- relationship contribution when mathematically supplied
-
-When the object has `status: not_quantifiable`, the UI may show `Consequence not quantifiable from available evidence.` It must never synthesize a numeric value.
-
-## Extraction boundary
-
-The service has intentionally minimal dependencies so it can later be extracted into a dedicated repository/package (proposed name: `Neraium/neraium-consequence`) without changing its evidence contract. Until repository creation is available to the connected GitHub tooling, the authoritative implementation remains in the platform repository so integration can proceed without a disconnected prototype.
+`backend/requirements.txt` pins the package's immutable source archive and SHA-256.
+This needs no Git binary or credentials in either production Docker build context.
+Merge the package PR first, then the platform PR. The source pin remains reproducible
+after merge. No PyPI release, mainline merge, or production deployment is performed
+by opening these PRs. Local development can install a checkout with `pip install -e
+/path/to/neraium-consequence` after installing backend requirements.

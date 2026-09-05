@@ -343,3 +343,16 @@ def test_projection_is_deterministic_and_does_not_mutate_exact_execution() -> No
     assert execution == original
     assert canonical_projection_digest(first) == canonical_projection_digest(second)
     assert first.projection_bytes == second.projection_bytes
+
+
+def test_measurable_consequence_survives_canonical_projection_without_recalculation():
+    from neraium_consequence import quantify_consequence
+    execution = _execution()
+    consequence = dict(quantify_consequence(
+        [{"timestamp": 0, "observed": 30, "expected": 20},
+         {"timestamp": 60, "observed": 30, "expected": 20}],
+        profile_key="water_gpm", finding_id="condition-1", source_relationship_ids=["rel: exact "],
+    ))
+    execution["analysis_result"]["conditions"][0]["measurable_consequence"] = consequence
+    projection = build_canonical_result_projection(execution, artifact_metadata=_metadata(), scope=_scope())
+    assert projection.product_result["analysis_result"]["conditions"][0]["measurable_consequence"] == consequence

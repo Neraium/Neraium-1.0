@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from app.services.measurable_consequence import attach_measurable_consequences
 from app.services.analysis_explanations import build_analysis_explanation
 from app.services.condition_corroboration import ConditionCorroborationService
 from app.services.cumulative_counters import is_cumulative_counter_name
@@ -673,7 +674,12 @@ def build_analysis_result(
     }
     if telemetry_lineage is not None:
         payload["telemetry_lineage"] = telemetry_lineage
-    return sanitize_payload(payload)
+    payload = sanitize_payload(payload)
+    # Attach after presentation sanitization to preserve exact calculation provenance.
+    attach_measurable_consequences(
+        payload, source=result, original_findings=[*raw_conditions, *raw_insights],
+    )
+    return payload
 
 
 def empty_sii_evidence_projection(

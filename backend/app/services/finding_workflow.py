@@ -9,6 +9,7 @@ from typing import Any
 
 from app.services.auth_store import workflow_member, workspace_assignment_member
 from app.services.dataset_scope import current_dataset_scope, dataset_scope_context, dataset_scope_from_payload
+from app.services.measurable_consequence import unavailable_consequence
 from app.services.runtime_db import db_connection, init_runtime_db, now_iso
 from app.services.workspace_authorization import current_workspace_context
 
@@ -513,6 +514,9 @@ def _case_response(case: dict[str, Any], events: list[dict[str, Any]]) -> dict[s
             "run_id": snapshot.get("source_run_id"),
         },
         "evidence": snapshot,
+        "measurable_consequence": (snapshot.get("finding") or {}).get(
+            "measurable_consequence", unavailable_consequence()
+        ),
         "workflow": _project(case, events),
         "activity": {
             "count": len(events),

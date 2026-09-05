@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.consequence_quantification import quantify_consequence
+from neraium_consequence import quantify_consequence
 
 
 def test_water_quantification_integrates_irregular_cadence() -> None:

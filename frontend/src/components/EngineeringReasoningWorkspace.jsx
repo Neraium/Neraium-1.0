@@ -6,14 +6,13 @@ import { projectAnalysisEvidenceRecord, projectAnalysisInvestigation, projectEvi
 import { normalizeReviewRecords, reviewRecordFor, reviewRecordFromWorkflow } from "../viewModels/findingReviewState";
 import { fetchFindings } from "../services/api/findingsApi";
 import ConfidenceTierChip from "./engineering/ConfidenceTierChip";
-import EvidencePackageExport from "./engineering/EvidencePackageExport";
 import GlobalAssetSearch from "./engineering/GlobalAssetSearch";
 import PortfolioWorkspace from "./engineering/PortfolioWorkspace";
 import OperationsBrief from "./engineering/OperationsBrief";
-import TraceTimeline from "./engineering/TraceTimeline";
 import SkipToMainContent from "./SkipToMainContent";
 import "../styles/engineering-reasoning.css";
 
+const TraceWorkspace = lazy(() => import("./engineering/TraceWorkspace"));
 const WorkQueueWorkspace = lazy(() => import("./work/WorkQueueWorkspace"));
 const FindingReviewWorkspace = lazy(() => import("./engineering/FindingCaseWorkspaces").then((module) => ({ default: module.FindingReviewWorkspace })));
 const InvestigationWorkspace = lazy(() => import("./engineering/FindingCaseWorkspaces").then((module) => ({ default: module.InvestigationWorkspace })));
@@ -135,19 +134,6 @@ function FindingsOverview({ projection, onReview, onOpenInvestigation, onOpenEvi
 
 function EvidenceOutcomesOverview({ projection, onReview, onOpenInvestigation, onOpenEvidence }) {
   return <OperationsBrief projection={projection} onReview={onReview} onOpenInvestigation={onOpenInvestigation} onOpenEvidence={onOpenEvidence} />;
-}
-
-function TraceWorkspace({ model, finding, apiFetch, onBack }) {
-  const [selectedId, setSelectedId] = useState(model.trace[0]?.id ?? null);
-  const runId = runIdentity(model, finding);
-  return (
-    <div className="trace-workspace">
-      <button type="button" className="evidence-back" onClick={onBack}>Back to evidence</button>
-      <header className="forensic-page-header"><div><span className="forensic-kicker">Technical details</span><h1>Trace mode</h1></div></header>
-      <div className="trace-actions"><EvidencePackageExport runId={runId} apiFetch={apiFetch} /></div>
-      <TraceTimeline steps={model.trace} selectedId={selectedId} onSelect={(step) => setSelectedId(step.id)} />
-    </div>
-  );
 }
 
 const REVIEW_STATE_STORAGE_PREFIX = "neraium.operations-brief.review-state";
@@ -485,7 +471,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
                 ? <InvestigationWorkspace projection={investigationProjection} onOpenEvidence={openEvidence} onBack={() => goBack("findings")} />
                 : <EvidenceRecordWorkspace projection={evidenceProjection} apiFetch={apiFetch} onTrace={() => navigate("trace")} onBack={() => goBack("investigations")} />}</Suspense>
             : ["noDataset", "datasetReady", "analysisRunning"].includes(presentationState.key) ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
-              : effectiveRoute === "trace" ? <TraceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onBack={() => goBack("investigations")} />
+              : effectiveRoute === "trace" ? <Suspense fallback={<p className="case-unavailable">Loading technical details…</p>}><TraceWorkspace model={model} finding={selectedFinding} apiFetch={apiFetch} onBack={() => goBack("investigations")} /></Suspense>
                       : effectiveRoute === "portfolio" ? <PortfolioWorkspace sites={portfolioSites} onSelectSite={handleSelectSite} />
                         : effectiveRoute === "systems" ? <SystemsOverview projection={systemsProjection} onSystem={openSystem} />
                             : effectiveRoute === "findings" ? <FindingsOverview projection={resultsProjection} onReview={openFinding} onOpenInvestigation={openInvestigation} onOpenEvidence={openEvidence} />

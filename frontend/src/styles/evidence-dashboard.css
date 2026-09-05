@@ -104,3 +104,19 @@
   .evidence-dashboard--insufficient { padding: 20px 16px; }
   .evidence-record-technical__body { padding-inline: 0; }
 }
+
+.measurable-consequence {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-subtle, #d9e0e3);
+}
+.measurable-consequence h2 { margin: 0 0 0.9rem; font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.measurable-consequence__label { margin-bottom: 0.3rem; }
+.measurable-consequence__amount { display: block; font-size: 1.65rem; font-variant-numeric: tabular-nums; }
+.measurable-consequence__summary { display: flex; flex-wrap: wrap; gap: 1rem 3rem; margin: 1rem 0; }
+.measurable-consequence dt { font-size: 0.8rem; opacity: 0.75; }
+.measurable-consequence dd { margin: 0.25rem 0 0; overflow-wrap: anywhere; }
+.measurable-consequence summary { cursor: pointer; font-size: 0.85rem; padding: 0.5rem 0; }
+.measurable-consequence summary:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.measurable-consequence__technical { display: grid; gap: 0.85rem; font-size: 0.85rem; }
+.measurable-consequence__technical ul { margin: 0; padding-left: 1.2rem; }

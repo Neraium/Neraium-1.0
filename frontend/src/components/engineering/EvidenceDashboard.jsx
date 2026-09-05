@@ -1,4 +1,5 @@
 import React from "react";
+import MeasurableConsequence from "./MeasurableConsequence";
 import "../../styles/evidence-dashboard.css";
 
 function Icon({ name }) {
@@ -68,6 +69,7 @@ export default function EvidenceDashboard({ summary, variant = "ready" }) {
         <span className="evidence-dashboard__kicker">Evidence record</span>
         <h1 id="evidence-insufficient-title">{summary.insufficient?.title || "Insufficient evidence"}</h1>
         <p>{summary.insufficient?.description || "The available evidence does not support a reliable behavioral-change conclusion."}</p>
+        <MeasurableConsequence result={summary.measurableConsequence?.status === "not_quantifiable" ? summary.measurableConsequence : null} />
       </section>
     );
   }
@@ -121,6 +123,8 @@ export default function EvidenceDashboard({ summary, variant = "ready" }) {
           </ol>
         ) : <p className="evidence-dashboard__empty">No authoritative relationship changes were supplied.</p>}
       </section>
+
+      <MeasurableConsequence result={summary.measurableConsequence} />
 
       <div className="evidence-dashboard__cause">
         <div><Icon name="cause" /><strong>Cause established?</strong></div>

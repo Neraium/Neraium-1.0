@@ -697,3 +697,26 @@ def test_invalid_limitation_enums_are_rejected() -> None:
         LimitationSeverity("critical")
     with pytest.raises(ValueError):
         LimitationStatus("suspected")
+
+
+def test_package_preserves_canonical_measurable_consequence():
+    from neraium_consequence import quantify_consequence
+    source = _comparison()
+    consequence = dict(quantify_consequence(
+        [{"timestamp": 0, "observed": 30, "expected": 20},
+         {"timestamp": 60, "observed": 30, "expected": 20}],
+        profile_key="water_gpm", finding_id="condition-001", evidence_id="e: exact ",
+    ))
+    source["conditions"][0]["measurable_consequence"] = consequence
+    package = build_evidence_package(source)
+    assert package["measurable_consequence"] == consequence
+    assert EvidencePackage.model_validate(package).model_dump(mode="json")["measurable_consequence"] == consequence
+
+
+def test_package_uses_matching_canonical_consequence_over_legacy_finding():
+    source = _comparison()
+    consequence = {"status": "not_quantifiable", "statement": "Consequence not quantifiable from available evidence.", "evidence_id": "exact-canonical-reference"}
+    source["analysis_result"] = {"conditions": [{"id": "condition-001", "measurable_consequence": consequence}]}
+    assert build_evidence_package(source)["measurable_consequence"] == consequence
+    source["analysis_result"]["conditions"][0]["id"] = "sibling"
+    assert "evidence_id" not in build_evidence_package(source)["measurable_consequence"]

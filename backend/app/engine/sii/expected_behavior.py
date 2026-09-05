@@ -16,6 +16,9 @@ from app.engine.sii.common import (
 )
 
 
+from app.engine.sii.expected_rate_evidence import expected_rate_observations
+
+
 MODEL_TYPE = "robust_theil_sen_linear_response"
 MODEL_VERSION = "v2"
 DEFAULT_CONFIG = {
@@ -86,6 +89,7 @@ def evaluate_expected_behavior(
     sensor_health: dict[str, Any],
     source_model_version: str | None,
     evaluation_time: str,
+    timestamp_column: str | None = None,
     config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     cfg = {**DEFAULT_CONFIG, **(config or {})}
@@ -226,6 +230,12 @@ def evaluate_expected_behavior(
                     "causal_interpretation": False,
                 },
             }
+            item["observations"] = expected_rate_observations(
+                rows, predictor=predictor, target=target, parameters=parameters,
+                timestamp_column=timestamp_column,
+            )
+            item["max_gap_seconds"] = cfg.get("max_gap_seconds", 3600.0)
+            item["observation_methodology"] = "validated_model_timestamp_aligned_response_v1"
             expected_values.append(item)
             if abs(normalized) >= float(cfg["residual_evidence_threshold"]):
                 residual_evidence.append(

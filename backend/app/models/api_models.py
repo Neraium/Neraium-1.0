@@ -467,6 +467,10 @@ class FindingActivitySummaryResponse(BaseModel):
 
 
 class FindingCaseResponse(BaseModel):
+    measurable_consequence: dict[str, Any] = Field(default_factory=lambda: {
+        "status": "not_quantifiable",
+        "statement": "Consequence not quantifiable from available evidence.",
+    })
     finding_id: str
     source: FindingSourceResponse
     evidence: dict[str, Any]

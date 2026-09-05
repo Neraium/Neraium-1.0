@@ -1,3 +1,5 @@
+import { consequenceSummary } from "./measurableConsequence";
+
 const CONTRACT_VERSION = "results-presentation.v1";
 
 export const RESULTS_KEYS = Object.freeze([
@@ -103,6 +105,14 @@ function rawFinding(model, finding) {
   const identities = new Set([finding?.id, finding?.sourceFindingKey, ...asArray(finding?.mergedFindingIds)].map(String));
   return [...asArray(source?.conditions ?? model?.result?.conditions), ...asArray(source?.insights ?? model?.result?.findings)]
     .find((item) => isObject(item) && identities.has(String(item.id ?? item.finding_id ?? item.finding_key ?? ""))) ?? null;
+}
+
+function recordedConsequence(model, finding, raw) {
+  const source = model?.result?.analysis_result;
+  const identities = new Set([finding?.id, finding?.sourceFindingKey].filter(Boolean).map(String));
+  const canonical = [...asArray(source?.conditions), ...asArray(source?.insights)]
+    .find((item) => isObject(item) && identities.has(String(item.id ?? item.condition_id ?? item.finding_id ?? "")));
+  return consequenceSummary(canonical?.measurable_consequence ?? raw?.measurable_consequence);
 }
 
 function unavailable(depth) {
@@ -516,6 +526,7 @@ export function projectFindingReview(model, requestedFindingId, reviewRecord = {
     identity: { findingKey: key, ...canonicalRouteIdentity(model?.result) },
     header: reviewHeader(finding, model, reviewRecord),
     dashboardSummary: {
+      measurableConsequence: recordedConsequence(model, finding, raw),
       title: bounded(reviewReason(finding?.observedChange) || finding?.title, 120) || null,
       system: systemContext(finding, model) || null,
       status: firstText(finding?.status) || null,
@@ -921,6 +932,7 @@ export function projectEvidenceRecord(model, requestedFindingId, reviewRecord = 
     },
     header: reviewHeader(finding, model, reviewRecord),
     dashboardIdentity: {
+      measurableConsequence: recordedConsequence(model, finding, raw),
       title: firstText(raw?.headline, raw?.title, raw?.finding_title) || null,
       system: firstText(raw?.system_display_name, raw?.system_name, raw?.system, raw?.localization?.system_display_name, raw?.localization?.system) || null,
       status: firstText(finding?.status) || null,

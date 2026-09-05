@@ -1,0 +1,199 @@
+{
+  "status": "quantified",
+  "profile_key": "water_gpm",
+  "resource_type": "water",
+  "source_relationship_ids": [
+    "water:load"
+  ],
+  "source_tag_ids": [
+    "water-flow",
+    "cooling-load"
+  ],
+  "support_level": "high",
+  "methodology": "timestamp_aware_trapezoidal_integration",
+  "methodology_version": "1.0.0",
+  "observation_count": 7,
+  "contributing_interval_count": 6,
+  "skipped_interval_count": 0,
+  "limitations": [],
+  "statement": "Water observed-minus-expected amount: 12840 gal across 21600 seconds.",
+  "provenance": {
+    "observations": [
+      {
+        "timestamp": 0,
+        "observed": 135.66666666666666,
+        "expected": 100
+      },
+      {
+        "timestamp": 3600,
+        "observed": 135.66666666666666,
+        "expected": 100
+      },
+      {
+        "timestamp": 7200,
+        "observed": 135.66666666666666,
+        "expected": 100
+      },
+      {
+        "timestamp": 10800,
+        "observed": 135.66666666666666,
+        "expected": 100
+      },
+      {
+        "timestamp": 14400,
+        "observed": 135.66666666666666,
+        "expected": 100
+      },
+      {
+        "timestamp": 18000,
+        "observed": 135.66666666666666,
+        "expected": 100
+      },
+      {
+        "timestamp": 21600,
+        "observed": 135.66666666666666,
+        "expected": 100
+      }
+    ],
+    "max_gap_seconds": null,
+    "effective_max_gap_seconds": 3600.0,
+    "observation_validation": [
+      {
+        "input_index": 0,
+        "timestamp": 0.0,
+        "valid": true
+      },
+      {
+        "input_index": 1,
+        "timestamp": 3600.0,
+        "valid": true
+      },
+      {
+        "input_index": 2,
+        "timestamp": 7200.0,
+        "valid": true
+      },
+      {
+        "input_index": 3,
+        "timestamp": 10800.0,
+        "valid": true
+      },
+      {
+        "input_index": 4,
+        "timestamp": 14400.0,
+        "valid": true
+      },
+      {
+        "input_index": 5,
+        "timestamp": 18000.0,
+        "valid": true
+      },
+      {
+        "input_index": 6,
+        "timestamp": 21600.0,
+        "valid": true
+      }
+    ]
+  },
+  "finding_id": "flow-response",
+  "evidence_id": "evidence-water-1",
+  "analysis_run_id": "consequence-ui-run",
+  "valid_observation_count": 7,
+  "rejected_observation_count": 0,
+  "excluded_interval_count": 0,
+  "skipped_intervals": [],
+  "direction": "above_expected",
+  "cumulative_amount": 12839.999999999996,
+  "cumulative_unit": "gal",
+  "duration_seconds": 21600.0,
+  "start_timestamp": 0.0,
+  "end_timestamp": 21600.0,
+  "rate_unit": "gpm",
+  "observed_rate": 135.66666666666666,
+  "expected_rate": 100.0,
+  "deviation_rate": 35.66666666666666,
+  "relative_deviation": 0.3566666666666666,
+  "absolute_cumulative_amount": 12839.999999999996,
+  "contributing_intervals": [
+    {
+      "start_timestamp": 0.0,
+      "end_timestamp": 3600.0,
+      "duration_seconds": 3600.0,
+      "source_observation_indices": [
+        0,
+        1
+      ],
+      "start_deviation_rate": 35.66666666666666,
+      "end_deviation_rate": 35.66666666666666,
+      "integrated_amount": 2139.9999999999995,
+      "absolute_integrated_amount": 2139.9999999999995
+    },
+    {
+      "start_timestamp": 3600.0,
+      "end_timestamp": 7200.0,
+      "duration_seconds": 3600.0,
+      "source_observation_indices": [
+        1,
+        2
+      ],
+      "start_deviation_rate": 35.66666666666666,
+      "end_deviation_rate": 35.66666666666666,
+      "integrated_amount": 2139.9999999999995,
+      "absolute_integrated_amount": 2139.9999999999995
+    },
+    {
+      "start_timestamp": 7200.0,
+      "end_timestamp": 10800.0,
+      "duration_seconds": 3600.0,
+      "source_observation_indices": [
+        2,
+        3
+      ],
+      "start_deviation_rate": 35.66666666666666,
+      "end_deviation_rate": 35.66666666666666,
+      "integrated_amount": 2139.9999999999995,
+      "absolute_integrated_amount": 2139.9999999999995
+    },
+    {
+      "start_timestamp": 10800.0,
+      "end_timestamp": 14400.0,
+      "duration_seconds": 3600.0,
+      "source_observation_indices": [
+        3,
+        4
+      ],
+      "start_deviation_rate": 35.66666666666666,
+      "end_deviation_rate": 35.66666666666666,
+      "integrated_amount": 2139.9999999999995,
+      "absolute_integrated_amount": 2139.9999999999995
+    },
+    {
+      "start_timestamp": 14400.0,
+      "end_timestamp": 18000.0,
+      "duration_seconds": 3600.0,
+      "source_observation_indices": [
+        4,
+        5
+      ],
+      "start_deviation_rate": 35.66666666666666,
+      "end_deviation_rate": 35.66666666666666,
+      "integrated_amount": 2139.9999999999995,
+      "absolute_integrated_amount": 2139.9999999999995
+    },
+    {
+      "start_timestamp": 18000.0,
+      "end_timestamp": 21600.0,
+      "duration_seconds": 3600.0,
+      "source_observation_indices": [
+        5,
+        6
+      ],
+      "start_deviation_rate": 35.66666666666666,
+      "end_deviation_rate": 35.66666666666666,
+      "integrated_amount": 2139.9999999999995,
+      "absolute_integrated_amount": 2139.9999999999995
+    }
+  ],
+  "calculation_method": "timestamp-aware trapezoidal integration of observed-minus-expected rate",
+  "evidence_boundary": "Associated measurable deviation only; no cause attribution is performed."
+}
