@@ -120,6 +120,20 @@ def build_measurable_consequence(
         return refuse(
             "Persistent relationship change is not established for this finding."
         )
+    mode = _mapping(finding.get("operating_mode"))
+    comparable = _mapping(finding.get("comparable_operation"))
+    confidence_context = _mapping(
+        _mapping(finding.get("finding_confidence_v1")).get("operating_context")
+    )
+    context_status = (
+        mode.get("match")
+        or comparable.get("status")
+        or confidence_context.get("status")
+    )
+    if str(context_status or "").lower() not in {"strong", "supported", "comparable"}:
+        return refuse(
+            "Comparable operating context is not established for this finding."
+        )
     window = _window(finding)
     if window is None:
         return refuse("An exact finding-owned calculation window is unavailable.")
@@ -177,6 +191,13 @@ def build_measurable_consequence(
         catalog.get(expected["target_signal"])
     )
     result["provenance"]["finding_window"] = list(window)
+    result["provenance"]["operating_context"] = snapshot(
+        {
+            "operating_mode": mode,
+            "comparable_operation": comparable,
+            "confidence_context": confidence_context,
+        }
+    )
     result["limitations"].extend(_strings(expected.get("limitations")))
     return result
 

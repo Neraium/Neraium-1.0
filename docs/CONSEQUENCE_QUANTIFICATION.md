@@ -19,8 +19,9 @@ It retains invalid/missing predictor rows. It performs no consequence integratio
 Models with a nonzero sample lag withhold the series until timestamp-based lag
 alignment is supported. A median expected value is never expanded into a series.
 
-`services.measurable_consequence` checks persistence, ownership of every source
-relationship, exactly one mapped resource series, and an exact single finding
+`services.measurable_consequence` checks persistence, explicitly comparable
+operating context, ownership of every source relationship, exactly one mapped
+resource series, and an exact single finding
 window. It excludes observations outside that window without interpolating new
 boundary samples. Unknown resources, ambiguous multiple resource series, missing
 units, absent persistence, or insufficient intervals produce `not_quantifiable`.

@@ -18,6 +18,7 @@ def fixture():
         "id": "finding-1",
         "headline": "Water response changed",
         "support_level": "high",
+        "operating_mode": {"match": "strong"},
         "evidence_id": "evidence-1",
         "persistence": {"status": "persistent"},
         "source_relationship_ids": ["rel-1"],
@@ -259,3 +260,12 @@ def test_malformed_model_identity_cannot_pass_ownership_gate(bad):
     finding, expected, catalog = fixture()
     expected["expected_values"][0].update(bad)
     assert run(finding, expected, catalog)["status"] == "not_quantifiable"
+
+
+@pytest.mark.parametrize("context", [{}, {"match": "weak"}, {"match": "partial"}])
+def test_missing_or_incomparable_operating_context_withholds_number(context):
+    finding, expected, catalog = fixture()
+    finding["operating_mode"] = context
+    result = run(finding, expected, catalog)
+    assert result["status"] == "not_quantifiable"
+    assert "operating context" in result["reason"]
