@@ -40,7 +40,7 @@ _ATTRIBUTION_PATTERNS = tuple(re.compile(pattern, re.IGNORECASE | re.MULTILINE) 
     r"underlying\s+issue|responsible\s+component|failure\s+source)\s*$",
     r"\b(?:drivers?|explanations?|reasons?|underlying\s+issue|responsible\s+component|"
     r"failure\s+source|source\s+of\s+(?:the\s+)?problem)\s*"
-    r"(?::|[=—–-]|\b(?:is|was|are|were|appears\s+to\s+be|seems\s+to\s+be|"
+    r"(?::|[=\u2014–-]|\b(?:is|was|are|were|appears\s+to\s+be|seems\s+to\s+be|"
     r"(?:may|might|could|must)\s+be)\b)",
     r"\b(?:drivers?|explanations?|reasons?)\s+(?:for|of|behind)\s+"
     r"(?:(?:the|this|that|observed|physical|persistent|system)\s+)*"
