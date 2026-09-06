@@ -17,6 +17,7 @@ from typing import Any
 from app.engine.sii.behavioral_model_contract import AuthenticatedPhase4Scope
 from app.engine.sii_engine import evaluate_sii
 from app.services.analysis_result_contract import build_analysis_result
+from app.services.consequence_configuration import validate_consequence_configuration
 from app.services.phase4_scope import ServerBoundSystemIdentityV2
 from app.services.telemetry_domain import TelemetryScopeRef, sanitize_telemetry_public_value
 from app.services.telemetry_lineage import (
@@ -56,6 +57,11 @@ _AUTHORITY_KEYS = frozenset(
 )
 _CANONICAL_CATALOG_KEYS = frozenset(
     {
+        "resource_type",
+        "consequence_profile_key",
+        "rate_unit",
+        "max_gap_seconds",
+        "consequence_connection_id",
         "analysis_role",
         "canonical_role",
         "canonical_signal_id",
@@ -392,6 +398,8 @@ def build_canonical_analysis_window(
     persisted_authority_digest: str,
     phase4_system_identity: ServerBoundSystemIdentityV2,
     observations: Sequence[Mapping[str, Any]],
+    consequence_configuration: Mapping[str, Any] | None = None,
+    consequence_connection_id: str | None = None,
     source_kind: str = "telemetry_connector",
     window_start: datetime | None = None,
     window_end: datetime | None = None,
@@ -520,6 +528,20 @@ def build_canonical_analysis_window(
             or entry["canonical_unit"] != observation_lineage.canonical_unit
         ):
             raise AnalysisWindowValidationError("telemetry_analysis_canonical_signal_conflict")
+    if consequence_configuration is not None:
+        try:
+            configured = validate_consequence_configuration(consequence_configuration)["signals"]
+        except ValueError as error:
+            raise AnalysisWindowValidationError("telemetry_consequence_configuration_invalid") from error
+        for signal_id, entry in catalog.items():
+            if signal_id in configured:
+                if not consequence_connection_id or any(
+                    item.connection_id != consequence_connection_id
+                    for item in lineage if item.canonical_signal_id == signal_id
+                ):
+                    raise AnalysisWindowValidationError("telemetry_consequence_connection_mismatch")
+                entry.update(configured[signal_id])
+                entry["consequence_connection_id"] = consequence_connection_id
     rows = tuple(rows_by_time[timestamp] for timestamp in timestamps if any(
         rows_by_time[timestamp][signal] is not None for signal in eligible_signals
     ))

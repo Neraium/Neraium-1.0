@@ -1,0 +1,1220 @@
+{
+  "A:1": {
+    "status": "quantified",
+    "profile_key": "water_gpm",
+    "resource_type": "water",
+    "source_relationship_ids": [
+      "flow:load"
+    ],
+    "source_tag_ids": [
+      "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+      "ba959381-2fc2-556f-aa57-279a9f97d3b8"
+    ],
+    "support_level": "high",
+    "methodology": "timestamp_aware_trapezoidal_integration",
+    "methodology_version": "1.0.0",
+    "observation_count": 7,
+    "contributing_interval_count": 6,
+    "skipped_interval_count": 0,
+    "limitations": [
+      "Expected rates use the validated reference model."
+    ],
+    "statement": "Water observed-minus-expected amount: 3600 gal across 21600 seconds.",
+    "provenance": {
+      "observations": [
+        {
+          "timestamp": "2026-09-01T00:00:00+00:00",
+          "observed": 110.0,
+          "expected": 100.0,
+          "valid": true,
+          "source_row_index": 0,
+          "predictor_value": 0.0
+        },
+        {
+          "timestamp": "2026-09-01T01:00:00+00:00",
+          "observed": 112.0,
+          "expected": 102.0,
+          "valid": true,
+          "source_row_index": 1,
+          "predictor_value": 1.0
+        },
+        {
+          "timestamp": "2026-09-01T02:00:00+00:00",
+          "observed": 114.0,
+          "expected": 104.00000000000001,
+          "valid": true,
+          "source_row_index": 2,
+          "predictor_value": 2.0
+        },
+        {
+          "timestamp": "2026-09-01T03:00:00+00:00",
+          "observed": 116.0,
+          "expected": 106.0,
+          "valid": true,
+          "source_row_index": 3,
+          "predictor_value": 3.0
+        },
+        {
+          "timestamp": "2026-09-01T04:00:00+00:00",
+          "observed": 118.0,
+          "expected": 108.0,
+          "valid": true,
+          "source_row_index": 4,
+          "predictor_value": 4.0
+        },
+        {
+          "timestamp": "2026-09-01T05:00:00+00:00",
+          "observed": 120.0,
+          "expected": 110.0,
+          "valid": true,
+          "source_row_index": 5,
+          "predictor_value": 5.0
+        },
+        {
+          "timestamp": "2026-09-01T06:00:00+00:00",
+          "observed": 122.0,
+          "expected": 112.0,
+          "valid": true,
+          "source_row_index": 6,
+          "predictor_value": 6.0
+        }
+      ],
+      "max_gap_seconds": 3600.0,
+      "effective_max_gap_seconds": 3600.0,
+      "observation_validation": [
+        {
+          "input_index": 0,
+          "timestamp": 1788220800.0,
+          "valid": true
+        },
+        {
+          "input_index": 1,
+          "timestamp": 1788224400.0,
+          "valid": true
+        },
+        {
+          "input_index": 2,
+          "timestamp": 1788228000.0,
+          "valid": true
+        },
+        {
+          "input_index": 3,
+          "timestamp": 1788231600.0,
+          "valid": true
+        },
+        {
+          "input_index": 4,
+          "timestamp": 1788235200.0,
+          "valid": true
+        },
+        {
+          "input_index": 5,
+          "timestamp": 1788238800.0,
+          "valid": true
+        },
+        {
+          "input_index": 6,
+          "timestamp": 1788242400.0,
+          "valid": true
+        }
+      ],
+      "acquisition_gap_policy": {
+        "source": "signal_catalog",
+        "max_gap_seconds": 3600.0,
+        "connection_id": "connection-a",
+        "method": "explicit_maximum_interval_gap_v1"
+      },
+      "rate_unit_conversion": {
+        "source_unit": "L/s",
+        "rate_unit": "gpm",
+        "conversion_id": "lps_to_gpm",
+        "version": "neraium.telemetry.units/v1"
+      },
+      "expected_behavior": {
+        "status": "complete",
+        "target_signal": "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+        "predictor_signals": [
+          "ba959381-2fc2-556f-aa57-279a9f97d3b8"
+        ],
+        "predictor_values": {
+          "ba959381-2fc2-556f-aa57-279a9f97d3b8": 4.0
+        },
+        "operating_mode": "running",
+        "model_type": null,
+        "model_version": null,
+        "model_parameters": {
+          "intercept": 6.309019640194602,
+          "slope": 0.12618039280389204,
+          "lag_samples": 0
+        },
+        "training_window": null,
+        "sample_support": 80,
+        "evaluation_sample_support": 5,
+        "historical_support_duration": null,
+        "expected_value": 6.813741,
+        "expected_interval": [
+          6.813741,
+          6.813741
+        ],
+        "observed_value": 7.444643,
+        "residual": 0.630902,
+        "normalized_residual": 630901964019.4604,
+        "historical_residual_distribution": {
+          "quantile_values": []
+        },
+        "confidence": {
+          "compatibility": 0.65,
+          "not_probability": true,
+          "factors": {
+            "historical_sample_sufficiency": 1.0,
+            "current_predictor_coverage": 0.25,
+            "residual_stability": 0.0,
+            "sensor_health_consistency": 1.0,
+            "operating_mode_consistency": 1.0
+          },
+          "method": "unweighted_deterministic_factor_mean_for_compatibility_display"
+        },
+        "uncertainty": {
+          "residual_scale": 0.0,
+          "residual_center": 0.0,
+          "data_uncertainty": {
+            "evaluation_sample_support": 5,
+            "predictor_coverage_factor": 0.25
+          },
+          "model_uncertainty": {
+            "slope_interval": null,
+            "intercept_interval": null,
+            "parameter_only_prediction_interval": [
+              6.813741,
+              6.813741
+            ],
+            "validation": {
+              "passed": true
+            }
+          },
+          "relationship_uncertainty": {
+            "source_relationships": [
+              "flow:load"
+            ],
+            "lag_samples": 0,
+            "lag_seconds": null
+          },
+          "not_probability": true,
+          "interpretation": "Expected intervals combine empirical robust residual bounds with inspectable Theil-Sen parameter ranges; they are not probability intervals."
+        },
+        "limitations": [
+          "Expected rates use the validated reference model."
+        ],
+        "source_relationships": [
+          "flow:load"
+        ],
+        "source_model_version": "3",
+        "processing_trace": {
+          "model_id": "validated-flow-response-v3",
+          "evaluation_time": "2026-09-01T00:00:00+00:00",
+          "selection_method": "highest_sample_support_then_model_id",
+          "prediction_method": "median_recent_lag_aligned_predictor_response",
+          "lag_samples": 0,
+          "causal_interpretation": false
+        },
+        "observations": [
+          {
+            "timestamp": "2026-09-01T00:00:00+00:00",
+            "observed": 6.939921604214063,
+            "expected": 6.309019640194602,
+            "valid": true,
+            "source_row_index": 0,
+            "predictor_value": 0.0
+          },
+          {
+            "timestamp": "2026-09-01T01:00:00+00:00",
+            "observed": 7.066101997017954,
+            "expected": 6.435200032998495,
+            "valid": true,
+            "source_row_index": 1,
+            "predictor_value": 1.0
+          },
+          {
+            "timestamp": "2026-09-01T02:00:00+00:00",
+            "observed": 7.192282389821846,
+            "expected": 6.561380425802387,
+            "valid": true,
+            "source_row_index": 2,
+            "predictor_value": 2.0
+          },
+          {
+            "timestamp": "2026-09-01T03:00:00+00:00",
+            "observed": 7.318462782625739,
+            "expected": 6.687560818606278,
+            "valid": true,
+            "source_row_index": 3,
+            "predictor_value": 3.0
+          },
+          {
+            "timestamp": "2026-09-01T04:00:00+00:00",
+            "observed": 7.444643175429631,
+            "expected": 6.8137412114101705,
+            "valid": true,
+            "source_row_index": 4,
+            "predictor_value": 4.0
+          },
+          {
+            "timestamp": "2026-09-01T05:00:00+00:00",
+            "observed": 7.570823568233522,
+            "expected": 6.939921604214063,
+            "valid": true,
+            "source_row_index": 5,
+            "predictor_value": 5.0
+          },
+          {
+            "timestamp": "2026-09-01T06:00:00+00:00",
+            "observed": 7.697003961037415,
+            "expected": 7.066101997017954,
+            "valid": true,
+            "source_row_index": 6,
+            "predictor_value": 6.0
+          }
+        ],
+        "max_gap_seconds": null,
+        "observation_methodology": "validated_model_timestamp_aligned_response_v1"
+      },
+      "signal_metadata": {
+        "canonical_signal_id": "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+        "canonical_signal_name": "volumetric_flow",
+        "display_name": "volumetric_flow",
+        "engineering_units": "L/s",
+        "canonical_unit": "L/s",
+        "column": "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+        "resource_type": "water",
+        "consequence_profile_key": "water_gpm",
+        "rate_unit": "gpm",
+        "max_gap_seconds": 3600.0,
+        "consequence_connection_id": "connection-a"
+      },
+      "finding_window": [
+        1788220800.0,
+        1788242400.0
+      ],
+      "operating_context": {
+        "operating_mode": {
+          "match": "strong"
+        },
+        "comparable_operation": {},
+        "confidence_context": {}
+      }
+    },
+    "finding_id": "flow-finding",
+    "evidence_id": "flow-evidence",
+    "analysis_run_id": "00000000-0000-4000-8000-000000000202",
+    "valid_observation_count": 7,
+    "rejected_observation_count": 0,
+    "excluded_interval_count": 0,
+    "skipped_intervals": [],
+    "direction": "above_expected",
+    "cumulative_amount": 3599.999999999999,
+    "cumulative_unit": "gal",
+    "duration_seconds": 21600.0,
+    "start_timestamp": 1788220800.0,
+    "end_timestamp": 1788242400.0,
+    "rate_unit": "gpm",
+    "observed_rate": 116.0,
+    "expected_rate": 106.0,
+    "deviation_rate": 10.0,
+    "relative_deviation": 0.09433962264150944,
+    "absolute_cumulative_amount": 3599.999999999999,
+    "contributing_intervals": [
+      {
+        "start_timestamp": 1788220800.0,
+        "end_timestamp": 1788224400.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          0,
+          1
+        ],
+        "start_deviation_rate": 10.0,
+        "end_deviation_rate": 10.0,
+        "integrated_amount": 600.0,
+        "absolute_integrated_amount": 600.0
+      },
+      {
+        "start_timestamp": 1788224400.0,
+        "end_timestamp": 1788228000.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          1,
+          2
+        ],
+        "start_deviation_rate": 10.0,
+        "end_deviation_rate": 9.999999999999986,
+        "integrated_amount": 599.9999999999995,
+        "absolute_integrated_amount": 599.9999999999995
+      },
+      {
+        "start_timestamp": 1788228000.0,
+        "end_timestamp": 1788231600.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          2,
+          3
+        ],
+        "start_deviation_rate": 9.999999999999986,
+        "end_deviation_rate": 10.0,
+        "integrated_amount": 599.9999999999995,
+        "absolute_integrated_amount": 599.9999999999995
+      },
+      {
+        "start_timestamp": 1788231600.0,
+        "end_timestamp": 1788235200.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          3,
+          4
+        ],
+        "start_deviation_rate": 10.0,
+        "end_deviation_rate": 10.0,
+        "integrated_amount": 600.0,
+        "absolute_integrated_amount": 600.0
+      },
+      {
+        "start_timestamp": 1788235200.0,
+        "end_timestamp": 1788238800.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          4,
+          5
+        ],
+        "start_deviation_rate": 10.0,
+        "end_deviation_rate": 10.0,
+        "integrated_amount": 600.0,
+        "absolute_integrated_amount": 600.0
+      },
+      {
+        "start_timestamp": 1788238800.0,
+        "end_timestamp": 1788242400.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          5,
+          6
+        ],
+        "start_deviation_rate": 10.0,
+        "end_deviation_rate": 10.0,
+        "integrated_amount": 600.0,
+        "absolute_integrated_amount": 600.0
+      }
+    ],
+    "calculation_method": "timestamp-aware trapezoidal integration of observed-minus-expected rate",
+    "evidence_boundary": "Associated measurable deviation only; no cause attribution is performed."
+  },
+  "A:-1": {
+    "status": "quantified",
+    "profile_key": "water_gpm",
+    "resource_type": "water",
+    "source_relationship_ids": [
+      "flow:load"
+    ],
+    "source_tag_ids": [
+      "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+      "ba959381-2fc2-556f-aa57-279a9f97d3b8"
+    ],
+    "support_level": "high",
+    "methodology": "timestamp_aware_trapezoidal_integration",
+    "methodology_version": "1.0.0",
+    "observation_count": 7,
+    "contributing_interval_count": 6,
+    "skipped_interval_count": 0,
+    "limitations": [
+      "Expected rates use the validated reference model."
+    ],
+    "statement": "Water observed-minus-expected amount: -3600 gal across 21600 seconds.",
+    "provenance": {
+      "observations": [
+        {
+          "timestamp": "2026-09-01T00:00:00+00:00",
+          "observed": 90.0,
+          "expected": 100.0,
+          "valid": true,
+          "source_row_index": 0,
+          "predictor_value": 0.0
+        },
+        {
+          "timestamp": "2026-09-01T01:00:00+00:00",
+          "observed": 92.0,
+          "expected": 102.0,
+          "valid": true,
+          "source_row_index": 1,
+          "predictor_value": 1.0
+        },
+        {
+          "timestamp": "2026-09-01T02:00:00+00:00",
+          "observed": 94.0,
+          "expected": 104.00000000000001,
+          "valid": true,
+          "source_row_index": 2,
+          "predictor_value": 2.0
+        },
+        {
+          "timestamp": "2026-09-01T03:00:00+00:00",
+          "observed": 96.0,
+          "expected": 106.0,
+          "valid": true,
+          "source_row_index": 3,
+          "predictor_value": 3.0
+        },
+        {
+          "timestamp": "2026-09-01T04:00:00+00:00",
+          "observed": 98.0,
+          "expected": 108.0,
+          "valid": true,
+          "source_row_index": 4,
+          "predictor_value": 4.0
+        },
+        {
+          "timestamp": "2026-09-01T05:00:00+00:00",
+          "observed": 100.0,
+          "expected": 110.0,
+          "valid": true,
+          "source_row_index": 5,
+          "predictor_value": 5.0
+        },
+        {
+          "timestamp": "2026-09-01T06:00:00+00:00",
+          "observed": 102.0,
+          "expected": 112.0,
+          "valid": true,
+          "source_row_index": 6,
+          "predictor_value": 6.0
+        }
+      ],
+      "max_gap_seconds": 3600.0,
+      "effective_max_gap_seconds": 3600.0,
+      "observation_validation": [
+        {
+          "input_index": 0,
+          "timestamp": 1788220800.0,
+          "valid": true
+        },
+        {
+          "input_index": 1,
+          "timestamp": 1788224400.0,
+          "valid": true
+        },
+        {
+          "input_index": 2,
+          "timestamp": 1788228000.0,
+          "valid": true
+        },
+        {
+          "input_index": 3,
+          "timestamp": 1788231600.0,
+          "valid": true
+        },
+        {
+          "input_index": 4,
+          "timestamp": 1788235200.0,
+          "valid": true
+        },
+        {
+          "input_index": 5,
+          "timestamp": 1788238800.0,
+          "valid": true
+        },
+        {
+          "input_index": 6,
+          "timestamp": 1788242400.0,
+          "valid": true
+        }
+      ],
+      "acquisition_gap_policy": {
+        "source": "signal_catalog",
+        "max_gap_seconds": 3600.0,
+        "connection_id": "connection-a",
+        "method": "explicit_maximum_interval_gap_v1"
+      },
+      "rate_unit_conversion": {
+        "source_unit": "L/s",
+        "rate_unit": "gpm",
+        "conversion_id": "lps_to_gpm",
+        "version": "neraium.telemetry.units/v1"
+      },
+      "expected_behavior": {
+        "status": "complete",
+        "target_signal": "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+        "predictor_signals": [
+          "ba959381-2fc2-556f-aa57-279a9f97d3b8"
+        ],
+        "predictor_values": {
+          "ba959381-2fc2-556f-aa57-279a9f97d3b8": 4.0
+        },
+        "operating_mode": "running",
+        "model_type": null,
+        "model_version": null,
+        "model_parameters": {
+          "intercept": 6.309019640194602,
+          "slope": 0.12618039280389204,
+          "lag_samples": 0
+        },
+        "training_window": null,
+        "sample_support": 80,
+        "evaluation_sample_support": 5,
+        "historical_support_duration": null,
+        "expected_value": 6.813741,
+        "expected_interval": [
+          6.813741,
+          6.813741
+        ],
+        "observed_value": 6.182839,
+        "residual": -0.630902,
+        "normalized_residual": -630901964019.4604,
+        "historical_residual_distribution": {
+          "quantile_values": []
+        },
+        "confidence": {
+          "compatibility": 0.65,
+          "not_probability": true,
+          "factors": {
+            "historical_sample_sufficiency": 1.0,
+            "current_predictor_coverage": 0.25,
+            "residual_stability": 0.0,
+            "sensor_health_consistency": 1.0,
+            "operating_mode_consistency": 1.0
+          },
+          "method": "unweighted_deterministic_factor_mean_for_compatibility_display"
+        },
+        "uncertainty": {
+          "residual_scale": 0.0,
+          "residual_center": 0.0,
+          "data_uncertainty": {
+            "evaluation_sample_support": 5,
+            "predictor_coverage_factor": 0.25
+          },
+          "model_uncertainty": {
+            "slope_interval": null,
+            "intercept_interval": null,
+            "parameter_only_prediction_interval": [
+              6.813741,
+              6.813741
+            ],
+            "validation": {
+              "passed": true
+            }
+          },
+          "relationship_uncertainty": {
+            "source_relationships": [
+              "flow:load"
+            ],
+            "lag_samples": 0,
+            "lag_seconds": null
+          },
+          "not_probability": true,
+          "interpretation": "Expected intervals combine empirical robust residual bounds with inspectable Theil-Sen parameter ranges; they are not probability intervals."
+        },
+        "limitations": [
+          "Expected rates use the validated reference model."
+        ],
+        "source_relationships": [
+          "flow:load"
+        ],
+        "source_model_version": "3",
+        "processing_trace": {
+          "model_id": "validated-flow-response-v3",
+          "evaluation_time": "2026-09-01T00:00:00+00:00",
+          "selection_method": "highest_sample_support_then_model_id",
+          "prediction_method": "median_recent_lag_aligned_predictor_response",
+          "lag_samples": 0,
+          "causal_interpretation": false
+        },
+        "observations": [
+          {
+            "timestamp": "2026-09-01T00:00:00+00:00",
+            "observed": 5.678117676175142,
+            "expected": 6.309019640194602,
+            "valid": true,
+            "source_row_index": 0,
+            "predictor_value": 0.0
+          },
+          {
+            "timestamp": "2026-09-01T01:00:00+00:00",
+            "observed": 5.804298068979034,
+            "expected": 6.435200032998495,
+            "valid": true,
+            "source_row_index": 1,
+            "predictor_value": 1.0
+          },
+          {
+            "timestamp": "2026-09-01T02:00:00+00:00",
+            "observed": 5.9304784617829265,
+            "expected": 6.561380425802387,
+            "valid": true,
+            "source_row_index": 2,
+            "predictor_value": 2.0
+          },
+          {
+            "timestamp": "2026-09-01T03:00:00+00:00",
+            "observed": 6.056658854586818,
+            "expected": 6.687560818606278,
+            "valid": true,
+            "source_row_index": 3,
+            "predictor_value": 3.0
+          },
+          {
+            "timestamp": "2026-09-01T04:00:00+00:00",
+            "observed": 6.18283924739071,
+            "expected": 6.8137412114101705,
+            "valid": true,
+            "source_row_index": 4,
+            "predictor_value": 4.0
+          },
+          {
+            "timestamp": "2026-09-01T05:00:00+00:00",
+            "observed": 6.309019640194602,
+            "expected": 6.939921604214063,
+            "valid": true,
+            "source_row_index": 5,
+            "predictor_value": 5.0
+          },
+          {
+            "timestamp": "2026-09-01T06:00:00+00:00",
+            "observed": 6.435200032998495,
+            "expected": 7.066101997017954,
+            "valid": true,
+            "source_row_index": 6,
+            "predictor_value": 6.0
+          }
+        ],
+        "max_gap_seconds": null,
+        "observation_methodology": "validated_model_timestamp_aligned_response_v1"
+      },
+      "signal_metadata": {
+        "canonical_signal_id": "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+        "canonical_signal_name": "volumetric_flow",
+        "display_name": "volumetric_flow",
+        "engineering_units": "L/s",
+        "canonical_unit": "L/s",
+        "column": "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+        "resource_type": "water",
+        "consequence_profile_key": "water_gpm",
+        "rate_unit": "gpm",
+        "max_gap_seconds": 3600.0,
+        "consequence_connection_id": "connection-a"
+      },
+      "finding_window": [
+        1788220800.0,
+        1788242400.0
+      ],
+      "operating_context": {
+        "operating_mode": {
+          "match": "strong"
+        },
+        "comparable_operation": {},
+        "confidence_context": {}
+      }
+    },
+    "finding_id": "flow-finding",
+    "evidence_id": "flow-evidence",
+    "analysis_run_id": "00000000-0000-4000-8000-000000000202",
+    "valid_observation_count": 7,
+    "rejected_observation_count": 0,
+    "excluded_interval_count": 0,
+    "skipped_intervals": [],
+    "direction": "below_expected",
+    "cumulative_amount": -3600.000000000001,
+    "cumulative_unit": "gal",
+    "duration_seconds": 21600.0,
+    "start_timestamp": 1788220800.0,
+    "end_timestamp": 1788242400.0,
+    "rate_unit": "gpm",
+    "observed_rate": 96.0,
+    "expected_rate": 106.0,
+    "deviation_rate": -10.0,
+    "relative_deviation": -0.09433962264150944,
+    "absolute_cumulative_amount": 3600.000000000001,
+    "contributing_intervals": [
+      {
+        "start_timestamp": 1788220800.0,
+        "end_timestamp": 1788224400.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          0,
+          1
+        ],
+        "start_deviation_rate": -10.0,
+        "end_deviation_rate": -10.0,
+        "integrated_amount": -600.0,
+        "absolute_integrated_amount": 600.0
+      },
+      {
+        "start_timestamp": 1788224400.0,
+        "end_timestamp": 1788228000.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          1,
+          2
+        ],
+        "start_deviation_rate": -10.0,
+        "end_deviation_rate": -10.000000000000014,
+        "integrated_amount": -600.0000000000005,
+        "absolute_integrated_amount": 600.0000000000005
+      },
+      {
+        "start_timestamp": 1788228000.0,
+        "end_timestamp": 1788231600.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          2,
+          3
+        ],
+        "start_deviation_rate": -10.000000000000014,
+        "end_deviation_rate": -10.0,
+        "integrated_amount": -600.0000000000005,
+        "absolute_integrated_amount": 600.0000000000005
+      },
+      {
+        "start_timestamp": 1788231600.0,
+        "end_timestamp": 1788235200.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          3,
+          4
+        ],
+        "start_deviation_rate": -10.0,
+        "end_deviation_rate": -10.0,
+        "integrated_amount": -600.0,
+        "absolute_integrated_amount": 600.0
+      },
+      {
+        "start_timestamp": 1788235200.0,
+        "end_timestamp": 1788238800.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          4,
+          5
+        ],
+        "start_deviation_rate": -10.0,
+        "end_deviation_rate": -10.0,
+        "integrated_amount": -600.0,
+        "absolute_integrated_amount": 600.0
+      },
+      {
+        "start_timestamp": 1788238800.0,
+        "end_timestamp": 1788242400.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          5,
+          6
+        ],
+        "start_deviation_rate": -10.0,
+        "end_deviation_rate": -10.0,
+        "integrated_amount": -600.0,
+        "absolute_integrated_amount": 600.0
+      }
+    ],
+    "calculation_method": "timestamp-aware trapezoidal integration of observed-minus-expected rate",
+    "evidence_boundary": "Associated measurable deviation only; no cause attribution is performed."
+  },
+  "B:1": {
+    "status": "not_quantifiable",
+    "profile_key": "unmapped",
+    "resource_type": null,
+    "source_relationship_ids": [
+      "flow:load"
+    ],
+    "source_tag_ids": [
+      "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+      "ba959381-2fc2-556f-aa57-279a9f97d3b8"
+    ],
+    "support_level": "high",
+    "methodology": "timestamp_aware_trapezoidal_integration",
+    "methodology_version": "1.0.0",
+    "observation_count": 0,
+    "contributing_interval_count": 0,
+    "skipped_interval_count": 0,
+    "limitations": [
+      "Exactly one mapped, finding-owned resource rate series is required."
+    ],
+    "statement": "Consequence not quantifiable from available evidence.",
+    "provenance": {
+      "observations": [],
+      "max_gap_seconds": null
+    },
+    "finding_id": "flow-finding",
+    "evidence_id": "flow-evidence",
+    "analysis_run_id": "00000000-0000-4000-8000-000000000202",
+    "reason": "Exactly one mapped, finding-owned resource rate series is required."
+  },
+  "C:1": {
+    "status": "not_quantifiable",
+    "profile_key": "water_gpm",
+    "resource_type": "water",
+    "source_relationship_ids": [
+      "flow:load"
+    ],
+    "source_tag_ids": [
+      "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+      "ba959381-2fc2-556f-aa57-279a9f97d3b8"
+    ],
+    "support_level": "high",
+    "methodology": "timestamp_aware_trapezoidal_integration",
+    "methodology_version": "1.0.0",
+    "observation_count": 7,
+    "contributing_interval_count": 0,
+    "skipped_interval_count": 6,
+    "limitations": [
+      "Unsupported intervals were excluded; coverage is partial.",
+      "No valid contiguous intervals support accumulation.",
+      "Expected rates use the validated reference model."
+    ],
+    "statement": "Consequence not quantifiable from available evidence.",
+    "provenance": {
+      "observations": [
+        {
+          "timestamp": "2026-09-01T00:00:00+00:00",
+          "observed": 110.0,
+          "expected": 100.0,
+          "valid": true,
+          "source_row_index": 0,
+          "predictor_value": 0.0
+        },
+        {
+          "timestamp": "2026-09-01T01:00:00+00:00",
+          "observed": 112.0,
+          "expected": 102.0,
+          "valid": true,
+          "source_row_index": 1,
+          "predictor_value": 1.0
+        },
+        {
+          "timestamp": "2026-09-01T02:00:00+00:00",
+          "observed": 114.0,
+          "expected": 104.00000000000001,
+          "valid": true,
+          "source_row_index": 2,
+          "predictor_value": 2.0
+        },
+        {
+          "timestamp": "2026-09-01T03:00:00+00:00",
+          "observed": 116.0,
+          "expected": 106.0,
+          "valid": true,
+          "source_row_index": 3,
+          "predictor_value": 3.0
+        },
+        {
+          "timestamp": "2026-09-01T04:00:00+00:00",
+          "observed": 118.0,
+          "expected": 108.0,
+          "valid": true,
+          "source_row_index": 4,
+          "predictor_value": 4.0
+        },
+        {
+          "timestamp": "2026-09-01T05:00:00+00:00",
+          "observed": 120.0,
+          "expected": 110.0,
+          "valid": true,
+          "source_row_index": 5,
+          "predictor_value": 5.0
+        },
+        {
+          "timestamp": "2026-09-01T06:00:00+00:00",
+          "observed": 122.0,
+          "expected": 112.0,
+          "valid": true,
+          "source_row_index": 6,
+          "predictor_value": 6.0
+        }
+      ],
+      "max_gap_seconds": 1800.0,
+      "effective_max_gap_seconds": 1800.0,
+      "observation_validation": [
+        {
+          "input_index": 0,
+          "timestamp": 1788220800.0,
+          "valid": true
+        },
+        {
+          "input_index": 1,
+          "timestamp": 1788224400.0,
+          "valid": true
+        },
+        {
+          "input_index": 2,
+          "timestamp": 1788228000.0,
+          "valid": true
+        },
+        {
+          "input_index": 3,
+          "timestamp": 1788231600.0,
+          "valid": true
+        },
+        {
+          "input_index": 4,
+          "timestamp": 1788235200.0,
+          "valid": true
+        },
+        {
+          "input_index": 5,
+          "timestamp": 1788238800.0,
+          "valid": true
+        },
+        {
+          "input_index": 6,
+          "timestamp": 1788242400.0,
+          "valid": true
+        }
+      ],
+      "acquisition_gap_policy": {
+        "source": "signal_catalog",
+        "max_gap_seconds": 1800.0,
+        "connection_id": "connection-a",
+        "method": "explicit_maximum_interval_gap_v1"
+      },
+      "rate_unit_conversion": {
+        "source_unit": "L/s",
+        "rate_unit": "gpm",
+        "conversion_id": "lps_to_gpm",
+        "version": "neraium.telemetry.units/v1"
+      },
+      "expected_behavior": {
+        "status": "complete",
+        "target_signal": "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+        "predictor_signals": [
+          "ba959381-2fc2-556f-aa57-279a9f97d3b8"
+        ],
+        "predictor_values": {
+          "ba959381-2fc2-556f-aa57-279a9f97d3b8": 4.0
+        },
+        "operating_mode": "running",
+        "model_type": null,
+        "model_version": null,
+        "model_parameters": {
+          "intercept": 6.309019640194602,
+          "slope": 0.12618039280389204,
+          "lag_samples": 0
+        },
+        "training_window": null,
+        "sample_support": 80,
+        "evaluation_sample_support": 5,
+        "historical_support_duration": null,
+        "expected_value": 6.813741,
+        "expected_interval": [
+          6.813741,
+          6.813741
+        ],
+        "observed_value": 7.444643,
+        "residual": 0.630902,
+        "normalized_residual": 630901964019.4604,
+        "historical_residual_distribution": {
+          "quantile_values": []
+        },
+        "confidence": {
+          "compatibility": 0.65,
+          "not_probability": true,
+          "factors": {
+            "historical_sample_sufficiency": 1.0,
+            "current_predictor_coverage": 0.25,
+            "residual_stability": 0.0,
+            "sensor_health_consistency": 1.0,
+            "operating_mode_consistency": 1.0
+          },
+          "method": "unweighted_deterministic_factor_mean_for_compatibility_display"
+        },
+        "uncertainty": {
+          "residual_scale": 0.0,
+          "residual_center": 0.0,
+          "data_uncertainty": {
+            "evaluation_sample_support": 5,
+            "predictor_coverage_factor": 0.25
+          },
+          "model_uncertainty": {
+            "slope_interval": null,
+            "intercept_interval": null,
+            "parameter_only_prediction_interval": [
+              6.813741,
+              6.813741
+            ],
+            "validation": {
+              "passed": true
+            }
+          },
+          "relationship_uncertainty": {
+            "source_relationships": [
+              "flow:load"
+            ],
+            "lag_samples": 0,
+            "lag_seconds": null
+          },
+          "not_probability": true,
+          "interpretation": "Expected intervals combine empirical robust residual bounds with inspectable Theil-Sen parameter ranges; they are not probability intervals."
+        },
+        "limitations": [
+          "Expected rates use the validated reference model."
+        ],
+        "source_relationships": [
+          "flow:load"
+        ],
+        "source_model_version": "3",
+        "processing_trace": {
+          "model_id": "validated-flow-response-v3",
+          "evaluation_time": "2026-09-01T00:00:00+00:00",
+          "selection_method": "highest_sample_support_then_model_id",
+          "prediction_method": "median_recent_lag_aligned_predictor_response",
+          "lag_samples": 0,
+          "causal_interpretation": false
+        },
+        "observations": [
+          {
+            "timestamp": "2026-09-01T00:00:00+00:00",
+            "observed": 6.939921604214063,
+            "expected": 6.309019640194602,
+            "valid": true,
+            "source_row_index": 0,
+            "predictor_value": 0.0
+          },
+          {
+            "timestamp": "2026-09-01T01:00:00+00:00",
+            "observed": 7.066101997017954,
+            "expected": 6.435200032998495,
+            "valid": true,
+            "source_row_index": 1,
+            "predictor_value": 1.0
+          },
+          {
+            "timestamp": "2026-09-01T02:00:00+00:00",
+            "observed": 7.192282389821846,
+            "expected": 6.561380425802387,
+            "valid": true,
+            "source_row_index": 2,
+            "predictor_value": 2.0
+          },
+          {
+            "timestamp": "2026-09-01T03:00:00+00:00",
+            "observed": 7.318462782625739,
+            "expected": 6.687560818606278,
+            "valid": true,
+            "source_row_index": 3,
+            "predictor_value": 3.0
+          },
+          {
+            "timestamp": "2026-09-01T04:00:00+00:00",
+            "observed": 7.444643175429631,
+            "expected": 6.8137412114101705,
+            "valid": true,
+            "source_row_index": 4,
+            "predictor_value": 4.0
+          },
+          {
+            "timestamp": "2026-09-01T05:00:00+00:00",
+            "observed": 7.570823568233522,
+            "expected": 6.939921604214063,
+            "valid": true,
+            "source_row_index": 5,
+            "predictor_value": 5.0
+          },
+          {
+            "timestamp": "2026-09-01T06:00:00+00:00",
+            "observed": 7.697003961037415,
+            "expected": 7.066101997017954,
+            "valid": true,
+            "source_row_index": 6,
+            "predictor_value": 6.0
+          }
+        ],
+        "max_gap_seconds": null,
+        "observation_methodology": "validated_model_timestamp_aligned_response_v1"
+      },
+      "signal_metadata": {
+        "canonical_signal_id": "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+        "canonical_signal_name": "volumetric_flow",
+        "display_name": "volumetric_flow",
+        "engineering_units": "L/s",
+        "canonical_unit": "L/s",
+        "column": "a19db5be-5ca1-5373-a9e4-6957e9f54c43",
+        "resource_type": "water",
+        "consequence_profile_key": "water_gpm",
+        "rate_unit": "gpm",
+        "max_gap_seconds": 1800.0,
+        "consequence_connection_id": "connection-a"
+      },
+      "finding_window": [
+        1788220800.0,
+        1788242400.0
+      ],
+      "operating_context": {
+        "operating_mode": {
+          "match": "strong"
+        },
+        "comparable_operation": {},
+        "confidence_context": {}
+      }
+    },
+    "finding_id": "flow-finding",
+    "evidence_id": "flow-evidence",
+    "analysis_run_id": "00000000-0000-4000-8000-000000000202",
+    "valid_observation_count": 7,
+    "rejected_observation_count": 0,
+    "excluded_interval_count": 6,
+    "skipped_intervals": [
+      {
+        "start_timestamp": 1788220800.0,
+        "end_timestamp": 1788224400.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          0,
+          1
+        ],
+        "reason": "unsupported_gap"
+      },
+      {
+        "start_timestamp": 1788224400.0,
+        "end_timestamp": 1788228000.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          1,
+          2
+        ],
+        "reason": "unsupported_gap"
+      },
+      {
+        "start_timestamp": 1788228000.0,
+        "end_timestamp": 1788231600.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          2,
+          3
+        ],
+        "reason": "unsupported_gap"
+      },
+      {
+        "start_timestamp": 1788231600.0,
+        "end_timestamp": 1788235200.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          3,
+          4
+        ],
+        "reason": "unsupported_gap"
+      },
+      {
+        "start_timestamp": 1788235200.0,
+        "end_timestamp": 1788238800.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          4,
+          5
+        ],
+        "reason": "unsupported_gap"
+      },
+      {
+        "start_timestamp": 1788238800.0,
+        "end_timestamp": 1788242400.0,
+        "duration_seconds": 3600.0,
+        "source_observation_indices": [
+          5,
+          6
+        ],
+        "reason": "unsupported_gap"
+      }
+    ],
+    "reason": "No valid contiguous intervals support accumulation."
+  }
+}

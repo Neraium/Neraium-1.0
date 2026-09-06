@@ -93,7 +93,7 @@ def test_expected_rate_consequence_and_provenance_unchanged(quantifiable):
         source_model_version="3", evaluation_time="2026-09-05T00:00:00Z", timestamp_column="t",
     )
     finding = {"id": "consequence-finding", "evidence_id": "evidence", "support_level": "high", "source_relationship_ids": ["rel"], "persistence": {"status": "persistent"}, "operating_mode": {"match": "strong"}, "source_time_ranges": [{"current_start": 0, "current_end": 360}]}
-    kwargs = {"expected_behavior": expected, "signal_catalog": {"flow": {"canonical_unit": "gpm", **({"resource_type": "water"} if quantifiable else {})}}, "analysis_run_id": "run"}
+    kwargs = {"expected_behavior": expected, "signal_catalog": {"flow": {"canonical_unit": "gpm", "max_gap_seconds": 3600, **({"resource_type": "water"} if quantifiable else {})}}, "analysis_run_id": "run"}
     recorded = build_measurable_consequence(finding, **kwargs)
     legacy = {**finding, "likely_cause": "LEGACY_CAUSE_CANARY", "measurable_consequence": recorded}
     projected = product_evidence(legacy)

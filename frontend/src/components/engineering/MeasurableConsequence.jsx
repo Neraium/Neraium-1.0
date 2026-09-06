@@ -2,7 +2,7 @@ import React from "react";
 
 const insufficient = "Consequence not quantifiable from available evidence.";
 const resources = {
-  water: ["Water use", "gal"], electricity: ["Electricity use", "kWh"], steam: ["Steam use", "lb"],
+  water: ["Water flow", "gal"], electricity: ["Electricity use", "kWh"], steam: ["Steam use", "lb"],
   chemical: ["Chemical feed", "gal"], compressed_air: ["Compressed air use", "scf"],
 };
 const directions = { above_expected: "above expected", below_expected: "below expected", aligned: "aligned with expected" };
@@ -27,6 +27,7 @@ export default function MeasurableConsequence({ result }) {
       || (value < 0 && result.direction === "below_expected")
       || (value === 0 && result.direction === "aligned"));
   const limitations = array(result?.limitations);
+  if (typeof result?.reason === "string" && !limitations.includes(result.reason)) limitations.push(result.reason);
   const support = typeof result?.support_level === "string" && result.support_level.trim()
     ? result.support_level.charAt(0).toUpperCase() + result.support_level.slice(1) : "Not supplied";
   return (

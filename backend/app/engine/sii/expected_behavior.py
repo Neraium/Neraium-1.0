@@ -234,7 +234,7 @@ def evaluate_expected_behavior(
                 rows, predictor=predictor, target=target, parameters=parameters,
                 timestamp_column=timestamp_column,
             )
-            item["max_gap_seconds"] = cfg.get("max_gap_seconds", 3600.0)
+            item["max_gap_seconds"] = cfg.get("max_gap_seconds")
             item["observation_methodology"] = "validated_model_timestamp_aligned_response_v1"
             expected_values.append(item)
             if abs(normalized) >= float(cfg["residual_evidence_threshold"]):

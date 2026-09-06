@@ -129,7 +129,7 @@ class _HttpsConfig:
             )
         except ValueError as error:
             raise _configuration_error("credential_fields_not_allowed") from error
-        unknown = set(raw) - _ALLOWED_CONFIG_KEYS
+        unknown = set(raw) - (_ALLOWED_CONFIG_KEYS | {"consequence"})
         if unknown:
             raise _configuration_error("unknown_configuration_field")
         try:
