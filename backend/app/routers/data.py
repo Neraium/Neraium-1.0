@@ -16,6 +16,7 @@ import re
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Path as ApiPath, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from app.services.product_evidence_contract import product_evidence
 from app.services.evidence_store import upsert_evidence_run
 from app.services.dataset_scope import (
     current_dataset_scope,
@@ -2020,7 +2021,7 @@ async def latest_upload(include_persisted: bool = Query(True), request: Request 
             }
     if request is not None:
         request.state.upload_session_id = payload.get("upload_session_id")
-    return payload
+    return product_evidence(payload)
 
 
 @router.get("/system-interpretation")
@@ -2046,7 +2047,7 @@ async def data_replay(job_id: UploadJobPath):
     payload = resolve_upload_artifacts(job_id).get("replay") or read_replay_payload(job_id)
     if not payload or not payload.get("timeline"):
         raise HTTPException(status_code=404, detail="Replay was not found.")
-    return payload
+    return product_evidence(payload)
 
 
 @router.get("/intake/{job_id}/result")
@@ -2054,13 +2055,13 @@ async def intake_result(job_id: UploadJobPath):
     result = read_upload_result_by_job_id(job_id)
     if not result or not payload_matches_dataset_scope(result):
         raise HTTPException(status_code=404, detail="Upload result was not found.")
-    return {
+    return product_evidence({
         "job_id": job_id,
         "result_available": True,
         "status": "COMPLETE",
         "result": result,
         "analysis_result": ensure_analysis_result(result),
-    }
+    })
 
 
 @router.get("/baselines")
@@ -2229,7 +2230,7 @@ def behavioral_baseline_by_portfolio(
             "duration_ms": round((time.perf_counter() - started) * 1000, 2),
         },
     )
-    return result
+    return product_evidence(result)
 
 
 @router.get("/baselines/{model_id}")
@@ -2237,7 +2238,7 @@ def behavioral_baseline_by_id(model_id: UploadJobPath):
     result = _exact_baseline_detail(current_dataset_scope().workspace_id, model_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Baseline was not found.")
-    return result
+    return product_evidence(result)
 
 
 @router.get("/portfolios/{portfolio_id}/systems/{system_id}/baselines/{baseline_id}/analyses/{analysis_run_id}")
@@ -2261,7 +2262,7 @@ def baseline_comparison_analysis_by_id(
     package = read_evidence_package_by_analysis_id(analysis_run_id)
     if package is not None:
         result["evidence_package"] = package
-    return result
+    return product_evidence(result)
 
 
 @router.get("/analyses/{comparison_analysis_id}")
@@ -2272,7 +2273,7 @@ def comparison_analysis_by_id(comparison_analysis_id: UploadJobPath):
     package = read_evidence_package_by_analysis_id(comparison_analysis_id)
     if package is not None:
         result["evidence_package"] = package
-    return result
+    return product_evidence(result)
 
 
 @router.get("/analyses/{comparison_analysis_id}/evidence-package", response_model=EvidencePackage)
@@ -2280,7 +2281,7 @@ def evidence_package_by_analysis_id(comparison_analysis_id: UploadJobPath):
     package = read_evidence_package_by_analysis_id(comparison_analysis_id)
     if package is None:
         raise HTTPException(status_code=404, detail="Evidence Package was not found for this analysis.")
-    return package
+    return product_evidence(package)
 
 
 @router.get("/evidence-packages/{package_id}", response_model=EvidencePackage)

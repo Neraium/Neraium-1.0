@@ -360,7 +360,6 @@ function reviewAssessment(finding, insufficient) {
   return {
     changeConfidence: assessmentValue(firstText(finding?.confidenceDimensions?.changeDetection?.level, finding?.confidenceContract?.change_detection?.level, finding?.tier)),
     evidenceQuality: assessmentValue(firstText(finding?.confidenceDimensions?.evidenceQuality?.level, presentation?.dataConfidence?.rating)),
-    causeAttribution: assessmentValue(firstText(finding?.confidenceDimensions?.interpretation?.attribution_status, finding?.confidenceContract?.interpretation?.attribution_status), "Not established"),
     persistence: assessmentValue(firstText(presentation?.persistence?.label, finding?.confidenceContract?.persistence?.status, finding?.persistence?.status)),
     operatingContext: assessmentValue(firstText(finding?.confidenceDimensions?.operatingContext?.status, presentation?.operatingMode?.match, finding?.operatingMode?.match)),
     corroboration: assessmentValue(corroboration ? `${corroboration}${relationshipCount !== null ? ` · ${relationshipCount} relationships` : ""}` : "Unavailable"),
@@ -517,8 +516,6 @@ export function projectFindingReview(model, requestedFindingId, reviewRecord = {
   const key = String(finding.id);
   const assessment = reviewAssessment(finding, insufficient);
   const relationships = reviewRelationshipSummaries(finding);
-  const attribution = firstText(finding?.confidenceDimensions?.causeAttribution?.value, assessment.causeAttribution.value).toLowerCase();
-  const causeEstablished = raw?.cause_established === true || raw?.cause_confirmed === true || /^(?:confirmed|established)$/.test(attribution);
   return {
     contractVersion: CONTRACT_VERSION,
     depth: "review",
@@ -539,7 +536,6 @@ export function projectFindingReview(model, requestedFindingId, reviewRecord = {
         persistence: assessment.persistence.value,
         operatingContext: assessment.operatingContext.value,
       },
-      causeEstablished,
     },
     whatChanged: insufficient
       ? "A supported material behavioral change cannot be shown from the available evidence."
@@ -937,7 +933,6 @@ export function projectEvidenceRecord(model, requestedFindingId, reviewRecord = 
       system: firstText(raw?.system_display_name, raw?.system_name, raw?.system, raw?.localization?.system_display_name, raw?.localization?.system) || null,
       status: firstText(finding?.status) || null,
       operatingContext: firstText(finding?.comparableOperation?.status, finding?.comparableOperation?.evidence_summary, finding?.confidenceDimensions?.operatingContext?.status, finding?.operatingMode?.match) || null,
-      causeEstablished: raw?.cause_established === true || raw?.cause_confirmed === true,
     },
     timestamps: { generatedAt: firstText(finding?.generatedAt, result?.completed_at, result?.processed_at) || null, firstDetectedAt: firstText(finding?.firstDetectedAt) || null, sourceRanges: evidenceWindows.map((item) => copyJsonSafe(item)) },
     signals,

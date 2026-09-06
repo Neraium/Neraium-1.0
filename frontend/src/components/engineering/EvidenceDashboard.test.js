@@ -43,7 +43,7 @@ describe("EvidenceDashboard", () => {
     expect(screen.getByText("-0.32")).toBeTruthy();
     expect(screen.getByText("Not supplied")).toBeTruthy();
     expect(screen.queryByText("Never ↔ Rendered")).toBeNull();
-    expect(screen.getByText("No — investigation required")).toBeTruthy();
+    expect(screen.queryByText("Cause established?")).toBeNull();
     expect(screen.getByText("Behavior change evidence")).toBeTruthy();
     expect(screen.getAllByText("Review-safe relationship summary")).toHaveLength(3);
     expect(document.body.textContent).not.toMatch(/baseline|sample count|signal id|lineage/i);
@@ -84,14 +84,14 @@ describe("EvidenceDashboard", () => {
     expect(screen.getByText("Insufficient evidence")).toBeTruthy();
     expect(screen.getByText("Unavailable")).toBeTruthy();
     expect(screen.getByText("No authoritative relationship changes were supplied.")).toBeTruthy();
-    expect(screen.getByText("No — investigation required")).toBeTruthy();
+    expect(screen.queryByText("Cause established?")).toBeNull();
     expect(document.body.textContent).not.toMatch(/probable|likely cause/i);
   });
 
-  it("shows confirmed cause language only when the supplied cause contract confirms it", () => {
+  it("ignores a legacy confirmed cause even when supplied", () => {
     render(React.createElement(EvidenceDashboard, { summary: summary({ cause: { established: true, label: "Yes — confirmed in evidence" } }) }));
-    const answer = screen.getByText("Yes — confirmed in evidence");
-    expect(answer.getAttribute("data-established")).toBe("true");
+    expect(screen.queryByText("Yes — confirmed in evidence")).toBeNull();
+    expect(document.body.innerHTML).not.toMatch(/likely cause|probable cause|root cause|suspected cause|diagnosis|Cause established/i);
   });
 
   it("renders a reduced insufficient record without unsupported finding metrics or cause claims", () => {

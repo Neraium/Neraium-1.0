@@ -70,7 +70,7 @@ def test_supported_sensor_hypothesis_is_not_buried_by_low_change_support() -> No
         "reason": "pressure: The pressure signal remained at one value.",
         "method": "deterministic_finding_classification",
         "evidence_refs": ["relationship-window-1"],
-        "attribution_status": "hypothesis",
+        "attribution_status": None,
     }
 
 
@@ -94,7 +94,7 @@ def test_measured_change_still_observing_has_maintenance_class_and_legacy_mappin
     assert result["rule_version"] == "deterministic_finding_classification_v3"
     assert contract["persistence"]["status"] == "observing"
     assert contract["change_detection"]["level"] == "high"
-    assert contract["interpretation"]["attribution_status"] == "unattributed"
+    assert contract["interpretation"]["attribution_status"] is None
     assert contract["interpretation"]["level"] == "unknown"
 
 
@@ -115,7 +115,7 @@ def test_confidence_dimensions_and_named_relationship_values_are_independent() -
     assert contract["schema_version"] == "finding-confidence-v1"
     assert contract["change_detection"]["level"] == "high"
     assert contract["interpretation"]["level"] == "unknown"
-    assert contract["interpretation"]["attribution_status"] == "unattributed"
+    assert contract["interpretation"]["attribution_status"] is None
     assert contract["operating_context"]["status"] == "comparable"
     assert contract["evidence_quality"]["level"] == "high"
     assert contract["persistence"]["status"] == "persistent"
@@ -153,7 +153,7 @@ def test_high_confidence_change_with_different_context_keeps_change_and_cause_se
     assert contract["operating_context"]["status"] == "different_from_baseline"
     assert "level" not in contract["operating_context"]
     assert contract["interpretation"]["level"] == "unknown"
-    assert contract["interpretation"]["attribution_status"] == "unattributed"
+    assert contract["interpretation"]["attribution_status"] is None
 
 
 def test_alternative_reconciliation_distinguishes_unavailable_and_clear_sensor_checks() -> None:
@@ -166,11 +166,6 @@ def test_alternative_reconciliation_distinguishes_unavailable_and_clear_sensor_c
     unavailable = classify_finding(sensor_health=[], **common)
     checked = classify_finding(sensor_health=_healthy_signals(), **common)
 
-    assert unavailable["alternative_explanations"][0] == (
-        "Signal-health checks were unavailable for the affected signals."
-    )
-    assert checked["alternative_explanations"][0].startswith(
-        "Recorded signal-health checks did not identify a supported instrumentation issue"
-    )
-    assert not any("establish" in item.lower() and "persistence" in item.lower() for item in checked["alternative_explanations"])
-    assert not any("more persistence" in item.lower() for item in checked["alternative_explanations"])
+    assert unavailable["alternative_explanations"] == []
+    assert checked["alternative_explanations"] == []
+    assert checked["finding_confidence_v1"]["persistence"] == unavailable["finding_confidence_v1"]["persistence"]

@@ -18,7 +18,7 @@ const FEEDBACK_OPTIONS = [
   { id: "maintenance_event", label: "Maintenance event" },
   { id: "known_operational_change", label: "Known operational change" },
   { id: "sensor_or_data_problem", label: "Sensor or data problem" },
-  { id: "environmental_cause", label: "Environmental cause" },
+  { id: "environmental_cause", label: "Environmental observation" },
   { id: "useful_warning", label: "Useful warning" },
   { id: "expected_behavior", label: "Expected behavior" },
   { id: "ignore", label: "Ignored" },
@@ -187,7 +187,6 @@ function uniqueBriefingItems(items) {
 function buildObservationBriefing(finding, run) {
   return {
     summary: splitBriefingSentences(finding?.summary).slice(0, 2),
-    possibleExplanations: buildEvidenceBackedExplanations(finding, run),
     relationships: buildObservationRelationships(finding, run),
     investigation: buildEvidenceBackedChecks(finding, run),
   };
@@ -195,18 +194,6 @@ function buildObservationBriefing(finding, run) {
 
 function waterInsights(run) {
   return Array.isArray(run?.water_intelligence?.insights) ? run.water_intelligence.insights : [];
-}
-
-function buildEvidenceBackedExplanations(finding, run) {
-  const persisted = waterInsights(run).flatMap((insight) => (
-    Array.isArray(insight?.possible_explanations)
-      ? insight.possible_explanations.map((item) => item?.explanation)
-      : []
-  ));
-  const classified = Array.isArray(finding?.alternativeExplanations)
-    ? finding.alternativeExplanations
-    : [];
-  return uniqueBriefingItems([...persisted, ...classified]).slice(0, 6);
 }
 
 function buildObservationRelationships(finding, run) {
@@ -915,7 +902,6 @@ export default function ObservationCenterWorkspace({
                 ]}
                 compact
               />
-              <IssueBriefingList title="Possible explanations, not confirmed causes" items={activeBriefing.possibleExplanations} />
               <IssueBriefingList title="Relationships Involved" items={activeBriefing.relationships} />
               <IssueBriefingList title="Evidence-linked verification checks" items={activeBriefing.investigation} />
               {hasCurrentFinding ? (

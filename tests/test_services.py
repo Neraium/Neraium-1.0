@@ -364,7 +364,7 @@ def test_driver_attribution_ranks_humidity_control_with_persistent_relationship_
     )
 
     assert attribution["driver_category"] == "process_timing"
-    assert attribution["likely_driver"] == "Process timing response"
+    assert attribution["likely_driver"] is None
     assert attribution["attribution_confidence"] == "low"
     assert "Humidity recovery is becoming less stable" in attribution["supporting_evidence"][0]
     assert "root cause" not in str(attribution).lower()
@@ -398,8 +398,8 @@ def test_driver_attribution_ranks_sensor_network_for_missing_and_timestamp_evide
     )
 
     assert attribution["driver_category"] == "sensor_network"
-    assert attribution["likely_driver"] == "Sensor/network continuity"
-    assert attribution["next_operator_move"] == "Check sensor sync, gateway status, and stale readings"
+    assert attribution["likely_driver"] is None
+    assert attribution["next_operator_move"] is None
 
 
 def test_driver_attribution_returns_unknown_for_single_weak_signal() -> None:
@@ -429,7 +429,7 @@ def test_driver_attribution_returns_unknown_for_single_weak_signal() -> None:
 
     assert attribution["driver_category"] == "thermal_control"
     assert attribution["attribution_confidence"] == "low"
-    assert attribution["next_operator_move"] == "Check thermal control setpoints and recovery timing"
+    assert attribution["next_operator_move"] is None
 
 
 def test_confidence_and_urgency_are_downgraded_for_contradictory_weak_evidence() -> None:
@@ -510,9 +510,8 @@ def test_driver_attribution_elevates_aquatic_infrastructure_narrative_when_multi
     )
 
     assert attribution["driver_category"] == "aquatic_circulation_infrastructure"
-    assert "Pool circulation system drift coincides with" in attribution["likely_driver"]
-    assert "makeup-water demand increase" in attribution["likely_driver"]
-    assert "heater runtime divergence" in attribution["likely_driver"]
+    assert attribution["likely_driver"] is None
+    assert attribution["counterfactual_driver_ranking"] == []
     assert attribution["attribution_confidence"] in {"medium", "high"}
 
 
@@ -552,9 +551,8 @@ def test_driver_attribution_elevates_hvac_infrastructure_narrative_when_multiple
     )
 
     assert attribution["driver_category"] == "hvac_air_distribution_infrastructure"
-    assert "Air distribution system drift coincides with" in attribution["likely_driver"]
-    assert "supply-return thermal split divergence" in attribution["likely_driver"]
-    assert "compressor runtime divergence" in attribution["likely_driver"]
+    assert attribution["likely_driver"] is None
+    assert attribution["counterfactual_driver_ranking"] == []
     assert attribution["attribution_confidence"] in {"medium", "high"}
 
 
@@ -601,9 +599,8 @@ def test_driver_attribution_elevates_utility_infrastructure_narrative_from_opera
     )
 
     assert attribution["driver_category"] == "utility_distribution_infrastructure"
-    assert "Utility distribution system drift coincides with" in attribution["likely_driver"]
-    assert "reservoir refill divergence" in attribution["likely_driver"]
-    assert "leak or downstream demand divergence" in attribution["likely_driver"]
+    assert attribution["likely_driver"] is None
+    assert attribution["counterfactual_driver_ranking"] == []
     assert attribution["attribution_confidence"] in {"medium", "high"}
 
 

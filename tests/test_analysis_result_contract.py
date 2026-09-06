@@ -24,6 +24,8 @@ def test_csv_analysis_returns_canonical_analysis_result() -> None:
         job_id="canonicalcontract001",
     )
 
+    from test_product_evidence_contract import assert_no_conclusion
+    assert_no_conclusion(result)
     analysis = result["analysis_result"]
     assert analysis["analysis_id"] == result["run_id"]
     assert analysis["upload_id"] == result["upload_id"]

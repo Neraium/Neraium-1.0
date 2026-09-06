@@ -64,7 +64,7 @@ describe("Analysis Details workspace", () => {
 
     await waitFor(() => expect(screen.getByText("Analysis Details")).toBeTruthy());
     expect(screen.getByLabelText("Evidence")).toBeTruthy();
-    expect(screen.getByLabelText("Possible Operational Causes")).toBeTruthy();
+    expect(screen.queryByLabelText("Possible Operational Causes")).toBeNull();
     expect(screen.getByLabelText("What To Inspect")).toBeTruthy();
     expect(screen.getByLabelText("How It Developed")).toBeTruthy();
     expect(screen.getByLabelText("Supporting Trends")).toBeTruthy();
@@ -114,7 +114,8 @@ describe("Analysis Details workspace", () => {
     await waitFor(() => expect(screen.getByText(/Temperature and humidity system behavior changed/i)).toBeTruthy());
     expect(screen.queryByText(/relationship divergence/i)).toBeNull();
     expect(screen.queryByText(/State Group A/i)).toBeNull();
-    expect(screen.getByText("Sensor drift")).toBeTruthy();
+    expect(screen.queryByText("Sensor drift")).toBeNull();
+    expect(document.body.innerHTML).not.toMatch(/likely cause|probable cause|root cause|suspected cause|diagnosis/i);
   });
 
   it("prefers the job-scoped story source", async () => {

@@ -126,7 +126,9 @@ def build_driver_attribution(
             "room": room_state.get("room") or room_state.get("label") or "Current room",
             "state": room_state.get("state") or room_state.get("status") or "Needs review",
             **subsystem_override,
-            "counterfactual_driver_ranking": counterfactual_driver_ranking(ranked),
+            "likely_driver": None,
+            "next_operator_move": None,
+            "counterfactual_driver_ranking": [],
         }
 
     top = ranked[0] if ranked else DriverScore("unknown_system_drift")
@@ -135,21 +137,21 @@ def build_driver_attribution(
 
     if top.score < 3 or evidence_strength < 2 or not has_corrob:
         attribution = unknown_attribution(room_state, telemetry_context, top)
-        attribution["counterfactual_driver_ranking"] = counterfactual_driver_ranking(ranked)
+        attribution["counterfactual_driver_ranking"] = []
         return attribution
 
     return {
         "room": room_state.get("room") or room_state.get("label") or "Current room",
         "state": room_state.get("state") or room_state.get("status") or "Needs review",
-        "likely_driver": DRIVER_LABELS[top.category],
+        "likely_driver": None,
         "driver_category": top.category,
         "contributing_signals": sorted(top.signals) or CATEGORY_SIGNALS[top.category],
         "supporting_evidence": top.evidence[:4],
         "confidence_basis": confidence_basis(top),
-        "next_operator_move": NEXT_MOVES[top.category],
+        "next_operator_move": None,
         "severity": severity_from_score(top.score, room_state),
         "attribution_confidence": confidence_from_score(top),
-        "counterfactual_driver_ranking": counterfactual_driver_ranking(ranked),
+        "counterfactual_driver_ranking": [],
     }
 
 
@@ -279,7 +281,7 @@ def unknown_attribution(
     return {
         "room": room_state.get("room") or room_state.get("label") or "Current room",
         "state": room_state.get("state") or room_state.get("status") or "Needs review",
-        "likely_driver": DRIVER_LABELS[driver_category],
+        "likely_driver": None,
         "driver_category": driver_category,
         "contributing_signals": sorted(top.signals) or CATEGORY_SIGNALS[driver_category],
         "supporting_evidence": evidence,
@@ -288,10 +290,10 @@ def unknown_attribution(
             if has_directional_evidence
             else "Evidence is limited or based on a single weak signal."
         ),
-        "next_operator_move": NEXT_MOVES[driver_category],
+        "next_operator_move": None,
         "severity": "review" if readiness != "ready" or has_directional_evidence else "info",
         "attribution_confidence": "low",
-        "counterfactual_driver_ranking": counterfactual_driver_ranking([top]),
+        "counterfactual_driver_ranking": [],
     }
 
 

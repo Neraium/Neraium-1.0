@@ -16,7 +16,7 @@ const FEEDBACK_OPTIONS = [
   ["known_operational_change", "Known operational change"],
   ["maintenance_event", "Maintenance event"],
   ["sensor_or_data_problem", "Sensor or data problem"],
-  ["environmental_cause", "Environmental cause"],
+  ["environmental_cause", "Environmental observation"],
   ["expected_behavior", "Expected behavior"],
   ["false_positive", "False positive"],
   ["nothing_meaningful", "Nothing meaningful"],

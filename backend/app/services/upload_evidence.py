@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.services.product_evidence_contract import product_evidence
 from app.services.analysis_provenance import build_analysis_provenance, canonical_digest
 from app.services.analysis_result_contract import build_sii_evidence_projection
 from app.services.telemetry_lineage import bounded_lineage_bundle
@@ -402,6 +403,7 @@ def build_evidence_record_from_result(
     rows_accepted: int | None = None,
     rows_rejected: int | None = None,
 ) -> dict[str, Any]:
+    result = product_evidence(result)
     sii = _mapping(result.get("sii_intelligence"))
     analysis_result = _mapping(result.get("analysis_result"))
     analysis_conditions = analysis_result.get("conditions") if isinstance(analysis_result.get("conditions"), list) else []

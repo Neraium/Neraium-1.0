@@ -304,22 +304,16 @@ def _interpretation_dimension(
     evidence_refs: list[str],
 ) -> dict[str, Any]:
     if classification_type == "known_operational_change":
-        attribution_status = "supported"
         level = "high" if classification_confidence == "high" else "medium"
     elif classification_type == "possible_instrumentation_issue":
-        attribution_status = "hypothesis"
         level = "medium" if any(item.get("health") == "suspect" for item in sensor_health) else "low"
     elif classification_type == "unexplained_systemic_change":
-        attribution_status = "unattributed"
         level = "unknown"
     elif classification_type == "observed_change_under_review":
-        attribution_status = "unattributed"
         level = "unknown"
     elif classification_type == "context_limited_relationship_change":
-        attribution_status = "unattributed"
         level = "unknown"
     else:
-        attribution_status = "withheld"
         level = "low" if evidence_quality["level"] != "unknown" else "unknown"
     return {
         **_dimension(
@@ -328,7 +322,7 @@ def _interpretation_dimension(
             method="deterministic_finding_classification",
             evidence_refs=evidence_refs,
         ),
-        "attribution_status": attribution_status,
+        "attribution_status": None,
     }
 
 

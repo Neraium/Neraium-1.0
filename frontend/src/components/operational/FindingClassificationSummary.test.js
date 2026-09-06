@@ -77,8 +77,9 @@ describe("FindingClassificationSummary", () => {
     }));
 
     expect(screen.getByText("High", { selector: "dd" })).toBeTruthy();
-    expect(screen.getByText("Cause")).toBeTruthy();
-    expect(screen.getByText("Not established")).toBeTruthy();
+    expect(screen.queryByText("Cause")).toBeNull();
+    expect(screen.queryByText("Cause")).toBeNull();
+    expect(screen.getByTestId("finding-classification-summary").getAttribute("aria-label")).not.toMatch(/cause|diagnosis/i);
     expect(screen.getByText("Comparable")).toBeTruthy();
     expect(screen.getByText("Medium")).toBeTruthy();
     expect(screen.getByText("Observing")).toBeTruthy();
@@ -101,7 +102,8 @@ describe("FindingClassificationSummary", () => {
     }));
 
     expect(screen.getByText("Different From Baseline")).toBeTruthy();
-    expect(screen.getByText("Not established")).toBeTruthy();
+    expect(screen.queryByText("Cause")).toBeNull();
+    expect(screen.getByTestId("finding-classification-summary").getAttribute("aria-label")).not.toMatch(/cause|diagnosis/i);
     expect(screen.queryByText("Low · Unattributed")).toBeNull();
   });
 });

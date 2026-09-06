@@ -21,7 +21,7 @@ const LIMITATION_LABELS = Object.freeze({
 });
 
 export const CORRELATION_NON_CLAIM =
-  "Related evidence does not establish cause, propagation, diagnosis, or equipment failure.";
+  "Related evidence describes recorded associations and their limits.";
 
 export function relationshipLabel(value) {
   return RELATIONSHIP_LABELS[value] ?? "Supported package relationship";

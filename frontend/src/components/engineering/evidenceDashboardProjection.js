@@ -94,7 +94,6 @@ export function projectEvidenceDashboardSummary(projection) {
       },
       relationships,
       relationshipStatus: relationships.length ? "Ranked relationship-change summary" : "Relationship detail available in Investigation",
-      cause: { established: dashboard.causeEstablished === true, label: dashboard.causeEstablished === true ? "Yes, established by supplied evidence" : "No, investigation required" },
       insufficient: projection.variant === "insufficient" ? { title: "Insufficient evidence", description: projection.whatChanged } : null,
     };
   }
@@ -107,8 +106,6 @@ export function projectEvidenceDashboardSummary(projection) {
   const persistence = firstText(contract?.persistence?.status);
   const operatingContext = firstText(projection.dashboardIdentity.operatingContext, contract?.operating_context?.status);
   const confidence = firstText(contract?.change_detection?.level, contract?.evidence_quality?.level);
-  const attribution = normalizedState(contract?.interpretation?.attribution_status);
-  const causeEstablished = projection.dashboardIdentity.causeEstablished || ["confirmed", "established"].includes(attribution);
   return {
     measurableConsequence: projection.dashboardIdentity.measurableConsequence,
     title: projection.dashboardIdentity.title || "Finding title unavailable",
@@ -122,7 +119,6 @@ export function projectEvidenceDashboardSummary(projection) {
       confidence: { value: confidence ? label(confidence) : "Not established", description: confidence ? "supporting evidence" : "confidence evidence unavailable" },
     },
     relationships,
-    cause: { established: causeEstablished, label: causeEstablished ? "Yes \u2014 confirmed in evidence" : "No \u2014 investigation required" },
     insufficient: projection.variant === "insufficient" ? { title: "Insufficient evidence", description: firstText(projection.limitations?.material) || "The available evidence does not support a reliable behavioral-change conclusion." } : null,
   };
 }

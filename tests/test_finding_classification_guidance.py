@@ -48,7 +48,7 @@ def test_representative_classifications_and_guidance_are_valid(scenario: dict) -
     assert classification["label"]
     assert classification["confidence"] in {"low", "limited", "high"}
     assert classification["reasons"]
-    assert classification["alternative_explanations"]
+    assert classification["alternative_explanations"] == []
     assert classification["certainty_limit"]
     assert len(guidance) <= 3
     assert [item["rank"] for item in guidance] == list(range(1, len(guidance) + 1))

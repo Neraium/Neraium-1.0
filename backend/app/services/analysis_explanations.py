@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.product_evidence_contract import product_evidence
 from app.services.cumulative_counters import is_cumulative_counter_name
 from app.services.finding_confidence import build_relationship_comparison
 from app.services.finding_classification import (
@@ -18,6 +19,7 @@ from app.services.telemetry_classification import is_context_or_supporting_colum
 
 
 def build_analysis_explanation(result: dict[str, Any]) -> dict[str, Any]:
+    result = product_evidence(result)
     baseline = result.get("baseline_analysis") if isinstance(result.get("baseline_analysis"), dict) else {}
     relationship_model = result.get("relationship_model") if isinstance(result.get("relationship_model"), dict) else {}
     if not relationship_model and isinstance(baseline.get("top_relationship_changes"), list):
@@ -146,7 +148,6 @@ def water_interpreted_insights(water_intelligence: Any) -> list[dict[str, Any]]:
         insight.setdefault("evidence", insight.get("observed_evidence") or [])
         insight.setdefault("recommended_operator_check", first_item([check.get("check") for check in insight.get("recommended_checks", []) if isinstance(check, dict)]))
         insight.setdefault("recommended_investigation", [check.get("check") for check in insight.get("recommended_checks", []) if isinstance(check, dict) and check.get("check")])
-        insight.setdefault("possible_operational_causes", [item.get("explanation") for item in insight.get("possible_explanations", []) if isinstance(item, dict) and item.get("explanation")])
         insight.setdefault("why_it_matters", insight.get("possible_operational_consequence"))
         insights.append(compact_dict(insight))
     return insights
@@ -239,26 +240,19 @@ def build_insights(
                 evidence_items.append(adjusted)
             contributions.append(relationship_contribution(entry, group_index, columns))
         signal_context = all_signal_names or all_columns or primary_columns
-        possible_causes = possible_operational_causes(system, signal_context)
         what_changed = merged_relationship_observable_sentence(group, primary)
-        why = merged_relationship_reason(group, primary, label)
         persistence_duration = sample_window_phrase(primary.get("baseline_sample_size"), primary.get("recent_sample_size"))
-        title = operational_diagnosis_title(system, signal_context, group, confidence_score)
-        operational_impact = relationship_operational_impact_sentence(
-            system,
-            signal_context,
-            possible_causes,
-        )
+        title = observed_relationship_title(system, signal_context, group, confidence_score)
+        operational_impact = "The measured relationship differs from its reference window."
         deduped_source_ranges = dedupe_ranges(group_source_ranges)
         observed_facts = relationship_observed_facts(
             group=group,
             baseline=baseline,
             source_ranges=deduped_source_ranges,
         )
-        likely_impacts = relationship_why_this_matters(system, signal_context)
         investigation_steps = recommended_investigation_steps(system, signal_context, label)
         first_check = first_item(investigation_steps)
-        behavior_interpretation = relationship_behavior_interpretation(system, signal_context, possible_causes)
+        behavior_interpretation = what_changed
         operating_mode = finding_operating_mode(primary.get("operating_mode"), default_operating_mode)
         sensor_health = finding_sensor_health(group, all_sensor_health, all_columns)
         data_confidence = finding_data_confidence(primary.get("data_confidence"), data_quality)
@@ -286,15 +280,9 @@ def build_insights(
         if has_certainty_context:
             title = classification_title(system, classification)
             what_changed = classification_narrative["what_changed"]
-            why = classification_narrative["why_classified"]
             behavior_interpretation = classification_narrative["interpretation"]
             operational_impact = classification_narrative["why_it_matters"]
-        explanation_options = (
-            classification.get("alternative_explanations", [])
-            if has_certainty_context
-            else possible_causes
-        )
-        impact_options = [operational_impact] if has_certainty_context else likely_impacts
+        impact_options = [operational_impact]
         activity_timeline = relationship_activity_timeline(
             system=system,
             facts=observed_facts,
@@ -335,24 +323,18 @@ def build_insights(
                 "explanation": what_changed,
                 "observed": observed_facts,
                 "observed_facts": observed_facts,
-                "why_neraium_thinks_it_happened": why,
-                "why_neraium_thinks": why,
                 "behavior_interpretation": behavior_interpretation,
                 "why_it_matters": operational_impact,
                 "why_this_matters": impact_options,
                 "if_ignored": impact_options,
-                "likely_cause": why,
                 "contributing_factors": [relationship_label(entry) for entry in group],
                 "possible_operational_consequence": operational_impact,
                 "possible_consequence": operational_impact,
-                "possible_operational_causes": explanation_options,
-                "likely_causes": explanation_options,
-                "possible_operational_causes_summary": "; ".join(explanation_options),
-                "recommended_operator_check": operational_cause_check(label, possible_causes),
+                "recommended_operator_check": None,
                 "recommended_action": relationship_recommended_action(system),
                 "recommended_investigation": investigation_steps,
                 "recommended_first_action": first_check,
-                "operator_check": operational_cause_check(label, possible_causes),
+                "operator_check": None,
                 "first_check": first_check,
                 "activity_timeline": activity_timeline,
                 "evidence_summary": evidence_summary(evidence_items),
@@ -414,7 +396,6 @@ def build_insights(
             )
         )
         what_changed = metric_change_sentence(item)
-        why = metric_confidence_basis(item, persistence_detail)
         operator_check = first_text(
             matching_operator_check(operator_report, column),
             f"Review {column_label} readings against facility logs for the uploaded period.",
@@ -456,7 +437,6 @@ def build_insights(
         )
         if has_certainty_context:
             what_changed = metric_narrative["what_changed"]
-            why = metric_narrative["why_classified"]
         insights.append(
             compact_dict(
                 {
@@ -485,9 +465,6 @@ def build_insights(
                     "system": system,
                     "what_changed": what_changed,
                     "explanation": what_changed,
-                    "why_neraium_thinks_it_happened": why,
-                    "why_neraium_thinks": why,
-                    "likely_cause": why,
                     "metric_name": column,
                     "persistence_score": item.get("persistence_score"),
                     "standardized_change": item.get("standardized_change"),
@@ -564,8 +541,6 @@ def build_insights(
                     "system": first_text(intelligence.get("primary_room"), "Uploaded telemetry"),
                     "what_changed": "No reviewed metric or relationship moved beyond the configured baseline thresholds.",
                     "explanation": "No reviewed metric or relationship moved beyond the configured baseline thresholds.",
-                    "why_neraium_thinks_it_happened": "The current window remained close to the baseline window across the numeric columns available in the CSV.",
-                    "likely_cause": "The current window remained close to the baseline window across the numeric columns available in the CSV.",
                     "possible_operational_consequence": "Continue normal monitoring unless operator logs show an unmodeled event.",
                     "possible_consequence": "Continue normal monitoring unless operator logs show an unmodeled event.",
                     "recommended_operator_check": first_item(operator_report.get("recommended_operator_checks")),
@@ -891,8 +866,7 @@ def relationship_classification_narrative(
             ),
             "why_classified": reasons or "Recorded operating context changed with the relationship.",
             "interpretation": (
-                "The operating-context change is directly observed in the same window. It may explain the "
-                "relationship shift, but the evidence does not establish causality."
+                "The operating-context change and relationship shift are recorded in the same window."
             ),
             "why_it_matters": "Confirm the recorded staging, schedule, setpoint, or event context before escalating the relationship shift.",
         }
@@ -1254,11 +1228,7 @@ def build_relationships(
             sample_confidence_score(item.get("baseline_sample_size"), item.get("recent_sample_size"), item.get("correlation_delta")),
         )
         system = relationship_subsystem_name([*columns, *display_columns], confidence_score=confidence_score)
-        why_it_matters = relationship_operational_impact_sentence(
-            system,
-            [*columns, *display_columns],
-            possible_operational_causes(system, [*columns, *display_columns]),
-        )
+        why_it_matters = "The measured relationship differs from its reference window."
         relationship_comparison = build_relationship_comparison(relationship_evidence_context(item))
         relationships.append(
             compact_dict(
@@ -1404,7 +1374,7 @@ def build_evidence(
                         "type": "insight_support",
                         "insight_id": insight.get("id"),
                         "what_happened": insight.get("explanation"),
-                        "why_neraium_believes_this": insight.get("likely_cause"),
+                        "why_neraium_believes_this": insight.get("what_changed"),
                         "supporting_evidence": item.get("supporting_signals"),
                         "relevant_metric_changes": item.get("relevant_metric_changes"),
                         "time_window": item.get("time_window"),
@@ -1498,7 +1468,6 @@ def build_operator_interpretation(
         primary.get("confidence_score") if primary else fingerprint.get("confidence_score"),
     )
     overall_condition = "Attention Needed" if changed else "Normal"
-    possible_causes = operator_possible_causes(primary, system, relationship_labels)
     recommended_review = operator_review_items(system, relationship_labels, recommendations, operator_report)
     executive_summary = operator_executive_summary(system, relationship_labels, fingerprint, changed)
     what_changed = operator_what_changed(primary, system, relationship_labels, changed)
@@ -1513,7 +1482,6 @@ def build_operator_interpretation(
             "confidence": confidence,
             "summary": executive_summary,
             "what_changed": what_changed,
-            "potential_operational_causes": possible_causes,
             "recommended_review": recommended_review,
             "relationship_changes": relationship_changes,
             "advanced_details": advanced_details,
@@ -1631,17 +1599,6 @@ def operator_fingerprint_status(fingerprint: dict[str, Any], changed: bool) -> s
     if status == "stable":
         return "Stable"
     return "Pending"
-
-
-def operator_possible_causes(primary: dict[str, Any], system: str, relationship_labels: list[str]) -> list[str]:
-    return [
-        "Operating setpoint modification",
-        "Control sequence adjustment",
-        "Process demand change",
-        "Equipment operating state change",
-        "Recent maintenance activity",
-        "Sensor calibration change",
-    ]
 
 
 def operator_review_items(
@@ -1878,7 +1835,7 @@ def build_recommendations(
                     "id": f"{insight.get('id', 'insight')}-recommendation",
                     "priority": priority_from_severity(insight.get("severity")),
                     "recommendation": action,
-                    "reason": first_text(insight.get("explanation"), insight.get("likely_cause")),
+                    "reason": first_text(insight.get("explanation"), insight.get("what_changed")),
                     "evidence_refs": [insight.get("id")],
                     "next_check": insight.get("operator_check"),
                     "system": insight.get("system"),
@@ -2593,7 +2550,7 @@ def relationship_cluster_key(item: dict[str, Any]) -> str:
     return subsystem.lower().replace(" / ", "_").replace(" ", "_")
 
 
-def operational_diagnosis_title(
+def observed_relationship_title(
     system: str,
     names: list[str],
     group: list[dict[str, Any]],
@@ -2715,36 +2672,6 @@ def format_signed_percent(value: Any) -> str:
     return f"{number:.1f}%"
 
 
-def relationship_why_this_matters(system: str, names: list[str]) -> list[str]:
-    combined = " ".join([system, *[str(name or "") for name in names]]).lower().replace("_", " ").replace("-", " ")
-    if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
-        return [
-            "Higher energy consumption for the same hydraulic output",
-            "Reduced filtration or flow performance",
-            "Increased risk of cavitation, overload, or nuisance trips",
-            "More rapid equipment wear if restriction continues",
-        ]
-    if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality"]):
-        return [
-            "Reduced treatment consistency",
-            "Higher chemical use or under-dosing risk",
-            "Water quality excursions may develop before alarms trigger",
-            "Operator response may be delayed if sensor drift is not ruled out",
-        ]
-    if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower", "temperature"]):
-        return [
-            "Higher energy consumption for the same cooling load",
-            "Reduced heat-transfer capacity",
-            "Increased risk of equipment staging or limit problems",
-            "Fouling or flow imbalance can compound if left unresolved",
-        ]
-    return [
-        "Operating behavior may continue moving away from the learned fingerprint",
-        "Energy, quality, or reliability risk can increase if the cause is not isolated",
-        "Operators may spend more time troubleshooting without a first-check path",
-    ]
-
-
 def recommended_investigation_steps(system: str, names: list[str], label: str) -> list[str]:
     combined = " ".join([system, label, *[str(name or "") for name in names]]).lower().replace("_", " ").replace("-", " ")
     if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
@@ -2774,17 +2701,6 @@ def recommended_investigation_steps(system: str, names: list[str], label: str) -
         "Review recent maintenance and operator logs.",
         "Monitor the next operating window to confirm persistence.",
     ]
-
-
-def relationship_behavior_interpretation(system: str, names: list[str], causes: list[str]) -> str:
-    combined = " ".join([system, *[str(name or "") for name in names], *causes]).lower().replace("_", " ").replace("-", " ")
-    if any(token in combined for token in ["pump", "flow", "pressure", "hydraulic", "filter"]):
-        return "The hydraulic response no longer matches its historical operating pattern. This may reflect an operating-mode change, valve-position change, instrumentation issue, or equipment configuration change."
-    if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "quality"]):
-        return "Treatment response no longer matches the learned control fingerprint. This pattern is consistent with feed, sensor, or source-water changes that should be separated before changing controls."
-    if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):
-        return "Thermal output no longer matches the learned equipment response. This pattern is consistent with fouling, staging, flow imbalance, or load changes."
-    return "Current equipment behavior no longer matches its established operating fingerprint. Review the first listed check before treating the finding as a sensor-only issue."
 
 
 def relationship_activity_timeline(
@@ -3124,92 +3040,6 @@ def relationship_recommended_action(system: str) -> str:
     if any(token in str(system or "").lower() for token in ["pump", "flow", "pressure", "hydraulic"]):
         return "Inspect filter differential pressure trend before checking pump performance."
     return f"Review {system.lower()} trends, operator logs, setpoint changes, maintenance activity, and demand changes for the same window."
-
-
-def relationship_operational_impact_sentence(system: str, names: list[str], causes: list[str]) -> str:
-    combined = " ".join([system, *[str(name or "") for name in names], *causes]).lower().replace("_", " ").replace("-", " ")
-    if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
-        return "The hydraulic response no longer matches its historical operating pattern. This may reflect an operating-mode change, valve-position change, instrumentation issue, or equipment configuration change."
-    if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality", "disinfection"]):
-        return "Operational impact: This relationship change is consistent with conditions such as feed calibration drift, water quality variation, control loop changes, or recent maintenance. Investigation is recommended to determine the cause."
-    if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):
-        return "Operational impact: This relationship change is consistent with conditions such as heat transfer degradation, equipment staging changes, load variation, or recent maintenance. Investigation is recommended to determine the cause."
-    if any(token in combined for token in ["humidity", "moisture", "vpd"]):
-        return "Operational impact: This relationship change is consistent with conditions such as airflow balance changes, latent load variation, control adjustments, or recent maintenance. Investigation is recommended to determine the cause."
-    if any(token in combined for token in ["energy", "schedule", "runtime"]):
-        return "Operational impact: This relationship change is consistent with conditions such as schedule changes, load profile shifts, control mode adjustments, or recent maintenance. Investigation is recommended to determine the cause."
-    return "Operational impact: This relationship change is consistent with conditions such as a control mode change, equipment state change, sensor calibration issue, demand shift, or recent maintenance. Investigation is recommended to determine the cause."
-
-
-def operational_cause_check(label: str, causes: list[str]) -> str:
-    if not causes:
-        return f"Investigate whether {label} changed after a known operating mode, load condition, or equipment state change."
-    return f"Investigate whether any of these operating conditions changed during the same window: {'; '.join(causes[:5])}."
-
-
-def possible_operational_causes(system: str, names: list[str]) -> list[str]:
-    combined = " ".join([system, *[str(name or "") for name in names]]).lower().replace("_", " ").replace("-", " ")
-    if any(token in combined for token in ["flow", "pressure", "hydraulic", "pump", "valve", "vfd", "filter"]):
-        if any(token in combined for token in ["filter", "dp", "differential pressure"]):
-            return [
-                "Dirty filter",
-                "Partial blockage",
-                "Pump wear",
-                "Valve position change",
-                "Restricted suction",
-                "Recent maintenance activity",
-                "Sensor calibration issue",
-            ]
-        return [
-            "Increasing filter resistance",
-            "Pump operating point shifted",
-            "Valve position changed",
-            "Increased hydraulic resistance",
-            "VFD control adjustment",
-            "Recent maintenance activity",
-            "Operational demand change",
-        ]
-    if any(token in combined for token in ["chemical", "chlor", "dose", "feed", "turbidity", "orp", "ph", "quality", "disinfection"]):
-        return [
-            "Feed pump calibration drift",
-            "Chemical concentration changes",
-            "Water quality variation",
-            "Control loop tuning",
-            "Process demand changes",
-            "Recent maintenance activity",
-        ]
-    if any(token in combined for token in ["thermal", "cooling", "heat", "chiller", "condenser", "tower"]):
-        return [
-            "Heat exchanger fouling",
-            "Cooling tower performance change",
-            "Chiller staging or control adjustment",
-            "Flow imbalance",
-            "Outdoor load condition change",
-            "Recent maintenance activity",
-        ]
-    if any(token in combined for token in ["humidity", "moisture", "vpd"]):
-        return [
-            "Airflow balance change",
-            "Latent load variation",
-            "Humidification or dehumidification control adjustment",
-            "Envelope or ventilation change",
-            "Operational demand change",
-        ]
-    if any(token in combined for token in ["energy", "schedule", "runtime"]):
-        return [
-            "Schedule change",
-            "Load profile change",
-            "Equipment runtime pattern changed",
-            "Control mode adjustment",
-            "Recent maintenance activity",
-        ]
-    return [
-        "Setpoint or control mode change",
-        "Equipment state change",
-        "Sensor calibration drift",
-        "Recent maintenance activity",
-        "Operational demand change",
-    ]
 
 
 def metric_recommended_action(column: str, item: dict[str, Any]) -> str:

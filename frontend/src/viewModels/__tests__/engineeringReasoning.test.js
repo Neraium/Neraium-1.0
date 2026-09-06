@@ -451,7 +451,7 @@ describe("engineering reasoning model", () => {
     });
     expect(finding.confidenceDimensions).toEqual({
       changeDetection: confidence.change_detection,
-      interpretation: confidence.interpretation,
+      interpretation: { level: confidence.interpretation.level, reason: confidence.interpretation.reason },
       operatingContext: { ...confidence.operating_context, status: "comparable" },
       evidenceQuality: confidence.evidence_quality,
     });

@@ -83,7 +83,7 @@ def test_short_persistence_does_not_produce_strong_finding() -> None:
     assert latest["confidence"] <= 0.58
 
 
-def test_heavy_missingness_caps_confidence_and_temper_driver_language() -> None:
+def test_heavy_missingness_caps_confidence_without_driver_output() -> None:
     rows = _telemetry_rows(240)
     degraded_rows: list[str] = []
     for index, row in enumerate(rows):
@@ -98,7 +98,8 @@ def test_heavy_missingness_caps_confidence_and_temper_driver_language() -> None:
     primary_room = _primary_room(result)
 
     assert primary_room["confidence"] <= 50
-    assert "evidence remains limited" in primary_room["primary_driver"].lower() or "insufficient" in primary_room["primary_driver"].lower()
+    assert "primary_driver" not in primary_room
+    assert "likely_cause" not in primary_room
     assert "data quality is poor" in primary_room["confidence_basis"].lower()
 
 

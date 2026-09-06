@@ -784,8 +784,6 @@ def build_runner_evidence(
         f"Backend SII runner reported {latest_state.get('regime', 'unknown')} regime and {latest_state.get('urgency', 'unknown')} urgency.",
         f"Instability score {round(float(latest_state.get('instability_score', 0.0)), 4)} with structural drift {round(float(latest_state.get('structural_drift', 0.0)), 4)}.",
     ]
-    if driver_attribution.get("driver_category"):
-        evidence.append(f"Driver attribution category: {driver_attribution['driver_category']}.")
     for item in engine_result.get("evidence", [])[:2]:
         if item.get("type"):
             evidence.append("Environmental coupling is less consistent than the room's recent baseline.")

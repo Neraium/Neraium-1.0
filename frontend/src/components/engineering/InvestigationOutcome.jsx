@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 
 const OUTCOMES = [
-  "Root cause confirmed", "Operating condition explained", "Instrumentation issue", "Maintenance performed",
+  "Field observation confirmed", "Operating condition explained", "Instrumentation issue", "Maintenance performed",
   "No issue found", "Escalated", "Deferred", "Other",
 ];
 const CATEGORY_BY_OUTCOME = {
-  "Root cause confirmed": "confirmed_issue",
+  "Field observation confirmed": "confirmed_issue",
   "Operating condition explained": "known_operational_change",
   "Instrumentation issue": "sensor_or_data_problem",
   "Maintenance performed": "maintenance_event",

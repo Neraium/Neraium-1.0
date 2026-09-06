@@ -1,3 +1,4 @@
+import { productEvidence } from "./productEvidence";
 import { normalizeFindingPresentation, sanitizeOperatorText } from "./operatorFinding";
 
 export const CONFIDENCE_TIERS = ["Confirmed", "Qualified", "Narrowed", "Deferred", "Withheld"];
@@ -467,6 +468,7 @@ function confidenceReason(tier, primaryLimitation) {
 }
 
 function buildFinding(raw, index, context) {
+  raw = productEvidence(raw);
   const embeddedRows = asArray(raw?.supporting_relationships ?? raw?.contributing_relationships ?? raw?.relationships).map((row, rowIndex) => normalizeRelationship(row, rowIndex, context.evidenceIndex, context.labelContext));
   const relationshipIds = unique([
     raw?.relationship_id,
@@ -584,7 +586,7 @@ function buildFinding(raw, index, context) {
     operatingMode: raw?.operating_mode ?? raw?.operatingMode,
     sensorHealth: raw?.sensor_health ?? raw?.sensorHealth,
     certaintyLimit: firstText(raw?.certainty_limit, raw?.certaintyLimit),
-    alternativeExplanations: raw?.alternative_explanations ?? raw?.alternativeExplanations ?? [],
+    alternativeExplanations: [],
     dataLimitations: raw?.data_limitations ?? raw?.dataLimitations ?? [],
     persistence: raw?.persistence ?? confidenceContract?.persistence,
     relationshipEvidence: raw?.relationship_evidence ?? raw?.relationshipEvidence,

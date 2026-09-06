@@ -131,8 +131,8 @@ describe("progressive results hierarchy", () => {
     render(React.createElement(FindingReviewWorkspace, { projection: reviewProjection() }));
     for (const heading of ["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]) expect(screen.getByRole("heading", { name: heading })).toBeTruthy();
     const assessment = screen.getByRole("heading", { name: "Evidence assessment" }).closest("section");
-    for (const label of ["Change confidence", "Evidence quality", "Cause / attribution", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) expect(within(assessment).getByText(label)).toBeTruthy();
-    expect(within(assessment).getByText("Not established")).toBeTruthy();
+    for (const label of ["Change confidence", "Evidence quality", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) expect(within(assessment).getByText(label)).toBeTruthy();
+    expect(within(assessment).queryByText("Cause / attribution")).toBeNull();
     expect(screen.getByText("Verify the relevant source signals.")).toBeTruthy();
     expect(document.body.textContent).not.toContain("RAW_SIGNAL_A");
     expect(screen.queryByText("Audit history")).toBeNull();
@@ -158,7 +158,7 @@ describe("progressive results hierarchy", () => {
     expect(screen.getByRole("heading", { level: 1, name: "RAW AUTHORITATIVE EVIDENCE TITLE" })).toBeTruthy();
     expect(screen.getByText("RAW AUTHORITATIVE SYSTEM")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Strongest Relationship Changes" })).toBeTruthy();
-    expect(screen.getByText("No — investigation required")).toBeTruthy();
+    expect(screen.queryByText("Cause established?")).toBeNull();
     expect(screen.getByText("Technical evidence and audit trail")).toBeTruthy();
     expect(apiFetch).not.toHaveBeenCalled();
   });

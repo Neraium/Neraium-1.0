@@ -541,11 +541,7 @@ export function normalizeFindingPresentation(finding = {}) {
       })),
     }));
   const reasons = uniquePresentationText(rawClassification.reasons);
-  const alternatives = uniquePresentationText(
-    finding.alternativeExplanations
-      ?? finding.alternative_explanations
-      ?? rawClassification.alternative_explanations,
-  );
+  const alternatives = []; // Historical alternatives are not current product output.
   const certaintyLimit = presentationText(
     finding.certaintyLimit
       ?? finding.certainty_limit

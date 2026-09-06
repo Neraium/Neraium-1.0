@@ -132,7 +132,9 @@ async function openSite(page, viewport, payload = reasoningPayload()) {
       : findingCase;
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/sites/current", { waitUntil: "domcontentloaded" });
+  // Current main requires explicit analysis selection; persisted latest must not activate itself.
+  await page.route("**/api/data/analyses/forensic-job", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload.latest_result) }));
+  await page.goto("/analyses/forensic-job", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("engineering-reasoning-platform")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Analysis complete" })).toBeVisible();
   await expect(page.locator(".operational-finding")).toBeVisible();
@@ -174,8 +176,8 @@ test.describe("Results progressive disclosure", () => {
       expect(resultsMetrics.scrollWidth).toBeLessThanOrEqual(resultsMetrics.viewportWidth + 1);
       await card.getByRole("button", { name: "Review finding" }).click();
       for (const heading of ["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]) await expect(page.getByRole("heading", { name: heading })).toBeVisible();
-      for (const label of ["Change confidence", "Evidence quality", "Cause / attribution", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) await expect(page.getByText(label, { exact: true })).toBeVisible();
-      await expect(page.getByText("Cause / attribution").locator("..")).toContainText("hypothesis");
+      for (const label of ["Change confidence", "Evidence quality", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) await expect(page.locator(".evidence-assessment dt").getByText(label, { exact: true })).toBeVisible();
+      await expect(page.getByText("Cause / attribution", { exact: true })).toHaveCount(0);
       await expect(page.getByTestId("finding-review")).not.toContainText("Chiller-03");
       await expect(page.getByTestId("finding-review")).not.toContainText("Flow-01");
       await page.getByRole("button", { name: "Open investigation" }).click();
@@ -195,8 +197,9 @@ test.describe("Results progressive disclosure", () => {
       await expect(dashboard.getByLabel("Finding context")).toBeVisible();
       await expect(dashboard.getByLabel("Evidence metrics")).toBeVisible();
       await expect(dashboard.getByRole("heading", { name: "Strongest Relationship Changes" })).toBeVisible();
-      await expect(dashboard.getByText("Cause established?", { exact: true })).toBeVisible();
-      await expect(dashboard.getByText("No — investigation required", { exact: true })).toBeVisible();
+      await expect(dashboard.getByText("Cause established?", { exact: true })).toHaveCount(0);
+      await expect(dashboard).not.toContainText(/likely cause|probable cause|root cause|suspected cause|diagnosis/i);
+      await expect(dashboard.getByText("No — investigation required", { exact: true })).toHaveCount(0);
       await page.screenshot({ path: path.join(screenshotDirectory, `${viewport.name}.png`) });
       const technicalEvidence = page.getByText("Technical evidence and audit trail", { exact: true });
       await expect(technicalEvidence).toBeVisible();
