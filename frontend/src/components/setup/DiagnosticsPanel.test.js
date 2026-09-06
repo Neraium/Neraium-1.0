@@ -6,7 +6,7 @@ import DiagnosticsPanel from "./DiagnosticsPanel";
 
 afterEach(cleanup);
 
-function renderPanel(siiIntelligence) {
+function renderPanel(siiIntelligence, result = {}) {
   const apiFetch = vi.fn(async () => ({
     ok: true,
     json: async () => ({ timeline: [] }),
@@ -14,6 +14,7 @@ function renderPanel(siiIntelligence) {
   render(React.createElement(DiagnosticsPanel, {
     latestUploadResult: {
       job_id: "upload-1",
+      ...result,
       sii_intelligence: {
         facility_state: "Stable",
         urgency: "nominal",
@@ -27,13 +28,34 @@ function renderPanel(siiIntelligence) {
     hasResumedSession: false,
     apiFetch,
     accessCode: "",
-    uploadStateView: {},
+    uploadStateView: { deriveTimeCoverage: () => ({ summary: "Recorded window" }) },
     uploadHistoryRows: [],
   }));
   return apiFetch;
 }
 
 describe("DiagnosticsPanel authority projection", () => {
+  it("does not render historical attribution or renamed driver fields", async () => {
+    const apiFetch = renderPanel({
+      attribution_confidence: "LEGACY_ATTRIBUTION",
+      causal_evidence: "LEGACY_CAUSAL_EVIDENCE",
+      primary_driver: "LEGACY_PRIMARY_DRIVER",
+      rooms: [{
+        room: "Recorded segment",
+        driver_category: "LEGACY_DRIVER_CATEGORY",
+        attribution_confidence: "LEGACY_ROOM_ATTRIBUTION",
+        confidence_components: { relationship_support: "high", persistence: "persistent" },
+      }],
+    }, { driver_attribution: { severity: "LEGACY_ATTRIBUTION_SEVERITY" } });
+    expect(document.body.textContent).not.toContain("LEGACY_");
+    expect(screen.queryByText("Attribution")).toBeNull();
+    expect(screen.queryByText("Driver Category")).toBeNull();
+    expect(screen.getByText("Recorded segment")).toBeTruthy();
+    expect(screen.getByText("Relationship Support")).toBeTruthy();
+    expect(screen.getByText("Persistent")).toBeTruthy();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+  });
+
   it("uses only non-predictive review-window fields", async () => {
     const apiFetch = renderPanel({
       projected_time_to_failure: "Predicted failure in 8 hours",
