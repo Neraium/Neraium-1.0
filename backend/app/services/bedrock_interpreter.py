@@ -16,6 +16,66 @@ DEFAULT_TEMPERATURE = 0.1
 MAX_EVIDENCE_CHARACTERS = 24_000
 STAGING_CLUSTER_NAME = "neraium-staging-cluster"
 
+# Match assertions, not ordinary uses of reason/explanation/driver as evidence
+# or methodology vocabulary. Keep denial exceptions local to an entire clause:
+# a limitation must never exempt a later physical conclusion in the response.
+_ATTRIBUTION_DENIAL = re.compile(
+    r"(?:no\s+(?:physical\s+)?(?:cause|diagnosis|attribution)(?:\s+is)?\s+"
+    r"(?:established|supported|identified)|(?:physical\s+|root\s+)?cause\s+"
+    r"(?:is\s+)?not\s+(?:established|supported|identified))"
+    r"(?:\s+from\s+(?:the\s+)?available\s+evidence)?",
+    re.IGNORECASE,
+)
+_CALCULATION_EXPLANATION = re.compile(
+    r"(?:the\s+)?(?:reason|explanation)\s*(?::|is)\s*"
+    r"(?:(?:insufficient|missing|incomplete)\s+(?:timestamp\s+coverage|timestamps|evidence|samples)|"
+    r"(?:the\s+)?(?:calculation\s+)?methodology|timestamp[- ]aware\s+trapezoidal\s+integration)",
+    re.IGNORECASE,
+)
+_COMPONENT = r"(?:pump|valve|filter|heat exchanger|compressor|seal|bearing|motor)"
+_EXPLICIT_ATTRIBUTION = re.compile(r"\b(?:causes?|caused|causing|diagnos\w*|culprit)\b", re.IGNORECASE)
+_ATTRIBUTION_PATTERNS = tuple(re.compile(pattern, re.IGNORECASE | re.MULTILINE) for pattern in (
+    r"\b(?:(?:likely|suspected|probable)\s+(?:drivers?|mechanisms?|issues?)|corrective\s+actions?)\b",
+    r"^\s*(?:(?:primary|likely|probable|suspected)\s+)?(?:drivers?|explanations?|reasons?|"
+    r"underlying\s+issue|responsible\s+component|failure\s+source)\s*$",
+    r"\b(?:drivers?|explanations?|reasons?|underlying\s+issue|responsible\s+component|"
+    r"failure\s+source|source\s+of\s+(?:the\s+)?problem)\s*"
+    r"(?::|[=—–-]|\b(?:is|was|are|were|appears\s+to\s+be|seems\s+to\s+be|"
+    r"(?:may|might|could|must)\s+be)\b)",
+    r"\b(?:drivers?|explanations?|reasons?)\s+(?:for|of|behind)\s+"
+    r"(?:(?:the|this|that|observed|physical|persistent|system)\s+)*"
+    r"(?:condition|change|behavior|deviation|problem|issue|failure)\b",
+    r"\b(?:this|that|it|(?:the|this|that)\s+"
+    r"(?:condition|change|behavior|deviation|problem|issue|failure))\s+"
+    r"(?:(?:occurred|happened|developed|arose)\s+because|(?:is|was)\s+due\s+to|"
+    r"results?\s+from)\b|\bresponsible\s+for\s+(?:this|the|that)\s+"
+    r"(?:condition|change|problem|failure)\b",
+    r"\b(?:indicates?|suggests?|points?\s+to|is\s+consistent\s+with)\s+"
+    r"(?:(?:a|an|the|possible|likely|probable)\s+)*"
+    rf"(?:{_COMPONENT}\s+(?:failure|degradation|cavitation|leakage|fouling|blockage)|"
+    rf"(?:failed|failing|blocked|fouled|leaking|degraded)\s+{_COMPONENT})\b",
+))
+
+
+def _contains_physical_attribution(text: str) -> bool:
+    # Inspect a copy so accepted wording/formatting is never rewritten. Markdown
+    # labels and snake_case conclusions must have the same boundary as prose.
+    inspected = re.sub(r"[*`#]", "", text).replace("_", " ")
+    # Only complete non-causal clauses qualify, never a keyword somewhere in
+    # the response. Retain spans instead of deleting text or rewriting claims.
+    noncausal_spans = [
+        (clause.start(), clause.end())
+        for clause in re.finditer(r"[^.!?;\n]+", inspected)
+        if _ATTRIBUTION_DENIAL.fullmatch(clause[0].strip())
+        or _CALCULATION_EXPLANATION.fullmatch(clause[0].strip())
+    ]
+    # Assertions can span line breaks or separate Converse content blocks.
+    for pattern in (*_ATTRIBUTION_PATTERNS, _EXPLICIT_ATTRIBUTION):
+        for match in pattern.finditer(inspected):
+            if not any(start <= match.start() and match.end() <= end for start, end in noncausal_spans):
+                return True
+    return False
+
 
 class BedrockInterpretationDisabled(RuntimeError):
     pass
@@ -78,8 +138,16 @@ def _system_prompt() -> str:
         "The supplied Evidence Package is authoritative. Never recalculate findings, invent telemetry, "
         "upgrade confidence, or attribute a physical cause. Do not produce causes, diagnoses, hypotheses "
         "about why equipment behavior changed, corrective actions, or recommendations. Do not rename "
-        "attribution as a driver, culprit, mechanism, reason, or explanation. Preserve all uncertainty "
-        "and limitations. Summarize only recorded observations for an engineering/operator audience. "
+        "attribution as a driver, culprit, mechanism, reason, explanation, underlying issue, "
+        "responsible component, failure source, or source of the problem. Never answer why a physical "
+        "condition occurred, which component produced it, or what mechanism produced it. "
+        "Statements such as 'Driver: blocked filter', 'The explanation is a failed valve', "
+        "'The reason for this condition is low refrigerant', and 'This indicates pump failure' "
+        "are forbidden even when hedged. You may describe only recorded observed behavior, changed "
+        "relationships, evidence, persistence, operating context, measurable consequence, and limitations. "
+        "Methodology explanations, reasons for insufficient evidence or non-quantifiability, and "
+        "contextual model variables are allowed; they must not attribute physical behavior. "
+        "Preserve all uncertainty and limitations for an engineering/operator audience. "
         "Return exactly four sections: Observed change, Relationship evidence, Operating context, Limitations."
     )
 
@@ -133,7 +201,7 @@ def interpret_evidence_package(
     if not text:
         raise BedrockInterpretationError("Amazon Bedrock returned no interpretation text.")
 
-    if re.search(r"\b(?:causes?|caused|causing|diagnos\w*|culprit|root[ _-]?cause|(?:likely|suspected|probable)\s+(?:driver|mechanism|issue)|corrective action)\b", text, re.IGNORECASE):
+    if _contains_physical_attribution(text):
         raise BedrockInterpretationError("Model response contains retired analytical attribution.")
 
     usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}

@@ -4,7 +4,12 @@ import pytest
 from fastapi import HTTPException
 
 from app.routers import evidence
-from app.services.bedrock_interpreter import BedrockInterpretationDisabled, BedrockInterpretationError
+from app.services.bedrock_interpreter import (
+    BedrockInterpretationConfig,
+    BedrockInterpretationDisabled,
+    BedrockInterpretationError,
+    interpret_evidence_package,
+)
 
 
 @pytest.mark.asyncio
@@ -96,3 +101,47 @@ async def test_interpret_evidence_run_returns_502_on_model_failure(monkeypatch):
         await evidence.interpret_evidence_run(request, "run-1")
 
     assert exc.value.status_code == 502
+
+
+@pytest.mark.parametrize(("text", "expected_status"), [
+    ("Driver: blocked filter", 502),
+    ("Explanation: pump cavitation.", 502),
+    ("Reason: fouled heat exchanger.", 502),
+    ("The reason this consequence is not quantifiable is insufficient timestamp coverage.", 200),
+    ("Explanation of calculation methodology: timestamp-aware trapezoidal integration.", 200),
+])
+def test_interpretation_api_enforces_model_boundary_before_publishing(client, monkeypatch, text, expected_status):
+    record = {"run_id": "run-1", "initiated_by": "tester"}
+    package = {"governance": {"raw_telemetry_included": False}, "finding": {"status": "supported"}}
+    audit_calls = []
+
+    class FakeClient:
+        def converse(self, **kwargs):
+            return {"output": {"message": {"content": [{"text": text}]}}}
+
+    config = BedrockInterpretationConfig(enabled=True, model_id="fake", region="us-east-2")
+    monkeypatch.setattr(evidence, "read_evidence_run", lambda run_id: record)
+    monkeypatch.setattr(evidence, "build_evidence_package_payload", lambda value: package)
+    monkeypatch.setattr(evidence, "interpret_evidence_package", lambda value: interpret_evidence_package(value, config=config, client=FakeClient()))
+    monkeypatch.setattr(evidence, "record_audit_event", lambda **kwargs: audit_calls.append(kwargs))
+
+    async def allow_operator(request):
+        return None
+
+    monkeypatch.setattr(evidence, "require_operator_role", allow_operator)
+    response = client.post("/api/evidence/runs/run-1/interpretation")
+    assert response.status_code == expected_status
+    if expected_status == 502:
+        assert response.json() == {
+            "detail": "Model response contains retired analytical attribution.",
+            "message": "Model response contains retired analytical attribution.",
+            "error_type": "http_502",
+        }
+        assert audit_calls == []
+    else:
+        assert response.json()["interpretation"] == text
+        assert response.json()["model_role"] == "interpretation_only"
+        assert response.json()["authoritative_source"] == "neraium_evidence_package"
+        assert audit_calls[0]["action"] == "evidence.interpretation.generated"
+    assert record == {"run_id": "run-1", "initiated_by": "tester"}
+    assert package == {"governance": {"raw_telemetry_included": False}, "finding": {"status": "supported"}}

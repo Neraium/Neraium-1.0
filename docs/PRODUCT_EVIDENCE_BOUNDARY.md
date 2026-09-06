@@ -40,6 +40,16 @@ Nullable/empty compatibility values remain where existing callers expect them:
 an observation. Exception `cause` chains, service diagnostics and false/null engine
 boundary flags are not physical conclusions and are retained.
 
+The optional Bedrock response boundary rejects the whole model reply when it
+contains physical-attribution labels or predicates, including renamed driver,
+reason, explanation, underlying issue, and responsible component conclusions.
+Checks span Markdown formatting, line breaks, and Converse text blocks. Ordinary
+methodology explanations, reasons for non-quantifiability, contextual model
+variables, and explicit attribution limitations remain readable without changing
+accepted text. Rejection retains the existing HTTP 502 contract and does not
+publish a successful interpretation audit event. Tests cover both sides of this
+boundary using fake model clients; no additional model service is required.
+
 The standalone `neraium-consequence` package and its immutable dependency pin are
 unchanged. Canonical consequence objects are preserved exactly, including
 `not_quantifiable`, source IDs, timestamp evidence, methodology and limitations.
