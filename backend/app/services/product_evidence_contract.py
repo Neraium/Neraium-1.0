@@ -15,6 +15,7 @@ _RETIRED = frozenset({
     "suspectedcause", "rootcause", "rootcauseconclusion", "rootcauseconclusions",
     "diagnosis", "diagnosticconclusion", "automatedcorrectiveaction",
     "causeestablished", "causeconfirmed", "causeattribution", "attributionstatus",
+    "attributionconfidence", "causalevidence",
     "potentialoperationalcauses", "possibleoperationalcauses", "possibleoperationalcausessummary",
     "possibleexplanations", "alternativeexplanations",
     "whyneraiumthinksithappened", "whyneraiumthinks",

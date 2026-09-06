@@ -3,6 +3,7 @@ const retired = new Set([
   "cause", "causes", "likelycause", "likelycauses", "probablecause", "suspectedcause", "rootcause",
   "diagnosis", "diagnosticconclusion", "automatedcorrectiveaction", "causeestablished", "causeconfirmed",
   "causeattribution", "attributionstatus", "potentialoperationalcauses", "possibleoperationalcauses", "possibleoperationalcausessummary",
+  "attributionconfidence", "causalevidence",
   "possibleexplanations", "alternativeexplanations", "whyneraiumthinksithappened", "whyneraiumthinks",
   "likelydriver", "primarydriver", "primarydrivers", "driverattribution", "counterfactualdriverranking",
 ]);

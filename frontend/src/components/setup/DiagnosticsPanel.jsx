@@ -20,8 +20,6 @@ function readPrimaryContributors(result) {
   if (Array.isArray(frameContributors) && frameContributors.length) {
     return frameContributors.slice(0, 3).join(" | ");
   }
-  const driver = result?.sii_intelligence?.primary_driver;
-  if (driver) return String(driver);
   const evidence = result?.sii_intelligence?.supporting_evidence;
   if (Array.isArray(evidence) && evidence.length) return String(evidence[0]);
   return DASH;
@@ -64,7 +62,7 @@ function replaySummaryFromResult(result) {
     frameCount: 0,
     currentWindow: String(intelligence?.observed_persistence ?? DASH),
     baselineSeparation: classifyBaselineSeparation(result?.baseline_analysis?.column_drift?.[0]?.percent_change),
-    driftVelocity: String(result?.driver_attribution?.severity ?? DASH),
+    driftVelocity: DASH,
     driftAcceleration: DASH,
     structuralRead: formatStructuralRead(intelligence?.facility_state),
     evidenceConfidence: String(intelligence?.confidence_basis ?? DASH),
@@ -181,8 +179,6 @@ export default function DiagnosticsPanel({
       return [
         room?.room ?? DASH,
         room?.urgency ?? DASH,
-        room?.driver_category ?? DASH,
-        room?.attribution_confidence ?? DASH,
         formatConfidenceComponentValue(components?.data_sufficiency),
         formatConfidenceComponentValue(components?.signal_strength),
         formatConfidenceComponentValue(components?.relationship_support),
@@ -244,8 +240,6 @@ export default function DiagnosticsPanel({
                 columns={[
                   "Segment",
                   "Urgency",
-                  "Driver Category",
-                  "Attribution",
                   "Data Sufficiency",
                   "Signal Strength",
                   "Relationship Support",
