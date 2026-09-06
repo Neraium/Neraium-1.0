@@ -270,6 +270,7 @@ RUNTIME_SCHEMA_MIGRATIONS = (
     "011_workspace_live_analysis_scope",
     "012_upload_queue_phase4_scope",
     "013_internal_health_relevance",
+    "014_governance_lifecycle_events",
 )
 
 
@@ -807,9 +808,9 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
             ("008_finding_workflow_scope", now_iso()),
         )
 
-    if "009_finding_field_reports" not in applied:
+    if "009_finding_field_reports" not in applied or "014_governance_lifecycle_events" not in applied:
         table_sql = _table_sql(connection, "finding_workflow_events")
-        if "field_report_recorded" not in table_sql:
+        if "governance_lifecycle_recorded" not in table_sql:
             # SQLite cannot alter CHECK constraints. Rebuild this append-only
             # table transactionally while preserving every event and uniqueness
             # constraint, then restore its immutability triggers.
@@ -827,7 +828,7 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
                     event_type TEXT NOT NULL CHECK (event_type IN (
                         'workflow_updated', 'feedback_recorded', 'resolution_recorded',
                         'legacy_status_imported', 'legacy_feedback_imported',
-                        'field_report_recorded'
+                        'field_report_recorded', 'governance_lifecycle_recorded'
                     )),
                     recorded_at TEXT NOT NULL,
                     actor TEXT NOT NULL,
@@ -869,10 +870,12 @@ def _apply_runtime_migrations(connection: sqlite3.Connection) -> None:
                 BEGIN SELECT RAISE(ABORT, 'finding_workflow_events_append_only'); END
                 """
             )
-        connection.execute(
-            "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
-            ("009_finding_field_reports", now_iso()),
-        )
+        for migration_id in ("009_finding_field_reports", "014_governance_lifecycle_events"):
+            if migration_id not in applied:
+                connection.execute(
+                    "INSERT INTO runtime_schema_migrations (migration_id, applied_at) VALUES (?, ?)",
+                    (migration_id, now_iso()),
+                )
 
     if "010_workspace_evidence_scope" not in applied:
         evidence_columns = {
