@@ -283,7 +283,9 @@ class EvidenceRunResponse(BaseModel):
     operating_state: str | None = None
     neraium_score: int | None = None
     drift_status: str | None = None
-    primary_drivers: list[str] = Field(default_factory=list)
+    # Parse historical records, but never reintroduce the retired field when
+    # FastAPI serializes an already-sanitized evidence response.
+    primary_drivers: list[str] = Field(default_factory=list, exclude=True)
     evidence_summary: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
