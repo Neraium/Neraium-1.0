@@ -3,6 +3,8 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it } from "vitest";
 import EvidenceDashboard from "./EvidenceDashboard";
 import MeasurableConsequence from "./MeasurableConsequence";
+import certification from "../../../tests/fixtures/consequence-certification.json";
+import { consequenceSummary } from "../../viewModels/measurableConsequence";
 import quantified from "../../../tests/fixtures/measurable-consequence.json";
 
 afterEach(cleanup);
@@ -11,7 +13,7 @@ describe("Measurable consequence", () => {
   it("renders the package result in the current dashboard with expandable technical evidence", () => {
     render(React.createElement(EvidenceDashboard, { summary: { title: "Flow response changed", measurableConsequence: quantified } }));
     const section = screen.getByRole("region", { name: "Measurable consequence" });
-    expect(within(section).getByText("Water use above expected")).toBeTruthy();
+    expect(within(section).getByText("Water flow above expected")).toBeTruthy();
     expect(within(section).getByText("12,840 gal")).toBeTruthy();
     expect(within(section).getByText("6.0 hours")).toBeTruthy();
     expect(within(section).getByText("High")).toBeTruthy();
@@ -53,5 +55,40 @@ describe("Measurable consequence", () => {
     render(React.createElement(EvidenceDashboard, { variant: "insufficient", summary: { measurableConsequence: quantified } }));
     expect(screen.getByText("Consequence not quantifiable from available evidence.")).toBeTruthy();
     expect(screen.queryByText("12,840 gal")).toBeNull();
+  });
+});
+
+
+describe("Certified platform consequence projection", () => {
+  it.each(Object.entries(certification))("passes recorded API case %s through the evidence dashboard", (key, canonical) => {
+    const original = JSON.stringify(canonical);
+    const projected = consequenceSummary(canonical);
+    for (const [field, value] of Object.entries(projected)) expect(value).toEqual(canonical[field]);
+    render(React.createElement(EvidenceDashboard, { summary: { title: "Flow response changed", measurableConsequence: projected } }));
+    const section = screen.getByRole("region", { name: "Measurable consequence" });
+    if (key.startsWith("A:")) {
+      expect(within(section).getByText(key === "A:1" ? "3,600 gal" : "-3,600 gal")).toBeTruthy();
+      expect(within(section).getByText("6.0 hours")).toBeTruthy();
+      expect(within(section).getByText("High")).toBeTruthy();
+      expect(within(section).getByText("flow:load")).toBeTruthy();
+      expect(within(section).getByText(canonical.source_tag_ids.join(" / "))).toBeTruthy();
+    } else {
+      expect(within(section).getByText("Consequence not quantifiable from available evidence.")).toBeTruthy();
+      expect(within(section).getByText(canonical.reason)).toBeTruthy();
+      expect(section.querySelector(".measurable-consequence__amount")).toBeNull();
+      expect(within(section).queryByText("Observed across")).toBeNull();
+    }
+    fireEvent.click(within(section).getByText("Technical evidence"));
+    expect(section.querySelector("details").open).toBe(true);
+    expect(within(section).getByText(/timestamp_aware_trapezoidal_integration/)).toBeTruthy();
+    expect(section.textContent).not.toMatch(/leak|waste|saving|remediation|diagnos|cost/i);
+    expect(JSON.stringify(canonical)).toBe(original);
+  });
+
+  it("retains a standalone unsupported reason without inventing zero", () => {
+    const result = consequenceSummary({ status: "not_quantifiable", reason: "Acquisition gap is not configured." });
+    render(React.createElement(MeasurableConsequence, { result }));
+    expect(screen.getByText("Acquisition gap is not configured.")).toBeTruthy();
+    expect(screen.queryByText("0 gal")).toBeNull();
   });
 });

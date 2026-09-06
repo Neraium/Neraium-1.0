@@ -89,6 +89,9 @@ class FakeAnalysisRepository:
             authority_record_digest=authority_digest,
         )
 
+    def get_connection(self, scope, connection_id):
+        return {"safe_config": getattr(self, "configuration", {})}
+
     def get_analysis_window(self, scope, *, window_id):
         return self.windows.get(window_id)
 

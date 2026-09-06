@@ -46,7 +46,7 @@ def fixture():
             }
         ],
     }
-    catalog = {"flow": {"resource_type": "water", "canonical_unit": "gpm"}}
+    catalog = {"flow": {"resource_type": "water", "canonical_unit": "gpm", "max_gap_seconds": 3600}}
     return finding, expected, catalog
 
 

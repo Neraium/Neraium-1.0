@@ -46,6 +46,10 @@ logger = logging.getLogger(__name__)
 
 
 class TelemetryAnalysisRepository(Protocol):
+    def get_connection(
+        self, scope: TelemetryScopeRef, connection_id: str
+    ) -> Mapping[str, Any] | None: ...
+
     def resolve_analysis_authority_snapshot(
         self,
         scope: TelemetryScopeRef,
@@ -437,6 +441,8 @@ def run_post_ingestion_analysis(
                 reason_code="telemetry_analysis_observation_limit_exceeded",
             )
         raise
+    connection = repository.get_connection(scope, connection_id) or {}
+    consequence_config = (connection.get("safe_config") or {}).get("consequence")
     try:
         window = build_canonical_analysis_window(
             window_id=window_id,
@@ -447,6 +453,8 @@ def run_post_ingestion_analysis(
             persisted_authority_digest=authority_digest,
             phase4_system_identity=identity,
             observations=observations,
+            consequence_configuration=consequence_config,
+            consequence_connection_id=connection_id,
             source_kind="telemetry_connector",
             window_start=start,
             window_end=end,

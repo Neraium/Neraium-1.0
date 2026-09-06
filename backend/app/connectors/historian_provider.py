@@ -311,7 +311,7 @@ class HistorianTemplateConnector(TelemetryConnector):
             )
         except ValueError:
             raise _historian_config_error("historian_credential_fields_not_allowed") from None
-        if set(configuration) - _ALLOWED_CONFIG_KEYS:
+        if set(configuration) - (_ALLOWED_CONFIG_KEYS | {"consequence"}):
             raise _historian_config_error("historian_configuration_field_not_allowed")
         try:
             if len(json.dumps(dict(configuration), default=str).encode("utf-8")) > 32 * 1024:

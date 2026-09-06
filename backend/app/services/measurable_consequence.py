@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from math import isfinite
 from typing import Any
 
 from neraium_consequence import RESOURCE_PROFILES, quantify_consequence
 from neraium_consequence.provenance import snapshot
 from neraium_consequence.validation import timestamp_seconds
+
+from app.services.telemetry_units import normalize_telemetry_unit
 
 
 def unavailable_consequence() -> dict[str, Any]:
@@ -59,23 +62,25 @@ def _window(finding: dict[str, Any]) -> tuple[float, float] | None:
         return None
 
 
+def _source_unit(metadata: dict[str, Any]) -> str | None:
+    units = {
+        metadata[key]
+        for key in ("canonical_unit", "engineering_units", "unit")
+        if isinstance(metadata.get(key), str) and metadata[key]
+    }
+    return next(iter(units)) if len(units) == 1 else None
+
+
 def _profile(metadata: dict[str, Any]) -> str | None:
-    explicit = metadata.get("consequence_profile_key")
-    unit = (
-        metadata.get("canonical_unit")
-        or metadata.get("engineering_units")
-        or metadata.get("unit")
-    )
-    if isinstance(explicit, str) and explicit in RESOURCE_PROFILES:
-        return explicit if unit == RESOURCE_PROFILES[explicit].rate_unit else None
-    # Exact canonical identity; no guesses from raw tag names or dimension alone.
-    if (
-        metadata.get("canonical_signal_name") == "electrical.active_power"
-        and unit == "kW"
-    ):
-        return "electricity_kw"
+    source_unit = _source_unit(metadata)
+    if not source_unit:
+        return None
+    unit = metadata.get("rate_unit") or source_unit
     resource = metadata.get("resource_type")
+    explicit = metadata.get("consequence_profile_key")
     for key, profile in RESOURCE_PROFILES.items():
+        if explicit is not None and explicit != key:
+            continue
         if resource == profile.resource_type and unit == profile.rate_unit:
             return key
     return None
@@ -161,12 +166,65 @@ def build_measurable_consequence(
             "Exactly one mapped, finding-owned resource rate series is required."
         )
     expected, profile_key, source_ids = candidates[0]
+    metadata = _mapping(catalog.get(expected["target_signal"]))
+    # A catalog policy belongs to this acquisition and takes precedence over a
+    # model-level limit. Never substitute polling cadence or the package default.
+    policy_source = (
+        "signal_catalog" if "max_gap_seconds" in metadata else "expected_behavior"
+    )
+    max_gap = (metadata if policy_source == "signal_catalog" else expected).get(
+        "max_gap_seconds"
+    )
+    policy = {
+        "source": policy_source,
+        "max_gap_seconds": max_gap,
+        "connection_id": metadata.get("consequence_connection_id"),
+        "method": "explicit_maximum_interval_gap_v1",
+    }
+    if (
+        isinstance(max_gap, bool)
+        or not isinstance(max_gap, (int, float))
+        or not isfinite(max_gap)
+        or max_gap <= 0
+    ):
+        result = refuse(
+            "An explicit positive acquisition maximum interval gap is required."
+        )
+        result["provenance"]["acquisition_gap_policy"] = snapshot(policy)
+        result["provenance"]["signal_metadata"] = snapshot(metadata)
+        return result
     observations = deepcopy(expected.get("observations") or [])
     if not isinstance(observations, list):
         return refuse("Aligned observed-versus-expected observations are unavailable.")
+    source_unit = _source_unit(metadata)
+    rate_unit = RESOURCE_PROFILES[profile_key].rate_unit
+    conversion = None
+    if source_unit != rate_unit:
+        conversion = normalize_telemetry_unit(
+            value=1.0,
+            source_unit=source_unit,
+            canonical_unit=rate_unit,
+            expected_dimension=None,
+        )
+        if not conversion.analysis_eligible:
+            return refuse(
+                "The explicit source-to-profile rate unit conversion is unsupported."
+            )
     for row in observations:
         if not isinstance(row, dict):
             continue
+        if conversion is not None:
+            for field in ("observed", "expected"):
+                normalized = normalize_telemetry_unit(
+                    value=row.get(field),
+                    source_unit=source_unit,
+                    canonical_unit=rate_unit,
+                    expected_dimension=None,
+                )
+                if not normalized.analysis_eligible:
+                    row["valid"] = False
+                else:
+                    row[field] = normalized.canonical_value
         try:
             timestamp = timestamp_seconds(row.get("timestamp"))
             if not window[0] <= timestamp <= window[1]:
@@ -182,10 +240,18 @@ def build_measurable_consequence(
         quantify_consequence(
             observations,
             profile_key=profile_key,
-            max_gap_seconds=expected.get("max_gap_seconds"),
+            max_gap_seconds=max_gap,
             **kwargs,
         )
     )
+    result["provenance"]["acquisition_gap_policy"] = snapshot(policy)
+    if conversion is not None:
+        result["provenance"]["rate_unit_conversion"] = {
+            "source_unit": source_unit,
+            "rate_unit": rate_unit,
+            "conversion_id": conversion.conversion_id,
+            "version": conversion.conversion_version,
+        }
     result["provenance"]["expected_behavior"] = snapshot(expected)
     result["provenance"]["signal_metadata"] = snapshot(
         catalog.get(expected["target_signal"])

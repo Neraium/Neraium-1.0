@@ -9,6 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
+from app.services.consequence_configuration import validate_consequence_configuration
 from app.services.telemetry_domain import (
     ConnectorCapability,
     ConnectorType,
@@ -49,8 +50,13 @@ def _validate_safe_configuration(
         if connector_type is ConnectorType.HTTPS_TELEMETRY
         else _HISTORIAN_CONFIG_KEYS
     )
-    if set(configuration) - allowed:
+    if set(configuration) - (allowed | {"consequence"}):
         raise ValueError("Configuration contains unsupported fields.")
+    if "consequence" in configuration:
+        configuration = {
+            **configuration,
+            "consequence": validate_consequence_configuration(configuration["consequence"]),
+        }
     if connector_type is ConnectorType.HTTPS_TELEMETRY:
         base_url = str(configuration.get("base_url") or "").strip()
         parsed = urlsplit(base_url)

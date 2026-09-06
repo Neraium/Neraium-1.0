@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from typing import Any
 
@@ -581,6 +582,7 @@ def _evidence_condition_record(condition: dict[str, Any]) -> dict[str, Any]:
     return {
         key: value
         for key, value in {
+            "measurable_consequence": deepcopy(condition.get("measurable_consequence")),
             "object_type": "condition",
             "condition_id": condition.get("condition_id"),
             "id": condition.get("condition_id") or condition.get("id"),
