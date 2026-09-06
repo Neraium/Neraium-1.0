@@ -105,3 +105,77 @@ Each stage records wall duration, process CPU duration, and applicable counters.
 - evidence fusion, baseline artifact reuse, result finalization, and evidence persistence.
 
 Applicable totals include rows, signals, candidate/eligible/deep pairs, windows, lags, scales, models, evidence candidates, and cache/artifact reuse. The report also contains a compact, duration-ranked summary suitable for internal logs or diagnostics.
+
+
+## Robustness matrix and upload performance guards
+
+The robustness matrix and dedicated upload guards have separate responsibilities:
+
+- `test_robustness_benchmark_matrix` checks stable false positives, injected drift,
+  relationship collapse, and exact row/sample accounting. It retains all six
+  workloads, including 10k rows. Its historical 8s/20s values are observational
+  references, not absolute CI assertions.
+- `test_100k_upload_performance_guard` remains required in default backend CI.
+  Both reported processing time and complete `process_csv_content` wall time
+  must be **at most 60 seconds**. The complete-call timer also covers final
+  durable completion writes and result reload. CSV fixture generation, pytest
+  runtime initialization, and benchmark-report serialization are outside it.
+- The optional 1M guard remains **at most 300 seconds**, with its existing full
+  population, bounded sample, and 768 MiB RSS-delta assertions. Enable it with
+  `NERAIUM_RUN_1M_BENCHMARK=1`; ordinary CI does not execute that workload.
+- Six boundary checks inject exact-limit and 1ms-over-limit reports into the
+  actual guard functions. They protect both 100k timing assertions and the 1M
+  timing assertion without sleeping or generating large fixtures.
+
+Matrix reports expose `runtime_seconds`, complete-call `wall_seconds`, existing
+stage wall/CPU measurements and job-stage timings, row/sample counts, and
+`reference_seconds` / `reference_overage_seconds`. Their `timing_policy` is
+`observational_reference`. The 100k guard writes its report before asserting,
+with unchanged `max_seconds=60`; failures include the actual report. Pytest
+writes these JSON files beneath its temporary directory. For retained local
+artifacts, run:
+
+```bash
+PYTHONPATH=backend APP_ENV=test python -m pytest tests/test_upload_robustness_benchmark.py --basetemp=/path/to/dedicated-benchmark-artifacts
+```
+
+Use a dedicated artifact directory: pytest clears `--basetemp` at startup.
+Compare repeated timings on comparable hardware and runtime state, together
+with stage work counts and semantic output. The 60s guard detects substantial
+upload latency regressions; it does not claim to detect every small-workload
+slowdown. No absolute wall-clock guard can guarantee immunity to arbitrarily
+severe runner contention.
+
+### Why the matrix timing assertion changed
+
+The required backend matrix failed on unchanged main
+`757267e445cc9d9e9f1c01388ed18915df73e012`, independently of PR #126.
+The assertion originated in `ddd9358a`; `1ca4ea9e` later expanded the reported
+processing timer through evidence finalization without recalibrating those
+matrix ceilings. That later work already established the reference/optimized
+benchmark policy of observing absolute timings while checking semantic equality.
+
+The current reported timer uses monotonic `perf_counter`, starting in
+`process_csv_file` after source hashing/preparation and stopping in
+`_finalize_completed_upload` after evidence persistence, before final durable
+completion writes. It includes ingestion, canonical persistence, SII analysis,
+progress persistence and result/evidence finalization. It excludes module import,
+fixture generation, pytest's runtime initialization, temporary source creation,
+source preparation, final completion writes, and result reload. It measures
+elapsed time, so scheduling and I/O waits count. Analytical caches are job-local,
+but the six matrix uploads share one pytest runtime directory; only separate
+tests receive fresh runtime state.
+
+Five fresh-process, unchanged-main matrix runs all failed timing assertions;
+all analytical assertions passed. Reordering changed the measured workload:
+10k-first took 10.139s, while stable-clean-last took 12.307s. A separate probe
+with fresh runtime state for each case passed all original timing assertions.
+These probes were not concurrent and did not modify production code. The host
+also had unrelated CPU-intensive processes. Scheduling, CPU work and I/O effects
+cannot be fully separated by these observations, so this is a combined gate and
+measurement-design defect, not proof of a new implementation regression.
+
+The correction preserves the analytical workload and adds complete-call
+coverage to the existing 60s performance contract. It changes no backend,
+relationship, persistence, consequence, cause-removal, resource-mapping or UI
+implementation.
