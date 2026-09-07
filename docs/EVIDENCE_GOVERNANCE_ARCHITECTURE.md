@@ -51,7 +51,7 @@ Cross-cutting controls apply across every layer:
 
 ## Layer 0: Context Registry
 
-**Status: Existing / extend**
+**Status: Existing: versioned registry; live adapters deferred**
 
 The Context Registry is a shared, versioned, provenance-aware dependency used by all downstream layers. It records infrastructure identity, operating context, external anchors, engineering constraints, maintenance and calibration events, commissioning references, baseline/model history, and other admissible context.
 
@@ -89,7 +89,7 @@ Analytical modules produce evidence only. They do not decide evidence maturity, 
 
 ## Evidence families
 
-**Status: Specified**
+**Status: Existing**
 
 Canonical evidence families are:
 
@@ -107,7 +107,7 @@ Multiple metrics derived from the same underlying mathematical structure do not 
 
 ## Layer 2: Evidence Maturity Engine
 
-**Status: Specified**
+**Status: Existing: L0–L4 evaluators; live adapters deferred**
 
 The Evidence Maturity Engine evaluates a finding-specific evidence object over time.
 
@@ -144,7 +144,7 @@ Lifecycle history is append-only and versioned. A finding may recover or regress
 
 ## Layer 4: Authority Policy Engine
 
-**Status: Specified**
+**Status: Existing: non-executing contract and evaluator**
 
 The Authority Policy Engine decides what software is permitted to do with a finding under the policy version in force at decision time.
 
@@ -161,7 +161,7 @@ Low-maturity structural evidence should generally **defer** adaptation while add
 
 ### Tier A: state-location adaptation
 
-**Status: Specified**
+**Status: Existing classification/eligibility; adaptation deferred**
 
 Tier A is bounded adaptation where state location changes while structural evidence remains sufficiently consistent. Eligibility may include mean/offset movement with materially intact relationship and covariance structure, no unresolved instrumentation concern, no contradictory physics evidence, and an admissible evolution rate.
 
@@ -169,13 +169,13 @@ Tier A may become automatically permissible only when the applicable policy and 
 
 ### Tier B: structural adaptation
 
-**Status: Specified**
+**Status: Existing classification/eligibility; adaptation deferred**
 
 Tier B covers material graph, covariance-structure, expected-response, or other structural changes. Tier B is not automatically learned merely because the new state is stable. It requires stricter policy gates and may require explicit human review.
 
 ## Layer 5: Authority Decision Record
 
-**Status: Specified**
+**Status: Existing: append-only v1/v2 basis and replay**
 
 Every consequential software-authority decision must create an immutable, append-only `AuthorityDecision` record.
 
@@ -240,7 +240,7 @@ The system should be able to answer, for any material finding or model transitio
 
 ## Evidence dependency graph
 
-**Status: Specified**
+**Status: Existing**
 
 Evidence dependencies are first-class. Each evidence object records the upstream observations and evidence objects from which it was derived. The maturity engine uses the dependency graph together with evidence-family classification to avoid false corroboration.
 
@@ -281,3 +281,13 @@ The first implementation tranche is intentionally limited to governance foundati
 ## Implementation invariant
 
 No existing analytical module may be modified to make a new authoritative baseline, escalation, or finding-closure decision until the evidence-governance contracts and tests for that authority path are in place.
+
+## Phase 2 implementation status
+
+[Evidence-governance Phase 2](EVIDENCE_GOVERNANCE_PHASE2.md) implements the versioned Context Registry, L3 characterization contract, L4 context qualification, assumption-gated Mann–Kendall trend evidence, AuthorityPolicy contract/evaluator, and Tier A/Tier B classification and eligibility. The Layer 0, Layer 2, Layer 4 and dependency contracts are now **Existing** as explicitly invoked governance services. Layer 5 has a v2 decision/basis with frozen policy evaluation and independent replay. Live analytical adapters and authority consumers remain **Deferred**.
+
+Context and policy records carry both creation/availability time and effective intervals. No historical governance object may depend on information that became available after its evaluation or decision timestamp. Retroactive effective dates cannot relax this rule. Supersession and invalidation append versions and do not rewrite earlier decisions. Policy context requirements are evaluated again at decision time; expired anchors cannot preserve an earlier L4 permission basis.
+
+L3 requires supported multi-family characterization, not a single metric or probability. L4 requires applicable verified external context; it is neither cause nor action authorization. Partial and unavailable context remain explicit. Tier A/B eligibility is evaluable, but no baseline/model mutation or adaptation is activated. No admissible rate method is implemented yet, so the evolution-rate gate remains unknown and Tier A remains ineligible. Tier B cannot receive automatic permission. Every v2 decision remains non-executing, and before/after active model references must match.
+
+Existing SII outputs, compatibility payloads, learning behavior, finding workflow and operator escalation remain unchanged. Neraium remains read-only and human-in-the-loop, with no physical authority, diagnosis, maintenance recommendation, failure-time prediction, regulatory compliance claim or cryptographic non-repudiation claim.

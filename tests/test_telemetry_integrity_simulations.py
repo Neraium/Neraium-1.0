@@ -44,7 +44,9 @@ def test_flatlined_signal_fixture_returns_graceful_terminal_state() -> None:
   client = TestClient(create_app())
   response = post_fixture_csv(client, "flatlined_signal.csv")
   assert response.status_code == 202
-  terminal = wait_for_terminal_upload_status(client, response.json()["status_url"])
+  # Real background analysis can exceed five seconds on slower runners; this
+  # checks terminal behavior, using the upload tests' 15-second polling budget.
+  terminal = wait_for_terminal_upload_status(client, response.json()["status_url"], timeout_seconds=15.0)
   assert terminal["status"] in {"COMPLETE", "FAILED"}
   assert terminal.get("message")
 
