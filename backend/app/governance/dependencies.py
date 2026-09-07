@@ -1,13 +1,14 @@
 """Conservative declared-lineage rules; no statistical independence claims."""
 from __future__ import annotations
 
+from datetime import datetime
 from graphlib import CycleError, TopologicalSorter
 from typing import Literal, Self
 
-from pydantic import StrictBool, field_validator, model_validator
+from pydantic import StrictBool, TypeAdapter, field_validator, model_validator
 
 from app.governance.contracts import (
-    ContentRecord, Contract, EvidenceFamily, EvidenceObject, ObservationReference, Text,
+    ContentRecord, Contract, EvidenceFamily, EvidenceObject, ObservationReference, Text, Timestamp,
 )
 
 
@@ -68,6 +69,20 @@ class DependencyGraph(ContentRecord):
 
     def upstream(self, node_id: str) -> tuple[str, ...]:
         return self.edges()[node_id]
+
+    def validate_available_at(self, timestamp: str) -> None:
+        """The entire retained graph must be available, including upstream nodes.
+
+        Observation references have window bounds, not separate creation/effective
+        timestamps in v1. Missing optional bounds are not inferred from a clock.
+        """
+        cutoff = datetime.fromisoformat(TypeAdapter(Timestamp).validate_python(timestamp))
+        for item in (*self.evidence, *self.observations):
+            times = [item.source_window.ended_at]
+            if isinstance(item, EvidenceObject):
+                times.extend((item.created_at, item.effective_at))
+            if any(datetime.fromisoformat(value) > cutoff for value in times if value is not None):
+                raise ValueError("graph_contains_later_knowledge")
 
     def lineage(self, node_id: str) -> tuple[str, ...]:
         edges = self.edges()

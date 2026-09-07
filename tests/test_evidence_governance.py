@@ -304,7 +304,8 @@ def test_authority_serialization_append_supersession_and_historical_basis(store)
     second, later_basis = decision_and_basis(policy_version="2", supersedes_decision_id=first.decision_id,
                                             decision_timestamp=LATER, effective_timestamp=AT)
     store.append_decision(SCOPE, second, later_basis)
-    third, third_basis = decision_and_basis(policy_version="3", supersedes_decision_id=second.decision_id)
+    third, third_basis = decision_and_basis(policy_version="3", supersedes_decision_id=second.decision_id,
+                                          decision_timestamp=LATER)
     store.append_decision(SCOPE, third, third_basis)
     assert store.history(SCOPE, "system-1", finding_id="finding-1") == [first, second, third]
     assert store.get_record(SCOPE, "system-1", first.decision_id) == original

@@ -57,6 +57,7 @@ def evaluate_maturity(
     available = {item.evidence_id for item in graph.evidence}
     if not ids or not set(ids) <= available:
         raise ValueError("relevant_evidence_required_for_L0")
+    graph.validate_available_at(evaluated_at)
     if finding_id != persistence.finding_id:
         raise ValueError("persistence_finding_mismatch")
     if len({gate.requirement_id for gate in persistence.gates}) != len(persistence.gates):

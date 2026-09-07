@@ -3,8 +3,9 @@ import sqlite3
 
 import pytest
 
-from app.governance.authority_store import AuthorityRecordConflict, DecisionBasis, InMemoryAuthorityDecisionStore
+from app.governance.authority_store import AuthorityRecordConflict, DecisionBasis, InMemoryAuthorityDecisionStore, RuntimeAuthorityDecisionStore
 from app.governance.contracts import AuthorityDecision, FindingLifecycleEvent
+from app.governance.maturity import MaturityEvaluation
 from app.services import finding_workflow as workflow, runtime_db
 from test_evidence_governance import (
     AT, LATER, SCOPE, assess, decision_and_basis, graph_for, lifecycle_change,
@@ -47,7 +48,7 @@ def test_decision_rejects_source_windows_after_decision_time(future_node):
     a = evidence(source_window=window) if future_node == "evidence" else evidence()
     raw = observation(source_window=window) if future_node == "observation" else observation()
     graph = graph_for(a, evidence("b", "instrumentation"), observations=(raw, observation("b")))
-    maturity = assess(graph)
+    maturity = assess(graph, evaluated_at=LATER)
     lifecycle = FindingLifecycleEvent(**{
         **basis.lifecycle.as_dict(), "evidence_ids": maturity.relevant_evidence_ids,
     })
@@ -106,3 +107,123 @@ def test_lifecycle_schema_upgrade_preserves_existing_events_and_append_only_trig
     with runtime_db.db_connection() as connection:
         indexes = {row["name"] for row in connection.execute("PRAGMA index_list(finding_workflow_events)")}
         assert "idx_finding_workflow_events_finding_version" in indexes
+
+
+@pytest.fixture(params=[InMemoryAuthorityDecisionStore, RuntimeAuthorityDecisionStore])
+def temporal_store(request):
+    return request.param()
+
+
+def test_supersession_chronology_rejects_atomically_and_allows_retroactive_effect(temporal_store):
+    first, basis = decision_and_basis(decision_timestamp=LATER)
+    temporal_store.append_decision(SCOPE, first, basis)
+    original = temporal_store.get_record(SCOPE, "system-1", first.decision_id)
+    earlier, earlier_basis = decision_and_basis(supersedes_decision_id=first.decision_id)
+    with pytest.raises(AuthorityRecordConflict, match="supersession_precedes_predecessor_decision"):
+        temporal_store.append_decision(SCOPE, earlier, earlier_basis)
+    assert temporal_store.history(SCOPE, "system-1") == [first]
+    assert temporal_store.get_record(SCOPE, "system-1", first.decision_id) == original
+    # Equality is allowed, including equivalent timezone representations. The
+    # failed append must not consume the predecessor's single successor slot.
+    successor, successor_basis = decision_and_basis(
+        supersedes_decision_id=first.decision_id,
+        decision_timestamp="2026-09-06T13:00:00+02:00", effective_timestamp=AT,
+    )
+    temporal_store.append_decision(SCOPE, successor, successor_basis)
+    assert temporal_store.history(SCOPE, "system-1") == [first, successor]
+    assert successor.effective_timestamp == AT
+    assert temporal_store.get_record(SCOPE, "system-1", first.decision_id) == original
+
+
+def test_future_effective_lifecycle_cannot_supply_decision_time_state(temporal_store):
+    decision, basis = decision_and_basis(effective_timestamp=AT)
+    future = FindingLifecycleEvent(**{**basis.lifecycle.as_dict(), "effective_at": LATER})
+    basis = DecisionBasis(**{**basis.as_dict(), "lifecycle": future})
+    with pytest.raises(ValueError, match="decision_lifecycle_not_yet_effective"):
+        temporal_store.append_decision(SCOPE, decision, basis)
+    assert temporal_store.history(SCOPE, "system-1") == []
+    applicable = AuthorityDecision.model_validate({
+        **decision.as_dict(), "decision_id": "", "decision_timestamp": LATER,
+    })
+    temporal_store.append_decision(SCOPE, applicable, basis)
+    assert temporal_store.history(SCOPE, "system-1") == [applicable]
+
+
+def test_future_effective_lifecycle_remains_recordable():
+    finding = materialize_finding()
+    change = {**lifecycle_change(), "effective_at": LATER}
+    event = workflow.record_governance_lifecycle(
+        finding, change=change, actor="adapter", expected_version=0,
+        idempotency_key="scheduled", recorded_at=AT,
+    )
+    assert event["recorded_at"] == AT and event["effective_at"] == LATER
+    assert workflow.governance_lifecycle_history(finding) == [event]
+    assert workflow.read_finding_case(finding)["workflow"]["status"] == "open"
+
+
+TEMPORAL_CASES = (
+    "evidence_created", "evidence_effective", "evidence_window",
+    "upstream_created", "upstream_effective", "upstream_window",
+    "observation_window", "unrelated_evidence",
+)
+
+
+def graph_with_later_knowledge(case):
+    window = {"window_id": "window:a", "started_at": AT, "ended_at": LATER}
+    changes = {}
+    if case.endswith("created"):
+        changes["created_at"] = LATER
+    elif case.endswith("effective"):
+        changes["effective_at"] = LATER
+    elif case.endswith("window") and case != "observation_window":
+        changes["source_window"] = window
+    a, b = evidence(**changes), evidence("b", "instrumentation")
+    nodes = [a, b]
+    relevant = (a.evidence_id, b.evidence_id)
+    if case.startswith("upstream"):
+        child = evidence("c", "trend", derived_from=[{"kind": "evidence", "dependency_id": a.evidence_id}])
+        nodes.append(child)
+        relevant = (child.evidence_id, b.evidence_id)
+    if case == "unrelated_evidence":
+        nodes.append(evidence("unused", created_at=LATER, derived_from=[]))
+    raw = observation(source_window=window) if case == "observation_window" else observation()
+    return graph_for(*nodes, observations=(raw, observation("b"))), relevant
+
+
+@pytest.mark.parametrize("case", TEMPORAL_CASES)
+def test_maturity_rejects_future_knowledge_in_retained_graph(case):
+    graph, relevant = graph_with_later_knowledge(case)
+    with pytest.raises(ValueError, match="graph_contains_later_knowledge"):
+        assess(graph, relevant=relevant, evaluated_at=AT)
+    # Exact boundary and equivalent UTC offsets are admissible.
+    evaluated = assess(graph, relevant=relevant, evaluated_at="2026-09-06T13:00:00+02:00")
+    assert evaluated.evaluated_at == LATER
+
+
+@pytest.mark.parametrize("case", TEMPORAL_CASES)
+def test_storage_independently_rejects_backdated_maturity(temporal_store, monkeypatch, case):
+    graph, relevant = graph_with_later_knowledge(case)
+    valid = assess(graph, relevant=relevant, evaluated_at=LATER)
+    # Simulate an imported historical evaluation with a valid content ID, not
+    # an object produced by the corrected evaluator.
+    backdated = MaturityEvaluation.model_validate({
+        **valid.as_dict(), "evaluation_id": "", "evaluated_at": AT,
+    })
+    decision, basis = decision_and_basis(decision_timestamp=LATER)
+    lifecycle = FindingLifecycleEvent(**{
+        **basis.lifecycle.as_dict(), "evidence_ids": relevant, "recorded_at": LATER,
+    })
+    basis = DecisionBasis(**{
+        **basis.as_dict(), "graph": graph, "maturity": backdated, "lifecycle": lifecycle,
+    })
+    decision = AuthorityDecision.model_validate({
+        **decision.as_dict(), "decision_id": "", "evidence_snapshot_ids": relevant,
+        "dependency_graph_snapshot_id": graph.snapshot_id,
+        "maturity_snapshot_id": backdated.evaluation_id, "maturity_at_decision": backdated.level,
+    })
+    # Even a replay implementation returning the claimed result cannot bypass
+    # the separate storage-side temporal validation.
+    monkeypatch.setattr("app.governance.authority_store.evaluate_maturity", lambda **kwargs: backdated)
+    with pytest.raises(ValueError, match="graph_contains_later_knowledge"):
+        temporal_store.append_decision(SCOPE, decision, basis)
+    assert temporal_store.history(SCOPE, "system-1") == []

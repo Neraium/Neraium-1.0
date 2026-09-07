@@ -51,6 +51,9 @@ class DecisionBasis(Contract):
             raise ValueError("decision_maturity_snapshot_mismatch")
         if maturity.level != decision.maturity_at_decision or set(maturity.relevant_evidence_ids) != set(decision.evidence_snapshot_ids):
             raise ValueError("decision_maturity_evidence_mismatch")
+        # Validate the historical boundary independently of evaluator replay,
+        # including imported evaluations with valid content IDs.
+        graph.validate_available_at(maturity.evaluated_at)
         replay = evaluate_maturity(
             finding_id=maturity.finding_id, relevant_evidence_ids=maturity.relevant_evidence_ids,
             graph=graph, persistence=maturity.persistence, evaluated_at=maturity.evaluated_at,
@@ -64,6 +67,8 @@ class DecisionBasis(Contract):
             raise ValueError("decision_lifecycle_snapshot_mismatch")
         if not set(self.lifecycle.evidence_ids) <= ids:
             raise ValueError("lifecycle_evidence_snapshot_missing")
+        if datetime.fromisoformat(self.lifecycle.effective_at) > datetime.fromisoformat(decision.decision_timestamp):
+            raise ValueError("decision_lifecycle_not_yet_effective")
         for reference, kind in (
             (decision.policy_snapshot_id, "policy"), (decision.context_snapshot_id, "context"),
             (decision.active_model_before, "model"), (decision.candidate_model, "model"),
@@ -167,6 +172,8 @@ class AuthorityDecisionStore(ABC):
                     raise AuthorityRecordConflict("superseded_decision_missing")
                 if (previous["finding_id"], previous["requested_operation"]) != (decision.finding_id, decision.requested_operation):
                     raise AuthorityRecordConflict("supersession_finding_or_operation_mismatch")
+                if datetime.fromisoformat(decision.decision_timestamp) < datetime.fromisoformat(previous["decision_timestamp"]):
+                    raise AuthorityRecordConflict("supersession_precedes_predecessor_decision")
                 if any(item["decision"]["supersedes_decision_id"] == previous_id for item in records):
                     raise AuthorityRecordConflict("superseded_decision_already_has_successor")
             records.append(candidate)
