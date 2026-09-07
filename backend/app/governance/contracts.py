@@ -165,10 +165,12 @@ class EvidenceObject(ContentRecord):
 
 
 class MaturityLevel(str, Enum):
-    # Additive enum values can introduce L3/L4 later; v1 evaluates only these.
+    # v1 still evaluates only L0–L2; v2 adds explicit characterization/context.
     L0 = "L0"
     L1 = "L1"
     L2 = "L2"
+    L3 = "L3"
+    L4 = "L4"
 
 
 class LifecycleState(str, Enum):

@@ -13,10 +13,12 @@ from typing import Any, Callable, Literal
 
 from app.engine.sii.behavioral_model_contract import AuthenticatedPhase4Scope
 from app.governance.contracts import (
-    AuditSnapshot, AuthorityDecision, Contract, FindingLifecycleEvent, content_id,
+    AuditSnapshot, AuthorityDecision, Contract, FindingLifecycleEvent, Text, content_id,
 )
+from app.governance.context import ContextBasis
+from app.governance.policy import AuthorityPolicy, PolicyEvaluation, evaluate_policy
 from app.governance.dependencies import DependencyGraph
-from app.governance.maturity import MaturityEvaluation, evaluate_maturity
+from app.governance.maturity import MaturityEvaluation, MaturityEvaluationV2, replay_maturity, evaluate_maturity
 
 
 class AuthorityRecordConflict(ValueError):
@@ -30,7 +32,7 @@ class AuthorityStorageUnavailable(RuntimeError):
 class DecisionBasis(Contract):
     schema_version: Literal["authority-decision-basis-v1"] = "authority-decision-basis-v1"
     graph: DependencyGraph
-    maturity: MaturityEvaluation
+    maturity: MaturityEvaluation | MaturityEvaluationV2
     lifecycle: FindingLifecycleEvent
     snapshots: tuple[AuditSnapshot, ...]
 
@@ -54,11 +56,11 @@ class DecisionBasis(Contract):
         # Validate the historical boundary independently of evaluator replay,
         # including imported evaluations with valid content IDs.
         graph.validate_available_at(maturity.evaluated_at)
-        replay = evaluate_maturity(
+        replay = (replay_maturity(maturity, graph) if isinstance(maturity, MaturityEvaluationV2) else evaluate_maturity(
             finding_id=maturity.finding_id, relevant_evidence_ids=maturity.relevant_evidence_ids,
             graph=graph, persistence=maturity.persistence, evaluated_at=maturity.evaluated_at,
             source_run_id=maturity.source_run_id,
-        )
+        ))
         if replay != maturity:
             raise ValueError("maturity_replay_mismatch")
         if (self.lifecycle.event_id != decision.lifecycle_event_id
@@ -105,6 +107,9 @@ def _basis_objects(basis: dict) -> dict[str, dict]:
     entries.extend(("observation_id", item) for item in basis["graph"]["observations"])
     entries.extend((("snapshot_id", basis["graph"]), ("evaluation_id", basis["maturity"]),
                     ("event_id", basis["lifecycle"])))
+    if basis.get("schema_version") == "authority-decision-basis-v2":
+        entries.extend((("policy_record_id", basis["policy"]), ("evaluation_id", basis["policy_evaluation"])))
+        entries.extend(("context_id", item) for item in basis["context"]["records"])
     for field, item in entries:
         identifier = item[field]
         if identifier in objects and objects[identifier] != item:
@@ -145,8 +150,10 @@ class AuthorityDecisionStore(ABC):
 
     def append_decision(self, scope: AuthenticatedPhase4Scope, decision: AuthorityDecision, basis: DecisionBasis) -> AuthorityDecision:
         # Revalidate defensive serialized copies, including nested payload IDs.
-        decision = AuthorityDecision.model_validate(decision.as_dict())
-        basis = DecisionBasis.model_validate(basis.as_dict())
+        decision = parse_decision(decision.as_dict())
+        basis = parse_basis(basis.as_dict())
+        if isinstance(decision, AuthorityDecisionV2) != isinstance(basis, DecisionBasisV2):
+            raise ValueError("decision_basis_schema_mismatch")
         basis.validate_for(decision)
         key = self._key(scope, decision.system_scope)
 
@@ -180,13 +187,13 @@ class AuthorityDecisionStore(ABC):
             return ledger
 
         self._mutate(key, update)
-        return AuthorityDecision.model_validate(decision.as_dict())
+        return parse_decision(decision.as_dict())
 
     def history(self, scope: AuthenticatedPhase4Scope, system_scope: str, *, finding_id: str | None = None) -> list[AuthorityDecision]:
         """Ordered by atomic append sequence, independent of effective time."""
         key = self._key(scope, system_scope)
         ledger = self._ledger(self._read(key), scope, system_scope)
-        return [AuthorityDecision.model_validate(item["decision"]) for item in ledger["records"]
+        return [parse_decision(item["decision"]) for item in ledger["records"]
                 if finding_id is None or item["decision"]["finding_id"] == finding_id]
 
     def get_record(self, scope: AuthenticatedPhase4Scope, system_scope: str, decision_id: str) -> dict | None:
@@ -228,3 +235,110 @@ class RuntimeAuthorityDecisionStore(AuthorityDecisionStore):
             raise
         except Exception as exc:
             raise AuthorityStorageUnavailable("authority_ledger_append_failed") from exc
+
+
+# v2 requires evaluator replay; legacy v1 remains an inert historical record.
+
+
+class AuthorityDecisionV2(AuthorityDecision):
+    schema_version: Literal["authority-decision-v2"] = "authority-decision-v2"
+    policy_evaluation_id: Text
+    tier_classification: Literal["tier_a", "tier_b", "unclassified"] | None
+    execution_authorized: Literal[False] = False
+
+
+class DecisionBasisV2(DecisionBasis):
+    schema_version: Literal["authority-decision-basis-v2"] = "authority-decision-basis-v2"
+    context: ContextBasis
+    policy: AuthorityPolicy
+    policy_evaluation: PolicyEvaluation
+
+    def validate_for(self, decision: AuthorityDecision) -> None:
+        if not isinstance(decision, AuthorityDecisionV2):
+            raise ValueError("phase2_decision_schema_required")
+        super().validate_for(decision)
+        snapshots = {item.snapshot_id: item for item in self.snapshots}
+        if snapshots[decision.context_snapshot_id].payload != self.context.as_dict():
+            raise ValueError("decision_context_contents_mismatch")
+        if snapshots[decision.policy_snapshot_id].payload != self.policy.as_dict():
+            raise ValueError("decision_policy_contents_mismatch")
+        if (self.policy.policy_id, str(self.policy.policy_version)) != (decision.policy_id, decision.policy_version):
+            raise ValueError("decision_policy_contract_mismatch")
+        if self.context.evaluated_at != decision.decision_timestamp or self.context.relevant_at != decision.decision_timestamp:
+            raise ValueError("decision_context_timestamp_mismatch")
+        if isinstance(self.maturity, MaturityEvaluationV2) and self.maturity.context_basis:
+            original = self.maturity.context_basis
+            if not {item.context_id for item in original.records} <= {item.context_id for item in self.context.records}:
+                raise ValueError("decision_context_omits_maturity_history")
+        replay = evaluate_policy(policy=self.policy, graph=self.graph, maturity=self.maturity,
+            lifecycle_state=self.lifecycle.state, context=self.context, requested_operation=decision.requested_operation,
+            evaluated_at=decision.decision_timestamp)
+        if replay != self.policy_evaluation or decision.policy_evaluation_id != replay.evaluation_id:
+            raise ValueError("policy_replay_mismatch")
+        tier = replay.classification.tier if replay.classification else None
+        if (decision.decision_outcome != replay.outcome or decision.decision_reasons != replay.reasons
+                or decision.limiting_evidence != replay.limiting_evidence or decision.tier_classification != tier
+                or decision.contradicting_evidence != replay.contradicting_evidence):
+            raise ValueError("decision_policy_result_mismatch")
+        if decision.active_model_before is None:
+            raise ValueError("phase2_active_model_basis_required")
+        model = snapshots[decision.active_model_before]
+        if any(not isinstance(model.payload.get(key), str) or not model.payload[key].strip()
+               for key in ("model_ref", "baseline_ref")):
+            raise ValueError("phase2_immutable_model_and_baseline_refs_required")
+        if decision.active_model_after != decision.active_model_before:
+            raise ValueError("phase2_model_transition_inactive")
+        required = replay.outcome.value == "human_review_required"
+        if decision.human_review.as_dict() != {"required": required, "status": "pending" if required else "not_required",
+            "reviewer_identity": None, "reviewed_at": None, "rationale": None}:
+            raise ValueError("phase2_review_completion_inactive")
+
+
+def parse_decision(raw):
+    cls = AuthorityDecisionV2 if raw.get("schema_version") == "authority-decision-v2" else AuthorityDecision
+    return cls.model_validate(raw)
+
+
+def parse_basis(raw):
+    cls = DecisionBasisV2 if raw.get("schema_version") == "authority-decision-basis-v2" else DecisionBasis
+    result = cls.model_validate(raw)
+    if not isinstance(result, DecisionBasisV2) and isinstance(result.maturity, MaturityEvaluationV2):
+        raise ValueError("phase2_basis_schema_required")
+    return result
+
+
+def create_policy_decision(*, graph, maturity, lifecycle, context, policy,
+                           requested_operation, decision_timestamp, source_run_id,
+                           active_model, candidate_model=None, supersedes_decision_id=None):
+    """Build an evaluable, non-executing decision and its complete frozen basis.
+
+    active_model is an immutable audit snapshot containing model/baseline refs.
+    No live model is loaded, changed or saved by this function.
+    """
+    evaluation = evaluate_policy(policy=policy, graph=graph, maturity=maturity, lifecycle_state=lifecycle.state,
+        context=context, requested_operation=requested_operation, evaluated_at=decision_timestamp)
+    policy_snapshot = AuditSnapshot(kind="policy", object_id=policy.policy_id, version=str(policy.policy_version),
+        system_scope=graph.system_scope, created_at=policy.created_at, provenance=policy.provenance, payload=policy.as_dict())
+    context_snapshot = AuditSnapshot(kind="context", object_id="context-basis", version="1", system_scope=graph.system_scope,
+        created_at=context.evaluated_at, provenance=context.facts_provenance, payload=context.as_dict())
+    snapshots = (policy_snapshot, context_snapshot, active_model) + ((candidate_model,) if candidate_model else ())
+    required = evaluation.outcome.value == "human_review_required"
+    decision = AuthorityDecisionV2(finding_id=maturity.finding_id, system_scope=graph.system_scope,
+        decision_timestamp=decision_timestamp, effective_timestamp=decision_timestamp,
+        policy_id=policy.policy_id, policy_version=str(policy.policy_version), policy_snapshot_id=policy_snapshot.snapshot_id,
+        evidence_snapshot_ids=maturity.relevant_evidence_ids, context_snapshot_id=context_snapshot.snapshot_id,
+        dependency_graph_snapshot_id=graph.snapshot_id, maturity_at_decision=maturity.level,
+        maturity_snapshot_id=maturity.evaluation_id, lifecycle_state_at_decision=lifecycle.state, lifecycle_event_id=lifecycle.event_id,
+        requested_operation=requested_operation, decision_outcome=evaluation.outcome, decision_reasons=evaluation.reasons,
+        limiting_evidence=evaluation.limiting_evidence, contradicting_evidence=evaluation.contradicting_evidence,
+        active_model_before=active_model.snapshot_id,
+        candidate_model=candidate_model.snapshot_id if candidate_model else None, active_model_after=active_model.snapshot_id,
+        human_review={"required": required, "status": "pending" if required else "not_required"},
+        supersedes_decision_id=supersedes_decision_id, source_run_id=source_run_id,
+        policy_evaluation_id=evaluation.evaluation_id,
+        tier_classification=evaluation.classification.tier if evaluation.classification else None)
+    basis = DecisionBasisV2(graph=graph, maturity=maturity, lifecycle=lifecycle, snapshots=snapshots,
+                           context=context, policy=policy, policy_evaluation=evaluation)
+    basis.validate_for(decision)
+    # Return detached, validated copies, even when callers mutate nested JSON.
+    return parse_decision(decision.as_dict()), parse_basis(basis.as_dict())

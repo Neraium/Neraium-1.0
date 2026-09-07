@@ -1,0 +1,73 @@
+# Evidence-governance Phase 2
+
+Phase 2 adds Context Registry v1, L3/L4 maturity, trend evidence, versioned AuthorityPolicy evaluation, and Tier A/Tier B classification. All entry points are explicitly invoked library functions. No SII, API, compatibility-payload, operator-workflow, escalation, baseline-learning, or model-activation caller is added.
+
+## Context Registry v1
+
+`ContextObject` has a content-addressed `context_id` identifying one immutable version and a stable `context_key` linking versions. It carries the eleven architectural context types, system scope, source type/reference, provenance, explicit verification status, effective interval, creation time, version, exact predecessor, validity conditions and payload. `verified` is an assertion from the supplied source; the registry does not independently verify an event.
+
+`ContextRegistry` and `PolicyRegistry` reuse the foundation's runtime `latest_payloads` atomic transaction mechanism, with separate namespaces and authenticated tenant/workspace plus system scope. Both also support the foundation's in-memory backend. Exact retries are idempotent. Successors must increment the version, name the current predecessor and preserve creation chronology. Branches and identity rebinding are rejected. Reads return validated defensive copies. No database migration or new table is needed. History remains append-ordered; `as_of` selects only versions known by the supplied time.
+
+Effective intervals are half-open `[effective_from, effective_to)`. Creation/availability and effective time are checked separately: a retroactive effective date never makes a later-created record knowable earlier. Invalidation is a successor with `invalidated` status. It preserves original content and decisions. Qualification uses the latest supplied known version per logical key; it never falls back to an older verified anchor after invalidation or expiry. Supplied multi-version chains must be complete and non-branching.
+
+`ContextBasis` freezes the known version history and the exact validity facts, their availability time and provenance. Conditions are exact JSON equality predicates; absent facts fail closed. Scope mismatch, expiry, future effectiveness, unmet conditions, partial verification, lack of verification and invalidation produce explicit rejection reasons. Future-created records and facts are rejected before a historical basis can be constructed. `ContextQualification` retains applicable/rejected IDs, verification statuses, reasons, limiting/unavailable context and evaluation time.
+
+L4 admissible anchors are verified engineering constraints, commissioning references, maintenance/calibration events, setpoint changes and external anchors (including an explicitly sourced physics prior). Identity and operating context can satisfy policy context requirements but cannot alone establish L4. Partial context remains visible as a limitation; another verified applicable anchor may still qualify L4. Policies can require specific context types. Expired historical-reference qualification is intentionally unsupported in this tranche.
+
+## L3 and L4
+
+`evaluate_maturity_v2` retains the foundation's finding-specific persistence and declared-lineage independence rules. L2 without supported trajectory remains L2. Limited evidence cannot support v2 persistence or corroboration. L3 requires an explicit multi-family `TrajectoryCharacterization` associated with the same finding and graph, with an independent pair tied to persistence/corroboration support. Single-metric characterization is unsupported. Characterization preserves evidence IDs, families, full graph reference, bounded time horizon, method, assumptions and limitations.
+
+The vocabulary is `step_change`, `gradual_drift`, `oscillation`, `recovery`, `sustained_shift`, `propagation_candidate`, and `indeterminate`. An indeterminate or unsupported trajectory cannot elevate L2. This is a versioned adapter assertion contract, not a new classifier that infers trajectories from arbitrary payloads. Production analytical adapters and validation of their assumptions remain future work.
+
+L4 requires L3 plus applicable verified external context at the maturity evaluation time. It makes context-qualified evidence available for software authority-policy evaluation; it does not establish cause, health, truth, action necessity or regulatory approval. Every evaluation starts from its frozen basis; loss of persistence, corroboration, trajectory support or context can regress maturity. Lifecycle remains separate, including recovery states. There are no maturity probability or confidence fields.
+
+V1 maturity and decision schemas, IDs and historical evaluator behavior remain intact. V2 schemas retain trajectory and context inputs so replay does not read a live registry. V1 cannot represent L3/L4 evaluations.
+
+## Trend evidence
+
+`mann_kendall_evidence` implements a bounded, tie-corrected Mann–Kendall S statistic with continuity-corrected normal approximation. It uses the standard library and adds no SciPy or third-party trend dependency. This is appropriate only when an adapter explicitly asserts independent observations, no unmodeled seasonality, a comparable measurement regime and ignorable missingness. These assumptions are not established by the function itself; serially correlated operational telemetry must not be submitted as eligible without an appropriate upstream method.
+
+The rank-based test does not require regular spacing. Timestamps must strictly increase, lie inside the declared immutable observation window and be available by evidence creation. Null samples are counted and omitted only under the explicit missingness assumption. Non-finite values are rejected. At least 10 usable samples are required; processing is capped at 2,048 input samples for the quadratic pair calculation. Ineligible assumptions, insufficient samples and excess input return `limited` with null statistics rather than fabricated results.
+
+The payload retains sample/missing counts, irregular-spacing indication, S, tie-corrected variance, z, two-sided p-value, direction, the fixed 0.05 significance threshold, eligibility reasons, method, assumptions and limitations. The p-value is a statistical test output under stated assumptions, never a maturity score, confidence in a finding, probability of failure, health assessment or authority. Direction can be nonzero without significance. The method is not an evolution-rate estimator. An acceptable-rate assertion for Tier A therefore requires a separate analytical method; the trend function does not emit one.
+
+The tie-aware rank-test and normal-approximation rationale is consistent with the [SciPy Kendall test documentation](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kendalltau.html). This implementation explicitly retains S and continuity correction; it does not claim bit-for-bit equivalence with SciPy's tau statistic or exact small-sample test. Raw samples remain in the immutable observation artifact referenced by evidence; the governance layer does not create a raw-data archive.
+
+Trend has its own `EvidenceFamily` and preserves original observation lineage. It cannot independently establish L3 or authorize adaptation. No causal interpretation, degradation conclusion, maintenance recommendation, root-cause diagnosis or RUL/failure-time prediction is generated.
+
+## Authority policy and Tier classification
+
+`AuthorityPolicy` freezes policy ID/version, scope, requested software operation, minimum maturity, allowed lifecycle states, required evidence families and context types, prohibited typed evidence conditions, human-review requirement, outcome rules, effective/creation times, predecessor and provenance. `PolicyRegistry.resolve` selects the highest known, effective version for an explicit policy ID. It rejects expiry and does not resurrect an older policy when a successor expires. New-decision callers must use the registry's complete authoritative history; replay deliberately uses the retained historical policy rather than today's policy.
+
+`evaluate_policy` replays maturity, checks temporal availability and scope, and re-evaluates context at decision time. An old L4 snapshot cannot carry an expired anchor forward. Outcomes are `permitted`, `deferred`, `blocked`, `human_review_required`, `released` and `escalated`, with exact reasons, satisfied/failed rules, limiting evidence/context, classification and exact policy version. Scope, operation and policy interval mismatches block. Prohibited conditions take precedence over insufficiency, which takes precedence over Tier B and ordinary human-review gates. Outcome rules configure these responses within fail-closed bounds. `released` and `escalated` are audit outcomes only; neither invokes workflow behavior.
+
+Classification consumes only relevant frozen evidence using a documented `payload.governance_conditions` adapter protocol. Keys are the `EvidenceCondition` enum; values are `present`, `absent` or `unknown`. Each condition is bound to its appropriate evidence family. A present concern dominates an intact assertion. Incomplete ancestry, undeclared covariance sources, limited results and missing checks cannot establish intact structure. Unknown checks remain explicit. These are analytical assertions with retained method/provenance, not permission fields.
+
+Tier A requires location shift present and all of relationship change, covariance change, response breakdown, propagation change, physics contradiction, instrumentation concern and excessive evolution rate absent with usable lineage. Policy then independently controls maturity, lifecycle, context, prohibited conditions and review requirements. Tier B is a structural candidate when relationship, covariance, expected-response, propagation or physics evidence indicates a structural change. Its policy outcome can only be review-required, blocked or deferred; a permissive Tier B rule cannot be configured. Classification itself always carries `execution_authorized=false`.
+
+## Frozen decisions and boundaries
+
+`create_policy_decision` constructs `AuthorityDecisionV2` and `DecisionBasisV2`; it executes nothing. The basis retains the complete graph, evidence IDs, maturity (including trajectory and context), lifecycle event, decision-time context, exact AuthorityPolicy, full evaluator result, and immutable active model/baseline references. The active model snapshot payload requires `model_ref` and `baseline_ref`; external reference immutability and archival remain adapter obligations. Candidate models are representable but inactive. Before/after active model snapshots must be identical.
+
+The store independently replays maturity and policy, validates all decision references, binds serialized policy/context contents to their audit snapshots, and checks exact outcomes/reasons and classification. V2 cannot be saved as a legacy basis. Existing decisions cannot be changed by later context, evidence, policy or model versions. Review-required results record a pending human review; completion/release of a reviewed adaptation requires a later tranche with a validated authority chain. No v2 decision is an execution token. Context/policy audit envelopes retain the foundation's 65,536-byte inline payload limit; oversized bases fail validation instead of truncating history. Larger context snapshots require a future immutable external archival contract.
+
+The layer makes software eligibility representable and evaluable. It introduces no permission consumer, baseline mutation, Tier A/B adaptation, model learning, operator escalation change, severity/state change, finding closure, physical-control authority or compatibility-payload change. Neraium remains read-only and human-in-the-loop.
+
+Historical replay relies on truthful availability metadata and complete context/policy selection from trusted adapters. It cannot detect facts concealed by a caller or knowledge hidden inside arbitrary external artifacts. Runtime ledgers are unbounded like the foundation; partitioning, retention and a cryptographically verifiable archive remain deferred. Content hashes support deterministic identity, not cryptographic non-repudiation. There is no signing, attestation, key management or tamper-proof storage, and no regulatory compliance or certification claim.
+
+## Verification
+
+Focused Phase 2 tests are in `tests/test_governance_phase2.py`, alongside all foundation governance tests. They cover context and policy versioning, both storage backends, temporal scope/interval/availability rules, append-only replay, trajectory vocabulary/regression, trend eligibility and deterministic outputs, classification, policy outcomes, and rejection of forged decisions/model transitions. Existing governance compatibility tests retain the baseline SII result hash and non-authoritative workflow checks.
+
+The PR records exact commands and final results for governance, SII, behavioral models, findings/lifecycle, baseline/adaptive learning, maintenance and migrations. No context/policy migration is necessary because the existing runtime payload ledger is reused.
+
+The delivery environment used Python 3.12.3 from `/tmp/neraium-governance-venv/bin/python`, with the repository-pinned backend dependencies (`pip check`: no broken requirements). Exact verification commands:
+
+```sh
+/tmp/neraium-governance-venv/bin/python -m pytest tests/test_evidence_governance.py tests/test_governance*.py -q
+/tmp/neraium-governance-venv/bin/python -m pytest tests/test_sii*.py tests/test_behavioral_model*.py tests/test_finding*.py tests/test_engineering_finding_classification.py tests/test_operational_lifecycle.py tests/test_behavioral_baseline_workflow.py tests/test_adaptive_learning.py tests/test_phase3_auth_runtime.py tests/test_shared_maintenance_workflow.py tests/test_schema_migrations.py tests/test_telemetry_migrations.py tests/test_health_relevance_migrations.py -q
+git diff --check
+```
+
+Delivery results: **191 governance tests passed** (2 warnings, 81.99s); **270 regression tests passed, 2 skipped** (4 warnings, 714.00s). The skipped existing PostgreSQL telemetry migration cases at `tests/test_telemetry_migrations.py:308` and `:435` require `NERAIUM_TEST_POSTGRES_DSN`, which was not configured. No context/policy migration was introduced. `git diff --check` passed. The full diff was reviewed against `origin/main` at `88b27846f1f937e5e3520e2e542e747d797e0cdf`, including future knowledge, scope isolation, false corroboration, replay ambiguity, deterministic identity, baseline/model mutation, authority activation, confidence semantics and assurance overclaims.
