@@ -10,6 +10,7 @@ from pydantic import StrictBool
 
 from app.governance.contracts import Contract, EvidenceFamily, Text
 from app.governance.dependencies import DependencyGraph
+from app.governance.trend import trend_usable
 
 
 class EvidenceCondition(str, Enum):
@@ -65,6 +66,8 @@ def usable_lineage(graph: DependencyGraph, identifier: str) -> bool:
             item.covariance_source_id not in graph.lineage(ancestor)
         ):
             return False
+        if item.evidence_family == EvidenceFamily.TREND and not trend_usable(item):
+            return False
         if (item.payload or {}).get("status", "available") != "available":
             return False
     return True
@@ -75,10 +78,13 @@ def assess_conditions(graph: DependencyGraph, relevant_ids: tuple[str, ...]) -> 
     nodes = {item.evidence_id: item for item in graph.evidence}
     if not set(relevant_ids) <= nodes.keys():
         raise ValueError("condition_evidence_outside_graph")
+    material_ids = set(relevant_ids)
+    for identifier in relevant_ids:
+        material_ids.update(set(graph.lineage(identifier)) & nodes.keys())
     results = []
     for condition, family in CONDITION_FAMILIES.items():
         present, absent, unknown = [], [], []
-        for identifier in sorted(set(relevant_ids)):
+        for identifier in sorted(material_ids):
             item = nodes[identifier]
             if item.evidence_family != family:
                 continue
@@ -94,8 +100,10 @@ def assess_conditions(graph: DependencyGraph, relevant_ids: tuple[str, ...]) -> 
                     unknown.append(identifier)
                 else:
                     present.append(identifier)
+            # No admissible rate method or concern-resolution contract exists yet.
+            # A new assertion cannot erase a material ancestor concern.
             elif status == "absent" and usable_lineage(graph, identifier) and (
-                family != EvidenceFamily.TREND or payload.get("status") == "available"
+                condition != EvidenceCondition.EXCESSIVE_EVOLUTION_RATE
             ):
                 absent.append(identifier)
             else:

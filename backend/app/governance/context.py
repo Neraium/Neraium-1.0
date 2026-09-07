@@ -84,6 +84,15 @@ class ContextBasis(Contract):
     facts_available_at: Timestamp
     facts_provenance: Provenance
 
+    def validate_historical_basis(self, original: "ContextBasis") -> None:
+        # Reconstruct only the history knowable at the earlier evaluation.
+        # Its facts keep their original availability/provenance; today's facts
+        # must never be substituted into historical qualification.
+        known = tuple(item for item in self.records if time(item.created_at) <= time(original.evaluated_at))
+        reconstructed = ContextBasis.model_validate({**original.as_dict(), "records": known})
+        if reconstructed != original:
+            raise ValueError("maturity_context_history_mismatch")
+
     @field_validator("records")
     @classmethod
     def ordered_records(cls, value):

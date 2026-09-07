@@ -51,7 +51,7 @@ Cross-cutting controls apply across every layer:
 
 ## Layer 0: Context Registry
 
-**Status: Existing — versioned registry; live adapters deferred**
+**Status: Existing: versioned registry; live adapters deferred**
 
 The Context Registry is a shared, versioned, provenance-aware dependency used by all downstream layers. It records infrastructure identity, operating context, external anchors, engineering constraints, maintenance and calibration events, commissioning references, baseline/model history, and other admissible context.
 
@@ -107,7 +107,7 @@ Multiple metrics derived from the same underlying mathematical structure do not 
 
 ## Layer 2: Evidence Maturity Engine
 
-**Status: Existing — L0–L4 evaluators; live adapters deferred**
+**Status: Existing: L0–L4 evaluators; live adapters deferred**
 
 The Evidence Maturity Engine evaluates a finding-specific evidence object over time.
 
@@ -144,7 +144,7 @@ Lifecycle history is append-only and versioned. A finding may recover or regress
 
 ## Layer 4: Authority Policy Engine
 
-**Status: Existing — non-executing contract and evaluator**
+**Status: Existing: non-executing contract and evaluator**
 
 The Authority Policy Engine decides what software is permitted to do with a finding under the policy version in force at decision time.
 
@@ -175,7 +175,7 @@ Tier B covers material graph, covariance-structure, expected-response, or other 
 
 ## Layer 5: Authority Decision Record
 
-**Status: Existing — append-only v1/v2 basis and replay**
+**Status: Existing: append-only v1/v2 basis and replay**
 
 Every consequential software-authority decision must create an immutable, append-only `AuthorityDecision` record.
 
@@ -288,6 +288,6 @@ No existing analytical module may be modified to make a new authoritative baseli
 
 Context and policy records carry both creation/availability time and effective intervals. No historical governance object may depend on information that became available after its evaluation or decision timestamp. Retroactive effective dates cannot relax this rule. Supersession and invalidation append versions and do not rewrite earlier decisions. Policy context requirements are evaluated again at decision time; expired anchors cannot preserve an earlier L4 permission basis.
 
-L3 requires supported multi-family characterization, not a single metric or probability. L4 requires applicable verified external context; it is neither cause nor action authorization. Partial and unavailable context remain explicit. Tier A/B eligibility is evaluable, but no baseline/model mutation or adaptation is activated. Tier B cannot receive automatic permission. Every v2 decision remains non-executing, and before/after active model references must match.
+L3 requires supported multi-family characterization, not a single metric or probability. L4 requires applicable verified external context; it is neither cause nor action authorization. Partial and unavailable context remain explicit. Tier A/B eligibility is evaluable, but no baseline/model mutation or adaptation is activated. No admissible rate method is implemented yet, so the evolution-rate gate remains unknown and Tier A remains ineligible. Tier B cannot receive automatic permission. Every v2 decision remains non-executing, and before/after active model references must match.
 
 Existing SII outputs, compatibility payloads, learning behavior, finding workflow and operator escalation remain unchanged. Neraium remains read-only and human-in-the-loop, with no physical authority, diagnosis, maintenance recommendation, failure-time prediction, regulatory compliance claim or cryptographic non-repudiation claim.

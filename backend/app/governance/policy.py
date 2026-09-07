@@ -126,6 +126,8 @@ def evaluate_policy(*, policy: AuthorityPolicy, graph: DependencyGraph,
     graph.validate_available_at(evaluated_at)
     if graph.system_scope != maturity.system_scope or graph.system_scope != context.system_scope:
         raise ValueError("policy_basis_scope_mismatch")
+    if isinstance(maturity, MaturityEvaluationV2) and maturity.context_basis:
+        context.validate_historical_basis(maturity.context_basis)
     # Re-evaluate context at decision time; old L4 cannot carry expired anchors forward.
     current_context = ContextBasis.model_validate({**context.as_dict(), "evaluated_at": evaluated_at, "relevant_at": evaluated_at})
     qualification = qualify_context(current_context, external_only=False)
