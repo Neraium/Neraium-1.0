@@ -126,6 +126,14 @@ def _available_maturity_support(base, graph):
     return level, reasons, usable_ids
 
 
+def _validate_current_maturity_context(base, context_basis):
+    if context_basis.system_scope != base.system_scope or context_basis.evaluated_at != base.evaluated_at:
+        raise ValueError("maturity_context_basis_mismatch")
+    # Maturity v2 qualifies current anchors, not expired historical references.
+    if context_basis.relevant_at != base.evaluated_at:
+        raise ValueError("maturity_requires_current_context")
+
+
 def evaluate_maturity_v2(*, trajectory: TrajectoryCharacterization | None = None,
                          context_basis: ContextBasis | None = None, **kwargs) -> MaturityEvaluationV2:
     base = evaluate_maturity(**kwargs)
@@ -144,11 +152,7 @@ def evaluate_maturity_v2(*, trajectory: TrajectoryCharacterization | None = None
             reasons.append("trajectory_insufficient_or_indeterminate")
     if context_basis is not None:
         context_basis = ContextBasis.model_validate(context_basis.as_dict())
-        if context_basis.system_scope != base.system_scope or context_basis.evaluated_at != base.evaluated_at:
-            raise ValueError("maturity_context_basis_mismatch")
-        # Maturity v2 qualifies current anchors, not expired historical references.
-        if context_basis.relevant_at != base.evaluated_at:
-            raise ValueError("maturity_requires_current_context")
+        _validate_current_maturity_context(base, context_basis)
         qualification = qualify_context(context_basis)
         if level == MaturityLevel.L3 and qualification.applicable_context_ids:
             level = MaturityLevel.L4
