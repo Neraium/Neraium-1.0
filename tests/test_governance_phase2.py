@@ -116,10 +116,12 @@ def test_context_registry_identity_history_supersession_and_scope(storage):
     assert registry.history(other_scope, "system-1") == ()
     registry.history(SCOPE, "system-1")[0].payload["changed"] = True
     assert "changed" not in registry.history(SCOPE, "system-1")[0].payload
+    rebound_first = changed(first, payload={"rebind": True})
     with pytest.raises(AuthorityRecordConflict):
-        registry.append(SCOPE, changed(first, payload={"rebind": True}))
+        registry.append(SCOPE, rebound_first)
+    branched_second = changed(second, payload={"branch": True})
     with pytest.raises(AuthorityRecordConflict):
-        registry.append(SCOPE, changed(second, payload={"branch": True}))
+        registry.append(SCOPE, branched_second)
 
 
 @pytest.mark.parametrize("changes,reason", [
@@ -145,12 +147,14 @@ def test_context_qualification_limits(changes, reason):
 def test_context_validity_facts_and_temporal_boundary():
     item = changed(anchor(), validity_conditions={"mode": "cooling"})
     assert qualify_context(context(item, facts={"mode": "cooling"})).applicable_context_ids
+    future_item = changed(item, created_at=LATER, effective_from=BEFORE)
     with pytest.raises(ValueError, match="future_context_knowledge"):
-        context(changed(item, created_at=LATER, effective_from=BEFORE))
+        context(future_item)
     with pytest.raises(ValueError, match="future_context_facts"):
         context(item, facts_available_at=LATER)
+    orphan_successor = changed(item, version=2, supersedes=item.context_id)
     with pytest.raises(ValueError, match="incomplete_or_ambiguous"):
-        context(changed(item, version=2, supersedes=item.context_id))
+        context(orphan_successor)
     with pytest.raises(ValueError, match="empty_or_reversed"):
         changed(item, effective_to=BEFORE)
 
@@ -176,10 +180,11 @@ def test_no_false_trajectory_corroboration_or_future_characterization():
     assert characterized(dependent)[0].level == MaturityLevel.L1
     for changes in ({"evaluated_at": LATER}, {"evidence_families": ["signal_location", "trend"]},
                     {"finding_id": "other-finding"}):
+        invalid_trajectory = changed(l3.trajectory, **changes)
         with pytest.raises(ValueError):
             evaluate_maturity_v2(finding_id=l3.finding_id, relevant_evidence_ids=l3.relevant_evidence_ids,
                 graph=graph, persistence=l3.persistence, evaluated_at=AT, source_run_id="run-1",
-                trajectory=changed(l3.trajectory, **changes))
+                trajectory=invalid_trajectory)
 
 
 def trend(values, **assumption_changes):
@@ -208,13 +213,15 @@ def test_mann_kendall_direction_statistic_significance_and_replay(values, direct
 def test_trend_limited_not_fabricated(values, assumptions):
     result = trend(values, **assumptions).payload
     assert result["status"] == "limited"
-    assert result["statistic_s"] is None and result["significant"] is None
+    assert result["statistic_s"] is None
+    assert result["significant"] is None
     assert result["eligibility_reasons"]
 
 
 def test_trend_missing_ties_and_nonfinite():
     result = trend([1, 1, 2, None, 3, 4, 4, 5, 6, 7, 8, 9]).payload
-    assert result["missing_count"] == 1 and result["status"] == "available"
+    assert result["missing_count"] == 1
+    assert result["status"] == "available"
     assert result["variance_s"] > 0
     with pytest.raises(ValueError, match="nonfinite"):
         trend([float("nan")] * 12)
@@ -243,8 +250,9 @@ def test_policy_outcome_rules_and_reasons(fields, outcome, rule):
 
 
 def test_future_policy_and_expired_L4_cannot_authorize():
+    future_policy = policy(created_at=LATER, effective_from=BEFORE)
     with pytest.raises(ValueError, match="future_knowledge"):
-        evaluate(policy(created_at=LATER, effective_from=BEFORE))
+        evaluate(future_policy)
     ctx = context(changed(anchor(), effective_to=LATER))
     maturity, graph = characterized(anchors=ctx)
     assert maturity.level == MaturityLevel.L4
@@ -266,8 +274,9 @@ def test_policy_registry_version_resolution_and_no_history_rewrite(storage):
     with pytest.raises(ValueError, match="expired"):
         registry.resolve(SCOPE, "system-1", first.policy_id, AFTER)
     assert registry.history(SCOPE, "system-1") == (first, second)
+    rewritten_policy = changed(second, human_review_requirement=False)
     with pytest.raises(AuthorityRecordConflict):
-        registry.append(SCOPE, changed(second, human_review_requirement=False))
+        registry.append(SCOPE, rewritten_policy)
 
 
 def tier_graph(**statuses):
@@ -295,7 +304,8 @@ def test_structural_change_forces_Tier_B_human_review(condition):
     graph = tier_graph(**{condition: "present"})
     maturity = assess(graph)
     classification = classify_tier(graph, maturity.relevant_evidence_ids)
-    assert classification.tier == "tier_b" and not classification.execution_authorized
+    assert classification.tier == "tier_b"
+    assert not classification.execution_authorized
     p = policy(requested_operation="evaluate_adaptation", minimum_maturity="L2", required_evidence_families=[], required_context_types=[])
     result = evaluate(p, maturity=maturity, graph=graph)
     assert result.outcome.value == "human_review_required"
@@ -310,7 +320,8 @@ def test_Tier_A_requires_all_intact_checks_and_never_executes():
     assert classify_tier(graph, maturity.relevant_evidence_ids).tier == "unclassified"
     p = policy(requested_operation="adapt_state_location", minimum_maturity="L2", required_evidence_families=[], required_context_types=[])
     result = evaluate(p, maturity=maturity, graph=graph)
-    assert result.outcome.value == "deferred" and not result.execution_authorized
+    assert result.outcome.value == "deferred"
+    assert not result.execution_authorized
     for condition in ("relationship_change", "instrumentation_concern", "excessive_evolution_rate"):
         graph = tier_graph(**{condition: "unknown"})
         assert classify_tier(graph, assess(graph).relevant_evidence_ids).tier == "unclassified"
@@ -356,8 +367,10 @@ def test_frozen_phase2_decision_replay_and_later_invalidation(storage):
 ])
 def test_decision_cannot_override_policy_or_mutate_model(field, value, reason):
     decision, basis = phase2_decision()
+    store = InMemoryAuthorityDecisionStore()
+    forged_decision = changed(decision, **{field: value})
     with pytest.raises(ValueError, match=reason):
-        InMemoryAuthorityDecisionStore().append_decision(SCOPE, changed(decision, **{field: value}), basis)
+        store.append_decision(SCOPE, forged_decision, basis)
 
 
 def test_registry_concurrent_append_is_atomic_and_failure_propagates(monkeypatch):
@@ -368,8 +381,9 @@ def test_registry_concurrent_append_is_atomic_and_failure_propagates(monkeypatch
     assert registry.history(SCOPE, "system-1") == (anchor(),)
     def fail(*args): raise OSError("offline")
     monkeypatch.setattr(storage, "_mutate", fail)
+    item = anchor()
     with pytest.raises(OSError, match="offline"):
-        registry.append(SCOPE, anchor())
+        registry.append(SCOPE, item)
 
 
 def test_irregular_trend_duplicate_times_and_future_samples():
@@ -382,11 +396,13 @@ def test_irregular_trend_duplicate_times_and_future_samples():
         return mann_kendall_evidence(samples=items, observation=raw, assumptions=assumptions,
                                     created_at=AT, source_run_id="run-1")
     result = compute(samples)
-    assert result.payload["irregular_spacing"] and result.payload["significant"]
+    assert result.payload["irregular_spacing"]
+    assert result.payload["significant"]
     with pytest.raises(ValueError, match="strictly_increase"):
         compute((samples[0], *samples))
+    future_sample = TrendSample(observed_at=LATER, value=11)
     with pytest.raises(ValueError, match="future_trend_sample"):
-        compute((*samples, TrendSample(observed_at=LATER, value=11)))
+        compute((*samples, future_sample))
     assert trend([1, 5, 2, 4, 3, 3, 4, 2, 5, 1]).payload["significant"] is False
 
 
@@ -444,12 +460,15 @@ def test_policy_can_require_non_external_context_without_using_it_for_L4():
 def test_v2_cannot_be_stored_under_legacy_basis_or_forged_policy_result():
     decision, basis = phase2_decision()
     from app.governance.authority_store import DecisionBasis
+    legacy_store = InMemoryAuthorityDecisionStore()
+    legacy_basis = DecisionBasis(graph=basis.graph, maturity=basis.maturity, lifecycle=basis.lifecycle, snapshots=basis.snapshots)
     with pytest.raises(ValueError, match="phase2_basis_schema_required"):
-        InMemoryAuthorityDecisionStore().append_decision(SCOPE, decision,
-            DecisionBasis(graph=basis.graph, maturity=basis.maturity, lifecycle=basis.lifecycle, snapshots=basis.snapshots))
+        legacy_store.append_decision(SCOPE, decision, legacy_basis)
     forged = changed(basis.policy_evaluation, outcome="blocked", reasons=["invented"])
+    forged_store = InMemoryAuthorityDecisionStore()
+    forged_basis = changed(basis, policy_evaluation=forged)
     with pytest.raises(ValueError, match="policy_replay_mismatch"):
-        InMemoryAuthorityDecisionStore().append_decision(SCOPE, decision, changed(basis, policy_evaluation=forged))
+        forged_store.append_decision(SCOPE, decision, forged_basis)
 
 
 def test_governance_evaluation_has_no_runtime_write_or_physical_handler(monkeypatch):
@@ -529,11 +548,13 @@ def test_Tier_decision_serialization_and_pending_review(structural, outcome, tie
     decision, basis = create_policy_decision(scope=SCOPE, graph=graph, maturity=maturity, lifecycle=lifecycle,
         context=context(anchor()), policy=p, requested_operation=p.requested_operation, decision_timestamp=AT,
         source_run_id="run-1", active_model=snapshot("model", payload={"model_ref": "immutable-model", "baseline_ref": "immutable-baseline"}))
-    assert decision.decision_outcome.value == outcome and decision.tier_classification == tier
+    assert decision.decision_outcome.value == outcome
+    assert decision.tier_classification == tier
     assert decision.human_review.required == structural
     assert decision.human_review.status == ("pending" if structural else "not_required")
     assert bool(decision.contradicting_evidence) == structural
-    assert not decision.execution_authorized and decision.active_model_before == decision.active_model_after
+    assert not decision.execution_authorized
+    assert decision.active_model_before == decision.active_model_after
     store = InMemoryAuthorityDecisionStore()
     register_basis(store, basis)
     store.append_decision(SCOPE, decision, basis)

@@ -364,6 +364,9 @@ class DecisionBasisV2(DecisionBasis):
                 or decision.limiting_evidence != replay.limiting_evidence or decision.tier_classification != tier
                 or decision.contradicting_evidence != replay.contradicting_evidence):
             raise ValueError("decision_policy_result_mismatch")
+        self._validate_inactive_execution(decision, snapshots, replay)
+
+    def _validate_inactive_execution(self, decision, snapshots, replay) -> None:
         if decision.active_model_before is None:
             raise ValueError("phase2_active_model_basis_required")
         model = snapshots[decision.active_model_before]

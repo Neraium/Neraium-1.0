@@ -109,15 +109,7 @@ ADAPTATION_OPERATIONS = frozenset({RequestedOperation.EVALUATE_ADAPTATION, Reque
                                   RequestedOperation.ADAPT_STRUCTURE})
 
 
-def evaluate_policy(*, policy: AuthorityPolicy, graph: DependencyGraph,
-                    maturity: MaturityEvaluation | MaturityEvaluationV2, lifecycle_state: LifecycleState,
-                    context: ContextBasis, requested_operation: RequestedOperation, evaluated_at: str) -> PolicyEvaluation:
-    policy = AuthorityPolicy.model_validate(policy.as_dict())
-    graph = DependencyGraph.model_validate(graph.as_dict())
-    context = ContextBasis.model_validate(context.as_dict())
-    requested_operation = RequestedOperation(requested_operation)
-    lifecycle_state = LifecycleState(lifecycle_state)
-    evaluated_at = _timestamp(evaluated_at)
+def _validate_policy_basis(policy, graph, maturity, context, evaluated_at):
     if replay_maturity(maturity, graph) != maturity:
         raise ValueError("policy_maturity_replay_mismatch")
     if (time(policy.created_at) > time(evaluated_at) or time(maturity.evaluated_at) > time(evaluated_at)
@@ -128,6 +120,59 @@ def evaluate_policy(*, policy: AuthorityPolicy, graph: DependencyGraph,
         raise ValueError("policy_basis_scope_mismatch")
     if isinstance(maturity, MaturityEvaluationV2) and maturity.context_basis:
         context.validate_historical_basis(maturity.context_basis)
+
+
+def _policy_outcome(policy, failed, prohibited, classification):
+    rules = policy.decision_outcome_rules
+    if any(rule in failed for rule in ("policy_scope", "requested_operation", "policy_effective_interval")):
+        outcome = "blocked"
+    elif prohibited:
+        outcome = rules.prohibited
+    elif failed:
+        outcome = rules.insufficient
+    elif classification and classification.tier == "tier_b":
+        outcome = rules.tier_b
+        failed.append("tier_b_requires_review_no_automatic_authority")
+    elif policy.human_review_requirement:
+        outcome = "human_review_required"
+        failed.append("human_review_pending")
+    else:
+        outcome = rules.satisfied
+    return outcome
+
+
+def _check_prohibited_conditions(policy, conditions, maturity, usable, check):
+    prohibited = False
+    limiting = set(maturity.supporting_evidence_ids) - {item.evidence_id for item in usable}
+    for condition in sorted(set(policy.prohibited_evidence_conditions)):
+        item = conditions[condition]
+        check(f"prohibited_condition_absent:{condition.value}", item.status == "absent")
+        if item.status == "present":
+            prohibited = True
+        if item.status != "absent": limiting.update(item.evidence_ids)
+    return prohibited, limiting
+
+
+def _check_adaptation(classification, requested_operation, limiting, check):
+    if classification:
+        limiting.update(classification.limiting_evidence)
+        check("adaptation_candidate_classified", classification.eligible_candidate)
+        if requested_operation == RequestedOperation.ADAPT_STATE_LOCATION:
+            check("tier_a_operation_match", classification.tier == "tier_a")
+        if requested_operation == RequestedOperation.ADAPT_STRUCTURE:
+            check("tier_b_operation_match", classification.tier == "tier_b")
+
+
+def evaluate_policy(*, policy: AuthorityPolicy, graph: DependencyGraph,
+                    maturity: MaturityEvaluation | MaturityEvaluationV2, lifecycle_state: LifecycleState,
+                    context: ContextBasis, requested_operation: RequestedOperation, evaluated_at: str) -> PolicyEvaluation:
+    policy = AuthorityPolicy.model_validate(policy.as_dict())
+    graph = DependencyGraph.model_validate(graph.as_dict())
+    context = ContextBasis.model_validate(context.as_dict())
+    requested_operation = RequestedOperation(requested_operation)
+    lifecycle_state = LifecycleState(lifecycle_state)
+    evaluated_at = _timestamp(evaluated_at)
+    _validate_policy_basis(policy, graph, maturity, context, evaluated_at)
     # Re-evaluate context at decision time; old L4 cannot carry expired anchors forward.
     current_context = ContextBasis.model_validate({**context.as_dict(), "evaluated_at": evaluated_at, "relevant_at": evaluated_at})
     qualification = qualify_context(current_context, external_only=False)
@@ -149,40 +194,13 @@ def evaluate_policy(*, policy: AuthorityPolicy, graph: DependencyGraph,
     for family in sorted(set(policy.required_evidence_families)):
         check(f"evidence_family:{family.value}", any(item.evidence_family == family for item in usable))
     conditions = {item.condition: item for item in assess_conditions(graph, maturity.relevant_evidence_ids)}
-    prohibited = False
-    limiting = set(maturity.supporting_evidence_ids) - {item.evidence_id for item in usable}
-    for condition in sorted(set(policy.prohibited_evidence_conditions)):
-        item = conditions[condition]
-        check(f"prohibited_condition_absent:{condition.value}", item.status == "absent")
-        if item.status == "present":
-            prohibited = True
-        if item.status != "absent": limiting.update(item.evidence_ids)
+    prohibited, limiting = _check_prohibited_conditions(policy, conditions, maturity, usable, check)
     types = {item.context_type for item in current_context.records if item.context_id in qualification.applicable_context_ids}
     for kind in sorted(set(policy.required_context_types)):
         check(f"context_type:{kind.value}", kind in types)
     classification = classify_tier(graph, maturity.relevant_evidence_ids) if requested_operation in ADAPTATION_OPERATIONS else None
-    if classification:
-        limiting.update(classification.limiting_evidence)
-        check("adaptation_candidate_classified", classification.eligible_candidate)
-        if requested_operation == RequestedOperation.ADAPT_STATE_LOCATION:
-            check("tier_a_operation_match", classification.tier == "tier_a")
-        if requested_operation == RequestedOperation.ADAPT_STRUCTURE:
-            check("tier_b_operation_match", classification.tier == "tier_b")
-    rules = policy.decision_outcome_rules
-    if any(rule in failed for rule in ("policy_scope", "requested_operation", "policy_effective_interval")):
-        outcome = "blocked"
-    elif prohibited:
-        outcome = rules.prohibited
-    elif failed:
-        outcome = rules.insufficient
-    elif classification and classification.tier == "tier_b":
-        outcome = rules.tier_b
-        failed.append("tier_b_requires_review_no_automatic_authority")
-    elif policy.human_review_requirement:
-        outcome = "human_review_required"
-        failed.append("human_review_pending")
-    else:
-        outcome = rules.satisfied
+    _check_adaptation(classification, requested_operation, limiting, check)
+    outcome = _policy_outcome(policy, failed, prohibited, classification)
     return PolicyEvaluation(policy_id=policy.policy_id, policy_version=policy.policy_version,
         policy_record_id=policy.policy_record_id, evaluated_at=evaluated_at, requested_operation=requested_operation,
         dependency_graph_snapshot_id=graph.snapshot_id, maturity_snapshot_id=maturity.evaluation_id,
@@ -191,5 +209,5 @@ def evaluate_policy(*, policy: AuthorityPolicy, graph: DependencyGraph,
         failed_rules=tuple(failed), limiting_evidence=tuple(sorted(limiting)),
         contradicting_evidence=tuple(sorted({identifier for item in conditions.values()
             if item.status == "present" and item.condition != EvidenceCondition.LOCATION_SHIFT for identifier in item.evidence_ids})),
-        limiting_context=tuple(sorted(set((*qualification.limiting_context, *qualification.unavailable_context,
-            *(rule for rule in failed if rule.startswith("context_type:")))))), classification=classification)
+        limiting_context=tuple(sorted({*qualification.limiting_context, *qualification.unavailable_context,
+            *(rule for rule in failed if rule.startswith("context_type:"))})), classification=classification)

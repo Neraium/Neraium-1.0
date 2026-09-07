@@ -1,5 +1,6 @@
 """Pre-merge attack reproductions: assertions must not manufacture eligibility."""
 from concurrent.futures import ThreadPoolExecutor
+from math import nextafter
 
 import pytest
 
@@ -83,15 +84,19 @@ def test_known_successor_cannot_be_omitted_from_maturity(at, status):
     first = changed(anchor(), created_at=BEFORE)
     successor = changed(first, version=2, supersedes=first.context_id, created_at=at, verification_status=status)
     new_key = changed(anchor(), context_key="new", created_at=LATER)
+    original_context = context(first)
+    complete_context = context(first, successor, new_key, at=LATER)
     with pytest.raises(ValueError, match="maturity_context_history_mismatch"):
-        decision_with_history(context(first), context(first, successor, new_key, at=LATER))
+        decision_with_history(original_context, complete_context)
 
 
 def test_known_additional_logical_key_cannot_be_omitted():
     first = anchor()
     second = changed(first, context_key="another", verification_status="partially_verified")
+    original_context = context(first)
+    complete_context = context(second, first, at=LATER)
     with pytest.raises(ValueError, match="maturity_context_history_mismatch"):
-        decision_with_history(context(first), context(second, first, at=LATER))
+        decision_with_history(original_context, complete_context)
 
 
 def test_later_invalidation_preserves_legitimate_historical_L4(storage):
@@ -129,7 +134,8 @@ def test_scoped_admission_and_original_retry_after_updates(storage):
     first, basis = phase2_decision()
     register_basis(storage, basis)
     actual, frozen = admit(storage, first, basis)
-    assert actual == first and frozen == basis
+    assert actual == first
+    assert frozen == basis
     original = storage.get_record(SCOPE, first.system_scope, first.decision_id)
     successor = changed(anchor(), version=2, supersedes=anchor().context_id, created_at=LATER, verification_status="invalidated")
     ContextRegistry(storage).append(SCOPE, successor)
@@ -165,8 +171,9 @@ def test_serialized_decision_cannot_cross_authenticated_scope(storage, field):
     with pytest.raises(ValueError, match="authenticated_scope_mismatch"):
         storage.append_decision(other, decision, basis)
     assert not storage.history(other, "system-1")
+    other_basis = changed(basis, authenticated_scope=other)
     with pytest.raises(ValueError, match="authenticated_scope_mismatch"):
-        changed(basis, authenticated_scope=other).validate_for(decision)
+        other_basis.validate_for(decision)
 
 
 def test_admission_system_mismatch_and_future_policy(storage):
@@ -186,7 +193,8 @@ def test_admission_excludes_future_context_without_retroactive_qualification(sto
     ContextRegistry(storage).append(SCOPE, future)
     actual, frozen = admit(storage, decision, basis)
     assert frozen.context.records == ()
-    assert actual.maturity_at_decision.value == "L3" and actual.decision_outcome.value == "deferred"
+    assert actual.maturity_at_decision.value == "L3"
+    assert actual.decision_outcome.value == "deferred"
 
 
 def test_atomic_admission_rejects_registry_change_between_selection_and_append(storage, monkeypatch):
@@ -267,8 +275,9 @@ def test_archived_historical_windows_and_future_evidence():
         dependency_graph_snapshot_id=graph.snapshot_id, time_horizon=window)
     assert v2(graph, trajectory=trajectory).level.value == "L3"
     future = changed(a, created_at=LATER)
+    future_graph = graph_for(future, b, observations=graph.observations)
     with pytest.raises(ValueError, match="later_knowledge"):
-        v2(graph_for(future, b, observations=graph.observations))
+        v2(future_graph)
 
 
 def propagation_graph(**changes):
@@ -321,3 +330,11 @@ def test_trajectory_cannot_hide_disjoint_or_unbounded_raw_ancestry(bounds):
     graph = graph_for(evidence(), evidence("b", "relational"),
         observations=(observation(source_window=bounds), observation("b")))
     assert characterized(graph)[0].level.value == "L2"
+
+
+@pytest.mark.parametrize("threshold", [nextafter(.05, 0.0), nextafter(.05, 1.0), .01, .1])
+def test_mann_kendall_threshold_requires_exact_method_parameter(threshold):
+    item = trend(list(range(12)))
+    assert trend_usable(item)
+    forged = changed(item, payload={**item.payload, "significance_threshold": threshold})
+    assert not trend_usable(forged)

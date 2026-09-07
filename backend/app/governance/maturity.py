@@ -109,12 +109,8 @@ class MaturityEvaluationV2(MaturityEvaluation):
     context_qualification: ContextQualification | None = None
 
 
-def evaluate_maturity_v2(*, trajectory: TrajectoryCharacterization | None = None,
-                         context_basis: ContextBasis | None = None, **kwargs) -> MaturityEvaluationV2:
-    base = evaluate_maturity(**kwargs)
+def _available_maturity_support(base, graph):
     level, reasons = base.level, list(base.reasons)
-    qualification = None
-    graph = kwargs["graph"]
     usable_ids = {item.evidence_id for item in graph.evidence if usable_lineage(graph, item.evidence_id)
                   and (item.evidence_family.value != "trend" or (item.payload or {}).get("status") == "available")}
     persistent_ids = {identifier for gate in base.persistence.gates if gate.satisfied for identifier in gate.evidence_ids}
@@ -127,6 +123,15 @@ def evaluate_maturity_v2(*, trajectory: TrajectoryCharacterization | None = None
         reasons.append("corroborating_support_unavailable")
     if level in {MaturityLevel.L0, MaturityLevel.L1} and base.level == MaturityLevel.L2:
         reasons.remove("independent_corroboration_established")
+    return level, reasons, usable_ids
+
+
+def evaluate_maturity_v2(*, trajectory: TrajectoryCharacterization | None = None,
+                         context_basis: ContextBasis | None = None, **kwargs) -> MaturityEvaluationV2:
+    base = evaluate_maturity(**kwargs)
+    qualification = None
+    graph = kwargs["graph"]
+    level, reasons, usable_ids = _available_maturity_support(base, graph)
     if trajectory is not None:
         trajectory = TrajectoryCharacterization.model_validate(trajectory.as_dict())
         supported = trajectory.validate_support(kwargs["graph"], base.finding_id, base.relevant_evidence_ids,
@@ -159,9 +164,9 @@ def evaluate_maturity_v2(*, trajectory: TrajectoryCharacterization | None = None
 
 
 def replay_maturity(maturity, graph):
-    kwargs = dict(finding_id=maturity.finding_id, relevant_evidence_ids=maturity.relevant_evidence_ids,
-                  graph=graph, persistence=maturity.persistence, evaluated_at=maturity.evaluated_at,
-                  source_run_id=maturity.source_run_id)
+    kwargs = {"finding_id": maturity.finding_id, "relevant_evidence_ids": maturity.relevant_evidence_ids,
+              "graph": graph, "persistence": maturity.persistence, "evaluated_at": maturity.evaluated_at,
+              "source_run_id": maturity.source_run_id}
     if isinstance(maturity, MaturityEvaluationV2):
         return evaluate_maturity_v2(trajectory=maturity.trajectory, context_basis=maturity.context_basis, **kwargs)
     return evaluate_maturity(**kwargs)

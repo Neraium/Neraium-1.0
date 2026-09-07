@@ -136,6 +136,26 @@ QUALIFYING_TYPES = frozenset({ContextType.ENGINEERING_CONSTRAINT, ContextType.CO
     ContextType.MAINTENANCE_EVENT, ContextType.CALIBRATION_EVENT, ContextType.SETPOINT_CHANGE, ContextType.EXTERNAL_ANCHOR})
 
 
+def _qualification_reason(item, basis, latest, external_only):
+    reason = None
+    if item.system_scope != basis.system_scope:
+        reason = "scope_mismatch"
+    elif latest[(item.system_scope, item.context_key)] != item:
+        reason = "superseded"
+    elif item.verification_status == VerificationStatus.INVALIDATED:
+        reason = "invalidated"
+    elif not covers(item.effective_from, item.effective_to, basis.relevant_at):
+        reason = "outside_effective_interval"
+    elif any(key not in basis.facts or canonical_json(basis.facts[key]) != canonical_json(value)
+             for key, value in item.validity_conditions.items()):
+        reason = "validity_conditions_unsatisfied"
+    elif external_only and item.context_type not in QUALIFYING_TYPES:
+        reason = "not_external_qualification"
+    elif item.verification_status != VerificationStatus.VERIFIED:
+        reason = "verification_limited"
+    return reason
+
+
 def qualify_context(basis: ContextBasis, *, external_only: bool = True) -> ContextQualification:
     basis = ContextBasis.model_validate(basis.as_dict())
     latest = {}
@@ -145,22 +165,7 @@ def qualify_context(basis: ContextBasis, *, external_only: bool = True) -> Conte
             latest[key] = item
     accepted, rejected, limited, reasons = [], [], [], []
     for item in sorted(basis.records, key=lambda item: item.context_id):
-        reason = None
-        if item.system_scope != basis.system_scope:
-            reason = "scope_mismatch"
-        elif latest[(item.system_scope, item.context_key)] != item:
-            reason = "superseded"
-        elif item.verification_status == VerificationStatus.INVALIDATED:
-            reason = "invalidated"
-        elif not covers(item.effective_from, item.effective_to, basis.relevant_at):
-            reason = "outside_effective_interval"
-        elif any(key not in basis.facts or canonical_json(basis.facts[key]) != canonical_json(value)
-                 for key, value in item.validity_conditions.items()):
-            reason = "validity_conditions_unsatisfied"
-        elif external_only and item.context_type not in QUALIFYING_TYPES:
-            reason = "not_external_qualification"
-        elif item.verification_status != VerificationStatus.VERIFIED:
-            reason = "verification_limited"
+        reason = _qualification_reason(item, basis, latest, external_only)
         if reason:
             rejected.append(item.context_id)
             limited.append(item.context_id)
