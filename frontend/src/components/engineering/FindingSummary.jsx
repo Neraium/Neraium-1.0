@@ -1,4 +1,5 @@
 import React from "react";
+import GovernanceLayer from "./GovernanceLayer";
 
 function FindingSummary({ card, onReview }) {
   if (!card) return null;
@@ -25,6 +26,7 @@ function FindingSummary({ card, onReview }) {
         <div><dt>Review state</dt><dd>{card.reviewState}</dd></div>
         <div><dt>Assignment</dt><dd>{card.assignment}</dd></div>
       </dl>
+      <GovernanceLayer governance={card.governance} compact />
       {card.materialLimitation ? <p className="operational-finding__compact-limit"><span>Important limitation</span>{card.materialLimitation}</p> : null}
       <footer className="operational-finding__action" aria-label={`Actions for ${accessibleName}`}>
         <button type="button" className="forensic-button" onClick={() => onReview?.(card.findingKey)}>{card.primaryAction.label}</button>

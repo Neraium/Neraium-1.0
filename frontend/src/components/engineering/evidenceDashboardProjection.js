@@ -82,6 +82,7 @@ export function projectEvidenceDashboardSummary(projection) {
     const evidenceWindow = currentEvidenceWindow([dashboard.evidenceWindow]);
     return {
       measurableConsequence: dashboard.measurableConsequence,
+      governance: dashboard.governance,
       title: dashboard.title || "Finding title unavailable",
       system: dashboard.system || "System not supplied",
       status: dashboard.status || "Unavailable",
@@ -108,6 +109,7 @@ export function projectEvidenceDashboardSummary(projection) {
   const confidence = firstText(contract?.change_detection?.level, contract?.evidence_quality?.level);
   return {
     measurableConsequence: projection.dashboardIdentity.measurableConsequence,
+    governance: projection.dashboardIdentity.governance,
     title: projection.dashboardIdentity.title || "Finding title unavailable",
     system: projection.dashboardIdentity.system || "System not supplied",
     status: projection.dashboardIdentity.status || "Unavailable",

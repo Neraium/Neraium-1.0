@@ -142,6 +142,30 @@ async function openSite(page, viewport, payload = reasoningPayload()) {
 
 
 test.describe("Results progressive disclosure", () => {
+  test("runtime governance stays server supplied and behind audit disclosure", async ({ page }) => {
+    const payload = reasoningPayload();
+    payload.latest_result.governance = { "flow-response": {
+      schema_version: "runtime-governance-v1", status: "evaluated", maturity_label: "Persistent",
+      authority_label: "Observation only", context_label: "External context unavailable",
+      lifecycle: { state: "persistent" }, source_run_id: "forensic-job", execution_authorized: false,
+      evaluated_at: "2026-07-26T10:00:00Z", limitations: ["Rate assessment unavailable"],
+      maturity: { reasons: ["all_applicable_persistence_gates_satisfied"] },
+    } };
+    await openSite(page, { width: 390, height: 844 }, payload);
+    const card = page.getByTestId("compact-finding-card");
+    await expect(card).toContainText("Evidence maturity: Persistent");
+    await expect(card).toContainText("Observation only");
+    await expect(card.getByRole("button")).toHaveCount(1);
+    await card.getByRole("button", { name: "Review finding" }).click();
+    const layer = page.getByRole("region", { name: "Evidence governance" });
+    await expect(layer.getByText("Persistent", { exact: true })).toBeVisible();
+    await expect(layer.getByText("Rate assessment unavailable")).toHaveCount(0);
+    await layer.getByText("Governance audit", { exact: true }).click();
+    await expect(layer.getByText("Rate assessment unavailable", { exact: true })).toBeVisible();
+    await expect(layer.getByRole("button")).toHaveCount(0);
+    const width = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: innerWidth }));
+    expect(width.document).toBeLessThanOrEqual(width.viewport + 1);
+  });
   test.beforeAll(() => {
     mkdirSync(screenshotDirectory, { recursive: true });
   });

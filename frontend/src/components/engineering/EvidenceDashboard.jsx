@@ -1,5 +1,6 @@
 import React from "react";
 import MeasurableConsequence from "./MeasurableConsequence";
+import GovernanceLayer from "./GovernanceLayer";
 import "../../styles/evidence-dashboard.css";
 
 function Icon({ name }) {
@@ -124,6 +125,7 @@ export default function EvidenceDashboard({ summary, variant = "ready" }) {
       </section>
 
       <MeasurableConsequence result={summary.measurableConsequence} />
+      <GovernanceLayer governance={summary.governance} audit />
 
       <p className="evidence-dashboard__disclaimer">This record describes observed evidence and its limits. Human review remains authoritative.</p>
         </div>

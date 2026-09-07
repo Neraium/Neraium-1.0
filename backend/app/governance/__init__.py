@@ -1,1 +1,1 @@
-"""Inactive evidence-governance foundations; never imported by analytical engines."""
+"""Non-executing governance contracts; runtime adapters live in app.services."""

@@ -667,6 +667,8 @@ def _finalize_completed_upload(
             )
         )
         persisted_record = read_evidence_run(job_id)
+        from app.services.runtime_governance import evidence_run_governance
+        finalized_result["governance"] = evidence_run_governance(job_id)
         evidence_persisted = bool(persisted_record and persisted_record.get("run_id") == job_id)
         finalized_result["evidence_persistence"] = {
             **dict(finalized_result.get("evidence_persistence") or {}),

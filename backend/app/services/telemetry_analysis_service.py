@@ -578,6 +578,9 @@ def run_post_ingestion_analysis(
         )
 
     try:
+        from app.services.runtime_governance import govern_connector_execution
+        execution = govern_connector_execution(execution, window,
+            at=_aware_utc(clock(), "telemetry_analysis_clock_invalid").isoformat())
         result_artifact = build_canonical_result_artifact(execution)
         result_metadata, evidence_lineage, _bounded_digest = (
             build_durable_result_lineage(

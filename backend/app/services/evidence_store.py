@@ -125,7 +125,7 @@ def upsert_evidence_run(record: dict[str, Any]) -> dict[str, Any]:
     prior_items = [item for item in raw_items if str(item.get("run_id") or "") != str(record.get("run_id") or "")]
     persisted = _annotate_evidence_record(record, prior_items)
     upsert_evidence_run_db(persisted)
-    materialize_evidence_finding_cases(persisted)
+    materialize_evidence_finding_cases(persisted, evaluate_governance=True)
     path = evidence_runs_path()
     items = [item for item in raw_items if str(item.get("run_id") or "") != str(record.get("run_id") or "")]
     updated = [persisted, *items]

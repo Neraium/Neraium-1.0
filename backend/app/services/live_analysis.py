@@ -76,6 +76,8 @@ def _finding_payload(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
     payload["finding_classification"] = json.loads(payload.pop("finding_classification_json"))
     payload["persistence_state"] = json.loads(payload.pop("persistence_state_json"))
     payload["latest_evidence"] = json.loads(payload.pop("latest_evidence_json"))
+    from app.services.runtime_governance import finding_governance
+    payload["governance"] = finding_governance(payload["finding_id"], payload["system_id"])
     return payload
 
 
@@ -722,10 +724,10 @@ def _complete_run(
     window: dict[str, Any],
     analytics: dict[str, Any],
     now: datetime,
+    baseline: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     timestamp = _iso(now)
     next_analysis = _next_analysis(config, now)
-    analytics_json = json.dumps(analytics, separators=(",", ":"), default=str)
     with db_connection() as connection:
         connection.execute("BEGIN IMMEDIATE")
         created, updated, resolved = _finalize_findings(
@@ -736,6 +738,10 @@ def _complete_run(
             analytics=analytics,
             timestamp=timestamp,
         )
+        from app.services.runtime_governance import govern_live_findings
+        governance = govern_live_findings(connection, run_id=run_id, config=config, window=window,
+                                          analytics=analytics, baseline=baseline, at=timestamp)
+        analytics_json = json.dumps({**analytics, "governance": governance}, separators=(",", ":"), default=str)
         connection.execute(
             """
             UPDATE live_analysis_runs
@@ -1051,6 +1057,7 @@ def trigger_live_analysis(
             window=window,
             analytics=analytics,
             now=current,
+            baseline=baseline,
         )
     except Exception as error:
         logger.exception(
