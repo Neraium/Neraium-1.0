@@ -24,6 +24,7 @@ _RETIRED = frozenset({
 })
 # Immutable measurements and human-authored history are not analytical conclusions.
 _PRESERVED = frozenset({
+    "governance",
     "measurable_consequence", "provenance", "source_tag_ids", "source_relationship_ids",
     "normalized_telemetry", "telemetry_signal_catalog", "telemetry_signals",
     "source_rows", "observations", "rows",

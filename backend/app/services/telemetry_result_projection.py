@@ -260,6 +260,9 @@ def build_canonical_result_projection(
         **shared_envelope,
         # Keep the existing engineering view-model input path.
         "analysis_result": shared_analysis,
+        # This is the frozen runtime snapshot from the verified artifact. It is
+        # never reevaluated against today's registries during retrieval.
+        "governance": _json_value(analysis_result.get("governance", {})),
         "sii_result": projected_sii,
         "canonical_result": {
             "identity": identity,

@@ -6,7 +6,7 @@ export const RESULTS_KEYS = Object.freeze([
   "contractVersion", "depth", "variant", "outcome", "eyebrow", "headline", "explanation", "systemLabel", "counts", "cards",
 ]);
 export const RESULT_CARD_KEYS = Object.freeze([
-  "findingKey", "systemContext", "assetContext", "title", "behavior", "priority", "changeConfidence", "materialLimitation", "reviewState", "assignment", "primaryAction",
+  "findingKey", "systemContext", "assetContext", "title", "behavior", "priority", "changeConfidence", "materialLimitation", "reviewState", "assignment", "primaryAction", "governance",
 ]);
 export const SYSTEMS_KEYS = Object.freeze([
   "contractVersion", "depth", "variant", "header", "systems",
@@ -107,6 +107,12 @@ function rawFinding(model, finding) {
     .find((item) => isObject(item) && identities.has(String(item.id ?? item.finding_id ?? item.finding_key ?? ""))) ?? null;
 }
 
+function recordedGovernance(model, finding) {
+  const records = model?.result?.governance ?? model?.result?.analysis_result?.governance;
+  const key = finding?.sourceFindingKey || finding?.id;
+  return records && Object.hasOwn(records, key) ? copyJsonSafe(records[key]) : null;
+}
+
 function recordedConsequence(model, finding, raw) {
   const source = model?.result?.analysis_result;
   const identities = new Set([finding?.id, finding?.sourceFindingKey].filter(Boolean).map(String));
@@ -143,6 +149,7 @@ function cardFor(finding, model, reviewRecord = {}) {
   const key = String(own(finding, "id"));
   return {
     findingKey: key,
+    governance: recordedGovernance(model, finding),
     systemContext: systemContext(finding, model),
     assetContext: firstText(ownPath(finding, "location.asset"), ownPath(finding, "location.subsystem")) || null,
     title: bounded(own(finding, "title"), 96) || "Behavioral change for review",
@@ -524,6 +531,7 @@ export function projectFindingReview(model, requestedFindingId, reviewRecord = {
     header: reviewHeader(finding, model, reviewRecord),
     dashboardSummary: {
       measurableConsequence: recordedConsequence(model, finding, raw),
+      governance: recordedGovernance(model, finding),
       title: bounded(reviewReason(finding?.observedChange) || finding?.title, 120) || null,
       system: systemContext(finding, model) || null,
       status: firstText(finding?.status) || null,
@@ -929,6 +937,7 @@ export function projectEvidenceRecord(model, requestedFindingId, reviewRecord = 
     header: reviewHeader(finding, model, reviewRecord),
     dashboardIdentity: {
       measurableConsequence: recordedConsequence(model, finding, raw),
+      governance: recordedGovernance(model, finding),
       title: firstText(raw?.headline, raw?.title, raw?.finding_title) || null,
       system: firstText(raw?.system_display_name, raw?.system_name, raw?.system, raw?.localization?.system_display_name, raw?.localization?.system) || null,
       status: firstText(finding?.status) || null,

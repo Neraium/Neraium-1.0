@@ -3,6 +3,7 @@ import ConfidenceTierChip from "./ConfidenceTierChip";
 import DataGapBand from "./DataGapBand";
 import EvidenceLineage from "./EvidenceLineage";
 import ReadOnlyIndicator from "./ReadOnlyIndicator";
+import GovernanceLayer from "./GovernanceLayer";
 
 function evidenceValue(value, fallback = "Unavailable") {
   if (value === null || value === undefined || value === "") return fallback;
@@ -45,6 +46,7 @@ export default function EvidenceDrawer({ open, finding, relationship, result, re
       <section className="evidence-drawer__split"><div><h3>Supporting evidence</h3>{finding.supporting.length ? <ul>{finding.supporting.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None supplied.</p>}</div><div><h3>Contradicting evidence</h3>{finding.contradictions.length ? <ul>{finding.contradictions.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No contradiction was supplied.</p>}</div></section>
       <section><h3>Limitations</h3>{finding.limitations.length ? <ul>{finding.limitations.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No material limitation was supplied with this result.</p>}</section>
       <EvidenceRecordContext record={record} />
+      <GovernanceLayer governance={record?.governance} audit />
       {gaps.map((gap) => <DataGapBand key={gap.id} gap={gap} />)}
       <footer>{onTrace ? <button type="button" className="forensic-button" onClick={onTrace}>Open trace mode</button> : null}</footer>
     </aside>

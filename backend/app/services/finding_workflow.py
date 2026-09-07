@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 import uuid
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -178,7 +179,7 @@ def _initial_evidence_status(record: dict[str, Any]) -> str:
     return status if status in WORKFLOW_STATUSES else "open"
 
 
-def materialize_evidence_finding_cases(record: dict[str, Any]) -> list[str]:
+def materialize_evidence_finding_cases(record: dict[str, Any], *, evaluate_governance: bool = False) -> list[str]:
     run_id = _clean(record.get("run_id"))
     if not run_id:
         return []
@@ -203,9 +204,19 @@ def materialize_evidence_finding_cases(record: dict[str, Any]) -> list[str]:
     dataset_scope_json = _json(dataset_scope.as_dict()) if dataset_scope is not None else None
     identifiers: list[str] = []
     with db_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
         for source_key, finding in _source_finding_candidates(record):
             finding_id = evidence_finding_id(run_id, source_key)
             identifiers.append(finding_id)
+            snapshot = _evidence_source_snapshot(record, source_key, finding)
+            existing_case = connection.execute("SELECT finding_id FROM finding_cases WHERE finding_id = ?", (finding_id,)).fetchone()
+            if evaluate_governance and existing_case is None:
+                from app.services.phase4_scope import current_server_bound_system_identity
+                from app.services.runtime_governance import unavailable
+                identity = current_server_bound_system_identity()
+                snapshot["governance_system_scope"] = identity.system_id if identity else None
+                if identity is None:
+                    snapshot["governance"] = unavailable("Authenticated runtime scope unavailable.", run_id=run_id)
             connection.execute(
                 """
                 INSERT OR IGNORE INTO finding_cases (
@@ -215,7 +226,7 @@ def materialize_evidence_finding_cases(record: dict[str, Any]) -> list[str]:
                 """,
                 (
                     finding_id, run_id, source_key, scope_storage_id, dataset_scope_json,
-                    _json(_evidence_source_snapshot(record, source_key, finding)), created_at,
+                    _json(snapshot), created_at,
                 ),
             )
             existing = connection.execute(
@@ -224,6 +235,9 @@ def materialize_evidence_finding_cases(record: dict[str, Any]) -> list[str]:
             existing_scope = existing["scope_storage_id"] if existing else None
             if existing_scope != scope_storage_id and (existing_scope is not None or scope_storage_id is not None):
                 raise ValueError("finding_case_scope_conflict")
+            if evaluate_governance and existing_case is None:
+                from app.services.runtime_governance import govern_evidence_case
+                govern_evidence_case(connection, record=record, finding_id=finding_id, finding=finding)
     _migrate_legacy_events_if_unambiguous(run_id)
     return identifiers
 
@@ -505,6 +519,12 @@ def validate_status_transition(
 
 def _case_response(case: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
     snapshot = product_evidence(case["source_snapshot"])
+    from app.services.runtime_governance import finding_governance, unavailable
+    governance = snapshot.get("governance") or unavailable("No governance snapshot was recorded at finding creation.")
+    if case["source_kind"] == "live_finding":
+        governance = finding_governance(case["finding_id"], snapshot["finding"]["system_id"])
+    elif snapshot.get("governance_system_scope"):
+        governance = finding_governance(case["finding_id"], snapshot["governance_system_scope"])
     latest_at = events[-1].get("recorded_at") if events else None
     return {
         "finding_id": case["finding_id"],
@@ -515,6 +535,7 @@ def _case_response(case: dict[str, Any], events: list[dict[str, Any]]) -> dict[s
             "run_id": snapshot.get("source_run_id"),
         },
         "evidence": snapshot,
+        "governance": governance,
         "measurable_consequence": (snapshot.get("finding") or {}).get(
             "measurable_consequence", unavailable_consequence()
         ),
@@ -785,11 +806,14 @@ def _append_event(
     finding_id: str, *, event_type: str, actor: str, payload: dict[str, Any],
     expected_version: int | None, idempotency_key: str | None,
     recorded_at: str | None = None,
+    connection_override: sqlite3.Connection | None = None,
 ) -> dict[str, Any]:
-    init_runtime_db()
+    if connection_override is None:
+        init_runtime_db()
     request_fingerprint = _fingerprint(event_type, {"actor_identity": actor, **payload})
-    with db_connection() as connection:
-        connection.execute("BEGIN IMMEDIATE")
+    with (nullcontext(connection_override) if connection_override is not None else db_connection()) as connection:
+        if connection_override is None:
+            connection.execute("BEGIN IMMEDIATE")
         exists = connection.execute(
             """
             SELECT 1 FROM finding_cases
@@ -868,7 +892,7 @@ def record_governance_lifecycle(
     finding_id: str, *, change: dict[str, Any], actor: str,
     expected_version: int, idempotency_key: str, recorded_at: str,
 ) -> dict[str, Any]:
-    """Explicit, inactive migration helper; no API or analytics call this.
+    """Explicit audit helper, sharing the runtime lifecycle event contract.
 
     Uses the existing finding identity/event version sequence (gaps between
     lifecycle events are valid). It neither derives maturity nor changes status.

@@ -7,7 +7,7 @@ const retired = new Set([
   "possibleexplanations", "alternativeexplanations", "whyneraiumthinksithappened", "whyneraiumthinks",
   "likelydriver", "primarydriver", "primarydrivers", "driverattribution", "counterfactualdriverranking",
 ]);
-const immutable = new Set(["measurable_consequence", "provenance", "source_tag_ids", "source_relationship_ids", "normalized_telemetry", "telemetry_signal_catalog", "telemetry_signals", "source_rows", "observations", "rows"]);
+const immutable = new Set(["governance", "measurable_consequence", "provenance", "source_tag_ids", "source_relationship_ids", "normalized_telemetry", "telemetry_signal_catalog", "telemetry_signals", "source_rows", "observations", "rows"]);
 export function productEvidence(value) {
   if (Array.isArray(value)) return value.map(productEvidence);
   if (!value || typeof value !== "object") return value;

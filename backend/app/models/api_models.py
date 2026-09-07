@@ -467,6 +467,8 @@ class FindingActivitySummaryResponse(BaseModel):
 
 
 class FindingCaseResponse(BaseModel):
+    # Frozen Phase 1–3 records; the API does not reevaluate authority on read.
+    governance: dict[str, Any] | None = None
     measurable_consequence: dict[str, Any] = Field(default_factory=lambda: {
         "status": "not_quantifiable",
         "statement": "Consequence not quantifiable from available evidence.",
@@ -839,6 +841,7 @@ class LiveAnalysisRunsListResponse(BaseModel):
 
 
 class LiveFindingResponse(BaseModel):
+    governance: dict[str, Any] | None = None
     finding_id: str
     deduplication_key: str
     system_id: str

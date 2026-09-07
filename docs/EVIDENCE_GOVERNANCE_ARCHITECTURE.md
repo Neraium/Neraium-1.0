@@ -301,3 +301,15 @@ disabled in this workflow. The rate gate remains unknown pending a justified
 versioned rate/policy contract; Tier A remains ineligible. Human review cannot
 waive evidence gates, and Tier B cannot be automatically approved. Historical
 Phase 1/2 evaluators and records are unchanged.
+
+## Runtime integration status
+
+[Runtime integration](RUNTIME_GOVERNANCE_INTEGRATION.md) connects new upload finding
+creation, canonical connector artifact persistence, and the existing scheduled
+live worker to the unchanged governance evaluators and append-only stores.
+The current adapter admits finding-owned relational comparisons and explicit
+fixed-window persistence. Other run-level evidence is not automatically assigned
+to a finding, so higher maturity/trajectory remains unavailable without the
+required independent support. Context integration admits server-bound identity
+and consumes existing scoped registry history. Execution, activation and runtime
+review admission remain disabled. Existing historical records are not backfilled.
