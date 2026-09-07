@@ -291,3 +291,13 @@ Context and policy records carry both creation/availability time and effective i
 L3 requires supported multi-family characterization, not a single metric or probability. L4 requires applicable verified external context; it is neither cause nor action authorization. Partial and unavailable context remain explicit. Tier A/B eligibility is evaluable, but no baseline/model mutation or adaptation is activated. No admissible rate method is implemented yet, so the evolution-rate gate remains unknown and Tier A remains ineligible. Tier B cannot receive automatic permission. Every v2 decision remains non-executing, and before/after active model references must match.
 
 Existing SII outputs, compatibility payloads, learning behavior, finding workflow and operator escalation remain unchanged. Neraium remains read-only and human-in-the-loop, with no physical authority, diagnosis, maintenance recommendation, failure-time prediction, regulatory compliance claim or cryptographic non-repudiation claim.
+
+## Phase 3 implementation status
+
+[Phase 3](EVIDENCE_GOVERNANCE_PHASE3.md) adds append-only adaptation candidates,
+explicit authenticated-review admission contracts, lifecycle history and frozen
+non-executing transition/rollback references. All model activation remains
+disabled in this workflow. The rate gate remains unknown pending a justified
+versioned rate/policy contract; Tier A remains ineligible. Human review cannot
+waive evidence gates, and Tier B cannot be automatically approved. Historical
+Phase 1/2 evaluators and records are unchanged.
