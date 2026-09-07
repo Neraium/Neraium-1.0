@@ -830,6 +830,25 @@ def _append_event(
             "request_fingerprint": request_fingerprint,
             **payload,
         }
+        if event_type == "governance_lifecycle_recorded":
+            # Reuse this log's scope, idempotency, version and transaction
+            # boundary. This payload never changes operator workflow status.
+            from app.governance.contracts import FindingLifecycleEvent
+
+            prior_row = connection.execute(
+                "SELECT event_id FROM finding_workflow_events "
+                "WHERE finding_id = ? AND event_type = ? ORDER BY version DESC LIMIT 1",
+                (finding_id, event_type),
+            ).fetchone()
+            previous_id = prior_row["event_id"] if prior_row else None
+            if payload["governance_lifecycle"]["previous_event_id"] != previous_id:
+                raise FindingWorkflowConflictError("stale_lifecycle_predecessor", current_version=current_version)
+            lifecycle = FindingLifecycleEvent(
+                **payload["governance_lifecycle"], event_id=event["event_id"],
+                finding_id=finding_id, version=event["version"],
+                recorded_at=event["recorded_at"], actor=actor,
+            )
+            event["governance_lifecycle"] = lifecycle.as_dict()
         connection.execute(
             """
             INSERT INTO finding_workflow_events (
@@ -843,6 +862,34 @@ def _append_event(
             ),
         )
     return event
+
+
+def record_governance_lifecycle(
+    finding_id: str, *, change: dict[str, Any], actor: str,
+    expected_version: int, idempotency_key: str, recorded_at: str,
+) -> dict[str, Any]:
+    """Explicit, inactive migration helper; no API or analytics call this.
+
+    Uses the existing finding identity/event version sequence (gaps between
+    lifecycle events are valid). It neither derives maturity nor changes status.
+    """
+    from app.governance.contracts import LifecycleChange
+
+    payload = LifecycleChange.model_validate(change).as_dict()
+    event = _append_event(
+        finding_id, event_type="governance_lifecycle_recorded", actor=actor,
+        payload={"governance_lifecycle": payload}, expected_version=expected_version,
+        idempotency_key=idempotency_key, recorded_at=recorded_at,
+    )
+    return event["governance_lifecycle"]
+
+
+def governance_lifecycle_history(finding_id: str) -> list[dict[str, Any]]:
+    """Return original versioned payloads through the existing scope boundary."""
+    if _raw_case(finding_id) is None:
+        raise FindingNotFoundError("Finding not found.")
+    return [event["governance_lifecycle"] for event in _events(finding_id)
+            if event.get("event_type") == "governance_lifecycle_recorded"]
 
 
 def update_finding_workflow(

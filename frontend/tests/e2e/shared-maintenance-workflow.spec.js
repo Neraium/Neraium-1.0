@@ -360,11 +360,20 @@ test.describe("Shared maintenance workflow", () => {
     await installWorkflowApi(page, { role: "operator" });
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto("/work/finding-review", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("app-ready-root")).toHaveAttribute("data-app-ready", "1");
+    // Establish the resumed-session precondition after authentication binds
+    // the cache to this user/workspace. Broad latest data alone stays inactive.
+    await page.evaluate(() => {
+      localStorage.setItem("neraium.allow_persisted_latest", "1");
+      sessionStorage.setItem("neraium.session_intent", "resumed");
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Open investigation" }).click();
     await expect(page).toHaveURL(/\/investigations\/pump-response$/);
     await expect(page.getByRole("heading", { name: "Relationship evidence" })).toBeVisible();
     await page.getByRole("button", { name: "Open evidence record" }).click();
     await expect(page).toHaveURL(/\/evidence\/pump-response$/);
+    await page.getByText("Technical evidence and audit trail", { exact: true }).click();
     await expect(page.getByRole("heading", { name: "Finding provenance and lineage" })).toBeVisible();
     await expect(page.getByText("CHWP-2-SPD", { exact: true })).toBeVisible();
     await expect(page.getByText("CHWP-2-FLOW", { exact: true })).toBeVisible();

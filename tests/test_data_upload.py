@@ -1610,7 +1610,9 @@ def test_multi_room_intelligence_uses_room_specific_relationship_and_structural_
     sparse = room_map["Veg Room A"]
 
     assert "driver_category" in secondary
-    assert "attribution_confidence" in secondary
+    # Product views expose evidence, not the retired attribution conclusion.
+    assert "attribution_confidence" not in primary
+    assert "attribution_confidence" not in secondary
     assert "next_operator_move" in secondary
     assert "confidence_components" in secondary
     assert set(secondary["confidence_components"].keys()) == {
@@ -1631,7 +1633,7 @@ def test_multi_room_intelligence_uses_room_specific_relationship_and_structural_
     assert "limited due to sparse telemetry" in " ".join(sparse["relationship_evidence"]).lower()
     assert sparse["relationship_evidence"][0].count("Veg Room A:") == 1
     assert sparse["driver_category"] == "sensor_network"
-    assert sparse["attribution_confidence"] == "low"
+    assert "attribution_confidence" not in sparse
 
 
 def test_mixed_room_regression_preserves_unstable_nominal_and_sparse_room_states() -> None:
@@ -1664,18 +1666,18 @@ def test_mixed_room_regression_preserves_unstable_nominal_and_sparse_room_states
 
     assert unstable_room["urgency"] == "unstable"
     assert unstable_room["driver_category"] == "process_timing"
-    assert unstable_room["attribution_confidence"] == "high"
+    assert "attribution_confidence" not in unstable_room
     assert unstable_room["confidence_components"]["signal_strength"] == "high"
 
     assert nominal_room["urgency"] == "nominal"
     assert nominal_room["driver_category"] == "stable_monitoring"
-    assert nominal_room["attribution_confidence"] == "medium"
+    assert "attribution_confidence" not in nominal_room
     assert nominal_room["confidence_components"]["signal_strength"] == "low"
 
     assert sparse_room["urgency"] == "review"
     assert sparse_room["room_state"] == "Insufficient telemetry"
     assert sparse_room["driver_category"] == "sensor_network"
-    assert sparse_room["attribution_confidence"] == "low"
+    assert "attribution_confidence" not in sparse_room
     assert sparse_room["confidence_components"]["data_sufficiency"] == "low"
 
 
