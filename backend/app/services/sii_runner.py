@@ -59,7 +59,8 @@ def configure_runtime_dir(runtime_dir: Path) -> None:
 class BackendSiiRunner:
     """Backend-native telemetry runner used by production uploads and readiness checks."""
 
-    def __init__(self, *, baseline_window: int = 12, recent_window: int = 12) -> None:
+    def __init__(self, *, baseline_window: int = 12, recent_window: int = 12, reference_vectors: np.ndarray | None = None) -> None:
+        self._reference_vectors = reference_vectors
         self.baseline_window = max(2, baseline_window)
         self.recent_window = max(2, recent_window)
         self._history: deque[np.ndarray] = deque(maxlen=self.baseline_window + self.recent_window)
@@ -262,10 +263,12 @@ class BackendSiiRunner:
         history = list(self._history)
         if len(history) == 1:
             only = np.vstack(history)
-            return only, only
+            return (self._reference_vectors if self._reference_vectors is not None else only), only
 
         recent_count = min(self.recent_window, len(history))
         recent_vectors = np.vstack(history[-recent_count:])
+        if self._reference_vectors is not None:
+            return self._reference_vectors, recent_vectors
         baseline_source = history[:-recent_count]
         if not baseline_source:
             split_index = max(1, len(history) // 2)
@@ -419,6 +422,7 @@ def run_sii_runner(
     numeric_profiles: list[dict[str, Any]],
     timestamp_column: str | None,
     primary_room: str,
+    reference_rows: list[list[str]] | None = None,
     driver_attribution: dict[str, Any],
     engine_result: dict[str, Any],
     processing_trace: dict[str, Any],
@@ -446,7 +450,8 @@ def run_sii_runner(
 
     vector_rows = build_sensor_vectors(columns, rows, numeric_profiles, telemetry_signal_catalog=telemetry_signal_catalog)
     source_vector_count = len(vector_rows["vectors"])
-    vector_rows = limit_runner_vectors(vector_rows)
+    if reference_rows is None:
+        vector_rows = limit_runner_vectors(vector_rows)
     retained_vector_count = len(vector_rows["vectors"])
     if progress_callback:
         progress_callback(0, retained_vector_count)
@@ -462,7 +467,13 @@ def run_sii_runner(
         return base_result
 
     baseline_window = min(50, max(2, min(48, retained_vector_count // 2 or 2)))
-    adapter = _SII_ENGINE_ADAPTER(baseline_window=baseline_window, recent_window=baseline_window)
+    adapter_kwargs = {}
+    if reference_rows is not None:
+        reference = build_sensor_vectors(columns, reference_rows, numeric_profiles, telemetry_signal_catalog=telemetry_signal_catalog)
+        if reference["columns_used"] != vector_rows["columns_used"] or not reference["vectors"]:
+            raise ValueError("incompatible_reference_sensor_vectors")
+        adapter_kwargs["reference_vectors"] = np.asarray(reference["vectors"], dtype=float)
+    adapter = _SII_ENGINE_ADAPTER(baseline_window=baseline_window, recent_window=baseline_window, **adapter_kwargs)
     states: list[dict[str, Any]] = []
     run_id = f"upload-{datetime.now(UTC).timestamp()}"
 
@@ -524,16 +535,17 @@ def run_sii_runner(
             "evidence": evidence,
         }
     )
-    write_latest_sii_state(
-        build_runtime_state(
-            latest_state=latest_state,
-            primary_room=primary_room,
-            evidence=evidence,
-            driver_attribution=driver_attribution,
-            processing_trace=processing_trace,
-            output_summary=output_summary,
+    if reference_rows is None:
+        write_latest_sii_state(
+            build_runtime_state(
+                latest_state=latest_state,
+                primary_room=primary_room,
+                evidence=evidence,
+                driver_attribution=driver_attribution,
+                processing_trace=processing_trace,
+                output_summary=output_summary,
+            )
         )
-    )
     return base_result
 
 

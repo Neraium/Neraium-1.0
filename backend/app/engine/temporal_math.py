@@ -24,6 +24,7 @@ def evaluate_temporal_math(
     numeric_profiles: list[dict[str, Any]],
     timestamp_column: str | None,
     config: TemporalMathConfig | None = None,
+    reference_rows: list[list[str]] | None = None,
     progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     started = __import__("time").perf_counter()
@@ -53,6 +54,14 @@ def evaluate_temporal_math(
     baseline_count = min(max(4, baseline_count), matrix.shape[0] - 2)
     baseline = matrix[:baseline_count]
     active = matrix[baseline_count:]
+    if reference_rows is not None:
+        if max(len(rows), len(reference_rows)) > cfg.max_rows:
+            raise ValueError("supplied_reference_temporal_limit_exceeded")
+        baseline, reference_columns = _build_numeric_matrix(columns=columns, rows=reference_rows, numeric_profiles=numeric_profiles, max_rows=cfg.max_rows)
+        if reference_columns != used_columns or len(baseline) < cfg.min_baseline_rows:
+            return _empty_result(reason="insufficient_reference_history")
+        baseline_count = len(baseline)
+        active = matrix
     if active.shape[0] < 2:
         return _empty_result(reason="insufficient_active_window")
 
@@ -113,7 +122,8 @@ def evaluate_temporal_math(
         relationship_series=correlation_drift["series"],
         entropy_series=entropy_growth_series,
         evidence_series=evidence["timeline"],
-        baseline_count=baseline_count,
+        baseline_count=baseline_count if reference_rows is None else 0,
+        require_trigger=reference_rows is not None,
         timestamp_column=timestamp_column,
         rows=rows[-matrix.shape[0]:],
         columns=columns,
@@ -512,15 +522,20 @@ def _lead_time_estimate(
     timestamp_column: str | None,
     rows: list[list[str]],
     columns: list[str],
+    require_trigger: bool = False,
 ) -> dict[str, Any]:
     rel = np.asarray(relationship_series, dtype=float) if relationship_series else np.zeros_like(state_drift_series)
     ent = entropy_series if entropy_series.size else np.zeros_like(state_drift_series)
     comb = (state_drift_series * 0.45) + (rel[: state_drift_series.size] * 0.3) + (ent[: state_drift_series.size] * 0.25)
     idx = 0
+    triggered = False
     for i, v in enumerate(comb):
         if v >= 0.22:
             idx = i
+            triggered = True
             break
+    if require_trigger and not triggered:
+        return {"rows_before_event": 0, "timestamp": None, "confidence": "low"}
     rows_before = int(max(0, (state_drift_series.size - idx)))
     ts = None
     if timestamp_column and timestamp_column in columns:

@@ -1876,6 +1876,27 @@ def build_behavior_windows(
     insights: list[dict[str, Any]],
     normalized_telemetry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    sii = _sii_map(result.get("sii_result"))
+    paired = _sii_map(sii.get("supplied_reference"))
+    if paired:
+        reference = _sii_map(paired.get("reference"))
+        comparison = _sii_map(paired.get("comparison"))
+        onset = _sii_map(_sii_map(sii.get("temporal_analysis")).get("lead_time_estimate")).get("timestamp")
+        return {
+            "change_onset": clean_text(onset) if insights else "",
+            "stable_window": behavior_window(
+                label="Reference window", start=reference.get("time_start"), end=reference.get("time_end"),
+                rows=reference.get("row_count"), description="Supplied reference; no customer operating-state label is inferred.",
+            ),
+            "deviation_window": behavior_window(
+                label="Comparison window", start=comparison.get("time_start"), end=comparison.get("time_end"),
+                rows=comparison.get("row_count"), description="Evaluated comparison period; a finding is not implied by this window.",
+            ),
+            "current_state_window": behavior_window(
+                label="Comparison window", start=comparison.get("time_start"), end=comparison.get("time_end"),
+                rows=comparison.get("row_count"), description="Actual supplied comparison bounds.",
+            ),
+        }
     timestamp = result.get("timestamp_profile") if isinstance(result.get("timestamp_profile"), dict) else {}
     first = clean_text(timestamp.get("first_timestamp"))
     last = clean_text(timestamp.get("last_timestamp"))

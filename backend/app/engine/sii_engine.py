@@ -51,7 +51,10 @@ from app.services.telemetry_classification import (
 def evaluate_sii(
     *,
     columns,
-    rows,
+    rows=None,
+    reference_rows: list[dict[str, Any]] | None = None,
+    comparison_rows: list[dict[str, Any]] | None = None,
+    signal_units: dict[str, str | None] | None = None,
     numeric_profiles,
     timestamp_column,
     telemetry_signal_catalog=None,
@@ -71,8 +74,30 @@ def evaluate_sii(
     root cause, prescribes work, or treats confidence as probability.
     """
 
+    # Paired mode requires exact dict-row schemas and explicit shared units.
+    # It returns the normal governed analysis_result as well as engine evidence.
+    # See docs/supplied_reference_sii.md for supported inputs and limitations.
     started = time.perf_counter()
     cfg = dict(config) if isinstance(config, dict) else {}
+    paired = reference_rows is not None or comparison_rows is not None
+    reference_dict_rows = reference_matrix_rows = paired_provenance = None
+    if paired:
+        if config is not None and not isinstance(config, dict):
+            raise ValueError("paired_config_must_be_a_mapping")
+        if rows is not None or reference_rows is None or comparison_rows is None:
+            raise ValueError("provide_reference_rows_and_comparison_rows_without_rows")
+        if any(value is not None for value in (data_quality, sensor_health, operating_mode, phase4_scope, telemetry_signal_catalog)):
+            raise ValueError("paired_evaluation_requires_fresh_evidence_and_no_persistent_scope")
+        from app.engine.supplied_reference import prepare_supplied_reference
+        reference, comparison, cfg, paired_provenance = prepare_supplied_reference(
+            columns=columns, reference_rows=reference_rows, comparison_rows=comparison_rows,
+            numeric_profiles=numeric_profiles, timestamp_column=timestamp_column,
+            signal_units=signal_units, config=cfg,
+        )
+        reference_dict_rows, reference_matrix_rows = reference
+        rows = comparison[0]
+    elif signal_units is not None:
+        raise ValueError("signal_units_requires_supplied_reference")
     performance_caches_enabled = not bool(cfg.get("disable_performance_caches"))
     column_names = [str(column) for column in columns]
     profile_list = [dict(item) for item in numeric_profiles if isinstance(item, dict)]
@@ -191,6 +216,11 @@ def evaluate_sii(
                 timestamp_column=timestamp_column,
                 header_present=bool(cfg.get("header_present", True)),
             )
+        if paired:
+            from app.services.telemetry_classification import telemetry_catalog_by_column
+            catalog = telemetry_catalog_by_column(catalog)
+            for column, unit in signal_units.items():
+                catalog[column]["engineering_units"] = unit
         record("telemetry_catalog", "complete")
     except Exception as exc:
         catalog = telemetry_signal_catalog or {}
@@ -204,6 +234,7 @@ def evaluate_sii(
             column_names,
             matrix_rows,
             profile_list,
+            **({"reference_rows": reference_matrix_rows} if paired else {}),
             telemetry_signal_catalog=catalog,
         )
         drift_status = "complete" if int(baseline_analysis.get("baseline_window_rows") or 0) > 0 else "limited"
@@ -231,6 +262,8 @@ def evaluate_sii(
         relationship_model = build_relationship_baseline(
             dict_rows,
             numeric_columns_used,
+            **({"reference_rows": reference_dict_rows} if paired else {}),
+            **({"baseline_window_limit": 12000, "recent_window_limit": 12000} if paired else {}),
             total_row_count=int(cfg.get("row_count_total") or len(dict_rows)),
             raw_signal_count=sum(column != timestamp_column for column in column_names),
             baseline_analysis=baseline_analysis,
@@ -268,6 +301,7 @@ def evaluate_sii(
             else assess_operating_modes(
                 dict_rows,
                 timestamp_column=timestamp_column,
+                **({"reference_rows": reference_dict_rows} if paired else {}),
                 telemetry_signal_catalog=catalog,
                 progress_callback=unit_progress(
                     "operating_modes",
@@ -388,6 +422,7 @@ def evaluate_sii(
             if isinstance(node, dict) and node.get("type") == "metric" and node.get("source_column")
         ]
         empirical_thresholds = estimate_empirical_thresholds(
+            **({"reference_rows": reference_dict_rows} if paired else {}),
             rows=dict_rows,
             numeric_columns=numeric_columns_used,
             relationship_columns=list(dict.fromkeys(relationship_fit_columns)),
@@ -415,6 +450,7 @@ def evaluate_sii(
     try:
         attempted.append("mode_conditioned_baseline")
         mode_conditioned = analyze_mode_conditioned_baseline(
+            **({"reference_rows": reference_dict_rows} if paired else {}),
             rows=dict_rows,
             numeric_columns=numeric_columns_used,
             timestamp_column=timestamp_column,
@@ -507,7 +543,7 @@ def evaluate_sii(
             if isinstance(cfg.get("adaptive_persistence_config"), dict)
             else {}
         )
-        adaptive_config.setdefault("align_to_phase2_active_window", True)
+        adaptive_config.setdefault("align_to_phase2_active_window", not paired)
         adaptive_persistence = evaluate_adaptive_persistence(
             rows=dict_rows,
             timestamp_column=timestamp_column,
@@ -550,6 +586,7 @@ def evaluate_sii(
             )
         effective_temporal_config = temporal_config or TemporalMathConfig()
         temporal_analysis = evaluate_temporal_math(
+            **({"reference_rows": reference_matrix_rows} if paired else {}),
             columns=column_names,
             rows=matrix_rows,
             numeric_profiles=profile_list,
@@ -702,6 +739,7 @@ def evaluate_sii(
     try:
         attempted.append("covariance_analysis")
         runner_result = run_sii_runner(
+            **({"reference_rows": reference_matrix_rows} if paired else {}),
             columns=column_names,
             rows=matrix_rows,
             numeric_profiles=profile_list,
@@ -1169,4 +1207,27 @@ def evaluate_sii(
             "temporal_analysis": temporal_analysis,
         },
     }
+    if paired:
+        paired_provenance["engine"] = dict(result["engine"])
+        result["supplied_reference"] = paired_provenance
+        result["processing_trace"]["supplied_reference"] = paired_provenance
+        result["uncertainty"].setdefault("limitations", []).extend(paired_provenance["limitations"])
+        # Reuse the same governed finding/condition construction as telemetry windows.
+        from app.services.analysis_result_contract import build_analysis_result
+        source = {
+            **result["compatibility"], "sii_result": result,
+            "analysis_id": "paired-" + paired_provenance["comparison"]["input_hash"][:16] + "-" + paired_provenance["reference"]["input_hash"][:16],
+            "columns": column_names, "row_count": len(matrix_rows),
+            "warnings": paired_provenance["limitations"],
+            "provenance": {
+                "engine_name": ENGINE_NAME, "engine_version": ENGINE_VERSION,
+                "dataset_id": paired_provenance["comparison"]["dataset_id"],
+                "input_hash": paired_provenance["comparison"]["input_hash"],
+                "baseline_dataset_id": paired_provenance["reference"]["dataset_id"],
+                "baseline_hash": paired_provenance["reference"]["input_hash"],
+            },
+        }
+        result["analysis_result"] = build_analysis_result(source)
+        result["analysis_result"]["sii_evidence"]["supplied_reference"] = paired_provenance
+        result["findings"] = result["analysis_result"].get("insights", [])
     return result
