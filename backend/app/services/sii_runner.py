@@ -14,6 +14,7 @@ from typing import Any
 from app.core.config import get_settings
 from app.services.data_quality import parse_numeric_value
 from app.services.runtime_db import read_latest_payload, upsert_latest_payload
+from app.services import runtime_postgres
 from app.services.telemetry_classification import signal_classification, telemetry_catalog_by_column
 from app.services.telemetry_constants import SENTINEL
 
@@ -791,6 +792,9 @@ def build_runner_evidence(
 
 
 def read_latest_sii_state() -> dict[str, Any] | None:
+    if runtime_postgres.database_url():
+        state = read_latest_payload("latest_sii_state")
+        return state if is_valid_latest_sii_state(state) else None
     try:
         persisted = read_latest_payload("latest_sii_state")
         if isinstance(persisted, dict) and is_valid_latest_sii_state(persisted):
@@ -807,6 +811,10 @@ def read_latest_sii_state() -> dict[str, Any] | None:
 
 
 def write_latest_sii_state(state: dict[str, Any]) -> None:
+    if runtime_postgres.database_url():
+        upsert_latest_payload("latest_sii_state", state)
+        logger.info("sii_state_published", extra={"event": "sii_state_published", "state_available": True})
+        return
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     temp_path = STATE_PATH.with_suffix(".json.tmp")
     temp_path.write_text(json.dumps(state, indent=2), encoding="utf-8")

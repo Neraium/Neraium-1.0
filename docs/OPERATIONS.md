@@ -22,7 +22,7 @@ Startup validates configuration before binding the HTTP port or entering the wor
 8. Verify the telemetry schema when a telemetry database is configured and start enabled background services.
 9. Mark startup complete and begin serving.
 
-For split-role production, both tasks must use the same `NERAIUM_UPLOAD_STATE_BUCKET`. Local runtime files are not shared across ECS tasks.
+All production tasks must use the same `NERAIUM_RUNTIME_DATABASE_URL` PostgreSQL database (injected as a task secret, with TLS). Split-role tasks also use the same `NERAIUM_UPLOAD_STATE_BUCKET`. Local runtime files are not shared across ECS tasks. Before deploying this storage boundary, follow the offline snapshot-copy and cutover requirements in [Pilot Production Finish](PILOT_PRODUCTION_FINISH.md).
 Completed-analysis workers publish immutable Evidence Package Correlation
 sidecars to this repository, and API reads use the same bucket without
 GET-time backfill or repair.
@@ -75,7 +75,8 @@ All values are read at process startup. Invalid enums, booleans, ports, positive
 | `BACKEND_PORT` | `8080` | Bind port, 1-65535 |
 | `CORS_ORIGINS` | comma-separated explicit origins | Browser allowlist; `*` is rejected in production |
 | `CORS_ORIGIN_REGEX` | valid Python regex | Optional domain allowlist; defaults to Neraium domains |
-| `NERAIUM_RUNTIME_DIR` | `/mnt/neraium-runtime` | Explicit writable runtime path; required in production |
+| `NERAIUM_RUNTIME_DIR` | `/mnt/neraium-runtime` | Explicit writable temporary/cache path; required in production |
+| `NERAIUM_RUNTIME_DATABASE_URL` | injected task secret | Shared PostgreSQL runtime authority; TLS required in production |
 | `NERAIUM_BUILD_SHA` | deployed commit SHA | Its 12-character prefix is included in diagnostics; the ECS workflow pins the full value |
 | `NERAIUM_PROCESS_ROLE` | `api` or `worker` | Selects process behavior |
 | `NERAIUM_UPLOAD_STATE_BUCKET` | shared S3 bucket | Required operationally for split API/worker state |

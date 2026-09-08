@@ -45,3 +45,6 @@ export NERAIUM_TEST_POSTGRES_DSN="postgresql://postgres:postgres@127.0.0.1:${HOS
 export PYTHONPATH="$ROOT_DIR/backend${PYTHONPATH:+:$PYTHONPATH}"
 cd "$ROOT_DIR"
 python -m pytest tests/integration/test_database_connector_postgres.py -m integration "$@"
+
+export NERAIUM_TEST_RUNTIME_POSTGRES_DSN="$NERAIUM_TEST_POSTGRES_DSN?sslmode=require"
+python -m pytest tests/test_pilot_shared_state.py -m integration "$@"

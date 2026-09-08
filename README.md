@@ -127,7 +127,7 @@ Important API areas include:
   non-causal Evidence Package Correlation v1 reads
 - Observability and readiness endpoints
 
-Backend runtime state is written under `NERAIUM_RUNTIME_DIR`. Runtime storage includes upload jobs, upload queue records, evidence runs, audit events, latest payloads, and data connection records.
+Production runtime records use shared PostgreSQL through `NERAIUM_RUNTIME_DATABASE_URL`; local development uses SQLite under `NERAIUM_RUNTIME_DIR`. Upload artifacts and dispatch remain in the configured shared S3 bucket. Runtime records include evidence, findings, operator actions, governance, facility context, and audit events. See [pilot storage and migration requirements](docs/PILOT_PRODUCTION_FINISH.md).
 The correlation contract and its explicit evidence limitations are documented
 in `docs/EVIDENCE_PACKAGE_CORRELATION_V1.md`.
 
@@ -210,6 +210,7 @@ Common variables include:
 - `CORS_ORIGINS`
 - `CORS_ORIGIN_REGEX`
 - `NERAIUM_RUNTIME_DIR`
+- `NERAIUM_RUNTIME_DATABASE_URL` (production task secret, PostgreSQL with TLS)
 - `NERAIUM_PROCESS_ROLE`
 - `NERAIUM_START_BACKGROUND_WORKERS`
 - `NERAIUM_START_DATA_POLLER`
@@ -275,9 +276,8 @@ Before broader production use, review `docs/PRODUCTION_ACCEPTANCE_CHECKLIST.md` 
 
 Current hardening focus areas include:
 
-- Confirming runtime database persistence across API and worker restarts
-- Confirming auth/session persistence through the dedicated auth database
-- Verifying multi-task or multi-worker deployment behavior
+- Completing the shared PostgreSQL runtime cutover and preserving existing history
+- Verifying configured production persistence after the separately authorized release
 - Requiring Postgres for production API auth/session state while keeping SQLite fallback for tests and local development
 - Keeping README/workflow screenshots current with the deployed UI
 - Keeping browser clients free of build-time shared API secrets
@@ -291,7 +291,7 @@ Neraium 1.0 is the active production-oriented foundation for system intelligence
 
 The current platform supports read-only telemetry analysis, upload-based workflows, deterministic SII engine results, evidence generation, replay artifacts, audit logging, runtime observability, authentication, CI validation, and cloud deployment preparation.
 
-The next major focus areas are broader data connectors, multi-instance shared runtime storage, expanded test coverage, improved replay workflows, and operator reporting.
+Pilot release conditions, completed boundaries, and focused verification are documented in [Pilot Production Finish](docs/PILOT_PRODUCTION_FINISH.md).
 
 Current Phase 3 hardening status:
 
