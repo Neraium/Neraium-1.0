@@ -83,6 +83,12 @@ def test_postgres_backend_is_selected_when_configured(monkeypatch, tmp_path) -> 
         def upsert_user(self, payload):
             state["users"][payload["email"]] = dict(payload)
 
+        def insert_user_if_absent(self, payload):
+            if payload["email"] in state["users"]:
+                return False
+            self.upsert_user(payload)
+            return True
+
         def read_user(self, email):
             return state["users"].get(email)
 
@@ -350,7 +356,7 @@ def test_bootstrap_admin_creates_absent_user_and_normalizes_email(monkeypatch, t
     assert "new-password-123" not in caplog.text
 
 
-def test_bootstrap_admin_repairs_existing_inactive_user(monkeypatch, tmp_path, caplog) -> None:
+def test_bootstrap_admin_preserves_deactivation_on_restart(monkeypatch, tmp_path, caplog) -> None:
     monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", raising=False)
     monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", raising=False)
     _reset_auth_backend(monkeypatch)
@@ -365,12 +371,12 @@ def test_bootstrap_admin_repairs_existing_inactive_user(monkeypatch, tmp_path, c
         auth_store.initialize_auth_store()
 
     user = auth_store._get_backend().read_user("inactive@example.com")
-    assert bool(user["is_active"]) is True
-    assert user["role"] == "admin"
-    assert _bootstrap_event(caplog) == "bootstrap_admin_updated"
+    assert bool(user["is_active"]) is False
+    assert user["role"] == "operator"
+    assert _bootstrap_event(caplog) == "bootstrap_admin_already_exists"
 
 
-def test_bootstrap_admin_repairs_missing_admin_role(monkeypatch, tmp_path, caplog) -> None:
+def test_bootstrap_admin_preserves_role_on_restart(monkeypatch, tmp_path, caplog) -> None:
     monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", raising=False)
     monkeypatch.delenv("NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", raising=False)
     _reset_auth_backend(monkeypatch)
@@ -384,9 +390,9 @@ def test_bootstrap_admin_repairs_missing_admin_role(monkeypatch, tmp_path, caplo
         auth_store.initialize_auth_store()
 
     user = auth_store._get_backend().read_user("role-repair@example.com")
-    assert user["role"] == "admin"
+    assert user["role"] == "viewer"
     assert bool(user["is_active"]) is True
-    assert _bootstrap_event(caplog) == "bootstrap_admin_updated"
+    assert _bootstrap_event(caplog) == "bootstrap_admin_already_exists"
 
 
 def test_bootstrap_admin_resets_password_when_enabled(monkeypatch, tmp_path, caplog) -> None:

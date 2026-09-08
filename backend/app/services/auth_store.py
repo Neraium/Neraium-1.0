@@ -365,6 +365,10 @@ class _BaseAuthBackend:
 
     def ensure_schema(self) -> None:
         with self._connect() as connection:
+            if self.dialect == "postgresql":
+                connection.execute("SELECT pg_advisory_xact_lock(173514001)")
+            else:
+                connection.execute("BEGIN IMMEDIATE")
             statements = POSTGRES_AUTH_SCHEMA_STATEMENTS if self.dialect == "postgresql" else AUTH_SCHEMA_STATEMENTS
             for statement in statements:
                 connection.execute(statement)
@@ -465,6 +469,12 @@ class _BaseAuthBackend:
             else:
                 # Serialize session replacement for one account across API processes.
                 connection.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (email,))
+            user_cursor = connection.execute(
+                f"SELECT is_active FROM auth_users WHERE email = {self.placeholder}", (email,)
+            )
+            user = self._row_to_dict(user_cursor, user_cursor.fetchone())
+            if not user or not bool(user["is_active"]):
+                raise ValueError("Account is inactive or missing.")
             revoke_sql = (
                 "UPDATE auth_sessions SET revoked_at = ? WHERE email = ? AND revoked_at IS NULL"
                 if self.placeholder == "?"
@@ -519,7 +529,18 @@ class _BaseAuthBackend:
             if self.placeholder == "?"
             else "UPDATE auth_users SET is_active = %s, deactivated_at = %s, updated_at = %s WHERE email = %s"
         )
-        self._execute(sql, (bool(is_active), deactivated_at, timestamp, email))
+        with self._connect() as connection:
+            if self.dialect == "sqlite":
+                connection.execute("BEGIN IMMEDIATE")
+            else:
+                connection.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (email,))
+            connection.execute(sql, (bool(is_active), deactivated_at, timestamp, email))
+            if not is_active:
+                connection.execute(
+                    f"UPDATE auth_sessions SET revoked_at = {self.placeholder} "
+                    f"WHERE email = {self.placeholder} AND revoked_at IS NULL",
+                    (timestamp, email),
+                )
         return self.read_user(email)
 
     def create_workspace(self, workspace: dict[str, Any], first_member: dict[str, Any]) -> None:
@@ -1187,28 +1208,18 @@ def _ensure_bootstrap_admin(backend: _BaseAuthBackend) -> None:
                 _log_bootstrap_event("bootstrap_admin_skipped_missing_configuration", normalized_email)
                 return
             salt = secrets.token_hex(16)
-            _upsert_user_record(
-                backend,
-                email=normalized_email,
-                password_hash=_hash_password(password, salt),
-                salt=salt,
-                name=name or normalized_email.split("@", 1)[0],
-                role="admin",
-                is_active=True,
-                deactivated_at=None,
-                bootstrap_managed=True,
-            )
+            backend.insert_user_if_absent({
+                "email": normalized_email, "password_hash": _hash_password(password, salt),
+                "salt": salt, "name": name or normalized_email.split("@", 1)[0],
+                "role": "admin", "is_active": True, "bootstrap_managed": True,
+            })
             _log_bootstrap_event("bootstrap_admin_created", normalized_email)
             return
 
         payload = dict(existing)
         changed = False
-        if normalize_role(existing.get("role"), "operator") != "admin":
+        if reset_password and normalize_role(existing.get("role"), "operator") != "admin":
             payload["role"] = "admin"
-            changed = True
-        if not bool(existing.get("is_active", True)):
-            payload["is_active"] = True
-            payload["deactivated_at"] = None
             changed = True
         if not str(existing.get("name") or "").strip() and name:
             payload["name"] = name
@@ -1599,7 +1610,6 @@ def deactivate_user(email: str) -> dict[str, Any] | None:
     normalized_email = _normalize_email(email)
     with _STORE_LOCK:
         user = backend.set_user_active_status(normalized_email, is_active=False)
-        backend.revoke_sessions_for_email(normalized_email)
     return sanitize_user_record(user) if user else None
 
 

@@ -39,7 +39,7 @@ Use this as the final go or no-go checklist for commercial water-system CSV uplo
 - [ ] No production dashboard output is fabricated in the frontend.
 - [ ] Missing SII output shows "Awaiting SII analysis" or equivalent neutral state.
 - [ ] Operational conclusions are evidence-linked.
-- [ ] Runway or projected time-to-failure is shown only when provided by backend/SII output.
+- [ ] Product views omit unsupported failure-probability and remaining-life claims, including historical projections.
 - [ ] Sample mode is explicitly labeled and never silently replaces production output.
 - [ ] SII result includes limitations or confidence basis when confidence is low.
 - [ ] Replay views use persisted backend artifacts, not client-only reconstruction.

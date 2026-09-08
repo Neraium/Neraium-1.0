@@ -2,6 +2,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from app.core.security import require_api_access, require_operator_role
+from app.services.product_evidence_contract import product_evidence
 from app.models.api_models import FacilityContextRequest
 from app.services.facility_context import read_facility_context, write_facility_context
 from api.cognition_contracts import build_canonical_cognition_state_response
@@ -104,7 +105,7 @@ def resolve_uploaded_intelligence(latest_result: dict[str, Any] | None, *, inclu
     result_intel = latest_result.get("sii_intelligence") if isinstance(latest_result, dict) and isinstance(latest_result.get("sii_intelligence"), dict) else {}
     # The result embedded in the scoped canonical upload is authoritative. A
     # process-global runner snapshot may belong to another workspace or user.
-    return result_intel if is_valid_persisted_intelligence(result_intel) else None
+    return product_evidence(result_intel) if is_valid_persisted_intelligence(result_intel) else None
 
 
 def is_valid_persisted_intelligence(candidate: Any) -> bool:

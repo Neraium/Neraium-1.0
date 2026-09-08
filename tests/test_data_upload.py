@@ -16,7 +16,7 @@ from app.services.runtime_db import claim_next_upload_job, db_connection, read_u
 from app.services.sii_runner import CORE_ENGINE, RUNNER_MODULE
 from app.services import sii_runner, upload_jobs
 from app.services.upload_jobs import UploadTooLargeError, create_upload_job, parse_positive_int_env, process_csv_content, process_csv_file, process_json_payload, read_job, read_latest_upload_summary, write_job
-from app.services.upload_state_repository import write_latest_upload_result, write_latest_upload_summary
+from app.services.upload_state_repository import read_latest_upload_result, write_latest_upload_result, write_latest_upload_summary
 
 
 REQUIRED_COMPLETION_ARTIFACT_KEYS = (
@@ -1410,7 +1410,12 @@ def test_facility_systems_recovers_from_persisted_upload_result_when_state_missi
     assert response.status_code == 200
     payload = response.json()
     assert payload["intelligence"]["source"] == "uploaded"
-    assert payload["intelligence"]["primary_driver"] == "Recovered from persisted upload result"
+    assert payload["intelligence"]["supporting_evidence"] == ["Recovered from persisted upload result"]
+    assert payload["intelligence"]["primary_room"] == "Flower Room 3"
+    assert payload["intelligence"]["neraium_score"] == 90
+    assert "primary_driver" not in payload["intelligence"]
+    # Product projection must not rewrite the historical upload evidence.
+    assert read_latest_upload_result()["sii_intelligence"]["primary_driver"] == "Recovered from persisted upload result"
 
 def test_facility_systems_uses_multi_room_state_after_upload() -> None:
     client = TestClient(create_app())

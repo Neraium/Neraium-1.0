@@ -321,6 +321,7 @@ class RuntimeBehavioralModelStore(InMemoryBehavioralModelStore):
         self._writer = writer
         self._mutator = mutator
         self._loaded: set[str] = set()
+        self._mutating = False
 
     def _model_state(self, scope: AuthenticatedPhase4Scope, model_id: str) -> dict[str, Any]:
         self._load_ledger(scope, model_id)
@@ -350,7 +351,7 @@ class RuntimeBehavioralModelStore(InMemoryBehavioralModelStore):
         model_id = str(model_id)
         state_key = _ledger_state_key(scope, model_id)
         with self._lock:
-            if state_key in self._loaded:
+            if self._mutating and state_key in self._loaded:
                 return
             try:
                 payload = self._reader(_runtime_ledger_key(scope, model_id))
@@ -361,6 +362,8 @@ class RuntimeBehavioralModelStore(InMemoryBehavioralModelStore):
             if isinstance(payload, dict):
                 _validate_ledger_scope(payload, scope, model_id)
                 self._state[state_key] = deepcopy(payload)
+            else:
+                self._state.pop(state_key, None)
             self._loaded.add(state_key)
 
     def _persist(self, scope: AuthenticatedPhase4Scope, model_id: str) -> None:
@@ -386,9 +389,16 @@ class RuntimeBehavioralModelStore(InMemoryBehavioralModelStore):
             ) from exc
 
     def _with_persist(self, scope: AuthenticatedPhase4Scope, model_id: str, operation: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-        result = operation()
-        self._persist(scope, model_id)
-        return result
+        with self._lock:
+            self._load_ledger(scope, model_id)
+            was_mutating = self._mutating
+            self._mutating = True
+            try:
+                result = operation()
+                self._persist(scope, model_id)
+                return result
+            finally:
+                self._mutating = was_mutating
 
     def save_model(self, scope: AuthenticatedPhase4Scope, model: dict[str, Any], *, source_run_id: str) -> dict[str, Any]:
         model_id = _required_text(model, "model_id")

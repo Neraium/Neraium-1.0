@@ -579,6 +579,16 @@ def validate_environment_completeness(settings: Settings) -> None:
                 "for production API processes."
             )
 
+    runtime_database_url = parse_postgresql_url(
+        os.getenv("NERAIUM_RUNTIME_DATABASE_URL"), name="NERAIUM_RUNTIME_DATABASE_URL", allow_empty=True,
+    )
+    if app_env in {"prod", "production"}:
+        if not runtime_database_url:
+            raise ValueError("NERAIUM_RUNTIME_DATABASE_URL is required for shared production runtime state.")
+        sslmode = parse_qs(urlsplit(runtime_database_url).query).get("sslmode", [""])[-1]
+        if sslmode not in {"require", "verify-ca", "verify-full"}:
+            raise ValueError("NERAIUM_RUNTIME_DATABASE_URL must require TLS in production.")
+
     for label, email_name, password_name in (
         (
             "admin bootstrap",

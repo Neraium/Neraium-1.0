@@ -136,6 +136,34 @@ jobs:
           test "$(docker image inspect "$IMAGE_NAME" --format '{{.Config.User}}')" = "neraium"
           docker image inspect "$IMAGE_NAME" --format '{{json .Config.ExposedPorts}}' | grep '8080/tcp'
 
+      - name: Enable TLS on CI PostgreSQL
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          cert_dir="$(mktemp -d)"
+          trap 'rm -rf "$cert_dir"' EXIT
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "$cert_dir/server.key" -out "$cert_dir/server.crt" \
+            -days 1 -subj /CN=host.docker.internal >/dev/null 2>&1
+          docker cp "$cert_dir/server.key" "$POSTGRES_CONTAINER:/tmp/server.key"
+          docker cp "$cert_dir/server.crt" "$POSTGRES_CONTAINER:/tmp/server.crt"
+          docker exec "$POSTGRES_CONTAINER" sh -c 'chown postgres:postgres /tmp/server.key /tmp/server.crt && chmod 600 /tmp/server.key'
+          docker exec "$POSTGRES_CONTAINER" psql -U postgres -d neraium \
+            -c "ALTER SYSTEM SET ssl_cert_file = '/tmp/server.crt'" \
+            -c "ALTER SYSTEM SET ssl_key_file = '/tmp/server.key'" \
+            -c "ALTER SYSTEM SET ssl = 'on'" \
+            -c 'SELECT pg_reload_conf()'
+          for attempt in {1..30}; do
+            if docker exec "$POSTGRES_CONTAINER" psql \
+              'postgresql://postgres:postgres@127.0.0.1:5432/neraium?sslmode=require' \
+              -c 'SELECT 1'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
       - name: Start production container
         run: |
           set -euo pipefail
@@ -151,7 +179,8 @@ jobs:
             -e CORS_ORIGINS=https://app.neraium.com \
             -e CORS_ORIGIN_REGEX='^https://([a-z0-9-]+\.)?neraium\.com$' \
             -e NERAIUM_RUNTIME_DIR=/mnt/neraium-runtime \
-            -e NERAIUM_AUTH_DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/neraium \
+            -e NERAIUM_AUTH_DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/neraium?sslmode=require \
+            -e NERAIUM_RUNTIME_DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/neraium?sslmode=require \
             -e NERAIUM_API_TOKEN=docker-validation-token \
             -e NERAIUM_BOOTSTRAP_ADMIN_EMAIL=docker-validation-admin@example.com \
             -e NERAIUM_BOOTSTRAP_ADMIN_PASSWORD=docker-validation-password \
@@ -193,7 +222,15 @@ jobs:
           set -euo pipefail
           docker exec "$CONTAINER_NAME" sh -c 'pid1_uid="$(awk "/^Uid:/{print \$2}" /proc/1/status)"; echo "pid1_uid=${pid1_uid}"; test "$pid1_uid" != "0"; test "$(id -u)" != "0"'
           docker exec "$CONTAINER_NAME" sh -c 'test -w /app/app/runtime && test -w /mnt/neraium-runtime && test -w /var/log/neraium'
-          docker exec "$CONTAINER_NAME" sh -c 'test -f /mnt/neraium-runtime/runtime.db'
+          docker exec -i "$CONTAINER_NAME" python - <<'PY'
+          import os
+          import psycopg
+          with psycopg.connect(os.environ["NERAIUM_RUNTIME_DATABASE_URL"]) as conn:
+              assert conn.pgconn.ssl_in_use
+              for table in ("latest_payloads", "upload_queue", "evidence_runs"):
+                  qualified = f"neraium_runtime.{table}"
+                  assert conn.execute("SELECT to_regclass(%s)", (qualified,)).fetchone()[0] == qualified
+          PY
           docker exec "$CONTAINER_NAME" python -c 'import os, psycopg; conn = psycopg.connect(os.environ["NERAIUM_AUTH_DATABASE_URL"]); row = conn.execute("SELECT to_regclass('"'"'public.auth_users'"'"')").fetchone(); conn.close(); assert row and row[0] == "auth_users"'
           docker exec "$CONTAINER_NAME" python -c "import app.main, api.cognition_contracts, runtime.runtime_contracts, db.migrations.create_normalization_tables, cognition.structural_stability_index, evidence.evidence_lineage_engine, integrations.scada_adapter"
 

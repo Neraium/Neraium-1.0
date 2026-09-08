@@ -251,6 +251,7 @@ def test_production_api_accepts_managed_auth_database_secret(monkeypatch, tmp_pa
     monkeypatch.setenv("NERAIUM_AUTH_DATABASE_NAME", "postgres")
     monkeypatch.setenv("NERAIUM_AUTH_DATABASE_SSLMODE", "require")
 
+    monkeypatch.setenv("NERAIUM_RUNTIME_DATABASE_URL", "postgresql://runtime@database.example.test/runtime?sslmode=require")
     validate_environment_completeness(get_settings())
 
 
@@ -274,6 +275,7 @@ def test_production_worker_does_not_require_auth_database(monkeypatch, tmp_path)
     monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-state")
     monkeypatch.delenv("NERAIUM_AUTH_DATABASE_URL", raising=False)
 
+    monkeypatch.setenv("NERAIUM_RUNTIME_DATABASE_URL", "postgresql://runtime@database.example.test/runtime?sslmode=require")
     validate_environment_completeness(get_settings())
 
 
@@ -295,3 +297,15 @@ def test_partial_bootstrap_secret_pair_fails_fast(monkeypatch) -> None:
     settings = get_settings()
     with pytest.raises(ValueError, match="NERAIUM_BOOTSTRAP_ADMIN_PASSWORD"):
         validate_environment_completeness(settings)
+
+
+@pytest.mark.parametrize("url", ["", "sqlite:///runtime.db", "postgresql://runtime@db/runtime"])
+def test_production_rejects_missing_or_insecure_shared_runtime(monkeypatch, tmp_path, url):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("NERAIUM_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.neraium.com")
+    monkeypatch.setenv("NERAIUM_PROCESS_ROLE", "worker")
+    monkeypatch.setenv("NERAIUM_UPLOAD_STATE_BUCKET", "shared-state")
+    monkeypatch.setenv("NERAIUM_RUNTIME_DATABASE_URL", url)
+    with pytest.raises(ValueError, match="NERAIUM_RUNTIME_DATABASE_URL"):
+        validate_environment_completeness(get_settings())

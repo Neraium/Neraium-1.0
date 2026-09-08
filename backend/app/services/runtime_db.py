@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from app.core.config import get_settings
+from app.services import runtime_postgres
 from app.services.dataset_scope import (
     attach_dataset_scope,
     build_upload_queue_routing,
@@ -73,6 +74,10 @@ def ensure_runtime_dir() -> None:
 
 @contextmanager
 def db_connection() -> Iterator[sqlite3.Connection]:
+    if runtime_postgres.database_url():
+        with runtime_postgres.connect() as connection:
+            yield connection
+        return
     ensure_runtime_dir()
     connection = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     connection.row_factory = sqlite3.Row
@@ -89,6 +94,9 @@ def db_connection() -> Iterator[sqlite3.Connection]:
 
 
 def init_runtime_db() -> None:
+    if runtime_postgres.database_url():
+        runtime_postgres.initialize()
+        return
     with db_connection() as connection:
         connection.executescript(
             """
@@ -2071,6 +2079,7 @@ def _resolve_enqueue_routing(
     return existing_routing
 
 
+@runtime_postgres.shared_queue_transaction
 def enqueue_upload_job(
     job_id: str,
     *,
@@ -2178,6 +2187,7 @@ def enqueue_upload_job(
     logger.info("upload_queue_enqueued queue_backend=%s job_id=%s", backend, job_id)
 
 
+@runtime_postgres.shared_queue_transaction
 def claim_next_upload_job_record() -> dict[str, Any] | None:
     backend = upload_queue_backend()
     if backend == "s3":
@@ -2302,6 +2312,7 @@ def peek_next_upload_job_for_worker() -> str | None:
     return None if row is None else str(row["job_id"])
 
 
+@runtime_postgres.shared_queue_transaction
 def mark_queue_job_failed(job_id: str, reason: str) -> None:
     backend = upload_queue_backend()
     if backend == "s3":
@@ -2469,11 +2480,25 @@ def _publish_interrupted_upload_status(queue_records: list[dict[str, Any]]) -> d
     return terminal_outcomes
 
 
+def _shared_processing_job_is_stale(record: dict[str, Any]) -> bool:
+    try:
+        updated = datetime.fromisoformat(str(record.get("updated_at") or "").replace("Z", "+00:00"))
+        if updated.tzinfo is None:
+            return False
+        age = (datetime.now(UTC) - updated).total_seconds()
+    except ValueError:
+        return False  # Missing heartbeat evidence is not proof that ownership ended.
+    return age > get_settings().worker_heartbeat_timeout_seconds
+
+
+@runtime_postgres.shared_queue_transaction
 def clear_stale_processing_queue_jobs() -> int:
     backend = upload_queue_backend()
     if backend == "s3":
         _ensure_shared_upload_queue_backend()
         processing_jobs = _list_s3_queue_jobs(statuses={"processing"})
+        if runtime_postgres.database_url():
+            processing_jobs = [record for record in processing_jobs if _shared_processing_job_is_stale(record)]
         terminal_outcomes = _publish_interrupted_upload_status(processing_jobs)
         for record in processing_jobs:
             job_id = str(record.get("job_id") or "")
@@ -2498,9 +2523,10 @@ def clear_stale_processing_queue_jobs() -> int:
     init_runtime_db()
     with db_connection() as connection:
         rows = connection.execute(
-            "SELECT job_id FROM upload_queue WHERE status = 'processing'"
+            "SELECT job_id, updated_at FROM upload_queue WHERE status = 'processing'"
         ).fetchall()
-        stale_job_ids = [row["job_id"] for row in rows]
+        stale_job_ids = [row["job_id"] for row in rows
+                         if not runtime_postgres.database_url() or _shared_processing_job_is_stale(dict(row))]
     terminal_outcomes = _publish_interrupted_upload_status(
         [{"job_id": job_id} for job_id in stale_job_ids]
     )
@@ -2533,6 +2559,7 @@ def clear_stale_processing_queue_jobs() -> int:
     return len(terminal_outcomes)
 
 
+@runtime_postgres.shared_queue_transaction
 def complete_upload_queue_job(job_id: str, status: str, last_error: str | None = None) -> None:
     normalized_status = _require_upload_queue_status(status, {"completed", "failed"})
     backend = upload_queue_backend()
@@ -2569,6 +2596,7 @@ def complete_upload_queue_job(job_id: str, status: str, last_error: str | None =
         )
 
 
+@runtime_postgres.shared_queue_transaction
 def touch_upload_queue_job(job_id: str, status: str | None = None) -> None:
     normalized_status = (
         _require_upload_queue_status(status, {"processing"}) if status is not None else None
@@ -2842,6 +2870,10 @@ def read_latest_payload(key: str) -> Any | None:
 
 def read_latest_payload_pure(key: str) -> Any | None:
     """Read without initializing, migrating, creating, or writing the database."""
+    if runtime_postgres.database_url():
+        with runtime_postgres.connect(readonly=True) as connection:
+            row = connection.execute("SELECT payload_json FROM latest_payloads WHERE key = ?", (key,)).fetchone()
+        return json.loads(row["payload_json"]) if row is not None else None
     path = Path(DB_PATH)
     if not path.exists():
         return None
@@ -2875,6 +2907,12 @@ def list_latest_payloads_prefix(prefix: str) -> list[Any]:
 
 def list_latest_payloads_prefix_pure(prefix: str) -> list[Any]:
     """List immutable payloads without touching runtime schema or timestamps."""
+    if runtime_postgres.database_url():
+        with runtime_postgres.connect(readonly=True) as connection:
+            rows = connection.execute(
+                "SELECT payload_json FROM latest_payloads WHERE key LIKE ? ORDER BY key ASC", (f"{prefix}%",)
+            ).fetchall()
+        return [json.loads(row["payload_json"]) for row in rows]
     path = Path(DB_PATH)
     if not path.exists():
         return []
