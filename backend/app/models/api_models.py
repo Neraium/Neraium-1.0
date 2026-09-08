@@ -283,7 +283,8 @@ class EvidenceRunResponse(BaseModel):
     operating_state: str | None = None
     neraium_score: int | None = None
     drift_status: str | None = None
-    primary_drivers: list[str] = Field(default_factory=list)
+    # Parse historical records without serializing the retired product field.
+    primary_drivers: list[str] = Field(default_factory=list, exclude=True)
     evidence_summary: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

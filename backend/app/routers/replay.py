@@ -5,8 +5,8 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
-from app.core.config import get_settings
 from app.core.security import require_api_access
+from app.services.product_evidence_contract import product_evidence
 from app.services.upload_state_repository import read_replay_payload, resolve_upload_artifacts
 
 router = APIRouter(prefix="/replay", tags=["replay"], dependencies=[Depends(require_api_access)])
@@ -35,7 +35,7 @@ async def replay_timeline(
     canonical_result = artifacts.get("active_result") if isinstance(artifacts.get("active_result"), dict) else None
     replay_payload = artifacts.get("replay") if canonical_result else {}
     timeline = replay_payload.get("timeline", []) if isinstance(replay_payload, dict) else []
-    timeline = timeline if isinstance(timeline, list) else []
+    timeline = product_evidence(timeline) if isinstance(timeline, list) else []
     source = "uploaded" if timeline else "empty"
 
     if normalized_mode == "live_causal":
@@ -92,7 +92,7 @@ async def replay_by_job(job_id: ReplayJobId):
     payload = read_replay_payload(job_id)
     if not payload or not payload.get("timeline"):
         raise HTTPException(status_code=404, detail="Replay was not found.")
-    return payload
+    return product_evidence(payload)
 
 
 def _parse_timestamp(value: str, field: str) -> datetime:

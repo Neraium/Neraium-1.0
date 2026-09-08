@@ -21,6 +21,8 @@ _RETIRED = frozenset({
     "whyneraiumthinksithappened", "whyneraiumthinks",
     "likelydriver", "primarydriver", "primarydrivers", "driverattribution",
     "counterfactualdriverranking",
+    "projectedtimetofailure", "projectedtimetofailurehours",
+    "probabilityoffailure", "failureprobability", "remainingusefullife", "rul",
 })
 # Immutable measurements and human-authored history are not analytical conclusions.
 _PRESERVED = frozenset({

@@ -48,6 +48,8 @@ def assert_projected(projected, original):
 @pytest.mark.parametrize("key", [
     "attribution_confidence", "attributionConfidence", "causal_evidence", "causalEvidence",
     "driver_attribution", "driverAttribution", "cause_attribution", "causeAttribution",
+    "projected_time_to_failure", "projected_time_to_failure_hours", "failure_probability",
+    "probability_of_failure", "remaining_useful_life", "RUL",
 ])
 def test_product_boundary_omits_legacy_and_renamed_attribution_objects(key):
     original = {"nested": [{key: {"conclusion": "LEGACY_ATTRIBUTION"}, "correlation_delta": 0.7}]}
@@ -128,3 +130,24 @@ def test_historical_evidence_findings_and_exports_preserve_storage_and_consequen
     reloaded = runtime_db.read_evidence_run_db(record["run_id"])
     assert reloaded == stored
     assert result_digest(reloaded) == stored_hash
+
+
+def test_facility_intelligence_omits_legacy_predictions_without_mutating_evidence(monkeypatch):
+    from app.routers import facility
+    original = {
+        "sii_intelligence": {
+            "source": "uploaded", "rooms": [{"projected_time_to_failure_hours": 8}],
+            "failure_probability": 0.9,
+            "measurable_consequence": {"status": "not_quantifiable"},
+            "provenance": {"result_hash": "original"},
+        },
+    }
+    before = deepcopy(original)
+    monkeypatch.setattr(facility, "has_active_session_artifact", lambda _: True)
+    projected = facility.resolve_uploaded_intelligence(original, include_persisted=True)
+    assert projected == {
+        "source": "uploaded", "rooms": [{}],
+        "measurable_consequence": {"status": "not_quantifiable"},
+        "provenance": {"result_hash": "original"},
+    }
+    assert original == before
