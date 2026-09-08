@@ -31,6 +31,7 @@ DEFAULT_CONFIG = {
 def analyze_mode_conditioned_baseline(
     *,
     rows: list[dict[str, Any]],
+    reference_rows: list[dict[str, Any]] | None = None,
     numeric_columns: list[str],
     timestamp_column: str | None,
     telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
@@ -51,8 +52,12 @@ def analyze_mode_conditioned_baseline(
     split_index = max(1, min(len(rows) - 1, int(len(rows) * float(cfg["baseline_fraction"])))) if len(rows) >= 2 else 0
     historical_rows = rows[:split_index]
     recent_rows = rows[split_index:]
-    signals = context_signals(rows, timestamp_column, telemetry_signal_catalog) if rows else []
-    references = numeric_band_references(rows, signals)
+    if reference_rows is not None:
+        historical_rows, recent_rows = reference_rows, rows
+        split_index = 0
+    context_rows = historical_rows + recent_rows
+    signals = context_signals(context_rows, timestamp_column, telemetry_signal_catalog) if context_rows else []
+    references = numeric_band_references(context_rows, signals)
     recent_descriptor = describe_mode(recent_rows, signals, references, timestamp_column) if recent_rows else {
         "mode_id": "unavailable",
         "mode_label": "Operating context unavailable",
@@ -169,7 +174,7 @@ def analyze_mode_conditioned_baseline(
             "target_features": target_features,
             "selection": {
                 "historical_start_index": 0,
-                "historical_end_index_exclusive": split_index,
+                "historical_end_index_exclusive": len(historical_rows),
                 "recent_start_index": split_index,
                 "recent_end_index_exclusive": len(rows),
                 "selected_historical_indices": selected_indices,
@@ -243,7 +248,7 @@ def analyze_mode_conditioned_baseline(
         columns_used=numeric_columns,
         assumptions=[
             "Only exact matches across every available explicit recent-mode feature are selected.",
-            "Selected baseline rows precede every recent comparison row.",
+            "Selected baseline rows come from the supplied reference." if reference_rows is not None else "Selected baseline rows precede every recent comparison row.",
             "Relationships remain non-causal Pearson evidence.",
         ],
         output_metrics=metrics,
@@ -261,7 +266,7 @@ def analyze_mode_conditioned_baseline(
         "target_features": target_features,
         "selection": {
             "historical_start_index": 0,
-            "historical_end_index_exclusive": split_index,
+            "historical_end_index_exclusive": len(historical_rows),
             "recent_start_index": split_index,
             "recent_end_index_exclusive": len(rows),
             "selected_historical_indices": selected_indices,

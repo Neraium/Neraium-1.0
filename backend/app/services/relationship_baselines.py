@@ -428,6 +428,7 @@ def build_relationship_baseline(
     *,
     total_row_count: int | None = None,
     raw_signal_count: int | None = None,
+    reference_rows: list[dict[str, Any]] | None = None,
     baseline_window_limit: int = 12000,
     recent_window_limit: int = 6000,
     max_relationship_columns: int = 32,
@@ -548,8 +549,8 @@ def build_relationship_baseline(
         }
 
     baseline_count = max(6, int(len(rows) * 0.7))
-    baseline_rows = rows[:baseline_count]
-    recent_rows = rows[baseline_count:]
+    baseline_rows = rows[:baseline_count] if reference_rows is None else reference_rows
+    recent_rows = rows[baseline_count:] if reference_rows is None else rows
 
     sampled_for_baseline = False
     if len(baseline_rows) > baseline_window_limit:
@@ -565,8 +566,8 @@ def build_relationship_baseline(
     candidates: list[dict[str, Any]] = []
     graph_edges: list[dict[str, Any]] = []
     baseline_drift_by_column = _baseline_drift_lookup(baseline_analysis)
-    baseline_rows_for_relationships = rows_for_relationships[:baseline_count]
-    recent_rows_for_relationships = rows_for_relationships[baseline_count:]
+    baseline_rows_for_relationships = rows_for_relationships[:baseline_count] if reference_rows is None else reference_rows
+    recent_rows_for_relationships = rows_for_relationships[baseline_count:] if reference_rows is None else rows_for_relationships
     if len(baseline_rows_for_relationships) > baseline_window_limit:
         baseline_rows_for_relationships = baseline_rows_for_relationships[:baseline_window_limit]
     if len(recent_rows_for_relationships) > recent_window_limit:

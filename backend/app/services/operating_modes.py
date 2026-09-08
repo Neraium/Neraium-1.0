@@ -52,6 +52,7 @@ def assess_operating_modes(
     timestamp_column: str | None = None,
     telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
     baseline_fraction: float = 0.7,
+    reference_rows: list[dict[str, Any]] | None = None,
     progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Compare baseline and recent operating context with deterministic rules."""
@@ -69,6 +70,9 @@ def assess_operating_modes(
     recent_population = rows[split_index:]
     baseline_rows = baseline_population[:12000]
     recent_rows = recent_population[-6000:]
+    if reference_rows is not None:
+        baseline_rows, recent_rows = reference_rows, rows
+        baseline_population, recent_population = reference_rows, rows
     context_rows = [*baseline_rows, *recent_rows]
     signals = context_signals(context_rows, timestamp_column, telemetry_signal_catalog)
     references = numeric_band_references(context_rows, signals)
@@ -120,7 +124,7 @@ def assess_operating_modes(
         "reasons": reasons,
         "known_operational_change": bool(material),
         "sampled_context": len(context_rows) < len(rows),
-        "population_rows": len(rows),
+        "population_rows": len(rows) + (len(reference_rows) if reference_rows is not None else 0),
         "assessed_rows": len(context_rows),
         "assessment_method": "deterministic_telemetry_context_v1",
     }

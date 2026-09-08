@@ -30,6 +30,7 @@ DEFAULT_CONFIG = {
 def estimate_empirical_thresholds(
     *,
     rows: list[dict[str, Any]],
+    reference_rows: list[dict[str, Any]] | None = None,
     numeric_columns: list[str],
     relationship_columns: list[str] | None = None,
     config: dict[str, Any] | None = None,
@@ -45,7 +46,7 @@ def estimate_empirical_thresholds(
     started = time.perf_counter()
     cfg = {**DEFAULT_CONFIG, **(config or {})}
     split_index = max(0, min(len(rows), int(len(rows) * float(cfg["baseline_fraction"]))))
-    baseline_rows = rows[:split_index]
+    baseline_rows = rows[:split_index] if reference_rows is None else reference_rows
     minimum_rows = int(cfg["minimum_baseline_rows"])
     fixed_relationship = float(cfg["fixed_relationship_change_threshold"])
     limitations: list[str] = []
@@ -154,8 +155,8 @@ def estimate_empirical_thresholds(
     reason = None if status == "complete" else "insufficient_baseline_for_empirical_thresholds"
     metrics = {
         "fit_rows": len(baseline_rows),
-        "fit_end_index_exclusive": split_index,
-        "active_rows_excluded_from_fit": len(rows) - split_index,
+        "fit_end_index_exclusive": len(baseline_rows),
+        "active_rows_excluded_from_fit": len(rows) - split_index if reference_rows is None else len(rows),
         "learned_signal_threshold_count": learned_signal_count,
         "fallback_signal_threshold_count": fallback_signal_count,
         "relationship_change_threshold": relationship["threshold"],
@@ -182,9 +183,9 @@ def estimate_empirical_thresholds(
         "method": "baseline_only_robust_empirical_thresholds_v1",
         "fit_window": {
             "start_index": 0,
-            "end_index_exclusive": split_index,
+            "end_index_exclusive": len(baseline_rows),
             "rows": len(baseline_rows),
-            "active_rows_excluded": len(rows) - split_index,
+            "active_rows_excluded": len(rows) - split_index if reference_rows is None else len(rows),
         },
         "signal_thresholds": signal_thresholds,
         "relationship_change": {**relationship, "columns_used": list(relationship_fit_columns)},

@@ -25,6 +25,8 @@ def build_baseline_analysis(
     rows: list[list[str]],
     numeric_profiles: list[dict[str, Any]],
     telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
+    *,
+    reference_rows: list[list[str]] | None = None,
 ) -> dict[str, Any]:
     warnings: list[str] = []
     signal_catalog = telemetry_catalog_by_column(telemetry_signal_catalog)
@@ -54,9 +56,14 @@ def build_baseline_analysis(
     cumulative_counters = detect_cumulative_counters_from_matrix(columns, rows, numeric_columns)
     cumulative_counter_columns = {item["column"] for item in cumulative_counters}
     numeric_indexes = [index for index, column in enumerate(columns) if column in numeric_columns]
-    adaptive_baseline = select_adaptive_baseline_window(rows, numeric_indexes, baseline_window_size, recent_window_size)
-    baseline_rows = rows[adaptive_baseline["start_index"]:adaptive_baseline["end_index"]]
-    recent_rows = rows[-recent_window_size:]
+    if reference_rows is None:
+        adaptive_baseline = select_adaptive_baseline_window(rows, numeric_indexes, baseline_window_size, recent_window_size)
+        baseline_rows = rows[adaptive_baseline["start_index"]:adaptive_baseline["end_index"]]
+        recent_rows = rows[-recent_window_size:]
+    else:
+        baseline_rows, recent_rows = reference_rows, rows
+        baseline_window_size, recent_window_size = len(reference_rows), len(rows)
+        adaptive_baseline = {"method": "supplied_reference", "start_index": 0, "end_index": len(reference_rows)}
     regime_context = classify_operating_regime(rows, numeric_indexes)
     column_drift: list[dict[str, Any]] = []
 
@@ -144,7 +151,7 @@ def build_baseline_analysis(
                 "warnings": column_warnings + informational_warnings,
             }
         )
-        if metric_type == "cumulative_counter":
+        if metric_type == "cumulative_counter" and reference_rows is None:
             delta_drift = cumulative_delta_drift(
                 column=column,
                 rows=rows,
