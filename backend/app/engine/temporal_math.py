@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from math import isfinite, log
 from typing import Any
 
@@ -25,6 +26,7 @@ def evaluate_temporal_math(
     timestamp_column: str | None,
     config: TemporalMathConfig | None = None,
     reference_rows: list[list[str]] | None = None,
+    source_clock: bool = False,
     progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     started = __import__("time").perf_counter()
@@ -128,6 +130,16 @@ def evaluate_temporal_math(
         rows=rows[-matrix.shape[0]:],
         columns=columns,
     )
+
+    if source_clock:
+        lead_time['timing_basis'] = 'direct_source_clock_datetime_differences'
+        lead_time['seconds_since_comparison_start'] = None
+        lead_time['seconds_to_comparison_end'] = None
+        if lead_time['timestamp'] is not None:
+            timestamp_index = columns.index(timestamp_column)
+            onset = datetime.fromisoformat(lead_time['timestamp'])
+            lead_time['seconds_since_comparison_start'] = (onset - datetime.fromisoformat(rows[0][timestamp_index])).total_seconds()
+            lead_time['seconds_to_comparison_end'] = (datetime.fromisoformat(rows[-1][timestamp_index]) - onset).total_seconds()
 
     mark("lead_time", 12)
     return {

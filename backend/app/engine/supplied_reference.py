@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from datetime import datetime
 from typing import Any
 
@@ -12,6 +13,13 @@ from app.engine.temporal_math import TemporalMathConfig
 from app.services.cumulative_counters import is_cumulative_counter_name
 
 MAX_PAIRED_ROWS = 12000
+SOURCE_CLOCK_MODE = 'naive_historical_source_clock'
+SOURCE_CLOCK_FORMAT = '%Y-%m-%d %H:%M:%S'
+SOURCE_CLOCK_PATTERN = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}')
+SOURCE_CLOCK_LIMITATION = (
+    'timezone_not_supplied: Timing is relative to the supplied source clock; '
+    'absolute UTC instants, timezone offset, and daylight-saving interpretation are not established.'
+)
 
 
 def prepare_supplied_reference(*, columns, reference_rows, comparison_rows,
@@ -50,10 +58,12 @@ def prepare_supplied_reference(*, columns, reference_rows, comparison_rows,
     cfg['numeric_columns'] = signals
     prepared = []
     provenance: dict[str, Any] = {'contract_version': 'supplied-reference-v1', 'signal_units': dict(signal_units), 'signals': signals}
+    pair_mode = None
     for role, rows in [('reference', reference_rows), ('comparison', comparison_rows)]:
         if not isinstance(rows, list) or not 16 <= len(rows) <= min(MAX_PAIRED_ROWS, temporal.max_rows):
             raise ValueError(f'paired_{role}_requires_16_to_{min(MAX_PAIRED_ROWS, temporal.max_rows)}_rows')
         prior_time = None
+        dataset_mode = None
         for row in rows:
             if not isinstance(row, dict) or set(row) != set(columns):
                 raise ValueError(f'paired_{role}_row_schema_mismatch')
@@ -71,15 +81,29 @@ def prepare_supplied_reference(*, columns, reference_rows, comparison_rows,
                 value = row[timestamp_column]
                 try:
                     parsed = datetime.fromisoformat(value.replace('Z', '+00:00')) if isinstance(value, str) else None
-                    if parsed is None or parsed.tzinfo is None or (prior_time is not None and parsed <= prior_time):
+                    if parsed is None:
                         raise ValueError()
+                    mode = 'timezone_aware' if parsed.tzinfo is not None else SOURCE_CLOCK_MODE
+                    if mode == SOURCE_CLOCK_MODE and not SOURCE_CLOCK_PATTERN.fullmatch(value):
+                        raise ValueError()
+                    if dataset_mode is not None and mode != dataset_mode:
+                        raise ValueError()
+                    if prior_time is not None and (parsed - prior_time).total_seconds() <= 0:
+                        raise ValueError()
+                    dataset_mode = mode
                 except (ValueError, TypeError):
-                    raise ValueError(f'paired_{role}_requires_ordered_timezone_aware_timestamps') from None
+                    requirement = 'source_clock' if dataset_mode == SOURCE_CLOCK_MODE else 'timezone_aware'
+                    raise ValueError(f'paired_{role}_requires_ordered_{requirement}_timestamps') from None
                 prior_time = parsed
+        if pair_mode is not None and dataset_mode != pair_mode:
+            raise ValueError('paired_timestamp_modes_must_match')
+        pair_mode = dataset_mode
         digest = hashlib.sha256(json.dumps({'columns': columns, 'units': signal_units, 'rows': rows}, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
         provenance[role] = {'role': role, 'dataset_id': f'sha256:{digest}', 'input_hash': digest,
                             'row_count': len(rows), 'row_start': 1, 'row_end': len(rows),
                             'time_start': rows[0].get(timestamp_column), 'time_end': rows[-1].get(timestamp_column)}
+        if dataset_mode == SOURCE_CLOCK_MODE:
+            provenance[role]['source_timestamps'] = [row[timestamp_column] for row in rows]
         dict_rows, matrix = normalize_rows(columns, rows)
         for index, row in enumerate(dict_rows, 1):
             row['__source_row_number'] = index
@@ -93,6 +117,13 @@ def prepare_supplied_reference(*, columns, reference_rows, comparison_rows,
         'Elapsed persistence retains the existing terminal-sample median-interval convention.',
         'Temporal lead-time estimates are heuristic evidence, not a verified event or failure prediction.',
     ]
+    if pair_mode == SOURCE_CLOCK_MODE:
+        provenance['contract_version'] = 'supplied-reference-v1.1'
+        provenance['timestamp_mode'] = SOURCE_CLOCK_MODE
+        provenance['timestamp_format'] = SOURCE_CLOCK_FORMAT
+        provenance['source_timezone'] = {'status': 'timezone_not_supplied', 'value': None}
+        provenance['timing_basis'] = 'direct_source_clock_datetime_differences'
+        provenance['limitations'].append(SOURCE_CLOCK_LIMITATION)
     if timestamp_column is None:
         provenance['limitations'].append('No timestamps supplied; elapsed persistence and timestamp onset are unavailable.')
     return prepared[0], prepared[1], cfg, provenance

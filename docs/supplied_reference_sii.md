@@ -51,13 +51,41 @@ Reference rows never enter comparison history or its persistence clock.
 Temporal active rows cover the whole comparison; temporal timestamp indexes
 start at comparison row zero. Fixed and adaptive persistence use all comparison
 rows. Adaptive persistence retains its existing convention of crediting the
-terminal sample one median interval. Timestamps must be strictly increasing,
-timezone-aware ISO strings within each dataset; reference and comparison may
-have independent or overlapping date ranges. They are never joined into a
-synthetic timeline. Uneven intervals retain existing elapsed-time handling.
+terminal sample one median interval. Timestamps must be strictly increasing
+and unique within each dataset. Existing timezone-aware ISO support and its
+`supplied-reference-v1` output are unchanged. Alternatively, both datasets may
+use the exact naive format `YYYY-MM-DD HH:MM:SS` (zero-padded, second precision,
+valid calendar dates). This automatically selects the explicit
+`naive_historical_source_clock` mode and `supplied-reference-v1.1` output.
+No other naive formats are accepted: date-only values, alternate separators,
+fractional seconds, ambiguous date strings, and numeric epochs without units
+are rejected. Aware and naive values cannot mix within or between datasets.
+Reference and comparison may have independent or overlapping date ranges. They
+are never joined into a synthetic timeline. Uneven intervals retain existing elapsed-time handling.
 Without a timestamp column, elapsed evidence is explicitly limited to row
 support. Temporal onset/lead-time output remains heuristic evidence, not a
 verified physical event or a failure-time prediction.
+
+For source-clock mode, ordering, cadence, duration, persistence, onset offsets,
+and multiscale windows use direct naive datetime differences. No timezone is
+attached and no source timestamp is converted to an absolute instant. The runner
+receives seconds since the first comparison sample, explicitly labeled
+`source_clock_seconds_since_comparison_start` in its result and latest state,
+with the exact `source_clock_origin`. Temporal onset retains the source string
+and adds `seconds_since_comparison_start` and `seconds_to_comparison_end`;
+these are comparison-relative offsets, not a predicted event duration. They
+remain null if no onset is supported.
+
+Source-clock provenance includes `timestamp_format: "%Y-%m-%d %H:%M:%S"`,
+`timing_basis: "direct_source_clock_datetime_differences"`, and
+`source_timezone: {"status": "timezone_not_supplied", "value": null}`.
+Each role retains every exact input string in `source_timestamps`, in addition
+to the existing original bounds, source-row annotations, and content hash.
+The same provenance is carried into governed `sii_evidence`. Its explicit
+`timezone_not_supplied` limitation states that timing is relative to the
+supplied source clock and that absolute UTC instants, timezone offset, and
+daylight-saving interpretation are not established. A clock jump is used as
+supplied; it is never repaired or interpreted as daylight saving.
 
 ## Safe failure and read-only behavior
 
