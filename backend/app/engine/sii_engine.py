@@ -98,6 +98,7 @@ def evaluate_sii(
         rows = comparison[0]
     elif signal_units is not None:
         raise ValueError("signal_units_requires_supplied_reference")
+    source_clock = paired and paired_provenance.get('timestamp_mode') == 'naive_historical_source_clock'
     performance_caches_enabled = not bool(cfg.get("disable_performance_caches"))
     column_names = [str(column) for column in columns]
     profile_list = [dict(item) for item in numeric_profiles if isinstance(item, dict)]
@@ -586,6 +587,7 @@ def evaluate_sii(
             )
         effective_temporal_config = temporal_config or TemporalMathConfig()
         temporal_analysis = evaluate_temporal_math(
+            **({'source_clock': True} if source_clock else {}),
             **({"reference_rows": reference_matrix_rows} if paired else {}),
             columns=column_names,
             rows=matrix_rows,
@@ -633,6 +635,7 @@ def evaluate_sii(
         multiscale_numeric_cache = NumericRowCache() if performance_caches_enabled else None
         multiscale_config = dict(cfg.get("multiscale_config") or {}) if isinstance(cfg.get("multiscale_config"), dict) else {}
         multiscale_analysis = analyze_multiscale(
+            **({'source_clock': True} if source_clock else {}),
             rows=dict_rows,
             numeric_columns=numeric_columns_used,
             timestamp_column=timestamp_column,
@@ -739,6 +742,7 @@ def evaluate_sii(
     try:
         attempted.append("covariance_analysis")
         runner_result = run_sii_runner(
+            **({'source_clock': True} if source_clock else {}),
             **({"reference_rows": reference_matrix_rows} if paired else {}),
             columns=column_names,
             rows=matrix_rows,

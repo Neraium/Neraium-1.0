@@ -175,3 +175,171 @@ def test_reference_fitting_and_like_mode_provenance_exclude_comparison():
     assert mode['selection']['historical_end_index_exclusive'] == 64
     assert mode['selection']['recent_start_index'] == 0
     assert mode['selection']['recent_rows'] == 64
+
+
+def source_clock_contract(count=64, start=datetime(2026, 6, 1)):
+    args = contract(count)
+    for role, offset in [('reference', -90), ('comparison', 0)]:
+        for i, row in enumerate(args[f'{role}_rows']):
+            row['timestamp'] = (start + timedelta(days=offset, minutes=15 * i)).strftime('%Y-%m-%d %H:%M:%S')
+    return args
+
+
+def test_source_clock_contract_provenance_and_timing(monkeypatch):
+    from app.services import sii_runner
+    monkeypatch.setattr(sii_runner, 'write_latest_sii_state', lambda *_a, **_k: pytest.fail('paired evaluation wrote state'))
+    args = source_clock_contract()
+    original = deepcopy(args)
+    reference, comparison, _, provenance = prepare(args)
+    assert args == original
+    for role, prepared in [('reference', reference), ('comparison', comparison)]:
+        supplied = [r['timestamp'] for r in args[f'{role}_rows']]
+        assert provenance[role]['source_timestamps'] == supplied
+        assert [r['__source_timestamp'] for r in prepared[0]] == supplied
+        assert [r[0] for r in prepared[1]] == supplied
+    assert provenance['contract_version'] == 'supplied-reference-v1.1'
+    assert provenance['timestamp_mode'] == 'naive_historical_source_clock'
+    assert provenance['source_timezone'] == {'status': 'timezone_not_supplied', 'value': None}
+    assert provenance['timing_basis'] == 'direct_source_clock_datetime_differences'
+    assert any('timezone_not_supplied' in s and 'absolute UTC instants' in s
+               and 'timezone offset' in s and 'daylight-saving interpretation' in s
+               and 'not established' in s for s in provenance['limitations'])
+    result = evaluate_sii(**args)
+    assert args == original
+    assert result['processing_trace']['modules_failed'] == []
+    governed = result['analysis_result']['sii_evidence']['supplied_reference']
+    assert governed == result['supplied_reference']
+    assert {key: governed[key] for key in provenance} == provenance
+    persistence = result['persistence_analysis']['adaptive_persistence']
+    assert persistence['elapsed_time_available']
+    assert persistence['sampling_regular']
+    assert persistence['timestamp_profile']['median_interval_seconds'] == 900
+    assert persistence['observed_duration_seconds'] == 64 * 900  # Terminal sample credit.
+    assert {d['column'] for d in persistence['details']} == {'pressure', 'power'}
+    for detail in persistence['details']:
+        assert detail['supporting_duration_seconds'] == 64 * 900
+        assert detail['longest_continuous_support_seconds'] == 64 * 900
+    onset = result['temporal_analysis']['lead_time_estimate']
+    supplied = provenance['comparison']['source_timestamps']
+    onset_index = supplied.index(onset['timestamp'])
+    assert onset['seconds_since_comparison_start'] == onset_index * 900
+    assert onset['seconds_to_comparison_end'] == (63 - onset_index) * 900
+    runner = result['compatibility']['sii_runner_result']
+    assert runner['timestamp_basis'] == 'source_clock_seconds_since_comparison_start'
+    assert runner['source_clock_origin'] == supplied[0]
+    assert runner['latest_state']['timestamp'] == 63 * 900
+
+
+@pytest.mark.parametrize('role', ['reference', 'comparison'])
+@pytest.mark.parametrize('invalid', [
+    '06/01/2026 00:15:00', '01/06/2026 00:15:00', '2026-06-01',
+    '2026-06-01T00:15:00', '2026-06-01 00:15:00.000',
+    '2026-02-30 00:15:00', '2026-06-01 00:15:00+00:00',
+    '1780272900', 1780272900, 1780272900000,
+])
+def test_source_clock_rejects_invalid_or_mixed_timestamps(role, invalid):
+    args = source_clock_contract(16)
+    args[f'{role}_rows'][1]['timestamp'] = invalid
+    with pytest.raises(ValueError, match=f'paired_{role}_requires_ordered'):
+        prepare(args)
+
+
+@pytest.mark.parametrize('role', ['reference', 'comparison'])
+@pytest.mark.parametrize('duplicate', [False, True])
+def test_source_clock_rejects_unordered_or_duplicate_timestamps(role, duplicate):
+    args = source_clock_contract(16)
+    rows = args[f'{role}_rows']
+    if duplicate:
+        rows[1]['timestamp'] = rows[0]['timestamp']
+    else:
+        rows[0], rows[1] = rows[1], rows[0]
+    with pytest.raises(ValueError, match=f'paired_{role}_requires_ordered'):
+        prepare(args)
+
+
+@pytest.mark.parametrize('naive_role', ['reference', 'comparison'])
+def test_pair_rejects_different_timestamp_modes(naive_role):
+    args = contract(16)
+    args[f'{naive_role}_rows'] = source_clock_contract(16)[f'{naive_role}_rows']
+    with pytest.raises(ValueError, match='paired_timestamp_modes_must_match'):
+        prepare(args)
+
+
+def test_aware_contract_keeps_existing_timing_and_provenance():
+    args = contract()
+    _, _, _, provenance = prepare(args)
+    assert provenance['contract_version'] == 'supplied-reference-v1'
+    assert 'timestamp_mode' not in provenance
+    assert 'source_timezone' not in provenance
+    result = evaluate_sii(**args)
+    persistence = result['persistence_analysis']['adaptive_persistence']
+    assert persistence['timestamp_profile']['median_interval_seconds'] == 60
+    assert persistence['observed_duration_seconds'] == 64 * 60
+    assert 'seconds_since_comparison_start' not in result['temporal_analysis']['lead_time_estimate']
+    runner = result['compatibility']['sii_runner_result']
+    assert 'timestamp_basis' not in runner
+    assert runner['latest_state']['timestamp'] == datetime.fromisoformat(args['comparison_rows'][-1]['timestamp']).timestamp()
+
+
+@pytest.mark.parametrize('start', [datetime(2026, 3, 7, 12), datetime(2026, 10, 31, 12)])
+def test_source_clock_results_are_host_timezone_independent(monkeypatch, start):
+    import os
+    import time
+    if not hasattr(time, 'tzset'):
+        pytest.skip('Requires POSIX tzset')
+    args = source_clock_contract(start=start)
+    original_tz = os.environ.get('TZ')
+    snapshots = []
+    try:
+        for zone in ['UTC0', 'EST5EDT,M3.2.0/2,M11.1.0/2', 'JST-9']:
+            monkeypatch.setenv('TZ', zone)
+            time.tzset()
+            result = evaluate_sii(**args)
+            assert result['processing_trace']['modules_failed'] == []
+            persistence = result['persistence_analysis']['adaptive_persistence']
+            assert persistence['observed_duration_seconds'] == 64 * 900
+            # The six-hour window itself crosses the host's spring/fall transition.
+            six_hours = next(s for s in result['multiscale_analysis']['scales'] if s['name'] == '6_hours')
+            assert six_hours['active_rows'] == 24
+            assert six_hours['baseline_rows'] == 40
+            assert six_hours['actual_active_span_seconds'] == 23 * 900
+            snapshots.append({
+                'provenance': result['supplied_reference'],
+                'onset': result['temporal_analysis']['lead_time_estimate'],
+                'cadence': persistence['timestamp_profile'],
+                'duration': persistence['observed_duration_seconds'],
+                'scales': result['multiscale_analysis']['scales'],
+                'runner_timestamp': result['compatibility']['sii_runner_result']['latest_state']['timestamp'],
+            })
+    finally:
+        if original_tz is None:
+            monkeypatch.delenv('TZ', raising=False)
+        else:
+            monkeypatch.setenv('TZ', original_tz)
+        time.tzset()
+    assert snapshots[0] == snapshots[1] == snapshots[2]
+
+
+def test_source_clock_delayed_onset_uses_comparison_clock_only():
+    args = source_clock_contract()
+    for i in range(32):
+        for column in ['flow', 'pressure', 'power']:
+            args['comparison_rows'][i][column] = args['reference_rows'][i][column]
+    reference, comparison, cfg, _ = prepare(args)
+    result = evaluate_temporal_math(
+        columns=args['columns'], rows=comparison[1], reference_rows=reference[1],
+        numeric_profiles=args['numeric_profiles'], timestamp_column='timestamp',
+        config=cfg['temporal_config'], source_clock=True,
+    )
+    onset = result['lead_time_estimate']
+    assert onset['timestamp'] == '2026-06-01 08:00:00'
+    assert onset['seconds_since_comparison_start'] == 32 * 900
+    assert onset['seconds_to_comparison_end'] == 31 * 900
+
+
+@pytest.mark.parametrize('role', ['reference', 'comparison'])
+def test_aware_dataset_rejects_naive_timestamp(role):
+    args = contract(16)
+    args[f'{role}_rows'][1]['timestamp'] = '2026-06-01 00:15:00'
+    with pytest.raises(ValueError, match=f'paired_{role}_requires_ordered_timezone_aware_timestamps'):
+        prepare(args)

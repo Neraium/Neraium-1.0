@@ -47,6 +47,7 @@ def analyze_multiscale(
     rows: list[dict[str, Any]],
     numeric_columns: list[str],
     timestamp_column: str | None,
+    source_clock: bool = False,
     empirical_thresholds: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
     progress_callback: Any | None = None,
@@ -137,17 +138,23 @@ def analyze_multiscale(
         limitations.append("Signal columns were bounded by the configured multiscale runtime limit.")
 
     for scale_index, spec in enumerate(scale_specs, start=1):
-        cutoff = latest.timestamp() - float(spec["seconds"])
-        current_indices = [
-            index
-            for index, timestamp in valid_pairs
-            if cutoff < timestamp.timestamp() <= latest.timestamp()
-        ]
-        baseline_indices = [
-            index
-            for index, timestamp in valid_pairs
-            if timestamp.timestamp() <= cutoff
-        ]
+        if source_clock:
+            current_indices = [index for index, timestamp in valid_pairs
+                               if 0 <= (latest - timestamp).total_seconds() < float(spec['seconds'])]
+            baseline_indices = [index for index, timestamp in valid_pairs
+                                if (latest - timestamp).total_seconds() >= float(spec['seconds'])]
+        else:
+            cutoff = latest.timestamp() - float(spec["seconds"])
+            current_indices = [
+                index
+                for index, timestamp in valid_pairs
+                if cutoff < timestamp.timestamp() <= latest.timestamp()
+            ]
+            baseline_indices = [
+                index
+                for index, timestamp in valid_pairs
+                if timestamp.timestamp() <= cutoff
+            ]
         start_time = parsed[current_indices[0]] if current_indices else None
         end_time = parsed[current_indices[-1]] if current_indices else None
         actual_span = (end_time - start_time).total_seconds() if start_time and end_time else 0.0

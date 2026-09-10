@@ -423,6 +423,7 @@ def run_sii_runner(
     timestamp_column: str | None,
     primary_room: str,
     reference_rows: list[list[str]] | None = None,
+    source_clock: bool = False,
     driver_attribution: dict[str, Any],
     engine_result: dict[str, Any],
     processing_trace: dict[str, Any],
@@ -474,12 +475,21 @@ def run_sii_runner(
             raise ValueError("incompatible_reference_sensor_vectors")
         adapter_kwargs["reference_vectors"] = np.asarray(reference["vectors"], dtype=float)
     adapter = _SII_ENGINE_ADAPTER(baseline_window=baseline_window, recent_window=baseline_window, **adapter_kwargs)
+    source_clock_origin = None
+    if source_clock:
+        source_clock_origin = datetime.fromisoformat(rows[0][columns.index(timestamp_column)])
+        base_result['timestamp_basis'] = 'source_clock_seconds_since_comparison_start'
+        base_result['source_clock_origin'] = rows[0][columns.index(timestamp_column)]
     states: list[dict[str, Any]] = []
     run_id = f"upload-{datetime.now(UTC).timestamp()}"
 
     try:
         for index, vector in enumerate(vector_rows["vectors"]):
-            timestamp = parse_timestamp(columns, rows[vector_rows["row_indexes"][index]], timestamp_column, index)
+            source_row = rows[vector_rows["row_indexes"][index]]
+            if source_clock_origin is not None:
+                timestamp = (datetime.fromisoformat(source_row[columns.index(timestamp_column)]) - source_clock_origin).total_seconds()
+            else:
+                timestamp = parse_timestamp(columns, source_row, timestamp_column, index)
             state = adapter.ingest(
                 sensor_vector=np.asarray(vector, dtype=float),
                 timestamp=timestamp,
@@ -494,6 +504,9 @@ def run_sii_runner(
         return base_result
 
     latest_state = states[-1]
+    if source_clock:
+        latest_state['timestamp_basis'] = base_result['timestamp_basis']
+        latest_state['source_clock_origin'] = base_result['source_clock_origin']
     projected_hours = project_time_to_failure_hours_from_state(latest_state)
     instability_index = build_instability_index(latest_state)
     latest_state = {
