@@ -1,7 +1,96 @@
+import pytest
+
 from app.services.telemetry_classification import (
     build_telemetry_signal_catalog,
     classify_telemetry_signal,
 )
+
+
+def test_zone_temperature_is_numeric_equipment_process_telemetry() -> None:
+    column = "AHU3_Zone_Temp_F"
+    values = [60.0 + index / 100 for index in range(575)]
+    profile = {
+        "column": column,
+        "min": min(values),
+        "max": max(values),
+        "unique_values": values,
+        "constant_or_stuck": False,
+    }
+
+    classification = classify_telemetry_signal(column, numeric_profile=profile)
+    assert classification["category"] == "equipment_process"
+    assert classification["structural_class"] == "Equipment Process Variable"
+    assert classification["analysis_role"] == "primary_signal"
+    assert classification["operator_primary_eligible"] is True
+    assert classification["is_ignored"] is False
+    assert classify_telemetry_signal(column) == classification
+    catalog = build_telemetry_signal_catalog([column], numeric_profiles=[profile])
+    assert catalog[column]["telemetry_classification"] == classification
+
+
+@pytest.mark.parametrize(
+    ("column", "category"),
+    [
+        ("AHU1_Zone_Temperature_C", "equipment_process"),
+        ("zone_temp_f", "equipment_process"),
+        ("Zone Temperature (F)", "equipment_process"),
+        ("AHU2-Zone-Humidity-Pct", "equipment_process"),
+        ("zone_relative_humidity", "equipment_process"),
+        ("zone_rh_pct", "equipment_process"),
+        ("zone_pressure_pa", "equipment_process"),
+        ("zone_airflow_cfm", "equipment_process"),
+        ("zone_temperature_setpoint_f", "setpoint"),
+        ("AHU2_Zone_Temp_SP_F", "setpoint"),
+        ("zone_humidity_set_point", "setpoint"),
+        ("zone_setpoint", "setpoint"),
+    ],
+)
+def test_zone_measurements_and_setpoints_remain_telemetry(column: str, category: str) -> None:
+    classification = classify_telemetry_signal(column)
+
+    assert classification["category"] == category
+    assert classification["is_ignored"] is False
+
+
+@pytest.mark.parametrize(
+    "column",
+    [
+        "zone",
+        "AHU3_Zone",
+        "zone_identifier",
+        "zone_id",
+        "AHU3_Zone_ID",
+        "Zone Name",
+        "AHU3_Zone_Name",
+        "zone_code",
+        "zone_number",
+        "zone_code_value",
+        "zone_temp_sensor_id",
+        "zone_humidity_identifier",
+        "zone_temperature_name",
+        "zone_setpoint_uuid",
+        "zone_sensor_serial",
+        "asset_id",
+        "sensor_uuid",
+        "sensor_serial",
+        "sensor_identifier",
+        "equipment_code",
+        "asset",
+        "site",
+        "facility",
+        "room",
+        "location",
+        "area",
+    ],
+)
+@pytest.mark.parametrize("numeric_profile", [{}, {"unique_values": [101, 102, 103]}])
+def test_identifier_fields_remain_ignored(column: str, numeric_profile: dict) -> None:
+    classification = classify_telemetry_signal(column, numeric_profile=numeric_profile)
+
+    assert classification["category"] == "identifier"
+    assert classification["analysis_role"] == "ignored"
+    assert classification["is_ignored"] is True
+    assert classification["operator_primary_eligible"] is False
 
 
 def test_telemetry_structural_classification_covers_operator_eligibility() -> None:
