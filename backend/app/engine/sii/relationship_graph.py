@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import math
 import time
 from collections import Counter, defaultdict, deque
 from typing import Any
@@ -11,16 +13,25 @@ from app.engine.sii.common import (
     module_envelope,
     relationship_columns,
 )
+from app.engine.relationship_change import (
+    ABRUPT_CHANGE_THRESHOLD,
+    MINIMUM_EDGE_CONFIDENCE,
+    MINIMUM_DATA_QUALITY,
+    TEMPORAL_RULES,
+    relationship_change_promotable,
+    relationship_change_type,
+    relationship_temporal_evidence,
+)
 from app.services.telemetry_classification import telemetry_catalog_by_column
 
 DEFAULT_CONFIG = {
-    "change_inclusion_threshold": 0.25,
+    "change_inclusion_threshold": ABRUPT_CHANGE_THRESHOLD,
     "density_inclusion_threshold": 0.10,
-    "minimum_edge_confidence": 0.45,
-    "minimum_data_quality_factor": 0.35,
+    "minimum_edge_confidence": MINIMUM_EDGE_CONFIDENCE,
+    "minimum_data_quality_factor": MINIMUM_DATA_QUALITY,
     "minimum_component_coherence": 0.62,
     "minimum_component_edges": 2,
-    "minimum_persistence_observations": 6,
+    "minimum_sample_observations": 6,
 }
 
 
@@ -33,12 +44,18 @@ def analyze_relationship_graph(
     operating_mode: dict[str, Any] | None = None,
     mode_conditioned_analysis: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
+    relationship_persistence_state: dict[str, Any] | None = None,
     progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Build non-causal graph evidence from existing Pearson relationship edges."""
 
     started = time.perf_counter()
     cfg = {**DEFAULT_CONFIG, **(config or {})}
+    # Legacy setting only controls within-window sample sufficiency.
+    if config and "minimum_persistence_observations" in config and "minimum_sample_observations" not in config:
+        cfg["minimum_sample_observations"] = config["minimum_persistence_observations"]
+    previous_states = relationship_persistence_state or {}
+    persistence_states: dict[str, Any] = {}
     limitations: list[str] = []
     catalog = telemetry_catalog_by_column(telemetry_signal_catalog)
     source_graph = relationship_model.get("relationship_graph") if isinstance(relationship_model, dict) else None
@@ -85,8 +102,21 @@ def analyze_relationship_graph(
             health_by_signal=health_by_signal,
             global_quality=global_quality,
             operating_mode=operating_mode or {},
-            minimum_persistence_observations=int(cfg["minimum_persistence_observations"]),
+            minimum_sample_observations=int(cfg["minimum_sample_observations"]),
         )
+        state_key = json.dumps(sorted(edge["columns"]), separators=(",", ":"))
+        temporal, state = relationship_temporal_evidence(
+            edge, previous_states.get(state_key), basis=edge_basis,
+            minimum_confidence=float(cfg["minimum_edge_confidence"]),
+            minimum_quality=float(cfg["minimum_data_quality_factor"]),
+        )
+        persistence_states[state_key] = state
+        edge.update(temporal)
+        edge["single_window_change_type"] = edge.get("change_type", "stable")
+        if temporal["persistent_relationship_change"]:
+            edge["change_type"] = relationship_change_type(
+                edge["baseline_correlation"], edge["current_correlation"], persistent=True,
+            )
         enriched_edges.append(edge)
         if not edge["eligible"]:
             if progress_callback:
@@ -186,6 +216,7 @@ def analyze_relationship_graph(
         **envelope,
         "method": "deterministic_dynamic_relationship_graph_v1",
         "edge_basis": edge_basis,
+        "relationship_persistence_state": persistence_states,
         "nodes": nodes,
         "edges": enriched_edges,
         "eligible_edges": eligible_edges,
@@ -201,6 +232,7 @@ def analyze_relationship_graph(
         "graph_density_change": density,
         "subsystem_concentration": subsystem_concentration,
         "thresholds": {
+            "temporal_persistence": dict(TEMPORAL_RULES),
             "change_inclusion_threshold": float(cfg["change_inclusion_threshold"]),
             "density_inclusion_threshold": float(cfg["density_inclusion_threshold"]),
             "minimum_edge_confidence": float(cfg["minimum_edge_confidence"]),
@@ -213,7 +245,7 @@ def analyze_relationship_graph(
             "edge_displacement": "abs(current_correlation - baseline_correlation) * edge_confidence * data_quality_factor",
             "weighted_edge_displacement": "sum(edge_displacement) / max(sum(edge_confidence), epsilon)",
             "node_disruption": "sum(incident_edge_displacement) / max(sum(incident_edge_confidence * incident_data_quality_factor), epsilon)",
-            "component_coherence": "0.20*shared_node + 0.20*direction + 0.15*time_alignment + 0.15*confidence + 0.15*persistence + 0.15*sensor_health",
+            "component_coherence": "0.20*shared_node + 0.20*direction + 0.15*time_alignment + 0.15*confidence + 0.15*sample_sufficiency + 0.15*sensor_health",
         },
     }
 
@@ -225,7 +257,7 @@ def _enrich_edge(
     health_by_signal: dict[str, dict[str, Any]],
     global_quality: float,
     operating_mode: dict[str, Any],
-    minimum_persistence_observations: int,
+    minimum_sample_observations: int,
 ) -> dict[str, Any]:
     columns = relationship_columns(raw_edge)
     baseline = _edge_number(raw_edge, "baseline_correlation")
@@ -248,7 +280,7 @@ def _enrich_edge(
         and current_count >= 3
         and context.get("operator_primary_eligible", True)
     )
-    persistence_factor = clamp(current_count / max(1, minimum_persistence_observations))
+    sample_sufficiency_factor = clamp(current_count / max(1, minimum_sample_observations))
     return {
         **raw_edge,
         "columns": columns,
@@ -267,7 +299,7 @@ def _enrich_edge(
         "edge_displacement": round(displacement, 6),
         "baseline_sample_count": baseline_count,
         "current_sample_count": current_count,
-        "persistence_factor": round(persistence_factor, 6),
+        "sample_sufficiency_factor": round(sample_sufficiency_factor, 6),
         "sensor_health_context": health_context,
         "telemetry_classification": [
             catalog.get(column, {}).get("telemetry_classification")
@@ -284,21 +316,16 @@ def _enrich_edge(
 
 
 def _promoted(edge: dict[str, Any], config: dict[str, Any]) -> bool:
-    change_type = str(edge.get("change_type") or "stable")
-    baseline_strength = float(edge.get("baseline_strength") or 0.0)
-    current_strength = float(edge.get("current_strength") or 0.0)
-    if change_type in {"disrupted", "missing", "weakened"}:
-        strength_gate = baseline_strength >= 0.65
-    elif change_type == "strengthened":
-        strength_gate = baseline_strength >= 0.50 and current_strength >= 0.65
-    elif change_type == "new":
-        strength_gate = current_strength >= 0.75
-    else:
-        strength_gate = False
     return bool(
-        edge["eligible"]
-        and strength_gate
-        and float(edge["absolute_correlation_delta"]) >= float(config["change_inclusion_threshold"])
+        relationship_change_promotable(
+            change_type=str(edge.get("change_type") or "stable"),
+            baseline_strength=float(edge.get("baseline_strength") or 0.0),
+            current_strength=float(edge.get("current_strength") or 0.0),
+            drift=float(edge["absolute_correlation_delta"]),
+            eligible=edge["eligible"],
+            persistent=edge.get("persistent_relationship_change", False),
+            threshold=float(config["change_inclusion_threshold"]),
+        )
         and float(edge["edge_confidence"]) >= float(config["minimum_edge_confidence"])
         and float(edge["data_quality_factor"]) >= float(config["minimum_data_quality_factor"])
     )
@@ -416,14 +443,14 @@ def _component_coherence(nodes: set[str], edges: list[dict[str, Any]]) -> tuple[
     ]
     time_alignment = max(Counter(windows).values()) / edge_count
     confidence = sum(float(edge["edge_confidence"]) for edge in edges) / edge_count
-    persistence = sum(float(edge["persistence_factor"]) for edge in edges) / edge_count
+    sample_sufficiency = sum(float(edge["sample_sufficiency_factor"]) for edge in edges) / edge_count
     sensor_health = sum(float(edge["data_quality_factor"]) for edge in edges) / edge_count
     factors = {
         "shared_node_factor": round(shared_node, 6),
         "compatible_direction_factor": round(direction, 6),
         "time_window_alignment_factor": round(time_alignment, 6),
         "confidence_factor": round(confidence, 6),
-        "persistence_factor": round(persistence, 6),
+        "sample_sufficiency_factor": round(sample_sufficiency, 6),
         "sensor_health_factor": round(sensor_health, 6),
     }
     coherence = (
@@ -431,7 +458,7 @@ def _component_coherence(nodes: set[str], edges: list[dict[str, Any]]) -> tuple[
         + 0.20 * direction
         + 0.15 * time_alignment
         + 0.15 * confidence
-        + 0.15 * persistence
+        + 0.15 * sample_sufficiency
         + 0.15 * sensor_health
     )
     return clamp(coherence), factors
@@ -601,7 +628,8 @@ def _edge_number(edge: dict[str, Any], *keys: str) -> float | None:
             value = float(edge.get(key))
         except (TypeError, ValueError):
             continue
-        return value
+        if math.isfinite(value) and -1.0 <= value <= 1.0:
+            return value
     return None
 
 

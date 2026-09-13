@@ -845,9 +845,29 @@ def _sii_relationship(item: dict[str, Any]) -> dict[str, Any]:
             "recent_correlation", "correlation_delta", "signed_correlation_delta",
             "baseline_strength", "current_strength", "signed_change",
             "absolute_change", "change_percent", "confidence", "confidence_level",
-            "persistence", "status",
+            "persistence", "status", "single_window_change_type",
+            "sample_sufficiency_factor", "temporal_persistence_observations",
+            "temporal_persistence_supporting_observations", "temporal_persistence_direction",
+            "temporal_persistence_direction_agreement", "temporal_persistence_supported",
+            "persistent_relationship_change", "temporal_persistence_status",
+            "first_supported_observation", "latest_supported_observation",
         ),
     )
+    if "supporting_windows" in item:
+        projected["supporting_windows"] = [
+            {
+                **_sii_pick(window, (
+                    "observed_at", "signed_correlation_delta", "edge_confidence",
+                    "data_quality_factor", "eligible", "acceptable", "source_dataset_id",
+                )),
+                "time_window": _sii_scalar_map(window.get("time_window"), 8),
+                "source_rows": [
+                    _sii_pick(anchor, ("window", "source_row", "timestamp"))
+                    for anchor in _sii_dicts(window.get("source_rows"), 4)
+                ],
+            }
+            for window in _sii_dicts(item.get("supporting_windows"), 8)
+        ]
     refs = []
     for ref in _sii_items(item.get("evidence_refs"))[:8]:
         if isinstance(ref, str):

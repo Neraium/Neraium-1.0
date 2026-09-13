@@ -4,6 +4,8 @@ import time
 from itertools import combinations
 from typing import Any
 
+from app.engine.relationship_change import relationship_change_type as _change_type
+
 from app.engine.sii.common import (
     clamp,
     module_envelope,
@@ -456,22 +458,6 @@ def _conditioned_source_rows(
             }
         )
     return anchors
-
-
-def _change_type(baseline: float, recent: float) -> str:
-    baseline_strength = abs(baseline)
-    current_strength = abs(recent)
-    if baseline_strength >= 0.35 and current_strength >= 0.35 and (baseline > 0) != (recent > 0):
-        return "disrupted"
-    if baseline_strength >= 0.65 and current_strength < 0.35:
-        return "missing"
-    if baseline_strength >= 0.65 and current_strength <= baseline_strength - 0.25:
-        return "weakened"
-    if current_strength >= 0.65 and baseline_strength < 0.35:
-        return "new"
-    if current_strength >= baseline_strength + 0.25:
-        return "strengthened"
-    return "stable"
 
 
 def _mode_signal_drift(

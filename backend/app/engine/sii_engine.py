@@ -62,6 +62,7 @@ def evaluate_sii(
     sensor_health=None,
     operating_mode=None,
     phase4_scope: AuthenticatedPhase4Scope | None = None,
+    relationship_persistence_state: dict[str, Any] | None = None,
     config=None,
     progress_callback=None,
 ) -> dict:
@@ -72,6 +73,10 @@ def evaluate_sii(
     evidence. Phase 3 evaluates externally configured engineering priors and
     organizes independent evidence without scoring it. No module diagnoses
     root cause, prescribes work, or treats confidence as probability.
+
+    For chronological relationship evaluation, pass the preceding result's
+    relationship_graph.relationship_persistence_state. The state is returned
+    by value, scoped to the caller's dataset/facility, and never written here.
     """
 
     # Paired mode requires exact dict-row schemas and explicit shared units.
@@ -263,6 +268,7 @@ def evaluate_sii(
         relationship_model = build_relationship_baseline(
             dict_rows,
             numeric_columns_used,
+            timestamp_column=timestamp_column,
             **({"reference_rows": reference_dict_rows} if paired else {}),
             **({"baseline_window_limit": 12000, "recent_window_limit": 12000} if paired else {}),
             total_row_count=int(cfg.get("row_count_total") or len(dict_rows)),
@@ -277,6 +283,11 @@ def evaluate_sii(
             ),
             performance_counts=relationship_performance,
         )
+        if paired:
+            for edge in relationship_model.get("relationship_graph", {}).get("edges", []):
+                edge["reference_dataset_id"] = paired_provenance["reference"]["dataset_id"]
+                edge["source_dataset_id"] = paired_provenance["comparison"]["dataset_id"]
+                edge["signal_units"] = dict(signal_units)
         relationship_status = "complete"
         profiler.update(**relationship_performance)
         if len(dict_rows) < 12 or int(relationship_model.get("relationship_columns_analyzed") or 0) < 2:
@@ -498,6 +509,7 @@ def evaluate_sii(
             operating_mode=operating_mode_result,
             mode_conditioned_analysis=mode_conditioned,
             config=graph_config,
+            relationship_persistence_state=relationship_persistence_state,
             progress_callback=unit_progress(
                 "relationship_graph_analysis",
                 unit_type="relationship_edges",

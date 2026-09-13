@@ -545,7 +545,7 @@ For relationships, only metric columns retained by the preserved Phase 1 relatio
 relationship_threshold = max(0.25, q95(consecutive_baseline_correlation_deltas))
 ```
 
-Insufficient history retains the fixed `0.25` threshold with `status=fallback` and an exact reason. Learned thresholds can make promotion stricter but never lower a Phase 1 evidence floor. They are behavioral variability thresholds, not physical alarms.
+Insufficient history retains the fixed `0.25` threshold with `status=fallback` and an exact reason. Learned thresholds can make abrupt-change promotion stricter but never lower its Phase 1 evidence floor. They are behavioral variability thresholds, not physical alarms.
 
 ### 8.2 Exact like-mode historical selection
 
@@ -566,7 +566,7 @@ edge_displacement_e = absolute_delta_e
                       * data_quality_factor_e
 ```
 
-A changed edge is promoted only when it passes the preserved change-type strength gate, the empirical relationship threshold (never below `0.25`), effective confidence `>=0.45`, and data-quality factor `>=0.35`.
+A changed edge is promoted when either the preserved abrupt-change route passes the empirical relationship threshold (never below `0.25`), or cross-window temporal evidence supports persistent directional change. Both routes retain the change-type strength gate, eligibility, effective confidence `>=0.45`, and data-quality factor `>=0.35`. The bounded observation state, temporal criteria and supporting-window provenance are specified in [Temporal relationship evidence](relationship_temporal_persistence.md).
 
 ```text
 changed_edge_fraction = promoted_changed_edges / max(eligible_edges,1)
@@ -583,9 +583,11 @@ coherence = 0.20*shared_node_factor
           + 0.20*compatible_direction_factor
           + 0.15*time_window_alignment_factor
           + 0.15*confidence_factor
-          + 0.15*persistence_factor
+          + 0.15*sample_sufficiency_factor
           + 0.15*sensor_health_factor
 ```
+
+The component's `sample_sufficiency_factor` is the unchanged within-window sample-count term, formerly named `persistence_factor`. Edge `persistence_factor` now describes cross-window evidence and is not the component's sample-sufficiency term. Temporal support is explicitly reported by `temporal_persistence_supported`; sample count alone cannot establish it. See the linked temporal evidence specification for field migration and the legacy configuration alias.
 
 A coherent component needs at least 2 promoted edges and coherence `>=0.62`. Weighted-degree and density deltas remain association summaries. Subsystem concentration is calculated only from explicit telemetry-catalog subsystem metadata; names are never used to invent subsystem identity. Every graph field is non-causal.
 
