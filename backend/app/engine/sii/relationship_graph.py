@@ -23,6 +23,7 @@ from app.engine.relationship_change import (
     relationship_temporal_evidence,
 )
 from app.services.telemetry_classification import telemetry_catalog_by_column
+from app.engine.relationship_recurrence import RECURRENCE_RULES, relationship_recurrence_evidence
 
 DEFAULT_CONFIG = {
     "change_inclusion_threshold": ABRUPT_CHANGE_THRESHOLD,
@@ -45,6 +46,7 @@ def analyze_relationship_graph(
     mode_conditioned_analysis: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
     relationship_persistence_state: dict[str, Any] | None = None,
+    relationship_recurrence_state: dict[str, Any] | None = None,
     progress_callback: Any | None = None,
 ) -> dict[str, Any]:
     """Build non-causal graph evidence from existing Pearson relationship edges."""
@@ -56,6 +58,7 @@ def analyze_relationship_graph(
         cfg["minimum_sample_observations"] = config["minimum_persistence_observations"]
     previous_states = relationship_persistence_state or {}
     persistence_states: dict[str, Any] = {}
+    recurrence_states: dict[str, Any] = {}
     limitations: list[str] = []
     catalog = telemetry_catalog_by_column(telemetry_signal_catalog)
     source_graph = relationship_model.get("relationship_graph") if isinstance(relationship_model, dict) else None
@@ -112,6 +115,13 @@ def analyze_relationship_graph(
         )
         persistence_states[state_key] = state
         edge.update(temporal)
+        recurrence, recurrence_state = relationship_recurrence_evidence(
+            edge, (relationship_recurrence_state or {}).get(state_key), identity=state["identity"],
+            minimum_confidence=float(cfg["minimum_edge_confidence"]),
+            minimum_quality=float(cfg["minimum_data_quality_factor"]),
+        )
+        recurrence_states[state_key] = recurrence_state
+        edge["recurrence_evidence"] = recurrence
         edge["single_window_change_type"] = edge.get("change_type", "stable")
         if temporal["persistent_relationship_change"]:
             edge["change_type"] = relationship_change_type(
@@ -217,6 +227,8 @@ def analyze_relationship_graph(
         "method": "deterministic_dynamic_relationship_graph_v1",
         "edge_basis": edge_basis,
         "relationship_persistence_state": persistence_states,
+        "relationship_recurrence_state": recurrence_states,
+        "recurring_edges": [edge for edge in enriched_edges if edge["recurrence_evidence"]["supported"]],
         "nodes": nodes,
         "edges": enriched_edges,
         "eligible_edges": eligible_edges,
@@ -233,6 +245,7 @@ def analyze_relationship_graph(
         "subsystem_concentration": subsystem_concentration,
         "thresholds": {
             "temporal_persistence": dict(TEMPORAL_RULES),
+            "recurrence": dict(RECURRENCE_RULES),
             "change_inclusion_threshold": float(cfg["change_inclusion_threshold"]),
             "density_inclusion_threshold": float(cfg["density_inclusion_threshold"]),
             "minimum_edge_confidence": float(cfg["minimum_edge_confidence"]),

@@ -878,7 +878,7 @@ function evidenceChannels(model, finding) {
   const temporal = temporalSource(result);
   channels.push(evidenceChannel("lag", "Lag evidence", own(temporal[0], "lagged_relationships"), `${temporal[1]}.lagged_relationships`, "run", technicalQualification(result, `${temporal[1]}.lagged_relationships`)));
   channels.push(evidenceChannel("mutual_information", "Mutual-information evidence", own(temporal[0], "mutual_information_drift"), `${temporal[1]}.mutual_information_drift`, "run", technicalQualification(result, `${temporal[1]}.mutual_information_drift`)));
-  const siiSections = ["relationship_changes", "operating_context", "persistence", "uncertainty", "data_quality", "sensor_health", "configured_prior_observations", "phase_4", "provenance"];
+  const siiSections = ["relationship_changes", "relationship_recurrences", "operating_context", "persistence", "uncertainty", "data_quality", "sensor_health", "configured_prior_observations", "phase_4", "provenance"];
   for (const section of siiSections) channels.push(evidenceChannel(`sii_${section}`, `SII ${label(section)}`, ownPath(model, `siiEvidence.${section}`), `model.siiEvidence.${section}`));
   channels.push(evidenceChannel("traceability", "Traceability", own(result, "traceability"), "model.result.traceability"));
   channels.push(evidenceChannel("processing_trace", "Processing trace", own(result, "processing_trace"), "model.result.processing_trace"));

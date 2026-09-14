@@ -1,5 +1,8 @@
 # Temporal relationship evidence
 
+The independent [recurrence evidence channel](relationship_recurrence_evidence.md)
+does not alter the continuous behavior documented below.
+
 The existing Pearson detector and abrupt classification rules are unchanged.
 `app.engine.relationship_change` centralizes classification and strength/promotion
 rules used by the baseline service, mode-conditioned analysis and dynamic graph.

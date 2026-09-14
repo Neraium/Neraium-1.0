@@ -63,6 +63,7 @@ def evaluate_sii(
     operating_mode=None,
     phase4_scope: AuthenticatedPhase4Scope | None = None,
     relationship_persistence_state: dict[str, Any] | None = None,
+    relationship_recurrence_state: dict[str, Any] | None = None,
     config=None,
     progress_callback=None,
 ) -> dict:
@@ -77,6 +78,8 @@ def evaluate_sii(
     For chronological relationship evaluation, pass the preceding result's
     relationship_graph.relationship_persistence_state. The state is returned
     by value, scoped to the caller's dataset/facility, and never written here.
+    Recurrence independently uses relationship_graph.relationship_recurrence_state
+    through the relationship_recurrence_state argument, with the same ownership.
     """
 
     # Paired mode requires exact dict-row schemas and explicit shared units.
@@ -510,6 +513,7 @@ def evaluate_sii(
             mode_conditioned_analysis=mode_conditioned,
             config=graph_config,
             relationship_persistence_state=relationship_persistence_state,
+            relationship_recurrence_state=relationship_recurrence_state,
             progress_callback=unit_progress(
                 "relationship_graph_analysis",
                 unit_type="relationship_edges",

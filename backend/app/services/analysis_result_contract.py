@@ -696,6 +696,7 @@ def empty_sii_evidence_projection(
         "status": "unavailable",
         "engine": {},
         "relationship_changes": [],
+        "relationship_recurrences": [],
         "operating_context": {},
         "persistence": {},
         "uncertainty": {"status": "unavailable", "limitations": []},
@@ -767,6 +768,16 @@ def build_sii_evidence_projection(result: dict[str, Any] | None) -> dict[str, An
             )
         ],
         "operating_context": _sii_operating(_sii_map(sii.get("operating_modes"))),
+        "relationship_recurrences": [
+            {
+                **_sii_pick(item, ("id", "columns")),
+                "recurrence_evidence": _sii_recurrence(_sii_map(item.get("recurrence_evidence"))),
+            }
+            for item in _sii_dicts(
+                _sii_map(sii.get("relationship_graph")).get("recurring_edges"),
+                SII_RELATIONSHIP_LIMIT,
+            )
+        ],
         "persistence": _sii_persistence(_sii_map(sii.get("persistence_analysis"))),
         "uncertainty": _sii_uncertainty(_sii_map(sii.get("uncertainty"))),
         "data_quality": _sii_quality(_sii_map(conditions.get("data_quality"))),
@@ -833,6 +844,54 @@ def _sii_texts(values: list[Any], limit: int) -> list[str]:
         if len(output) >= limit:
             break
     return output
+
+
+def _sii_recurrence_window(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **_sii_pick(item, ("observed_at", "signed_correlation_delta", "edge_confidence",
+                          "data_quality_factor", "eligible", "acceptable", "source_dataset_id")),
+        "time_window": _sii_scalar_map(item.get("time_window"), 8),
+        "source_rows": [_sii_pick(anchor, ("window", "source_row", "timestamp"))
+                        for anchor in _sii_dicts(item.get("source_rows"), 4)],
+        "sensor_health_context": [
+            {**_sii_pick(health, ("signal", "health", "factor")),
+             **({"conditions": [_sii_pick(condition, ("type", "severity"))
+                                for condition in _sii_dicts(health.get("conditions"), 12)]}
+                if "conditions" in health else {})}
+            for health in _sii_dicts(item.get("sensor_health_context"), 2)
+        ],
+    }
+
+
+def _sii_recurrence(value: dict[str, Any]) -> dict[str, Any]:
+    # Same bounds as the reducer; do not truncate support below its decision count.
+    identity = _sii_map(value.get("identity"))
+    mode = _sii_scalar_map(identity.get("mode"))
+    if "features" in _sii_map(identity.get("mode")):
+        mode["features"] = _sii_scalar_map(identity["mode"]["features"])
+    return {
+        **_sii_pick(value, ("evidence_model", "status", "supported", "direction", "episode_count",
+                           "opposite_direction_veto", "evaluated_at", "reason")),
+        "policy": _sii_scalar_map(value.get("policy")),
+        "gates": _sii_scalar_map(value.get("gates")),
+        "identity": {
+            **_sii_pick(identity, ("columns", "basis", "baseline_correlation", "baseline_start",
+                                  "baseline_end", "reference_dataset_id")),
+            "mode": mode,
+            "signal_units": _sii_scalar_map(identity.get("signal_units"), len(_sii_map(identity.get("signal_units"))))
+                            if isinstance(identity.get("signal_units"), dict) else None,
+        },
+        "episodes": [
+            {**_sii_pick(episode, ("direction", "support_count", "maximum_consecutive_support",
+                                   "started_at", "last_supported_at", "closed_at")),
+             "supporting_windows": [_sii_recurrence_window(window)
+                                    for window in _sii_dicts(episode.get("supporting_windows"), 256)],
+             "opening_return": _sii_recurrence_window(episode["opening_return"])
+                               if isinstance(episode.get("opening_return"), dict) else None,
+             "closing_return": _sii_recurrence_window(_sii_map(episode.get("closing_return")))}
+            for episode in _sii_dicts(value.get("episodes"), 85)
+        ],
+    }
 
 
 def _sii_relationship(item: dict[str, Any]) -> dict[str, Any]:
