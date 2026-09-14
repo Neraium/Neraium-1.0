@@ -5,6 +5,11 @@ from typing import Any
 
 import pandas as pd
 
+from app.engine.relationship_change import (
+    relationship_change_type as _relationship_change_type,
+    relationship_change_promotable,
+)
+
 from app.services.cumulative_counters import (
     counter_delta_series,
     detect_cumulative_counters_from_rows,
@@ -79,23 +84,25 @@ def _unique_pair_count(signal_count: int) -> int:
 
 
 
-def _source_row_anchor(row: dict[str, Any] | None, window: str) -> dict[str, Any]:
+def _source_row_anchor(row: dict[str, Any] | None, window: str, timestamp_column: str | None = None) -> dict[str, Any]:
     row = row or {}
     return {
         "window": window,
         "source_row": row.get("__source_row_number"),
-        "timestamp": row.get("__source_timestamp"),
+        "timestamp": row.get("__source_timestamp") or (row.get(timestamp_column) if timestamp_column else None),
     }
 
 
-def _relationship_source_rows(baseline_rows: list[dict[str, Any]], recent_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _relationship_source_rows(
+    baseline_rows: list[dict[str, Any]], recent_rows: list[dict[str, Any]], timestamp_column: str | None = None,
+) -> list[dict[str, Any]]:
     anchors = []
     if baseline_rows:
-        anchors.append(_source_row_anchor(baseline_rows[0], "baseline_start"))
-        anchors.append(_source_row_anchor(baseline_rows[-1], "baseline_end"))
+        anchors.append(_source_row_anchor(baseline_rows[0], "baseline_start", timestamp_column))
+        anchors.append(_source_row_anchor(baseline_rows[-1], "baseline_end", timestamp_column))
     if recent_rows:
-        anchors.append(_source_row_anchor(recent_rows[0], "recent_start"))
-        anchors.append(_source_row_anchor(recent_rows[-1], "recent_end"))
+        anchors.append(_source_row_anchor(recent_rows[0], "recent_start", timestamp_column))
+        anchors.append(_source_row_anchor(recent_rows[-1], "recent_end", timestamp_column))
     return [anchor for anchor in anchors if anchor.get("source_row") is not None or anchor.get("timestamp")]
 
 
@@ -122,27 +129,6 @@ def _relationship_direction(baseline_corr: float, recent_corr: float) -> str:
     if recent_corr <= -0.1:
         return "negative"
     return "weak_or_flat"
-
-
-def _relationship_change_type(baseline_corr: float, recent_corr: float) -> str:
-    baseline_strength = abs(baseline_corr)
-    current_strength = abs(recent_corr)
-    sign_flipped = (
-        baseline_strength >= 0.35
-        and current_strength >= 0.35
-        and (baseline_corr > 0) != (recent_corr > 0)
-    )
-    if sign_flipped:
-        return "disrupted"
-    if baseline_strength >= 0.65 and current_strength < 0.35:
-        return "missing"
-    if baseline_strength >= 0.65 and current_strength <= baseline_strength - 0.25:
-        return "weakened"
-    if current_strength >= 0.65 and baseline_strength < 0.35:
-        return "new"
-    if current_strength >= baseline_strength + 0.25:
-        return "strengthened"
-    return "stable"
 
 
 def _change_percentage(baseline_strength: float, current_strength: float) -> float | None:
@@ -174,17 +160,13 @@ def _should_promote_relationship_change(
     drift: float,
     relationship_context: dict[str, Any],
 ) -> bool:
-    if change_type == "stable" or drift < 0.25:
-        return False
-    if relationship_context.get("operator_primary_eligible") is False:
-        return False
-    if change_type in {"disrupted", "missing", "weakened"}:
-        return baseline_strength >= 0.65
-    if change_type == "strengthened":
-        return baseline_strength >= 0.5 and current_strength >= 0.65
-    if change_type == "new":
-        return current_strength >= 0.75
-    return False
+    return relationship_change_promotable(
+        change_type=change_type,
+        baseline_strength=baseline_strength,
+        current_strength=current_strength,
+        drift=drift,
+        eligible=relationship_context.get("operator_primary_eligible") is not False,
+    )
 
 
 def _system_label_for_columns(left_col: str, right_col: str) -> str:
@@ -288,17 +270,17 @@ def score_relationship_importance(
         minimum_samples = min(int(edge.get("baseline_sample_size") or 0), int(edge.get("recent_sample_size") or 0))
     except (TypeError, ValueError):
         minimum_samples = 0
-    persistence_factor = min(1.0, minimum_samples / 24.0)
+    sample_sufficiency_factor = min(1.0, minimum_samples / 24.0)
     downstream_factor = _system_factor_for_columns(clean_columns)
     severity_factor = _severity_factor_for_columns(clean_columns, baseline_drift_by_column)
     novelty_factor = _novelty_factor(edge.get("change_type"))
-    data_quality_factor = min(confidence_factor, max(0.2, persistence_factor))
+    data_quality_factor = min(confidence_factor, max(0.2, sample_sufficiency_factor))
     equipment_factor = 1.0 if classification["equipment_process_involved"] else 0.25
 
     weighted = (
         delta_factor * 0.22
         + confidence_factor * 0.16
-        + persistence_factor * 0.12
+        + sample_sufficiency_factor * 0.12
         + downstream_factor * 0.10
         + severity_factor * 0.16
         + novelty_factor * 0.09
@@ -318,7 +300,7 @@ def score_relationship_importance(
     factors = {
         "magnitude": round(delta_factor, 4),
         "confidence": round(confidence_factor, 4),
-        "persistence": round(persistence_factor, 4),
+        "sample_sufficiency": round(sample_sufficiency_factor, 4),
         "downstream_scope": round(downstream_factor, 4),
         "affected_metric_severity": round(severity_factor, 4),
         "novelty": round(novelty_factor, 4),
@@ -429,6 +411,7 @@ def build_relationship_baseline(
     total_row_count: int | None = None,
     raw_signal_count: int | None = None,
     reference_rows: list[dict[str, Any]] | None = None,
+    timestamp_column: str | None = None,
     baseline_window_limit: int = 12000,
     recent_window_limit: int = 6000,
     max_relationship_columns: int = 32,
@@ -579,7 +562,7 @@ def build_relationship_baseline(
     recent_corr_matrix = recent_frame.corr(min_periods=3)
     baseline_counts = baseline_frame.notna().astype(int).T.dot(baseline_frame.notna().astype(int))
     recent_counts = recent_frame.notna().astype(int).T.dot(recent_frame.notna().astype(int))
-    source_rows = _relationship_source_rows(baseline_rows, recent_rows)
+    source_rows = _relationship_source_rows(baseline_rows, recent_rows, timestamp_column)
 
     processed_pairs = 0
 

@@ -9,7 +9,7 @@ from collections import deque
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from app.core.config import get_settings
 from app.services.data_quality import parse_numeric_value
@@ -61,6 +61,10 @@ class BackendSiiRunner:
 
     def __init__(self, *, baseline_window: int = 12, recent_window: int = 12, reference_vectors: np.ndarray | None = None) -> None:
         self._reference_vectors = reference_vectors
+        # Only fixed-reference values are reusable. Recent windows and all
+        # chronological histories still advance on every ingest.
+        self._reference_signature = None
+        self._reference_cache: dict[Any, Any] = {}
         self.baseline_window = max(2, baseline_window)
         self.recent_window = max(2, recent_window)
         self._history: deque[np.ndarray] = deque(maxlen=self.baseline_window + self.recent_window)
@@ -79,12 +83,18 @@ class BackendSiiRunner:
         asset_id: str,
         run_id: str,
     ) -> dict[str, Any]:
+        if self._reference_vectors is not None:
+            reference = self._reference_vectors
+            signature = (reference.dtype.str, reference.shape, reference.strides, reference.tobytes())
+            if signature != self._reference_signature:
+                self._reference_cache.clear()
+                self._reference_signature = signature
         vector = np.asarray(sensor_vector, dtype=float)
         self._history.append(vector)
         self._history_count += 1
 
         baseline_vectors, recent_vectors = self._windowed_history()
-        baseline_mean = _nanmean_columns(baseline_vectors)
+        baseline_mean = self._reference_value("mean", lambda: _nanmean_columns(baseline_vectors))
         recent_mean = _nanmean_columns(recent_vectors)
         safe_baseline = np.where(np.abs(baseline_mean) < 1e-6, 1.0, np.abs(baseline_mean))
         normalized_delta = np.abs(recent_mean - baseline_mean) / safe_baseline
@@ -123,12 +133,14 @@ class BackendSiiRunner:
         dynamic_threshold = 0.0
 
         current_vector = np.nan_to_num(vector, nan=0.0)
-        baseline_matrix = np.nan_to_num(np.asarray(baseline_vectors, dtype=float), nan=0.0)
+        baseline_matrix = self._reference_value(
+            "matrix", lambda: np.nan_to_num(np.asarray(baseline_vectors, dtype=float), nan=0.0)
+        )
         recent_matrix = np.nan_to_num(np.asarray(recent_vectors, dtype=float), nan=0.0)
         previous_distance = self._distance_history[-1] if self._distance_history else 0.0
         previous_velocity = self._distance_velocity_history[-1] if self._distance_velocity_history else 0.0
 
-        baseline_completeness = _matrix_completeness(baseline_vectors)
+        baseline_completeness = self._reference_value("completeness", lambda: _matrix_completeness(baseline_vectors))
         recent_completeness = _matrix_completeness(recent_vectors)
         enough_baseline_for_covariance = (
             len(baseline_matrix) >= MIN_COVARIANCE_BASELINE_ROWS
@@ -139,12 +151,14 @@ class BackendSiiRunner:
         try:
             if not enough_baseline_for_covariance:
                 raise ValueError("insufficient baseline for covariance scoring")
-            baseline_covariance = _regularized_covariance_matrix(baseline_matrix)
+            baseline_covariance = self._reference_value("covariance", lambda: _regularized_covariance_matrix(baseline_matrix))
             baseline_covariance = np.nan_to_num(baseline_covariance, nan=0.0)
             expected_shape = (current_vector.shape[0], current_vector.shape[0])
             if baseline_covariance.shape != expected_shape:
                 baseline_covariance = np.eye(current_vector.shape[0], dtype=float)
-            covariance_inverse = np.linalg.pinv(baseline_covariance)
+            covariance_inverse = self._reference_value(
+                ("inverse", expected_shape), lambda: np.linalg.pinv(baseline_covariance)
+            )
             centered_vector = np.nan_to_num(current_vector - baseline_mean, nan=0.0)
             mahalanobis_sq = float(centered_vector.T @ covariance_inverse @ centered_vector)
             mahalanobis_distance = float(np.sqrt(max(mahalanobis_sq, 0.0)))
@@ -156,9 +170,16 @@ class BackendSiiRunner:
             mahalanobis_distance = fallback_score
 
         if covariance_valid:
-            baseline_distances = _baseline_mahalanobis_distances(baseline_matrix, baseline_mean, covariance_inverse)
-            baseline_distance_center = float(np.mean(baseline_distances)) if baseline_distances else 0.0
-            baseline_distance_spread = float(np.std(baseline_distances)) if baseline_distances else 0.0
+            baseline_distances = self._reference_value(
+                ("distances", expected_shape),
+                lambda: _baseline_mahalanobis_distances(baseline_matrix, baseline_mean, covariance_inverse),
+            )
+            baseline_distance_center = self._reference_value(
+                ("distance_center", expected_shape), lambda: float(np.mean(baseline_distances)) if baseline_distances else 0.0
+            )
+            baseline_distance_spread = self._reference_value(
+                ("distance_spread", expected_shape), lambda: float(np.std(baseline_distances)) if baseline_distances else 0.0
+            )
             baseline_distance_limit = max(baseline_distance_center + baseline_distance_spread * 3.0, 1.0)
             excess_distance = max(0.0, mahalanobis_distance - baseline_distance_limit)
             structural_drift_score = float(np.clip(excess_distance / baseline_distance_limit, 0.0, 1.0))
@@ -167,7 +188,9 @@ class BackendSiiRunner:
             recent_covariance = _regularized_covariance_matrix(recent_matrix)
             recent_covariance = np.nan_to_num(recent_covariance, nan=0.0)
             if recent_covariance.shape == baseline_covariance.shape:
-                baseline_norm = float(np.linalg.norm(baseline_covariance, ord="fro"))
+                baseline_norm = self._reference_value(
+                    ("norm", expected_shape), lambda: float(np.linalg.norm(baseline_covariance, ord="fro"))
+                )
                 covariance_shift = float(
                     np.linalg.norm(recent_covariance - baseline_covariance, ord="fro") / max(baseline_norm, 1e-6)
                 )
@@ -258,6 +281,14 @@ class BackendSiiRunner:
             "velocity_history": [round(value, 6) for value in self._velocity_history],
             "regime_history": list(self._regime_history),
         }
+
+    def _reference_value(self, key: Any, calculate: Callable[[], Any]) -> Any:
+        if self._reference_vectors is None:
+            return calculate()
+        if key not in self._reference_cache:
+            # Exceptions are deliberately not cached: preserve retry/fallback.
+            self._reference_cache[key] = calculate()
+        return self._reference_cache[key]
 
     def _windowed_history(self) -> tuple[np.ndarray, np.ndarray]:
         history = list(self._history)

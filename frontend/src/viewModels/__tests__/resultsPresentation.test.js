@@ -102,6 +102,7 @@ function fixtureResult() {
       conditions: [condition("A", "PACKAGE_RESULTS_CANARY_A"), condition("B")],
       sii_evidence: {
         relationship_changes: [{ id: "RUN_RELATIONSHIP_RESULTS_CANARY" }],
+        relationship_recurrences: [{ id: "RUN_RECURRENCE_RESULTS_CANARY", recurrence_evidence: { evidence_model: "relationship_recurrence_v1", supported: true, episode_count: 3 } }],
         operating_context: { status: "RUN_CONTEXT_RESULTS_CANARY" },
         persistence: { status: "RUN_PERSISTENCE_RESULTS_CANARY" },
         data_quality: { rating: "RUN_QUALITY_RESULTS_CANARY" },
@@ -225,6 +226,7 @@ describe("results presentation contracts", () => {
     const rendered = JSON.stringify(projection);
     for (const required of ["RAW_SIGNAL_RESULTS_CANARY_A", "CANONICAL_SIGNAL_CANARY_A", "pearson_correlation", "0.918273", "997", "2026-08-25T05:23:56.206210+00:00", "LINEAGE_RESULTS_CANARY_A", "ENGINE_RESULTS_CANARY", "PACKAGE_INTERNAL_RESULTS_CANARY", "MI_RESULTS_CANARY", "LAG_RESULTS_CANARY", "CLASSIFICATION_RESULTS_CANARY", "SUFFICIENCY_RESULTS_CANARY", "AUDIT_RESULTS_CANARY", "AUDIT_REVIEW_RESULTS_CANARY", "CORROBORATION_RESULTS_CANARY", "Persistent relationship evidence A"]) expect(rendered).toContain(required);
     expect(projection.channels.find((channel) => channel.key === "data_quality").payload).toEqual({ usable: false, missing: 0 });
+    expect(projection.channels.find((channel) => channel.key === "sii_relationship_recurrences").payload).toEqual(fixtureResult().analysis_explanation.sii_evidence.relationship_recurrences);
   });
 
   it("builds the primary evidence summary only from authoritative finding fields", () => {

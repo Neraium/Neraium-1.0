@@ -1,0 +1,1459 @@
+{
+  "authorities": {
+    "continuous": "2a25a3312bcd01d67550bb259c0fe3605076696c",
+    "original": "b790479f0abcb90aa71f7677d10aa542222b55c8",
+    "pre_recurrence": "303456053b571d67fd670653185bb576b2fceb11",
+    "recurrence": "86b5579069486c66376efc8f2bd0d35025a11f9f"
+  },
+  "continuous": [
+    {
+      "kind": "removed",
+      "old": 0.0,
+      "paths": [
+        "/compatibility/baseline_analysis/relationship_graph/edges/0/ranking_factors/persistence",
+        "/compatibility/baseline_analysis/relationship_graph/edges/1/ranking_factors/persistence",
+        "/compatibility/baseline_analysis/relationship_graph/edges/2/ranking_factors/persistence",
+        "/compatibility/relationship_model/relationship_graph/edges/0/ranking_factors/persistence",
+        "/compatibility/relationship_model/relationship_graph/edges/1/ranking_factors/persistence",
+        "/compatibility/relationship_model/relationship_graph/edges/2/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/0/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/1/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/2/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/ranking_factors/persistence",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/ranking_factors/persistence",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/persistence",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/persistence",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/0/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/1/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/2/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/ranking_factors/persistence",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/ranking_factors/persistence",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/persistence",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/persistence",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/persistence",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/persistence",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/persistence",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/persistence",
+        "/relationship_analysis/relationship_graph/edges/0/ranking_factors/persistence",
+        "/relationship_analysis/relationship_graph/edges/1/ranking_factors/persistence",
+        "/relationship_analysis/relationship_graph/edges/2/ranking_factors/persistence",
+        "/relationship_graph/edges/0/ranking_factors/persistence",
+        "/relationship_graph/edges/1/ranking_factors/persistence",
+        "/relationship_graph/edges/2/ranking_factors/persistence",
+        "/relationship_graph/eligible_edges/0/ranking_factors/persistence",
+        "/relationship_graph/eligible_edges/1/ranking_factors/persistence",
+        "/relationship_graph/eligible_edges/2/ranking_factors/persistence"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": 0.0,
+      "paths": [
+        "/compatibility/baseline_analysis/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/compatibility/baseline_analysis/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/compatibility/baseline_analysis/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/compatibility/relationship_model/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/compatibility/relationship_model/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/compatibility/relationship_model/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/temporal_persistence_direction_agreement",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/temporal_persistence_direction_agreement",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/temporal_persistence_direction_agreement",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/temporal_persistence_direction_agreement",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/temporal_persistence_direction_agreement",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/temporal_persistence_direction_agreement",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/temporal_persistence_direction_agreement",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/temporal_persistence_direction_agreement",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/temporal_persistence_direction_agreement",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/temporal_persistence_direction_agreement",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/temporal_persistence_direction_agreement",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/ranking_factors/sample_sufficiency",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/temporal_persistence_direction_agreement",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/relationship_analysis/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/relationship_analysis/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/relationship_analysis/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/relationship_graph/edges/0/ranking_factors/sample_sufficiency",
+        "/relationship_graph/edges/0/temporal_persistence_direction_agreement",
+        "/relationship_graph/edges/1/ranking_factors/sample_sufficiency",
+        "/relationship_graph/edges/1/temporal_persistence_direction_agreement",
+        "/relationship_graph/edges/2/ranking_factors/sample_sufficiency",
+        "/relationship_graph/edges/2/temporal_persistence_direction_agreement",
+        "/relationship_graph/eligible_edges/0/ranking_factors/sample_sufficiency",
+        "/relationship_graph/eligible_edges/0/temporal_persistence_direction_agreement",
+        "/relationship_graph/eligible_edges/1/ranking_factors/sample_sufficiency",
+        "/relationship_graph/eligible_edges/1/temporal_persistence_direction_agreement",
+        "/relationship_graph/eligible_edges/2/ranking_factors/sample_sufficiency",
+        "/relationship_graph/eligible_edges/2/temporal_persistence_direction_agreement"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": [
+        {
+          "source_row": null,
+          "timestamp": "2026-01-01T00:00:00Z",
+          "window": "baseline_start"
+        },
+        {
+          "source_row": null,
+          "timestamp": "2026-01-01T01:23:00Z",
+          "window": "baseline_end"
+        },
+        {
+          "source_row": null,
+          "timestamp": "2026-01-01T01:24:00Z",
+          "window": "recent_start"
+        },
+        {
+          "source_row": null,
+          "timestamp": "2026-01-01T01:59:00Z",
+          "window": "recent_end"
+        }
+      ],
+      "paths": [
+        "/compatibility/baseline_analysis/relationship_graph/edges/0/source_rows",
+        "/compatibility/baseline_analysis/relationship_graph/edges/1/source_rows",
+        "/compatibility/baseline_analysis/relationship_graph/edges/2/source_rows",
+        "/compatibility/relationship_model/relationship_graph/edges/0/source_rows",
+        "/compatibility/relationship_model/relationship_graph/edges/1/source_rows",
+        "/compatibility/relationship_model/relationship_graph/edges/2/source_rows",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/source_rows",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/source_rows",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/source_rows",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/0/source_rows",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/1/source_rows",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/2/source_rows",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/source_rows",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/source_rows",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/source_rows",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/source_rows",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/source_rows",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/source_rows",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/source_rows",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/source_rows",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/source_rows",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/source_rows",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/source_rows",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/source_rows",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/source_rows",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/source_rows",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/source_rows",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/0/source_rows",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/1/source_rows",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/2/source_rows",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/source_rows",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/source_rows",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/source_rows",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/source_rows",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/source_rows",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/source_rows",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/source_rows",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/source_rows",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/source_rows",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/source_rows",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/source_rows",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/source_rows",
+        "/relationship_analysis/relationship_graph/edges/0/source_rows",
+        "/relationship_analysis/relationship_graph/edges/1/source_rows",
+        "/relationship_analysis/relationship_graph/edges/2/source_rows",
+        "/relationship_graph/edges/0/source_rows",
+        "/relationship_graph/edges/1/source_rows",
+        "/relationship_graph/edges/2/source_rows",
+        "/relationship_graph/eligible_edges/0/source_rows",
+        "/relationship_graph/eligible_edges/1/source_rows",
+        "/relationship_graph/eligible_edges/2/source_rows"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": {
+        "baseline_end": "2026-01-01T01:23:00Z",
+        "baseline_start": "2026-01-01T00:00:00Z",
+        "current_end": "2026-01-01T01:59:00Z",
+        "current_start": "2026-01-01T01:24:00Z"
+      },
+      "paths": [
+        "/compatibility/baseline_analysis/relationship_graph/edges/0/time_window",
+        "/compatibility/baseline_analysis/relationship_graph/edges/1/time_window",
+        "/compatibility/baseline_analysis/relationship_graph/edges/2/time_window",
+        "/compatibility/relationship_model/relationship_graph/edges/0/time_window",
+        "/compatibility/relationship_model/relationship_graph/edges/1/time_window",
+        "/compatibility/relationship_model/relationship_graph/edges/2/time_window",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/time_window",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/time_window",
+        "/evidence_fusion/evidence_inventory/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/time_window",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/0/time_window",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/1/time_window",
+        "/evidence_fusion/evidence_inventory/1/evidence/relationship_graph/edges/2/time_window",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/time_window",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/time_window",
+        "/evidence_fusion/evidence_inventory/2/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/time_window",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/time_window",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/time_window",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/time_window",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/time_window",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/time_window",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/time_window",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/time_window",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/time_window",
+        "/evidence_fusion/limiting_evidence/0/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/time_window",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/time_window",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/time_window",
+        "/evidence_fusion/neutral_evidence/1/evidence/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/time_window",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/0/time_window",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/1/time_window",
+        "/evidence_fusion/neutral_evidence/1/evidence/relationship_graph/edges/2/time_window",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/time_window",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/time_window",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/time_window",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/time_window",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/time_window",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/time_window",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/time_window",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/time_window",
+        "/operating_modes/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/time_window",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/0/time_window",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/1/time_window",
+        "/relationship_analysis/mode_conditioned_baseline/global_relationship_model/relationship_graph/edges/2/time_window",
+        "/relationship_analysis/relationship_graph/edges/0/time_window",
+        "/relationship_analysis/relationship_graph/edges/1/time_window",
+        "/relationship_analysis/relationship_graph/edges/2/time_window",
+        "/relationship_graph/edges/0/time_window",
+        "/relationship_graph/edges/1/time_window",
+        "/relationship_graph/edges/2/time_window",
+        "/relationship_graph/eligible_edges/0/time_window",
+        "/relationship_graph/eligible_edges/1/time_window",
+        "/relationship_graph/eligible_edges/2/time_window"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": null,
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/first_supported_observation",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/latest_supported_observation",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/first_supported_observation",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/latest_supported_observation",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/first_supported_observation",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/latest_supported_observation",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/first_supported_observation",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/latest_supported_observation",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/first_supported_observation",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/latest_supported_observation",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/first_supported_observation",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/latest_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/first_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/latest_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/first_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/latest_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/first_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/latest_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/first_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/latest_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/first_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/latest_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/first_supported_observation",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/latest_supported_observation",
+        "/relationship_graph/edges/0/first_supported_observation",
+        "/relationship_graph/edges/0/latest_supported_observation",
+        "/relationship_graph/edges/1/first_supported_observation",
+        "/relationship_graph/edges/1/latest_supported_observation",
+        "/relationship_graph/edges/2/first_supported_observation",
+        "/relationship_graph/edges/2/latest_supported_observation",
+        "/relationship_graph/eligible_edges/0/first_supported_observation",
+        "/relationship_graph/eligible_edges/0/latest_supported_observation",
+        "/relationship_graph/eligible_edges/1/first_supported_observation",
+        "/relationship_graph/eligible_edges/1/latest_supported_observation",
+        "/relationship_graph/eligible_edges/2/first_supported_observation",
+        "/relationship_graph/eligible_edges/2/latest_supported_observation"
+      ]
+    },
+    {
+      "kind": "value",
+      "new": 0.0,
+      "old": 1.0,
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/persistence_factor",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/persistence_factor",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/persistence_factor",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/persistence_factor",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/persistence_factor",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/persistence_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/persistence_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/persistence_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/persistence_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/persistence_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/persistence_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/persistence_factor",
+        "/relationship_graph/edges/0/persistence_factor",
+        "/relationship_graph/edges/1/persistence_factor",
+        "/relationship_graph/edges/2/persistence_factor",
+        "/relationship_graph/eligible_edges/0/persistence_factor",
+        "/relationship_graph/eligible_edges/1/persistence_factor",
+        "/relationship_graph/eligible_edges/2/persistence_factor"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": false,
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/persistent_relationship_change",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/temporal_persistence_supported",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/persistent_relationship_change",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/temporal_persistence_supported",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/persistent_relationship_change",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/temporal_persistence_supported",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/persistent_relationship_change",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/temporal_persistence_supported",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/persistent_relationship_change",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/temporal_persistence_supported",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/persistent_relationship_change",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/temporal_persistence_supported",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/persistent_relationship_change",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/temporal_persistence_supported",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/persistent_relationship_change",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/temporal_persistence_supported",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/persistent_relationship_change",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/temporal_persistence_supported",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/persistent_relationship_change",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/temporal_persistence_supported",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/persistent_relationship_change",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/temporal_persistence_supported",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/persistent_relationship_change",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/temporal_persistence_supported",
+        "/relationship_graph/edges/0/persistent_relationship_change",
+        "/relationship_graph/edges/0/temporal_persistence_supported",
+        "/relationship_graph/edges/1/persistent_relationship_change",
+        "/relationship_graph/edges/1/temporal_persistence_supported",
+        "/relationship_graph/edges/2/persistent_relationship_change",
+        "/relationship_graph/edges/2/temporal_persistence_supported",
+        "/relationship_graph/eligible_edges/0/persistent_relationship_change",
+        "/relationship_graph/eligible_edges/0/temporal_persistence_supported",
+        "/relationship_graph/eligible_edges/1/persistent_relationship_change",
+        "/relationship_graph/eligible_edges/1/temporal_persistence_supported",
+        "/relationship_graph/eligible_edges/2/persistent_relationship_change",
+        "/relationship_graph/eligible_edges/2/temporal_persistence_supported"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": 1.0,
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/sample_sufficiency_factor",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/sample_sufficiency_factor",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/sample_sufficiency_factor",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/sample_sufficiency_factor",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/sample_sufficiency_factor",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/sample_sufficiency_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/sample_sufficiency_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/sample_sufficiency_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/sample_sufficiency_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/sample_sufficiency_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/sample_sufficiency_factor",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/sample_sufficiency_factor",
+        "/relationship_graph/edges/0/sample_sufficiency_factor",
+        "/relationship_graph/edges/1/sample_sufficiency_factor",
+        "/relationship_graph/edges/2/sample_sufficiency_factor",
+        "/relationship_graph/eligible_edges/0/sample_sufficiency_factor",
+        "/relationship_graph/eligible_edges/1/sample_sufficiency_factor",
+        "/relationship_graph/eligible_edges/2/sample_sufficiency_factor"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": "stable",
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/single_window_change_type",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/single_window_change_type",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/single_window_change_type",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/single_window_change_type",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/single_window_change_type",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/single_window_change_type",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/single_window_change_type",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/single_window_change_type",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/single_window_change_type",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/single_window_change_type",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/single_window_change_type",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/single_window_change_type",
+        "/relationship_graph/edges/0/single_window_change_type",
+        "/relationship_graph/edges/1/single_window_change_type",
+        "/relationship_graph/edges/2/single_window_change_type",
+        "/relationship_graph/eligible_edges/0/single_window_change_type",
+        "/relationship_graph/eligible_edges/1/single_window_change_type",
+        "/relationship_graph/eligible_edges/2/single_window_change_type"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": [],
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/supporting_windows",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/supporting_windows",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/supporting_windows",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/supporting_windows",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/supporting_windows",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/supporting_windows",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/supporting_windows",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/supporting_windows",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/supporting_windows",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/supporting_windows",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/supporting_windows",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/supporting_windows",
+        "/relationship_graph/edges/0/supporting_windows",
+        "/relationship_graph/edges/1/supporting_windows",
+        "/relationship_graph/edges/2/supporting_windows",
+        "/relationship_graph/eligible_edges/0/supporting_windows",
+        "/relationship_graph/eligible_edges/1/supporting_windows",
+        "/relationship_graph/eligible_edges/2/supporting_windows"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": 0,
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/temporal_persistence_direction",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/temporal_persistence_supporting_observations",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/temporal_persistence_direction",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/temporal_persistence_supporting_observations",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/temporal_persistence_direction",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/temporal_persistence_supporting_observations",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/temporal_persistence_direction",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/temporal_persistence_supporting_observations",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/temporal_persistence_direction",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/temporal_persistence_supporting_observations",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/temporal_persistence_direction",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/temporal_persistence_supporting_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/temporal_persistence_direction",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/temporal_persistence_supporting_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/temporal_persistence_direction",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/temporal_persistence_supporting_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/temporal_persistence_direction",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/temporal_persistence_supporting_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/temporal_persistence_direction",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/temporal_persistence_supporting_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/temporal_persistence_direction",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/temporal_persistence_supporting_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/temporal_persistence_direction",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/temporal_persistence_supporting_observations",
+        "/relationship_graph/edges/0/temporal_persistence_direction",
+        "/relationship_graph/edges/0/temporal_persistence_supporting_observations",
+        "/relationship_graph/edges/1/temporal_persistence_direction",
+        "/relationship_graph/edges/1/temporal_persistence_supporting_observations",
+        "/relationship_graph/edges/2/temporal_persistence_direction",
+        "/relationship_graph/edges/2/temporal_persistence_supporting_observations",
+        "/relationship_graph/eligible_edges/0/temporal_persistence_direction",
+        "/relationship_graph/eligible_edges/0/temporal_persistence_supporting_observations",
+        "/relationship_graph/eligible_edges/1/temporal_persistence_direction",
+        "/relationship_graph/eligible_edges/1/temporal_persistence_supporting_observations",
+        "/relationship_graph/eligible_edges/2/temporal_persistence_direction",
+        "/relationship_graph/eligible_edges/2/temporal_persistence_supporting_observations"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": 1,
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/temporal_persistence_observations",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/temporal_persistence_observations",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/temporal_persistence_observations",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/temporal_persistence_observations",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/temporal_persistence_observations",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/temporal_persistence_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/temporal_persistence_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/temporal_persistence_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/temporal_persistence_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/temporal_persistence_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/temporal_persistence_observations",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/temporal_persistence_observations",
+        "/relationship_graph/edges/0/temporal_persistence_observations",
+        "/relationship_graph/edges/1/temporal_persistence_observations",
+        "/relationship_graph/edges/2/temporal_persistence_observations",
+        "/relationship_graph/eligible_edges/0/temporal_persistence_observations",
+        "/relationship_graph/eligible_edges/1/temporal_persistence_observations",
+        "/relationship_graph/eligible_edges/2/temporal_persistence_observations"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": "unconfirmed",
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/temporal_persistence_status",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/temporal_persistence_status",
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/temporal_persistence_status",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/temporal_persistence_status",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/temporal_persistence_status",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/temporal_persistence_status",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/temporal_persistence_status",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/temporal_persistence_status",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/temporal_persistence_status",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/temporal_persistence_status",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/temporal_persistence_status",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/temporal_persistence_status",
+        "/relationship_graph/edges/0/temporal_persistence_status",
+        "/relationship_graph/edges/1/temporal_persistence_status",
+        "/relationship_graph/edges/2/temporal_persistence_status",
+        "/relationship_graph/eligible_edges/0/temporal_persistence_status",
+        "/relationship_graph/eligible_edges/1/temporal_persistence_status",
+        "/relationship_graph/eligible_edges/2/temporal_persistence_status"
+      ]
+    },
+    {
+      "kind": "value",
+      "new": "0.20*shared_node + 0.20*direction + 0.15*time_alignment + 0.15*confidence + 0.15*sample_sufficiency + 0.15*sensor_health",
+      "old": "0.20*shared_node + 0.20*direction + 0.15*time_alignment + 0.15*confidence + 0.15*persistence + 0.15*sensor_health",
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/formulas/component_coherence",
+        "/evidence_fusion/neutral_evidence/5/evidence/formulas/component_coherence",
+        "/relationship_graph/formulas/component_coherence"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": {
+        "[\"flow_rate\",\"pump_power\"]": {
+          "identity": {
+            "baseline_correlation": 1.0,
+            "baseline_end": "2026-01-01T01:23:00Z",
+            "baseline_start": "2026-01-01T00:00:00Z",
+            "basis": "global_relationship_model",
+            "columns": [
+              "flow_rate",
+              "pump_power"
+            ],
+            "mode": {
+              "baseline_mode": "unavailable",
+              "recent_mode": "unavailable"
+            },
+            "reference_dataset_id": null,
+            "signal_units": null
+          },
+          "observations": [
+            {
+              "acceptable": true,
+              "data_quality_factor": 1.0,
+              "edge_confidence": 0.65,
+              "eligible": true,
+              "observed_at": "2026-01-01T01:59:00+00:00",
+              "signed_correlation_delta": 0.0,
+              "source_dataset_id": null,
+              "source_rows": [
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T00:00:00Z",
+                  "window": "baseline_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:23:00Z",
+                  "window": "baseline_end"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:24:00Z",
+                  "window": "recent_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:59:00Z",
+                  "window": "recent_end"
+                }
+              ],
+              "time_window": {
+                "baseline_end": "2026-01-01T01:23:00Z",
+                "baseline_start": "2026-01-01T00:00:00Z",
+                "current_end": "2026-01-01T01:59:00Z",
+                "current_start": "2026-01-01T01:24:00Z"
+              }
+            }
+          ],
+          "version": 1
+        },
+        "[\"flow_rate\",\"supply_pressure\"]": {
+          "identity": {
+            "baseline_correlation": 1.0,
+            "baseline_end": "2026-01-01T01:23:00Z",
+            "baseline_start": "2026-01-01T00:00:00Z",
+            "basis": "global_relationship_model",
+            "columns": [
+              "flow_rate",
+              "supply_pressure"
+            ],
+            "mode": {
+              "baseline_mode": "unavailable",
+              "recent_mode": "unavailable"
+            },
+            "reference_dataset_id": null,
+            "signal_units": null
+          },
+          "observations": [
+            {
+              "acceptable": true,
+              "data_quality_factor": 1.0,
+              "edge_confidence": 0.65,
+              "eligible": true,
+              "observed_at": "2026-01-01T01:59:00+00:00",
+              "signed_correlation_delta": 0.0,
+              "source_dataset_id": null,
+              "source_rows": [
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T00:00:00Z",
+                  "window": "baseline_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:23:00Z",
+                  "window": "baseline_end"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:24:00Z",
+                  "window": "recent_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:59:00Z",
+                  "window": "recent_end"
+                }
+              ],
+              "time_window": {
+                "baseline_end": "2026-01-01T01:23:00Z",
+                "baseline_start": "2026-01-01T00:00:00Z",
+                "current_end": "2026-01-01T01:59:00Z",
+                "current_start": "2026-01-01T01:24:00Z"
+              }
+            }
+          ],
+          "version": 1
+        },
+        "[\"pump_power\",\"supply_pressure\"]": {
+          "identity": {
+            "baseline_correlation": 1.0,
+            "baseline_end": "2026-01-01T01:23:00Z",
+            "baseline_start": "2026-01-01T00:00:00Z",
+            "basis": "global_relationship_model",
+            "columns": [
+              "pump_power",
+              "supply_pressure"
+            ],
+            "mode": {
+              "baseline_mode": "unavailable",
+              "recent_mode": "unavailable"
+            },
+            "reference_dataset_id": null,
+            "signal_units": null
+          },
+          "observations": [
+            {
+              "acceptable": true,
+              "data_quality_factor": 1.0,
+              "edge_confidence": 0.65,
+              "eligible": true,
+              "observed_at": "2026-01-01T01:59:00+00:00",
+              "signed_correlation_delta": 0.0,
+              "source_dataset_id": null,
+              "source_rows": [
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T00:00:00Z",
+                  "window": "baseline_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:23:00Z",
+                  "window": "baseline_end"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:24:00Z",
+                  "window": "recent_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:59:00Z",
+                  "window": "recent_end"
+                }
+              ],
+              "time_window": {
+                "baseline_end": "2026-01-01T01:23:00Z",
+                "baseline_start": "2026-01-01T00:00:00Z",
+                "current_end": "2026-01-01T01:59:00Z",
+                "current_start": "2026-01-01T01:24:00Z"
+              }
+            }
+          ],
+          "version": 1
+        }
+      },
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/relationship_persistence_state",
+        "/evidence_fusion/neutral_evidence/5/evidence/relationship_persistence_state",
+        "/relationship_graph/relationship_persistence_state"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": {
+        "maximum_age_days": 30,
+        "maximum_observations": 8,
+        "minimum_direction_agreement": 0.75,
+        "minimum_displacement": 0.15,
+        "minimum_supporting_observations": 6
+      },
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/thresholds/temporal_persistence",
+        "/evidence_fusion/neutral_evidence/5/evidence/thresholds/temporal_persistence",
+        "/relationship_graph/thresholds/temporal_persistence"
+      ]
+    }
+  ],
+  "pre_recurrence_governed_evidence": {
+    "authority": {
+      "finding_classification": false,
+      "scope": "canonical_engine_evidence"
+    },
+    "configured_prior_observations": [],
+    "data_quality": {
+      "analysis_gate_state": "READY",
+      "data_confidence": {
+        "rating": "high"
+      },
+      "limitations": [],
+      "quality_metrics": {
+        "baseline_reliable": true,
+        "drop_ratio": 0.0,
+        "irregular_sampling": false,
+        "normalization_window_suppressed": false,
+        "rows_dropped": 0,
+        "rows_received": 120,
+        "rows_used": 120,
+        "rows_with_invalid_numeric": 0,
+        "rows_with_missing_values": 0,
+        "stuck_sensor_count": 0
+      },
+      "readiness": "ready",
+      "reliability_rating": "strong",
+      "reliability_score": 100,
+      "warnings": []
+    },
+    "engine": {
+      "name": "neraium_sii",
+      "version": "v2"
+    },
+    "operating_context": {
+      "baseline_mode": "unavailable",
+      "confidence": "low",
+      "limitations": [],
+      "match": "unavailable",
+      "mode_conditioned_baseline": {
+        "fallback_reason": "no_explicit_operating_mode_features",
+        "limitations": [
+          "Mode-conditioned evidence was not substituted for the global comparison; the fallback is explicit."
+        ],
+        "method": "exact_like_mode_historical_selection_v1",
+        "reason": "no_explicit_operating_mode_features",
+        "selected_operating_mode": {
+          "ambiguous": false,
+          "confidence": 0.0,
+          "confidence_level": "limited",
+          "features": {},
+          "minimum_feature_support": 0.0,
+          "mode_id": "unavailable",
+          "mode_label": "Operating context unavailable",
+          "reported_recent_mode": "unavailable"
+        },
+        "selection": {
+          "historical_end_index_exclusive": 84,
+          "historical_start_index": 0,
+          "minimum_baseline_rows": 12,
+          "minimum_recent_mode_purity": 0.7,
+          "minimum_recent_rows": 6,
+          "recent_end_index_exclusive": 120,
+          "recent_rows": 36,
+          "recent_start_index": 84,
+          "selected_baseline_rows": 0
+        },
+        "selection_confidence": 0.0,
+        "selection_confidence_level": "limited",
+        "status": "limited",
+        "used_global_fallback": true
+      },
+      "recent_mode": "unavailable",
+      "status": "limited"
+    },
+    "persistence": {
+      "adaptive_persistence": {
+        "actual_persistence": {
+          "persistent_columns": [],
+          "persistent_signal_count": 0,
+          "signals_assessed": 0,
+          "source": "elapsed_time_support"
+        },
+        "details": [],
+        "elapsed_time_available": true,
+        "limitations": [
+          "No non-flat watch/review signal was eligible for elapsed-time persistence."
+        ],
+        "method": "elapsed_time_weighted_adaptive_persistence_v2",
+        "observed_duration_seconds": 2160.0,
+        "persistence_basis": "elapsed_time",
+        "persistent_columns": [],
+        "required_observations": 3,
+        "sampling_regular": true,
+        "status": "complete",
+        "used_row_fallback": false
+      },
+      "baseline_signal_persistence": {
+        "signals": [
+          {
+            "column": "flow_rate",
+            "drift_flag": "normal",
+            "persistence_score": 0.0
+          },
+          {
+            "column": "supply_pressure",
+            "drift_flag": "normal",
+            "persistence_score": 0.0
+          },
+          {
+            "column": "pump_power",
+            "drift_flag": "normal",
+            "persistence_score": 0.0
+          }
+        ]
+      },
+      "covariance_gates": {
+        "accumulation": 20.785035,
+        "accumulation_condition": true,
+        "dynamic_threshold": 1.466313,
+        "persistence_condition": false
+      },
+      "fixed_row_support": {
+        "columns_assessed": 0,
+        "details": [],
+        "limitations": [],
+        "persistent_columns": [],
+        "status": "not_persistent"
+      },
+      "method": "phase_1_views_with_phase_2_elapsed_time_persistence",
+      "status": "complete"
+    },
+    "phase_4": {
+      "available": false,
+      "behavioral_evolution": {
+        "adaptation_evidence": [],
+        "limitations": [
+          "authenticated_scope_unavailable"
+        ],
+        "operating_mode_changes": [],
+        "reason": "authenticated_scope_unavailable",
+        "recovery_evidence": [],
+        "relationship_changes": [],
+        "signal_changes": [],
+        "status": "limited",
+        "unresolved_changes": []
+      },
+      "limitations": [
+        "authenticated_scope_unavailable"
+      ],
+      "propagation": {
+        "activated_edges": [],
+        "activated_nodes": [],
+        "candidate_paths": [],
+        "competing_path_count": 0,
+        "earliest_observed_changes": [],
+        "limitations": [
+          "authenticated_scope_unavailable"
+        ],
+        "propagation_confidence": {},
+        "reason": "authenticated_scope_unavailable",
+        "reasoning_trace": {},
+        "status": "limited",
+        "uncertainty": {
+          "propagation_uncertainty": {}
+        },
+        "unsupported_segments": []
+      },
+      "status": "limited"
+    },
+    "provenance": {},
+    "relationship_changes": [],
+    "sensor_health": {
+      "limitations": [],
+      "signals": [
+        {
+          "conditions": [],
+          "health": "healthy",
+          "signal": "flow_rate"
+        },
+        {
+          "conditions": [],
+          "health": "healthy",
+          "signal": "supply_pressure"
+        },
+        {
+          "conditions": [],
+          "health": "healthy",
+          "signal": "pump_power"
+        }
+      ]
+    },
+    "source": "sii_result",
+    "source_path": "sii_result",
+    "status": "complete",
+    "uncertainty": {
+      "components": {
+        "data_uncertainty": {
+          "limitations": [],
+          "not_probability": true,
+          "source_references": [
+            "data_conditions.data_quality",
+            "data_conditions.sensor_health"
+          ],
+          "status": "complete",
+          "traceable_metrics": {
+            "limited_sensor_count": 0,
+            "readiness": "ready",
+            "sensor_count": 3
+          }
+        },
+        "model_uncertainty": {
+          "limitations": [
+            "authenticated_scope_unavailable"
+          ],
+          "not_probability": true,
+          "source_references": [
+            "expected_behavior.expected_values.*.uncertainty",
+            "covariance_analysis",
+            "temporal_analysis.uncertainty_summary",
+            "processing_trace.module_failures"
+          ],
+          "status": "limited",
+          "traceable_metrics": {
+            "covariance_status": "complete",
+            "model_intervals": [],
+            "models_evaluated": 0,
+            "module_failure_count": 0
+          }
+        },
+        "operating_context_uncertainty": {
+          "limitations": [
+            "recent_operating_mode_unavailable",
+            "operating_mode_match_limited"
+          ],
+          "not_probability": true,
+          "source_references": [
+            "operating_modes",
+            "multiscale_analysis.cross_scale_interpretation"
+          ],
+          "status": "limited",
+          "traceable_metrics": {
+            "baseline_mode": "unavailable",
+            "cross_scale_classification": "stable_across_scales",
+            "mode_confidence": "low",
+            "mode_match": "unavailable",
+            "recent_mode": "unavailable"
+          }
+        },
+        "propagation_uncertainty": {
+          "limitations": [
+            "authenticated_scope_unavailable"
+          ],
+          "not_probability": true,
+          "source_references": [
+            "propagation_analysis.candidate_paths",
+            "propagation_analysis.competing_paths",
+            "propagation_analysis.unsupported_segments",
+            "propagation_analysis.uncertainty.propagation_uncertainty"
+          ],
+          "status": "limited",
+          "traceable_metrics": {
+            "candidate_path_count": 0,
+            "competing_path_count": 0,
+            "unsupported_segment_count": 0
+          }
+        },
+        "relationship_uncertainty": {
+          "limitations": [
+            "comparable_relationship_edges_unavailable"
+          ],
+          "not_probability": true,
+          "source_references": [
+            "relationship_analysis",
+            "relationship_graph.edges",
+            "relationship_graph.graph_mathematics.graph_stability"
+          ],
+          "status": "limited",
+          "traceable_metrics": {
+            "direction_ambiguous_edge_count": 0,
+            "edge_count": 0,
+            "minimum_edge_sample_support": null
+          }
+        }
+      },
+      "data_confidence": {
+        "rating": "high"
+      },
+      "limitations": [],
+      "module_failures": [],
+      "status": "complete"
+    }
+  },
+  "recurrence": [
+    {
+      "kind": "added",
+      "new": {
+        "direction": 0,
+        "episode_count": 0,
+        "episodes": [],
+        "evaluated_at": "2026-01-01T01:59:00+00:00",
+        "evidence_model": "relationship_recurrence_v1",
+        "gates": {
+          "minimum_data_quality_factor": 0.35,
+          "minimum_edge_confidence": 0.45
+        },
+        "identity": {
+          "baseline_correlation": 1.0,
+          "baseline_end": "2026-01-01T01:23:00Z",
+          "baseline_start": "2026-01-01T00:00:00Z",
+          "basis": "global_relationship_model",
+          "columns": [
+            "flow_rate",
+            "pump_power"
+          ],
+          "mode": {
+            "baseline_mode": "unavailable",
+            "recent_mode": "unavailable"
+          },
+          "reference_dataset_id": null,
+          "signal_units": null
+        },
+        "opposite_direction_veto": false,
+        "policy": {
+          "maximum_age_days": 30,
+          "maximum_observations": 256,
+          "minimum_displacement": 0.15,
+          "minimum_episodes": 3,
+          "minimum_support_per_episode": 2
+        },
+        "reason": "insufficient_evidence",
+        "status": "unconfirmed",
+        "supported": false
+      },
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/0/recurrence_evidence",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/0/recurrence_evidence",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/0/recurrence_evidence",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/0/recurrence_evidence",
+        "/relationship_graph/edges/0/recurrence_evidence",
+        "/relationship_graph/eligible_edges/0/recurrence_evidence"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": {
+        "direction": 0,
+        "episode_count": 0,
+        "episodes": [],
+        "evaluated_at": "2026-01-01T01:59:00+00:00",
+        "evidence_model": "relationship_recurrence_v1",
+        "gates": {
+          "minimum_data_quality_factor": 0.35,
+          "minimum_edge_confidence": 0.45
+        },
+        "identity": {
+          "baseline_correlation": 1.0,
+          "baseline_end": "2026-01-01T01:23:00Z",
+          "baseline_start": "2026-01-01T00:00:00Z",
+          "basis": "global_relationship_model",
+          "columns": [
+            "pump_power",
+            "supply_pressure"
+          ],
+          "mode": {
+            "baseline_mode": "unavailable",
+            "recent_mode": "unavailable"
+          },
+          "reference_dataset_id": null,
+          "signal_units": null
+        },
+        "opposite_direction_veto": false,
+        "policy": {
+          "maximum_age_days": 30,
+          "maximum_observations": 256,
+          "minimum_displacement": 0.15,
+          "minimum_episodes": 3,
+          "minimum_support_per_episode": 2
+        },
+        "reason": "insufficient_evidence",
+        "status": "unconfirmed",
+        "supported": false
+      },
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/1/recurrence_evidence",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/1/recurrence_evidence",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/1/recurrence_evidence",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/1/recurrence_evidence",
+        "/relationship_graph/edges/1/recurrence_evidence",
+        "/relationship_graph/eligible_edges/1/recurrence_evidence"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": {
+        "direction": 0,
+        "episode_count": 0,
+        "episodes": [],
+        "evaluated_at": "2026-01-01T01:59:00+00:00",
+        "evidence_model": "relationship_recurrence_v1",
+        "gates": {
+          "minimum_data_quality_factor": 0.35,
+          "minimum_edge_confidence": 0.45
+        },
+        "identity": {
+          "baseline_correlation": 1.0,
+          "baseline_end": "2026-01-01T01:23:00Z",
+          "baseline_start": "2026-01-01T00:00:00Z",
+          "basis": "global_relationship_model",
+          "columns": [
+            "flow_rate",
+            "supply_pressure"
+          ],
+          "mode": {
+            "baseline_mode": "unavailable",
+            "recent_mode": "unavailable"
+          },
+          "reference_dataset_id": null,
+          "signal_units": null
+        },
+        "opposite_direction_veto": false,
+        "policy": {
+          "maximum_age_days": 30,
+          "maximum_observations": 256,
+          "minimum_displacement": 0.15,
+          "minimum_episodes": 3,
+          "minimum_support_per_episode": 2
+        },
+        "reason": "insufficient_evidence",
+        "status": "unconfirmed",
+        "supported": false
+      },
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/edges/2/recurrence_evidence",
+        "/evidence_fusion/evidence_inventory/7/evidence/eligible_edges/2/recurrence_evidence",
+        "/evidence_fusion/neutral_evidence/5/evidence/edges/2/recurrence_evidence",
+        "/evidence_fusion/neutral_evidence/5/evidence/eligible_edges/2/recurrence_evidence",
+        "/relationship_graph/edges/2/recurrence_evidence",
+        "/relationship_graph/eligible_edges/2/recurrence_evidence"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": [],
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/recurring_edges",
+        "/evidence_fusion/neutral_evidence/5/evidence/recurring_edges",
+        "/relationship_graph/recurring_edges"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": {
+        "[\"flow_rate\",\"pump_power\"]": {
+          "identity": {
+            "baseline_correlation": 1.0,
+            "baseline_end": "2026-01-01T01:23:00Z",
+            "baseline_start": "2026-01-01T00:00:00Z",
+            "basis": "global_relationship_model",
+            "columns": [
+              "flow_rate",
+              "pump_power"
+            ],
+            "mode": {
+              "baseline_mode": "unavailable",
+              "recent_mode": "unavailable"
+            },
+            "reference_dataset_id": null,
+            "signal_units": null
+          },
+          "observations": [
+            {
+              "acceptable": true,
+              "data_quality_factor": 1.0,
+              "edge_confidence": 0.65,
+              "eligible": true,
+              "observed_at": "2026-01-01T01:59:00+00:00",
+              "sensor_health_context": [
+                {
+                  "conditions": [],
+                  "factor": 1.0,
+                  "health": "healthy",
+                  "signal": "flow_rate"
+                },
+                {
+                  "conditions": [],
+                  "factor": 1.0,
+                  "health": "healthy",
+                  "signal": "pump_power"
+                }
+              ],
+              "signed_correlation_delta": 0.0,
+              "source_dataset_id": null,
+              "source_rows": [
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T00:00:00Z",
+                  "window": "baseline_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:23:00Z",
+                  "window": "baseline_end"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:24:00Z",
+                  "window": "recent_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:59:00Z",
+                  "window": "recent_end"
+                }
+              ],
+              "time_window": {
+                "baseline_end": "2026-01-01T01:23:00Z",
+                "baseline_start": "2026-01-01T00:00:00Z",
+                "current_end": "2026-01-01T01:59:00Z",
+                "current_start": "2026-01-01T01:24:00Z"
+              }
+            }
+          ],
+          "overflow_until": null,
+          "requires_initial_return": false,
+          "version": 1
+        },
+        "[\"flow_rate\",\"supply_pressure\"]": {
+          "identity": {
+            "baseline_correlation": 1.0,
+            "baseline_end": "2026-01-01T01:23:00Z",
+            "baseline_start": "2026-01-01T00:00:00Z",
+            "basis": "global_relationship_model",
+            "columns": [
+              "flow_rate",
+              "supply_pressure"
+            ],
+            "mode": {
+              "baseline_mode": "unavailable",
+              "recent_mode": "unavailable"
+            },
+            "reference_dataset_id": null,
+            "signal_units": null
+          },
+          "observations": [
+            {
+              "acceptable": true,
+              "data_quality_factor": 1.0,
+              "edge_confidence": 0.65,
+              "eligible": true,
+              "observed_at": "2026-01-01T01:59:00+00:00",
+              "sensor_health_context": [
+                {
+                  "conditions": [],
+                  "factor": 1.0,
+                  "health": "healthy",
+                  "signal": "flow_rate"
+                },
+                {
+                  "conditions": [],
+                  "factor": 1.0,
+                  "health": "healthy",
+                  "signal": "supply_pressure"
+                }
+              ],
+              "signed_correlation_delta": 0.0,
+              "source_dataset_id": null,
+              "source_rows": [
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T00:00:00Z",
+                  "window": "baseline_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:23:00Z",
+                  "window": "baseline_end"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:24:00Z",
+                  "window": "recent_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:59:00Z",
+                  "window": "recent_end"
+                }
+              ],
+              "time_window": {
+                "baseline_end": "2026-01-01T01:23:00Z",
+                "baseline_start": "2026-01-01T00:00:00Z",
+                "current_end": "2026-01-01T01:59:00Z",
+                "current_start": "2026-01-01T01:24:00Z"
+              }
+            }
+          ],
+          "overflow_until": null,
+          "requires_initial_return": false,
+          "version": 1
+        },
+        "[\"pump_power\",\"supply_pressure\"]": {
+          "identity": {
+            "baseline_correlation": 1.0,
+            "baseline_end": "2026-01-01T01:23:00Z",
+            "baseline_start": "2026-01-01T00:00:00Z",
+            "basis": "global_relationship_model",
+            "columns": [
+              "pump_power",
+              "supply_pressure"
+            ],
+            "mode": {
+              "baseline_mode": "unavailable",
+              "recent_mode": "unavailable"
+            },
+            "reference_dataset_id": null,
+            "signal_units": null
+          },
+          "observations": [
+            {
+              "acceptable": true,
+              "data_quality_factor": 1.0,
+              "edge_confidence": 0.65,
+              "eligible": true,
+              "observed_at": "2026-01-01T01:59:00+00:00",
+              "sensor_health_context": [
+                {
+                  "conditions": [],
+                  "factor": 1.0,
+                  "health": "healthy",
+                  "signal": "supply_pressure"
+                },
+                {
+                  "conditions": [],
+                  "factor": 1.0,
+                  "health": "healthy",
+                  "signal": "pump_power"
+                }
+              ],
+              "signed_correlation_delta": 0.0,
+              "source_dataset_id": null,
+              "source_rows": [
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T00:00:00Z",
+                  "window": "baseline_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:23:00Z",
+                  "window": "baseline_end"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:24:00Z",
+                  "window": "recent_start"
+                },
+                {
+                  "source_row": null,
+                  "timestamp": "2026-01-01T01:59:00Z",
+                  "window": "recent_end"
+                }
+              ],
+              "time_window": {
+                "baseline_end": "2026-01-01T01:23:00Z",
+                "baseline_start": "2026-01-01T00:00:00Z",
+                "current_end": "2026-01-01T01:59:00Z",
+                "current_start": "2026-01-01T01:24:00Z"
+              }
+            }
+          ],
+          "overflow_until": null,
+          "requires_initial_return": false,
+          "version": 1
+        }
+      },
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/relationship_recurrence_state",
+        "/evidence_fusion/neutral_evidence/5/evidence/relationship_recurrence_state",
+        "/relationship_graph/relationship_recurrence_state"
+      ]
+    },
+    {
+      "kind": "added",
+      "new": {
+        "maximum_age_days": 30,
+        "maximum_observations": 256,
+        "minimum_displacement": 0.15,
+        "minimum_episodes": 3,
+        "minimum_support_per_episode": 2
+      },
+      "paths": [
+        "/evidence_fusion/evidence_inventory/7/evidence/thresholds/recurrence",
+        "/evidence_fusion/neutral_evidence/5/evidence/thresholds/recurrence",
+        "/relationship_graph/thresholds/recurrence"
+      ]
+    }
+  ]
+}

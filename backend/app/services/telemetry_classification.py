@@ -450,7 +450,10 @@ def _has_setpoint_token(text: str) -> bool:
 
 def _has_identifier_token(text: str) -> bool:
     tokens = _tokens(text)
-    if tokens & {"id", "uuid", "serial", "identifier", "asset", "site", "facility", "room", "zone", "location", "area"}:
+    if tokens & {"id", "uuid", "serial", "identifier", "asset", "site", "facility", "room", "location", "area"}:
+        return True
+    # Zone can qualify a measurement; require zone identity semantics instead.
+    if "zone" in tokens and (text == "zone" or text.endswith("_zone") or tokens & {"name", "code", "number"}):
         return True
     return text.endswith("_id") or text.endswith("_code")
 
