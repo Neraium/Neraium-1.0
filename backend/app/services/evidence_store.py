@@ -142,9 +142,9 @@ def read_progress_evidence_run(run_id: str) -> dict[str, Any] | None:
             "AND source_id = ? AND scope_storage_id = ?) "
             "OR EXISTS(SELECT 1 FROM operator_feedback_events WHERE run_id = ?) "
             "OR EXISTS(SELECT 1 FROM finding_status_events WHERE run_id = ?) "
-            "OR EXISTS(SELECT 1 FROM evidence_audit_tag_events WHERE run_id = ?)",
+            "OR EXISTS(SELECT 1 FROM evidence_audit_tag_events WHERE run_id = ?) AS has_context",
             (run_id, current_dataset_scope().storage_id, run_id, run_id, run_id),
-        ).fetchone()[0]
+        ).fetchone()["has_context"]
     if has_context:
         return read_evidence_run(run_id)
     projected = {

@@ -1,6 +1,8 @@
 from copy import deepcopy
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
+import sqlite3
 from unittest.mock import patch
 
 import pytest
@@ -191,3 +193,55 @@ def test_progress_keeps_legacy_import_fallback(monkeypatch, tmp_path):
     assert runtime_db.read_latest_payload(marker) is True
     assert actual == evidence_store.read_evidence_run("legacy")
     assert actual["provenance"] == legacy["provenance"]
+
+
+def assert_progress_lookup_preserves_current_evidence(monkeypatch):
+    """Shared contract exercised with SQLite rows and real PostgreSQL mappings."""
+    monkeypatch.setattr(repo, "_runtime_db_latest_enabled", lambda: True)
+    scope = DatasetScope("row-shape", "current-workspace", "user")
+    other_scope = DatasetScope("row-shape", "other-workspace", "user")
+    with dataset_scope_context(scope):
+        evidence_store.upsert_evidence_run(evidence("row-current"))
+        expected = evidence_store.read_evidence_run("row-current")
+        with (
+            patch.object(evidence_store, "_load_raw_evidence_runs", wraps=evidence_store._load_raw_evidence_runs) as history,
+            patch.object(evidence_store, "hydrate_evidence_event_history_db", wraps=evidence_store.hydrate_evidence_event_history_db) as hydrate,
+        ):
+            upload_jobs.write_job(processing("row-current"))
+            latest = repo.read_latest_upload_record()
+            assert latest["evidence"] is not None
+            assert latest["evidence"] == expected
+            assert latest["evidence"]["provenance"]["dataset_digest"] == "hydraulic-digest"
+            assert latest["evidence"]["analysis_result"]["provenance"]["baseline_id"] == "hydraulic-baseline"
+            assert evidence_store.read_progress_evidence_run("row-current") == expected
+            with dataset_scope_context(other_scope):
+                assert evidence_store.read_progress_evidence_run("row-current") is None
+            history.assert_not_called()
+            hydrate.assert_not_called()
+
+
+@pytest.mark.parametrize("row_shape", ["sqlite_row", "postgres_mapping"])
+def test_progress_lookup_preserves_evidence_for_both_row_shapes(monkeypatch, row_shape):
+    observed = []
+
+    def row_factory(cursor, values):
+        row = sqlite3.Row(cursor, values)
+        # Execute the real query, retaining its actual column names in both shapes.
+        result = dict(row) if row_shape == "postgres_mapping" else row
+        observed.append(result)
+        return result
+
+    @contextmanager
+    def connection_with_row_shape():
+        with runtime_db.db_connection() as connection:
+            connection.row_factory = row_factory
+            yield connection
+
+    monkeypatch.setattr(evidence_store, "db_connection", connection_with_row_shape)
+    assert_progress_lookup_preserves_current_evidence(monkeypatch)
+    assert observed
+    assert all(row["has_context"] == 0 for row in observed)
+    if row_shape == "sqlite_row":
+        assert all(row[0] == row["has_context"] for row in observed)
+    else:
+        assert all(isinstance(row, dict) and 0 not in row for row in observed)
