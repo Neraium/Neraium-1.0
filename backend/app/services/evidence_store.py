@@ -18,6 +18,7 @@ from app.services.finding_workflow import (
 )
 from app.services.runtime_db import (
     append_evidence_audit_tag_event_db,
+    db_connection,
     hydrate_evidence_event_history_db,
     list_evidence_runs_db,
     read_evidence_run_db,
@@ -107,6 +108,52 @@ def read_evidence_run(run_id: str) -> dict[str, Any] | None:
         if item.get("run_id") == run_id:
             return item
     return None
+
+
+def read_progress_evidence_run(run_id: str) -> dict[str, Any] | None:
+    """Project a provisional run without hydrating unrelated evidence history.
+
+    Rich evidence and compatibility events still use the full reader: their
+    historical annotations are part of the existing latest-state contract.
+    """
+    record = read_evidence_run_db(run_id)
+    if record is None:
+        # Preserve the existing cold legacy import when a DB row is not yet present.
+        if read_latest_payload(LEGACY_EVIDENCE_IMPORT_MARKER) is not True:
+            return read_evidence_run(run_id)
+        return None
+    if dataset_scope_from_payload(record) != current_dataset_scope():
+        return None
+    observation_type, variables = _record_observation_keys(record)
+    if (
+        str(record.get("status") or "").lower() not in {"queued", "pending", "processing"}
+        or record.get("finding_identity_snapshot")
+        or record.get("condition_id")
+        or record.get("condition")
+        or (observation_type and variables)
+        or any(record.get(key) for key in ("operator_feedback_history", "finding_status_history", "audit_tags"))
+    ):
+        return read_evidence_run(run_id)
+    # A provisional record normally has no findings or review events. Check only
+    # this run before skipping their materialization/migration/compatibility path.
+    with db_connection() as connection:
+        has_context = connection.execute(
+            "SELECT EXISTS(SELECT 1 FROM finding_cases WHERE source_kind = 'evidence_run' "
+            "AND source_id = ? AND scope_storage_id = ?) "
+            "OR EXISTS(SELECT 1 FROM operator_feedback_events WHERE run_id = ?) "
+            "OR EXISTS(SELECT 1 FROM finding_status_events WHERE run_id = ?) "
+            "OR EXISTS(SELECT 1 FROM evidence_audit_tag_events WHERE run_id = ?)",
+            (run_id, current_dataset_scope().storage_id, run_id, run_id, run_id),
+        ).fetchone()[0]
+    if has_context:
+        return read_evidence_run(run_id)
+    projected = {
+        **record,
+        "operator_feedback_history": [],
+        "finding_status_history": [],
+        "audit_tags": [],
+    }
+    return product_evidence(_annotate_evidence_record_indexed(projected, _new_annotation_history_index()))
 
 
 def latest_evidence_run() -> dict[str, Any] | None:
