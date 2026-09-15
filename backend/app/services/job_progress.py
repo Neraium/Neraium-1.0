@@ -571,7 +571,7 @@ class ProgressReporter:
                 status=status,
                 **values,
             )
-            self._last_write = now
+            self._last_write = self.monotonic()
             self._last_substage = substage
             self._last_status = status
             self.write_count += 1
