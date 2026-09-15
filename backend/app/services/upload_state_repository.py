@@ -1285,7 +1285,9 @@ def write_upload_status_progress(
         )
         if _is_terminal_upload_state(canonical):
             return canonical
-        record = persist_latest_upload_state(summary=summary_payload, result=None, keep_result=keep_result)
+        record = persist_latest_upload_state(
+            summary=summary_payload, result=None, keep_result=keep_result, progress_only=True,
+        )
         if identity_matches(record, str(job_id)):
             write_latest_upload_summary_payload(summary_payload)
         return canonical
@@ -1592,6 +1594,7 @@ def persist_latest_upload_state(
     summary: dict[str, Any] | None = None,
     result: dict[str, Any] | None = None,
     keep_result: bool = True,
+    progress_only: bool = False,
 ) -> dict[str, Any]:
     scope = _state_scope(payload=result or summary)
     incoming = result if isinstance(result, dict) else summary
@@ -1624,9 +1627,12 @@ def persist_latest_upload_state(
     job_id, _, _ = normalize_upload_identity(retained_result or summary)
     if job_id:
         try:
-            from app.services.evidence_store import read_evidence_run
+            from app.services.evidence_store import read_evidence_run, read_progress_evidence_run
 
-            evidence_record = read_evidence_run(job_id)
+            if progress_only and not _is_terminal_upload_state(incoming_state_payload):
+                evidence_record = read_progress_evidence_run(job_id)
+            else:
+                evidence_record = read_evidence_run(job_id)
         except Exception:
             evidence_record = None
     record = build_latest_upload_record(

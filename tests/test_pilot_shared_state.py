@@ -35,6 +35,17 @@ def postgres_runtime(monkeypatch):
 
 
 @pytest.mark.integration
+def test_postgres_progress_lookup_preserves_evidence_and_scope(postgres_runtime, monkeypatch):
+    from test_progress_evidence_lookup import assert_progress_lookup_preserves_current_evidence
+
+    with runtime_db.db_connection() as connection:
+        row = connection.execute("SELECT false AS has_context").fetchone()
+    assert isinstance(row, dict)
+    assert row == {"has_context": False}
+    assert_progress_lookup_preserves_current_evidence(monkeypatch)
+
+
+@pytest.mark.integration
 def test_shared_payload_restart_concurrent_mutation_and_pure_reads(postgres_runtime, monkeypatch, tmp_path):
     dsn, schema = postgres_runtime
     runtime_db.upsert_latest_payload("counter", 0)
