@@ -1,6 +1,9 @@
 """Reproducible current-system benchmark; run with the repository virtualenv."""
 from __future__ import annotations
 import argparse, cProfile, fcntl, gzip, hashlib, json, math, os, pstats, resource, shutil, statistics, sys, time
+import importlib.abc
+import importlib.util
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -11,6 +14,40 @@ RAW = ROOT / 'docs/performance/2026-optimization/raw'
 RUNTIME = Path('/tmp/neraium-performance-runtime')
 os.environ['NERAIUM_RUNTIME_DIR'] = str(RUNTIME)
 os.environ['NERAIUM_PROCESS_ROLE'] = 'all'
+
+HOT_PATH_MODULES = {
+    'app.services.behavioral_baseline',
+    'app.services.data_quality',
+    'app.services.historical_ingestion',
+    'app.services.sii_runner',
+}
+
+
+class ReferenceLoader(importlib.abc.Loader):
+    def __init__(self, source, filename):
+        self.source = source
+        self.filename = filename
+
+    def create_module(self, spec):
+        return None
+
+    def exec_module(self, module):
+        exec(compile(self.source, self.filename, 'exec'), module.__dict__)
+
+
+class ReferenceFinder(importlib.abc.MetaPathFinder):
+    """Load only the four originally clean hot-path modules from the frozen commit."""
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname not in HOT_PATH_MODULES:
+            return None
+        relative = 'backend/' + fullname.replace('.', '/') + '.py'
+        revision = (RAW / 'initial-commit.txt').read_text().strip()
+        source = subprocess.check_output(['git', 'show', f'{revision}:{relative}'], cwd=ROOT)
+        expected = json.loads((RAW / 'baseline-source-hashes.json').read_text())[relative]
+        if hashlib.sha256(source).hexdigest() != expected:
+            raise RuntimeError(f'Frozen commit does not reproduce baseline source: {relative}')
+        filename = str(ROOT / relative)
+        return importlib.util.spec_from_file_location(fullname, filename, loader=ReferenceLoader(source, filename))
 
 class FixedDateTime(datetime):
     @classmethod
@@ -122,6 +159,28 @@ def encode(value):
     return json.dumps(value, ensure_ascii=False, separators=(',', ':'), allow_nan=False, default=json_default).encode()
 
 
+def capture_ingestion_artifacts(result, name):
+    """Materialize artifact bytes whose digests were frozen before optimization."""
+    with gzip.open(RAW / f'before-{name}-0.json.gz', 'rb') as f:
+        frozen = json.load(f)[0]
+    record = result[0]
+    canonical = list(RUNTIME.glob(f"historical_ingestion/scopes/*/canonical/{record['dataset_identity']}.jsonl"))
+    assert len(canonical) == 1
+    manifest = {}
+    for kind, source, expected, suffix in (
+        ('source', RUNTIME / 'historian.csv', frozen['raw_source']['sha256'], 'csv'),
+        ('canonical', canonical[0], frozen['canonical_dataset']['sha256'], 'jsonl'),
+    ):
+        with source.open('rb') as f:
+            actual = hashlib.file_digest(f, 'sha256').hexdigest()
+        assert actual == expected, (kind, expected, actual)
+        target = RAW / f'golden-artifact-{name}-{kind}.{suffix}.gz'
+        with source.open('rb') as src, gzip.open(target, 'wb') as dst:
+            shutil.copyfileobj(src, dst)
+        manifest[kind] = {'file': target.name, 'sha256': actual, 'bytes': source.stat().st_size}
+    (RAW / f'golden-artifact-{name}-manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--phase', required=True)
@@ -129,7 +188,10 @@ def main():
     parser.add_argument('--rows', type=int, default=10000)
     parser.add_argument('--repeats', type=int, default=3)
     parser.add_argument('--profile', action='store_true')
+    parser.add_argument('--reference', action='store_true', help='Control run with frozen original hot-path modules')
     args = parser.parse_args()
+    if args.reference:
+        sys.meta_path.insert(0, ReferenceFinder())
     RAW.mkdir(parents=True, exist_ok=True)
     name = f'{args.kind}-{args.rows}'
     # Freeze wall-clock metadata only; telemetry timestamps remain real fixtures.
@@ -153,6 +215,8 @@ def main():
             if args.phase != 'before' or i:
                 with gzip.open(golden, 'rb') as f: expected = encode(governed(json.load(f)))
                 sample['golden_equal'] = expected == payload
+            if args.phase == 'fresh' and args.kind == 'ingestion' and i == 0:
+                capture_ingestion_artifacts(result, name)
             print(name, i, sample, flush=True)
         if args.profile:
             run = setup(args.rows, args.kind)
@@ -165,7 +229,7 @@ def main():
             profile_text = RAW / f'{args.phase}-{name}-profile.txt'
             profile_text.write_text(profile_text.read_text().rstrip()+'\n')
         walls = [s['wall_seconds'] for s in samples]
-        output = {'phase': args.phase, 'workload': name, 'rows': 720 if args.kind == 'incremental' else args.rows, 'samples': samples, 'wall_median': statistics.median(walls), 'wall_min': min(walls), 'wall_max': max(walls), 'cpu_median': statistics.median(s['cpu_seconds'] for s in samples), 'peak_rss_bytes': max(s['peak_rss_bytes'] for s in samples)}
+        output = {'phase': args.phase, 'implementation': 'frozen-reference' if args.reference else 'working-tree', 'workload': name, 'rows': 720 if args.kind == 'incremental' else args.rows, 'samples': samples, 'wall_median': statistics.median(walls), 'wall_min': min(walls), 'wall_max': max(walls), 'cpu_median': statistics.median(s['cpu_seconds'] for s in samples), 'peak_rss_bytes': max(s['peak_rss_bytes'] for s in samples)}
         output['rows_per_second'] = output['rows'] / output['wall_median']
         (RAW / f'{args.phase}-{name}-benchmark.json').write_text(json.dumps(output, indent=2)+'\n')
         if any(s.get('golden_equal') is False for s in samples):

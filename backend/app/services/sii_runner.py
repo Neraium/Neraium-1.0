@@ -8,6 +8,7 @@ import time
 from collections import deque
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -290,6 +291,20 @@ def _regularized_covariance_matrix(matrix: np.ndarray) -> np.ndarray:
     return covariance + (np.eye(dimension, dtype=float) * regularization)
 
 
+@lru_cache(maxsize=64)
+def _baseline_distance_contraction_path(
+    baseline_shape: tuple[int, ...], inverse_shape: tuple[int, ...]
+) -> tuple:
+    """Cache only shape-derived plans, never telemetry or analytical state."""
+    # Planning inspects shapes only. Broadcast views avoid allocating matrices
+    # just to select the same path that optimize=True selects on each update.
+    scalar = np.zeros((), dtype=float)
+    centered = np.broadcast_to(scalar, baseline_shape)
+    inverse = np.broadcast_to(scalar, inverse_shape)
+    path, _ = np.einsum_path("ij,jk,ik->i", centered, inverse, centered, optimize=True)
+    return tuple(path)
+
+
 def _baseline_mahalanobis_distances(
     baseline_matrix: np.ndarray,
     baseline_mean: np.ndarray,
@@ -298,7 +313,8 @@ def _baseline_mahalanobis_distances(
     centered = np.nan_to_num(np.asarray(baseline_matrix, dtype=float) - baseline_mean, nan=0.0)
     if centered.size == 0:
         return []
-    distance_squares = np.einsum("ij,jk,ik->i", centered, covariance_inverse, centered, optimize=True)
+    path = _baseline_distance_contraction_path(centered.shape, covariance_inverse.shape)
+    distance_squares = np.einsum("ij,jk,ik->i", centered, covariance_inverse, centered, optimize=path)
     finite = distance_squares[np.isfinite(distance_squares)]
     return np.sqrt(np.clip(finite, 0.0, None)).astype(float).tolist()
 

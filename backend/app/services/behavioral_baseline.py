@@ -6,6 +6,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+import numpy as np
+
 from app.services.baseline_contracts import (
     BASELINE_RESULT_CONTRACT_VERSION,
     BASELINE_ARTIFACT_CONTRACT_VERSION,
@@ -132,6 +134,14 @@ def _std(values: list[float]) -> float:
     return math.sqrt(sum((value - average) ** 2 for value in values) / len(values))
 
 
+def _sequential_product_sum(left: np.ndarray, right: np.ndarray) -> float:
+    """Retain the original loop's addition order, including its initial +0.0."""
+    products = left * right
+    products[0] = 0.0 + products[0]
+    np.cumsum(products, out=products)
+    return float(products[-1])
+
+
 def _correlation(left: list[float], right: list[float]) -> float | None:
     if len(left) != len(right) or len(left) < 3:
         return None
@@ -140,12 +150,23 @@ def _correlation(left: list[float], right: list[float]) -> float | None:
     covariance = 0.0
     left_variance = 0.0
     right_variance = 0.0
-    for left_value, right_value in zip(left, right):
-        left_delta = left_value - left_mean
-        right_delta = right_value - right_mean
-        covariance += left_delta * right_delta
-        left_variance += left_delta * left_delta
-        right_variance += right_delta * right_delta
+    if len(left) >= 128:
+        # Keep the existing Python means. A sum/dot reduction could change
+        # rounding; cumulative sums preserve the scalar loop's accumulation.
+        # Python float arithmetic does not consult NumPy's global error policy.
+        with np.errstate(all="ignore"):
+            left_delta = np.fromiter(left, dtype=float, count=len(left)) - left_mean
+            right_delta = np.fromiter(right, dtype=float, count=len(right)) - right_mean
+            covariance = _sequential_product_sum(left_delta, right_delta)
+            left_variance = _sequential_product_sum(left_delta, left_delta)
+            right_variance = _sequential_product_sum(right_delta, right_delta)
+    else:
+        for left_value, right_value in zip(left, right):
+            left_delta = left_value - left_mean
+            right_delta = right_value - right_mean
+            covariance += left_delta * right_delta
+            left_variance += left_delta * left_delta
+            right_variance += right_delta * right_delta
     denominator = math.sqrt(left_variance * right_variance)
     if denominator <= 1e-12:
         return None
@@ -238,11 +259,13 @@ def _identify_modes(
             signatures = [("all_operation",) for _ in rows]
 
     counts = Counter(signatures)
-    retained = {signature for signature, _ in counts.most_common(8)}
+    common_modes = counts.most_common(8)
+    retained = {signature for signature, _ in common_modes}
+    dominant_signature = common_modes[0][0] if common_modes else None
     membership: dict[str, list[int]] = defaultdict(list)
     public_modes: list[dict[str, Any]] = []
     mode_id_by_signature: dict[tuple[str, ...], str] = {}
-    for index, (signature, count) in enumerate(counts.most_common(8), start=1):
+    for index, (signature, count) in enumerate(common_modes, start=1):
         mode_id = f"mode_{index}"
         mode_id_by_signature[signature] = mode_id
         public_modes.append(
@@ -259,7 +282,7 @@ def _identify_modes(
             }
         )
     for row_index, signature in enumerate(signatures):
-        normalized = signature if signature in retained else counts.most_common(1)[0][0]
+        normalized = signature if signature in retained else dominant_signature
         membership[mode_id_by_signature[normalized]].append(row_index)
     return public_modes, dict(membership)
 
@@ -293,7 +316,7 @@ def _signal_characteristics(values: list[float]) -> dict[str, Any]:
     lag_one = _correlation(values[:-1], values[1:]) if len(values) >= 4 else None
     lag_scores = []
     for lag in range(1, min(12, len(values) // 3) + 1):
-        correlation = _correlation(values[:-lag], values[lag:])
+        correlation = lag_one if lag == 1 else _correlation(values[:-lag], values[lag:])
         if correlation is not None:
             lag_scores.append((lag, correlation))
     strongest_lag = max(lag_scores, key=lambda item: abs(item[1])) if lag_scores else None
@@ -400,7 +423,7 @@ def _relationship_edge(
             lag_left, lag_right = left_values[offset:], right_values[:-offset]
         else:
             lag_left, lag_right = left_values, right_values
-        lag_correlation = _correlation(lag_left, lag_right)
+        lag_correlation = correlation if lag == 0 else _correlation(lag_left, lag_right)
         if lag_correlation is not None:
             lag_candidates.append((lag, lag_correlation, len(lag_left)))
     strongest = max(lag_candidates, key=lambda item: abs(item[1])) if lag_candidates else (0, correlation, len(left_values))

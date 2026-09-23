@@ -308,6 +308,16 @@ def parse_numeric_value(raw_value: Any) -> float | None:
     if not normalized:
         return None
     normalized = normalized.replace(",", "").replace("%", "")
+    # Canonical telemetry is usually already a complete number. Avoid allocating
+    # lowercase/split copies in that case. Keep source normalization above and
+    # the legacy fallback below for unit-bearing or malformed source values.
+    if normalized and normalized[-1] in "0123456789.":
+        try:
+            value = float(normalized)
+        except ValueError:
+            pass
+        else:
+            return value if math.isfinite(value) else None
     lowered = normalized.lower()
     if lowered in {"nan", "null", "none", "n/a", "na", "-"}:
         return None
