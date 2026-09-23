@@ -1,0 +1,98 @@
+[
+  {
+    "workload": "ingestion-100000",
+    "control": {
+      "phase": "memory-control",
+      "implementation": "frozen-reference",
+      "workload": "ingestion-100000",
+      "rows": 100000,
+      "samples": [
+        {
+          "wall_seconds": 10.08808614499867,
+          "cpu_seconds": 9.897014918,
+          "peak_rss_bytes": 269799424,
+          "governed_sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db",
+          "golden_equal": true
+        }
+      ],
+      "wall_median": 10.08808614499867,
+      "wall_min": 10.08808614499867,
+      "wall_max": 10.08808614499867,
+      "cpu_median": 9.897014918,
+      "peak_rss_bytes": 269799424,
+      "rows_per_second": 9912.682996821612
+    },
+    "after": {
+      "phase": "memory-after",
+      "implementation": "working-tree",
+      "workload": "ingestion-100000",
+      "rows": 100000,
+      "samples": [
+        {
+          "wall_seconds": 11.408844853984192,
+          "cpu_seconds": 11.247705860999998,
+          "peak_rss_bytes": 209207296,
+          "governed_sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db",
+          "golden_equal": true
+        }
+      ],
+      "wall_median": 11.408844853984192,
+      "wall_min": 11.408844853984192,
+      "wall_max": 11.408844853984192,
+      "cpu_median": 11.247705860999998,
+      "peak_rss_bytes": 209207296,
+      "rows_per_second": 8765.12927293231
+    },
+    "rss_bytes_saved": 60592128,
+    "rss_reduction_percent": 22.458212512714624,
+    "protocol": "Separate processes, one warm-up and one measured job; RSS read before output serialization/capture. Not used for throughput claims."
+  },
+  {
+    "workload": "ingestion-250000",
+    "control": {
+      "phase": "memory-control",
+      "implementation": "frozen-reference",
+      "workload": "ingestion-250000",
+      "rows": 250000,
+      "samples": [
+        {
+          "wall_seconds": 29.193607279099524,
+          "cpu_seconds": 28.276666838999994,
+          "peak_rss_bytes": 434413568,
+          "governed_sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91",
+          "golden_equal": true
+        }
+      ],
+      "wall_median": 29.193607279099524,
+      "wall_min": 29.193607279099524,
+      "wall_max": 29.193607279099524,
+      "cpu_median": 28.276666838999994,
+      "peak_rss_bytes": 434413568,
+      "rows_per_second": 8563.518636457839
+    },
+    "after": {
+      "phase": "memory-after",
+      "implementation": "working-tree",
+      "workload": "ingestion-250000",
+      "rows": 250000,
+      "samples": [
+        {
+          "wall_seconds": 24.532192955026403,
+          "cpu_seconds": 23.313408941000002,
+          "peak_rss_bytes": 305639424,
+          "governed_sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91",
+          "golden_equal": true
+        }
+      ],
+      "wall_median": 24.532192955026403,
+      "wall_min": 24.532192955026403,
+      "wall_max": 24.532192955026403,
+      "cpu_median": 23.313408941000002,
+      "peak_rss_bytes": 305639424,
+      "rows_per_second": 10190.69108327625
+    },
+    "rss_bytes_saved": 128774144,
+    "rss_reduction_percent": 29.64321409040337,
+    "protocol": "Separate processes, one warm-up and one measured job; RSS read before output serialization/capture. Not used for throughput claims."
+  }
+]

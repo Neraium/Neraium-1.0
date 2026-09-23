@@ -1,0 +1,35 @@
+{
+  "phase": "control",
+  "implementation": "frozen-reference",
+  "workload": "engine-10000",
+  "rows": 10000,
+  "samples": [
+    {
+      "wall_seconds": 4.162516684969887,
+      "cpu_seconds": 4.1413764529999995,
+      "peak_rss_bytes": 152616960,
+      "governed_sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7",
+      "golden_equal": true
+    },
+    {
+      "wall_seconds": 4.449311506003141,
+      "cpu_seconds": 4.424000054000002,
+      "peak_rss_bytes": 162402304,
+      "governed_sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7",
+      "golden_equal": true
+    },
+    {
+      "wall_seconds": 4.5102925868704915,
+      "cpu_seconds": 4.476809292999999,
+      "peak_rss_bytes": 165318656,
+      "governed_sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7",
+      "golden_equal": true
+    }
+  ],
+  "wall_median": 4.449311506003141,
+  "wall_min": 4.162516684969887,
+  "wall_max": 4.5102925868704915,
+  "cpu_median": 4.424000054000002,
+  "peak_rss_bytes": 165318656,
+  "rows_per_second": 2247.5387453784047
+}

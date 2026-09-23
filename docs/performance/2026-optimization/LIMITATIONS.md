@@ -39,3 +39,18 @@
   and operating-context availability. They do not establish new measurable
   consequences. No authority, consequence, threshold, uncertainty, provenance,
   or promotion rule is changed.
+
+- Isolated ingestion-memory checks supplement the repeated-process RSS values:
+  one warm-up and one measured job, before artifact serialization, in separate
+  original/optimized processes. They are footprint checks, not extra samples
+  selected for throughput claims. Repeated-process maximum RSS did not improve
+  for every workload and remains visible in the benchmark tables.
+- The complete selected suite has 30 pre-existing retired-route contract failures;
+  the overall repository is not certified green. The broad repository run was
+  interrupted and is explicitly reported as partial. No frontend/browser tests
+  were needed for these backend-only changes.
+- No long-duration live-store growth, remote connector capacity, or high-signal-count
+  throughput claim is made. Canonical JSON/provenance I/O, overlapping window
+  projections, mode construction, and rolling temporal statistics remain costs.
+- Parser gains depend on input format. Some malformed numeric-looking strings can
+  require an extra conversion attempt; exact legacy parsing behavior is preserved.

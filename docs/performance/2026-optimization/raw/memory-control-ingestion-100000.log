@@ -1,0 +1,1 @@
+ingestion-100000 0 {'wall_seconds': 10.08808614499867, 'cpu_seconds': 9.897014918, 'peak_rss_bytes': 269799424, 'governed_sha256': 'bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db', 'golden_equal': True}

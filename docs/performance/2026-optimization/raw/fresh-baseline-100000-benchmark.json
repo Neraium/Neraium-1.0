@@ -1,0 +1,21 @@
+{
+  "phase": "fresh",
+  "implementation": "working-tree",
+  "workload": "baseline-100000",
+  "rows": 100000,
+  "samples": [
+    {
+      "wall_seconds": 6.041034389054403,
+      "cpu_seconds": 5.990301887999999,
+      "peak_rss_bytes": 226340864,
+      "governed_sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8",
+      "golden_equal": true
+    }
+  ],
+  "wall_median": 6.041034389054403,
+  "wall_min": 6.041034389054403,
+  "wall_max": 6.041034389054403,
+  "cpu_median": 5.990301887999999,
+  "peak_rss_bytes": 226340864,
+  "rows_per_second": 16553.45650426812
+}

@@ -1,0 +1,3 @@
+ingestion-10000 0 {'wall_seconds': 0.9782620270270854, 'cpu_seconds': 0.9526507880000001, 'peak_rss_bytes': 140980224, 'governed_sha256': '017edefb1084793667da3ab3df2edbcc740200a252876d89b15bd2d903c70dbb', 'golden_equal': True}
+ingestion-10000 1 {'wall_seconds': 1.0848140879534185, 'cpu_seconds': 1.0620237980000002, 'peak_rss_bytes': 149327872, 'governed_sha256': '017edefb1084793667da3ab3df2edbcc740200a252876d89b15bd2d903c70dbb', 'golden_equal': True}
+ingestion-10000 2 {'wall_seconds': 0.8698886579368263, 'cpu_seconds': 0.8483067289999999, 'peak_rss_bytes': 152383488, 'governed_sha256': '017edefb1084793667da3ab3df2edbcc740200a252876d89b15bd2d903c70dbb', 'golden_equal': True}

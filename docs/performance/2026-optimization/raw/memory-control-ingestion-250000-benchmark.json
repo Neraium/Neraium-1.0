@@ -1,0 +1,21 @@
+{
+  "phase": "memory-control",
+  "implementation": "frozen-reference",
+  "workload": "ingestion-250000",
+  "rows": 250000,
+  "samples": [
+    {
+      "wall_seconds": 29.193607279099524,
+      "cpu_seconds": 28.276666838999994,
+      "peak_rss_bytes": 434413568,
+      "governed_sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91",
+      "golden_equal": true
+    }
+  ],
+  "wall_median": 29.193607279099524,
+  "wall_min": 29.193607279099524,
+  "wall_max": 29.193607279099524,
+  "cpu_median": 28.276666838999994,
+  "peak_rss_bytes": 434413568,
+  "rows_per_second": 8563.518636457839
+}

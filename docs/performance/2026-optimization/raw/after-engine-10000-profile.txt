@@ -1,0 +1,164 @@
+         9732412 function calls (9652939 primitive calls) in 8.869 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1125 to 90 due to restriction <90>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    8.869    8.869 governed_benchmark.py:138(<lambda>)
+        1    0.011    0.011    8.869    8.869 governed_benchmark.py:112(evaluate)
+        1    0.005    0.005    8.858    8.858 sii_engine.py:51(evaluate_sii)
+        1    0.018    0.018    3.230    3.230 sii_runner.py:430(run_sii_runner)
+     1024    0.238    0.000    2.981    0.003 sii_runner.py:73(ingest)
+        1    0.001    0.001    2.158    2.158 temporal_math.py:20(evaluate_temporal_math)
+        1    0.055    0.055    1.200    1.200 temporal_math.py:223(_entropy_growth_series)
+     9753    0.391    0.000    1.017    0.000 temporal_math.py:257(_column_entropy)
+       33    0.040    0.001    0.862    0.026 common.py:51(numeric_values)
+        1    0.027    0.027    0.843    0.843 multiscale_analysis.py:45(analyze_multiscale)
+        1    0.033    0.033    0.778    0.778 mode_conditioned_baseline.py:31(analyze_mode_conditioned_baseline)
+   222330    0.198    0.000    0.755    0.000 common.py:41(finite_number)
+    10003    0.094    0.000    0.747    0.000 operating_modes.py:230(describe_mode)
+   304316    0.471    0.000    0.713    0.000 data_quality.py:306(parse_numeric_value)
+     3573    0.096    0.000    0.691    0.000 common.py:21(column)
+        1    0.042    0.042    0.664    0.664 temporal_math.py:299(_correlation_drift)
+        4    0.001    0.000    0.596    0.149 multiscale_analysis.py:454(_signal_metrics)
+        1    0.001    0.001    0.567    0.567 phase4.py:43(evaluate_phase4)
+     5287    0.171    0.000    0.514    0.000 _function_base_impl.py:2680(cov)
+     2004    0.041    0.000    0.484    0.000 sii_runner.py:284(_regularized_covariance_matrix)
+        1    0.000    0.000    0.456    0.456 phase4.py:516(_advanced_modules)
+    14235    0.187    0.000    0.435    0.000 _type_check_impl.py:373(nan_to_num)
+    35482    0.074    0.000    0.423    0.000 fromnumeric.py:2241(clip)
+    25103    0.151    0.000    0.417    0.000 _methods.py:118(_mean)
+     3283    0.054    0.000    0.397    0.000 _function_base_impl.py:2903(corrcoef)
+    94071    0.390    0.000    0.390    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+    73100    0.128    0.000    0.388    0.000 data_quality.py:284(parse_timestamp)
+    19816    0.063    0.000    0.376    0.000 fromnumeric.py:3735(mean)
+     6323    0.049    0.000    0.367    0.000 _nanfunctions_impl.py:954(nanmean)
+     2004    0.029    0.000    0.358    0.000 sii_runner.py:277(_covariance_matrix)
+    37498    0.058    0.000    0.355    0.000 fromnumeric.py:51(_wrapfunc)
+38656/38655    0.118    0.000    0.345    0.000 {built-in method builtins.sum}
+    51077    0.114    0.000    0.340    0.000 fromnumeric.py:69(_wrapreduction)
+     1002    0.034    0.000    0.327    0.000 sii_runner.py:308(_baseline_mahalanobis_distances)
+     5287    0.051    0.000    0.319    0.000 _function_base_impl.py:415(average)
+    30577    0.061    0.000    0.301    0.000 fromnumeric.py:2338(sum)
+76095/132    0.123    0.000    0.277    0.002 copy.py:118(deepcopy)
+ 1904/139    0.017    0.000    0.276    0.002 copy.py:217(_deepcopy_dict)
+        1    0.003    0.003    0.273    0.273 baseline_analysis.py:23(build_baseline_analysis)
+        1    0.004    0.004    0.266    0.266 empirical_thresholds.py:30(estimate_empirical_thresholds)
+ 1410/564    0.022    0.000    0.257    0.000 copy.py:191(_deepcopy_list)
+    34229    0.104    0.000    0.250    0.000 {built-in method builtins.sorted}
+     1002    0.031    0.000    0.243    0.000 einsumfunc.py:1057(einsum)
+        1    0.000    0.000    0.230    0.230 phase4.py:538(<lambda>)
+        1    0.000    0.000    0.230    0.230 evidence_fusion.py:37(fuse_evidence)
+        1    0.009    0.009    0.230    0.230 dynamical_stability.py:12(analyze_dynamical_stability)
+       21    0.001    0.000    0.227    0.011 evidence_fusion.py:164(_module_evidence_item)
+        1    0.000    0.000    0.225    0.225 phase4.py:531(<lambda>)
+        1    0.001    0.001    0.224    0.224 spectral_analysis.py:21(analyze_spectral_behavior)
+     1024    0.018    0.000    0.208    0.000 sii_runner.py:261(_windowed_history)
+     9756    0.135    0.000    0.206    0.000 function_base.py:25(linspace)
+        1    0.007    0.007    0.188    0.188 baseline_analysis.py:353(select_adaptive_baseline_window)
+   674205    0.186    0.000    0.186    0.000 {method 'get' of 'dict' objects}
+        4    0.027    0.007    0.186    0.046 common.py:129(parse_timestamps)
+        1    0.006    0.006    0.185    0.185 mode_conditioned_baseline.py:287(_recent_feature_support)
+     2047    0.055    0.000    0.183    0.000 shape_base.py:220(vstack)
+        1    0.031    0.031    0.181    0.181 temporal_math.py:210(_variance_growth_series)
+     1002    0.040    0.000    0.176    0.000 _linalg.py:2128(pinv)
+    73100    0.047    0.000    0.176    0.000 data_quality.py:341(normalize_timestamp)
+    10003    0.043    0.000    0.172    0.000 operating_modes.py:287(summarize_signal)
+    19396    0.054    0.000    0.170    0.000 fromnumeric.py:41(_wrapit)
+        1    0.001    0.001    0.168    0.168 operating_modes.py:49(assess_operating_modes)
+     5260    0.101    0.000    0.168    0.000 _methods.py:151(_var)
+    20006    0.029    0.000    0.159    0.000 operating_modes.py:399(majority)
+        3    0.012    0.004    0.159    0.053 common.py:139(timestamp_statistics)
+     1002    0.063    0.000    0.154    0.000 einsumfunc.py:742(einsum_path)
+    23000    0.014    0.000    0.151    0.000 operating_modes.py:410(timestamp_value)
+   788902    0.151    0.000    0.151    0.000 {method 'replace' of 'str' objects}
+    35482    0.151    0.000    0.151    0.000 _methods.py:99(_clip)
+     1024    0.009    0.000    0.147    0.000 _nanfunctions_impl.py:1905(nanstd)
+   123660    0.116    0.000    0.144    0.000 temporal_math.py:296(<genexpr>)
+     2048    0.047    0.000    0.144    0.000 sii_runner.py:322(_nanmean_columns)
+        1    0.004    0.004    0.144    0.144 empirical_thresholds.py:200(_relationship_window_correlations)
+        1    0.003    0.003    0.139    0.139 sensor_health.py:20(assess_sensor_health)
+     1024    0.041    0.000    0.137    0.000 _nanfunctions_impl.py:1715(nanvar)
+     4055    0.097    0.000    0.134    0.000 shape_base.py:80(atleast_2d)
+     1773    0.027    0.000    0.129    0.000 common.py:87(pearson)
+       96    0.000    0.000    0.127    0.001 statistics.py:601(median)
+     1773    0.025    0.000    0.124    0.000 common.py:62(paired_values)
+    43000    0.022    0.000    0.121    0.000 operating_modes.py:406(numeric_value)
+        4    0.007    0.002    0.121    0.030 multiscale_analysis.py:581(_relationship_metrics)
+398080/398030    0.106    0.000    0.120    0.000 {built-in method builtins.isinstance}
+    23682    0.022    0.000    0.119    0.000 {method 'clip' of 'numpy.ndarray' objects}
+     8371    0.070    0.000    0.117    0.000 _nanfunctions_impl.py:204(_divide_by_count)
+   527551    0.116    0.000    0.116    0.000 {method 'strip' of 'str' objects}
+        1    0.036    0.036    0.116    0.116 sii_runner.py:555(build_sensor_vectors)
+     5287    0.006    0.000    0.114    0.000 _stride_tricks_impl.py:367(broadcast_to)
+     2009    0.013    0.000    0.114    0.000 fromnumeric.py:3869(std)
+    30363    0.098    0.000    0.112    0.000 _methods.py:76(_count_reduce_items)
+     5287    0.006    0.000    0.111    0.000 {method 'mean' of 'numpy.ndarray' objects}
+
+
+         9732412 function calls (9652939 primitive calls) in 8.869 seconds
+
+   Ordered by: internal time
+   List reduced from 1125 to 60 due to restriction <60>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+   304316    0.471    0.000    0.713    0.000 data_quality.py:306(parse_numeric_value)
+     9753    0.391    0.000    1.017    0.000 temporal_math.py:257(_column_entropy)
+    94071    0.390    0.000    0.390    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+     1024    0.238    0.000    2.981    0.003 sii_runner.py:73(ingest)
+   222330    0.198    0.000    0.755    0.000 common.py:41(finite_number)
+    14235    0.187    0.000    0.435    0.000 _type_check_impl.py:373(nan_to_num)
+   674205    0.186    0.000    0.186    0.000 {method 'get' of 'dict' objects}
+     5287    0.171    0.000    0.514    0.000 _function_base_impl.py:2680(cov)
+   788902    0.151    0.000    0.151    0.000 {method 'replace' of 'str' objects}
+    35482    0.151    0.000    0.151    0.000 _methods.py:99(_clip)
+    25103    0.151    0.000    0.417    0.000 _methods.py:118(_mean)
+     9756    0.135    0.000    0.206    0.000 function_base.py:25(linspace)
+    73100    0.128    0.000    0.388    0.000 data_quality.py:284(parse_timestamp)
+76095/132    0.123    0.000    0.277    0.002 copy.py:118(deepcopy)
+38656/38655    0.118    0.000    0.345    0.000 {built-in method builtins.sum}
+   527551    0.116    0.000    0.116    0.000 {method 'strip' of 'str' objects}
+   123660    0.116    0.000    0.144    0.000 temporal_math.py:296(<genexpr>)
+    51077    0.114    0.000    0.340    0.000 fromnumeric.py:69(_wrapreduction)
+    73100    0.108    0.000    0.108    0.000 {method 'replace' of 'datetime.datetime' objects}
+398080/398030    0.106    0.000    0.120    0.000 {built-in method builtins.isinstance}
+    34229    0.104    0.000    0.250    0.000 {built-in method builtins.sorted}
+     5260    0.101    0.000    0.168    0.000 _methods.py:151(_var)
+   466042    0.100    0.000    0.100    0.000 {method 'append' of 'list' objects}
+    30363    0.098    0.000    0.112    0.000 _methods.py:76(_count_reduce_items)
+     4055    0.097    0.000    0.134    0.000 shape_base.py:80(atleast_2d)
+     3573    0.096    0.000    0.691    0.000 common.py:21(column)
+    10003    0.094    0.000    0.747    0.000 operating_modes.py:230(describe_mode)
+    94902    0.084    0.000    0.084    0.000 {built-in method builtins.round}
+     5287    0.080    0.000    0.108    0.000 _stride_tricks_impl.py:340(_broadcast_to)
+    14235    0.078    0.000    0.078    0.000 _ufunclike_impl.py:70(isposinf)
+     9395    0.077    0.000    0.099    0.000 _nanfunctions_impl.py:70(_replace_nan)
+    35482    0.074    0.000    0.423    0.000 fromnumeric.py:2241(clip)
+   625469    0.072    0.000    0.072    0.000 {built-in method math.isfinite}
+     8371    0.070    0.000    0.117    0.000 _nanfunctions_impl.py:204(_divide_by_count)
+     1002    0.066    0.000    0.091    0.000 _linalg.py:1639(svd)
+     1002    0.063    0.000    0.154    0.000 einsumfunc.py:742(einsum_path)
+    19816    0.063    0.000    0.376    0.000 fromnumeric.py:3735(mean)
+    30577    0.061    0.000    0.301    0.000 fromnumeric.py:2338(sum)
+   144973    0.060    0.000    0.060    0.000 {built-in method builtins.max}
+    37498    0.058    0.000    0.355    0.000 fromnumeric.py:51(_wrapfunc)
+        1    0.055    0.055    1.200    1.200 temporal_math.py:223(_entropy_growth_series)
+     2047    0.055    0.000    0.183    0.000 shape_base.py:220(vstack)
+     9801    0.055    0.000    0.092    0.000 baseline_analysis.py:416(prefix_window_stability_score)
+    19396    0.054    0.000    0.170    0.000 fromnumeric.py:41(_wrapit)
+   166510    0.054    0.000    0.054    0.000 {built-in method numpy.asanyarray}
+     3283    0.054    0.000    0.397    0.000 _function_base_impl.py:2903(corrcoef)
+    34257    0.054    0.000    0.054    0.000 {built-in method numpy.array}
+        1    0.054    0.054    0.083    0.083 baseline_analysis.py:391(numeric_prefix_stats)
+     5287    0.051    0.000    0.319    0.000 _function_base_impl.py:415(average)
+     6323    0.049    0.000    0.367    0.000 _nanfunctions_impl.py:954(nanmean)
+     2048    0.047    0.000    0.144    0.000 sii_runner.py:322(_nanmean_columns)
+    73100    0.047    0.000    0.176    0.000 data_quality.py:341(normalize_timestamp)
+    14235    0.044    0.000    0.086    0.000 _type_check_impl.py:363(_getmaxmin)
+    14235    0.043    0.000    0.043    0.000 _ufunclike_impl.py:140(isneginf)
+269951/269787    0.043    0.000    0.043    0.000 {built-in method builtins.len}
+    10003    0.043    0.000    0.172    0.000 operating_modes.py:287(summarize_signal)
+        1    0.042    0.042    0.664    0.664 temporal_math.py:299(_correlation_drift)
+     2004    0.041    0.000    0.484    0.000 sii_runner.py:284(_regularized_covariance_matrix)
+     1024    0.041    0.000    0.137    0.000 _nanfunctions_impl.py:1715(nanvar)
+     1002    0.040    0.000    0.176    0.000 _linalg.py:2128(pinv)

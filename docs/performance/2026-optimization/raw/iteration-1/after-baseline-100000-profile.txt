@@ -1,0 +1,164 @@
+         9879202 function calls (9816676 primitive calls) in 9.569 seconds
+
+   Ordered by: cumulative time
+   List reduced from 875 to 90 due to restriction <90>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.024    0.024    9.569    9.569 governed_benchmark.py:93(<lambda>)
+        1    0.323    0.323    9.545    9.545 behavioral_baseline.py:729(build_behavioral_baseline)
+        1    0.031    0.031    4.149    4.149 behavioral_baseline.py:371(_learn_distributions)
+       27    0.560    0.021    3.080    0.114 behavioral_baseline.py:290(_signal_characteristics)
+      507    0.068    0.000    2.875    0.006 behavioral_baseline.py:145(_correlation)
+1055/1053    2.044    0.002    2.045    0.002 {built-in method numpy.asarray}
+        1    0.018    0.018    1.862    1.862 behavioral_baseline.py:518(_learn_relationship_graph)
+       27    0.209    0.008    1.843    0.068 behavioral_baseline.py:400(_relationship_edge)
+     1274    0.826    0.001    1.325    0.001 {built-in method builtins.sum}
+       27    0.054    0.002    1.038    0.038 behavioral_baseline.py:57(series)
+      107    0.167    0.002    0.932    0.009 behavioral_baseline.py:48(column)
+   400000    0.598    0.000    0.914    0.000 behavioral_baseline.py:95(_number)
+        1    0.119    0.119    0.904    0.904 data_quality.py:118(profile_timestamps)
+        1    0.048    0.048    0.756    0.756 behavioral_baseline.py:632(_fit_expected_models)
+       13    0.075    0.006    0.709    0.055 behavioral_baseline.py:579(_fit_linear_model)
+        1    0.149    0.149    0.704    0.704 behavioral_baseline.py:223(_identify_modes)
+   100000    0.184    0.000    0.556    0.000 data_quality.py:284(parse_timestamp)
+   200000    0.184    0.000    0.518    0.000 behavioral_baseline.py:235(<genexpr>)
+     1160    0.003    0.000    0.514    0.000 behavioral_baseline.py:126(_mean)
+       54    0.001    0.000    0.488    0.009 behavioral_baseline.py:130(_std)
+       40    0.358    0.009    0.477    0.012 behavioral_baseline.py:62(paired)
+        1    0.006    0.006    0.445    0.445 telemetry_normalization.py:184(build_normalization_report)
+        1    0.005    0.005    0.409    0.409 telemetry_normalization.py:248(dataframe_from_rows)
+   100000    0.077    0.000    0.307    0.000 behavioral_baseline.py:216(_normalize_state)
+     1521    0.095    0.000    0.295    0.000 behavioral_baseline.py:137(_sequential_product_sum)
+  1200027    0.287    0.000    0.287    0.000 behavioral_baseline.py:134(<genexpr>)
+       68    0.257    0.004    0.263    0.004 {built-in method builtins.sorted}
+   100000    0.066    0.000    0.255    0.000 data_quality.py:341(normalize_timestamp)
+   818655    0.222    0.000    0.222    0.000 {method 'get' of 'dict' objects}
+  1036051    0.220    0.000    0.220    0.000 {method 'replace' of 'str' objects}
+   619684    0.218    0.000    0.218    0.000 {built-in method builtins.max}
+     1521    0.003    0.000    0.199    0.000 fromnumeric.py:2879(cumsum)
+     1522    0.003    0.000    0.196    0.000 fromnumeric.py:51(_wrapfunc)
+     1521    0.192    0.000    0.192    0.000 {method 'cumsum' of 'numpy.ndarray' objects}
+        1    0.087    0.087    0.166    0.166 data_quality.py:347(estimated_sample_interval)
+        4    0.000    0.000    0.157    0.039 frame.py:694(__init__)
+   100000    0.155    0.000    0.155    0.000 {method 'replace' of 'datetime.datetime' objects}
+   619948    0.142    0.000    0.142    0.000 {method 'strip' of 'str' objects}
+        1    0.000    0.000    0.141    0.141 construction.py:506(nested_data_to_arrays)
+        1    0.002    0.002    0.141    0.141 construction.py:793(to_arrays)
+        1    0.068    0.068    0.139    0.139 construction.py:891(_list_of_dict_to_arrays)
+        1    0.000    0.000    0.132    0.132 behavioral_model_repository.py:147(persist_candidate)
+        3    0.128    0.043    0.128    0.043 numeric.py:44(to_numeric)
+        1    0.003    0.003    0.124    0.124 sensor_health.py:20(assess_sensor_health)
+       27    0.000    0.000    0.123    0.005 behavioral_baseline.py:113(_quantile)
+        1    0.000    0.000    0.120    0.120 datetimes.py:673(to_datetime)
+        1    0.000    0.000    0.119    0.119 datetimes.py:314(_convert_listlike_datetimes)
+   590652    0.118    0.000    0.118    0.000 behavioral_baseline.py:73(<genexpr>)
+        1    0.117    0.117    0.118    0.118 datetimes.py:456(_array_strptime_with_fallback)
+        4    0.000    0.000    0.113    0.028 behavioral_model_repository.py:35(_write)
+   754789    0.095    0.000    0.095    0.000 {built-in method builtins.abs}
+   472504    0.090    0.000    0.090    0.000 behavioral_baseline.py:597(<genexpr>)
+   472504    0.083    0.000    0.083    0.000 behavioral_baseline.py:600(<genexpr>)
+        3    0.013    0.004    0.082    0.027 sensor_health.py:553(numeric_series)
+   100001    0.053    0.000    0.071    0.000 construction.py:915(<genexpr>)
+        4    0.000    0.000    0.060    0.015 upload_state_repository.py:549(write_local_json)
+        8    0.000    0.000    0.060    0.008 __init__.py:183(dumps)
+        8    0.004    0.000    0.060    0.008 encoder.py:183(encode)
+    18003    0.013    0.000    0.059    0.000 sensor_health.py:706(number)
+   436006    0.058    0.000    0.058    0.000 {built-in method math.isfinite}
+   199998    0.054    0.000    0.054    0.000 {method 'total_seconds' of 'datetime.timedelta' objects}
+    15910    0.005    0.000    0.054    0.000 encoder.py:414(_iterencode)
+   300024    0.052    0.000    0.052    0.000 behavioral_baseline.py:59(<genexpr>)
+        4    0.000    0.000    0.052    0.013 upload_state_repository.py:781(write_shared_state_strict)
+        4    0.000    0.000    0.051    0.013 runtime_db.py:2202(upsert_latest_payload)
+75938/15910    0.035    0.000    0.049    0.000 encoder.py:334(_iterencode_dict)
+       60    0.000    0.000    0.045    0.001 {built-in method builtins.next}
+       60    0.000    0.000    0.045    0.001 runtime_db.py:74(db_connection)
+       11    0.000    0.000    0.045    0.004 behavioral_model_repository.py:27(_read)
+       11    0.000    0.000    0.044    0.004 upload_state_repository.py:599(read_shared_state)
+       11    0.000    0.000    0.043    0.004 upload_state_repository.py:588(_read_runtime_db_state)
+       11    0.000    0.000    0.043    0.004 runtime_db.py:2268(read_latest_payload)
+    18003    0.027    0.000    0.043    0.000 data_quality.py:306(parse_numeric_value)
+   200620    0.040    0.000    0.040    0.000 {method 'append' of 'list' objects}
+       30    0.000    0.000    0.039    0.001 contextlib.py:141(__exit__)
+       30    0.034    0.001    0.034    0.001 {method 'commit' of 'sqlite3.Connection' objects}
+   100002    0.033    0.000    0.033    0.000 {method 'astimezone' of 'datetime.datetime' objects}
+        2    0.000    0.000    0.033    0.016 behavioral_model_repository.py:109(verify_persisted_baseline)
+       15    0.000    0.000    0.032    0.002 runtime_db.py:91(init_runtime_db)
+   100027    0.028    0.000    0.028    0.000 {method 'endswith' of 'str' objects}
+   100000    0.026    0.000    0.026    0.000 {built-in method fromisoformat}
+   118140    0.026    0.000    0.026    0.000 behavioral_baseline.py:607(<genexpr>)
+       15    0.024    0.002    0.024    0.002 {method 'executescript' of 'sqlite3.Connection' objects}
+        3    0.005    0.002    0.023    0.008 sensor_health.py:607(abrupt_step_evidence)
+        1    0.000    0.000    0.021    0.021 telemetry_normalization.py:150(run)
+       22    0.011    0.000    0.021    0.001 {built-in method builtins.any}
+      399    0.020    0.000    0.020    0.000 {built-in method builtins.min}
+104533/104419    0.018    0.000    0.018    0.000 {built-in method builtins.len}
+        1    0.000    0.000    0.018    0.018 __init__.py:595(__init__)
+        1    0.000    0.000    0.018    0.018 __init__.py:669(update)
+
+
+         9879202 function calls (9816676 primitive calls) in 9.569 seconds
+
+   Ordered by: internal time
+   List reduced from 875 to 60 due to restriction <60>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+1055/1053    2.044    0.002    2.045    0.002 {built-in method numpy.asarray}
+     1274    0.826    0.001    1.325    0.001 {built-in method builtins.sum}
+   400000    0.598    0.000    0.914    0.000 behavioral_baseline.py:95(_number)
+       27    0.560    0.021    3.080    0.114 behavioral_baseline.py:290(_signal_characteristics)
+       40    0.358    0.009    0.477    0.012 behavioral_baseline.py:62(paired)
+        1    0.323    0.323    9.545    9.545 behavioral_baseline.py:729(build_behavioral_baseline)
+  1200027    0.287    0.000    0.287    0.000 behavioral_baseline.py:134(<genexpr>)
+       68    0.257    0.004    0.263    0.004 {built-in method builtins.sorted}
+   818655    0.222    0.000    0.222    0.000 {method 'get' of 'dict' objects}
+  1036051    0.220    0.000    0.220    0.000 {method 'replace' of 'str' objects}
+   619684    0.218    0.000    0.218    0.000 {built-in method builtins.max}
+       27    0.209    0.008    1.843    0.068 behavioral_baseline.py:400(_relationship_edge)
+     1521    0.192    0.000    0.192    0.000 {method 'cumsum' of 'numpy.ndarray' objects}
+   200000    0.184    0.000    0.518    0.000 behavioral_baseline.py:235(<genexpr>)
+   100000    0.184    0.000    0.556    0.000 data_quality.py:284(parse_timestamp)
+      107    0.167    0.002    0.932    0.009 behavioral_baseline.py:48(column)
+   100000    0.155    0.000    0.155    0.000 {method 'replace' of 'datetime.datetime' objects}
+        1    0.149    0.149    0.704    0.704 behavioral_baseline.py:223(_identify_modes)
+   619948    0.142    0.000    0.142    0.000 {method 'strip' of 'str' objects}
+        3    0.128    0.043    0.128    0.043 numeric.py:44(to_numeric)
+        1    0.119    0.119    0.904    0.904 data_quality.py:118(profile_timestamps)
+   590652    0.118    0.000    0.118    0.000 behavioral_baseline.py:73(<genexpr>)
+        1    0.117    0.117    0.118    0.118 datetimes.py:456(_array_strptime_with_fallback)
+   754789    0.095    0.000    0.095    0.000 {built-in method builtins.abs}
+     1521    0.095    0.000    0.295    0.000 behavioral_baseline.py:137(_sequential_product_sum)
+   472504    0.090    0.000    0.090    0.000 behavioral_baseline.py:597(<genexpr>)
+        1    0.087    0.087    0.166    0.166 data_quality.py:347(estimated_sample_interval)
+   472504    0.083    0.000    0.083    0.000 behavioral_baseline.py:600(<genexpr>)
+   100000    0.077    0.000    0.307    0.000 behavioral_baseline.py:216(_normalize_state)
+       13    0.075    0.006    0.709    0.055 behavioral_baseline.py:579(_fit_linear_model)
+      507    0.068    0.000    2.875    0.006 behavioral_baseline.py:145(_correlation)
+        1    0.068    0.068    0.139    0.139 construction.py:891(_list_of_dict_to_arrays)
+   100000    0.066    0.000    0.255    0.000 data_quality.py:341(normalize_timestamp)
+   436006    0.058    0.000    0.058    0.000 {built-in method math.isfinite}
+   199998    0.054    0.000    0.054    0.000 {method 'total_seconds' of 'datetime.timedelta' objects}
+       27    0.054    0.002    1.038    0.038 behavioral_baseline.py:57(series)
+   100001    0.053    0.000    0.071    0.000 construction.py:915(<genexpr>)
+   300024    0.052    0.000    0.052    0.000 behavioral_baseline.py:59(<genexpr>)
+        1    0.048    0.048    0.756    0.756 behavioral_baseline.py:632(_fit_expected_models)
+   200620    0.040    0.000    0.040    0.000 {method 'append' of 'list' objects}
+75938/15910    0.035    0.000    0.049    0.000 encoder.py:334(_iterencode_dict)
+       30    0.034    0.001    0.034    0.001 {method 'commit' of 'sqlite3.Connection' objects}
+   100002    0.033    0.000    0.033    0.000 {method 'astimezone' of 'datetime.datetime' objects}
+        1    0.031    0.031    4.149    4.149 behavioral_baseline.py:371(_learn_distributions)
+   100027    0.028    0.000    0.028    0.000 {method 'endswith' of 'str' objects}
+    18003    0.027    0.000    0.043    0.000 data_quality.py:306(parse_numeric_value)
+   100000    0.026    0.000    0.026    0.000 {built-in method fromisoformat}
+   118140    0.026    0.000    0.026    0.000 behavioral_baseline.py:607(<genexpr>)
+       15    0.024    0.002    0.024    0.002 {method 'executescript' of 'sqlite3.Connection' objects}
+        1    0.024    0.024    9.569    9.569 governed_benchmark.py:93(<lambda>)
+      399    0.020    0.000    0.020    0.000 {built-in method builtins.min}
+104533/104419    0.018    0.000    0.018    0.000 {built-in method builtins.len}
+        1    0.018    0.018    0.018    0.018 {built-in method _collections._count_elements}
+        1    0.018    0.018    1.862    1.862 behavioral_baseline.py:518(_learn_relationship_graph)
+   100002    0.017    0.000    0.017    0.000 {method 'keys' of 'dict' objects}
+      120    0.016    0.000    0.016    0.000 {method 'execute' of 'sqlite3.Connection' objects}
+    18003    0.013    0.000    0.059    0.000 sensor_health.py:706(number)
+        3    0.013    0.004    0.082    0.027 sensor_health.py:553(numeric_series)
+   118140    0.013    0.000    0.013    0.000 behavioral_baseline.py:608(<genexpr>)
+        3    0.011    0.004    0.014    0.005 managers.py:2246(_stack_arrays)

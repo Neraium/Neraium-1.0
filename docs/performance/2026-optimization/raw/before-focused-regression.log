@@ -1,0 +1,232 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/ubuntu/Neraium-1.0
+configfile: pytest.ini
+plugins: anyio-4.14.2, cov-4.1.0, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 379 items
+
+tests/test_behavioral_baseline_workflow.py FFF.FFFFFFFFFFFFFFFFFFFFFF    [  6%]
+tests/test_behavioral_model_runtime_migration.py ...                     [  7%]
+tests/test_behavioral_model_store.py .........                           [ 10%]
+tests/test_evidence_package.py .....                                     [ 11%]
+tests/test_evidence_package_approximate_similarity_v1.py .........       [ 13%]
+tests/test_evidence_package_correlation_v1.py ...................        [ 18%]
+tests/test_evidence_package_fingerprinting_v1.py ...........             [ 21%]
+tests/test_evidence_package_historical_pattern_v1.py ............        [ 24%]
+tests/test_evidence_package_v1.py ...................................... [ 34%]
+.                                                                        [ 35%]
+tests/test_historical_ingestion_trust_v1.py ............F.               [ 38%]
+tests/test_operating_context.py ..                                       [ 39%]
+tests/test_relationship_importance_quality.py ............               [ 42%]
+tests/test_sii_contract_enforcement.py FFF                               [ 43%]
+tests/test_sii_engine_phase_2.py ..........                              [ 45%]
+tests/test_sii_engine_phase_3.py .....                                   [ 47%]
+tests/test_sii_engine_phase_4.py .....                                   [ 48%]
+tests/test_sii_engine_v2.py .....                                        [ 49%]
+tests/test_sii_evidence_transport.py .....                               [ 51%]
+tests/test_sii_mathematical_refinement.py ........                       [ 53%]
+tests/test_sii_phase2_main_audit.py ...........................          [ 60%]
+tests/test_sii_phase4_advanced_math.py ....                              [ 61%]
+tests/test_sii_phase4_orchestrator.py ..........                         [ 64%]
+tests/test_sii_phase4_primitives.py ........                             [ 66%]
+tests/test_sii_phase4_safeguards.py ........                             [ 68%]
+tests/test_sii_pipeline_unification.py .                                 [ 68%]
+tests/test_sii_reference_category.py .F                                  [ 69%]
+tests/test_sii_robustness_regression.py ............                     [ 72%]
+tests/test_sii_runner.py ........                                        [ 74%]
+tests/test_telemetry_analysis_authority.py .........                     [ 76%]
+tests/test_telemetry_analysis_handoff.py .......                         [ 78%]
+tests/test_telemetry_analysis_service.py ..........                      [ 81%]
+tests/test_telemetry_backfill.py ...                                     [ 82%]
+tests/test_telemetry_ingestion.py ............................           [ 89%]
+tests/test_telemetry_ingestion_repository.py ........................... [ 96%]
+........                                                                 [ 98%]
+tests/test_temporal_generalization_guardrails.py ....                    [ 99%]
+tests/test_temporal_math_engine.py .                                     [100%]
+
+=================================== FAILURES ===================================
+____ test_create_baseline_never_invokes_sii_or_persists_detection_evidence _____
+tests/test_behavioral_baseline_workflow.py:81: in test_create_baseline_never_invokes_sii_or_persists_detection_evidence
+    assert accepted.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_ test_completed_baseline_contract_propagates_id_and_supports_recovery_lookups _
+tests/test_behavioral_baseline_workflow.py:112: in test_completed_baseline_contract_propagates_id_and_supports_recovery_lookups
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+____ test_dataset_baseline_lookup_uses_index_references_without_model_scan _____
+tests/test_behavioral_baseline_workflow.py:143: in test_dataset_baseline_lookup_uses_index_references_without_model_scan
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_________ test_candidate_requires_approval_and_activation_is_separate __________
+tests/test_behavioral_baseline_workflow.py:185: in test_candidate_requires_approval_and_activation_is_separate
+    terminal = _wait(client, queued["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______________ test_approval_can_be_disabled_by_controlled_policy ______________
+tests/test_behavioral_baseline_workflow.py:213: in test_approval_can_be_disabled_by_controlled_policy
+    terminal = _wait(client, accepted.json()["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______ test_analysis_and_controlled_extension_require_an_active_baseline _______
+tests/test_behavioral_baseline_workflow.py:227: in test_analysis_and_controlled_extension_require_an_active_baseline
+    assert analyze.status_code == 409
+E   assert 410 == 409
+E    +  where 410 = <Response [410 Gone]>.status_code
+_______ test_controlled_extension_creates_a_child_candidate_without_sii ________
+tests/test_behavioral_baseline_workflow.py:236: in test_controlled_extension_creates_a_child_candidate_without_sii
+    _wait(client, initial["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+________ test_exact_baseline_routes_survive_newer_activation_and_retry _________
+tests/test_behavioral_baseline_workflow.py:264: in test_exact_baseline_routes_survive_newer_activation_and_retry
+    first_terminal = _wait(client, first["status_url"])
+                                   ^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______ test_baseline_state_and_exact_ids_are_isolated_between_portfolios _______
+tests/test_behavioral_baseline_workflow.py:298: in test_baseline_state_and_exact_ids_are_isolated_between_portfolios
+    _wait(client, north["status_url"], headers=north_headers)
+                  ^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______ test_activation_failure_cannot_replace_the_previous_active_pointer ______
+tests/test_behavioral_baseline_workflow.py:318: in test_activation_failure_cannot_replace_the_previous_active_pointer
+    _wait(client, first["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_ test_explicit_baseline_detail_is_baseline_only_until_an_exact_analysis_exists _
+tests/test_behavioral_baseline_workflow.py:385: in test_explicit_baseline_detail_is_baseline_only_until_an_exact_analysis_exists
+    _wait(client, queued["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+__________ test_baseline_a_never_lists_or_serves_baseline_b_analysis ___________
+tests/test_behavioral_baseline_workflow.py:422: in test_baseline_a_never_lists_or_serves_baseline_b_analysis
+    _wait(client, first["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_______ test_analysis_persistence_rejects_mismatched_baseline_and_scope ________
+tests/test_behavioral_baseline_workflow.py:448: in test_analysis_persistence_rejects_mismatched_baseline_and_scope
+    _wait(client, queued["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+__ test_comparison_upload_rejects_a_requested_baseline_from_another_identity ___
+tests/test_behavioral_baseline_workflow.py:469: in test_comparison_upload_rejects_a_requested_baseline_from_another_identity
+    _wait(client, queued["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_ test_completed_comparison_uses_distinct_dataset_and_analysis_ids_and_scopes_findings _
+tests/test_behavioral_baseline_workflow.py:503: in test_completed_comparison_uses_distinct_dataset_and_analysis_ids_and_scopes_findings
+    _wait(client, baseline_job["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_ test_comparison_persistence_rejects_the_baseline_dataset_as_evaluation_data __
+tests/test_behavioral_baseline_workflow.py:532: in test_comparison_persistence_rejects_the_baseline_dataset_as_evaluation_data
+    _wait(client, baseline_job["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+____ test_new_baseline_hides_stale_findings_until_its_own_comparison_exists ____
+tests/test_behavioral_baseline_workflow.py:549: in test_new_baseline_hides_stale_findings_until_its_own_comparison_exists
+    _wait(client, first_job["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+__ test_active_comparison_identity_is_not_replaced_by_baseline_ready_fallback __
+tests/test_behavioral_baseline_workflow.py:570: in test_active_comparison_identity_is_not_replaced_by_baseline_ready_fallback
+    _wait(client, baseline_job["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_ test_second_comparison_creates_a_separate_analysis_without_overwriting_baseline _
+tests/test_behavioral_baseline_workflow.py:597: in test_second_comparison_creates_a_separate_analysis_without_overwriting_baseline
+    _wait(client, baseline_job["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_________ test_upload_creates_distinct_dataset_and_processing_job_ids __________
+tests/test_behavioral_baseline_workflow.py:616: in test_upload_creates_distinct_dataset_and_processing_job_ids
+    assert accepted.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_ test_validation_exception_returns_structured_failure_with_original_exception _
+tests/test_behavioral_baseline_workflow.py:638: in test_validation_exception_returns_structured_failure_with_original_exception
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+__ test_relationship_learning_exception_reports_actual_stage_and_is_retryable __
+tests/test_behavioral_baseline_workflow.py:665: in test_relationship_learning_exception_reports_actual_stage_and_is_retryable
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+____________ test_worker_waits_for_a_delayed_baseline_result_record ____________
+tests/test_behavioral_baseline_workflow.py:690: in test_worker_waits_for_a_delayed_baseline_result_record
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______ test_terminal_success_is_rejected_when_result_cannot_be_retrieved _______
+tests/test_behavioral_baseline_workflow.py:703: in test_terminal_success_is_rejected_when_result_cannot_be_retrieved
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______________ test_retry_processing_reuses_the_uploaded_dataset _______________
+tests/test_behavioral_baseline_workflow.py:726: in test_retry_processing_reuses_the_uploaded_dataset
+    failed = _wait(client, accepted["status_url"])
+                           ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_____________ test_versioned_api_is_pure_and_records_human_review ______________
+tests/test_historical_ingestion_trust_v1.py:474: in test_versioned_api_is_pure_and_records_human_review
+    assert persisted_progress.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+__________ test_upload_status_complete_without_sii_contract_is_failed __________
+tests/test_sii_contract_enforcement.py:53: in test_upload_status_complete_without_sii_contract_is_failed
+    assert payload["status"] == "FAILED"
+           ^^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+________ test_upload_status_complete_with_sii_contract_remains_complete ________
+tests/test_sii_contract_enforcement.py:86: in test_upload_status_complete_with_sii_contract_remains_complete
+    assert payload["status"] == "COMPLETE"
+           ^^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+__________ test_latest_upload_requires_sii_contract_for_active_status __________
+tests/test_sii_contract_enforcement.py:124: in test_latest_upload_requires_sii_contract_for_active_status
+    assert payload["status"] != "active"
+           ^^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+____ test_audit_and_replay_endpoints_remain_available_with_reference_layer _____
+tests/test_sii_reference_category.py:25: in test_audit_and_replay_endpoints_remain_available_with_reference_layer
+    assert client.get("/api/replay/timeline").status_code == 200
+E   AssertionError: assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+E    +    where <Response [410 Gone]> = get('/api/replay/timeline')
+E    +      where get = <starlette.testclient.TestClient object at 0x77eedd4339b0>.get
+=========================== short test summary info ============================
+FAILED tests/test_behavioral_baseline_workflow.py::test_create_baseline_never_invokes_sii_or_persists_detection_evidence
+FAILED tests/test_behavioral_baseline_workflow.py::test_completed_baseline_contract_propagates_id_and_supports_recovery_lookups
+FAILED tests/test_behavioral_baseline_workflow.py::test_dataset_baseline_lookup_uses_index_references_without_model_scan
+FAILED tests/test_behavioral_baseline_workflow.py::test_candidate_requires_approval_and_activation_is_separate
+FAILED tests/test_behavioral_baseline_workflow.py::test_approval_can_be_disabled_by_controlled_policy
+FAILED tests/test_behavioral_baseline_workflow.py::test_analysis_and_controlled_extension_require_an_active_baseline
+FAILED tests/test_behavioral_baseline_workflow.py::test_controlled_extension_creates_a_child_candidate_without_sii
+FAILED tests/test_behavioral_baseline_workflow.py::test_exact_baseline_routes_survive_newer_activation_and_retry
+FAILED tests/test_behavioral_baseline_workflow.py::test_baseline_state_and_exact_ids_are_isolated_between_portfolios
+FAILED tests/test_behavioral_baseline_workflow.py::test_activation_failure_cannot_replace_the_previous_active_pointer
+FAILED tests/test_behavioral_baseline_workflow.py::test_explicit_baseline_detail_is_baseline_only_until_an_exact_analysis_exists
+FAILED tests/test_behavioral_baseline_workflow.py::test_baseline_a_never_lists_or_serves_baseline_b_analysis
+FAILED tests/test_behavioral_baseline_workflow.py::test_analysis_persistence_rejects_mismatched_baseline_and_scope
+FAILED tests/test_behavioral_baseline_workflow.py::test_comparison_upload_rejects_a_requested_baseline_from_another_identity
+FAILED tests/test_behavioral_baseline_workflow.py::test_completed_comparison_uses_distinct_dataset_and_analysis_ids_and_scopes_findings
+FAILED tests/test_behavioral_baseline_workflow.py::test_comparison_persistence_rejects_the_baseline_dataset_as_evaluation_data
+FAILED tests/test_behavioral_baseline_workflow.py::test_new_baseline_hides_stale_findings_until_its_own_comparison_exists
+FAILED tests/test_behavioral_baseline_workflow.py::test_active_comparison_identity_is_not_replaced_by_baseline_ready_fallback
+FAILED tests/test_behavioral_baseline_workflow.py::test_second_comparison_creates_a_separate_analysis_without_overwriting_baseline
+FAILED tests/test_behavioral_baseline_workflow.py::test_upload_creates_distinct_dataset_and_processing_job_ids
+FAILED tests/test_behavioral_baseline_workflow.py::test_validation_exception_returns_structured_failure_with_original_exception
+FAILED tests/test_behavioral_baseline_workflow.py::test_relationship_learning_exception_reports_actual_stage_and_is_retryable
+FAILED tests/test_behavioral_baseline_workflow.py::test_worker_waits_for_a_delayed_baseline_result_record
+FAILED tests/test_behavioral_baseline_workflow.py::test_terminal_success_is_rejected_when_result_cannot_be_retrieved
+FAILED tests/test_behavioral_baseline_workflow.py::test_retry_processing_reuses_the_uploaded_dataset
+FAILED tests/test_historical_ingestion_trust_v1.py::test_versioned_api_is_pure_and_records_human_review
+FAILED tests/test_sii_contract_enforcement.py::test_upload_status_complete_without_sii_contract_is_failed
+FAILED tests/test_sii_contract_enforcement.py::test_upload_status_complete_with_sii_contract_remains_complete
+FAILED tests/test_sii_contract_enforcement.py::test_latest_upload_requires_sii_contract_for_active_status
+FAILED tests/test_sii_reference_category.py::test_audit_and_replay_endpoints_remain_available_with_reference_layer
+============ 30 failed, 349 passed, 1 warning in 362.95s (0:06:02) =============

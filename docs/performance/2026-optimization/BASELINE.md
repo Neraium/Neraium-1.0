@@ -19,7 +19,7 @@ baseline behavior and a pressure violation in the recent engine window.
 Workloads: historical CSV ingestion including immutable artifacts and canonical
 provenance; baseline candidate construction and persistence; the unified SII engine
 including relationship/covariance, temporal persistence, context, and evidence
-fusion; and three successive 240-row windows against seeded behavioral memory.
+fusion; and three successive 240-row windows against a verified active model trained on the existing 240-row Phase 4 fixture. A separate governance workload freezes context summaries, three evidence packages, and their fingerprints.
 Larger workloads are bounded by observed cost and available memory.
 
 Each workload receives one warm-up, then three timed repetitions. Input generation,
@@ -29,3 +29,7 @@ performance measurements only; governed values and insertion ordering are preser
 Metadata clock is fixed; analytical telemetry timestamps are not altered.
 Profiling is a separate, untimed run. RSS is the process high-water mark (including
 setup and warm-up), not an allocation delta or a claim about production fleet RAM.
+
+Golden payloads are frozen by `raw/frozen-golden-manifest.json`. Existing analytical work counters and historical sampling limits are checked independently of excluded diagnostic timers. The harness owns its fixed scratch directory and takes an exclusive process lock; runs must be serial. `raw/configuration.json` records the actual analytical defaults.
+
+Reproduce a workload with `.venv/bin/python scripts/performance/governed_benchmark.py --phase after --kind engine --rows 10000 --profile`. Use `--reference --phase control` for a later original-code control; use a new phase name to retain previous samples. The initial dirty workspace must also be present: checking out the base commit alone does not recreate that context.

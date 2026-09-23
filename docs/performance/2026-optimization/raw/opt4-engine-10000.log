@@ -1,0 +1,1 @@
+engine-10000 0 {'wall_seconds': 4.509951059008017, 'cpu_seconds': 4.483954819, 'peak_rss_bytes': 152129536, 'governed_sha256': 'b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7', 'golden_equal': True}

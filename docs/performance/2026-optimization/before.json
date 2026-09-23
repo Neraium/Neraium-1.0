@@ -31,6 +31,8 @@
     "cpu_median": 1.0728832490000002,
     "peak_rss_bytes": 141475840,
     "rows_per_second": 8980.312379423034,
+    "cpu_min": 0.8707229270000001,
+    "cpu_max": 1.1828568600000002,
     "work_counters": {
       "rows_processed": 10000,
       "signals_processed": 3,
@@ -77,6 +79,8 @@
     "cpu_median": 10.278553058999996,
     "peak_rss_bytes": 225988608,
     "rows_per_second": 9663.217723540685,
+    "cpu_min": 8.531672637,
+    "cpu_max": 10.329361634000001,
     "work_counters": {
       "rows_processed": 100000,
       "signals_processed": 3,
@@ -123,6 +127,8 @@
     "cpu_median": 7.5226455130000005,
     "peak_rss_bytes": 164712448,
     "rows_per_second": 1316.1260897317995,
+    "cpu_min": 5.356079687000005,
+    "cpu_max": 7.961369072999998,
     "work_counters": {
       "rows_processed": 10000,
       "signals_processed": 6,
@@ -175,6 +181,8 @@
     "cpu_median": 14.578387790000008,
     "peak_rss_bytes": 353689600,
     "rows_per_second": 6823.962942228727,
+    "cpu_min": 13.476069917000004,
+    "cpu_max": 15.463608011000002,
     "work_counters": {
       "rows_processed": 100000,
       "signals_processed": 6,
@@ -227,6 +235,8 @@
     "cpu_median": 0.012435501999999765,
     "peak_rss_bytes": 162353152,
     "rows_per_second": 803800.6333922361,
+    "cpu_min": 0.007260612000000499,
+    "cpu_max": 0.015832384999999505,
     "work_counters": {},
     "relationship_pairs_per_second": null
   },
@@ -262,6 +272,8 @@
     "cpu_median": 1.5239752840000005,
     "peak_rss_bytes": 145117184,
     "rows_per_second": 467.47245131358926,
+    "cpu_min": 1.4403657400000007,
+    "cpu_max": 1.637543515,
     "work_counters": {
       "rows_processed": 720,
       "signals_processed": 6,
@@ -315,7 +327,12 @@
     "cpu_median": 1.5062240090000003,
     "peak_rss_bytes": 155074560,
     "rows_per_second": 6422.231851051143,
-    "work_counters": {},
+    "cpu_min": 1.2230262399999994,
+    "cpu_max": 1.5578701829999995,
+    "work_counters": {
+      "profile_sample_limit_per_signal": 4096,
+      "near_duplicate_comparison_limit": 4000
+    },
     "relationship_pairs_per_second": null
   },
   {
@@ -350,7 +367,12 @@
     "cpu_median": 15.243187122000002,
     "peak_rss_bytes": 355524608,
     "rows_per_second": 6457.554908566207,
-    "work_counters": {},
+    "cpu_min": 13.806077775000002,
+    "cpu_max": 15.295918830999994,
+    "work_counters": {
+      "profile_sample_limit_per_signal": 4096,
+      "near_duplicate_comparison_limit": 4000
+    },
     "relationship_pairs_per_second": null
   },
   {
@@ -385,7 +407,12 @@
     "cpu_median": 23.987775159999998,
     "peak_rss_bytes": 653602816,
     "rows_per_second": 10009.2355083572,
-    "work_counters": {},
+    "cpu_min": 23.955140739,
+    "cpu_max": 24.172518323000006,
+    "work_counters": {
+      "profile_sample_limit_per_signal": 4096,
+      "near_duplicate_comparison_limit": 4000
+    },
     "relationship_pairs_per_second": null
   }
 ]

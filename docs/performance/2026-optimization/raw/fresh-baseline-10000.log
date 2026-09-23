@@ -1,0 +1,1 @@
+baseline-10000 0 {'wall_seconds': 0.5278564118780196, 'cpu_seconds': 0.5017012529999998, 'peak_rss_bytes': 140197888, 'governed_sha256': '6db2474defdb0af542212d4d9843b7eadf9f14b6983d9b3951be35d0feb2b044', 'golden_equal': True}

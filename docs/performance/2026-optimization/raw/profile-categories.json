@@ -1,0 +1,2344 @@
+{
+  "after-baseline-10000.prof": {
+    "profile_seconds": 1.2951918400000006,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/telemetry_normalization.py",
+          "line": 184,
+          "function": "build_normalization_report",
+          "calls": 1,
+          "self_seconds": 0.0013083040000000002,
+          "inclusive_seconds": 0.07049994300000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 18003,
+          "self_seconds": 0.032976417,
+          "inclusive_seconds": 0.050030059
+        }
+      ],
+      "dataframe_operations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/telemetry_normalization.py",
+          "line": 248,
+          "function": "dataframe_from_rows",
+          "calls": 1,
+          "self_seconds": 0.00039739200000000005,
+          "inclusive_seconds": 0.05464522
+        }
+      ],
+      "statistical_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 290,
+          "function": "_signal_characteristics",
+          "calls": 27,
+          "self_seconds": 0.045262656000000005,
+          "inclusive_seconds": 0.26507514400000004
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 145,
+          "function": "_correlation",
+          "calls": 495,
+          "self_seconds": 0.01578421,
+          "inclusive_seconds": 0.237749596
+        }
+      ],
+      "relationship_graph": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 518,
+          "function": "_learn_relationship_graph",
+          "calls": 1,
+          "self_seconds": 0.0023344800000000003,
+          "inclusive_seconds": 0.161143057
+        }
+      ],
+      "baseline_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 371,
+          "function": "_learn_distributions",
+          "calls": 1,
+          "self_seconds": 0.002042528,
+          "inclusive_seconds": 0.38078685
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 632,
+          "function": "_fit_expected_models",
+          "calls": 1,
+          "self_seconds": 0.0056463830000000005,
+          "inclusive_seconds": 0.07449618000000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 223,
+          "function": "_identify_modes",
+          "calls": 1,
+          "self_seconds": 0.015146977,
+          "inclusive_seconds": 0.06302125800000001
+        }
+      ],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 8,
+          "self_seconds": 0.00016562800000000002,
+          "inclusive_seconds": 0.054138943
+        },
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 299,
+          "function": "loads",
+          "calls": 8,
+          "self_seconds": 4.3104e-05,
+          "inclusive_seconds": 0.005623992
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 8,
+          "self_seconds": 0.003406613,
+          "inclusive_seconds": 0.0034223530000000004
+        }
+      ],
+      "provenance_evidence": [],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 549,
+          "function": "write_local_json",
+          "calls": 4,
+          "self_seconds": 0.00027170600000000003,
+          "inclusive_seconds": 0.053018426
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 4,
+          "self_seconds": 0.000119339,
+          "inclusive_seconds": 0.051840716
+        }
+      ],
+      "copying_conversion": [
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.fromiter>",
+          "calls": 300,
+          "self_seconds": 0.143147825,
+          "inclusive_seconds": 0.143147825
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 137,
+          "function": "_sequential_product_sum",
+          "calls": 450,
+          "self_seconds": 0.008768399000000001,
+          "inclusive_seconds": 0.034310125000000004
+        },
+        {
+          "file": "/usr/lib/python3.12/copy.py",
+          "line": 118,
+          "function": "deepcopy",
+          "calls": 54,
+          "self_seconds": 0.00015671600000000002,
+          "inclusive_seconds": 0.000407026
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.asarray>",
+          "calls": 41,
+          "self_seconds": 6.2272e-05,
+          "inclusive_seconds": 0.00025005700000000004
+        }
+      ]
+    }
+  },
+  "after-baseline-100000.prof": {
+    "profile_seconds": 8.337399384000008,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/telemetry_normalization.py",
+          "line": 184,
+          "function": "build_normalization_report",
+          "calls": 1,
+          "self_seconds": 0.006524448,
+          "inclusive_seconds": 0.541383232
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 18003,
+          "self_seconds": 0.025346471000000002,
+          "inclusive_seconds": 0.038678660000000004
+        }
+      ],
+      "dataframe_operations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/telemetry_normalization.py",
+          "line": 248,
+          "function": "dataframe_from_rows",
+          "calls": 1,
+          "self_seconds": 0.0061506880000000005,
+          "inclusive_seconds": 0.5070693740000001
+        }
+      ],
+      "statistical_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 290,
+          "function": "_signal_characteristics",
+          "calls": 27,
+          "self_seconds": 0.46792057600000003,
+          "inclusive_seconds": 2.358023552
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 145,
+          "function": "_correlation",
+          "calls": 507,
+          "self_seconds": 0.067663955,
+          "inclusive_seconds": 2.209804343
+        }
+      ],
+      "relationship_graph": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 518,
+          "function": "_learn_relationship_graph",
+          "calls": 1,
+          "self_seconds": 0.023188986,
+          "inclusive_seconds": 1.727047629
+        }
+      ],
+      "baseline_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 371,
+          "function": "_learn_distributions",
+          "calls": 1,
+          "self_seconds": 0.028578843000000003,
+          "inclusive_seconds": 3.205820704
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 632,
+          "function": "_fit_expected_models",
+          "calls": 1,
+          "self_seconds": 0.049915749,
+          "inclusive_seconds": 0.7289033730000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 223,
+          "function": "_identify_modes",
+          "calls": 1,
+          "self_seconds": 0.133955337,
+          "inclusive_seconds": 0.623490427
+        }
+      ],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 8,
+          "self_seconds": 0.00015608400000000002,
+          "inclusive_seconds": 0.035949419
+        },
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 299,
+          "function": "loads",
+          "calls": 8,
+          "self_seconds": 4.1762000000000004e-05,
+          "inclusive_seconds": 0.007849486000000001
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 8,
+          "self_seconds": 0.0025651650000000003,
+          "inclusive_seconds": 0.00257982
+        }
+      ],
+      "provenance_evidence": [],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 4,
+          "self_seconds": 0.00011148600000000001,
+          "inclusive_seconds": 0.047871876
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 549,
+          "function": "write_local_json",
+          "calls": 4,
+          "self_seconds": 0.00010124500000000001,
+          "inclusive_seconds": 0.035178161
+        }
+      ],
+      "copying_conversion": [
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.fromiter>",
+          "calls": 1014,
+          "self_seconds": 1.427826102,
+          "inclusive_seconds": 1.427826102
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 137,
+          "function": "_sequential_product_sum",
+          "calls": 1521,
+          "self_seconds": 0.097577039,
+          "inclusive_seconds": 0.28994906400000003
+        },
+        {
+          "file": "/usr/lib/python3.12/copy.py",
+          "line": 118,
+          "function": "deepcopy",
+          "calls": 54,
+          "self_seconds": 0.00015930000000000002,
+          "inclusive_seconds": 0.000439373
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.asarray>",
+          "calls": 41,
+          "self_seconds": 8.4227e-05,
+          "inclusive_seconds": 0.000288898
+        }
+      ]
+    }
+  },
+  "after-engine-10000.prof": {
+    "profile_seconds": 8.869381957000002,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 304316,
+          "self_seconds": 0.471375845,
+          "inclusive_seconds": 0.712869949
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii_inputs.py",
+          "line": 8,
+          "function": "normalize_rows",
+          "calls": 1,
+          "self_seconds": 0.028415711000000003,
+          "inclusive_seconds": 0.047890705000000006
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 257,
+          "function": "_column_entropy",
+          "calls": 9753,
+          "self_seconds": 0.390503286,
+          "inclusive_seconds": 1.0167915090000001
+        }
+      ],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 299,
+          "function": "_correlation_drift",
+          "calls": 1,
+          "self_seconds": 0.041724373,
+          "inclusive_seconds": 0.6637513260000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 284,
+          "function": "_regularized_covariance_matrix",
+          "calls": 2004,
+          "self_seconds": 0.041295499,
+          "inclusive_seconds": 0.48372571200000003
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 308,
+          "function": "_baseline_mahalanobis_distances",
+          "calls": 1002,
+          "self_seconds": 0.033738356000000004,
+          "inclusive_seconds": 0.32720118000000004
+        }
+      ],
+      "temporal_persistence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 20,
+          "function": "evaluate_temporal_math",
+          "calls": 1,
+          "self_seconds": 0.001093797,
+          "inclusive_seconds": 2.1582604080000003
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/adaptive_persistence.py",
+          "line": 31,
+          "function": "evaluate_adaptive_persistence",
+          "calls": 1,
+          "self_seconds": 0.000641852,
+          "inclusive_seconds": 0.0053501930000000005
+        }
+      ],
+      "operating_context": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/mode_conditioned_baseline.py",
+          "line": 31,
+          "function": "analyze_mode_conditioned_baseline",
+          "calls": 1,
+          "self_seconds": 0.033050939,
+          "inclusive_seconds": 0.77778561
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/operating_modes.py",
+          "line": 230,
+          "function": "describe_mode",
+          "calls": 10003,
+          "self_seconds": 0.09367217200000001,
+          "inclusive_seconds": 0.7471982570000001
+        }
+      ],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 39,
+          "self_seconds": 0.000134706,
+          "inclusive_seconds": 0.001649209
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 39,
+          "self_seconds": 0.00038953100000000004,
+          "inclusive_seconds": 0.00039321800000000003
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/evidence_fusion.py",
+          "line": 37,
+          "function": "fuse_evidence",
+          "calls": 1,
+          "self_seconds": 0.000213415,
+          "inclusive_seconds": 0.22984077500000002
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 1,
+          "self_seconds": 2.4544e-05,
+          "inclusive_seconds": 0.009802728
+        }
+      ],
+      "copying_conversion": [
+        {
+          "file": "/usr/lib/python3.12/copy.py",
+          "line": 118,
+          "function": "deepcopy",
+          "calls": 76095,
+          "self_seconds": 0.12317905500000001,
+          "inclusive_seconds": 0.277433928
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.asarray>",
+          "calls": 22602,
+          "self_seconds": 0.01819901,
+          "inclusive_seconds": 0.01819901
+        }
+      ]
+    }
+  },
+  "after-engine-100000.prof": {
+    "profile_seconds": 39.784307154999986,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 2705316,
+          "self_seconds": 4.16772798,
+          "inclusive_seconds": 6.145192325
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii_inputs.py",
+          "line": 8,
+          "function": "normalize_rows",
+          "calls": 1,
+          "self_seconds": 0.30200760400000004,
+          "inclusive_seconds": 0.476391169
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 257,
+          "function": "_column_entropy",
+          "calls": 9753,
+          "self_seconds": 0.514332959,
+          "inclusive_seconds": 1.3291291740000002
+        }
+      ],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 299,
+          "function": "_correlation_drift",
+          "calls": 1,
+          "self_seconds": 0.049563668000000005,
+          "inclusive_seconds": 0.807923739
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 284,
+          "function": "_regularized_covariance_matrix",
+          "calls": 2004,
+          "self_seconds": 0.038666563,
+          "inclusive_seconds": 0.446455282
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 308,
+          "function": "_baseline_mahalanobis_distances",
+          "calls": 1002,
+          "self_seconds": 0.031165352,
+          "inclusive_seconds": 0.311204387
+        }
+      ],
+      "temporal_persistence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 20,
+          "function": "evaluate_temporal_math",
+          "calls": 1,
+          "self_seconds": 0.0017672780000000002,
+          "inclusive_seconds": 2.793550745
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/adaptive_persistence.py",
+          "line": 31,
+          "function": "evaluate_adaptive_persistence",
+          "calls": 1,
+          "self_seconds": 0.00041696500000000004,
+          "inclusive_seconds": 0.0033762820000000004
+        }
+      ],
+      "operating_context": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/mode_conditioned_baseline.py",
+          "line": 31,
+          "function": "analyze_mode_conditioned_baseline",
+          "calls": 1,
+          "self_seconds": 0.400874071,
+          "inclusive_seconds": 9.271556683
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/operating_modes.py",
+          "line": 230,
+          "function": "describe_mode",
+          "calls": 100003,
+          "self_seconds": 1.0377899700000002,
+          "inclusive_seconds": 7.65559394
+        }
+      ],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 39,
+          "self_seconds": 0.00014766100000000002,
+          "inclusive_seconds": 0.0020886940000000003
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 39,
+          "self_seconds": 0.00040422,
+          "inclusive_seconds": 0.000407773
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/evidence_fusion.py",
+          "line": 37,
+          "function": "fuse_evidence",
+          "calls": 1,
+          "self_seconds": 0.00015216100000000002,
+          "inclusive_seconds": 1.286421019
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 1,
+          "self_seconds": 4.6627000000000006e-05,
+          "inclusive_seconds": 0.009040276
+        }
+      ],
+      "copying_conversion": [
+        {
+          "file": "/usr/lib/python3.12/copy.py",
+          "line": 118,
+          "function": "deepcopy",
+          "calls": 298475,
+          "self_seconds": 0.5754618880000001,
+          "inclusive_seconds": 1.336763729
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.asarray>",
+          "calls": 22602,
+          "self_seconds": 0.033152848,
+          "inclusive_seconds": 0.033152848
+        }
+      ]
+    }
+  },
+  "after-governance-10000.prof": {
+    "profile_seconds": 0.019095428000000005,
+    "categories": {
+      "parsing_normalization": [],
+      "dataframe_operations": [],
+      "statistical_calculations": [],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/operating_context.py",
+          "line": 80,
+          "function": "_row_summaries",
+          "calls": 1,
+          "self_seconds": 0.00460435,
+          "inclusive_seconds": 0.012282524000000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/evidence_package.py",
+          "line": 685,
+          "function": "_operating_context",
+          "calls": 6,
+          "self_seconds": 5.0657000000000006e-05,
+          "inclusive_seconds": 0.00032665900000000003
+        }
+      ],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 5,
+          "self_seconds": 3.0291000000000002e-05,
+          "inclusive_seconds": 0.00018397000000000002
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 5,
+          "self_seconds": 0.00011853400000000001,
+          "inclusive_seconds": 0.00011853400000000001
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/evidence_package.py",
+          "line": 822,
+          "function": "build_evidence_package",
+          "calls": 6,
+          "self_seconds": 0.000874331,
+          "inclusive_seconds": 0.0051618060000000006
+        }
+      ],
+      "file_database_io": [],
+      "copying_conversion": []
+    }
+  },
+  "after-incremental-240.prof": {
+    "profile_seconds": 2.8381409129999926,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 15768,
+          "self_seconds": 0.037066281,
+          "inclusive_seconds": 0.068168933
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii_inputs.py",
+          "line": 8,
+          "function": "normalize_rows",
+          "calls": 3,
+          "self_seconds": 0.001368188,
+          "inclusive_seconds": 0.002196967
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 257,
+          "function": "_column_entropy",
+          "calls": 942,
+          "self_seconds": 0.034980467,
+          "inclusive_seconds": 0.09177130400000001
+        }
+      ],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 284,
+          "function": "_regularized_covariance_matrix",
+          "calls": 1308,
+          "self_seconds": 0.026880881000000002,
+          "inclusive_seconds": 0.300558502
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 308,
+          "function": "_baseline_mahalanobis_distances",
+          "calls": 654,
+          "self_seconds": 0.020355689,
+          "inclusive_seconds": 0.21103653
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 299,
+          "function": "_correlation_drift",
+          "calls": 3,
+          "self_seconds": 0.005407554,
+          "inclusive_seconds": 0.086044969
+        }
+      ],
+      "temporal_persistence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 20,
+          "function": "evaluate_temporal_math",
+          "calls": 3,
+          "self_seconds": 0.000498239,
+          "inclusive_seconds": 0.27218937200000004
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/adaptive_persistence.py",
+          "line": 31,
+          "function": "evaluate_adaptive_persistence",
+          "calls": 3,
+          "self_seconds": 0.000268698,
+          "inclusive_seconds": 0.004053940000000001
+        }
+      ],
+      "operating_context": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/mode_conditioned_baseline.py",
+          "line": 31,
+          "function": "analyze_mode_conditioned_baseline",
+          "calls": 3,
+          "self_seconds": 0.00014794,
+          "inclusive_seconds": 0.0030084630000000003
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/operating_modes.py",
+          "line": 230,
+          "function": "describe_mode",
+          "calls": 3,
+          "self_seconds": 0.000437772,
+          "inclusive_seconds": 0.0021858940000000003
+        }
+      ],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 117,
+          "self_seconds": 0.00043712000000000004,
+          "inclusive_seconds": 0.006206110000000001
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 117,
+          "self_seconds": 0.0013078990000000002,
+          "inclusive_seconds": 0.0013181970000000001
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/evidence_fusion.py",
+          "line": 37,
+          "function": "fuse_evidence",
+          "calls": 3,
+          "self_seconds": 0.00037595200000000004,
+          "inclusive_seconds": 0.088260688
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 3,
+          "self_seconds": 9.849e-05,
+          "inclusive_seconds": 0.026810848
+        }
+      ],
+      "copying_conversion": [
+        {
+          "file": "/usr/lib/python3.12/copy.py",
+          "line": 118,
+          "function": "deepcopy",
+          "calls": 109635,
+          "self_seconds": 0.13078984100000002,
+          "inclusive_seconds": 0.280531387
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.asarray>",
+          "calls": 13800,
+          "self_seconds": 0.009303697000000001,
+          "inclusive_seconds": 0.009303697000000001
+        }
+      ]
+    }
+  },
+  "after-ingestion-10000.prof": {
+    "profile_seconds": 2.144614839,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 535,
+          "function": "_parse_number",
+          "calls": 60000,
+          "self_seconds": 0.132979426,
+          "inclusive_seconds": 0.19805660600000002
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 4,
+          "self_seconds": 2.7365000000000003e-05,
+          "inclusive_seconds": 5.398e-05
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [],
+      "serialization_deserialization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 181,
+          "function": "_stable_json",
+          "calls": 30011,
+          "self_seconds": 0.022466295,
+          "inclusive_seconds": 0.47475027300000006
+        },
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 30013,
+          "self_seconds": 0.06490118,
+          "inclusive_seconds": 0.456174175
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 30013,
+          "self_seconds": 0.29528706200000004,
+          "inclusive_seconds": 0.29529082700000003
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 185,
+          "function": "_digest",
+          "calls": 20011,
+          "self_seconds": 0.032359598,
+          "inclusive_seconds": 0.272648889
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 203,
+          "function": "file_sha256",
+          "calls": 3,
+          "self_seconds": 0.000145035,
+          "inclusive_seconds": 0.032940422000000004
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 383,
+          "function": "persist_immutable_derived_artifact",
+          "calls": 2,
+          "self_seconds": 0.000145821,
+          "inclusive_seconds": 0.028548928
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 219,
+          "function": "preserve_raw_source",
+          "calls": 1,
+          "self_seconds": 8.2069e-05,
+          "inclusive_seconds": 0.009942266
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 1,
+          "self_seconds": 2.4174000000000003e-05,
+          "inclusive_seconds": 0.00819368
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 549,
+          "function": "write_local_json",
+          "calls": 1,
+          "self_seconds": 2.0514e-05,
+          "inclusive_seconds": 0.004201613
+        }
+      ],
+      "copying_conversion": []
+    }
+  },
+  "after-ingestion-100000.prof": {
+    "profile_seconds": 20.36728712200003,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 535,
+          "function": "_parse_number",
+          "calls": 600000,
+          "self_seconds": 1.305665488,
+          "inclusive_seconds": 1.9409438900000002
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 4,
+          "self_seconds": 3.2408e-05,
+          "inclusive_seconds": 6.303500000000001e-05
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [],
+      "serialization_deserialization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 181,
+          "function": "_stable_json",
+          "calls": 300011,
+          "self_seconds": 0.223185549,
+          "inclusive_seconds": 4.574729377000001
+        },
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 300013,
+          "self_seconds": 0.630891132,
+          "inclusive_seconds": 4.357519734
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 300013,
+          "self_seconds": 2.788789822,
+          "inclusive_seconds": 2.788794627
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 185,
+          "function": "_digest",
+          "calls": 200011,
+          "self_seconds": 0.333799512,
+          "inclusive_seconds": 2.802694375
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 203,
+          "function": "file_sha256",
+          "calls": 3,
+          "self_seconds": 0.000865834,
+          "inclusive_seconds": 0.334465308
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 383,
+          "function": "persist_immutable_derived_artifact",
+          "calls": 2,
+          "self_seconds": 0.000761603,
+          "inclusive_seconds": 0.28675399900000004
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 219,
+          "function": "preserve_raw_source",
+          "calls": 1,
+          "self_seconds": 0.00010696900000000001,
+          "inclusive_seconds": 0.034000064
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 1,
+          "self_seconds": 2.6245e-05,
+          "inclusive_seconds": 0.0065823
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 549,
+          "function": "write_local_json",
+          "calls": 1,
+          "self_seconds": 3.0858e-05,
+          "inclusive_seconds": 0.006462268
+        }
+      ],
+      "copying_conversion": []
+    }
+  },
+  "after-ingestion-250000.prof": {
+    "profile_seconds": 55.37888630999997,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 535,
+          "function": "_parse_number",
+          "calls": 1500000,
+          "self_seconds": 3.490362843,
+          "inclusive_seconds": 5.165145893
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 4,
+          "self_seconds": 2.7646000000000003e-05,
+          "inclusive_seconds": 5.6593000000000005e-05
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [],
+      "serialization_deserialization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 181,
+          "function": "_stable_json",
+          "calls": 750011,
+          "self_seconds": 0.613402195,
+          "inclusive_seconds": 12.418298152
+        },
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 750013,
+          "self_seconds": 1.719233927,
+          "inclusive_seconds": 11.811650198
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 750013,
+          "self_seconds": 7.563726978,
+          "inclusive_seconds": 7.563730696
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 185,
+          "function": "_digest",
+          "calls": 500011,
+          "self_seconds": 0.8836113790000001,
+          "inclusive_seconds": 7.7080320360000005
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 203,
+          "function": "file_sha256",
+          "calls": 3,
+          "self_seconds": 0.002339447,
+          "inclusive_seconds": 0.820507486
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 383,
+          "function": "persist_immutable_derived_artifact",
+          "calls": 2,
+          "self_seconds": 0.002263928,
+          "inclusive_seconds": 0.7716478520000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 219,
+          "function": "preserve_raw_source",
+          "calls": 1,
+          "self_seconds": 0.00015955100000000002,
+          "inclusive_seconds": 0.081117267
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 1,
+          "self_seconds": 2.8131000000000002e-05,
+          "inclusive_seconds": 0.007328585
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 549,
+          "function": "write_local_json",
+          "calls": 1,
+          "self_seconds": 2.7288e-05,
+          "inclusive_seconds": 0.007164373000000001
+        }
+      ],
+      "copying_conversion": []
+    }
+  },
+  "before-baseline-10000.prof": {
+    "profile_seconds": 1.7569792219999976,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 18003,
+          "self_seconds": 0.051538778,
+          "inclusive_seconds": 0.08444206700000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/telemetry_normalization.py",
+          "line": 184,
+          "function": "build_normalization_report",
+          "calls": 1,
+          "self_seconds": 0.0007506300000000001,
+          "inclusive_seconds": 0.08026717600000001
+        }
+      ],
+      "dataframe_operations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/telemetry_normalization.py",
+          "line": 248,
+          "function": "dataframe_from_rows",
+          "calls": 1,
+          "self_seconds": 0.000454337,
+          "inclusive_seconds": 0.067179244
+        }
+      ],
+      "statistical_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 135,
+          "function": "_correlation",
+          "calls": 534,
+          "self_seconds": 0.288530445,
+          "inclusive_seconds": 0.32637935
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 267,
+          "function": "_signal_characteristics",
+          "calls": 27,
+          "self_seconds": 0.041695801000000005,
+          "inclusive_seconds": 0.29808304700000005
+        }
+      ],
+      "relationship_graph": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 495,
+          "function": "_learn_relationship_graph",
+          "calls": 1,
+          "self_seconds": 0.0012335690000000001,
+          "inclusive_seconds": 0.20036693200000003
+        }
+      ],
+      "baseline_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 348,
+          "function": "_learn_distributions",
+          "calls": 1,
+          "self_seconds": 0.004675028,
+          "inclusive_seconds": 0.412512855
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 202,
+          "function": "_identify_modes",
+          "calls": 1,
+          "self_seconds": 0.02664899,
+          "inclusive_seconds": 0.358983682
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 609,
+          "function": "_fit_expected_models",
+          "calls": 1,
+          "self_seconds": 0.005136182,
+          "inclusive_seconds": 0.08207265600000001
+        }
+      ],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 8,
+          "self_seconds": 0.000208285,
+          "inclusive_seconds": 0.042506753
+        },
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 299,
+          "function": "loads",
+          "calls": 8,
+          "self_seconds": 0.000136,
+          "inclusive_seconds": 0.007125744000000001
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 8,
+          "self_seconds": 0.0025693960000000003,
+          "inclusive_seconds": 0.002585197
+        }
+      ],
+      "provenance_evidence": [],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 4,
+          "self_seconds": 9.977300000000001e-05,
+          "inclusive_seconds": 0.046013490000000004
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 549,
+          "function": "write_local_json",
+          "calls": 4,
+          "self_seconds": 0.00033336300000000004,
+          "inclusive_seconds": 0.04293106
+        }
+      ],
+      "copying_conversion": [
+        {
+          "file": "/usr/lib/python3.12/copy.py",
+          "line": 118,
+          "function": "deepcopy",
+          "calls": 54,
+          "self_seconds": 0.000214159,
+          "inclusive_seconds": 0.000542994
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.asarray>",
+          "calls": 41,
+          "self_seconds": 8.794900000000001e-05,
+          "inclusive_seconds": 0.00027448
+        }
+      ]
+    }
+  },
+  "before-baseline-100000.prof": {
+    "profile_seconds": 11.42586881200001,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/telemetry_normalization.py",
+          "line": 184,
+          "function": "build_normalization_report",
+          "calls": 1,
+          "self_seconds": 0.006175731,
+          "inclusive_seconds": 0.439892789
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 18003,
+          "self_seconds": 0.043066195,
+          "inclusive_seconds": 0.06946379300000001
+        }
+      ],
+      "dataframe_operations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/telemetry_normalization.py",
+          "line": 248,
+          "function": "dataframe_from_rows",
+          "calls": 1,
+          "self_seconds": 0.0066158020000000005,
+          "inclusive_seconds": 0.40470131400000003
+        }
+      ],
+      "statistical_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 135,
+          "function": "_correlation",
+          "calls": 547,
+          "self_seconds": 3.003632407,
+          "inclusive_seconds": 3.5189084310000003
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 267,
+          "function": "_signal_characteristics",
+          "calls": 27,
+          "self_seconds": 0.5419760650000001,
+          "inclusive_seconds": 3.1825420390000003
+        }
+      ],
+      "relationship_graph": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 495,
+          "function": "_learn_relationship_graph",
+          "calls": 1,
+          "self_seconds": 0.017493184000000002,
+          "inclusive_seconds": 2.310541036
+        }
+      ],
+      "baseline_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 348,
+          "function": "_learn_distributions",
+          "calls": 1,
+          "self_seconds": 0.030732998,
+          "inclusive_seconds": 4.175658569
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 202,
+          "function": "_identify_modes",
+          "calls": 1,
+          "self_seconds": 0.198351314,
+          "inclusive_seconds": 2.27528986
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/behavioral_baseline.py",
+          "line": 609,
+          "function": "_fit_expected_models",
+          "calls": 1,
+          "self_seconds": 0.047196812000000005,
+          "inclusive_seconds": 0.719301857
+        }
+      ],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 8,
+          "self_seconds": 0.000169153,
+          "inclusive_seconds": 0.043600593
+        },
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 299,
+          "function": "loads",
+          "calls": 8,
+          "self_seconds": 3.6733e-05,
+          "inclusive_seconds": 0.004789149
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 8,
+          "self_seconds": 0.002041198,
+          "inclusive_seconds": 0.002057333
+        }
+      ],
+      "provenance_evidence": [],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 4,
+          "self_seconds": 0.00042071700000000003,
+          "inclusive_seconds": 0.059395157000000004
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 549,
+          "function": "write_local_json",
+          "calls": 4,
+          "self_seconds": 0.00013023400000000001,
+          "inclusive_seconds": 0.044527872
+        }
+      ],
+      "copying_conversion": [
+        {
+          "file": "/usr/lib/python3.12/copy.py",
+          "line": 118,
+          "function": "deepcopy",
+          "calls": 54,
+          "self_seconds": 0.000166467,
+          "inclusive_seconds": 0.00039924400000000004
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.asarray>",
+          "calls": 41,
+          "self_seconds": 6.797e-05,
+          "inclusive_seconds": 0.000270757
+        }
+      ]
+    }
+  },
+  "before-engine-10000.prof": {
+    "profile_seconds": 13.311570295000017,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 304316,
+          "self_seconds": 0.873046867,
+          "inclusive_seconds": 1.395372658
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii_inputs.py",
+          "line": 8,
+          "function": "normalize_rows",
+          "calls": 1,
+          "self_seconds": 0.030742909000000002,
+          "inclusive_seconds": 0.054236647000000006
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 257,
+          "function": "_column_entropy",
+          "calls": 9753,
+          "self_seconds": 0.565660527,
+          "inclusive_seconds": 1.461743663
+        }
+      ],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 299,
+          "function": "_correlation_drift",
+          "calls": 1,
+          "self_seconds": 0.060546812000000005,
+          "inclusive_seconds": 0.9239688850000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 283,
+          "function": "_regularized_covariance_matrix",
+          "calls": 2004,
+          "self_seconds": 0.074907888,
+          "inclusive_seconds": 0.80346508
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 293,
+          "function": "_baseline_mahalanobis_distances",
+          "calls": 1002,
+          "self_seconds": 0.053317616000000005,
+          "inclusive_seconds": 0.645331691
+        }
+      ],
+      "temporal_persistence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 20,
+          "function": "evaluate_temporal_math",
+          "calls": 1,
+          "self_seconds": 0.001739209,
+          "inclusive_seconds": 3.049156399
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/adaptive_persistence.py",
+          "line": 31,
+          "function": "evaluate_adaptive_persistence",
+          "calls": 1,
+          "self_seconds": 0.000573997,
+          "inclusive_seconds": 0.006504796
+        }
+      ],
+      "operating_context": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/mode_conditioned_baseline.py",
+          "line": 31,
+          "function": "analyze_mode_conditioned_baseline",
+          "calls": 1,
+          "self_seconds": 0.045588781,
+          "inclusive_seconds": 0.989956571
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/operating_modes.py",
+          "line": 230,
+          "function": "describe_mode",
+          "calls": 10003,
+          "self_seconds": 0.11260022600000001,
+          "inclusive_seconds": 0.916876464
+        }
+      ],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 39,
+          "self_seconds": 0.000143959,
+          "inclusive_seconds": 0.0024782240000000002
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 39,
+          "self_seconds": 0.00043761600000000005,
+          "inclusive_seconds": 0.00044172300000000004
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/evidence_fusion.py",
+          "line": 37,
+          "function": "fuse_evidence",
+          "calls": 1,
+          "self_seconds": 0.00017419900000000002,
+          "inclusive_seconds": 0.27412324
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 1,
+          "self_seconds": 3.0717000000000004e-05,
+          "inclusive_seconds": 0.01064113
+        }
+      ],
+      "copying_conversion": [
+        {
+          "file": "/usr/lib/python3.12/copy.py",
+          "line": 118,
+          "function": "deepcopy",
+          "calls": 76095,
+          "self_seconds": 0.152517549,
+          "inclusive_seconds": 0.341345067
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.asarray>",
+          "calls": 22602,
+          "self_seconds": 0.026515373000000002,
+          "inclusive_seconds": 0.026515373000000002
+        }
+      ]
+    }
+  },
+  "before-engine-100000.prof": {
+    "profile_seconds": 42.822716807999946,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 2705316,
+          "self_seconds": 6.0252186850000005,
+          "inclusive_seconds": 9.527284819
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii_inputs.py",
+          "line": 8,
+          "function": "normalize_rows",
+          "calls": 1,
+          "self_seconds": 0.30326473400000004,
+          "inclusive_seconds": 0.47390462800000005
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 257,
+          "function": "_column_entropy",
+          "calls": 9753,
+          "self_seconds": 0.552099698,
+          "inclusive_seconds": 1.432639602
+        }
+      ],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 299,
+          "function": "_correlation_drift",
+          "calls": 1,
+          "self_seconds": 0.049143361,
+          "inclusive_seconds": 0.760715357
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 283,
+          "function": "_regularized_covariance_matrix",
+          "calls": 2004,
+          "self_seconds": 0.043117295,
+          "inclusive_seconds": 0.5094082710000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 293,
+          "function": "_baseline_mahalanobis_distances",
+          "calls": 1002,
+          "self_seconds": 0.032377076000000005,
+          "inclusive_seconds": 0.44379003600000005
+        }
+      ],
+      "temporal_persistence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 20,
+          "function": "evaluate_temporal_math",
+          "calls": 1,
+          "self_seconds": 0.002154619,
+          "inclusive_seconds": 2.8237387490000003
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/adaptive_persistence.py",
+          "line": 31,
+          "function": "evaluate_adaptive_persistence",
+          "calls": 1,
+          "self_seconds": 0.000481446,
+          "inclusive_seconds": 0.004199855000000001
+        }
+      ],
+      "operating_context": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/mode_conditioned_baseline.py",
+          "line": 31,
+          "function": "analyze_mode_conditioned_baseline",
+          "calls": 1,
+          "self_seconds": 0.369191174,
+          "inclusive_seconds": 8.726194510000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/operating_modes.py",
+          "line": 230,
+          "function": "describe_mode",
+          "calls": 100003,
+          "self_seconds": 0.9421977960000001,
+          "inclusive_seconds": 7.117015964
+        }
+      ],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 39,
+          "self_seconds": 0.000150445,
+          "inclusive_seconds": 0.001803055
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 39,
+          "self_seconds": 0.00042709000000000003,
+          "inclusive_seconds": 0.000430555
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/evidence_fusion.py",
+          "line": 37,
+          "function": "fuse_evidence",
+          "calls": 1,
+          "self_seconds": 0.00012438100000000001,
+          "inclusive_seconds": 1.270434754
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 1,
+          "self_seconds": 2.0346e-05,
+          "inclusive_seconds": 0.008744825000000001
+        }
+      ],
+      "copying_conversion": [
+        {
+          "file": "/usr/lib/python3.12/copy.py",
+          "line": 118,
+          "function": "deepcopy",
+          "calls": 298475,
+          "self_seconds": 0.5625980770000001,
+          "inclusive_seconds": 1.32188832
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.asarray>",
+          "calls": 22602,
+          "self_seconds": 0.032300501,
+          "inclusive_seconds": 0.032300501
+        }
+      ]
+    }
+  },
+  "before-governance-10000.prof": {
+    "profile_seconds": 0.03258935700000001,
+    "categories": {
+      "parsing_normalization": [],
+      "dataframe_operations": [],
+      "statistical_calculations": [],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/operating_context.py",
+          "line": 80,
+          "function": "_row_summaries",
+          "calls": 1,
+          "self_seconds": 0.00892732,
+          "inclusive_seconds": 0.025152091
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/evidence_package.py",
+          "line": 685,
+          "function": "_operating_context",
+          "calls": 6,
+          "self_seconds": 4.2805e-05,
+          "inclusive_seconds": 0.000259988
+        }
+      ],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 5,
+          "self_seconds": 2.2204000000000003e-05,
+          "inclusive_seconds": 0.00033802100000000004
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 5,
+          "self_seconds": 0.00028549900000000004,
+          "inclusive_seconds": 0.00028549900000000004
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/evidence_package.py",
+          "line": 822,
+          "function": "build_evidence_package",
+          "calls": 6,
+          "self_seconds": 0.000838127,
+          "inclusive_seconds": 0.0048939510000000006
+        }
+      ],
+      "file_database_io": [],
+      "copying_conversion": []
+    }
+  },
+  "before-incremental-240.prof": {
+    "profile_seconds": 2.822261732999998,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 15768,
+          "self_seconds": 0.039208585000000004,
+          "inclusive_seconds": 0.074722674
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii_inputs.py",
+          "line": 8,
+          "function": "normalize_rows",
+          "calls": 3,
+          "self_seconds": 0.0012221180000000001,
+          "inclusive_seconds": 0.002073858
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 257,
+          "function": "_column_entropy",
+          "calls": 942,
+          "self_seconds": 0.037369739,
+          "inclusive_seconds": 0.09581096600000001
+        }
+      ],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 283,
+          "function": "_regularized_covariance_matrix",
+          "calls": 1308,
+          "self_seconds": 0.025311011,
+          "inclusive_seconds": 0.291087945
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/sii_runner.py",
+          "line": 293,
+          "function": "_baseline_mahalanobis_distances",
+          "calls": 654,
+          "self_seconds": 0.018464721,
+          "inclusive_seconds": 0.266422802
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 299,
+          "function": "_correlation_drift",
+          "calls": 3,
+          "self_seconds": 0.005878457,
+          "inclusive_seconds": 0.093010676
+        }
+      ],
+      "temporal_persistence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/temporal_math.py",
+          "line": 20,
+          "function": "evaluate_temporal_math",
+          "calls": 3,
+          "self_seconds": 0.000497988,
+          "inclusive_seconds": 0.276918949
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/adaptive_persistence.py",
+          "line": 31,
+          "function": "evaluate_adaptive_persistence",
+          "calls": 3,
+          "self_seconds": 0.000252883,
+          "inclusive_seconds": 0.003794462
+        }
+      ],
+      "operating_context": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/mode_conditioned_baseline.py",
+          "line": 31,
+          "function": "analyze_mode_conditioned_baseline",
+          "calls": 3,
+          "self_seconds": 0.00016480500000000002,
+          "inclusive_seconds": 0.002771855
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/operating_modes.py",
+          "line": 230,
+          "function": "describe_mode",
+          "calls": 3,
+          "self_seconds": 0.000177581,
+          "inclusive_seconds": 0.001921182
+        }
+      ],
+      "serialization_deserialization": [
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 117,
+          "self_seconds": 0.000466252,
+          "inclusive_seconds": 0.006460734
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 117,
+          "self_seconds": 0.001442251,
+          "inclusive_seconds": 0.001456592
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/engine/sii/evidence_fusion.py",
+          "line": 37,
+          "function": "fuse_evidence",
+          "calls": 3,
+          "self_seconds": 0.000337619,
+          "inclusive_seconds": 0.072137459
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 3,
+          "self_seconds": 8.3977e-05,
+          "inclusive_seconds": 0.020417765
+        }
+      ],
+      "copying_conversion": [
+        {
+          "file": "/usr/lib/python3.12/copy.py",
+          "line": 118,
+          "function": "deepcopy",
+          "calls": 109635,
+          "self_seconds": 0.12474807800000001,
+          "inclusive_seconds": 0.26675813000000004
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<built-in method numpy.asarray>",
+          "calls": 13800,
+          "self_seconds": 0.008695802,
+          "inclusive_seconds": 0.008695802
+        }
+      ]
+    }
+  },
+  "before-ingestion-10000.prof": {
+    "profile_seconds": 3.3242326689999993,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 535,
+          "function": "_parse_number",
+          "calls": 60000,
+          "self_seconds": 0.188896,
+          "inclusive_seconds": 0.27686730200000004
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 4,
+          "self_seconds": 2.7538000000000003e-05,
+          "inclusive_seconds": 5.5976e-05
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [],
+      "serialization_deserialization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 181,
+          "function": "_stable_json",
+          "calls": 30011,
+          "self_seconds": 0.032256858,
+          "inclusive_seconds": 0.635337553
+        },
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 30013,
+          "self_seconds": 0.098955254,
+          "inclusive_seconds": 0.607075633
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 30013,
+          "self_seconds": 0.37009167200000004,
+          "inclusive_seconds": 0.37009580000000003
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 185,
+          "function": "_digest",
+          "calls": 20011,
+          "self_seconds": 0.043257256,
+          "inclusive_seconds": 0.431430368
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 203,
+          "function": "file_sha256",
+          "calls": 3,
+          "self_seconds": 0.00019747500000000002,
+          "inclusive_seconds": 0.045341676000000004
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 383,
+          "function": "persist_immutable_derived_artifact",
+          "calls": 2,
+          "self_seconds": 0.00021350700000000001,
+          "inclusive_seconds": 0.038546772
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 219,
+          "function": "preserve_raw_source",
+          "calls": 1,
+          "self_seconds": 7.3581e-05,
+          "inclusive_seconds": 0.009687754
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 1,
+          "self_seconds": 4.0657e-05,
+          "inclusive_seconds": 0.00854453
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 549,
+          "function": "write_local_json",
+          "calls": 1,
+          "self_seconds": 2.0159e-05,
+          "inclusive_seconds": 0.004117663000000001
+        }
+      ],
+      "copying_conversion": []
+    }
+  },
+  "before-ingestion-100000.prof": {
+    "profile_seconds": 34.48538310200001,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 535,
+          "function": "_parse_number",
+          "calls": 600000,
+          "self_seconds": 1.9760120760000002,
+          "inclusive_seconds": 2.8884659900000003
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 4,
+          "self_seconds": 2.799e-05,
+          "inclusive_seconds": 5.8931e-05
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [],
+      "serialization_deserialization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 181,
+          "function": "_stable_json",
+          "calls": 300011,
+          "self_seconds": 0.389695112,
+          "inclusive_seconds": 7.0002266760000005
+        },
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 300013,
+          "self_seconds": 1.028828552,
+          "inclusive_seconds": 6.614577844
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 300013,
+          "self_seconds": 4.1747395030000005,
+          "inclusive_seconds": 4.174743494
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 185,
+          "function": "_digest",
+          "calls": 200011,
+          "self_seconds": 0.48667556100000003,
+          "inclusive_seconds": 4.663245356
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 203,
+          "function": "file_sha256",
+          "calls": 3,
+          "self_seconds": 0.002106189,
+          "inclusive_seconds": 0.41711710900000004
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 383,
+          "function": "persist_immutable_derived_artifact",
+          "calls": 2,
+          "self_seconds": 0.0031517040000000004,
+          "inclusive_seconds": 0.402008544
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 219,
+          "function": "preserve_raw_source",
+          "calls": 1,
+          "self_seconds": 0.00018532700000000002,
+          "inclusive_seconds": 0.06382671100000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 1,
+          "self_seconds": 2.5151e-05,
+          "inclusive_seconds": 0.008587891
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 549,
+          "function": "write_local_json",
+          "calls": 1,
+          "self_seconds": 2.4797e-05,
+          "inclusive_seconds": 0.005063433
+        }
+      ],
+      "copying_conversion": []
+    }
+  },
+  "before-ingestion-250000.prof": {
+    "profile_seconds": 58.13482884800002,
+    "categories": {
+      "parsing_normalization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 535,
+          "function": "_parse_number",
+          "calls": 1500000,
+          "self_seconds": 3.419654495,
+          "inclusive_seconds": 5.073188418
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/data_quality.py",
+          "line": 306,
+          "function": "parse_numeric_value",
+          "calls": 4,
+          "self_seconds": 2.6588e-05,
+          "inclusive_seconds": 5.3957000000000005e-05
+        }
+      ],
+      "dataframe_operations": [],
+      "statistical_calculations": [],
+      "relationship_graph": [],
+      "baseline_calculations": [],
+      "covariance_correlation": [],
+      "temporal_persistence": [],
+      "operating_context": [],
+      "serialization_deserialization": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 181,
+          "function": "_stable_json",
+          "calls": 750011,
+          "self_seconds": 0.593190042,
+          "inclusive_seconds": 11.644646624
+        },
+        {
+          "file": "/usr/lib/python3.12/json/__init__.py",
+          "line": 183,
+          "function": "dumps",
+          "calls": 750013,
+          "self_seconds": 1.611681917,
+          "inclusive_seconds": 11.055539565
+        },
+        {
+          "file": "/usr/lib/python3.12/json/encoder.py",
+          "line": 205,
+          "function": "iterencode",
+          "calls": 750013,
+          "self_seconds": 7.029583398000001,
+          "inclusive_seconds": 7.0295883550000005
+        }
+      ],
+      "provenance_evidence": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 185,
+          "function": "_digest",
+          "calls": 500011,
+          "self_seconds": 0.837516247,
+          "inclusive_seconds": 7.475244297000001
+        }
+      ],
+      "file_database_io": [
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 203,
+          "function": "file_sha256",
+          "calls": 3,
+          "self_seconds": 0.002219792,
+          "inclusive_seconds": 0.7839037400000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 383,
+          "function": "persist_immutable_derived_artifact",
+          "calls": 2,
+          "self_seconds": 0.0016385450000000001,
+          "inclusive_seconds": 0.705396484
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/historical_ingestion.py",
+          "line": 219,
+          "function": "preserve_raw_source",
+          "calls": 1,
+          "self_seconds": 0.000140824,
+          "inclusive_seconds": 0.07884374300000001
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/runtime_db.py",
+          "line": 2202,
+          "function": "upsert_latest_payload",
+          "calls": 1,
+          "self_seconds": 3.6888e-05,
+          "inclusive_seconds": 0.017102929
+        },
+        {
+          "file": "/home/ubuntu/Neraium-1.0/backend/app/services/upload_state_repository.py",
+          "line": 549,
+          "function": "write_local_json",
+          "calls": 1,
+          "self_seconds": 2.3975e-05,
+          "inclusive_seconds": 0.004440416
+        }
+      ],
+      "copying_conversion": []
+    }
+  }
+}

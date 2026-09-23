@@ -1,0 +1,12 @@
+{
+  "source": {
+    "file": "golden-artifact-ingestion-100000-source.csv.gz",
+    "sha256": "405e710b53fb51384640332100325012d2ac36224d47552b202eb945906aad96",
+    "bytes": 6400042
+  },
+  "canonical": {
+    "file": "golden-artifact-ingestion-100000-canonical.jsonl.gz",
+    "sha256": "b085abd7308faec30e02a730377e5e8bbbd2ec8680414f0ab174758eb4c6ded3",
+    "bytes": 89655569
+  }
+}

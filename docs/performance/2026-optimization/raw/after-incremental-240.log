@@ -1,0 +1,3 @@
+incremental-240 0 {'wall_seconds': 1.5672618250828236, 'cpu_seconds': 1.5445076330000003, 'peak_rss_bytes': 135065600, 'governed_sha256': '6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb', 'golden_equal': True}
+incremental-240 1 {'wall_seconds': 1.8111528519075364, 'cpu_seconds': 1.7853480030000002, 'peak_rss_bytes': 144986112, 'governed_sha256': '6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb', 'golden_equal': True}
+incremental-240 2 {'wall_seconds': 1.5482614829670638, 'cpu_seconds': 1.522671712000001, 'peak_rss_bytes': 148361216, 'governed_sha256': '6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb', 'golden_equal': True}

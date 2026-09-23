@@ -1,0 +1,35 @@
+{
+  "phase": "control",
+  "implementation": "frozen-reference",
+  "workload": "baseline-100000",
+  "rows": 100000,
+  "samples": [
+    {
+      "wall_seconds": 8.028650806983933,
+      "cpu_seconds": 7.965900482999999,
+      "peak_rss_bytes": 226312192,
+      "governed_sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8",
+      "golden_equal": true
+    },
+    {
+      "wall_seconds": 7.711512501118705,
+      "cpu_seconds": 7.640239715,
+      "peak_rss_bytes": 226635776,
+      "governed_sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8",
+      "golden_equal": true
+    },
+    {
+      "wall_seconds": 7.856747649144381,
+      "cpu_seconds": 7.792062433000002,
+      "peak_rss_bytes": 226656256,
+      "governed_sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8",
+      "golden_equal": true
+    }
+  ],
+  "wall_median": 7.856747649144381,
+  "wall_min": 7.711512501118705,
+  "wall_max": 8.028650806983933,
+  "cpu_median": 7.792062433000002,
+  "peak_rss_bytes": 226656256,
+  "rows_per_second": 12727.912931108363
+}

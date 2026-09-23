@@ -1,0 +1,164 @@
+         33748 function calls in 0.019 seconds
+
+   Ordered by: cumulative time
+   List reduced from 123 to 90 due to restriction <90>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    0.019    0.019 governed_benchmark.py:101(packages)
+        1    0.000    0.000    0.012    0.012 operating_context.py:19(build_operating_context_inputs)
+        1    0.005    0.005    0.012    0.012 operating_context.py:80(_row_summaries)
+        6    0.001    0.000    0.005    0.001 evidence_package.py:822(build_evidence_package)
+    10003    0.004    0.000    0.005    0.000 operating_context.py:126(_finite)
+        3    0.000    0.000    0.003    0.001 test_evidence_package_v1.py:31(_comparison)
+        3    0.000    0.000    0.003    0.001 baseline_analysis_repository.py:145(stamp_comparison_analysis_identity)
+        3    0.000    0.000    0.003    0.001 evidence_package.py:975(ensure_evidence_package)
+    10905    0.002    0.000    0.002    0.000 {method 'get' of 'dict' objects}
+      172    0.000    0.000    0.001    0.000 main.py:253(__init__)
+      172    0.001    0.000    0.001    0.000 {method 'validate_python' of 'pydantic_core._pydantic_core.SchemaValidator' objects}
+       16    0.000    0.000    0.001    0.000 main.py:427(model_dump)
+       16    0.001    0.000    0.001    0.000 {method 'to_python' of 'pydantic_core._pydantic_core.SchemaSerializer' objects}
+        3    0.000    0.000    0.001    0.000 evidence_package_fingerprint.py:427(build_fingerprint)
+    10021    0.001    0.000    0.001    0.000 {built-in method math.isfinite}
+       37    0.001    0.000    0.001    0.000 {built-in method builtins.sorted}
+        7    0.000    0.000    0.001    0.000 statistics.py:601(median)
+        6    0.000    0.000    0.001    0.000 evidence_package.py:397(_timeline)
+       12    0.000    0.000    0.000    0.000 uuid.py:727(uuid5)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:685(_operating_context)
+       36    0.000    0.000    0.000    0.000 evidence_package.py:382(_timestamp)
+      186    0.000    0.000    0.000    0.000 evidence_package.py:373(_first)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:507(_finding_confidence)
+       30    0.000    0.000    0.000    0.000 evidence_package.py:494(_unknown)
+        5    0.000    0.000    0.000    0.000 evidence_package_fingerprint.py:423(canonical_bytes)
+       34    0.000    0.000    0.000    0.000 {method 'isoformat' of 'datetime.datetime' objects}
+        5    0.000    0.000    0.000    0.000 __init__.py:183(dumps)
+        5    0.000    0.000    0.000    0.000 {built-in method builtins.min}
+        3    0.000    0.000    0.000    0.000 baseline_analysis_repository.py:110(analysis_identity)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:461(_relationship)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:498(_confidence_level)
+        7    0.000    0.000    0.000    0.000 {built-in method builtins.max}
+       18    0.000    0.000    0.000    0.000 evidence_package_fingerprint.py:409(_number)
+        5    0.000    0.000    0.000    0.000 encoder.py:183(encode)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:588(_context_metric)
+      287    0.000    0.000    0.000    0.000 evidence_package.py:369(_mapping)
+       12    0.000    0.000    0.000    0.000 uuid.py:139(__init__)
+        3    0.000    0.000    0.000    0.000 dataset_scope.py:80(dataset_scope_from_payload)
+       10    0.000    0.000    0.000    0.000 enum.py:726(__call__)
+        5    0.000    0.000    0.000    0.000 encoder.py:205(iterencode)
+      118    0.000    0.000    0.000    0.000 enum.py:202(__get__)
+      527    0.000    0.000    0.000    0.000 {built-in method builtins.isinstance}
+       21    0.000    0.000    0.000    0.000 {method 'extend' of 'list' objects}
+       10    0.000    0.000    0.000    0.000 enum.py:1129(__new__)
+        2    0.000    0.000    0.000    0.000 {built-in method builtins.sum}
+        3    0.000    0.000    0.000    0.000 dataset_scope.py:56(build_dataset_scope)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:525(_data_quality_confidence)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:560(_mapping_confidence)
+        7    0.000    0.000    0.000    0.000 evidence_package.py:916(<genexpr>)
+        6    0.000    0.000    0.000    0.000 {method 'sort' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 evidence_package.py:639(_comparability)
+        2    0.000    0.000    0.000    0.000 evidence_package_fingerprint.py:483(<lambda>)
+       12    0.000    0.000    0.000    0.000 {built-in method _hashlib.openssl_sha1}
+      118    0.000    0.000    0.000    0.000 enum.py:1292(value)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:707(_limitations)
+       89    0.000    0.000    0.000    0.000 {method 'replace' of 'str' objects}
+        3    0.000    0.000    0.000    0.000 baseline_analysis_repository.py:129(_finding_collections)
+      136    0.000    0.000    0.000    0.000 {method 'strip' of 'str' objects}
+       12    0.000    0.000    0.000    0.000 uuid.py:280(__str__)
+       14    0.000    0.000    0.000    0.000 evidence_package.py:450(<lambda>)
+        3    0.000    0.000    0.000    0.000 dataset_scope.py:42(normalize_workspace_id)
+       53    0.000    0.000    0.000    0.000 {built-in method builtins.len}
+        3    0.000    0.000    0.000    0.000 {built-in method _hashlib.openssl_sha256}
+       13    0.000    0.000    0.000    0.000 {built-in method builtins.round}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+       12    0.000    0.000    0.000    0.000 {method 'digest' of '_hashlib.HASH' objects}
+        1    0.000    0.000    0.000    0.000 operating_context.py:110(_summary)
+        1    0.000    0.000    0.000    0.000 evidence_package.py:662(_transition)
+        2    0.000    0.000    0.000    0.000 operating_context.py:50(_signals_by_role)
+        3    0.000    0.000    0.000    0.000 {method 'fullmatch' of 're.Pattern' objects}
+        3    0.000    0.000    0.000    0.000 dataset_scope.py:156(attach_dataset_scope)
+        2    0.000    0.000    0.000    0.000 evidence_package.py:625(_range_overlap)
+       20    0.000    0.000    0.000    0.000 evidence_package_fingerprint.py:517(<genexpr>)
+        3    0.000    0.000    0.000    0.000 operating_context.py:134(_rounded)
+        3    0.000    0.000    0.000    0.000 <string>:2(__init__)
+       18    0.000    0.000    0.000    0.000 {built-in method builtins.format}
+       12    0.000    0.000    0.000    0.000 uuid.py:285(bytes)
+       20    0.000    0.000    0.000    0.000 {built-in method fromisoformat}
+        6    0.000    0.000    0.000    0.000 dataset_scope.py:51(normalize_principal)
+       44    0.000    0.000    0.000    0.000 {method 'append' of 'list' objects}
+       18    0.000    0.000    0.000    0.000 {method 'quantize' of 'decimal.Decimal' objects}
+       12    0.000    0.000    0.000    0.000 {method 'count' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 {method 'update' of 'set' objects}
+       20    0.000    0.000    0.000    0.000 {method 'astimezone' of 'datetime.datetime' objects}
+        6    0.000    0.000    0.000    0.000 evidence_package.py:480(_finding)
+       18    0.000    0.000    0.000    0.000 {method 'scaleb' of 'decimal.Decimal' objects}
+       36    0.000    0.000    0.000    0.000 {method 'rstrip' of 'str' objects}
+        4    0.000    0.000    0.000    0.000 evidence_package.py:619(_units_compatible)
+        7    0.000    0.000    0.000    0.000 evidence_package_fingerprint.py:495(<genexpr>)
+        3    0.000    0.000    0.000    0.000 dataset_scope.py:99(current_dataset_scope)
+
+
+         33748 function calls in 0.019 seconds
+
+   Ordered by: internal time
+   List reduced from 123 to 60 due to restriction <60>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.005    0.005    0.012    0.012 operating_context.py:80(_row_summaries)
+    10003    0.004    0.000    0.005    0.000 operating_context.py:126(_finite)
+    10905    0.002    0.000    0.002    0.000 {method 'get' of 'dict' objects}
+      172    0.001    0.000    0.001    0.000 {method 'validate_python' of 'pydantic_core._pydantic_core.SchemaValidator' objects}
+       16    0.001    0.000    0.001    0.000 {method 'to_python' of 'pydantic_core._pydantic_core.SchemaSerializer' objects}
+        6    0.001    0.000    0.005    0.001 evidence_package.py:822(build_evidence_package)
+    10021    0.001    0.000    0.001    0.000 {built-in method math.isfinite}
+       37    0.001    0.000    0.001    0.000 {built-in method builtins.sorted}
+        3    0.000    0.000    0.001    0.000 evidence_package_fingerprint.py:427(build_fingerprint)
+       34    0.000    0.000    0.000    0.000 {method 'isoformat' of 'datetime.datetime' objects}
+        5    0.000    0.000    0.000    0.000 {built-in method builtins.min}
+      186    0.000    0.000    0.000    0.000 evidence_package.py:373(_first)
+        7    0.000    0.000    0.000    0.000 {built-in method builtins.max}
+        6    0.000    0.000    0.001    0.000 evidence_package.py:397(_timeline)
+      172    0.000    0.000    0.001    0.000 main.py:253(__init__)
+       36    0.000    0.000    0.000    0.000 evidence_package.py:382(_timestamp)
+        5    0.000    0.000    0.000    0.000 encoder.py:205(iterencode)
+        1    0.000    0.000    0.012    0.012 operating_context.py:19(build_operating_context_inputs)
+       12    0.000    0.000    0.000    0.000 uuid.py:727(uuid5)
+      527    0.000    0.000    0.000    0.000 {built-in method builtins.isinstance}
+       12    0.000    0.000    0.000    0.000 uuid.py:139(__init__)
+        1    0.000    0.000    0.019    0.019 governed_benchmark.py:101(packages)
+       18    0.000    0.000    0.000    0.000 evidence_package_fingerprint.py:409(_number)
+      287    0.000    0.000    0.000    0.000 evidence_package.py:369(_mapping)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:461(_relationship)
+       30    0.000    0.000    0.000    0.000 evidence_package.py:494(_unknown)
+        2    0.000    0.000    0.000    0.000 {built-in method builtins.sum}
+        3    0.000    0.000    0.003    0.001 evidence_package.py:975(ensure_evidence_package)
+       10    0.000    0.000    0.000    0.000 enum.py:1129(__new__)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:588(_context_metric)
+      118    0.000    0.000    0.000    0.000 enum.py:202(__get__)
+        3    0.000    0.000    0.003    0.001 test_evidence_package_v1.py:31(_comparison)
+       12    0.000    0.000    0.000    0.000 {built-in method _hashlib.openssl_sha1}
+      118    0.000    0.000    0.000    0.000 enum.py:1292(value)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:685(_operating_context)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:498(_confidence_level)
+       89    0.000    0.000    0.000    0.000 {method 'replace' of 'str' objects}
+      136    0.000    0.000    0.000    0.000 {method 'strip' of 'str' objects}
+       12    0.000    0.000    0.000    0.000 uuid.py:280(__str__)
+       10    0.000    0.000    0.000    0.000 enum.py:726(__call__)
+        3    0.000    0.000    0.000    0.000 baseline_analysis_repository.py:110(analysis_identity)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:707(_limitations)
+        3    0.000    0.000    0.000    0.000 dataset_scope.py:80(dataset_scope_from_payload)
+        5    0.000    0.000    0.000    0.000 __init__.py:183(dumps)
+        3    0.000    0.000    0.000    0.000 baseline_analysis_repository.py:129(_finding_collections)
+        3    0.000    0.000    0.003    0.001 baseline_analysis_repository.py:145(stamp_comparison_analysis_identity)
+       53    0.000    0.000    0.000    0.000 {built-in method builtins.len}
+        3    0.000    0.000    0.000    0.000 {built-in method _hashlib.openssl_sha256}
+       13    0.000    0.000    0.000    0.000 {built-in method builtins.round}
+       21    0.000    0.000    0.000    0.000 {method 'extend' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+       12    0.000    0.000    0.000    0.000 {method 'digest' of '_hashlib.HASH' objects}
+        5    0.000    0.000    0.000    0.000 encoder.py:183(encode)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:507(_finding_confidence)
+        7    0.000    0.000    0.001    0.000 statistics.py:601(median)
+        6    0.000    0.000    0.000    0.000 evidence_package.py:525(_data_quality_confidence)
+        3    0.000    0.000    0.000    0.000 {method 'fullmatch' of 're.Pattern' objects}
+        3    0.000    0.000    0.000    0.000 dataset_scope.py:56(build_dataset_scope)
+       16    0.000    0.000    0.001    0.000 main.py:427(model_dump)
+        7    0.000    0.000    0.000    0.000 evidence_package.py:916(<genexpr>)

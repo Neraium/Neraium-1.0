@@ -1,0 +1,13 @@
+{
+  "unrelated_tracked_diff_unchanged": true,
+  "preexisting_python_sources_checked": 475,
+  "changed_preexisting_python_sources": [
+    "backend/app/services/behavioral_baseline.py",
+    "backend/app/services/data_quality.py",
+    "backend/app/services/historical_ingestion.py",
+    "backend/app/services/sii_runner.py"
+  ],
+  "unexpected_preexisting_python_source_changes": [],
+  "frozen_golden_files_checked": 27,
+  "frozen_golden_hashes_unchanged": true
+}

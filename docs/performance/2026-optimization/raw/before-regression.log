@@ -1,0 +1,612 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/ubuntu/Neraium-1.0
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.14.2, cov-4.1.0, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1658 items / 20 deselected / 1638 selected
+
+tests/backend/test_api_health.py ......                                  [  0%]
+tests/test_adaptive_learning.py F.F                                      [  0%]
+tests/test_analysis_output_quality.py .......                            [  0%]
+tests/test_analysis_provenance.py ...                                    [  1%]
+tests/test_analysis_result_contract.py ...F.F                            [  1%]
+tests/test_api_contracts.py .....                                        [  1%]
+tests/test_aquatic_domain.py .....                                       [  2%]
+tests/test_atomic_terminal_job_state.py ...............                  [  3%]
+tests/test_backend_route_smoke.py .                                      [  3%]
+tests/test_bedrock_evidence_route.py ....                                [  3%]
+tests/test_bedrock_interpreter.py ......                                 [  3%]
+tests/test_behavioral_baseline_workflow.py FFF.FFFFFFFFFFFFFFFFFFFFFF    [  5%]
+tests/test_behavioral_model_runtime_migration.py ...                     [  5%]
+tests/test_behavioral_model_store.py .........                           [  6%]
+tests/test_canonical_signal_catalog.py ....                              [  6%]
+tests/test_cognition_coherence.py ...                                    [  6%]
+tests/test_condition_intelligence.py ...........................         [  8%]
+tests/test_config.py .......................................             [ 10%]
+tests/test_connector_performance_limits.py ....                          [ 10%]
+tests/test_connector_sonar_refactors.py ....................             [ 11%]
+tests/test_connector_store_security.py ..............................    [ 13%]
+tests/test_connectors.py ...................                             [ 14%]
+tests/test_data_connections.py ..                                        [ 15%]
+tests/test_data_connections_polling.py ........                          [ 15%]
+tests/test_data_replay.py ....FF.FF                                      [ 16%]
+tests/test_data_upload.py FF..FFFFFFF.FFF.FFFFFFFFFF.FFF.FFFF..FFF.FFFF. [ 18%]
+................FFFFFF..FFF...FFFFFFFFFFFFFF.......FFF
+
+=================================== FAILURES ===================================
+____________ test_latest_upload_disables_adaptive_learning_snapshot ____________
+tests/test_adaptive_learning.py:34: in test_latest_upload_disables_adaptive_learning_snapshot
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+____ test_operator_feedback_updates_evidence_record_without_adaptive_memory ____
+tests/test_adaptive_learning.py:56: in test_operator_feedback_updates_evidence_record_without_adaptive_memory
+    status_payload = wait_for_terminal_upload_status(client, upload.json()["status_url"])
+                                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+____________ test_saved_analysis_result_is_viewable_without_replay _____________
+tests/test_analysis_result_contract.py:129: in test_saved_analysis_result_is_viewable_without_replay
+    assert status_payload["result_available"] is True
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'result_available'
+_______ test_latest_upload_does_not_reuse_stale_analysis_for_new_upload ________
+tests/test_analysis_result_contract.py:198: in test_latest_upload_does_not_reuse_stale_analysis_for_new_upload
+    assert payload["job_id"] == "queuedcontract001"
+           ^^^^^^^^^^^^^^^^^
+E   KeyError: 'job_id'
+____ test_create_baseline_never_invokes_sii_or_persists_detection_evidence _____
+tests/test_behavioral_baseline_workflow.py:81: in test_create_baseline_never_invokes_sii_or_persists_detection_evidence
+    assert accepted.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_ test_completed_baseline_contract_propagates_id_and_supports_recovery_lookups _
+tests/test_behavioral_baseline_workflow.py:112: in test_completed_baseline_contract_propagates_id_and_supports_recovery_lookups
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+____ test_dataset_baseline_lookup_uses_index_references_without_model_scan _____
+tests/test_behavioral_baseline_workflow.py:143: in test_dataset_baseline_lookup_uses_index_references_without_model_scan
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_________ test_candidate_requires_approval_and_activation_is_separate __________
+tests/test_behavioral_baseline_workflow.py:185: in test_candidate_requires_approval_and_activation_is_separate
+    terminal = _wait(client, queued["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______________ test_approval_can_be_disabled_by_controlled_policy ______________
+tests/test_behavioral_baseline_workflow.py:213: in test_approval_can_be_disabled_by_controlled_policy
+    terminal = _wait(client, accepted.json()["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______ test_analysis_and_controlled_extension_require_an_active_baseline _______
+tests/test_behavioral_baseline_workflow.py:227: in test_analysis_and_controlled_extension_require_an_active_baseline
+    assert analyze.status_code == 409
+E   assert 410 == 409
+E    +  where 410 = <Response [410 Gone]>.status_code
+_______ test_controlled_extension_creates_a_child_candidate_without_sii ________
+tests/test_behavioral_baseline_workflow.py:236: in test_controlled_extension_creates_a_child_candidate_without_sii
+    _wait(client, initial["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+________ test_exact_baseline_routes_survive_newer_activation_and_retry _________
+tests/test_behavioral_baseline_workflow.py:264: in test_exact_baseline_routes_survive_newer_activation_and_retry
+    first_terminal = _wait(client, first["status_url"])
+                                   ^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______ test_baseline_state_and_exact_ids_are_isolated_between_portfolios _______
+tests/test_behavioral_baseline_workflow.py:298: in test_baseline_state_and_exact_ids_are_isolated_between_portfolios
+    _wait(client, north["status_url"], headers=north_headers)
+                  ^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______ test_activation_failure_cannot_replace_the_previous_active_pointer ______
+tests/test_behavioral_baseline_workflow.py:318: in test_activation_failure_cannot_replace_the_previous_active_pointer
+    _wait(client, first["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_ test_explicit_baseline_detail_is_baseline_only_until_an_exact_analysis_exists _
+tests/test_behavioral_baseline_workflow.py:385: in test_explicit_baseline_detail_is_baseline_only_until_an_exact_analysis_exists
+    _wait(client, queued["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+__________ test_baseline_a_never_lists_or_serves_baseline_b_analysis ___________
+tests/test_behavioral_baseline_workflow.py:422: in test_baseline_a_never_lists_or_serves_baseline_b_analysis
+    _wait(client, first["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_______ test_analysis_persistence_rejects_mismatched_baseline_and_scope ________
+tests/test_behavioral_baseline_workflow.py:448: in test_analysis_persistence_rejects_mismatched_baseline_and_scope
+    _wait(client, queued["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+__ test_comparison_upload_rejects_a_requested_baseline_from_another_identity ___
+tests/test_behavioral_baseline_workflow.py:469: in test_comparison_upload_rejects_a_requested_baseline_from_another_identity
+    _wait(client, queued["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_ test_completed_comparison_uses_distinct_dataset_and_analysis_ids_and_scopes_findings _
+tests/test_behavioral_baseline_workflow.py:503: in test_completed_comparison_uses_distinct_dataset_and_analysis_ids_and_scopes_findings
+    _wait(client, baseline_job["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_ test_comparison_persistence_rejects_the_baseline_dataset_as_evaluation_data __
+tests/test_behavioral_baseline_workflow.py:532: in test_comparison_persistence_rejects_the_baseline_dataset_as_evaluation_data
+    _wait(client, baseline_job["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+____ test_new_baseline_hides_stale_findings_until_its_own_comparison_exists ____
+tests/test_behavioral_baseline_workflow.py:549: in test_new_baseline_hides_stale_findings_until_its_own_comparison_exists
+    _wait(client, first_job["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+__ test_active_comparison_identity_is_not_replaced_by_baseline_ready_fallback __
+tests/test_behavioral_baseline_workflow.py:570: in test_active_comparison_identity_is_not_replaced_by_baseline_ready_fallback
+    _wait(client, baseline_job["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_ test_second_comparison_creates_a_separate_analysis_without_overwriting_baseline _
+tests/test_behavioral_baseline_workflow.py:597: in test_second_comparison_creates_a_separate_analysis_without_overwriting_baseline
+    _wait(client, baseline_job["status_url"])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_________ test_upload_creates_distinct_dataset_and_processing_job_ids __________
+tests/test_behavioral_baseline_workflow.py:616: in test_upload_creates_distinct_dataset_and_processing_job_ids
+    assert accepted.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_ test_validation_exception_returns_structured_failure_with_original_exception _
+tests/test_behavioral_baseline_workflow.py:638: in test_validation_exception_returns_structured_failure_with_original_exception
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+__ test_relationship_learning_exception_reports_actual_stage_and_is_retryable __
+tests/test_behavioral_baseline_workflow.py:665: in test_relationship_learning_exception_reports_actual_stage_and_is_retryable
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+____________ test_worker_waits_for_a_delayed_baseline_result_record ____________
+tests/test_behavioral_baseline_workflow.py:690: in test_worker_waits_for_a_delayed_baseline_result_record
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______ test_terminal_success_is_rejected_when_result_cannot_be_retrieved _______
+tests/test_behavioral_baseline_workflow.py:703: in test_terminal_success_is_rejected_when_result_cannot_be_retrieved
+    terminal = _wait(client, accepted["status_url"])
+                             ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______________ test_retry_processing_reuses_the_uploaded_dataset _______________
+tests/test_behavioral_baseline_workflow.py:726: in test_retry_processing_reuses_the_uploaded_dataset
+    failed = _wait(client, accepted["status_url"])
+                           ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_______ test_persisted_upload_result_exposes_replay_without_source_file ________
+tests/test_data_replay.py:166: in test_persisted_upload_result_exposes_replay_without_source_file
+    assert payload["frame_count"] == 2
+           ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'frame_count'
+_________ test_replay_endpoint_uses_canonical_per_job_persisted_frames _________
+tests/test_data_replay.py:205: in test_replay_endpoint_uses_canonical_per_job_persisted_frames
+    assert payload["frame_count"] == 1
+           ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'frame_count'
+_____ test_intake_result_reads_canonical_per_job_artifact_not_just_latest ______
+tests/test_data_replay.py:305: in test_intake_result_reads_canonical_per_job_artifact_not_just_latest
+    assert response.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+_____ test_historian_style_csv_upload_persists_replay_after_source_removed _____
+tests/test_data_replay.py:358: in test_historian_style_csv_upload_persists_replay_after_source_removed
+    assert upload_response.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_____________________ test_upload_returns_accepted_job_id ______________________
+tests/test_data_upload.py:90: in test_upload_returns_accepted_job_id
+    assert response.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+___________________ test_json_upload_returns_accepted_job_id ___________________
+tests/test_data_upload.py:129: in test_json_upload_returns_accepted_job_id
+    assert response.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+______________ test_upload_requires_authentication_in_production _______________
+tests/test_data_upload.py:176: in test_upload_requires_authentication_in_production
+    assert response.status_code == 401
+E   assert 410 == 401
+E    +  where 410 = <Response [410 Gone]>.status_code
+_ test_upload_uses_local_queue_when_split_role_production_has_no_shared_bucket _
+tests/test_data_upload.py:201: in test_upload_uses_local_queue_when_split_role_production_has_no_shared_bucket
+    assert response.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_______ test_upload_in_split_role_production_uses_external_worker_queue ________
+tests/test_data_upload.py:247: in test_upload_in_split_role_production_uses_external_worker_queue
+    assert response.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_________ test_retry_upload_analysis_requeues_current_uploaded_dataset _________
+tests/test_data_upload.py:287: in test_retry_upload_analysis_requeues_current_uploaded_dataset
+    assert response.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_ test_retry_upload_analysis_returns_existing_active_job_without_duplicate_enqueue _
+tests/test_data_upload.py:313: in test_retry_upload_analysis_returns_existing_active_job_without_duplicate_enqueue
+    assert response.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_______ test_retry_upload_analysis_recovers_deterministic_stored_object ________
+tests/test_data_upload.py:337: in test_retry_upload_analysis_recovers_deterministic_stored_object
+    assert response.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+___________ test_retry_upload_analysis_requires_existing_source_file ___________
+tests/test_data_upload.py:360: in test_retry_upload_analysis_requires_existing_source_file
+    assert response.status_code == 404
+E   assert 410 == 404
+E    +  where 410 = <Response [410 Gone]>.status_code
+______ test_upload_returns_job_id_immediately_without_waiting_for_worker _______
+tests/test_data_upload.py:409: in test_upload_returns_job_id_immediately_without_waiting_for_worker
+    assert response.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_ test_upload_large_csv_returns_job_id_immediately_without_waiting_for_worker __
+tests/test_data_upload.py:438: in test_upload_large_csv_returns_job_id_immediately_without_waiting_for_worker
+    assert response.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_____________________ test_upload_rejects_oversize_request _____________________
+tests/test_data_upload.py:463: in test_upload_rejects_oversize_request
+    assert response.status_code == 413
+E   assert 410 == 413
+E    +  where 410 = <Response [410 Gone]>.status_code
+_____________________ test_upload_rejects_saturated_queue ______________________
+tests/test_data_upload.py:504: in test_upload_rejects_saturated_queue
+    assert response.status_code == 503
+E   assert 410 == 503
+E    +  where 410 = <Response [410 Gone]>.status_code
+__________ test_upload_accepts_configured_service_token_in_production __________
+tests/test_data_upload.py:529: in test_upload_accepts_configured_service_token_in_production
+    assert response.status_code == 202
+E   assert 410 == 202
+E    +  where 410 = <Response [410 Gone]>.status_code
+_______ test_upload_rejects_authenticated_operator_session_in_production _______
+tests/test_data_upload.py:555: in test_upload_rejects_authenticated_operator_session_in_production
+    assert response.status_code == 403
+E   assert 410 == 403
+E    +  where 410 = <Response [410 Gone]>.status_code
+_______ test_upload_status_accepts_existing_session_cookie_in_production _______
+tests/test_data_upload.py:594: in test_upload_status_accepts_existing_session_cookie_in_production
+    assert response.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+_______ test_upload_status_missing_job_returns_session_missing_contract ________
+tests/test_data_upload.py:606: in test_upload_status_missing_job_returns_session_missing_contract
+    assert response.status_code == 404
+E   assert 410 == 404
+E    +  where 410 = <Response [410 Gone]>.status_code
+__________ test_upload_status_recovers_from_latest_completed_summary ___________
+tests/test_data_upload.py:633: in test_upload_status_recovers_from_latest_completed_summary
+    assert response.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+_______________ test_upload_status_logs_session_missing_context ________________
+tests/test_data_upload.py:644: in test_upload_status_logs_session_missing_context
+    assert response.status_code == 404
+E   assert 410 == 404
+E    +  where 410 = <Response [410 Gone]>.status_code
+_______ test_upload_status_returns_complete_job_summary_and_writes_state _______
+tests/test_data_upload.py:658: in test_upload_status_returns_complete_job_summary_and_writes_state
+    payload = wait_for_terminal_upload_status(client, upload.json()["status_url"])
+                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+__________________ test_upload_status_can_return_queued_state __________________
+tests/test_data_upload.py:697: in test_upload_status_can_return_queued_state
+    assert status.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+______ test_upload_status_propagation_progresses_from_queued_to_complete _______
+tests/test_data_upload.py:720: in test_upload_status_propagation_progresses_from_queued_to_complete
+    status_url = upload.json()["status_url"]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_ test_upload_status_preserves_explicit_processing_stage_but_not_unmeasured_percentage _
+tests/test_data_upload.py:850: in test_upload_status_preserves_explicit_processing_stage_but_not_unmeasured_percentage
+    assert response.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+__________________ test_upload_status_can_return_failed_state __________________
+tests/test_data_upload.py:877: in test_upload_status_can_return_failed_state
+    assert status.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+____________ test_latest_upload_endpoint_returns_completed_summary _____________
+tests/test_data_upload.py:892: in test_latest_upload_endpoint_returns_completed_summary
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+______ test_upload_creates_evidence_record_and_latest_endpoint_returns_it ______
+tests/test_data_upload.py:1015: in test_upload_creates_evidence_record_and_latest_endpoint_returns_it
+    run_id = upload.json()["job_id"]
+             ^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'job_id'
+_____________ test_upload_records_authenticated_actor_in_evidence ______________
+tests/test_data_upload.py:1058: in test_upload_records_authenticated_actor_in_evidence
+    run_id = upload.json()["job_id"]
+             ^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'job_id'
+____________ test_failed_processing_creates_failed_evidence_record _____________
+tests/test_data_upload.py:1077: in test_failed_processing_creates_failed_evidence_record
+    run_id = upload.json()["job_id"]
+             ^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'job_id'
+_________________ test_evidence_export_endpoint_returns_report _________________
+tests/test_data_upload.py:1095: in test_evidence_export_endpoint_returns_report
+    run_id = upload.json()["job_id"]
+             ^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'job_id'
+__________ test_observability_summary_reports_queue_and_audit_counts ___________
+tests/test_data_upload.py:1288: in test_observability_summary_reports_queue_and_audit_counts
+    run_id = upload.json()["job_id"]
+             ^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'job_id'
+________ test_latest_upload_endpoint_returns_persisted_detailed_result _________
+tests/test_data_upload.py:1344: in test_latest_upload_endpoint_returns_persisted_detailed_result
+    assert response.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+_____________ test_facility_systems_uses_latest_state_after_upload _____________
+tests/test_data_upload.py:1358: in test_facility_systems_uses_latest_state_after_upload
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+___________ test_facility_systems_uses_multi_room_state_after_upload ___________
+tests/test_data_upload.py:1426: in test_facility_systems_uses_multi_room_state_after_upload
+    wait_for_terminal_upload_status(client, upload.json()["status_url"])
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+_________ test_one_column_csv_reports_runner_error_without_failed_job __________
+tests/test_data_upload.py:1444: in test_one_column_csv_reports_runner_error_without_failed_job
+    payload = wait_for_terminal_upload_status(client, upload.json()["status_url"])
+                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'status_url'
+____________________ test_upload_rejects_invalid_extension _____________________
+tests/test_data_upload.py:1459: in test_upload_rejects_invalid_extension
+    assert response.status_code == 400
+E   assert 410 == 400
+E    +  where 410 = <Response [410 Gone]>.status_code
+________________________ test_upload_rejects_empty_csv _________________________
+tests/test_data_upload.py:1471: in test_upload_rejects_empty_csv
+    assert response.status_code == 400
+E   assert 410 == 400
+E    +  where 410 = <Response [410 Gone]>.status_code
+_________ test_relationship_baseline_stable_does_not_emit_top_changes __________
+tests/test_data_upload.py:1880: in test_relationship_baseline_stable_does_not_emit_top_changes
+    top_changes = payload["system_interpretation"]["relationship_divergence"]["top_relationship_changes"]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+______ test_relationship_baseline_drift_emits_evidence_backed_top_changes ______
+tests/test_data_upload.py:1902: in test_relationship_baseline_drift_emits_evidence_backed_top_changes
+    top_changes = payload["system_interpretation"]["relationship_divergence"]["top_relationship_changes"]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+____________ test_relationship_baseline_ignores_weak_or_no_coupling ____________
+tests/test_data_upload.py:1969: in test_relationship_baseline_ignores_weak_or_no_coupling
+    top_changes = payload["system_interpretation"]["relationship_divergence"]["top_relationship_changes"]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+__________ test_relationship_drift_small_samples_yield_low_confidence __________
+tests/test_data_upload.py:2014: in test_relationship_drift_small_samples_yield_low_confidence
+    divergence = response["system_interpretation"]["relationship_divergence"]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+__ test_relationship_drift_strong_baseline_high_delta_yields_high_confidence ___
+tests/test_data_upload.py:2037: in test_relationship_drift_strong_baseline_high_delta_yields_high_confidence
+    divergence = response["system_interpretation"]["relationship_divergence"]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+__ test_relationship_drift_multiple_changes_aggregate_scores_and_instability ___
+tests/test_data_upload.py:2096: in test_relationship_drift_multiple_changes_aggregate_scores_and_instability
+    interpretation = response["system_interpretation"]
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+________________ test_upload_polling_reads_persisted_job_state _________________
+tests/test_data_upload.py:2283: in test_upload_polling_reads_persisted_job_state
+    assert response.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+______________ test_upload_status_recovers_after_jobs_cache_clear ______________
+tests/test_data_upload.py:2312: in test_upload_status_recovers_after_jobs_cache_clear
+    assert first.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+________________ test_latest_upload_recovers_after_cache_clear _________________
+tests/test_data_upload.py:2341: in test_latest_upload_recovers_after_cache_clear
+    assert payload["status"] == "COMPLETE"
+           ^^^^^^^^^^^^^^^^^
+E   KeyError: 'status'
+____ test_latest_upload_ignores_stale_result_without_active_session_marker _____
+tests/test_data_upload.py:2500: in test_latest_upload_ignores_stale_result_without_active_session_marker
+    assert payload["latest_result"] is None
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'latest_result'
+_ test_latest_upload_always_returns_system_interpretation_for_no_active_session _
+tests/test_data_upload.py:2517: in test_latest_upload_always_returns_system_interpretation_for_no_active_session
+    assert "system_interpretation" in payload
+E   AssertionError: assert 'system_interpretation' in {'detail': 'This upload-based workflow is no longer available.', 'error_type': 'retired_workflow', 'message': 'This upload-based workflow is no longer available.'}
+_ test_latest_upload_uses_canonical_identity_across_result_evidence_and_replay _
+tests/test_data_upload.py:2554: in test_latest_upload_uses_canonical_identity_across_result_evidence_and_replay
+    assert latest_payload["current_upload"]["job_id"] == result["job_id"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'current_upload'
+___________ test_new_upload_status_suppresses_prior_completed_result ___________
+tests/test_data_upload.py:2580: in test_new_upload_status_suppresses_prior_completed_result
+    assert payload["job_id"] == "queued-job"
+           ^^^^^^^^^^^^^^^^^
+E   KeyError: 'job_id'
+____ test_latest_upload_system_interpretation_states[stable-stable-Stable] _____
+tests/test_data_upload.py:2602: in test_latest_upload_system_interpretation_states
+    interpretation = payload["system_interpretation"]
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+_ test_latest_upload_system_interpretation_states[relationship_drift-relationship_drift-Relationship Drift] _
+tests/test_data_upload.py:2602: in test_latest_upload_system_interpretation_states
+    interpretation = payload["system_interpretation"]
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+_ test_latest_upload_system_interpretation_states[structural_degradation-structural_degradation-Structural Degradation] _
+tests/test_data_upload.py:2602: in test_latest_upload_system_interpretation_states
+    interpretation = payload["system_interpretation"]
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+_ test_latest_upload_system_interpretation_states[cascade_risk-cascade_risk-Cascade Risk] _
+tests/test_data_upload.py:2602: in test_latest_upload_system_interpretation_states
+    interpretation = payload["system_interpretation"]
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+_ test_latest_upload_system_interpretation_states[recovery_state-recovery_state-Recovery State] _
+tests/test_data_upload.py:2602: in test_latest_upload_system_interpretation_states
+    interpretation = payload["system_interpretation"]
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+_ test_latest_upload_system_interpretation_quality_levels[stable-partial_engine] _
+tests/test_data_upload.py:2640: in test_latest_upload_system_interpretation_quality_levels
+    interpretation = payload["system_interpretation"]
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+_ test_latest_upload_system_interpretation_quality_levels[relationship_drift-engine_native] _
+tests/test_data_upload.py:2640: in test_latest_upload_system_interpretation_quality_levels
+    interpretation = payload["system_interpretation"]
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+_____ test_system_interpretation_endpoint_matches_latest_upload_no_session _____
+tests/test_data_upload.py:2658: in test_system_interpretation_endpoint_matches_latest_upload_no_session
+    assert payload["system_interpretation"] == latest_payload["system_interpretation"]
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+___ test_system_interpretation_endpoint_matches_latest_upload_active_result ____
+tests/test_data_upload.py:2673: in test_system_interpretation_endpoint_matches_latest_upload_active_result
+    assert payload["system_interpretation"] == latest_payload["system_interpretation"]
+                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'system_interpretation'
+________ test_upload_status_marks_stalled_when_queued_without_heartbeat ________
+tests/test_data_upload.py:2705: in test_upload_status_marks_stalled_when_queued_without_heartbeat
+    assert status.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+________ test_upload_status_does_not_claim_running_before_worker_claim _________
+tests/test_data_upload.py:2950: in test_upload_status_does_not_claim_running_before_worker_claim
+    assert response.status_code == 200
+E   assert 410 == 200
+E    +  where 410 = <Response [410 Gone]>.status_code
+______ test_upload_status_reports_claimed_only_after_durable_queue_claim _______
+tests/test_data_upload.py:2976: in test_upload_status_reports_claimed_only_after_durable_queue_claim
+    assert payload["queue_state"] == "processing"
+           ^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'queue_state'
+____ test_upload_status_reports_processing_only_for_claimed_processing_job _____
+tests/test_data_upload.py:3007: in test_upload_status_reports_processing_only_for_claimed_processing_job
+    assert payload["worker_claimed"] is True
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'worker_claimed'
+=========================== short test summary info ============================
+FAILED tests/test_adaptive_learning.py::test_latest_upload_disables_adaptive_learning_snapshot
+FAILED tests/test_adaptive_learning.py::test_operator_feedback_updates_evidence_record_without_adaptive_memory
+FAILED tests/test_analysis_result_contract.py::test_saved_analysis_result_is_viewable_without_replay
+FAILED tests/test_analysis_result_contract.py::test_latest_upload_does_not_reuse_stale_analysis_for_new_upload
+FAILED tests/test_behavioral_baseline_workflow.py::test_create_baseline_never_invokes_sii_or_persists_detection_evidence
+FAILED tests/test_behavioral_baseline_workflow.py::test_completed_baseline_contract_propagates_id_and_supports_recovery_lookups
+FAILED tests/test_behavioral_baseline_workflow.py::test_dataset_baseline_lookup_uses_index_references_without_model_scan
+FAILED tests/test_behavioral_baseline_workflow.py::test_candidate_requires_approval_and_activation_is_separate
+FAILED tests/test_behavioral_baseline_workflow.py::test_approval_can_be_disabled_by_controlled_policy
+FAILED tests/test_behavioral_baseline_workflow.py::test_analysis_and_controlled_extension_require_an_active_baseline
+FAILED tests/test_behavioral_baseline_workflow.py::test_controlled_extension_creates_a_child_candidate_without_sii
+FAILED tests/test_behavioral_baseline_workflow.py::test_exact_baseline_routes_survive_newer_activation_and_retry
+FAILED tests/test_behavioral_baseline_workflow.py::test_baseline_state_and_exact_ids_are_isolated_between_portfolios
+FAILED tests/test_behavioral_baseline_workflow.py::test_activation_failure_cannot_replace_the_previous_active_pointer
+FAILED tests/test_behavioral_baseline_workflow.py::test_explicit_baseline_detail_is_baseline_only_until_an_exact_analysis_exists
+FAILED tests/test_behavioral_baseline_workflow.py::test_baseline_a_never_lists_or_serves_baseline_b_analysis
+FAILED tests/test_behavioral_baseline_workflow.py::test_analysis_persistence_rejects_mismatched_baseline_and_scope
+FAILED tests/test_behavioral_baseline_workflow.py::test_comparison_upload_rejects_a_requested_baseline_from_another_identity
+FAILED tests/test_behavioral_baseline_workflow.py::test_completed_comparison_uses_distinct_dataset_and_analysis_ids_and_scopes_findings
+FAILED tests/test_behavioral_baseline_workflow.py::test_comparison_persistence_rejects_the_baseline_dataset_as_evaluation_data
+FAILED tests/test_behavioral_baseline_workflow.py::test_new_baseline_hides_stale_findings_until_its_own_comparison_exists
+FAILED tests/test_behavioral_baseline_workflow.py::test_active_comparison_identity_is_not_replaced_by_baseline_ready_fallback
+FAILED tests/test_behavioral_baseline_workflow.py::test_second_comparison_creates_a_separate_analysis_without_overwriting_baseline
+FAILED tests/test_behavioral_baseline_workflow.py::test_upload_creates_distinct_dataset_and_processing_job_ids
+FAILED tests/test_behavioral_baseline_workflow.py::test_validation_exception_returns_structured_failure_with_original_exception
+FAILED tests/test_behavioral_baseline_workflow.py::test_relationship_learning_exception_reports_actual_stage_and_is_retryable
+FAILED tests/test_behavioral_baseline_workflow.py::test_worker_waits_for_a_delayed_baseline_result_record
+FAILED tests/test_behavioral_baseline_workflow.py::test_terminal_success_is_rejected_when_result_cannot_be_retrieved
+FAILED tests/test_behavioral_baseline_workflow.py::test_retry_processing_reuses_the_uploaded_dataset
+FAILED tests/test_data_replay.py::test_persisted_upload_result_exposes_replay_without_source_file
+FAILED tests/test_data_replay.py::test_replay_endpoint_uses_canonical_per_job_persisted_frames
+FAILED tests/test_data_replay.py::test_intake_result_reads_canonical_per_job_artifact_not_just_latest
+FAILED tests/test_data_replay.py::test_historian_style_csv_upload_persists_replay_after_source_removed
+FAILED tests/test_data_upload.py::test_upload_returns_accepted_job_id - asser...
+FAILED tests/test_data_upload.py::test_json_upload_returns_accepted_job_id - ...
+FAILED tests/test_data_upload.py::test_upload_requires_authentication_in_production
+FAILED tests/test_data_upload.py::test_upload_uses_local_queue_when_split_role_production_has_no_shared_bucket
+FAILED tests/test_data_upload.py::test_upload_in_split_role_production_uses_external_worker_queue
+FAILED tests/test_data_upload.py::test_retry_upload_analysis_requeues_current_uploaded_dataset
+FAILED tests/test_data_upload.py::test_retry_upload_analysis_returns_existing_active_job_without_duplicate_enqueue
+FAILED tests/test_data_upload.py::test_retry_upload_analysis_recovers_deterministic_stored_object
+FAILED tests/test_data_upload.py::test_retry_upload_analysis_requires_existing_source_file
+FAILED tests/test_data_upload.py::test_upload_returns_job_id_immediately_without_waiting_for_worker
+FAILED tests/test_data_upload.py::test_upload_large_csv_returns_job_id_immediately_without_waiting_for_worker
+FAILED tests/test_data_upload.py::test_upload_rejects_oversize_request - asse...
+FAILED tests/test_data_upload.py::test_upload_rejects_saturated_queue - asser...
+FAILED tests/test_data_upload.py::test_upload_accepts_configured_service_token_in_production
+FAILED tests/test_data_upload.py::test_upload_rejects_authenticated_operator_session_in_production
+FAILED tests/test_data_upload.py::test_upload_status_accepts_existing_session_cookie_in_production
+FAILED tests/test_data_upload.py::test_upload_status_missing_job_returns_session_missing_contract
+FAILED tests/test_data_upload.py::test_upload_status_recovers_from_latest_completed_summary
+FAILED tests/test_data_upload.py::test_upload_status_logs_session_missing_context
+FAILED tests/test_data_upload.py::test_upload_status_returns_complete_job_summary_and_writes_state
+FAILED tests/test_data_upload.py::test_upload_status_can_return_queued_state
+FAILED tests/test_data_upload.py::test_upload_status_propagation_progresses_from_queued_to_complete
+FAILED tests/test_data_upload.py::test_upload_status_preserves_explicit_processing_stage_but_not_unmeasured_percentage
+FAILED tests/test_data_upload.py::test_upload_status_can_return_failed_state
+FAILED tests/test_data_upload.py::test_latest_upload_endpoint_returns_completed_summary
+FAILED tests/test_data_upload.py::test_upload_creates_evidence_record_and_latest_endpoint_returns_it
+FAILED tests/test_data_upload.py::test_upload_records_authenticated_actor_in_evidence
+FAILED tests/test_data_upload.py::test_failed_processing_creates_failed_evidence_record
+FAILED tests/test_data_upload.py::test_evidence_export_endpoint_returns_report
+FAILED tests/test_data_upload.py::test_observability_summary_reports_queue_and_audit_counts
+FAILED tests/test_data_upload.py::test_latest_upload_endpoint_returns_persisted_detailed_result
+FAILED tests/test_data_upload.py::test_facility_systems_uses_latest_state_after_upload
+FAILED tests/test_data_upload.py::test_facility_systems_uses_multi_room_state_after_upload
+FAILED tests/test_data_upload.py::test_one_column_csv_reports_runner_error_without_failed_job
+FAILED tests/test_data_upload.py::test_upload_rejects_invalid_extension - ass...
+FAILED tests/test_data_upload.py::test_upload_rejects_empty_csv - assert 410 ...
+FAILED tests/test_data_upload.py::test_relationship_baseline_stable_does_not_emit_top_changes
+FAILED tests/test_data_upload.py::test_relationship_baseline_drift_emits_evidence_backed_top_changes
+FAILED tests/test_data_upload.py::test_relationship_baseline_ignores_weak_or_no_coupling
+FAILED tests/test_data_upload.py::test_relationship_drift_small_samples_yield_low_confidence
+FAILED tests/test_data_upload.py::test_relationship_drift_strong_baseline_high_delta_yields_high_confidence
+FAILED tests/test_data_upload.py::test_relationship_drift_multiple_changes_aggregate_scores_and_instability
+FAILED tests/test_data_upload.py::test_upload_polling_reads_persisted_job_state
+FAILED tests/test_data_upload.py::test_upload_status_recovers_after_jobs_cache_clear
+FAILED tests/test_data_upload.py::test_latest_upload_recovers_after_cache_clear
+FAILED tests/test_data_upload.py::test_latest_upload_ignores_stale_result_without_active_session_marker
+FAILED tests/test_data_upload.py::test_latest_upload_always_returns_system_interpretation_for_no_active_session
+FAILED tests/test_data_upload.py::test_latest_upload_uses_canonical_identity_across_result_evidence_and_replay
+FAILED tests/test_data_upload.py::test_new_upload_status_suppresses_prior_completed_result
+FAILED tests/test_data_upload.py::test_latest_upload_system_interpretation_states[stable-stable-Stable]
+FAILED tests/test_data_upload.py::test_latest_upload_system_interpretation_states[relationship_drift-relationship_drift-Relationship Drift]
+FAILED tests/test_data_upload.py::test_latest_upload_system_interpretation_states[structural_degradation-structural_degradation-Structural Degradation]
+FAILED tests/test_data_upload.py::test_latest_upload_system_interpretation_states[cascade_risk-cascade_risk-Cascade Risk]
+FAILED tests/test_data_upload.py::test_latest_upload_system_interpretation_states[recovery_state-recovery_state-Recovery State]
+FAILED tests/test_data_upload.py::test_latest_upload_system_interpretation_quality_levels[stable-partial_engine]
+FAILED tests/test_data_upload.py::test_latest_upload_system_interpretation_quality_levels[relationship_drift-engine_native]
+FAILED tests/test_data_upload.py::test_system_interpretation_endpoint_matches_latest_upload_no_session
+FAILED tests/test_data_upload.py::test_system_interpretation_endpoint_matches_latest_upload_active_result
+FAILED tests/test_data_upload.py::test_upload_status_marks_stalled_when_queued_without_heartbeat
+FAILED tests/test_data_upload.py::test_upload_status_does_not_claim_running_before_worker_claim
+FAILED tests/test_data_upload.py::test_upload_status_reports_claimed_only_after_durable_queue_claim
+FAILED tests/test_data_upload.py::test_upload_status_reports_processing_only_for_claimed_processing_job
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/usr/lib/python3.12/functools.py:979: KeyboardInterrupt
+(to show a full traceback on KeyboardInterrupt use --full-trace)
+==== 95 failed, 269 passed, 20 deselected, 23 warnings in 446.02s (0:07:26) ====

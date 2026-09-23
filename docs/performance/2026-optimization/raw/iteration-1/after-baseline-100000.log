@@ -1,0 +1,3 @@
+baseline-100000 0 {'wall_seconds': 5.564732973929495, 'cpu_seconds': 5.513805733, 'peak_rss_bytes': 226430976, 'governed_sha256': '8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8', 'golden_equal': True}
+baseline-100000 1 {'wall_seconds': 5.89382407697849, 'cpu_seconds': 5.841212577999999, 'peak_rss_bytes': 226803712, 'governed_sha256': '8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8', 'golden_equal': True}
+baseline-100000 2 {'wall_seconds': 5.92226872802712, 'cpu_seconds': 5.877538281, 'peak_rss_bytes': 226803712, 'governed_sha256': '8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8', 'golden_equal': True}

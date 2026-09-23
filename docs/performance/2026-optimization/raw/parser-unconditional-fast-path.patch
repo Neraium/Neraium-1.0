@@ -1,0 +1,15 @@
+diff --git a/backend/app/services/data_quality.py b/backend/app/services/data_quality.py
+--- a/backend/app/services/data_quality.py
++++ b/backend/app/services/data_quality.py
+@@ -308,5 +308,11 @@ def parse_numeric_value(raw_value: Any) -> float | None:
+     if not normalized:
+         return None
++    try:
++        value = float(normalized)
++    except ValueError:
++        pass
++    else:
++        return value if math.isfinite(value) else None
+     normalized = normalized.replace(",", "").replace("%", "")
+     lowered = normalized.lower()
+     if lowered in {"nan", "null", "none", "n/a", "na", "-"}:

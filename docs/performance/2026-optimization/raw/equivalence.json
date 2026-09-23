@@ -1,5 +1,26 @@
 [
   {
+    "file": "after-baseline-10000-0.json.gz",
+    "golden": "before-baseline-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6db2474defdb0af542212d4d9843b7eadf9f14b6983d9b3951be35d0feb2b044"
+  },
+  {
+    "file": "after-baseline-10000-1.json.gz",
+    "golden": "before-baseline-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6db2474defdb0af542212d4d9843b7eadf9f14b6983d9b3951be35d0feb2b044"
+  },
+  {
+    "file": "after-baseline-10000-2.json.gz",
+    "golden": "before-baseline-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6db2474defdb0af542212d4d9843b7eadf9f14b6983d9b3951be35d0feb2b044"
+  },
+  {
     "file": "before-baseline-10000-0.json.gz",
     "golden": "before-baseline-10000-0.json.gz",
     "equal": true,
@@ -19,6 +40,69 @@
     "equal": true,
     "work_counters_equal": true,
     "sha256": "6db2474defdb0af542212d4d9843b7eadf9f14b6983d9b3951be35d0feb2b044"
+  },
+  {
+    "file": "fresh-baseline-10000-0.json.gz",
+    "golden": "before-baseline-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6db2474defdb0af542212d4d9843b7eadf9f14b6983d9b3951be35d0feb2b044"
+  },
+  {
+    "file": "iteration-1/after-baseline-10000-0.json.gz",
+    "golden": "before-baseline-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6db2474defdb0af542212d4d9843b7eadf9f14b6983d9b3951be35d0feb2b044"
+  },
+  {
+    "file": "iteration-1/after-baseline-10000-1.json.gz",
+    "golden": "before-baseline-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6db2474defdb0af542212d4d9843b7eadf9f14b6983d9b3951be35d0feb2b044"
+  },
+  {
+    "file": "iteration-1/after-baseline-10000-2.json.gz",
+    "golden": "before-baseline-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6db2474defdb0af542212d4d9843b7eadf9f14b6983d9b3951be35d0feb2b044"
+  },
+  {
+    "file": "iteration-1/fresh-baseline-10000-0.json.gz",
+    "golden": "before-baseline-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6db2474defdb0af542212d4d9843b7eadf9f14b6983d9b3951be35d0feb2b044"
+  },
+  {
+    "file": "opt1-baseline-10000-0.json.gz",
+    "golden": "before-baseline-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6db2474defdb0af542212d4d9843b7eadf9f14b6983d9b3951be35d0feb2b044"
+  },
+  {
+    "file": "after-baseline-100000-0.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "after-baseline-100000-1.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "after-baseline-100000-2.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
   },
   {
     "file": "before-baseline-100000-0.json.gz",
@@ -42,6 +126,111 @@
     "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
   },
   {
+    "file": "control-baseline-100000-0.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "control-baseline-100000-1.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "control-baseline-100000-2.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "fresh-baseline-100000-0.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "iteration-1/after-baseline-100000-0.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "iteration-1/after-baseline-100000-1.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "iteration-1/after-baseline-100000-2.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "iteration-1/control-baseline-100000-0.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "iteration-1/control-baseline-100000-1.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "iteration-1/control-baseline-100000-2.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "iteration-1/fresh-baseline-100000-0.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "opt1-baseline-100000-0.json.gz",
+    "golden": "before-baseline-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "8a56ee063736c3d1701e9d67bf541287f1d042199ca99e970cc8e43d29b901e8"
+  },
+  {
+    "file": "after-engine-10000-0.json.gz",
+    "golden": "before-engine-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
+    "file": "after-engine-10000-1.json.gz",
+    "golden": "before-engine-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
+    "file": "after-engine-10000-2.json.gz",
+    "golden": "before-engine-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
     "file": "before-engine-10000-0.json.gz",
     "golden": "before-engine-10000-0.json.gz",
     "equal": true,
@@ -61,6 +250,83 @@
     "equal": true,
     "work_counters_equal": true,
     "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
+    "file": "control-engine-10000-0.json.gz",
+    "golden": "before-engine-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
+    "file": "control-engine-10000-1.json.gz",
+    "golden": "before-engine-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
+    "file": "control-engine-10000-2.json.gz",
+    "golden": "before-engine-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
+    "file": "fresh-engine-10000-0.json.gz",
+    "golden": "before-engine-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
+    "file": "opt2-engine-10000-0.json.gz",
+    "golden": "before-engine-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
+    "file": "opt2b-engine-10000-0.json.gz",
+    "golden": "before-engine-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
+    "file": "opt2c-engine-10000-0.json.gz",
+    "golden": "before-engine-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
+    "file": "opt4-engine-10000-0.json.gz",
+    "golden": "before-engine-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "b61171098b079156988b75d04b9d199b4044d163c2f742aa734d043fcb30c2c7"
+  },
+  {
+    "file": "after-engine-100000-0.json.gz",
+    "golden": "before-engine-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "1a87dc6b99acf78af28ae9c887abf8f04208a49fabe26001fe0b8b426f6c82a0"
+  },
+  {
+    "file": "after-engine-100000-1.json.gz",
+    "golden": "before-engine-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "1a87dc6b99acf78af28ae9c887abf8f04208a49fabe26001fe0b8b426f6c82a0"
+  },
+  {
+    "file": "after-engine-100000-2.json.gz",
+    "golden": "before-engine-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "1a87dc6b99acf78af28ae9c887abf8f04208a49fabe26001fe0b8b426f6c82a0"
   },
   {
     "file": "before-engine-100000-0.json.gz",
@@ -84,6 +350,62 @@
     "sha256": "1a87dc6b99acf78af28ae9c887abf8f04208a49fabe26001fe0b8b426f6c82a0"
   },
   {
+    "file": "control-engine-100000-0.json.gz",
+    "golden": "before-engine-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "1a87dc6b99acf78af28ae9c887abf8f04208a49fabe26001fe0b8b426f6c82a0"
+  },
+  {
+    "file": "control-engine-100000-1.json.gz",
+    "golden": "before-engine-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "1a87dc6b99acf78af28ae9c887abf8f04208a49fabe26001fe0b8b426f6c82a0"
+  },
+  {
+    "file": "control-engine-100000-2.json.gz",
+    "golden": "before-engine-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "1a87dc6b99acf78af28ae9c887abf8f04208a49fabe26001fe0b8b426f6c82a0"
+  },
+  {
+    "file": "fresh-engine-100000-0.json.gz",
+    "golden": "before-engine-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "1a87dc6b99acf78af28ae9c887abf8f04208a49fabe26001fe0b8b426f6c82a0"
+  },
+  {
+    "file": "opt2-engine-100000-0.json.gz",
+    "golden": "before-engine-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "1a87dc6b99acf78af28ae9c887abf8f04208a49fabe26001fe0b8b426f6c82a0"
+  },
+  {
+    "file": "after-governance-10000-0.json.gz",
+    "golden": "before-governance-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "cb8f03c395fe657c0d9c9898fee524315b3863e9d391182fc14b113880390876"
+  },
+  {
+    "file": "after-governance-10000-1.json.gz",
+    "golden": "before-governance-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "cb8f03c395fe657c0d9c9898fee524315b3863e9d391182fc14b113880390876"
+  },
+  {
+    "file": "after-governance-10000-2.json.gz",
+    "golden": "before-governance-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "cb8f03c395fe657c0d9c9898fee524315b3863e9d391182fc14b113880390876"
+  },
+  {
     "file": "before-governance-10000-0.json.gz",
     "golden": "before-governance-10000-0.json.gz",
     "equal": true,
@@ -103,6 +425,34 @@
     "equal": true,
     "work_counters_equal": true,
     "sha256": "cb8f03c395fe657c0d9c9898fee524315b3863e9d391182fc14b113880390876"
+  },
+  {
+    "file": "fresh-governance-10000-0.json.gz",
+    "golden": "before-governance-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "cb8f03c395fe657c0d9c9898fee524315b3863e9d391182fc14b113880390876"
+  },
+  {
+    "file": "after-incremental-240-0.json.gz",
+    "golden": "before-incremental-240-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb"
+  },
+  {
+    "file": "after-incremental-240-1.json.gz",
+    "golden": "before-incremental-240-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb"
+  },
+  {
+    "file": "after-incremental-240-2.json.gz",
+    "golden": "before-incremental-240-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb"
   },
   {
     "file": "before-incremental-240-0.json.gz",
@@ -126,6 +476,62 @@
     "sha256": "6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb"
   },
   {
+    "file": "control-incremental-240-0.json.gz",
+    "golden": "before-incremental-240-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb"
+  },
+  {
+    "file": "control-incremental-240-1.json.gz",
+    "golden": "before-incremental-240-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb"
+  },
+  {
+    "file": "control-incremental-240-2.json.gz",
+    "golden": "before-incremental-240-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb"
+  },
+  {
+    "file": "fresh-incremental-240-0.json.gz",
+    "golden": "before-incremental-240-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb"
+  },
+  {
+    "file": "opt4-incremental-240-0.json.gz",
+    "golden": "before-incremental-240-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "6225a6339fed711d84b23fd868e35beb519213a518062655c6b620ce68b95ebb"
+  },
+  {
+    "file": "after-ingestion-10000-0.json.gz",
+    "golden": "before-ingestion-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "017edefb1084793667da3ab3df2edbcc740200a252876d89b15bd2d903c70dbb"
+  },
+  {
+    "file": "after-ingestion-10000-1.json.gz",
+    "golden": "before-ingestion-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "017edefb1084793667da3ab3df2edbcc740200a252876d89b15bd2d903c70dbb"
+  },
+  {
+    "file": "after-ingestion-10000-2.json.gz",
+    "golden": "before-ingestion-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "017edefb1084793667da3ab3df2edbcc740200a252876d89b15bd2d903c70dbb"
+  },
+  {
     "file": "before-ingestion-10000-0.json.gz",
     "golden": "before-ingestion-10000-0.json.gz",
     "equal": true,
@@ -145,6 +551,41 @@
     "equal": true,
     "work_counters_equal": true,
     "sha256": "017edefb1084793667da3ab3df2edbcc740200a252876d89b15bd2d903c70dbb"
+  },
+  {
+    "file": "fresh-ingestion-10000-0.json.gz",
+    "golden": "before-ingestion-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "017edefb1084793667da3ab3df2edbcc740200a252876d89b15bd2d903c70dbb"
+  },
+  {
+    "file": "opt3-ingestion-10000-0.json.gz",
+    "golden": "before-ingestion-10000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "017edefb1084793667da3ab3df2edbcc740200a252876d89b15bd2d903c70dbb"
+  },
+  {
+    "file": "after-ingestion-100000-0.json.gz",
+    "golden": "before-ingestion-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db"
+  },
+  {
+    "file": "after-ingestion-100000-1.json.gz",
+    "golden": "before-ingestion-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db"
+  },
+  {
+    "file": "after-ingestion-100000-2.json.gz",
+    "golden": "before-ingestion-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db"
   },
   {
     "file": "before-ingestion-100000-0.json.gz",
@@ -168,6 +609,76 @@
     "sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db"
   },
   {
+    "file": "control-ingestion-100000-0.json.gz",
+    "golden": "before-ingestion-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db"
+  },
+  {
+    "file": "control-ingestion-100000-1.json.gz",
+    "golden": "before-ingestion-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db"
+  },
+  {
+    "file": "control-ingestion-100000-2.json.gz",
+    "golden": "before-ingestion-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db"
+  },
+  {
+    "file": "fresh-ingestion-100000-0.json.gz",
+    "golden": "before-ingestion-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db"
+  },
+  {
+    "file": "memory-after-ingestion-100000-0.json.gz",
+    "golden": "before-ingestion-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db"
+  },
+  {
+    "file": "memory-control-ingestion-100000-0.json.gz",
+    "golden": "before-ingestion-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db"
+  },
+  {
+    "file": "opt3-ingestion-100000-0.json.gz",
+    "golden": "before-ingestion-100000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "bbb2952a26370e231350ee6fcc467603c674badeb173c3ff2a734c91c58ff4db"
+  },
+  {
+    "file": "after-ingestion-250000-0.json.gz",
+    "golden": "before-ingestion-250000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91"
+  },
+  {
+    "file": "after-ingestion-250000-1.json.gz",
+    "golden": "before-ingestion-250000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91"
+  },
+  {
+    "file": "after-ingestion-250000-2.json.gz",
+    "golden": "before-ingestion-250000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91"
+  },
+  {
     "file": "before-ingestion-250000-0.json.gz",
     "golden": "before-ingestion-250000-0.json.gz",
     "equal": true,
@@ -183,6 +694,27 @@
   },
   {
     "file": "before-ingestion-250000-2.json.gz",
+    "golden": "before-ingestion-250000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91"
+  },
+  {
+    "file": "fresh-ingestion-250000-0.json.gz",
+    "golden": "before-ingestion-250000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91"
+  },
+  {
+    "file": "memory-after-ingestion-250000-0.json.gz",
+    "golden": "before-ingestion-250000-0.json.gz",
+    "equal": true,
+    "work_counters_equal": true,
+    "sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91"
+  },
+  {
+    "file": "memory-control-ingestion-250000-0.json.gz",
     "golden": "before-ingestion-250000-0.json.gz",
     "equal": true,
     "work_counters_equal": true,
