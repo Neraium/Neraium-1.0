@@ -1,0 +1,83 @@
+{
+  "rows": 74172,
+  "columns": [
+    "Time",
+    "Influent flowrate",
+    "DO",
+    "NH4",
+    "NO3",
+    "N2O",
+    "Temperature",
+    "N2O emission rate"
+  ],
+  "start": "2018-06-14 07:30:00",
+  "end": "2019-03-01 00:00:00",
+  "cadence_seconds": {
+    "300.0": 74165,
+    "3300.0": 1,
+    "86700.0": 2,
+    "600.0": 1,
+    "1800.0": 1,
+    "8400.0": 1
+  },
+  "signals": {
+    "Influent flowrate": {
+      "finite": 74171,
+      "invalid_rows": [
+        54
+      ],
+      "min": -3.1,
+      "max": 2808.0,
+      "zero_count": 9,
+      "units": null
+    },
+    "DO": {
+      "finite": 74172,
+      "invalid_rows": [],
+      "min": 0.03,
+      "max": 10.85,
+      "zero_count": 0,
+      "units": null
+    },
+    "NH4": {
+      "finite": 74172,
+      "invalid_rows": [],
+      "min": 0.0,
+      "max": 20.11,
+      "zero_count": 1245,
+      "units": null
+    },
+    "NO3": {
+      "finite": 74172,
+      "invalid_rows": [],
+      "min": 0.0,
+      "max": 12.73,
+      "zero_count": 1320,
+      "units": null
+    },
+    "N2O": {
+      "finite": 74172,
+      "invalid_rows": [],
+      "min": 0.0,
+      "max": 2.1048,
+      "zero_count": 4774,
+      "units": null
+    },
+    "Temperature": {
+      "finite": 74172,
+      "invalid_rows": [],
+      "min": 9.48,
+      "max": 27.13,
+      "zero_count": 0,
+      "units": null
+    },
+    "N2O emission rate": {
+      "finite": 74172,
+      "invalid_rows": [],
+      "min": 0.0,
+      "max": 60.37,
+      "zero_count": 18324,
+      "units": null
+    }
+  }
+}

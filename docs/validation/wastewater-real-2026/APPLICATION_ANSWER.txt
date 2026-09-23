@@ -1,0 +1,11 @@
+Neraium has controlled software-validation evidence and separate retrospective evidence from real full-scale wastewater telemetry. The engine, thresholds and governance were frozen.
+
+The wastewater run analyzed 74,171 observations in 253 chronological windows across 21 relationships, yielding 5,265 pair-window evaluations. Of these, 505 had graph temporal support; four observations across NH4/NO3 and NO3/N2O passed promotion and retained governed persistent-change flags. They are not confirmed plant events or accuracy results.
+
+All windows retained operating-context limitations. Measurable consequence remained not quantifiable, and no independently documented plant-event correspondence was established. Graph/governed persistence and limited insight-level persistence remain distinct.
+
+All four promoted states reproduced in 12 same-process reruns and four fresh-process reruns. Relationship evidence, governed SII evidence, insights, consequence states, evidence index, supplied-reference provenance and outgoing states matched exactly. Complete outputs were not identical because execution timestamps, generated run IDs, timing, memory and performance metadata differed. Exact-match failures and every difference are retained.
+
+Separately, the existing controlled campaign executed 1,403 engine calls. None of 40 stable, noisy, transient or alternating control sequences gained temporal persistence support across 320 windows. All 48 sustained synthetic cases with tested correlation displacements of 0.15–0.30 gained support at the sixth comparison window. A focused regression run passed 861 tests. These designed cases do not establish wastewater accuracy; their original replay and performance limitations remain disclosed.
+
+Inputs, configuration, outputs, state handoffs and hashes are retained for reproducibility. This evidence does not establish prediction, diagnosis, root cause, prescribed action, physical benefit, field deployment, prospective field validation or algorithmic novelty.

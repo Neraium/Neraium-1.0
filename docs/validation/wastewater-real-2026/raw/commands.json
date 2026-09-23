@@ -1,0 +1,9 @@
+[
+  "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 PYTHONHASHSEED=0 .venv/bin/python scripts/validate_wastewater_real.py > docs/validation/wastewater-real-2026/raw/run.log 2>&1",
+  ".venv/bin/python scripts/audit_wastewater_source.py",
+  ".venv/bin/python scripts/summarize_wastewater_real.py",
+  "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 PYTHONHASHSEED=0 .venv/bin/python scripts/verify_wastewater_real.py",
+  ".venv/bin/python scripts/report_wastewater_real.py",
+  "sha256sum -c docs/validation/prize-2026/SHA256SUMS",
+  "git diff --check"
+]

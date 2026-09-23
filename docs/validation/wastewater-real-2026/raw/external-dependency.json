@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0",
+  "direct_url": {
+    "url": "https://github.com/Neraium/neraium-consequence/archive/814d63b98fb65b6edca3bd79c74af4dd8aa8c3f0.tar.gz",
+    "archive_info": {}
+  },
+  "files": {
+    "neraium_consequence/__init__.py": "219d3e69666e830949e2d0c611efc95164dbdecafd89bf1df3af5690969c117a",
+    "neraium_consequence/models.py": "1241f307ee28c604a6178290e1c27c85e245ae0656da6251b4c97d96b76f321b",
+    "neraium_consequence/profiles.py": "6e7b33e28874b64cc642eaafee1ff8cb620ae96161746dafa093d2372d42adc1",
+    "neraium_consequence/provenance.py": "866045dba5c2ad03d5b8294ab6220facbb24a658bda85f19af3c69f9fdb9336a",
+    "neraium_consequence/quantifier.py": "6beac4881d9de5ebc8157c1a790f3d2e63ec97c87a97874d8313086b76dfdc0b",
+    "neraium_consequence/validation.py": "6a5a90c34c96fb393e31728227b665f8c5fd74b89a34e53b522060a142f0a90c"
+  }
+}

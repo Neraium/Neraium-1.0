@@ -1,0 +1,274 @@
+[
+  {
+    "window": 65,
+    "missing_pairs": [
+      [
+        "DO",
+        "NH4"
+      ],
+      [
+        "Influent flowrate",
+        "NH4"
+      ],
+      [
+        "N2O",
+        "NH4"
+      ],
+      [
+        "N2O emission rate",
+        "NH4"
+      ],
+      [
+        "NH4",
+        "NO3"
+      ],
+      [
+        "NH4",
+        "Temperature"
+      ]
+    ],
+    "constant_columns": {
+      "NH4": "1.84"
+    },
+    "relationship_analysis_status": "complete",
+    "relationship_analysis_limitations": null
+  },
+  {
+    "window": 66,
+    "missing_pairs": [
+      [
+        "DO",
+        "NH4"
+      ],
+      [
+        "Influent flowrate",
+        "NH4"
+      ],
+      [
+        "N2O",
+        "NH4"
+      ],
+      [
+        "N2O emission rate",
+        "NH4"
+      ],
+      [
+        "NH4",
+        "NO3"
+      ],
+      [
+        "NH4",
+        "Temperature"
+      ]
+    ],
+    "constant_columns": {
+      "NH4": "1.84"
+    },
+    "relationship_analysis_status": "complete",
+    "relationship_analysis_limitations": null
+  },
+  {
+    "window": 87,
+    "missing_pairs": [
+      [
+        "DO",
+        "NH4"
+      ],
+      [
+        "Influent flowrate",
+        "NH4"
+      ],
+      [
+        "N2O",
+        "NH4"
+      ],
+      [
+        "N2O emission rate",
+        "NH4"
+      ],
+      [
+        "NH4",
+        "NO3"
+      ],
+      [
+        "NH4",
+        "Temperature"
+      ]
+    ],
+    "constant_columns": {
+      "NH4": "0.31"
+    },
+    "relationship_analysis_status": "complete",
+    "relationship_analysis_limitations": null
+  },
+  {
+    "window": 115,
+    "missing_pairs": [
+      [
+        "DO",
+        "NH4"
+      ],
+      [
+        "Influent flowrate",
+        "NH4"
+      ],
+      [
+        "N2O",
+        "NH4"
+      ],
+      [
+        "N2O emission rate",
+        "NH4"
+      ],
+      [
+        "NH4",
+        "NO3"
+      ],
+      [
+        "NH4",
+        "Temperature"
+      ]
+    ],
+    "constant_columns": {
+      "NH4": "1.82"
+    },
+    "relationship_analysis_status": "complete",
+    "relationship_analysis_limitations": null
+  },
+  {
+    "window": 119,
+    "missing_pairs": [
+      [
+        "DO",
+        "NH4"
+      ],
+      [
+        "Influent flowrate",
+        "NH4"
+      ],
+      [
+        "N2O",
+        "NH4"
+      ],
+      [
+        "N2O emission rate",
+        "NH4"
+      ],
+      [
+        "NH4",
+        "NO3"
+      ],
+      [
+        "NH4",
+        "Temperature"
+      ]
+    ],
+    "constant_columns": {
+      "NH4": "0.39"
+    },
+    "relationship_analysis_status": "complete",
+    "relationship_analysis_limitations": null
+  },
+  {
+    "window": 163,
+    "missing_pairs": [
+      [
+        "DO",
+        "NH4"
+      ],
+      [
+        "Influent flowrate",
+        "NH4"
+      ],
+      [
+        "N2O",
+        "NH4"
+      ],
+      [
+        "N2O emission rate",
+        "NH4"
+      ],
+      [
+        "NH4",
+        "NO3"
+      ],
+      [
+        "NH4",
+        "Temperature"
+      ]
+    ],
+    "constant_columns": {
+      "NH4": "0.99"
+    },
+    "relationship_analysis_status": "complete",
+    "relationship_analysis_limitations": null
+  },
+  {
+    "window": 164,
+    "missing_pairs": [
+      [
+        "DO",
+        "NH4"
+      ],
+      [
+        "Influent flowrate",
+        "NH4"
+      ],
+      [
+        "N2O",
+        "NH4"
+      ],
+      [
+        "N2O emission rate",
+        "NH4"
+      ],
+      [
+        "NH4",
+        "NO3"
+      ],
+      [
+        "NH4",
+        "Temperature"
+      ]
+    ],
+    "constant_columns": {
+      "NH4": "0.99"
+    },
+    "relationship_analysis_status": "complete",
+    "relationship_analysis_limitations": null
+  },
+  {
+    "window": 244,
+    "missing_pairs": [
+      [
+        "DO",
+        "NH4"
+      ],
+      [
+        "Influent flowrate",
+        "NH4"
+      ],
+      [
+        "N2O",
+        "NH4"
+      ],
+      [
+        "N2O emission rate",
+        "NH4"
+      ],
+      [
+        "NH4",
+        "NO3"
+      ],
+      [
+        "NH4",
+        "Temperature"
+      ]
+    ],
+    "constant_columns": {
+      "NH4": "2.52"
+    },
+    "relationship_analysis_status": "complete",
+    "relationship_analysis_limitations": null
+  }
+]

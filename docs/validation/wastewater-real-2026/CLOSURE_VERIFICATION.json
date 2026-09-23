@@ -1,0 +1,47 @@
+{
+  "closed_at": "2026-09-23T07:44:13.861973+00:00",
+  "current_commit_before_documentation_commit": "97d267d317fcce4b4424cf2141e97e87680acfc0",
+  "frozen_engine_commit": "97d267d317fcce4b4424cf2141e97e87680acfc0",
+  "source_path": "/home/ubuntu/Data.csv",
+  "source_sha256": "29a2db4e54d5f5278d2c05732d62cf877f939f87312e035ddb700c385c3550a8",
+  "source_hash_matches": true,
+  "production_changed": [],
+  "production_source_file_hashes_checked": 1067,
+  "raw_artifacts_checked": 354,
+  "raw_artifacts_changed": [],
+  "previous_documents_preserved": true,
+  "original_report_and_limitations_preserved_verbatim_before_addenda": true,
+  "headline_counts_reconciled": {
+    "unique_rows_analyzed": 74171,
+    "returned_windows": 253,
+    "distinct_pairs": 21,
+    "evaluated_pair_windows": 5265,
+    "temporal_pair_windows": 505,
+    "governed_persistent_pair_windows": 4,
+    "distinct_governed_persistent_pairs": 2
+  },
+  "targeted_same_process_calls": 12,
+  "targeted_fresh_process_calls": 4,
+  "all_promoted_states_reproduced": true,
+  "specified_analytical_components_match": true,
+  "complete_and_prespecified_evidence_exact_matches": {
+    "same_process": 0,
+    "fresh_process": 0
+  },
+  "controlled_reference_claims_reconciled": true,
+  "existing_prize_source_copies_unchanged": true,
+  "application_answer_characters": 2007,
+  "claim_source_paths_resolve": true,
+  "claim_review": "Final summaries distinguish reproduction from output identity, graph evidence from confirmed plant events, and controlled cases from real-data analysis. No accuracy, causal, predictive, diagnostic, benefit, deployment or prospective-validation claim is made. Context, consequence, decision-trace and source-quality limits remain disclosed.",
+  "no_additional_neraium_execution_during_closure": true,
+  "no_additional_analytical_exploration_web_research_tuning_or_testing": true,
+  "integrity_check_scope": "File hashes, archive membership verification and reconciliation of existing saved counts only.",
+  "archive_verification": {
+    "original_raw_members_verified": 354,
+    "all_member_hashes_match": true,
+    "files_restored_or_overwritten": 0,
+    "archive_manifest_sha256": "185112f50f5f6b1e758349a18dc6b1a0180c79ae7089ae9912daa4a5e918eb2c",
+    "compressed_bytes": 102732838,
+    "parts": 4
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "wastewater_headlines": {
+    "74172_source_rows": "raw/qualification.json: rows",
+    "74171_analyzed_rows": "raw/assessment.json: counts.unique_rows_analyzed",
+    "253_windows": "raw/assessment.json: counts.returned_windows",
+    "5265_pair_evaluations": "raw/assessment.json: counts.evaluated_pair_windows",
+    "4_governed_2_pairs": "raw/assessment.json: counts.governed_persistent_pair_windows and distinct_governed_persistent_pairs; checkpoints 159,236,248,251",
+    "505_temporal_82_recurrence": "raw/assessment.json: counts.temporal_pair_windows and recurrence_pair_windows",
+    "3_repeats": "raw/repeatability.json: repeats",
+    "1195_consequences_46_insufficient": "raw/assessment.json: consequence_status and insight_categories",
+    "source_full_scale": "raw/posthoc/zenodo-record.json and source-match.json"
+  },
+  "controlled_claims": {
+    "1403_calls_40_controls_320_windows_48_sustained_cases": "../prize-2026/raw/assessment.json; ../prize-2026/CLAIM_TRACEABILITY.json",
+    "861_tests": "../prize-2026/raw/focused-regression.xml"
+  },
+  "combination_rule": "Separate evidence streams, no pooling of accuracy, no reinterpretation of original prize validation."
+}

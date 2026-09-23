@@ -1,0 +1,22 @@
+[
+  {
+    "original": "docs/validation/prize-2026/VALIDATION_REPORT.md",
+    "retained_copy": "reference-evidence/prize-2026/VALIDATION_REPORT.md",
+    "sha256": "e260a5e6c1a8bc1ee44fef31a8c091c0832c5faba07ef6ee370ecb137d0341c0"
+  },
+  {
+    "original": "docs/validation/prize-2026/CLAIM_TRACEABILITY.json",
+    "retained_copy": "reference-evidence/prize-2026/CLAIM_TRACEABILITY.json",
+    "sha256": "844687df42a110ffd904d8b5cb50eac06b9d04fd6146fae994813977f98997e3"
+  },
+  {
+    "original": "docs/validation/prize-2026/raw/assessment.json",
+    "retained_copy": "reference-evidence/prize-2026/raw/assessment.json",
+    "sha256": "1d6fd7a0dd7d4f5d259b3a8fed344cb4aa850f3568be04d8cbaad8a82a96a608"
+  },
+  {
+    "original": "docs/validation/prize-2026/raw/focused-regression.xml",
+    "retained_copy": "reference-evidence/prize-2026/raw/focused-regression.xml",
+    "sha256": "0c33f3de1ff9d891fb6ad5c76d65d2f5d7dab3443d8ca6b8ea520798f9b277c6"
+  }
+]

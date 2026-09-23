@@ -1,0 +1,919 @@
+{
+  "engine_calls": 1403,
+  "families": {
+    "alternating": {
+      "exceptions": 0,
+      "governed_persistent_windows": 0,
+      "promoted_windows": 0,
+      "sequences": 10,
+      "sequences_with_temporal_support": 0,
+      "temporal_windows": 0,
+      "windows": 80
+    },
+    "recovery": {
+      "exceptions": 0,
+      "governed_persistent_windows": 30,
+      "promoted_windows": 30,
+      "sequences": 10,
+      "sequences_with_temporal_support": 10,
+      "temporal_windows": 30,
+      "windows": 120
+    },
+    "sensitivity": {
+      "exceptions": 0,
+      "governed_persistent_windows": 144,
+      "promoted_windows": 144,
+      "sequences": 84,
+      "sequences_with_temporal_support": 48,
+      "temporal_windows": 144,
+      "windows": 672
+    },
+    "stable": {
+      "exceptions": 0,
+      "governed_persistent_windows": 0,
+      "promoted_windows": 0,
+      "sequences": 10,
+      "sequences_with_temporal_support": 0,
+      "temporal_windows": 0,
+      "windows": 80
+    },
+    "stationary_noise": {
+      "exceptions": 0,
+      "governed_persistent_windows": 0,
+      "promoted_windows": 0,
+      "sequences": 10,
+      "sequences_with_temporal_support": 0,
+      "temporal_windows": 0,
+      "windows": 80
+    },
+    "stress": {
+      "exceptions": 40,
+      "governed_persistent_windows": 9,
+      "promoted_windows": 9,
+      "sequences": 11,
+      "sequences_with_temporal_support": 3,
+      "temporal_windows": 9,
+      "windows": 88
+    },
+    "transient": {
+      "exceptions": 0,
+      "governed_persistent_windows": 0,
+      "promoted_windows": 0,
+      "sequences": 10,
+      "sequences_with_temporal_support": 0,
+      "temporal_windows": 0,
+      "windows": 80
+    }
+  },
+  "historical_other_promotions": [],
+  "historical_scenarios": {
+    "A": {
+      "governed_persistent_windows": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "kind": "continuous",
+      "pair": [
+        "Building_Cooling_Load_Tons",
+        "Chiller_Power_kW"
+      ],
+      "promoted_windows": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "recurrence_windows": [],
+      "temporal_windows": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ]
+    },
+    "B": {
+      "governed_persistent_windows": [],
+      "kind": "recurring",
+      "pair": [
+        "Plant_CHW_Flow_GPM",
+        "Primary_Pump_Speed_Pct"
+      ],
+      "promoted_windows": [],
+      "recurrence_windows": [
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56
+      ],
+      "temporal_windows": []
+    },
+    "C": {
+      "governed_persistent_windows": [],
+      "kind": "transient",
+      "pair": [
+        "AHU3_CHW_Valve_Cmd_Pct",
+        "AHU3_CHW_Flow_GPM"
+      ],
+      "promoted_windows": [],
+      "recurrence_windows": [],
+      "temporal_windows": []
+    },
+    "D": {
+      "governed_persistent_windows": [],
+      "kind": "stable",
+      "pair": [
+        "Plant_CHW_Supply_Temp_F",
+        "AHU3_Zone_Temp_F"
+      ],
+      "promoted_windows": [],
+      "recurrence_windows": [],
+      "temporal_windows": []
+    },
+    "E": {
+      "governed_persistent_windows": [],
+      "kind": "alternating",
+      "pair": [
+        "CoolingTower_Fan_Speed_Pct",
+        "Condenser_Water_Supply_Temp_F"
+      ],
+      "promoted_windows": [],
+      "recurrence_windows": [],
+      "temporal_windows": []
+    }
+  },
+  "ingestion": [
+    {
+      "case": "stable",
+      "conditions": 0,
+      "data_confidence": "high",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [
+        "insufficient_evidence"
+      ],
+      "gate": "READY",
+      "insights": 1,
+      "quality_rating": "strong",
+      "rows": 1200,
+      "wall_seconds": 21.28927437402308
+    },
+    {
+      "case": "noise",
+      "conditions": 0,
+      "data_confidence": "high",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [
+        "insufficient_evidence"
+      ],
+      "gate": "READY",
+      "insights": 1,
+      "quality_rating": "strong",
+      "rows": 1200,
+      "wall_seconds": 22.398526196135208
+    },
+    {
+      "case": "missing_1pct",
+      "conditions": 0,
+      "data_confidence": "limited",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [
+        "insufficient_evidence"
+      ],
+      "gate": "DEGRADED_READY",
+      "insights": 1,
+      "quality_rating": "strong",
+      "rows": 1200,
+      "wall_seconds": 23.824807734927163
+    },
+    {
+      "case": "missing_5pct",
+      "conditions": 0,
+      "data_confidence": "limited",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [
+        "insufficient_evidence"
+      ],
+      "gate": "DEGRADED_READY",
+      "insights": 1,
+      "quality_rating": "strong",
+      "rows": 1200,
+      "wall_seconds": 31.621049642795697
+    },
+    {
+      "case": "missing_20pct",
+      "conditions": 0,
+      "data_confidence": "limited",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [
+        "insufficient_evidence"
+      ],
+      "gate": "DEGRADED_READY",
+      "insights": 1,
+      "quality_rating": "strong",
+      "rows": 1200,
+      "wall_seconds": 31.84937650198117
+    },
+    {
+      "case": "missing_50pct",
+      "conditions": 0,
+      "data_confidence": "low",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [
+        "insufficient_evidence"
+      ],
+      "gate": "DEGRADED_READY",
+      "insights": 1,
+      "quality_rating": "weak",
+      "rows": 1200,
+      "wall_seconds": 30.76710963784717
+    },
+    {
+      "case": "dropout",
+      "conditions": 0,
+      "data_confidence": "low",
+      "drift_status": "review",
+      "exception": null,
+      "finding_classes": [],
+      "gate": "DEGRADED_READY",
+      "insights": 0,
+      "quality_rating": "weak",
+      "rows": 1200,
+      "wall_seconds": 32.89106105803512
+    },
+    {
+      "case": "flatline",
+      "conditions": 0,
+      "data_confidence": "high",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [
+        "insufficient_evidence"
+      ],
+      "gate": "READY",
+      "insights": 1,
+      "quality_rating": "strong",
+      "rows": 1200,
+      "wall_seconds": 36.311400106875226
+    },
+    {
+      "case": "duplicate",
+      "conditions": 0,
+      "data_confidence": "limited",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [
+        "insufficient_evidence"
+      ],
+      "gate": "DEGRADED_READY",
+      "insights": 1,
+      "quality_rating": "strong",
+      "rows": 1200,
+      "wall_seconds": 38.42671470390633
+    },
+    {
+      "case": "out_of_order",
+      "conditions": 0,
+      "data_confidence": "high",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [
+        "insufficient_evidence"
+      ],
+      "gate": "DEGRADED_READY",
+      "insights": 1,
+      "quality_rating": "strong",
+      "rows": 1200,
+      "wall_seconds": 38.274626825004816
+    },
+    {
+      "case": "irregular",
+      "conditions": 0,
+      "data_confidence": "limited",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [
+        "insufficient_evidence"
+      ],
+      "gate": "READY",
+      "insights": 1,
+      "quality_rating": "strong",
+      "rows": 1028,
+      "wall_seconds": 39.77798788296059
+    },
+    {
+      "case": "outliers",
+      "conditions": 0,
+      "data_confidence": "limited",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [],
+      "gate": "READY",
+      "insights": 0,
+      "quality_rating": "strong",
+      "rows": 1200,
+      "wall_seconds": 38.91236763400957
+    },
+    {
+      "case": "relationship_change",
+      "conditions": 1,
+      "data_confidence": "limited",
+      "drift_status": "review",
+      "exception": null,
+      "finding_classes": [
+        "context_limited_relationship_change"
+      ],
+      "gate": "READY",
+      "insights": 1,
+      "quality_rating": "strong",
+      "rows": 1200,
+      "wall_seconds": 42.704797248123214
+    },
+    {
+      "case": "level_compensation",
+      "conditions": 0,
+      "data_confidence": "high",
+      "drift_status": "info",
+      "exception": null,
+      "finding_classes": [
+        "insufficient_evidence"
+      ],
+      "gate": "READY",
+      "insights": 1,
+      "quality_rating": "strong",
+      "rows": 1200,
+      "wall_seconds": 45.35791623080149
+    }
+  ],
+  "input_hash_mismatches": [],
+  "input_mutations": [],
+  "nonfinite_output_records": [],
+  "performance": [
+    {
+      "case": "small",
+      "cpu_median_seconds": 0.06899059200000002,
+      "path": "baseline",
+      "peak_rss_bytes": 147329024,
+      "repetitions": 3,
+      "semantic_hash_count": 1,
+      "wall_max_seconds": 0.1368537920061499,
+      "wall_median_seconds": 0.12298554088920355,
+      "wall_min_seconds": 0.1023942509200424
+    },
+    {
+      "case": "small",
+      "cpu_median_seconds": 1.0115570929999995,
+      "path": "comparison",
+      "peak_rss_bytes": 147329024,
+      "repetitions": 3,
+      "semantic_hash_count": 1,
+      "wall_max_seconds": 2.1309537841007113,
+      "wall_median_seconds": 1.887088576797396,
+      "wall_min_seconds": 1.6808428401127458
+    },
+    {
+      "case": "medium",
+      "cpu_median_seconds": 1.2752194790000004,
+      "path": "baseline",
+      "peak_rss_bytes": 198541312,
+      "repetitions": 3,
+      "semantic_hash_count": 1,
+      "wall_max_seconds": 2.4012322509661317,
+      "wall_median_seconds": 2.3316519579384476,
+      "wall_min_seconds": 2.321667802054435
+    },
+    {
+      "case": "medium",
+      "cpu_median_seconds": 6.184623910000003,
+      "path": "comparison",
+      "peak_rss_bytes": 198541312,
+      "repetitions": 3,
+      "semantic_hash_count": 1,
+      "wall_max_seconds": 11.858760375063866,
+      "wall_median_seconds": 11.72303512901999,
+      "wall_min_seconds": 10.418939362978563
+    },
+    {
+      "case": "high-signal",
+      "cpu_median_seconds": 5.835717279000001,
+      "path": "baseline",
+      "peak_rss_bytes": 311758848,
+      "repetitions": 3,
+      "semantic_hash_count": 1,
+      "wall_max_seconds": 11.688015929888934,
+      "wall_median_seconds": 11.63110577291809,
+      "wall_min_seconds": 9.571383809903637
+    },
+    {
+      "case": "high-signal",
+      "cpu_median_seconds": 16.47601696999999,
+      "path": "comparison",
+      "peak_rss_bytes": 311758848,
+      "repetitions": 3,
+      "semantic_hash_count": 1,
+      "wall_max_seconds": 38.756062232889235,
+      "wall_median_seconds": 37.00234834617004,
+      "wall_min_seconds": 30.127727685961872
+    }
+  ],
+  "primary_calls": 1258,
+  "primary_exception_counts": {
+    "paired_comparison_finite_numeric_value_required:flow": 8,
+    "paired_comparison_numeric_value_required:flow": 8,
+    "paired_comparison_requires_16_to_12000_rows": 8,
+    "paired_comparison_requires_ordered_timezone_aware_timestamps": 16
+  },
+  "primary_generated_windows": 1200,
+  "primary_module_failures": {},
+  "primary_module_limitations": {
+    "mode_conditioned_baseline": 1218,
+    "operating_modes": 1152,
+    "phase_4": 1218,
+    "physics_reasoning": 1218,
+    "relationship_graph_analysis": 8
+  },
+  "primary_statuses": {
+    "complete": 1218
+  },
+  "raw_calls_verified": 1403,
+  "recovery_post_return_temporal_windows": 0,
+  "regression": {
+    "failures": [
+      {
+        "failure": "tests/test_behavioral_baseline_workflow.py:507: in test_completed_comparison_uses_distinct_dataset_and_analysis_ids_and_scopes_findings\n    terminal = _wait(client, comparison_job[\"status_url\"])\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests/test_behavioral_baseline_workflow.py:50: in _wait\n    raise AssertionError(f\"baseline job did not complete: {last}\")\nE   AssertionError: baseline job did not complete: {'job_id': '9cfb9dfed2604e86b89e20156609ccb2', 'dataset_id': 'd8289af756c84508af020c0377979a14', 'analysis_state': 'evidence_generation', 'status': 'PROCESSING', 'progress': 96, 'processing_state': 'saving_result', 'progress_label': 'Preparing analysis evidence for durable finalization.', 'stage': None, 'percent': 96, 'message': 'Preparing analysis evidence for durable finalization.', 'error_type': None, 'filename': 'comparison.csv', 'file_size_bytes': 3296, 'bytes_processed': 0, 'rows_processed': 0, 'columns_detected': 0, 'chunk_count': 0, 'memory_estimate_bytes': 0, 'processing_duration_seconds': None, 'engine_runtime_seconds': None, 'runner_used': True, 'runner_module': 'app.services.sii_runner.BackendSiiRunner', 'core_engine': 'app.engine.analysis.run_engine_analysis', 'started_at': None, 'completed_at': None, 'error': None, 'warnings': [], 'errors': [], 'result_available': False, 'first_usable_available': False, 'sii_completed': False, 'replay_ready': False, 'replay_frame_count': 0, 'sii_completion_artifacts': {}, 'timings': {'upload_transfer_ms': 17.663, 'backend_spool_ms': 0.592, 'backend_request_handling_ms': 12.829, 'worker_pickup_delay_ms': 92.593, 'validation_ms': 5441.536, 'total_job_ms': 13505.044, 'parse_seconds': 5.441536, 'baseline_build_seconds': 0.241493, 'structural_scoring_seconds': 7.821999, 'total_job_seconds': 13.505044, 'baseline_creation_ms': 241.493, 'mapping_ms': 7303.015, 'comparison_ms': 259.34, 'evidence_generation_ms': 259.644, 'persistence_ms': 0.0}, 'result_summary': None, 'ingest_request_id': None, 'request_id': 'a99d50253bdf411887565a8b119f078c', 'workflow': 'analyze_new_data', 'workflow_state': 'queued', 'baseline_candidate_created': False, 'baseline_activation_state': None, 'baselineId': None, 'workspacePath': None, 'createdAt': None, 'job_progress': {'contract_version': 'job-progress.v1', 'job_id': '9cfb9dfed2604e86b89e20156609ccb2', 'workflow': 'analyze_new_data', 'status': 'processing', 'stage': 'ready', 'substage': 'finalize_analysis', 'completed_units': 0, 'total_units': 4, 'percent_complete': 0, 'unit_type': 'finalization_steps', 'message': 'Preparing analysis evidence for durable finalization.', 'started_at': '2026-09-23T05:52:06.280609+00:00', 'updated_at': '2026-09-23T05:52:20.524353+00:00', 'elapsed_seconds': 15, 'last_worker_heartbeat_at': '2026-09-23T05:52:20.747103+00:00', 'seconds_since_worker_heartbeat': 0, 'seconds_since_update': 1, 'stalled': False, 'retryable': None, 'error': None, 'metadata': {'valid_rows_profiled': 72, 'canonical_rows_written': 72, 'readiness_outcome': 'ready_with_limitations', 'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis', 'physics_reasoning', 'phase_4', 'evidence_fusion'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_limited': ['mode_conditioned_baseline', 'physics_reasoning', 'phase_4'], 'modules_failed': [], 'completed_units': 21, 'total_units': 21, 'unit_type': 'evidence_candidates', 'message': 'Organized 21 of 21 evidence candidates.', 'operation_complete': True}, 'workflow_steps': [{'id': 'upload', 'label': 'Upload', 'status': 'completed', 'completed_work_units': 2, 'total_work_units': 2, 'percent_complete': 100}, {'id': 'validate', 'label': 'Validate', 'status': 'completed', 'completed_work_units': 13, 'total_work_units': 13, 'percent_complete': 100}, {'id': 'analysis', 'label': 'Analyze', 'status': 'completed', 'completed_work_units': 17, 'total_work_units': 17, 'percent_complete': 100}, {'id': 'ready', 'label': 'Results Ready', 'status': 'processing', 'completed_work_units': 0, 'total_work_units': 1, 'percent_complete': 0}], 'operations': [{'id': 'receiving', 'stage': 'upload', 'label': 'Receiving file', 'status': 'completed', 'completed_units': 1, 'total_units': 1, 'percent_complete': 100, 'unit_type': 'operation', 'message': 'File transfer completed.', 'started_at': '2026-09-23T05:52:06.280609+00:00', 'updated_at': '2026-09-23T05:52:06.282966+00:00', 'completed_at': '2026-09-23T05:52:06.282966+00:00', 'metadata': {}}, {'id': 'source_persisted', 'stage': 'upload', 'label': 'Source persisted', 'status': 'completed', 'completed_units': 1, 'total_units': 1, 'percent_complete': 100, 'unit_type': 'operation', 'message': 'Source persisted for processing.', 'started_at': '2026-09-23T05:52:06.280609+00:00', 'updated_at': '2026-09-23T05:52:06.282966+00:00', 'completed_at': '2026-09-23T05:52:06.282966+00:00', 'metadata': {}}, {'id': 'parse_source', 'stage': 'validate', 'label': 'Parse source', 'status': 'completed', 'completed_units': 72, 'total_units': 72, 'percent_complete': 100, 'unit_type': 'rows', 'message': 'Parsed 72 source rows.', 'started_at': '2026-09-23T05:52:06.980469+00:00', 'updated_at': '2026-09-23T05:52:07.166058+00:00', 'completed_at': '2026-09-23T05:52:07.166058+00:00', 'metadata': {}}, {'id': 'schema_detection', 'stage': 'validate', 'label': 'Schema detection', 'status': 'completed', 'completed_units': 5, 'total_units': 5, 'percent_complete': 100, 'unit_type': 'columns', 'message': 'Detected a 5-column source schema.', 'started_at': '2026-09-23T05:52:07.351204+00:00', 'updated_at': '2026-09-23T05:52:07.351204+00:00', 'completed_at': '2026-09-23T05:52:07.351204+00:00', 'metadata': {}}, {'id': 'timestamp_detection', 'stage': 'validate', 'label': 'Timestamp detection', 'status': 'completed', 'completed_units': 5, 'total_units': 5, 'percent_complete': 100, 'unit_type': 'columns', 'message': 'Selected timestamp signal timestamp.', 'started_at': '2026-09-23T05:52:07.544330+00:00', 'updated_at': '2026-09-23T05:52:07.700461+00:00', 'completed_at': '2026-09-23T05:52:07.700461+00:00', 'metadata': {}}, {'id': 'timestamp_quality', 'stage': 'validate', 'label': 'Timestamp quality', 'status': 'completed', 'completed_units': 72, 'total_units': 72, 'percent_complete': 100, 'unit_type': 'rows', 'message': 'Evaluated timestamp quality for 72 rows.', 'started_at': '2026-09-23T05:52:07.889109+00:00', 'updated_at': '2026-09-23T05:52:08.079611+00:00', 'completed_at': '2026-09-23T05:52:08.079611+00:00', 'metadata': {'valid_rows_profiled': 72}}, {'id': 'signal_inventory', 'stage': 'validate', 'label': 'Signal inventory', 'status': 'completed', 'completed_units': 4, 'total_units': 4, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Inventoried 4 candidate signals.', 'started_at': '2026-09-23T05:52:08.268804+00:00', 'updated_at': '2026-09-23T05:52:08.268804+00:00', 'completed_at': '2026-09-23T05:52:08.268804+00:00', 'metadata': {}}, {'id': 'unit_detection', 'stage': 'validate', 'label': 'Unit detection', 'status': 'completed', 'completed_units': 4, 'total_units': 4, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Evaluated units for 4 signals.', 'started_at': '2026-09-23T05:52:08.430438+00:00', 'updated_at': '2026-09-23T05:52:08.640620+00:00', 'completed_at': '2026-09-23T05:52:08.640620+00:00', 'metadata': {}}, {'id': 'semantic_mapping', 'stage': 'validate', 'label': 'Semantic mapping', 'status': 'completed', 'completed_units': 4, 'total_units': 4, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Mapped 4 signals.', 'started_at': '2026-09-23T05:52:08.835697+00:00', 'updated_at': '2026-09-23T05:52:09.030422+00:00', 'completed_at': '2026-09-23T05:52:09.030422+00:00', 'metadata': {}}, {'id': 'data_quality_profiling', 'stage': 'validate', 'label': 'Data-quality profiling', 'status': 'completed', 'completed_units': 4, 'total_units': 4, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Profiled quality for 4 signals.', 'started_at': '2026-09-23T05:52:09.233953+00:00', 'updated_at': '2026-09-23T05:52:09.424297+00:00', 'completed_at': '2026-09-23T05:52:09.424297+00:00', 'metadata': {}}, {'id': 'unit_normalization', 'stage': 'validate', 'label': 'Unit normalization', 'status': 'completed', 'completed_units': 72, 'total_units': 72, 'percent_complete': 100, 'unit_type': 'rows', 'message': 'Normalized 72 source rows.', 'started_at': '2026-09-23T05:52:09.600995+00:00', 'updated_at': '2026-09-23T05:52:09.805700+00:00', 'completed_at': '2026-09-23T05:52:09.805700+00:00', 'metadata': {'canonical_rows_written': 72}}, {'id': 'canonical_dataset_build', 'stage': 'validate', 'label': 'Canonical dataset build', 'status': 'completed', 'completed_units': 2, 'total_units': 2, 'percent_complete': 100, 'unit_type': 'persistence_checks', 'message': 'Built and persisted 72 canonical rows.', 'started_at': '2026-09-23T05:52:10.008265+00:00', 'updated_at': '2026-09-23T05:52:10.419702+00:00', 'completed_at': '2026-09-23T05:52:10.419702+00:00', 'metadata': {'canonical_rows_written': 72}}, {'id': 'configuration_awareness', 'stage': 'validate', 'label': 'Configuration awareness', 'status': 'completed', 'completed_units': 4, 'total_units': 4, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Evaluated configuration and operating-state boundaries.', 'started_at': '2026-09-23T05:52:10.623641+00:00', 'updated_at': '2026-09-23T05:52:10.856030+00:00', 'completed_at': '2026-09-23T05:52:10.856030+00:00', 'metadata': {}}, {'id': 'readiness_evaluation', 'stage': 'validate', 'label': 'Readiness evaluation', 'status': 'completed', 'completed_units': 1, 'total_units': 1, 'percent_complete': 100, 'unit_type': 'operation', 'message': 'Readiness evaluation: ready with limitations.', 'started_at': '2026-09-23T05:52:11.044111+00:00', 'updated_at': '2026-09-23T05:52:11.044111+00:00', 'completed_at': '2026-09-23T05:52:11.044111+00:00', 'metadata': {'readiness_outcome': 'ready_with_limitations'}}, {'id': 'analysis_snapshot_build', 'stage': 'validate', 'label': 'Analysis snapshot build', 'status': 'completed', 'completed_units': 72, 'total_units': 72, 'percent_complete': 100, 'unit_type': 'rows', 'message': 'Prepared the analysis snapshot from 72 source rows.', 'started_at': '2026-09-23T05:52:11.265698+00:00', 'updated_at': '2026-09-23T05:52:11.456942+00:00', 'completed_at': '2026-09-23T05:52:11.456942+00:00', 'metadata': {}}, {'id': 'prepare_inputs', 'stage': 'analysis', 'label': 'Prepare analysis inputs', 'status': 'completed', 'completed_units': None, 'total_units': None, 'percent_complete': 100, 'unit_type': None, 'message': 'Running prepare inputs; measuring eligible work.', 'started_at': '2026-09-23T05:52:12.691242+00:00', 'updated_at': '2026-09-23T05:52:12.691242+00:00', 'completed_at': '2026-09-23T05:52:12.884412+00:00', 'metadata': {'modules_attempted': [], 'modules_completed': [], 'modules_limited': [], 'modules_failed': [], 'completed_units': None, 'total_units': None, 'unit_type': None, 'message': None, 'operation_complete': False}}, {'id': 'signal_drift', 'stage': 'analysis', 'label': 'Signal drift analysis', 'status': 'completed', 'completed_units': None, 'total_units': None, 'percent_complete': 100, 'unit_type': None, 'message': 'Running signal drift; measuring eligible work.', 'started_at': '2026-09-23T05:52:12.884412+00:00', 'updated_at': '2026-09-23T05:52:12.884412+00:00', 'completed_at': '2026-09-23T05:52:13.084389+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog'], 'modules_completed': ['telemetry_catalog'], 'modules_limited': [], 'modules_failed': [], 'completed_units': None, 'total_units': None, 'unit_type': None, 'message': None, 'operation_complete': False}}, {'id': 'relationship_analysis', 'stage': 'analysis', 'label': 'Relationship analysis', 'status': 'completed', 'completed_units': 6, 'total_units': 6, 'percent_complete': 100, 'unit_type': 'relationship_pairs', 'message': 'Evaluated 6 of 6 relationship pairs.', 'started_at': '2026-09-23T05:52:13.084389+00:00', 'updated_at': '2026-09-23T05:52:13.323431+00:00', 'completed_at': '2026-09-23T05:52:13.530576+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment'], 'modules_limited': [], 'modules_failed': [], 'completed_units': 6, 'total_units': 6, 'unit_type': 'relationship_pairs', 'message': 'Evaluated 6 of 6 relationship pairs.', 'operation_complete': True}}, {'id': 'operating_modes', 'stage': 'analysis', 'label': 'Operating-context analysis', 'status': 'completed', 'completed_units': 2, 'total_units': 2, 'percent_complete': 100, 'unit_type': 'context_windows', 'message': 'Characterized 2 of 2 operating-context windows.', 'started_at': '2026-09-23T05:52:13.530576+00:00', 'updated_at': '2026-09-23T05:52:13.743092+00:00', 'completed_at': '2026-09-23T05:52:13.969385+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis'], 'modules_limited': [], 'modules_failed': [], 'completed_units': 2, 'total_units': 2, 'unit_type': 'context_windows', 'message': 'Characterized 2 of 2 operating-context windows.', 'operation_complete': True}}, {'id': 'data_conditions', 'stage': 'analysis', 'label': 'Data-condition checks', 'status': 'completed', 'completed_units': 2, 'total_units': 2, 'percent_complete': 100, 'unit_type': 'quality_checks', 'message': 'Completed 2 of 2 data-condition checks.', 'started_at': '2026-09-23T05:52:13.969385+00:00', 'updated_at': '2026-09-23T05:52:14.244113+00:00', 'completed_at': '2026-09-23T05:52:14.489116+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes'], 'modules_limited': [], 'modules_failed': [], 'completed_units': 2, 'total_units': 2, 'unit_type': 'quality_checks', 'message': 'Completed 2 of 2 data-condition checks.', 'operation_complete': True}}, {'id': 'sensor_health', 'stage': 'analysis', 'label': 'Signal-health analysis', 'status': 'completed', 'completed_units': 7, 'total_units': 7, 'percent_complete': 100, 'unit_type': 'health_checks', 'message': 'Completed 7 of 7 signal-health checks.', 'started_at': '2026-09-23T05:52:14.489116+00:00', 'updated_at': '2026-09-23T05:52:14.706303+00:00', 'completed_at': '2026-09-23T05:52:14.904391+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions'], 'modules_limited': [], 'modules_failed': [], 'completed_units': 7, 'total_units': 7, 'unit_type': 'health_checks', 'message': 'Completed 7 of 7 signal-health checks.', 'operation_complete': True}}, {'id': 'empirical_thresholds', 'stage': 'analysis', 'label': 'Empirical thresholds', 'status': 'completed', 'completed_units': 10, 'total_units': 10, 'percent_complete': 100, 'unit_type': 'threshold_candidates', 'message': 'Evaluated 10 of 10 threshold candidates.', 'started_at': '2026-09-23T05:52:14.904391+00:00', 'updated_at': '2026-09-23T05:52:15.117947+00:00', 'completed_at': '2026-09-23T05:52:15.347517+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health'], 'modules_limited': [], 'modules_failed': [], 'completed_units': 10, 'total_units': 10, 'unit_type': 'threshold_candidates', 'message': 'Evaluated 10 of 10 threshold candidates.', 'operation_complete': True}}, {'id': 'mode_conditioned_baseline', 'stage': 'analysis', 'label': 'Mode-conditioned comparison', 'status': 'completed', 'completed_units': 50, 'total_units': 50, 'percent_complete': 100, 'unit_type': 'mode_rows', 'message': 'Compared 50 of 50 historical mode rows.', 'started_at': '2026-09-23T05:52:15.347517+00:00', 'updated_at': '2026-09-23T05:52:15.555578+00:00', 'completed_at': '2026-09-23T05:52:15.761353+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds'], 'modules_limited': [], 'modules_failed': [], 'completed_units': 50, 'total_units': 50, 'unit_type': 'mode_rows', 'message': 'Compared 50 of 50 historical mode rows.', 'operation_complete': True}}, {'id': 'relationship_graph_analysis', 'stage': 'analysis', 'label': 'Relationship graph analysis', 'status': 'completed', 'completed_units': 6, 'total_units': 6, 'percent_complete': 100, 'unit_type': 'relationship_edges', 'message': 'Evaluated 6 of 6 relationship edges.', 'started_at': '2026-09-23T05:52:15.761353+00:00', 'updated_at': '2026-09-23T05:52:15.971831+00:00', 'completed_at': '2026-09-23T05:52:16.182843+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds'], 'modules_limited': ['mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': 6, 'total_units': 6, 'unit_type': 'relationship_edges', 'message': 'Evaluated 6 of 6 relationship edges.', 'operation_complete': True}}, {'id': 'fixed_persistence', 'stage': 'analysis', 'label': 'Persistence analysis', 'status': 'completed', 'completed_units': 2, 'total_units': 2, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Checked 2 of 2 drifted signals.', 'started_at': '2026-09-23T05:52:16.182843+00:00', 'updated_at': '2026-09-23T05:52:16.385877+00:00', 'completed_at': '2026-09-23T05:52:16.598599+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'relationship_graph_analysis'], 'modules_limited': ['mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': 2, 'total_units': 2, 'unit_type': 'signals', 'message': 'Checked 2 of 2 drifted signals.', 'operation_complete': True}}, {'id': 'adaptive_persistence', 'stage': 'analysis', 'label': 'Adaptive persistence', 'status': 'completed', 'completed_units': 2, 'total_units': 2, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Checked 2 of 2 adaptive-persistence signals.', 'started_at': '2026-09-23T05:52:16.598599+00:00', 'updated_at': '2026-09-23T05:52:16.829728+00:00', 'completed_at': '2026-09-23T05:52:17.037299+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'relationship_graph_analysis', 'fixed_persistence'], 'modules_limited': ['mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': 2, 'total_units': 2, 'unit_type': 'signals', 'message': 'Checked 2 of 2 adaptive-persistence signals.', 'operation_complete': True}}, {'id': 'temporal_analysis', 'stage': 'analysis', 'label': 'Lag and temporal analysis', 'status': 'completed', 'completed_units': 12, 'total_units': 12, 'percent_complete': 100, 'unit_type': 'temporal_calculations', 'message': 'Completed 12 of 12 temporal calculations; latest: lead time.', 'started_at': '2026-09-23T05:52:17.037299+00:00', 'updated_at': '2026-09-23T05:52:17.373299+00:00', 'completed_at': '2026-09-23T05:52:17.576018+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence'], 'modules_limited': ['mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': 12, 'total_units': 12, 'unit_type': 'temporal_calculations', 'message': 'Completed 12 of 12 temporal calculations; latest: lead time.', 'operation_complete': True}}, {'id': 'multiscale_analysis', 'stage': 'analysis', 'label': 'Multi-scale analysis', 'status': 'completed', 'completed_units': 4, 'total_units': 4, 'percent_complete': 100, 'unit_type': 'scales', 'message': 'Evaluated 4 of 4 analysis scales.', 'started_at': '2026-09-23T05:52:17.576018+00:00', 'updated_at': '2026-09-23T05:52:17.795034+00:00', 'completed_at': '2026-09-23T05:52:18.017411+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis'], 'modules_limited': ['mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': 4, 'total_units': 4, 'unit_type': 'scales', 'message': 'Evaluated 4 of 4 analysis scales.', 'operation_complete': True}}, {'id': 'covariance_analysis', 'stage': 'analysis', 'label': 'Covariance analysis', 'status': 'completed', 'completed_units': 72, 'total_units': 72, 'percent_complete': 100, 'unit_type': 'sensor_vectors', 'message': 'Processed 72 of 72 sensor vectors.', 'started_at': '2026-09-23T05:52:18.017411+00:00', 'updated_at': '2026-09-23T05:52:18.646245+00:00', 'completed_at': '2026-09-23T05:52:18.889122+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context'], 'modules_limited': ['mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': 72, 'total_units': 72, 'unit_type': 'sensor_vectors', 'message': 'Processed 72 of 72 sensor vectors.', 'operation_complete': True}}, {'id': 'physics_reasoning', 'stage': 'analysis', 'label': 'Physics evidence', 'status': 'completed', 'completed_units': None, 'total_units': None, 'percent_complete': 100, 'unit_type': None, 'message': 'Identifying configured engineering priors.', 'started_at': '2026-09-23T05:52:18.889122+00:00', 'updated_at': '2026-09-23T05:52:18.889122+00:00', 'completed_at': '2026-09-23T05:52:19.097173+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_limited': ['mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': None, 'total_units': None, 'unit_type': None, 'message': 'Identifying configured engineering priors.', 'operation_complete': False}}, {'id': 'behavioral_model', 'stage': 'analysis', 'label': 'Behavioral fingerprinting', 'status': 'completed', 'completed_units': None, 'total_units': None, 'percent_complete': 100, 'unit_type': None, 'message': 'Preparing behavioral-model components.', 'started_at': '2026-09-23T05:52:19.097173+00:00', 'updated_at': '2026-09-23T05:52:19.097173+00:00', 'completed_at': '2026-09-23T05:52:19.311972+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis', 'physics_reasoning'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_limited': ['mode_conditioned_baseline', 'physics_reasoning'], 'modules_failed': [], 'completed_units': None, 'total_units': None, 'unit_type': None, 'message': 'Preparing behavioral-model components.', 'operation_complete': False}}, {'id': 'evidence_fusion', 'stage': 'analysis', 'label': 'Evidence generation', 'status': 'completed', 'completed_units': 21, 'total_units': 21, 'percent_complete': 100, 'unit_type': 'evidence_candidates', 'message': 'Organized 21 of 21 evidence candidates.', 'started_at': '2026-09-23T05:52:19.311972+00:00', 'updated_at': '2026-09-23T05:52:19.580271+00:00', 'completed_at': '2026-09-23T05:52:20.524353+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis', 'physics_reasoning', 'phase_4', 'evidence_fusion'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_limited': ['mode_conditioned_baseline', 'physics_reasoning', 'phase_4'], 'modules_failed': [], 'completed_units': 21, 'total_units': 21, 'unit_type': 'evidence_candidates', 'message': 'Organized 21 of 21 evidence candidates.', 'operation_complete': True}}, {'id': 'finalize_analysis', 'stage': 'ready', 'label': 'Finalize analysis', 'status': 'processing', 'completed_units': 0, 'total_units': 4, 'percent_complete': 0, 'unit_type': 'finalization_steps', 'message': 'Preparing analysis evidence for durable finalization.', 'started_at': '2026-09-23T05:52:20.524353+00:00', 'updated_at': '2026-09-23T05:52:20.524353+00:00', 'completed_at': None, 'metadata': {}}], 'overall_percent_complete': 96, 'overall_basis': 'equal_completed_declared_substages', 'visibility_message': None}, 'status_url': '/api/data/upload-status/9cfb9dfed2604e86b89e20156609ccb2', 'propagation_stage': 'saving_result', 'propagation_progress': 96, 'propagation_label': 'Saving result...', 'file_path': '9cfb9dfed2604e86b89e20156609ccb2-4tj2nprw.csv', 'shared_upload_source_key': None, 'content_type': 'text/csv', 'initiated_by': 'anonymous', 'upload_session_id': 'd8289af756c84508af020c0377979a14', 'worker_dispatch_status': 'thread_dispatched', 'request_received_at': '2026-09-23T05:52:06.250151+00:00', 'backend_handler_started_at': '2026-09-23T05:52:06.267815+00:00', 'upload_completed_at': '2026-09-23T05:52:06.280633+00:00', 'job_created_at': '2026-09-23T05:52:06.280609+00:00', 'enqueued_at': '2026-09-23T05:52:06.280609+00:00', 'stage_changed_at': '2026-09-23T05:52:20.332347+00:00', 'approval_required': None, 'active_baseline_model_id': 'bdm-v1-29f4261f', 'active_baseline_version': 1, 'active_baseline_dataset_id': '04b62a0d0abb47d398c0244d145a53d2', 'active_baseline_system_id': 'default', 'active_baseline_portfolio_id': 'default', 'phase4_system_identity': None, 'phase4_system_identity_status': 'unavailable', 'phase4_system_identity_reason': 'baseline_system_id_not_registered', 'attempt_id': '9cfb9dfed2604e86b89e20156609ccb2', 'run_id': '9cfb9dfed2604e86b89e20156609ccb2', 'upload_id': '9cfb9dfed2604e86b89e20156609ccb2', 'contract_progress': 96, 'session_scope': {'active': True, 'status': 'saving_result', 'job_id': '9cfb9dfed2604e86b89e20156609ccb2', 'run_id': '9cfb9dfed2604e86b89e20156609ccb2', 'upload_id': '9cfb9dfed2604e86b89e20156609ccb2', 'dataset_id': 'd8289af756c84508af020c0377979a14', 'source_name': 'comparison.csv', 'version': 1, 'tenant_id': 'anonymous', 'user_id': 'anonymous', 'workspace_id': 'default'}, 'dataset_scope': {'version': 1, 'tenant_id': 'anonymous', 'user_id': 'anonymous', 'workspace_id': 'default'}, 'worker_started_at': '2026-09-23T05:52:06.654317+00:00', 'worker_pickup_delay_ms': 92.593, 'updated_at': '2026-09-23T05:52:20.524701+00:00', 'contract_stage': 'saving_result', 'contract_label': 'Saving result...', 'worker_state': 'running', 'worker_last_seen_at': '2026-09-23T05:52:20.747103+00:00', 'job_state': 'processing', 'terminal': False, 'analysis_result': {'schema_version': 'analysis-result-v1', 'status': 'saving_result', 'analysis_id': '9cfb9dfed2604e86b89e20156609ccb2', 'upload_id': '9cfb9dfed2604e86b89e20156609ccb2', 'source_file': 'comparison.csv', 'generated_at': '2026-09-23T05:52:21.609089+00:00', 'change_onset': '', 'stable_window': {}, 'deviation_window': {}, 'current_state_window': {}, 'data_quality': {'status': 'saving_result', 'readiness': 'not_ready', 'warnings': [], 'normalized_telemetry': {'status': 'missing', 'source_file': 'comparison.csv', 'row_count': 0, 'tag_count': 0, 'record_count': 0, 'record_limit': 500, 'truncated': False, 'records': [], 'tags': [], 'calculation_method': 'No uploaded telemetry was available to normalize.'}}, 'executive_summary': {}, 'systems': [], 'conditions': [], 'primary_object': 'finding', 'relationships': [], 'fingerprint': {'drift_status': 'unavailable', 'normal_operating_behavior': {}, 'current_behavior': {}, 'largest_deviations': [], 'confidence': 'limited', 'confidence_score': 0.0, 'evidence_refs': [], 'explanation': ''}, 'insights': [], 'recommendations': [], 'evidence_index': {}, 'warnings': [], 'errors': [], 'analysis_metadata': {'contract_version': 'analysis-result-v1', 'source': 'empty'}, 'sii_evidence': {'source': 'sii_result', 'source_path': 'sii_result', 'authority': {'scope': 'canonical_engine_evidence', 'finding_classification': False}, 'status': 'unavailable', 'engine': {}, 'relationship_changes': [], 'relationship_recurrences': [], 'operating_context': {}, 'persistence': {}, 'uncertainty': {'status': 'unavailable', 'limitations': []}, 'data_quality': {}, 'sensor_health': {'signals': []}, 'configured_prior_observations': [], 'phase_4': {'status': 'unavailable', 'available': False, 'limitations': [], 'behavioral_evolution': {}, 'propagation': {}}, 'provenance': {}}}, 'session_state': 'processing', 'session_source': 'active_in_memory_session', 'poll_request_id': '18843972513246a0990e42d2a722c4f6', 'state_backend': 'local', 'status_checked_at': '2026-09-23T05:52:21.609146+00:00', 'queue_position': None, 'queued_seconds': 15, 'queue_state': 'processing', 'terminal_publication_pending': False, 'worker_claimed': True, 'worker_claimed_at': '2026-09-23T05:52:06.626914+00:00', 'worker_heartbeat_age_seconds': 0.862, 'worker_heartbeat_stale': False, 'execution_state': 'processing', 'status_server_sent_at': '2026-09-23T05:52:21.640453+00:00', 'status_request_ms': 44.13}",
+        "name": {
+          "classname": "tests.test_behavioral_baseline_workflow",
+          "name": "test_completed_comparison_uses_distinct_dataset_and_analysis_ids_and_scopes_findings",
+          "time": "27.924"
+        }
+      },
+      {
+        "failure": "tests/test_data_upload.py:747: in test_upload_status_propagation_progresses_from_queued_to_complete\n    terminal = wait_for_terminal_upload_status(client, status_url)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests/test_data_upload.py:78: in wait_for_terminal_upload_status\n    raise AssertionError(f\"Upload did not reach a terminal state. Last payload: {last_payload}\")\nE   AssertionError: Upload did not reach a terminal state. Last payload: {'job_id': '5975b93b33324a1a949c01686c1f0178', 'dataset_id': '6056fe678a284fef8904e378dc17cba4', 'analysis_state': 'evidence_generation', 'status': 'PROCESSING', 'progress': 99, 'processing_state': 'saving_result', 'progress_label': 'Verified the required completion artifacts; committing the terminal result.', 'stage': None, 'percent': 99, 'message': 'Verified the required completion artifacts; committing the terminal result.', 'error_type': None, 'filename': 'propagation-progress.csv', 'file_size_bytes': 755, 'bytes_processed': 0, 'rows_processed': 0, 'columns_detected': 0, 'chunk_count': 0, 'memory_estimate_bytes': 0, 'processing_duration_seconds': None, 'engine_runtime_seconds': None, 'runner_used': True, 'runner_module': 'app.services.sii_runner.BackendSiiRunner', 'core_engine': 'app.engine.analysis.run_engine_analysis', 'started_at': None, 'completed_at': None, 'error': None, 'warnings': [], 'errors': [], 'result_available': False, 'first_usable_available': False, 'sii_completed': False, 'replay_ready': False, 'replay_frame_count': 0, 'sii_completion_artifacts': {}, 'timings': {'upload_transfer_ms': 7.097, 'backend_spool_ms': 0.599, 'backend_request_handling_ms': 6.312, 'worker_pickup_delay_ms': 113.203, 'validation_ms': 5363.224, 'total_job_ms': 12897.706, 'parse_seconds': 5.363224, 'baseline_build_seconds': 0.184001, 'structural_scoring_seconds': 6.765823, 'total_job_seconds': 12.897706, 'baseline_creation_ms': 184.001, 'mapping_ms': 6418.903, 'comparison_ms': 178.595, 'evidence_generation_ms': 168.325, 'persistence_ms': 584.643}, 'result_summary': None, 'ingest_request_id': None, 'request_id': '7345b8642eff48d185c1d30c7d30f30b', 'workflow': 'legacy_analysis', 'workflow_state': 'queued', 'baseline_candidate_created': False, 'baseline_activation_state': None, 'baselineId': None, 'workspacePath': None, 'createdAt': None, 'job_progress': {'contract_version': 'job-progress.v1', 'job_id': '5975b93b33324a1a949c01686c1f0178', 'workflow': 'legacy_analysis', 'status': 'processing', 'stage': 'ready', 'substage': 'finalize_analysis', 'completed_units': 3, 'total_units': 4, 'percent_complete': 75, 'unit_type': 'finalization_steps', 'message': 'Verified the required completion artifacts; committing the terminal result.', 'started_at': '2026-09-23T06:02:43.472152+00:00', 'updated_at': '2026-09-23T06:02:58.158483+00:00', 'elapsed_seconds': 15, 'last_worker_heartbeat_at': '2026-09-23T06:02:58.556355+00:00', 'seconds_since_worker_heartbeat': 0, 'seconds_since_update': 0, 'stalled': False, 'retryable': None, 'error': None, 'metadata': {'valid_rows_profiled': 18, 'canonical_rows_written': 18, 'readiness_outcome': 'ready_with_limitations', 'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis', 'physics_reasoning', 'phase_4', 'evidence_fusion'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_limited': ['operating_modes', 'empirical_thresholds', 'mode_conditioned_baseline', 'multiscale_analysis', 'physics_reasoning', 'phase_4'], 'modules_failed': [], 'completed_units': 21, 'total_units': 21, 'unit_type': 'evidence_candidates', 'message': 'Organized 21 of 21 evidence candidates.', 'operation_complete': True}, 'workflow_steps': [{'id': 'upload', 'label': 'Upload', 'status': 'completed', 'completed_work_units': 2, 'total_work_units': 2, 'percent_complete': 100}, {'id': 'validate', 'label': 'Validate', 'status': 'completed', 'completed_work_units': 13, 'total_work_units': 13, 'percent_complete': 100}, {'id': 'analysis', 'label': 'Analyze', 'status': 'completed', 'completed_work_units': 17, 'total_work_units': 17, 'percent_complete': 100}, {'id': 'ready', 'label': 'Results Ready', 'status': 'processing', 'completed_work_units': 0, 'total_work_units': 1, 'percent_complete': 75}], 'operations': [{'id': 'receiving', 'stage': 'upload', 'label': 'Receiving file', 'status': 'completed', 'completed_units': 1, 'total_units': 1, 'percent_complete': 100, 'unit_type': 'operation', 'message': 'File transfer completed.', 'started_at': '2026-09-23T06:02:43.472152+00:00', 'updated_at': '2026-09-23T06:02:43.472398+00:00', 'completed_at': '2026-09-23T06:02:43.472398+00:00', 'metadata': {}}, {'id': 'source_persisted', 'stage': 'upload', 'label': 'Source persisted', 'status': 'completed', 'completed_units': 1, 'total_units': 1, 'percent_complete': 100, 'unit_type': 'operation', 'message': 'Source persisted for processing.', 'started_at': '2026-09-23T06:02:43.472152+00:00', 'updated_at': '2026-09-23T06:02:43.472398+00:00', 'completed_at': '2026-09-23T06:02:43.472398+00:00', 'metadata': {}}, {'id': 'parse_source', 'stage': 'validate', 'label': 'Parse source', 'status': 'completed', 'completed_units': 18, 'total_units': 18, 'percent_complete': 100, 'unit_type': 'rows', 'message': 'Parsed 18 source rows.', 'started_at': '2026-09-23T06:02:44.163485+00:00', 'updated_at': '2026-09-23T06:02:44.352564+00:00', 'completed_at': '2026-09-23T06:02:44.352564+00:00', 'metadata': {}}, {'id': 'schema_detection', 'stage': 'validate', 'label': 'Schema detection', 'status': 'completed', 'completed_units': 4, 'total_units': 4, 'percent_complete': 100, 'unit_type': 'columns', 'message': 'Detected a 4-column source schema.', 'started_at': '2026-09-23T06:02:44.543929+00:00', 'updated_at': '2026-09-23T06:02:44.543929+00:00', 'completed_at': '2026-09-23T06:02:44.543929+00:00', 'metadata': {}}, {'id': 'timestamp_detection', 'stage': 'validate', 'label': 'Timestamp detection', 'status': 'completed', 'completed_units': 4, 'total_units': 4, 'percent_complete': 100, 'unit_type': 'columns', 'message': 'Selected timestamp signal timestamp.', 'started_at': '2026-09-23T06:02:44.716791+00:00', 'updated_at': '2026-09-23T06:02:44.909082+00:00', 'completed_at': '2026-09-23T06:02:44.909082+00:00', 'metadata': {}}, {'id': 'timestamp_quality', 'stage': 'validate', 'label': 'Timestamp quality', 'status': 'completed', 'completed_units': 18, 'total_units': 18, 'percent_complete': 100, 'unit_type': 'rows', 'message': 'Evaluated timestamp quality for 18 rows.', 'started_at': '2026-09-23T06:02:45.104071+00:00', 'updated_at': '2026-09-23T06:02:45.299310+00:00', 'completed_at': '2026-09-23T06:02:45.299310+00:00', 'metadata': {'valid_rows_profiled': 18}}, {'id': 'signal_inventory', 'stage': 'validate', 'label': 'Signal inventory', 'status': 'completed', 'completed_units': 3, 'total_units': 3, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Inventoried 3 candidate signals.', 'started_at': '2026-09-23T06:02:45.482129+00:00', 'updated_at': '2026-09-23T06:02:45.482129+00:00', 'completed_at': '2026-09-23T06:02:45.482129+00:00', 'metadata': {}}, {'id': 'unit_detection', 'stage': 'validate', 'label': 'Unit detection', 'status': 'completed', 'completed_units': 3, 'total_units': 3, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Evaluated units for 3 signals.', 'started_at': '2026-09-23T06:02:45.689210+00:00', 'updated_at': '2026-09-23T06:02:45.865219+00:00', 'completed_at': '2026-09-23T06:02:45.865219+00:00', 'metadata': {}}, {'id': 'semantic_mapping', 'stage': 'validate', 'label': 'Semantic mapping', 'status': 'completed', 'completed_units': 3, 'total_units': 3, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Mapped 3 signals.', 'started_at': '2026-09-23T06:02:46.030251+00:00', 'updated_at': '2026-09-23T06:02:46.228901+00:00', 'completed_at': '2026-09-23T06:02:46.228901+00:00', 'metadata': {}}, {'id': 'data_quality_profiling', 'stage': 'validate', 'label': 'Data-quality profiling', 'status': 'completed', 'completed_units': 3, 'total_units': 3, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Profiled quality for 3 signals.', 'started_at': '2026-09-23T06:02:46.424004+00:00', 'updated_at': '2026-09-23T06:02:46.619929+00:00', 'completed_at': '2026-09-23T06:02:46.619929+00:00', 'metadata': {}}, {'id': 'unit_normalization', 'stage': 'validate', 'label': 'Unit normalization', 'status': 'completed', 'completed_units': 18, 'total_units': 18, 'percent_complete': 100, 'unit_type': 'rows', 'message': 'Normalized 18 source rows.', 'started_at': '2026-09-23T06:02:46.808435+00:00', 'updated_at': '2026-09-23T06:02:47.028768+00:00', 'completed_at': '2026-09-23T06:02:47.028768+00:00', 'metadata': {'canonical_rows_written': 18}}, {'id': 'canonical_dataset_build', 'stage': 'validate', 'label': 'Canonical dataset build', 'status': 'completed', 'completed_units': 2, 'total_units': 2, 'percent_complete': 100, 'unit_type': 'persistence_checks', 'message': 'Built and persisted 18 canonical rows.', 'started_at': '2026-09-23T06:02:47.236940+00:00', 'updated_at': '2026-09-23T06:02:47.684946+00:00', 'completed_at': '2026-09-23T06:02:47.684946+00:00', 'metadata': {'canonical_rows_written': 18}}, {'id': 'configuration_awareness', 'stage': 'validate', 'label': 'Configuration awareness', 'status': 'completed', 'completed_units': 3, 'total_units': 3, 'percent_complete': 100, 'unit_type': 'signals', 'message': 'Evaluated configuration and operating-state boundaries.', 'started_at': '2026-09-23T06:02:47.898643+00:00', 'updated_at': '2026-09-23T06:02:48.079179+00:00', 'completed_at': '2026-09-23T06:02:48.079179+00:00', 'metadata': {}}, {'id': 'readiness_evaluation', 'stage': 'validate', 'label': 'Readiness evaluation', 'status': 'completed', 'completed_units': 1, 'total_units': 1, 'percent_complete': 100, 'unit_type': 'operation', 'message': 'Readiness evaluation: ready with limitations.', 'started_at': '2026-09-23T06:02:48.268975+00:00', 'updated_at': '2026-09-23T06:02:48.268975+00:00', 'completed_at': '2026-09-23T06:02:48.268975+00:00', 'metadata': {'readiness_outcome': 'ready_with_limitations'}}, {'id': 'analysis_snapshot_build', 'stage': 'validate', 'label': 'Analysis snapshot build', 'status': 'completed', 'completed_units': 18, 'total_units': 18, 'percent_complete': 100, 'unit_type': 'rows', 'message': 'Prepared the analysis snapshot from 18 source rows.', 'started_at': '2026-09-23T06:02:48.468612+00:00', 'updated_at': '2026-09-23T06:02:48.659463+00:00', 'completed_at': '2026-09-23T06:02:48.659463+00:00', 'metadata': {}}, {'id': 'prepare_inputs', 'stage': 'analysis', 'label': 'Prepare analysis inputs', 'status': 'completed', 'completed_units': None, 'total_units': None, 'percent_complete': 100, 'unit_type': None, 'message': 'Running prepare inputs; measuring eligible work.', 'started_at': '2026-09-23T06:02:49.707236+00:00', 'updated_at': '2026-09-23T06:02:49.707236+00:00', 'completed_at': '2026-09-23T06:02:49.910560+00:00', 'metadata': {'modules_attempted': [], 'modules_completed': [], 'modules_limited': [], 'modules_failed': [], 'completed_units': None, 'total_units': None, 'unit_type': None, 'message': None, 'operation_complete': False}}, {'id': 'signal_drift', 'stage': 'analysis', 'label': 'Signal drift analysis', 'status': 'completed', 'completed_units': None, 'total_units': None, 'percent_complete': 100, 'unit_type': None, 'message': 'Running signal drift; measuring eligible work.', 'started_at': '2026-09-23T06:02:49.910560+00:00', 'updated_at': '2026-09-23T06:02:49.910560+00:00', 'completed_at': '2026-09-23T06:02:50.113717+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog'], 'modules_completed': ['telemetry_catalog'], 'modules_limited': [], 'modules_failed': [], 'completed_units': None, 'total_units': None, 'unit_type': None, 'message': None, 'operation_complete': False}}, {'id': 'relationship_analysis', 'stage': 'analysis', 'label': 'Relationship analysis', 'status': 'completed', 'completed_units': 1, 'total_units': 1, 'percent_complete': 100, 'unit_type': 'relationship_pairs', 'message': 'Evaluated 1 of 1 relationship pairs.', 'started_at': '2026-09-23T06:02:50.113717+00:00', 'updated_at': '2026-09-23T06:02:50.325899+00:00', 'completed_at': '2026-09-23T06:02:50.527285+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment'], 'modules_limited': [], 'modules_failed': [], 'completed_units': 1, 'total_units': 1, 'unit_type': 'relationship_pairs', 'message': 'Evaluated 1 of 1 relationship pairs.', 'operation_complete': True}}, {'id': 'operating_modes', 'stage': 'analysis', 'label': 'Operating-context analysis', 'status': 'completed', 'completed_units': 2, 'total_units': 2, 'percent_complete': 100, 'unit_type': 'context_windows', 'message': 'Characterized 2 of 2 operating-context windows.', 'started_at': '2026-09-23T06:02:50.527285+00:00', 'updated_at': '2026-09-23T06:02:50.734740+00:00', 'completed_at': '2026-09-23T06:02:50.887485+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis'], 'modules_limited': [], 'modules_failed': [], 'completed_units': 2, 'total_units': 2, 'unit_type': 'context_windows', 'message': 'Characterized 2 of 2 operating-context windows.', 'operation_complete': True}}, {'id': 'data_conditions', 'stage': 'analysis', 'label': 'Data-condition checks', 'status': 'completed', 'completed_units': 2, 'total_units': 2, 'percent_complete': 100, 'unit_type': 'quality_checks', 'message': 'Completed 2 of 2 data-condition checks.', 'started_at': '2026-09-23T06:02:50.887485+00:00', 'updated_at': '2026-09-23T06:02:51.058604+00:00', 'completed_at': '2026-09-23T06:02:51.255924+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis'], 'modules_limited': ['operating_modes'], 'modules_failed': [], 'completed_units': 2, 'total_units': 2, 'unit_type': 'quality_checks', 'message': 'Completed 2 of 2 data-condition checks.', 'operation_complete': True}}, {'id': 'sensor_health', 'stage': 'analysis', 'label': 'Signal-health analysis', 'status': 'completed', 'completed_units': 5, 'total_units': 5, 'percent_complete': 100, 'unit_type': 'health_checks', 'message': 'Completed 5 of 5 signal-health checks.', 'started_at': '2026-09-23T06:02:51.255924+00:00', 'updated_at': '2026-09-23T06:02:52.067732+00:00', 'completed_at': '2026-09-23T06:02:52.277307+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions'], 'modules_limited': ['operating_modes'], 'modules_failed': [], 'completed_units': 5, 'total_units': 5, 'unit_type': 'health_checks', 'message': 'Completed 5 of 5 signal-health checks.', 'operation_complete': True}}, {'id': 'empirical_thresholds', 'stage': 'analysis', 'label': 'Empirical thresholds', 'status': 'completed', 'completed_units': 3, 'total_units': 3, 'percent_complete': 100, 'unit_type': 'threshold_candidates', 'message': 'Evaluated 3 of 3 threshold candidates.', 'started_at': '2026-09-23T06:02:52.277307+00:00', 'updated_at': '2026-09-23T06:02:52.509380+00:00', 'completed_at': '2026-09-23T06:02:52.741138+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health'], 'modules_limited': ['operating_modes'], 'modules_failed': [], 'completed_units': 3, 'total_units': 3, 'unit_type': 'threshold_candidates', 'message': 'Evaluated 3 of 3 threshold candidates.', 'operation_complete': True}}, {'id': 'mode_conditioned_baseline', 'stage': 'analysis', 'label': 'Mode-conditioned comparison', 'status': 'completed', 'completed_units': None, 'total_units': None, 'percent_complete': 100, 'unit_type': None, 'message': 'Selecting like-mode historical rows.', 'started_at': '2026-09-23T06:02:52.741138+00:00', 'updated_at': '2026-09-23T06:02:52.741138+00:00', 'completed_at': '2026-09-23T06:02:52.941790+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health'], 'modules_limited': ['operating_modes', 'empirical_thresholds'], 'modules_failed': [], 'completed_units': None, 'total_units': None, 'unit_type': None, 'message': 'Selecting like-mode historical rows.', 'operation_complete': False}}, {'id': 'relationship_graph_analysis', 'stage': 'analysis', 'label': 'Relationship graph analysis', 'status': 'completed', 'completed_units': 1, 'total_units': 1, 'percent_complete': 100, 'unit_type': 'relationship_edges', 'message': 'Evaluated 1 of 1 relationship edges.', 'started_at': '2026-09-23T06:02:52.941790+00:00', 'updated_at': '2026-09-23T06:02:53.134491+00:00', 'completed_at': '2026-09-23T06:02:53.323408+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health'], 'modules_limited': ['operating_modes', 'empirical_thresholds', 'mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': 1, 'total_units': 1, 'unit_type': 'relationship_edges', 'message': 'Evaluated 1 of 1 relationship edges.', 'operation_complete': True}}, {'id': 'fixed_persistence', 'stage': 'analysis', 'label': 'Persistence analysis', 'status': 'completed', 'completed_units': None, 'total_units': None, 'percent_complete': 100, 'unit_type': None, 'message': 'Identifying drifted signals for persistence checks.', 'started_at': '2026-09-23T06:02:53.323408+00:00', 'updated_at': '2026-09-23T06:02:53.323408+00:00', 'completed_at': '2026-09-23T06:02:53.513208+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health', 'relationship_graph_analysis'], 'modules_limited': ['operating_modes', 'empirical_thresholds', 'mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': None, 'total_units': None, 'unit_type': None, 'message': 'Identifying drifted signals for persistence checks.', 'operation_complete': False}}, {'id': 'adaptive_persistence', 'stage': 'analysis', 'label': 'Adaptive persistence', 'status': 'completed', 'completed_units': None, 'total_units': None, 'percent_complete': 100, 'unit_type': None, 'message': 'Identifying signals for elapsed-time persistence checks.', 'started_at': '2026-09-23T06:02:53.513208+00:00', 'updated_at': '2026-09-23T06:02:53.513208+00:00', 'completed_at': '2026-09-23T06:02:53.723344+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health', 'relationship_graph_analysis', 'fixed_persistence'], 'modules_limited': ['operating_modes', 'empirical_thresholds', 'mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': None, 'total_units': None, 'unit_type': None, 'message': 'Identifying signals for elapsed-time persistence checks.', 'operation_complete': False}}, {'id': 'temporal_analysis', 'stage': 'analysis', 'label': 'Lag and temporal analysis', 'status': 'completed', 'completed_units': 12, 'total_units': 12, 'percent_complete': 100, 'unit_type': 'temporal_calculations', 'message': 'Completed 12 of 12 temporal calculations; latest: lead time.', 'started_at': '2026-09-23T06:02:53.723344+00:00', 'updated_at': '2026-09-23T06:02:53.940453+00:00', 'completed_at': '2026-09-23T06:02:54.145037+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence'], 'modules_limited': ['operating_modes', 'empirical_thresholds', 'mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': 12, 'total_units': 12, 'unit_type': 'temporal_calculations', 'message': 'Completed 12 of 12 temporal calculations; latest: lead time.', 'operation_complete': True}}, {'id': 'multiscale_analysis', 'stage': 'analysis', 'label': 'Multi-scale analysis', 'status': 'completed', 'completed_units': 4, 'total_units': 4, 'percent_complete': 100, 'unit_type': 'scales', 'message': 'Evaluated 4 of 4 analysis scales.', 'started_at': '2026-09-23T06:02:54.145037+00:00', 'updated_at': '2026-09-23T06:02:54.354911+00:00', 'completed_at': '2026-09-23T06:02:54.559343+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis'], 'modules_limited': ['operating_modes', 'empirical_thresholds', 'mode_conditioned_baseline'], 'modules_failed': [], 'completed_units': 4, 'total_units': 4, 'unit_type': 'scales', 'message': 'Evaluated 4 of 4 analysis scales.', 'operation_complete': True}}, {'id': 'covariance_analysis', 'stage': 'analysis', 'label': 'Covariance analysis', 'status': 'completed', 'completed_units': 18, 'total_units': 18, 'percent_complete': 100, 'unit_type': 'sensor_vectors', 'message': 'Processed 18 of 18 sensor vectors.', 'started_at': '2026-09-23T06:02:54.559343+00:00', 'updated_at': '2026-09-23T06:02:54.838320+00:00', 'completed_at': '2026-09-23T06:02:55.089136+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'compatibility_context'], 'modules_limited': ['operating_modes', 'empirical_thresholds', 'mode_conditioned_baseline', 'multiscale_analysis'], 'modules_failed': [], 'completed_units': 18, 'total_units': 18, 'unit_type': 'sensor_vectors', 'message': 'Processed 18 of 18 sensor vectors.', 'operation_complete': True}}, {'id': 'physics_reasoning', 'stage': 'analysis', 'label': 'Physics evidence', 'status': 'completed', 'completed_units': None, 'total_units': None, 'percent_complete': 100, 'unit_type': None, 'message': 'Identifying configured engineering priors.', 'started_at': '2026-09-23T06:02:55.089136+00:00', 'updated_at': '2026-09-23T06:02:55.089136+00:00', 'completed_at': '2026-09-23T06:02:55.303338+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_limited': ['operating_modes', 'empirical_thresholds', 'mode_conditioned_baseline', 'multiscale_analysis'], 'modules_failed': [], 'completed_units': None, 'total_units': None, 'unit_type': None, 'message': 'Identifying configured engineering priors.', 'operation_complete': False}}, {'id': 'behavioral_model', 'stage': 'analysis', 'label': 'Behavioral fingerprinting', 'status': 'completed', 'completed_units': None, 'total_units': None, 'percent_complete': 100, 'unit_type': None, 'message': 'Preparing behavioral-model components.', 'started_at': '2026-09-23T06:02:55.303338+00:00', 'updated_at': '2026-09-23T06:02:55.303338+00:00', 'completed_at': '2026-09-23T06:02:55.510702+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis', 'physics_reasoning'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_limited': ['operating_modes', 'empirical_thresholds', 'mode_conditioned_baseline', 'multiscale_analysis', 'physics_reasoning'], 'modules_failed': [], 'completed_units': None, 'total_units': None, 'unit_type': None, 'message': 'Preparing behavioral-model components.', 'operation_complete': False}}, {'id': 'evidence_fusion', 'stage': 'analysis', 'label': 'Evidence generation', 'status': 'completed', 'completed_units': 21, 'total_units': 21, 'percent_complete': 100, 'unit_type': 'evidence_candidates', 'message': 'Organized 21 of 21 evidence candidates.', 'started_at': '2026-09-23T06:02:55.510702+00:00', 'updated_at': '2026-09-23T06:02:55.750523+00:00', 'completed_at': '2026-09-23T06:02:56.508506+00:00', 'metadata': {'modules_attempted': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'operating_modes', 'data_conditions', 'sensor_health', 'empirical_thresholds', 'mode_conditioned_baseline', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'multiscale_analysis', 'compatibility_context', 'covariance_analysis', 'physics_reasoning', 'phase_4', 'evidence_fusion'], 'modules_completed': ['telemetry_catalog', 'signal_drift', 'telemetry_catalog_enrichment', 'relationship_analysis', 'data_conditions', 'sensor_health', 'relationship_graph_analysis', 'fixed_persistence', 'adaptive_persistence', 'temporal_analysis', 'compatibility_context', 'covariance_analysis'], 'modules_limited': ['operating_modes', 'empirical_thresholds', 'mode_conditioned_baseline', 'multiscale_analysis', 'physics_reasoning', 'phase_4'], 'modules_failed': [], 'completed_units': 21, 'total_units': 21, 'unit_type': 'evidence_candidates', 'message': 'Organized 21 of 21 evidence candidates.', 'operation_complete': True}}, {'id': 'finalize_analysis', 'stage': 'ready', 'label': 'Finalize analysis', 'status': 'processing', 'completed_units': 3, 'total_units': 4, 'percent_complete': 75, 'unit_type': 'finalization_steps', 'message': 'Verified the required completion artifacts; committing the terminal result.', 'started_at': '2026-09-23T06:02:56.508506+00:00', 'updated_at': '2026-09-23T06:02:58.158483+00:00', 'completed_at': None, 'metadata': {}}], 'overall_percent_complete': 99, 'overall_basis': 'equal_completed_declared_substages', 'visibility_message': None}, 'status_url': '/api/data/upload-status/5975b93b33324a1a949c01686c1f0178', 'propagation_stage': 'saving_result', 'propagation_progress': 99, 'propagation_label': 'Saving result...', 'file_path': '5975b93b33324a1a949c01686c1f0178-vlnj_b50.csv', 'shared_upload_source_key': None, 'content_type': 'text/csv', 'initiated_by': 'anonymous', 'upload_session_id': '6056fe678a284fef8904e378dc17cba4', 'worker_dispatch_status': 'thread_dispatched', 'request_received_at': '2026-09-23T06:02:43.458778+00:00', 'backend_handler_started_at': '2026-09-23T06:02:43.465873+00:00', 'upload_completed_at': '2026-09-23T06:02:43.472175+00:00', 'job_created_at': '2026-09-23T06:02:43.472152+00:00', 'enqueued_at': '2026-09-23T06:02:43.472152+00:00', 'stage_changed_at': '2026-09-23T06:02:56.901361+00:00', 'approval_required': None, 'active_baseline_model_id': None, 'active_baseline_version': None, 'active_baseline_dataset_id': None, 'active_baseline_system_id': 'default', 'active_baseline_portfolio_id': 'default', 'phase4_system_identity': None, 'phase4_system_identity_status': 'unavailable', 'phase4_system_identity_reason': 'no_registered_system', 'attempt_id': '5975b93b33324a1a949c01686c1f0178', 'run_id': '5975b93b33324a1a949c01686c1f0178', 'upload_id': '5975b93b33324a1a949c01686c1f0178', 'contract_progress': 99, 'session_scope': {'active': True, 'status': 'saving_result', 'job_id': '5975b93b33324a1a949c01686c1f0178', 'run_id': '5975b93b33324a1a949c01686c1f0178', 'upload_id': '5975b93b33324a1a949c01686c1f0178', 'dataset_id': '6056fe678a284fef8904e378dc17cba4', 'source_name': 'propagation-progress.csv', 'version': 1, 'tenant_id': 'anonymous', 'user_id': 'anonymous', 'workspace_id': 'default'}, 'dataset_scope': {'version': 1, 'tenant_id': 'anonymous', 'user_id': 'anonymous', 'workspace_id': 'default'}, 'worker_started_at': '2026-09-23T06:02:43.821539+00:00', 'worker_pickup_delay_ms': 113.203, 'updated_at': '2026-09-23T06:02:58.158739+00:00', 'contract_stage': 'saving_result', 'contract_label': 'Saving result...', 'worker_state': 'running', 'worker_last_seen_at': '2026-09-23T06:02:58.556355+00:00', 'job_state': 'processing', 'terminal': False, 'analysis_result': {'schema_version': 'analysis-result-v1', 'status': 'saving_result', 'analysis_id': '5975b93b33324a1a949c01686c1f0178', 'upload_id': '5975b93b33324a1a949c01686c1f0178', 'source_file': 'propagation-progress.csv', 'generated_at': '2026-09-23T06:02:58.809719+00:00', 'change_onset': '', 'stable_window': {}, 'deviation_window': {}, 'current_state_window': {}, 'data_quality': {'status': 'saving_result', 'readiness': 'not_ready', 'warnings': [], 'normalized_telemetry': {'status': 'missing', 'source_file': 'propagation-progress.csv', 'row_count': 0, 'tag_count': 0, 'record_count': 0, 'record_limit': 500, 'truncated': False, 'records': [], 'tags': [], 'calculation_method': 'No uploaded telemetry was available to normalize.'}}, 'executive_summary': {}, 'systems': [], 'conditions': [], 'primary_object': 'finding', 'relationships': [], 'fingerprint': {'drift_status': 'unavailable', 'normal_operating_behavior': {}, 'current_behavior': {}, 'largest_deviations': [], 'confidence': 'limited', 'confidence_score': 0.0, 'evidence_refs': [], 'explanation': ''}, 'insights': [], 'recommendations': [], 'evidence_index': {}, 'warnings': [], 'errors': [], 'analysis_metadata': {'contract_version': 'analysis-result-v1', 'source': 'empty'}, 'sii_evidence': {'source': 'sii_result', 'source_path': 'sii_result', 'authority': {'scope': 'canonical_engine_evidence', 'finding_classification': False}, 'status': 'unavailable', 'engine': {}, 'relationship_changes': [], 'relationship_recurrences': [], 'operating_context': {}, 'persistence': {}, 'uncertainty': {'status': 'unavailable', 'limitations': []}, 'data_quality': {}, 'sensor_health': {'signals': []}, 'configured_prior_observations': [], 'phase_4': {'status': 'unavailable', 'available': False, 'limitations': [], 'behavioral_evolution': {}, 'propagation': {}}, 'provenance': {}}}, 'session_state': 'processing', 'session_source': 'active_in_memory_session', 'poll_request_id': 'fa54c05c52d5453dbc63ebb085c15348', 'state_backend': 'local', 'status_checked_at': '2026-09-23T06:02:58.809777+00:00', 'queue_position': None, 'queued_seconds': 15, 'queue_state': 'processing', 'terminal_publication_pending': False, 'worker_claimed': True, 'worker_claimed_at': '2026-09-23T06:02:43.781977+00:00', 'worker_heartbeat_age_seconds': 0.253, 'worker_heartbeat_stale': False, 'execution_state': 'processing', 'status_server_sent_at': '2026-09-23T06:02:58.839475+00:00', 'status_request_ms': 30.835}",
+        "name": {
+          "classname": "tests.test_data_upload",
+          "name": "test_upload_status_propagation_progresses_from_queued_to_complete",
+          "time": "19.450"
+        }
+      }
+    ],
+    "skips": [],
+    "suites": [
+      {
+        "errors": "0",
+        "failures": "2",
+        "hostname": "ip-172-31-41-178",
+        "name": "pytest",
+        "skipped": "0",
+        "tests": "427",
+        "time": "1018.309",
+        "timestamp": "2026-09-23T05:46:56.226990+00:00"
+      }
+    ]
+  },
+  "repeat_counts": {
+    "identical_rejection": 5,
+    "rejected_repeats": 5,
+    "successful_repeats": 140
+  },
+  "repeated_equal": 145,
+  "reporting_note": "Runner historical.json recurrence_edges uses an incorrect field name; do not use it. This scorer reads raw recurrence_evidence.supported; original outputs and runner retained unchanged.",
+  "sensitivity": [
+    {
+      "first_supported_windows": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "magnitude": 0,
+      "promoted_final": 0,
+      "sequences": 12,
+      "temporal_final": 0
+    },
+    {
+      "first_supported_windows": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "magnitude": 0.05,
+      "promoted_final": 0,
+      "sequences": 12,
+      "temporal_final": 0
+    },
+    {
+      "first_supported_windows": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "magnitude": 0.1,
+      "promoted_final": 0,
+      "sequences": 12,
+      "temporal_final": 0
+    },
+    {
+      "first_supported_windows": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "magnitude": 0.15,
+      "promoted_final": 12,
+      "sequences": 12,
+      "temporal_final": 12
+    },
+    {
+      "first_supported_windows": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "magnitude": 0.2,
+      "promoted_final": 12,
+      "sequences": 12,
+      "temporal_final": 12
+    },
+    {
+      "first_supported_windows": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "magnitude": 0.25,
+      "promoted_final": 12,
+      "sequences": 12,
+      "temporal_final": 12
+    },
+    {
+      "first_supported_windows": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ],
+      "magnitude": 0.3,
+      "promoted_final": 12,
+      "sequences": 12,
+      "temporal_final": 12
+    }
+  ],
+  "sequence_count": 145,
+  "stress": [
+    {
+      "case": "missing",
+      "exceptions": [
+        {
+          "message": "paired_comparison_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_numeric_value_required:flow",
+          "type": "ValueError"
+        }
+      ],
+      "promoted_windows": [],
+      "temporal_windows": [],
+      "windows": 8
+    },
+    {
+      "case": "nonfinite",
+      "exceptions": [
+        {
+          "message": "paired_comparison_finite_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_finite_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_finite_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_finite_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_finite_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_finite_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_finite_numeric_value_required:flow",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_finite_numeric_value_required:flow",
+          "type": "ValueError"
+        }
+      ],
+      "promoted_windows": [],
+      "temporal_windows": [],
+      "windows": 8
+    },
+    {
+      "case": "duplicate_time",
+      "exceptions": [
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        }
+      ],
+      "promoted_windows": [],
+      "temporal_windows": [],
+      "windows": 8
+    },
+    {
+      "case": "reversed_time",
+      "exceptions": [
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_ordered_timezone_aware_timestamps",
+          "type": "ValueError"
+        }
+      ],
+      "promoted_windows": [],
+      "temporal_windows": [],
+      "windows": 8
+    },
+    {
+      "case": "too_short",
+      "exceptions": [
+        {
+          "message": "paired_comparison_requires_16_to_12000_rows",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_16_to_12000_rows",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_16_to_12000_rows",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_16_to_12000_rows",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_16_to_12000_rows",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_16_to_12000_rows",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_16_to_12000_rows",
+          "type": "ValueError"
+        },
+        {
+          "message": "paired_comparison_requires_16_to_12000_rows",
+          "type": "ValueError"
+        }
+      ],
+      "promoted_windows": [],
+      "temporal_windows": [],
+      "windows": 8
+    },
+    {
+      "case": "irregular",
+      "exceptions": [],
+      "promoted_windows": [
+        6,
+        7,
+        8
+      ],
+      "temporal_windows": [
+        6,
+        7,
+        8
+      ],
+      "windows": 8
+    },
+    {
+      "case": "flatline",
+      "exceptions": [],
+      "promoted_windows": [],
+      "temporal_windows": [],
+      "windows": 8
+    },
+    {
+      "case": "outlier",
+      "exceptions": [],
+      "promoted_windows": [],
+      "temporal_windows": [],
+      "windows": 8
+    },
+    {
+      "case": "level_compensation",
+      "exceptions": [],
+      "promoted_windows": [],
+      "temporal_windows": [],
+      "windows": 8
+    },
+    {
+      "case": "response_change",
+      "exceptions": [],
+      "promoted_windows": [
+        6,
+        7,
+        8
+      ],
+      "temporal_windows": [
+        6,
+        7,
+        8
+      ],
+      "windows": 8
+    },
+    {
+      "case": "new_context",
+      "exceptions": [],
+      "promoted_windows": [
+        6,
+        7,
+        8
+      ],
+      "temporal_windows": [
+        6,
+        7,
+        8
+      ],
+      "windows": 8
+    }
+  ]
+}

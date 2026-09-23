@@ -1,0 +1,66 @@
+{
+  "archived_at": "2026-09-23T07:40:44.184921+00:00",
+  "purpose": "Exact pre-closure versions; later closure addenda supersede only repeatability coverage, never prior results.",
+  "files": [
+    {
+      "original_path": "WASTEWATER_VALIDATION_SUMMARY.md",
+      "archive_path": "history/pre-closure/WASTEWATER_VALIDATION_SUMMARY.md",
+      "sha256": "1b44c5ff1cebaa7a5020e832a8d12a437565f9b64f6fa855d9292a38145de15c"
+    },
+    {
+      "original_path": "docs/validation/wastewater-real-2026/DATASET_PROVENANCE.md",
+      "archive_path": "history/pre-closure/DATASET_PROVENANCE.md",
+      "sha256": "3d3edd56163cbdf0d9794c81437b64cf433dec23a2a8926aacfc2abdb3701680"
+    },
+    {
+      "original_path": "docs/validation/wastewater-real-2026/DEEP_EVIDENCE_REVIEW.md",
+      "archive_path": "history/pre-closure/DEEP_EVIDENCE_REVIEW.md",
+      "sha256": "89e58da0a9731be9d77af73d3322ec3c09adf48ae285ef3183d58783b2b18f4f"
+    },
+    {
+      "original_path": "docs/validation/wastewater-real-2026/FINDINGS.md",
+      "archive_path": "history/pre-closure/FINDINGS.md",
+      "sha256": "5781db13e1187e75dda6b158fea58dcad4f93187ab5335e650f4536d9b16cd80"
+    },
+    {
+      "original_path": "docs/validation/wastewater-real-2026/LIMITATIONS.md",
+      "archive_path": "history/pre-closure/LIMITATIONS.md",
+      "sha256": "4ce4b702d8be4e12f057cd0c750ef90dea9c12c278460e64a9e7d9005556831c"
+    },
+    {
+      "original_path": "docs/validation/wastewater-real-2026/METHODOLOGY.md",
+      "archive_path": "history/pre-closure/METHODOLOGY.md",
+      "sha256": "26bc3f4c05b8cdc7258c9c1aee38f530c039507f72f7c0ca6d7c138cbecb33f3"
+    },
+    {
+      "original_path": "docs/validation/wastewater-real-2026/POSTHOC_CONTEXT.md",
+      "archive_path": "history/pre-closure/POSTHOC_CONTEXT.md",
+      "sha256": "43ba1e2d6e14fddde36a2b83fd88a45af89f4e44f6a100ac28fd58d912e3faa1"
+    },
+    {
+      "original_path": "docs/validation/wastewater-real-2026/PROMOTED_FINDING_REPEATABILITY.md",
+      "archive_path": "history/pre-closure/PROMOTED_FINDING_REPEATABILITY.md",
+      "sha256": "d6f11a33d3cbec2d5eac4bcd3e9cf607d9252fb38275e15a4426184d20d69364"
+    },
+    {
+      "original_path": "docs/validation/wastewater-real-2026/VALIDATION_REPORT.md",
+      "archive_path": "history/pre-closure/VALIDATION_REPORT.md",
+      "sha256": "912daf6aa0192be9e6e6855d0e7e72d904099b56c6edbaf307ee0e9184be5e45"
+    },
+    {
+      "original_path": "docs/validation/wastewater-real-2026/CLAIM_TRACEABILITY.json",
+      "archive_path": "history/pre-closure/CLAIM_TRACEABILITY.json",
+      "sha256": "b0913463c1180814c722460786bf20ba41b830859790a00e8b69515be69ac5c9"
+    },
+    {
+      "original_path": "docs/validation/wastewater-real-2026/APPLICATION_ANSWER.txt",
+      "archive_path": "history/pre-closure/APPLICATION_ANSWER.txt",
+      "sha256": "7dc9c3b5449bc0a0e0eac29fe6a3761c5b4fea7aa6d63dad6894ed38f2dd28d3"
+    },
+    {
+      "original_path": "docs/validation/wastewater-real-2026/SHA256SUMS",
+      "archive_path": "history/pre-closure/SHA256SUMS",
+      "sha256": "c37d097c8fbca085a5eab20f3b5b76ba19cf43ef1879147800e1290f49892787"
+    }
+  ]
+}

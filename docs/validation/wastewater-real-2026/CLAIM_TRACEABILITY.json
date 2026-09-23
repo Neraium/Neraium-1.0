@@ -1,0 +1,451 @@
+{
+  "schema": "wastewater-claim-traceability-v2",
+  "scope": "Final external summaries, application answer and retained detailed report tables. Paths are package-relative. JSON selectors use / with * for explicitly identified collections; JSONL records are keyed by window/columns.",
+  "claims": [
+    {
+      "id": "unique_rows_analyzed",
+      "claim": "74171",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/counts/unique_rows_analyzed"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "returned_windows",
+      "claim": "253",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/counts/returned_windows"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "distinct_pairs",
+      "claim": "21",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/counts/distinct_pairs"
+        }
+      ],
+      "qualification": "Pair-window counts are repeated observations, not independent plant events."
+    },
+    {
+      "id": "evaluated_pair_windows",
+      "claim": "5265",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/counts/evaluated_pair_windows"
+        }
+      ],
+      "qualification": "Pair-window counts are repeated observations, not independent plant events."
+    },
+    {
+      "id": "temporal_pair_windows",
+      "claim": "505",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/counts/temporal_pair_windows"
+        }
+      ],
+      "qualification": "Pair-window counts are repeated observations, not independent plant events."
+    },
+    {
+      "id": "governed_persistent_pair_windows",
+      "claim": "4",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/counts/governed_persistent_pair_windows"
+        }
+      ],
+      "qualification": "Pair-window counts are repeated observations, not independent plant events."
+    },
+    {
+      "id": "distinct_governed_persistent_pairs",
+      "claim": "2",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/counts/distinct_governed_persistent_pairs"
+        }
+      ],
+      "qualification": "Pair-window counts are repeated observations, not independent plant events."
+    },
+    {
+      "id": "promoted_relationships",
+      "claim": "NH4/NO3 and NO3/N2O; promotion windows 159,236,248,251",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/pairs/*/governed"
+        },
+        {
+          "artifact": "raw/deep-evidence-review.json",
+          "selector": "/observations/*/relationship; /observations/*/window"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "source_and_retained_rows",
+      "claim": "74,172 source rows; 74,171 retained; one excluded nonnumeric row",
+      "sources": [
+        {
+          "artifact": "raw/qualification.json",
+          "selector": "/rows; /signals/Influent flowrate/invalid_rows"
+        },
+        {
+          "artifact": "raw/quality-view.json",
+          "selector": "/original_rows; /valid_rows; /excluded_row_provenance"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "fixed_reference_chronology",
+      "claim": "First seven source-clock days fixed; 2,015 reference and 72,156 comparison observations",
+      "sources": [
+        {
+          "artifact": "raw/protocol.json",
+          "selector": "/reference_start; /reference_end_exclusive; /policy"
+        },
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/counts/reference_rows; /counts/comparison_rows; /verification"
+        },
+        {
+          "artifact": "raw/checkpoints/manifest.json",
+          "selector": "/reference_start; /reference_end_exclusive; /step_seconds"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "context_limitations",
+      "claim": "All 253 windows retain operating-context limitations",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/limited_modules/operating_modes; /window_status; /pair_window_context"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "consequence",
+      "claim": "All 1,195 insight observations have not_quantifiable consequence; no physical benefit established",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/consequence_status"
+        },
+        {
+          "artifact": "raw/deep-evidence-review.json",
+          "selector": "/observations/*/insight/measurable_consequence"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "no_event_correspondence",
+      "claim": "No independently documented plant-event correspondence established",
+      "sources": [
+        {
+          "artifact": "POSTHOC_CONTEXT.md",
+          "selector": "Publication and operating-event evidence"
+        },
+        {
+          "artifact": "raw/posthoc/zenodo-record.json",
+          "selector": "/metadata"
+        }
+      ],
+      "qualification": "Limited to documented contextualization; not proof that no plant events occurred."
+    },
+    {
+      "id": "real_source_provenance",
+      "claim": "Published full-scale Danish wastewater provenance; downloaded file byte-identical after blind freeze",
+      "sources": [
+        {
+          "artifact": "raw/posthoc/source-match.json",
+          "selector": "/byte_identical_to_local; /download_sha256; /accessed_at"
+        },
+        {
+          "artifact": "raw/posthoc/zenodo-record.json",
+          "selector": "/metadata/description"
+        },
+        {
+          "artifact": "raw/blind-phase-seal.json",
+          "selector": "/frozen_at"
+        },
+        {
+          "artifact": "raw/analytical-output-freeze.json",
+          "selector": "/frozen_at"
+        }
+      ],
+      "qualification": "Source provenance does not validate event interpretations."
+    },
+    {
+      "id": "promoted_reruns",
+      "claim": "Four promoted states reproduced in 12 same-process and four fresh-process original-state calls",
+      "sources": [
+        {
+          "artifact": "raw/promoted-finding-repeatability.json",
+          "selector": "/summary/same_process; /summary/fresh_process; /verification/all_four_original_promoted_states_reproduced; /runs/*/comparison"
+        },
+        {
+          "artifact": "raw/promoted-repeat-runs/plan.json",
+          "selector": "/cases; /same_process; /fresh_process"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "analytical_component_equality",
+      "claim": "Target edges, governed SII evidence, insights, evidence index, analysis data quality, supplied-reference provenance and outgoing states match in all 16 reruns",
+      "sources": [
+        {
+          "artifact": "raw/promoted-finding-repeatability.json",
+          "selector": "/post_execution_component_diagnostics/per_run; /post_execution_component_diagnostics/all_listed_components_match_in_all_16_runs"
+        }
+      ],
+      "qualification": "Component equality is not complete-output equality."
+    },
+    {
+      "id": "complete_output_nonidentity",
+      "claim": "Strict complete matches 0/12 and 0/4; prespecified two-field-excluded comparison also 0/12 and 0/4",
+      "sources": [
+        {
+          "artifact": "raw/promoted-finding-repeatability.json",
+          "selector": "/summary; /plan/excluded_fields; /runs/*/comparison/full_governed_differences; /runs/*/comparison/evidence_differences"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "execution_differences",
+      "claim": "Execution timestamps, condition timeline timestamps, generated run IDs, timings, memory and performance metadata differ",
+      "sources": [
+        {
+          "artifact": "raw/promoted-finding-repeatability.json",
+          "selector": "/post_execution_component_diagnostics/all_full_response_difference_occurrences_by_category; /runs/*/comparison/full_response_differences"
+        }
+      ],
+      "qualification": "Legitimate execution-dependent differences are preserved; comparison rules were not repaired."
+    },
+    {
+      "id": "layered_persistence",
+      "claim": "Graph/governed persistent true coexists with insight persistence limited/false",
+      "sources": [
+        {
+          "artifact": "raw/deep-evidence-review.json",
+          "selector": "/observations/*/graph_edge/persistent_relationship_change; /observations/*/insight/persistence"
+        },
+        {
+          "artifact": "raw/promoted-finding-repeatability.json",
+          "selector": "/post_execution_component_diagnostics/per_run"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "promotion_trace_limit",
+      "claim": "All 501 supported nonpromotions pass recorded eligibility/confidence/quality conditions; exact distinguishing change rule not retained",
+      "sources": [
+        {
+          "artifact": "raw/deep-evidence-review.json",
+          "selector": "/filtering_findings"
+        }
+      ],
+      "qualification": "No exact per-edge rejection attribution or correctness claim follows."
+    },
+    {
+      "id": "unchanged_engine",
+      "claim": "Production analytical source and thresholds unchanged; frozen commit 97d267d317fcce4b4424cf2141e97e87680acfc0",
+      "sources": [
+        {
+          "artifact": "raw/freeze.json",
+          "selector": "/commit; /files_sha256"
+        },
+        {
+          "artifact": "raw/final-verification.json",
+          "selector": "/tracked_source_changed; /runner_matches_preexecution_seal"
+        },
+        {
+          "artifact": "raw/promoted-finding-repeatability.json",
+          "selector": "/verification/production_unchanged"
+        },
+        {
+          "artifact": "CLOSURE_VERIFICATION.json",
+          "selector": "/production_changed; /current_commit_before_documentation_commit"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "retained_historical_counts",
+      "claim": "82 recurrence-supported pair-windows across six pairs; 505 temporal across 12 pairs; 46 insufficient-evidence insights; 1,149 context-limited insights",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/counts; /insight_categories; /pairs"
+        }
+      ],
+      "qualification": "These earlier results remain descriptive, with overlapping support channels."
+    },
+    {
+      "id": "coverage_and_quality",
+      "claim": "Seven variables, 259.6875 days, six gaps, 619 missing five-minute slots, 2,851 negative flow readings, 48 unavailable correlations in eight constant-NH4 windows",
+      "sources": [
+        {
+          "artifact": "raw/qualification.json",
+          "selector": "/columns; /start; /end; /signals"
+        },
+        {
+          "artifact": "raw/quality-details.json",
+          "selector": "/source_span_days; /gaps; /absent_five_minute_slots; /negative_flow_rows; /constant_string_run_audit"
+        },
+        {
+          "artifact": "raw/omitted-pairs.json",
+          "selector": "all records"
+        }
+      ],
+      "qualification": "Finite readings are not certified sensor-valid; unavailable pairs are not stable negatives."
+    },
+    {
+      "id": "findings_all_times_statistics",
+      "claim": "Every original per-pair support count, first/last time, run duration and correlation in FINDINGS.md",
+      "sources": [
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/pairs/*/temporal; /pairs/*/recurrence; /pairs/*/governed; /pairs/*/promoted"
+        },
+        {
+          "artifact": "raw/edge-results.jsonl",
+          "selector": "all rows keyed by window and columns"
+        },
+        {
+          "artifact": "raw/deep-evidence-review.json",
+          "selector": "/observations"
+        }
+      ],
+      "qualification": "Duration describes supported observation spans, not proven physical continuity."
+    },
+    {
+      "id": "deep_review_ratios_and_neighbors",
+      "claim": "All deep-review retention percentages, support runs, neighbors, overlaps and substantial-movement examples",
+      "sources": [
+        {
+          "artifact": "raw/deep-evidence-review.json",
+          "selector": "/funnel; /additional_ratios; /clustering; /observations; /other_relationship_rankings; /substantial_unpromoted_examples"
+        }
+      ],
+      "qualification": "Arithmetic ratios are not accuracy or false-positive rates."
+    },
+    {
+      "id": "initial_repeats_runtime",
+      "claim": "Original three selected repeats matched their narrower evidence scope; primary execution 548.5396284589078 seconds",
+      "sources": [
+        {
+          "artifact": "raw/repeatability.json",
+          "selector": "/repeats; /repeat_scope"
+        },
+        {
+          "artifact": "raw/execution.json",
+          "selector": "/wall_seconds"
+        }
+      ],
+      "qualification": "Separate from complete promoted-output tests; shared-machine timing is not an SLA."
+    },
+    {
+      "id": "controlled_calls",
+      "claim": "Existing controlled campaign: 1,403 calls, 40 control sequences/320 windows with no temporal support, 48 sustained synthetic cases at 0.15\u20130.30 first support window six",
+      "sources": [
+        {
+          "artifact": "reference-evidence/prize-2026/raw/assessment.json",
+          "selector": "/engine_calls; /families/{stable,stationary_noise,transient,alternating}/{sequences,windows,temporal_windows}; /sensitivity/*/{magnitude,sequences,temporal_final,first_supported_windows}"
+        },
+        {
+          "artifact": "reference-evidence/prize-2026/CLAIM_TRACEABILITY.json",
+          "selector": "original claim map"
+        },
+        {
+          "artifact": "reference-evidence/prize-2026/VALIDATION_REPORT.md",
+          "selector": "controlled battery methodology and results"
+        }
+      ],
+      "qualification": "No pooling with wastewater denominators or inference of wastewater accuracy."
+    },
+    {
+      "id": "controlled_regression",
+      "claim": "861 focused tests passed in prior controlled campaign",
+      "sources": [
+        {
+          "artifact": "reference-evidence/prize-2026/raw/focused-regression.xml",
+          "selector": "testsuite counts"
+        },
+        {
+          "artifact": "reference-evidence/prize-2026/VALIDATION_REPORT.md",
+          "selector": "test coverage and limitations"
+        }
+      ],
+      "qualification": "Focused suite, not complete regression coverage or field accuracy."
+    },
+    {
+      "id": "reproducibility_and_retention",
+      "claim": "Original raw bytes retained, reconstruction provenance and hashes available",
+      "sources": [
+        {
+          "artifact": "RAW_EVIDENCE_SHA256.json",
+          "selector": "all records"
+        },
+        {
+          "artifact": "ARCHIVE_MANIFEST.json",
+          "selector": "parts and raw archive member hashes"
+        },
+        {
+          "artifact": "CLOSURE_VERIFICATION.json",
+          "selector": "integrity verification"
+        },
+        {
+          "artifact": "raw/promoted-finding-repeatability.json",
+          "selector": "/run_artifact_hashes; /plan; /verification"
+        }
+      ],
+      "qualification": null
+    },
+    {
+      "id": "unproven_claims",
+      "claim": "No event correctness, prediction, diagnosis, cause, prescribed action, emissions/physical benefit, prospective field performance or algorithmic novelty established",
+      "sources": [
+        {
+          "artifact": "LIMITATIONS.md",
+          "selector": "all original limitations and closure addendum"
+        },
+        {
+          "artifact": "POSTHOC_CONTEXT.md",
+          "selector": "absence of independent event correspondence"
+        },
+        {
+          "artifact": "raw/assessment.json",
+          "selector": "/consequence_status; /pair_window_context"
+        }
+      ],
+      "qualification": "These are boundaries on evidence, not claims that a capability is impossible."
+    }
+  ],
+  "original_claim_map": "history/pre-closure/CLAIM_TRACEABILITY.json",
+  "evidence_storage": "Some raw artifacts are retained in lossless archive parts; restore before resolving those paths. No raw bytes were changed.",
+  "source_artifact_hash_registry": [
+    "RAW_EVIDENCE_SHA256.json",
+    "SHA256SUMS",
+    "reference-evidence/prize-2026/MANIFEST.json"
+  ]
+}

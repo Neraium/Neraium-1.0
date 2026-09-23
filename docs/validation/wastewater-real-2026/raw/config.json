@@ -1,0 +1,14 @@
+{
+  "reference_rows": 2016,
+  "comparison_rows": 288,
+  "step_rows": 288,
+  "signal_units": {
+    "Influent flowrate": null,
+    "DO": null,
+    "NH4": null,
+    "NO3": null,
+    "N2O": null,
+    "Temperature": null,
+    "N2O emission rate": null
+  }
+}

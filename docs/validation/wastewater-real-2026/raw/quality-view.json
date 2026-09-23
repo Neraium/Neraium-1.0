@@ -1,0 +1,42 @@
+{
+  "original_rows": 74172,
+  "valid_rows": 74171,
+  "excluded_rows": 1,
+  "excluded_rows_by_reason_nonexclusive": {
+    "non_numeric": 1
+  },
+  "invalid_cells_by_signal_and_reason": {
+    "Influent flowrate:non_numeric": 1
+  },
+  "source_cadence_seconds": {
+    "300.0": 74165,
+    "3300.0": 1,
+    "86700.0": 2,
+    "600.0": 1,
+    "1800.0": 1,
+    "8400.0": 1
+  },
+  "valid_cadence_seconds": {
+    "300.0": 74163,
+    "600.0": 2,
+    "3300.0": 1,
+    "86700.0": 2,
+    "1800.0": 1,
+    "8400.0": 1
+  },
+  "rule": "Exclude a row iff any selected telemetry cell is blank, non-numeric or non-finite. Preserve all other cells verbatim.",
+  "source_row_numbering": "1-based data rows, header excluded",
+  "timestamps_strictly_increasing_unique": true,
+  "excluded_row_provenance": [
+    {
+      "source_row": 54,
+      "timestamp": "2018-06-14 11:55:00",
+      "issues": [
+        {
+          "signal": "Influent flowrate",
+          "reason": "non_numeric"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "sealed_at": "2026-09-23T06:55:27.396043+00:00",
+  "source_sha256": "29a2db4e54d5f5278d2c05732d62cf877f939f87312e035ddb700c385c3550a8",
+  "normalized_sha256": "77bb043db42645dcae4b0b47ec0c2d0f622b755bdeeb607ddda67362a473fc34",
+  "runner_sha256": "3d48a6f64efc873aef187092af3861e8ce87084c2070890c633dd1c626bb7579",
+  "wrapper_files": {
+    "src/neraium_historical/chw_generator.py": "5becd232f4a4fc7aa6ddfa20ff9f07cd2915ae715f3410480961f9622b8ada10",
+    "src/neraium_historical/config.py": "f0c2fad8922c15c1ff4abc58d97f112d8cfb68fb748401dbbba7f0dc50a76ce7",
+    "src/neraium_historical/recurrence.py": "dc9f01c00d925440477d6e07a1c0afdbb1d5f0326c181d6d8db0eeed4104e4ce",
+    "src/neraium_historical/quality_source.py": "672a809f34aa58529cf6bd13d1b9fc269cf3161535cdea8f02ee08d39680142e",
+    "src/neraium_historical/csv_loader.py": "38d5f238ca8a0f036fc4032a358cfac9859d26aaf696ce1e6d87713c401f139a",
+    "src/neraium_historical/engine_adapter.py": "8270e9583963766f5699a28452d021ba04b0e62c847503c5bff39686e1d9cae9",
+    "src/neraium_historical/coarse_fine.py": "6c5004143d4179808acf17a1690f889e9f7f10fa19048fc19f0d98ed153cef00",
+    "src/neraium_historical/findings.py": "ff119bdf3646b91d384bfdd789537e2d015c64eba4040bcf7d6eccab6d91cfd6",
+    "src/neraium_historical/relationship_guard.py": "36262dcbd61e549b82ec449224915e0b662f0dfc0521a55cc95eb20d87d8b324",
+    "src/neraium_historical/__init__.py": "e75f183f864bbed82f035791d2670fd80c56be909096848ecb587f59dc717cb4",
+    "src/neraium_historical/timeparse.py": "3b1d69aaaabd748162e43dad13159b7e023ad951c3d01a95ab82e974b20d80dd",
+    "src/neraium_historical/daily_replay.py": "74faa72f3620ab48c32a9c17d284d3c08cf250846689bd6951afe1ac1a28fedf",
+    "src/neraium_historical/time_replay.py": "0a8845056323255f66480c5b0b9f70c3b6adba3a0de682dd220ded332477350c",
+    "src/neraium_historical/cli.py": "4be485683d6df90d356a678ee1bef41daa5e64dd5133a58023582493cfbb5108",
+    "src/neraium_historical/replay.py": "d1c926433a9205a79adf4ee023781d8b1c07e7abd72cc4ffc23c61fcc03135d2",
+    "src/neraium_historical/report.py": "7afc2799b610b43fa1bf23e13dfc07d1bbea7d8c0c2ddcee623ad881db0638f5"
+  },
+  "reference_start": "2018-06-14T07:30:00",
+  "reference_end_exclusive": "2018-06-21T07:30:00",
+  "end_exclusive": "2019-03-01T07:30:00",
+  "policy": "First seven source-clock days fixed reference; every subsequent one-day half-open interval, including final partial interval. All seven signals; no adaptive selection. Existing QualitySource complete-case validity exclusion. No units inferred, imputation, resampling, clipping, sorting, baseline resets or analytical overrides.",
+  "transformation": "Timestamp format only: %m/%d/%Y %I:%M:%S %p to %Y-%m-%d %H:%M:%S; source clock retained, no timezone asserted. CSV rewritten with same header order and verbatim numeric cell strings.",
+  "endpoints": "Graph temporal and recurrence support, promoted edges, governed persistent relationship flags and insights reported separately; consecutive support runs are descriptive bookkeeping, not new qualification."
+}

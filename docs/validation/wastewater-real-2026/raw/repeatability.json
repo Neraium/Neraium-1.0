@@ -1,0 +1,35 @@
+{
+  "checked_input_hash_windows": 253,
+  "numeric_cells_and_source_order_preserved": true,
+  "timestamp_transformation_verified": true,
+  "source_unchanged": true,
+  "production_source_unchanged": true,
+  "repeat_scope": "Full relationship graph excluding runtime_seconds, governed sii_evidence, supplied_reference; ordered input dictionaries retained. Fresh process from original run; each selected window uses its original incoming states.",
+  "repeats": [
+    {
+      "window": 0,
+      "equal": true,
+      "original_hash": "040f039f4d1f2cba0466468199088c3f67e5e04acf7fe82366a5150f0a17b2ec",
+      "repeat_hash": "040f039f4d1f2cba0466468199088c3f67e5e04acf7fe82366a5150f0a17b2ec",
+      "input_unchanged": true,
+      "seconds": 1.6429749010130763
+    },
+    {
+      "window": 126,
+      "equal": true,
+      "original_hash": "4e402d3b3171671efbef3fe5fdc0d716d3e18c1ae46158b6f07f9c0768b93003",
+      "repeat_hash": "4e402d3b3171671efbef3fe5fdc0d716d3e18c1ae46158b6f07f9c0768b93003",
+      "input_unchanged": true,
+      "seconds": 2.3683241980616003
+    },
+    {
+      "window": 252,
+      "equal": true,
+      "original_hash": "400e7f3d2d4a7c45c701c02ab2d6fc759b7b7dd4c11ec7319ed4783c47b50a23",
+      "repeat_hash": "400e7f3d2d4a7c45c701c02ab2d6fc759b7b7dd4c11ec7319ed4783c47b50a23",
+      "input_unchanged": true,
+      "seconds": 2.1911537328269333
+    }
+  ],
+  "finished_at": "2026-09-23T07:06:04.186244+00:00"
+}

@@ -1,0 +1,2960 @@
+{
+  "mutually_exclusive_graph_support_counts": {
+    "temporal_False_recurrence_False": 4711,
+    "temporal_True_recurrence_False": 472,
+    "temporal_False_recurrence_True": 49,
+    "temporal_True_recurrence_True": 33
+  },
+  "possible_pair_windows": 5313,
+  "returned_pair_windows": 5265,
+  "omitted_pair_windows": 48,
+  "omitted_reason": "Eight windows have constant NH4 and omit its six correlations; see omitted-pairs.json. These are not stable negative results.",
+  "governed_records": [
+    {
+      "columns": [
+        "NH4",
+        "NO3"
+      ],
+      "baseline_correlation": -0.179239,
+      "current_correlation": -0.771946,
+      "signed_correlation_delta": -0.592707,
+      "absolute_correlation_delta": 0.592707,
+      "change_type": "new",
+      "single_window_change_type": "new",
+      "relationship_importance_score": 67.9651,
+      "edge_displacement": 0.247141,
+      "eligible": true,
+      "edge_confidence": 0.9266,
+      "data_quality_factor": 0.45,
+      "sample_sufficiency_factor": 1.0,
+      "temporal_persistence_status": "supported",
+      "temporal_persistence_supporting_observations": 7,
+      "temporal_persistence_supported": true,
+      "promoted_changed_edge": true,
+      "persistent_relationship_change": true,
+      "supporting_windows": [
+        {
+          "observed_at": "2018-11-22T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2018-11-21 07:30:00",
+            "current_end": "2018-11-22 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2018-11-21 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2018-11-22 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:83fc7c40f3c1b6982e80d9081221c720b5fd7300cd9ce8fec8985ab6ca22290b",
+          "signed_correlation_delta": -0.526068,
+          "edge_confidence": 0.8955,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2018-11-23T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2018-11-22 07:30:00",
+            "current_end": "2018-11-23 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2018-11-22 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2018-11-23 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:85f80b265cd651be29b2900067955ab2a7d5a6d809846ab3ff44508ae9e72359",
+          "signed_correlation_delta": -0.545713,
+          "edge_confidence": 0.9047,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2018-11-24T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2018-11-23 07:30:00",
+            "current_end": "2018-11-24 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2018-11-23 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2018-11-24 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:e29164d19be90d26bcc1d18dd9ad55d51647d167f5614e66ce44f40a8950a8d8",
+          "signed_correlation_delta": -0.198721,
+          "edge_confidence": 0.7427,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2018-11-25T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2018-11-24 07:30:00",
+            "current_end": "2018-11-25 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2018-11-24 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2018-11-25 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:13d1e4d51a7dfb9549867ecd227215c80ba5c51ba596e1dd3adfe144464301d5",
+          "signed_correlation_delta": -0.208211,
+          "edge_confidence": 0.7472,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2018-11-26T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2018-11-25 07:30:00",
+            "current_end": "2018-11-26 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2018-11-25 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2018-11-26 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:1656b3fe1b433421217a23d31820ff5780bf489be12c1f3884c44431275f5130",
+          "signed_correlation_delta": -0.424367,
+          "edge_confidence": 0.848,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2018-11-27T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2018-11-26 07:30:00",
+            "current_end": "2018-11-27 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2018-11-26 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2018-11-27 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:0ad5784e03d04069109d6abbce6da28c56a1aaf41903eecc18a62aa84bb95e6d",
+          "signed_correlation_delta": -0.53984,
+          "edge_confidence": 0.9019,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2018-11-28T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2018-11-27 07:30:00",
+            "current_end": "2018-11-28 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2018-11-27 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2018-11-28 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:e1e6b4333a503b4ac8c4787e5982a6246b9fcac2b465d4c41d2b7d915c853a3b",
+          "signed_correlation_delta": -0.592707,
+          "edge_confidence": 0.9266,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        }
+      ],
+      "first_supported_observation": "2018-11-22T07:25:00",
+      "latest_supported_observation": "2018-11-28T07:25:00",
+      "recurrence_evidence": {
+        "evidence_model": "relationship_recurrence_v1",
+        "status": "unconfirmed",
+        "supported": false,
+        "direction": 0,
+        "episode_count": 2,
+        "opposite_direction_veto": true,
+        "identity": {
+          "columns": [
+            "NH4",
+            "NO3"
+          ],
+          "basis": "global_relationship_model",
+          "baseline_correlation": -0.179239,
+          "baseline_start": "2018-06-14 07:30:00",
+          "baseline_end": "2018-06-21 07:25:00",
+          "mode": {
+            "baseline_mode": "unavailable",
+            "recent_mode": "unavailable"
+          },
+          "reference_dataset_id": "sha256:6419ff5d5ca4366d84b17fd1a9a935334f070271777c0706813d7729165892d8",
+          "signal_units": {
+            "Influent flowrate": null,
+            "DO": null,
+            "NH4": null,
+            "NO3": null,
+            "N2O": null,
+            "Temperature": null,
+            "N2O emission rate": null
+          }
+        },
+        "policy": {
+          "minimum_episodes": 3,
+          "minimum_support_per_episode": 2,
+          "minimum_displacement": 0.15,
+          "maximum_age_days": 30,
+          "maximum_observations": 256
+        },
+        "gates": {
+          "minimum_edge_confidence": 0.45,
+          "minimum_data_quality_factor": 0.35
+        },
+        "episodes": [
+          {
+            "direction": -1,
+            "support_count": 2,
+            "maximum_consecutive_support": 2,
+            "started_at": "2018-11-05 07:30:00",
+            "last_supported_at": "2018-11-07T07:25:00+00:00",
+            "closed_at": "2018-11-08T07:25:00+00:00",
+            "supporting_windows": [
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2018-11-05 07:30:00",
+                  "current_end": "2018-11-06 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2018-11-05 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2018-11-06 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:ada94660ebc60a3a1a3c2e063c3d85acff177f9cb830a9eafbf17fa25aab6228",
+                "signed_correlation_delta": -0.546354,
+                "edge_confidence": 0.905,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NH4",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2018-11-06T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2018-11-06 07:30:00",
+                  "current_end": "2018-11-07 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2018-11-06 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2018-11-07 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:0ed403bc1fec3d8617a7d63833324b349709bd4a7429f29732a48b8d4b5a7a48",
+                "signed_correlation_delta": -0.205937,
+                "edge_confidence": 0.7461,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NH4",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2018-11-07T07:25:00+00:00"
+              }
+            ],
+            "opening_return": {
+              "time_window": {
+                "baseline_start": "2018-06-14 07:30:00",
+                "baseline_end": "2018-06-21 07:25:00",
+                "current_start": "2018-11-04 07:30:00",
+                "current_end": "2018-11-05 07:25:00"
+              },
+              "source_rows": [
+                {
+                  "window": "baseline_start",
+                  "source_row": 1,
+                  "timestamp": "2018-06-14 07:30:00"
+                },
+                {
+                  "window": "baseline_end",
+                  "source_row": 2015,
+                  "timestamp": "2018-06-21 07:25:00"
+                },
+                {
+                  "window": "recent_start",
+                  "source_row": 1,
+                  "timestamp": "2018-11-04 07:30:00"
+                },
+                {
+                  "window": "recent_end",
+                  "source_row": 288,
+                  "timestamp": "2018-11-05 07:25:00"
+                }
+              ],
+              "source_dataset_id": "sha256:43f052e0fa0ede8e650fb0bf8ddc43a44a1805137969a10dd66dfbded4e7cda6",
+              "signed_correlation_delta": 0.120246,
+              "edge_confidence": 0.7061,
+              "data_quality_factor": 0.45,
+              "eligible": true,
+              "acceptable": true,
+              "sensor_health_context": [
+                {
+                  "signal": "NH4",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                },
+                {
+                  "signal": "NO3",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                }
+              ],
+              "observed_at": "2018-11-05T07:25:00+00:00"
+            },
+            "closing_return": {
+              "time_window": {
+                "baseline_start": "2018-06-14 07:30:00",
+                "baseline_end": "2018-06-21 07:25:00",
+                "current_start": "2018-11-07 07:30:00",
+                "current_end": "2018-11-08 07:25:00"
+              },
+              "source_rows": [
+                {
+                  "window": "baseline_start",
+                  "source_row": 1,
+                  "timestamp": "2018-06-14 07:30:00"
+                },
+                {
+                  "window": "baseline_end",
+                  "source_row": 2015,
+                  "timestamp": "2018-06-21 07:25:00"
+                },
+                {
+                  "window": "recent_start",
+                  "source_row": 1,
+                  "timestamp": "2018-11-07 07:30:00"
+                },
+                {
+                  "window": "recent_end",
+                  "source_row": 288,
+                  "timestamp": "2018-11-08 07:25:00"
+                }
+              ],
+              "source_dataset_id": "sha256:29883d8d2cf43e77ca102899c4e0086eaeb72d60a23d9d77d565e88688c01dca",
+              "signed_correlation_delta": 0.048285,
+              "edge_confidence": 0.6725,
+              "data_quality_factor": 0.45,
+              "eligible": true,
+              "acceptable": true,
+              "sensor_health_context": [
+                {
+                  "signal": "NH4",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                },
+                {
+                  "signal": "NO3",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                }
+              ],
+              "observed_at": "2018-11-08T07:25:00+00:00"
+            }
+          },
+          {
+            "direction": -1,
+            "support_count": 2,
+            "maximum_consecutive_support": 2,
+            "started_at": "2018-11-08 07:30:00",
+            "last_supported_at": "2018-11-10T07:25:00+00:00",
+            "closed_at": "2018-11-11T07:25:00+00:00",
+            "supporting_windows": [
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2018-11-08 07:30:00",
+                  "current_end": "2018-11-09 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2018-11-08 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2018-11-09 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:ee7371e23c1ae2ff6bd5caebfa56db89a73cf6ff4b4a7e3de57af5e033b92de5",
+                "signed_correlation_delta": -0.537511,
+                "edge_confidence": 0.9008,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NH4",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2018-11-09T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2018-11-09 07:30:00",
+                  "current_end": "2018-11-10 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2018-11-09 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2018-11-10 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:c555a63576a838f0009e4907a9545326f9235f1879d48e1443b52b7a049e5342",
+                "signed_correlation_delta": -0.278298,
+                "edge_confidence": 0.7799,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NH4",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2018-11-10T07:25:00+00:00"
+              }
+            ],
+            "opening_return": {
+              "time_window": {
+                "baseline_start": "2018-06-14 07:30:00",
+                "baseline_end": "2018-06-21 07:25:00",
+                "current_start": "2018-11-07 07:30:00",
+                "current_end": "2018-11-08 07:25:00"
+              },
+              "source_rows": [
+                {
+                  "window": "baseline_start",
+                  "source_row": 1,
+                  "timestamp": "2018-06-14 07:30:00"
+                },
+                {
+                  "window": "baseline_end",
+                  "source_row": 2015,
+                  "timestamp": "2018-06-21 07:25:00"
+                },
+                {
+                  "window": "recent_start",
+                  "source_row": 1,
+                  "timestamp": "2018-11-07 07:30:00"
+                },
+                {
+                  "window": "recent_end",
+                  "source_row": 288,
+                  "timestamp": "2018-11-08 07:25:00"
+                }
+              ],
+              "source_dataset_id": "sha256:29883d8d2cf43e77ca102899c4e0086eaeb72d60a23d9d77d565e88688c01dca",
+              "signed_correlation_delta": 0.048285,
+              "edge_confidence": 0.6725,
+              "data_quality_factor": 0.45,
+              "eligible": true,
+              "acceptable": true,
+              "sensor_health_context": [
+                {
+                  "signal": "NH4",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                },
+                {
+                  "signal": "NO3",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                }
+              ],
+              "observed_at": "2018-11-08T07:25:00+00:00"
+            },
+            "closing_return": {
+              "time_window": {
+                "baseline_start": "2018-06-14 07:30:00",
+                "baseline_end": "2018-06-21 07:25:00",
+                "current_start": "2018-11-10 07:30:00",
+                "current_end": "2018-11-11 07:25:00"
+              },
+              "source_rows": [
+                {
+                  "window": "baseline_start",
+                  "source_row": 1,
+                  "timestamp": "2018-06-14 07:30:00"
+                },
+                {
+                  "window": "baseline_end",
+                  "source_row": 2015,
+                  "timestamp": "2018-06-21 07:25:00"
+                },
+                {
+                  "window": "recent_start",
+                  "source_row": 1,
+                  "timestamp": "2018-11-10 07:30:00"
+                },
+                {
+                  "window": "recent_end",
+                  "source_row": 288,
+                  "timestamp": "2018-11-11 07:25:00"
+                }
+              ],
+              "source_dataset_id": "sha256:cd6d7d725455b9dd55c3202b05ea9d3edaf46421cfd33b852389609fdfc75bfa",
+              "signed_correlation_delta": -0.043626,
+              "edge_confidence": 0.6704,
+              "data_quality_factor": 0.45,
+              "eligible": true,
+              "acceptable": true,
+              "sensor_health_context": [
+                {
+                  "signal": "NH4",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                },
+                {
+                  "signal": "NO3",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                }
+              ],
+              "observed_at": "2018-11-11T07:25:00+00:00"
+            }
+          }
+        ],
+        "evaluated_at": "2018-11-28T07:25:00+00:00",
+        "reason": "opposite_direction_episode"
+      },
+      "operating_mode_context": {
+        "baseline_mode": "unavailable",
+        "baseline_mode_label": "Operating context unavailable",
+        "recent_mode": "unavailable",
+        "recent_mode_label": "Operating context unavailable",
+        "match": "unavailable",
+        "confidence": "low",
+        "features": {
+          "baseline": {
+            "time_band": "night",
+            "week_band": "weekday"
+          },
+          "recent": {
+            "time_band": "day",
+            "week_band": "weekday"
+          }
+        },
+        "differences": [],
+        "reasons": [
+          "No usable equipment-state, staging, load, schedule, weather, setpoint, or event signals were available."
+        ],
+        "known_operational_change": false,
+        "assessment_method": "deterministic_telemetry_context_v1"
+      },
+      "data_confidence": {
+        "rating": "high",
+        "summary": "Available telemetry passed the current completeness, timestamp, and signal-health checks.",
+        "reasons": [],
+        "affected_signals": []
+      },
+      "sensor_health_context": [
+        {
+          "signal": "NH4",
+          "health": "healthy",
+          "conditions": [],
+          "factor": 1.0
+        },
+        {
+          "signal": "NO3",
+          "health": "healthy",
+          "conditions": [],
+          "factor": 1.0
+        }
+      ],
+      "window": 159,
+      "start": "2018-11-27 07:30:00",
+      "end": "2018-11-28 07:25:00",
+      "checkpoint": "raw/checkpoints/159.json",
+      "governed_persistent": true
+    },
+    {
+      "columns": [
+        "NO3",
+        "N2O"
+      ],
+      "baseline_correlation": 0.347518,
+      "current_correlation": 0.832692,
+      "signed_correlation_delta": 0.485174,
+      "absolute_correlation_delta": 0.485174,
+      "change_type": "new",
+      "single_window_change_type": "new",
+      "relationship_importance_score": 64.7962,
+      "edge_displacement": 0.191343,
+      "eligible": true,
+      "edge_confidence": 0.8764,
+      "data_quality_factor": 0.45,
+      "sample_sufficiency_factor": 1.0,
+      "temporal_persistence_status": "supported",
+      "temporal_persistence_supporting_observations": 6,
+      "temporal_persistence_supported": true,
+      "promoted_changed_edge": true,
+      "persistent_relationship_change": true,
+      "supporting_windows": [
+        {
+          "observed_at": "2019-02-06T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-05 07:30:00",
+            "current_end": "2019-02-06 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-05 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-06 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:83f181c389442265168bb2167cff3d6616678a62e3574b4d46e5de3de079521d",
+          "signed_correlation_delta": 0.46236,
+          "edge_confidence": 0.8658,
+          "data_quality_factor": 1.0,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-07T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-06 07:30:00",
+            "current_end": "2019-02-07 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-06 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-07 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:4ade2f2b288cc58ce52c7b427413edd8c0b42e30cf5cba30c62935a6a895af9f",
+          "signed_correlation_delta": 0.27523,
+          "edge_confidence": 0.7784,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-08T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-07 07:30:00",
+            "current_end": "2019-02-08 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-07 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-08 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:45d372daaa89f510db4acc2611032c64653870277cf919a98adea8507ecca224",
+          "signed_correlation_delta": 0.375937,
+          "edge_confidence": 0.8254,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-10T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-09 07:30:00",
+            "current_end": "2019-02-10 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-09 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-10 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:2b8172b41fdc3904794257d6f5c2ee92e24be33651455f93c8d72cbc7c5cabaf",
+          "signed_correlation_delta": 0.360974,
+          "edge_confidence": 0.8185,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-11T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-10 07:30:00",
+            "current_end": "2019-02-11 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-10 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-11 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:5ac090dc4c140d64674c032cb297aa9ce7ae19fa7f039a09dbfaf7625948bddf",
+          "signed_correlation_delta": 0.367474,
+          "edge_confidence": 0.8215,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-13T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-12 07:30:00",
+            "current_end": "2019-02-13 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-12 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-13 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:1bc76717d26e90b4769f53982e19b826d6f7f8b834005b26a7b29f8a7d88deea",
+          "signed_correlation_delta": 0.485174,
+          "edge_confidence": 0.8764,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        }
+      ],
+      "first_supported_observation": "2019-02-06T07:25:00",
+      "latest_supported_observation": "2019-02-13T07:25:00",
+      "recurrence_evidence": {
+        "evidence_model": "relationship_recurrence_v1",
+        "status": "unconfirmed",
+        "supported": false,
+        "direction": 1,
+        "episode_count": 1,
+        "opposite_direction_veto": false,
+        "identity": {
+          "columns": [
+            "N2O",
+            "NO3"
+          ],
+          "basis": "global_relationship_model",
+          "baseline_correlation": 0.347518,
+          "baseline_start": "2018-06-14 07:30:00",
+          "baseline_end": "2018-06-21 07:25:00",
+          "mode": {
+            "baseline_mode": "unavailable",
+            "recent_mode": "unavailable"
+          },
+          "reference_dataset_id": "sha256:6419ff5d5ca4366d84b17fd1a9a935334f070271777c0706813d7729165892d8",
+          "signal_units": {
+            "Influent flowrate": null,
+            "DO": null,
+            "NH4": null,
+            "NO3": null,
+            "N2O": null,
+            "Temperature": null,
+            "N2O emission rate": null
+          }
+        },
+        "policy": {
+          "minimum_episodes": 3,
+          "minimum_support_per_episode": 2,
+          "minimum_displacement": 0.15,
+          "maximum_age_days": 30,
+          "maximum_observations": 256
+        },
+        "gates": {
+          "minimum_edge_confidence": 0.45,
+          "minimum_data_quality_factor": 0.35
+        },
+        "episodes": [
+          {
+            "direction": 1,
+            "support_count": 5,
+            "maximum_consecutive_support": 4,
+            "started_at": "2019-01-31 07:30:00",
+            "last_supported_at": "2019-02-08T07:25:00+00:00",
+            "closed_at": "2019-02-09T07:25:00+00:00",
+            "supporting_windows": [
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-01-31 07:30:00",
+                  "current_end": "2019-02-01 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-01-31 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-01 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:86afd49646b1a169ed89086cb8a70b3d5df566dda663190b498d9ca008efdc0e",
+                "signed_correlation_delta": 0.509727,
+                "edge_confidence": 0.8879,
+                "data_quality_factor": 1.0,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-01T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-04 07:30:00",
+                  "current_end": "2019-02-05 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-04 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-05 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:45ae046a5e3f61e14197ede8d1cc96a289dfe03c77cbcc9350fec3bae61e197b",
+                "signed_correlation_delta": 0.39146,
+                "edge_confidence": 0.8327,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-05T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-05 07:30:00",
+                  "current_end": "2019-02-06 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-05 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-06 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:83f181c389442265168bb2167cff3d6616678a62e3574b4d46e5de3de079521d",
+                "signed_correlation_delta": 0.46236,
+                "edge_confidence": 0.8658,
+                "data_quality_factor": 1.0,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-06T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-06 07:30:00",
+                  "current_end": "2019-02-07 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-06 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-07 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:4ade2f2b288cc58ce52c7b427413edd8c0b42e30cf5cba30c62935a6a895af9f",
+                "signed_correlation_delta": 0.27523,
+                "edge_confidence": 0.7784,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-07T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-07 07:30:00",
+                  "current_end": "2019-02-08 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-07 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-08 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:45d372daaa89f510db4acc2611032c64653870277cf919a98adea8507ecca224",
+                "signed_correlation_delta": 0.375937,
+                "edge_confidence": 0.8254,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-08T07:25:00+00:00"
+              }
+            ],
+            "opening_return": {
+              "time_window": {
+                "baseline_start": "2018-06-14 07:30:00",
+                "baseline_end": "2018-06-21 07:25:00",
+                "current_start": "2019-01-30 07:30:00",
+                "current_end": "2019-01-31 07:25:00"
+              },
+              "source_rows": [
+                {
+                  "window": "baseline_start",
+                  "source_row": 1,
+                  "timestamp": "2018-06-14 07:30:00"
+                },
+                {
+                  "window": "baseline_end",
+                  "source_row": 2015,
+                  "timestamp": "2018-06-21 07:25:00"
+                },
+                {
+                  "window": "recent_start",
+                  "source_row": 1,
+                  "timestamp": "2019-01-30 07:30:00"
+                },
+                {
+                  "window": "recent_end",
+                  "source_row": 288,
+                  "timestamp": "2019-01-31 07:25:00"
+                }
+              ],
+              "source_dataset_id": "sha256:1cf9ac2081a8a41b7ca69529913b2058e71ff42547f773bac379ecb3ad84d6ae",
+              "signed_correlation_delta": 0.136167,
+              "edge_confidence": 0.7135,
+              "data_quality_factor": 1.0,
+              "eligible": true,
+              "acceptable": true,
+              "sensor_health_context": [
+                {
+                  "signal": "NO3",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                },
+                {
+                  "signal": "N2O",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                }
+              ],
+              "observed_at": "2019-01-31T07:25:00+00:00"
+            },
+            "closing_return": {
+              "time_window": {
+                "baseline_start": "2018-06-14 07:30:00",
+                "baseline_end": "2018-06-21 07:25:00",
+                "current_start": "2019-02-08 07:30:00",
+                "current_end": "2019-02-09 07:25:00"
+              },
+              "source_rows": [
+                {
+                  "window": "baseline_start",
+                  "source_row": 1,
+                  "timestamp": "2018-06-14 07:30:00"
+                },
+                {
+                  "window": "baseline_end",
+                  "source_row": 2015,
+                  "timestamp": "2018-06-21 07:25:00"
+                },
+                {
+                  "window": "recent_start",
+                  "source_row": 1,
+                  "timestamp": "2019-02-08 07:30:00"
+                },
+                {
+                  "window": "recent_end",
+                  "source_row": 288,
+                  "timestamp": "2019-02-09 07:25:00"
+                }
+              ],
+              "source_dataset_id": "sha256:651fe00f43abeabd8e777f8d15610a224d7d9360e7152454defa36057d49bd5a",
+              "signed_correlation_delta": 0.142564,
+              "edge_confidence": 0.7165,
+              "data_quality_factor": 0.45,
+              "eligible": true,
+              "acceptable": true,
+              "sensor_health_context": [
+                {
+                  "signal": "NO3",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                },
+                {
+                  "signal": "N2O",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                }
+              ],
+              "observed_at": "2019-02-09T07:25:00+00:00"
+            }
+          }
+        ],
+        "evaluated_at": "2019-02-13T07:25:00+00:00",
+        "reason": "insufficient_evidence"
+      },
+      "operating_mode_context": {
+        "baseline_mode": "unavailable",
+        "baseline_mode_label": "Operating context unavailable",
+        "recent_mode": "unavailable",
+        "recent_mode_label": "Operating context unavailable",
+        "match": "unavailable",
+        "confidence": "low",
+        "features": {
+          "baseline": {
+            "time_band": "night",
+            "week_band": "weekday"
+          },
+          "recent": {
+            "time_band": "day",
+            "week_band": "weekday"
+          }
+        },
+        "differences": [],
+        "reasons": [
+          "No usable equipment-state, staging, load, schedule, weather, setpoint, or event signals were available."
+        ],
+        "known_operational_change": false,
+        "assessment_method": "deterministic_telemetry_context_v1"
+      },
+      "data_confidence": {
+        "rating": "high",
+        "summary": "Available telemetry passed the current completeness, timestamp, and signal-health checks.",
+        "reasons": [],
+        "affected_signals": []
+      },
+      "sensor_health_context": [
+        {
+          "signal": "NO3",
+          "health": "healthy",
+          "conditions": [],
+          "factor": 1.0
+        },
+        {
+          "signal": "N2O",
+          "health": "healthy",
+          "conditions": [],
+          "factor": 1.0
+        }
+      ],
+      "window": 236,
+      "start": "2019-02-12 07:30:00",
+      "end": "2019-02-13 07:25:00",
+      "checkpoint": "raw/checkpoints/236.json",
+      "governed_persistent": true
+    },
+    {
+      "columns": [
+        "NO3",
+        "N2O"
+      ],
+      "baseline_correlation": 0.347518,
+      "current_correlation": 0.782814,
+      "signed_correlation_delta": 0.435296,
+      "absolute_correlation_delta": 0.435296,
+      "change_type": "new",
+      "single_window_change_type": "new",
+      "relationship_importance_score": 63.3261,
+      "edge_displacement": 0.167108,
+      "eligible": true,
+      "edge_confidence": 0.8531,
+      "data_quality_factor": 0.45,
+      "sample_sufficiency_factor": 1.0,
+      "temporal_persistence_status": "supported",
+      "temporal_persistence_supporting_observations": 6,
+      "temporal_persistence_supported": true,
+      "promoted_changed_edge": true,
+      "persistent_relationship_change": true,
+      "supporting_windows": [
+        {
+          "observed_at": "2019-02-18T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-17 07:30:00",
+            "current_end": "2019-02-18 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-17 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-18 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:8a4e46d796aba455527cb80c12692fc42a81824158df5a98338e6b1ded36b94a",
+          "signed_correlation_delta": 0.454655,
+          "edge_confidence": 0.8622,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-21T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-20 07:30:00",
+            "current_end": "2019-02-21 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-20 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-21 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:401c5b81503e22c22d8ee4a538457f6f65dce3abd3f6adb87dd5c0e8a34eac3e",
+          "signed_correlation_delta": 0.209282,
+          "edge_confidence": 0.7477,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-22T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-21 07:30:00",
+            "current_end": "2019-02-22 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-21 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-22 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:e5ee28010ee7badead5a219ec9fb6e9566db4661fa7d88c2122b61b185a5d61e",
+          "signed_correlation_delta": 0.342473,
+          "edge_confidence": 0.8098,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-23T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-22 07:30:00",
+            "current_end": "2019-02-23 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-22 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-23 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:80b7532ad8b78bf27f1321fc0beca493fb32988f0ca2faf11165a6324f3323f3",
+          "signed_correlation_delta": 0.254762,
+          "edge_confidence": 0.7689,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-24T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-23 07:30:00",
+            "current_end": "2019-02-24 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-23 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-24 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:565da81f4680553a400d0351b32caf6f5d09a2e435cbb2dfc710612f16e7a08e",
+          "signed_correlation_delta": 0.386684,
+          "edge_confidence": 0.8305,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-25T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-24 07:30:00",
+            "current_end": "2019-02-25 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-24 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-25 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:0e5fd738952d9c3879c2a03cc2941ab0ad5b6edc388936dbcaafbbd135046c0b",
+          "signed_correlation_delta": 0.435296,
+          "edge_confidence": 0.8531,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        }
+      ],
+      "first_supported_observation": "2019-02-18T07:25:00",
+      "latest_supported_observation": "2019-02-25T07:25:00",
+      "recurrence_evidence": {
+        "evidence_model": "relationship_recurrence_v1",
+        "status": "unconfirmed",
+        "supported": false,
+        "direction": 1,
+        "episode_count": 1,
+        "opposite_direction_veto": false,
+        "identity": {
+          "columns": [
+            "N2O",
+            "NO3"
+          ],
+          "basis": "global_relationship_model",
+          "baseline_correlation": 0.347518,
+          "baseline_start": "2018-06-14 07:30:00",
+          "baseline_end": "2018-06-21 07:25:00",
+          "mode": {
+            "baseline_mode": "unavailable",
+            "recent_mode": "unavailable"
+          },
+          "reference_dataset_id": "sha256:6419ff5d5ca4366d84b17fd1a9a935334f070271777c0706813d7729165892d8",
+          "signal_units": {
+            "Influent flowrate": null,
+            "DO": null,
+            "NH4": null,
+            "NO3": null,
+            "N2O": null,
+            "Temperature": null,
+            "N2O emission rate": null
+          }
+        },
+        "policy": {
+          "minimum_episodes": 3,
+          "minimum_support_per_episode": 2,
+          "minimum_displacement": 0.15,
+          "maximum_age_days": 30,
+          "maximum_observations": 256
+        },
+        "gates": {
+          "minimum_edge_confidence": 0.45,
+          "minimum_data_quality_factor": 0.35
+        },
+        "episodes": [
+          {
+            "direction": 1,
+            "support_count": 5,
+            "maximum_consecutive_support": 4,
+            "started_at": "2019-01-31 07:30:00",
+            "last_supported_at": "2019-02-08T07:25:00+00:00",
+            "closed_at": "2019-02-09T07:25:00+00:00",
+            "supporting_windows": [
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-01-31 07:30:00",
+                  "current_end": "2019-02-01 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-01-31 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-01 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:86afd49646b1a169ed89086cb8a70b3d5df566dda663190b498d9ca008efdc0e",
+                "signed_correlation_delta": 0.509727,
+                "edge_confidence": 0.8879,
+                "data_quality_factor": 1.0,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-01T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-04 07:30:00",
+                  "current_end": "2019-02-05 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-04 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-05 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:45ae046a5e3f61e14197ede8d1cc96a289dfe03c77cbcc9350fec3bae61e197b",
+                "signed_correlation_delta": 0.39146,
+                "edge_confidence": 0.8327,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-05T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-05 07:30:00",
+                  "current_end": "2019-02-06 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-05 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-06 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:83f181c389442265168bb2167cff3d6616678a62e3574b4d46e5de3de079521d",
+                "signed_correlation_delta": 0.46236,
+                "edge_confidence": 0.8658,
+                "data_quality_factor": 1.0,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-06T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-06 07:30:00",
+                  "current_end": "2019-02-07 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-06 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-07 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:4ade2f2b288cc58ce52c7b427413edd8c0b42e30cf5cba30c62935a6a895af9f",
+                "signed_correlation_delta": 0.27523,
+                "edge_confidence": 0.7784,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-07T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-07 07:30:00",
+                  "current_end": "2019-02-08 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-07 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-08 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:45d372daaa89f510db4acc2611032c64653870277cf919a98adea8507ecca224",
+                "signed_correlation_delta": 0.375937,
+                "edge_confidence": 0.8254,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-08T07:25:00+00:00"
+              }
+            ],
+            "opening_return": {
+              "time_window": {
+                "baseline_start": "2018-06-14 07:30:00",
+                "baseline_end": "2018-06-21 07:25:00",
+                "current_start": "2019-01-30 07:30:00",
+                "current_end": "2019-01-31 07:25:00"
+              },
+              "source_rows": [
+                {
+                  "window": "baseline_start",
+                  "source_row": 1,
+                  "timestamp": "2018-06-14 07:30:00"
+                },
+                {
+                  "window": "baseline_end",
+                  "source_row": 2015,
+                  "timestamp": "2018-06-21 07:25:00"
+                },
+                {
+                  "window": "recent_start",
+                  "source_row": 1,
+                  "timestamp": "2019-01-30 07:30:00"
+                },
+                {
+                  "window": "recent_end",
+                  "source_row": 288,
+                  "timestamp": "2019-01-31 07:25:00"
+                }
+              ],
+              "source_dataset_id": "sha256:1cf9ac2081a8a41b7ca69529913b2058e71ff42547f773bac379ecb3ad84d6ae",
+              "signed_correlation_delta": 0.136167,
+              "edge_confidence": 0.7135,
+              "data_quality_factor": 1.0,
+              "eligible": true,
+              "acceptable": true,
+              "sensor_health_context": [
+                {
+                  "signal": "NO3",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                },
+                {
+                  "signal": "N2O",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                }
+              ],
+              "observed_at": "2019-01-31T07:25:00+00:00"
+            },
+            "closing_return": {
+              "time_window": {
+                "baseline_start": "2018-06-14 07:30:00",
+                "baseline_end": "2018-06-21 07:25:00",
+                "current_start": "2019-02-08 07:30:00",
+                "current_end": "2019-02-09 07:25:00"
+              },
+              "source_rows": [
+                {
+                  "window": "baseline_start",
+                  "source_row": 1,
+                  "timestamp": "2018-06-14 07:30:00"
+                },
+                {
+                  "window": "baseline_end",
+                  "source_row": 2015,
+                  "timestamp": "2018-06-21 07:25:00"
+                },
+                {
+                  "window": "recent_start",
+                  "source_row": 1,
+                  "timestamp": "2019-02-08 07:30:00"
+                },
+                {
+                  "window": "recent_end",
+                  "source_row": 288,
+                  "timestamp": "2019-02-09 07:25:00"
+                }
+              ],
+              "source_dataset_id": "sha256:651fe00f43abeabd8e777f8d15610a224d7d9360e7152454defa36057d49bd5a",
+              "signed_correlation_delta": 0.142564,
+              "edge_confidence": 0.7165,
+              "data_quality_factor": 0.45,
+              "eligible": true,
+              "acceptable": true,
+              "sensor_health_context": [
+                {
+                  "signal": "NO3",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                },
+                {
+                  "signal": "N2O",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                }
+              ],
+              "observed_at": "2019-02-09T07:25:00+00:00"
+            }
+          }
+        ],
+        "evaluated_at": "2019-02-25T07:25:00+00:00",
+        "reason": "insufficient_evidence"
+      },
+      "operating_mode_context": {
+        "baseline_mode": "unavailable",
+        "baseline_mode_label": "Operating context unavailable",
+        "recent_mode": "unavailable",
+        "recent_mode_label": "Operating context unavailable",
+        "match": "unavailable",
+        "confidence": "low",
+        "features": {
+          "baseline": {
+            "time_band": "night",
+            "week_band": "weekday"
+          },
+          "recent": {
+            "time_band": "day",
+            "week_band": "weekend"
+          }
+        },
+        "differences": [],
+        "reasons": [
+          "No usable equipment-state, staging, load, schedule, weather, setpoint, or event signals were available."
+        ],
+        "known_operational_change": false,
+        "assessment_method": "deterministic_telemetry_context_v1"
+      },
+      "data_confidence": {
+        "rating": "high",
+        "summary": "Available telemetry passed the current completeness, timestamp, and signal-health checks.",
+        "reasons": [],
+        "affected_signals": []
+      },
+      "sensor_health_context": [
+        {
+          "signal": "NO3",
+          "health": "healthy",
+          "conditions": [],
+          "factor": 1.0
+        },
+        {
+          "signal": "N2O",
+          "health": "healthy",
+          "conditions": [],
+          "factor": 1.0
+        }
+      ],
+      "window": 248,
+      "start": "2019-02-24 07:30:00",
+      "end": "2019-02-25 07:25:00",
+      "checkpoint": "raw/checkpoints/248.json",
+      "governed_persistent": true
+    },
+    {
+      "columns": [
+        "NO3",
+        "N2O"
+      ],
+      "baseline_correlation": 0.347518,
+      "current_correlation": 0.833239,
+      "signed_correlation_delta": 0.485721,
+      "absolute_correlation_delta": 0.485721,
+      "change_type": "new",
+      "single_window_change_type": "new",
+      "relationship_importance_score": 64.8131,
+      "edge_displacement": 0.191624,
+      "eligible": true,
+      "edge_confidence": 0.8767,
+      "data_quality_factor": 0.45,
+      "sample_sufficiency_factor": 1.0,
+      "temporal_persistence_status": "supported",
+      "temporal_persistence_supporting_observations": 6,
+      "temporal_persistence_supported": true,
+      "promoted_changed_edge": true,
+      "persistent_relationship_change": true,
+      "supporting_windows": [
+        {
+          "observed_at": "2019-02-21T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-20 07:30:00",
+            "current_end": "2019-02-21 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-20 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-21 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:401c5b81503e22c22d8ee4a538457f6f65dce3abd3f6adb87dd5c0e8a34eac3e",
+          "signed_correlation_delta": 0.209282,
+          "edge_confidence": 0.7477,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-22T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-21 07:30:00",
+            "current_end": "2019-02-22 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-21 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-22 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:e5ee28010ee7badead5a219ec9fb6e9566db4661fa7d88c2122b61b185a5d61e",
+          "signed_correlation_delta": 0.342473,
+          "edge_confidence": 0.8098,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-23T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-22 07:30:00",
+            "current_end": "2019-02-23 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-22 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-23 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:80b7532ad8b78bf27f1321fc0beca493fb32988f0ca2faf11165a6324f3323f3",
+          "signed_correlation_delta": 0.254762,
+          "edge_confidence": 0.7689,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-24T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-23 07:30:00",
+            "current_end": "2019-02-24 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-23 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-24 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:565da81f4680553a400d0351b32caf6f5d09a2e435cbb2dfc710612f16e7a08e",
+          "signed_correlation_delta": 0.386684,
+          "edge_confidence": 0.8305,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-25T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-24 07:30:00",
+            "current_end": "2019-02-25 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-24 07:30:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 288,
+              "timestamp": "2019-02-25 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:0e5fd738952d9c3879c2a03cc2941ab0ad5b6edc388936dbcaafbbd135046c0b",
+          "signed_correlation_delta": 0.435296,
+          "edge_confidence": 0.8531,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        },
+        {
+          "observed_at": "2019-02-28T07:25:00",
+          "time_window": {
+            "baseline_start": "2018-06-14 07:30:00",
+            "baseline_end": "2018-06-21 07:25:00",
+            "current_start": "2019-02-28 01:05:00",
+            "current_end": "2019-02-28 07:25:00"
+          },
+          "source_rows": [
+            {
+              "window": "baseline_start",
+              "source_row": 1,
+              "timestamp": "2018-06-14 07:30:00"
+            },
+            {
+              "window": "baseline_end",
+              "source_row": 2015,
+              "timestamp": "2018-06-21 07:25:00"
+            },
+            {
+              "window": "recent_start",
+              "source_row": 1,
+              "timestamp": "2019-02-28 01:05:00"
+            },
+            {
+              "window": "recent_end",
+              "source_row": 77,
+              "timestamp": "2019-02-28 07:25:00"
+            }
+          ],
+          "source_dataset_id": "sha256:fceb313e2e92f6e46fe3f990033427f6132c4b210c5e222ed6c3d1a1c1f52900",
+          "signed_correlation_delta": 0.485721,
+          "edge_confidence": 0.8767,
+          "data_quality_factor": 0.45,
+          "eligible": true,
+          "acceptable": true
+        }
+      ],
+      "first_supported_observation": "2019-02-21T07:25:00",
+      "latest_supported_observation": "2019-02-28T07:25:00",
+      "recurrence_evidence": {
+        "evidence_model": "relationship_recurrence_v1",
+        "status": "unconfirmed",
+        "supported": false,
+        "direction": 1,
+        "episode_count": 1,
+        "opposite_direction_veto": false,
+        "identity": {
+          "columns": [
+            "N2O",
+            "NO3"
+          ],
+          "basis": "global_relationship_model",
+          "baseline_correlation": 0.347518,
+          "baseline_start": "2018-06-14 07:30:00",
+          "baseline_end": "2018-06-21 07:25:00",
+          "mode": {
+            "baseline_mode": "unavailable",
+            "recent_mode": "unavailable"
+          },
+          "reference_dataset_id": "sha256:6419ff5d5ca4366d84b17fd1a9a935334f070271777c0706813d7729165892d8",
+          "signal_units": {
+            "Influent flowrate": null,
+            "DO": null,
+            "NH4": null,
+            "NO3": null,
+            "N2O": null,
+            "Temperature": null,
+            "N2O emission rate": null
+          }
+        },
+        "policy": {
+          "minimum_episodes": 3,
+          "minimum_support_per_episode": 2,
+          "minimum_displacement": 0.15,
+          "maximum_age_days": 30,
+          "maximum_observations": 256
+        },
+        "gates": {
+          "minimum_edge_confidence": 0.45,
+          "minimum_data_quality_factor": 0.35
+        },
+        "episodes": [
+          {
+            "direction": 1,
+            "support_count": 5,
+            "maximum_consecutive_support": 4,
+            "started_at": "2019-01-31 07:30:00",
+            "last_supported_at": "2019-02-08T07:25:00+00:00",
+            "closed_at": "2019-02-09T07:25:00+00:00",
+            "supporting_windows": [
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-01-31 07:30:00",
+                  "current_end": "2019-02-01 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-01-31 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-01 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:86afd49646b1a169ed89086cb8a70b3d5df566dda663190b498d9ca008efdc0e",
+                "signed_correlation_delta": 0.509727,
+                "edge_confidence": 0.8879,
+                "data_quality_factor": 1.0,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-01T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-04 07:30:00",
+                  "current_end": "2019-02-05 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-04 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-05 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:45ae046a5e3f61e14197ede8d1cc96a289dfe03c77cbcc9350fec3bae61e197b",
+                "signed_correlation_delta": 0.39146,
+                "edge_confidence": 0.8327,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-05T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-05 07:30:00",
+                  "current_end": "2019-02-06 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-05 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-06 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:83f181c389442265168bb2167cff3d6616678a62e3574b4d46e5de3de079521d",
+                "signed_correlation_delta": 0.46236,
+                "edge_confidence": 0.8658,
+                "data_quality_factor": 1.0,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-06T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-06 07:30:00",
+                  "current_end": "2019-02-07 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-06 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-07 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:4ade2f2b288cc58ce52c7b427413edd8c0b42e30cf5cba30c62935a6a895af9f",
+                "signed_correlation_delta": 0.27523,
+                "edge_confidence": 0.7784,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-07T07:25:00+00:00"
+              },
+              {
+                "time_window": {
+                  "baseline_start": "2018-06-14 07:30:00",
+                  "baseline_end": "2018-06-21 07:25:00",
+                  "current_start": "2019-02-07 07:30:00",
+                  "current_end": "2019-02-08 07:25:00"
+                },
+                "source_rows": [
+                  {
+                    "window": "baseline_start",
+                    "source_row": 1,
+                    "timestamp": "2018-06-14 07:30:00"
+                  },
+                  {
+                    "window": "baseline_end",
+                    "source_row": 2015,
+                    "timestamp": "2018-06-21 07:25:00"
+                  },
+                  {
+                    "window": "recent_start",
+                    "source_row": 1,
+                    "timestamp": "2019-02-07 07:30:00"
+                  },
+                  {
+                    "window": "recent_end",
+                    "source_row": 288,
+                    "timestamp": "2019-02-08 07:25:00"
+                  }
+                ],
+                "source_dataset_id": "sha256:45d372daaa89f510db4acc2611032c64653870277cf919a98adea8507ecca224",
+                "signed_correlation_delta": 0.375937,
+                "edge_confidence": 0.8254,
+                "data_quality_factor": 0.45,
+                "eligible": true,
+                "acceptable": true,
+                "sensor_health_context": [
+                  {
+                    "signal": "NO3",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  },
+                  {
+                    "signal": "N2O",
+                    "health": "healthy",
+                    "conditions": [],
+                    "factor": 1.0
+                  }
+                ],
+                "observed_at": "2019-02-08T07:25:00+00:00"
+              }
+            ],
+            "opening_return": {
+              "time_window": {
+                "baseline_start": "2018-06-14 07:30:00",
+                "baseline_end": "2018-06-21 07:25:00",
+                "current_start": "2019-01-30 07:30:00",
+                "current_end": "2019-01-31 07:25:00"
+              },
+              "source_rows": [
+                {
+                  "window": "baseline_start",
+                  "source_row": 1,
+                  "timestamp": "2018-06-14 07:30:00"
+                },
+                {
+                  "window": "baseline_end",
+                  "source_row": 2015,
+                  "timestamp": "2018-06-21 07:25:00"
+                },
+                {
+                  "window": "recent_start",
+                  "source_row": 1,
+                  "timestamp": "2019-01-30 07:30:00"
+                },
+                {
+                  "window": "recent_end",
+                  "source_row": 288,
+                  "timestamp": "2019-01-31 07:25:00"
+                }
+              ],
+              "source_dataset_id": "sha256:1cf9ac2081a8a41b7ca69529913b2058e71ff42547f773bac379ecb3ad84d6ae",
+              "signed_correlation_delta": 0.136167,
+              "edge_confidence": 0.7135,
+              "data_quality_factor": 1.0,
+              "eligible": true,
+              "acceptable": true,
+              "sensor_health_context": [
+                {
+                  "signal": "NO3",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                },
+                {
+                  "signal": "N2O",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                }
+              ],
+              "observed_at": "2019-01-31T07:25:00+00:00"
+            },
+            "closing_return": {
+              "time_window": {
+                "baseline_start": "2018-06-14 07:30:00",
+                "baseline_end": "2018-06-21 07:25:00",
+                "current_start": "2019-02-08 07:30:00",
+                "current_end": "2019-02-09 07:25:00"
+              },
+              "source_rows": [
+                {
+                  "window": "baseline_start",
+                  "source_row": 1,
+                  "timestamp": "2018-06-14 07:30:00"
+                },
+                {
+                  "window": "baseline_end",
+                  "source_row": 2015,
+                  "timestamp": "2018-06-21 07:25:00"
+                },
+                {
+                  "window": "recent_start",
+                  "source_row": 1,
+                  "timestamp": "2019-02-08 07:30:00"
+                },
+                {
+                  "window": "recent_end",
+                  "source_row": 288,
+                  "timestamp": "2019-02-09 07:25:00"
+                }
+              ],
+              "source_dataset_id": "sha256:651fe00f43abeabd8e777f8d15610a224d7d9360e7152454defa36057d49bd5a",
+              "signed_correlation_delta": 0.142564,
+              "edge_confidence": 0.7165,
+              "data_quality_factor": 0.45,
+              "eligible": true,
+              "acceptable": true,
+              "sensor_health_context": [
+                {
+                  "signal": "NO3",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                },
+                {
+                  "signal": "N2O",
+                  "health": "healthy",
+                  "conditions": [],
+                  "factor": 1.0
+                }
+              ],
+              "observed_at": "2019-02-09T07:25:00+00:00"
+            }
+          }
+        ],
+        "evaluated_at": "2019-02-28T07:25:00+00:00",
+        "reason": "insufficient_evidence"
+      },
+      "operating_mode_context": {
+        "baseline_mode": "unavailable",
+        "baseline_mode_label": "Operating context unavailable",
+        "recent_mode": "unavailable",
+        "recent_mode_label": "Operating context unavailable",
+        "match": "unavailable",
+        "confidence": "low",
+        "features": {
+          "baseline": {
+            "time_band": "night",
+            "week_band": "weekday"
+          },
+          "recent": {
+            "time_band": "night",
+            "week_band": "weekday"
+          }
+        },
+        "differences": [],
+        "reasons": [
+          "No usable equipment-state, staging, load, schedule, weather, setpoint, or event signals were available."
+        ],
+        "known_operational_change": false,
+        "assessment_method": "deterministic_telemetry_context_v1"
+      },
+      "data_confidence": {
+        "rating": "high",
+        "summary": "Available telemetry passed the current completeness, timestamp, and signal-health checks.",
+        "reasons": [],
+        "affected_signals": []
+      },
+      "sensor_health_context": [
+        {
+          "signal": "NO3",
+          "health": "healthy",
+          "conditions": [],
+          "factor": 1.0
+        },
+        {
+          "signal": "N2O",
+          "health": "healthy",
+          "conditions": [],
+          "factor": 1.0
+        }
+      ],
+      "window": 251,
+      "start": "2019-02-28 01:05:00",
+      "end": "2019-02-28 07:25:00",
+      "checkpoint": "raw/checkpoints/251.json",
+      "governed_persistent": true
+    }
+  ]
+}
