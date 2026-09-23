@@ -1,0 +1,164 @@
+         69039809 function calls (68737909 primitive calls) in 42.823 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1137 to 90 due to restriction <90>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000   42.823   42.823 governed_benchmark.py:89(<lambda>)
+        1    0.070    0.070   42.823   42.823 governed_benchmark.py:75(evaluate)
+        1    0.018    0.018   42.753   42.753 sii_engine.py:51(evaluate_sii)
+       33    0.381    0.012   11.645    0.353 common.py:51(numeric_values)
+        1    0.248    0.248   11.078   11.078 multiscale_analysis.py:45(analyze_multiscale)
+  2220330    2.277    0.000   10.787    0.000 common.py:41(finite_number)
+  2705316    6.025    0.000    9.527    0.000 data_quality.py:306(parse_numeric_value)
+    35073    0.966    0.000    9.324    0.000 common.py:21(column)
+        1    0.369    0.369    8.726    8.726 mode_conditioned_baseline.py:31(analyze_mode_conditioned_baseline)
+        4    0.024    0.006    8.420    2.105 multiscale_analysis.py:454(_signal_metrics)
+   100003    0.942    0.000    7.117    0.000 operating_modes.py:230(describe_mode)
+        1    0.002    0.002    6.118    6.118 phase4.py:43(evaluate_phase4)
+        1    0.000    0.000    5.450    5.450 phase4.py:516(_advanced_modules)
+        1    0.030    0.030    4.869    4.869 sii_runner.py:414(run_sii_runner)
+   648100    1.143    0.000    3.530    0.000 data_quality.py:284(parse_timestamp)
+        1    0.055    0.055    3.205    3.205 empirical_thresholds.py:30(estimate_empirical_thresholds)
+     1024    0.250    0.000    3.161    0.003 sii_runner.py:72(ingest)
+        1    0.004    0.004    3.075    3.075 phase4.py:538(<lambda>)
+        1    0.080    0.080    3.071    3.071 dynamical_stability.py:12(analyze_dynamical_stability)
+        1    0.002    0.002    2.824    2.824 temporal_math.py:20(evaluate_temporal_math)
+   304229    1.403    0.000    2.710    0.000 {built-in method builtins.sorted}
+        1    0.029    0.029    2.674    2.674 baseline_analysis.py:23(build_baseline_analysis)
+        1    0.002    0.002    2.374    2.374 phase4.py:531(<lambda>)
+        1    0.007    0.007    2.372    2.372 spectral_analysis.py:21(analyze_spectral_behavior)
+        1    0.070    0.070    2.054    2.054 mode_conditioned_baseline.py:287(_recent_feature_support)
+        4    0.287    0.072    1.984    0.496 common.py:129(parse_timestamps)
+        1    0.066    0.066    1.938    1.938 baseline_analysis.py:353(select_adaptive_baseline_window)
+        1    0.080    0.080    1.712    1.712 temporal_math.py:223(_entropy_growth_series)
+        3    0.120    0.040    1.679    0.560 common.py:139(timestamp_statistics)
+   100003    0.387    0.000    1.665    0.000 operating_modes.py:287(summarize_signal)
+   648100    0.430    0.000    1.646    0.000 data_quality.py:331(normalize_timestamp)
+        1    0.051    0.051    1.639    1.639 empirical_thresholds.py:200(_relationship_window_correlations)
+       96    0.001    0.000    1.628    0.017 statistics.py:601(median)
+273412/273411    0.791    0.000    1.626    0.000 {built-in method builtins.sum}
+   200006    0.325    0.000    1.621    0.000 operating_modes.py:399(majority)
+        1    0.363    0.363    1.560    1.560 sii_runner.py:539(build_sensor_vectors)
+    17523    0.288    0.000    1.462    0.000 common.py:62(paired_values)
+  7010902    1.456    0.000    1.456    0.000 {method 'replace' of 'str' objects}
+     9753    0.552    0.000    1.433    0.000 temporal_math.py:257(_column_entropy)
+    17523    0.337    0.000    1.420    0.000 common.py:87(pearson)
+       21    0.077    0.004    1.408    0.067 common.py:109(median_absolute_deviation)
+        4    0.096    0.024    1.394    0.348 multiscale_analysis.py:581(_relationship_metrics)
+  5210995    1.371    0.000    1.371    0.000 {method 'get' of 'dict' objects}
+298475/132    0.563    0.000    1.322    0.010 copy.py:118(deepcopy)
+ 1951/139    0.014    0.000    1.321    0.010 copy.py:217(_deepcopy_dict)
+ 1410/564    0.086    0.000    1.306    0.002 copy.py:191(_deepcopy_list)
+        1    0.000    0.000    1.270    1.270 evidence_fusion.py:37(fuse_evidence)
+       21    0.003    0.000    1.269    0.060 evidence_fusion.py:164(_module_evidence_item)
+   266000    0.168    0.000    1.160    0.000 operating_modes.py:406(numeric_value)
+   148000    0.096    0.000    1.070    0.000 operating_modes.py:410(timestamp_value)
+    99801    0.658    0.000    1.046    0.000 baseline_analysis.py:416(prefix_window_stability_score)
+  4618551    1.011    0.000    1.011    0.000 {method 'strip' of 'str' objects}
+   648100    1.006    0.000    1.006    0.000 {method 'replace' of 'datetime.datetime' objects}
+   100003    0.251    0.000    1.000    0.000 operating_modes.py:429(mode_id)
+   200006    0.259    0.000    0.996    0.000 __init__.py:595(__init__)
+2846091/2846041    0.737    0.000    0.883    0.000 {built-in method builtins.isinstance}
+        1    0.001    0.001    0.814    0.814 sii_inputs.py:51(build_data_conditions)
+        1    0.105    0.105    0.813    0.813 data_quality.py:118(profile_timestamps)
+   248003    0.083    0.000    0.806    0.000 operating_modes.py:298(<genexpr>)
+        1    0.500    0.500    0.781    0.781 baseline_analysis.py:391(numeric_prefix_stats)
+        1    0.049    0.049    0.761    0.761 temporal_math.py:299(_correlation_drift)
+  5580219    0.746    0.000    0.746    0.000 {built-in method math.isfinite}
+   200006    0.137    0.000    0.737    0.000 __init__.py:669(update)
+    71104    0.142    0.000    0.728    0.000 sii_engine.py:142(report)
+  2710426    0.717    0.000    0.717    0.000 {method 'split' of 'str' objects}
+  2805518    0.643    0.000    0.643    0.000 {method 'lower' of 'str' objects}
+        1    0.086    0.086    0.607    0.607 behavioral_model.py:617(observation_bounds)
+  3119705    0.604    0.000    0.604    0.000 {method 'append' of 'list' objects}
+  1724493    0.394    0.000    0.596    0.000 common.py:113(<genexpr>)
+        1    0.004    0.004    0.592    0.592 baseline_analysis.py:490(classify_operating_regime)
+        2    0.005    0.002    0.588    0.294 baseline_analysis.py:435(window_stability_score)
+    71104    0.208    0.000    0.572    0.000 performance_instrumentation.py:106(progress)
+        2    0.000    0.000    0.572    0.286 operating_modes.py:208(numeric_band_references)
+     5287    0.196    0.000    0.569    0.000 _function_base_impl.py:2680(cov)
+   118002    0.069    0.000    0.537    0.000 operating_modes.py:216(<genexpr>)
+     2004    0.043    0.000    0.509    0.000 sii_runner.py:283(_regularized_covariance_matrix)
+   100051    0.095    0.000    0.506    0.000 __init__.py:179(sub)
+    25103    0.176    0.000    0.495    0.000 _methods.py:118(_mean)
+       12    0.313    0.026    0.494    0.041 baseline_analysis.py:263(numeric_window_values)
+        1    0.303    0.303    0.474    0.474 sii_inputs.py:8(normalize_rows)
+    94071    0.458    0.000    0.458    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+     3283    0.058    0.000    0.455    0.000 _function_base_impl.py:2903(corrcoef)
+    19816    0.079    0.000    0.454    0.000 fromnumeric.py:3735(mean)
+    35482    0.080    0.000    0.445    0.000 fromnumeric.py:2241(clip)
+     1002    0.032    0.000    0.444    0.000 sii_runner.py:293(_baseline_mahalanobis_distances)
+    14235    0.190    0.000    0.443    0.000 _type_check_impl.py:373(nan_to_num)
+   300009    0.244    0.000    0.431    0.000 operating_modes.py:425(human_feature)
+    51077    0.142    0.000    0.419    0.000 fromnumeric.py:69(_wrapreduction)
+     6323    0.056    0.000    0.401    0.000 _nanfunctions_impl.py:954(nanmean)
+   204094    0.239    0.000    0.395    0.000 {method 'join' of 'str' objects}
+
+
+         69039809 function calls (68737909 primitive calls) in 42.823 seconds
+
+   Ordered by: internal time
+   List reduced from 1137 to 60 due to restriction <60>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+  2705316    6.025    0.000    9.527    0.000 data_quality.py:306(parse_numeric_value)
+  2220330    2.277    0.000   10.787    0.000 common.py:41(finite_number)
+  7010902    1.456    0.000    1.456    0.000 {method 'replace' of 'str' objects}
+   304229    1.403    0.000    2.710    0.000 {built-in method builtins.sorted}
+  5210995    1.371    0.000    1.371    0.000 {method 'get' of 'dict' objects}
+   648100    1.143    0.000    3.530    0.000 data_quality.py:284(parse_timestamp)
+  4618551    1.011    0.000    1.011    0.000 {method 'strip' of 'str' objects}
+   648100    1.006    0.000    1.006    0.000 {method 'replace' of 'datetime.datetime' objects}
+    35073    0.966    0.000    9.324    0.000 common.py:21(column)
+   100003    0.942    0.000    7.117    0.000 operating_modes.py:230(describe_mode)
+273412/273411    0.791    0.000    1.626    0.000 {built-in method builtins.sum}
+  5580219    0.746    0.000    0.746    0.000 {built-in method math.isfinite}
+2846091/2846041    0.737    0.000    0.883    0.000 {built-in method builtins.isinstance}
+  2710426    0.717    0.000    0.717    0.000 {method 'split' of 'str' objects}
+    99801    0.658    0.000    1.046    0.000 baseline_analysis.py:416(prefix_window_stability_score)
+  2805518    0.643    0.000    0.643    0.000 {method 'lower' of 'str' objects}
+  3119705    0.604    0.000    0.604    0.000 {method 'append' of 'list' objects}
+298475/132    0.563    0.000    1.322    0.010 copy.py:118(deepcopy)
+     9753    0.552    0.000    1.433    0.000 temporal_math.py:257(_column_entropy)
+        1    0.500    0.500    0.781    0.781 baseline_analysis.py:391(numeric_prefix_stats)
+    94071    0.458    0.000    0.458    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+   648100    0.430    0.000    1.646    0.000 data_quality.py:331(normalize_timestamp)
+  1724493    0.394    0.000    0.596    0.000 common.py:113(<genexpr>)
+   100003    0.387    0.000    1.665    0.000 operating_modes.py:287(summarize_signal)
+       33    0.381    0.012   11.645    0.353 common.py:51(numeric_values)
+        1    0.369    0.369    8.726    8.726 mode_conditioned_baseline.py:31(analyze_mode_conditioned_baseline)
+        1    0.363    0.363    1.560    1.560 sii_runner.py:539(build_sensor_vectors)
+   802904    0.348    0.000    0.348    0.000 {method 'timestamp' of 'datetime.datetime' objects}
+   983667    0.345    0.000    0.345    0.000 {built-in method builtins.max}
+    17523    0.337    0.000    1.420    0.000 common.py:87(pearson)
+   200006    0.325    0.000    1.621    0.000 operating_modes.py:399(majority)
+       12    0.313    0.026    0.494    0.041 baseline_analysis.py:263(numeric_window_values)
+   100000    0.313    0.000    0.313    0.000 sii_runner.py:571(<genexpr>)
+        1    0.303    0.303    0.474    0.474 sii_inputs.py:8(normalize_rows)
+  2477898    0.300    0.000    0.300    0.000 {built-in method builtins.abs}
+    17523    0.288    0.000    1.462    0.000 common.py:62(paired_values)
+        4    0.287    0.072    1.984    0.496 common.py:129(parse_timestamps)
+1959227/1959063    0.274    0.000    0.274    0.000 {built-in method builtins.len}
+   100051    0.263    0.000    0.263    0.000 {method 'sub' of 're.Pattern' objects}
+   200006    0.259    0.000    0.996    0.000 __init__.py:595(__init__)
+   100003    0.251    0.000    1.000    0.000 operating_modes.py:429(mode_id)
+     1024    0.250    0.000    3.161    0.003 sii_runner.py:72(ingest)
+        1    0.248    0.248   11.078   11.078 multiscale_analysis.py:45(analyze_multiscale)
+   300009    0.244    0.000    0.431    0.000 operating_modes.py:425(human_feature)
+   204094    0.239    0.000    0.395    0.000 {method 'join' of 'str' objects}
+   648102    0.211    0.000    0.211    0.000 {method 'astimezone' of 'datetime.datetime' objects}
+    71104    0.208    0.000    0.572    0.000 performance_instrumentation.py:106(progress)
+     5287    0.196    0.000    0.569    0.000 _function_base_impl.py:2680(cov)
+     9756    0.195    0.000    0.300    0.000 function_base.py:25(linspace)
+   100007    0.193    0.000    0.335    0.000 operating_modes.py:392(percentile)
+    14235    0.190    0.000    0.443    0.000 _type_check_impl.py:373(nan_to_num)
+  1427511    0.184    0.000    0.184    0.000 common.py:102(<genexpr>)
+   648147    0.184    0.000    0.184    0.000 {method 'endswith' of 'str' objects}
+   649124    0.178    0.000    0.178    0.000 {built-in method fromisoformat}
+    25103    0.176    0.000    0.495    0.000 _methods.py:118(_mean)
+   266000    0.168    0.000    1.160    0.000 operating_modes.py:406(numeric_value)
+   200006    0.168    0.000    0.344    0.000 {built-in method _collections._count_elements}
+   600493    0.161    0.000    0.161    0.000 {method 'total_seconds' of 'datetime.timedelta' objects}
+    35482    0.159    0.000    0.159    0.000 _methods.py:99(_clip)
+   123775    0.158    0.000    0.196    0.000 temporal_math.py:296(<genexpr>)

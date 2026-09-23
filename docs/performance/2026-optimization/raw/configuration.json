@@ -1,0 +1,69 @@
+{
+  "temporal": {
+    "baseline_fraction": 0.35,
+    "min_baseline_rows": 12,
+    "max_rows": 5000,
+    "max_lag": 8,
+    "evidence_trigger": 0.15,
+    "use_specialized_histogram": true
+  },
+  "empirical_thresholds": {
+    "baseline_fraction": 0.7,
+    "minimum_baseline_rows": 48,
+    "minimum_signal_values": 24,
+    "minimum_relationship_windows": 4,
+    "relationship_window_rows": 12,
+    "fixed_relationship_change_threshold": 0.25,
+    "minimum_absolute_signal_threshold": 0.01,
+    "signal_relative_floor": 0.05
+  },
+  "multiscale": {
+    "minimum_timestamp_coverage": 0.9,
+    "minimum_horizon_coverage": 0.8,
+    "minimum_baseline_rows": 12,
+    "minimum_active_rows": 6,
+    "signal_activation_ratio": 1.0,
+    "agreement_fraction": 0.67,
+    "minimum_agreeing_scales": 2,
+    "maximum_scales": 8,
+    "maximum_signal_columns": 64,
+    "maximum_relationship_columns": 16
+  },
+  "adaptive_persistence": {
+    "minimum_recent_rows": 3,
+    "phase2_active_fraction": 0.3,
+    "align_to_phase2_active_window": false,
+    "minimum_timestamp_coverage": 0.9,
+    "minimum_regularity": 0.8,
+    "support_fraction_threshold": 0.7,
+    "duration_fraction_threshold": 0.7,
+    "minimum_required_observations": 3,
+    "maximum_required_observations": 12,
+    "irregular_sampling_increment": 1,
+    "limited_data_quality_increment": 1,
+    "poor_data_quality_increment": 2,
+    "limited_sensor_health_increment": 1,
+    "poor_sensor_health_increment": 2,
+    "ambiguous_mode_increment": 1,
+    "unavailable_mode_increment": 2,
+    "moderate_volatility_increment": 1,
+    "high_volatility_increment": 2
+  },
+  "mode_conditioned_baseline": {
+    "baseline_fraction": 0.7,
+    "minimum_baseline_rows": 12,
+    "minimum_recent_rows": 6,
+    "minimum_pair_count": 3,
+    "maximum_relationship_columns": 32,
+    "minimum_recent_mode_purity": 0.7
+  },
+  "runner": {
+    "max_vectors": 1024,
+    "recent_tail": 512
+  },
+  "ingestion": {
+    "max_profile_samples": 4096,
+    "max_analysis_cells": 2000000
+  },
+  "performance_caches_enabled": true
+}

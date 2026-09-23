@@ -1,0 +1,33 @@
+{
+  "phase": "before",
+  "workload": "ingestion-250000",
+  "rows": 250000,
+  "samples": [
+    {
+      "wall_seconds": 24.886480693006888,
+      "cpu_seconds": 23.987775159999998,
+      "peak_rss_bytes": 433827840,
+      "governed_sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91"
+    },
+    {
+      "wall_seconds": 24.976932533085346,
+      "cpu_seconds": 23.955140739,
+      "peak_rss_bytes": 604794880,
+      "governed_sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91",
+      "golden_equal": true
+    },
+    {
+      "wall_seconds": 25.300133859040216,
+      "cpu_seconds": 24.172518323000006,
+      "peak_rss_bytes": 653602816,
+      "governed_sha256": "c2c1fdb397b81ed1e640de6cd148c4065ab1bf2b023bca135d1b220b0099eb91",
+      "golden_equal": true
+    }
+  ],
+  "wall_median": 24.976932533085346,
+  "wall_min": 24.886480693006888,
+  "wall_max": 25.300133859040216,
+  "cpu_median": 23.987775159999998,
+  "peak_rss_bytes": 653602816,
+  "rows_per_second": 10009.2355083572
+}

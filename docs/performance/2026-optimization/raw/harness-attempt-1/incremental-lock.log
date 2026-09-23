@@ -1,0 +1,26 @@
+Traceback (most recent call last):
+  File "/home/ubuntu/Neraium-1.0/scripts/performance/governed_benchmark.py", line 138, in <module>
+    if __name__ == '__main__': main()
+                               ^^^^^^
+  File "/home/ubuntu/Neraium-1.0/scripts/performance/governed_benchmark.py", line 104, in main
+    run = setup(args.rows, args.kind)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/Neraium-1.0/scripts/performance/governed_benchmark.py", line 67, in setup
+    seed = copy.deepcopy(store)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/copy.py", line 162, in deepcopy
+    y = _reconstruct(x, memo, *rv)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/copy.py", line 259, in _reconstruct
+    state = deepcopy(state, memo)
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/copy.py", line 136, in deepcopy
+    y = copier(x, memo)
+        ^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/copy.py", line 221, in _deepcopy_dict
+    y[deepcopy(key, memo)] = deepcopy(value, memo)
+                             ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/copy.py", line 151, in deepcopy
+    rv = reductor(4)
+         ^^^^^^^^^^^
+TypeError: cannot pickle '_thread.RLock' object

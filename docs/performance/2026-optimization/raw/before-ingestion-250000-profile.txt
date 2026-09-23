@@ -1,0 +1,164 @@
+         67572029 function calls (67568172 primitive calls) in 58.135 seconds
+
+   Ordered by: cumulative time
+   List reduced from 375 to 90 due to restriction <90>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.148    0.148   58.135   58.135 governed_benchmark.py:53(<lambda>)
+        1    8.294    8.294   57.987   57.987 historical_ingestion.py:1521(build_historical_ingestion)
+   750000    4.301    0.000   15.577    0.000 historical_ingestion.py:787(add)
+   750011    0.593    0.000   11.645    0.000 historical_ingestion.py:181(_stable_json)
+   750013    1.612    0.000   11.056    0.000 __init__.py:183(dumps)
+   750013    1.381    0.000    9.076    0.000 encoder.py:183(encode)
+   500011    0.838    0.000    7.475    0.000 historical_ingestion.py:185(_digest)
+   750013    7.030    0.000    7.030    0.000 encoder.py:205(iterencode)
+750205/750061    1.457    0.000    6.622    0.000 {built-in method builtins.any}
+   750003    3.648    0.000    5.417    0.000 historical_ingestion.py:390(_iter_source_rows)
+  9250000    3.647    0.000    5.165    0.000 historical_ingestion.py:793(<genexpr>)
+  1500000    3.420    0.000    5.073    0.000 historical_ingestion.py:535(_parse_number)
+   500002    0.707    0.000    3.119    0.000 historical_ingestion.py:450(_canonical_timestamp)
+   500004    1.923    0.000    1.923    0.000 {method 'isoformat' of 'datetime.datetime' objects}
+   501000    0.898    0.000    1.921    0.000 historical_ingestion.py:425(_parse_timestamp)
+  1500476    1.856    0.000    1.856    0.000 {method 'update' of '_hashlib.HASH' objects}
+  8500000    1.517    0.000    1.517    0.000 {method 'isalpha' of 'str' objects}
+  7252206    1.479    0.000    1.479    0.000 {method 'strip' of 'str' objects}
+        1    0.475    0.475    1.431    1.431 historical_ingestion.py:1031(_timestamp_profile)
+  6252901    1.282    0.000    1.282    0.000 {method 'get' of 'dict' objects}
+   750000    0.324    0.000    1.003    0.000 {built-in method builtins.all}
+  4751579    0.903    0.000    0.903    0.000 {built-in method builtins.len}
+        3    0.002    0.001    0.784    0.261 historical_ingestion.py:203(file_sha256)
+   250020    0.124    0.000    0.755    0.000 tempfile.py:636(func_wrapper)
+        2    0.737    0.368    0.737    0.368 {built-in method posix.fsync}
+   500022    0.715    0.000    0.715    0.000 {built-in method _hashlib.openssl_sha256}
+        2    0.002    0.001    0.705    0.353 upload_state_repository.py:383(persist_immutable_derived_artifact)
+   750000    0.525    0.000    0.678    0.000 historical_ingestion.py:417(<genexpr>)
+   501012    0.653    0.000    0.653    0.000 {built-in method fromisoformat}
+  2000020    0.649    0.000    0.649    0.000 {method 'replace' of 'str' objects}
+   250001    0.625    0.000    0.625    0.000 {method 'write' of '_io.TextIOWrapper' objects}
+  1750057    0.615    0.000    0.615    0.000 {built-in method builtins.max}
+   500022    0.571    0.000    0.571    0.000 {method 'hexdigest' of '_hashlib.HASH' objects}
+  1250022    0.467    0.000    0.467    0.000 {method 'encode' of 'str' objects}
+       15    0.000    0.000    0.466    0.031 __init__.py:595(__init__)
+       16    0.000    0.000    0.466    0.029 __init__.py:669(update)
+        6    0.168    0.028    0.466    0.078 {built-in method _collections._count_elements}
+  1502152    0.439    0.000    0.439    0.000 {built-in method builtins.isinstance}
+  1500071    0.406    0.000    0.406    0.000 {method 'lower' of 'str' objects}
+   750012    0.368    0.000    0.368    0.000 encoder.py:105(__init__)
+   250000    0.332    0.000    0.332    0.000 {method 'replace' of 'datetime.datetime' objects}
+   812294    0.290    0.000    0.290    0.000 {method 'add' of 'set' objects}
+   750001    0.288    0.000    0.288    0.000 {method 'astimezone' of 'datetime.datetime' objects}
+  1500000    0.266    0.000    0.266    0.000 {built-in method math.isfinite}
+       70    0.027    0.000    0.245    0.004 {built-in method builtins.sum}
+   501059    0.236    0.000    0.236    0.000 {method 'endswith' of 'str' objects}
+   750058    0.224    0.000    0.224    0.000 {method 'join' of 'str' objects}
+   725285    0.223    0.000    0.223    0.000 {method 'append' of 'list' objects}
+   750000    0.215    0.000    0.215    0.000 {method 'to_bytes' of 'int' objects}
+   250000    0.046    0.000    0.173    0.000 historical_ingestion.py:1085(<genexpr>)
+   250020    0.163    0.000    0.163    0.000 {built-in method builtins.sorted}
+   500195    0.159    0.000    0.159    0.000 {method 'items' of 'dict' objects}
+        1    0.066    0.066    0.143    0.143 historical_ingestion.py:1097(<genexpr>)
+      498    0.143    0.000    0.143    0.000 {method 'read' of '_io.BufferedReader' objects}
+   250037    0.127    0.000    0.127    0.000 {built-in method builtins.round}
+   750000    0.126    0.000    0.126    0.000 historical_ingestion.py:745(_convert_value)
+   199999    0.124    0.000    0.124    0.000 historical_ingestion.py:1730(<genexpr>)
+        1    0.000    0.000    0.079    0.079 historical_ingestion.py:219(preserve_raw_source)
+      249    0.001    0.000    0.076    0.000 historical_ingestion.py:206(<lambda>)
+   250000    0.073    0.000    0.073    0.000 {method 'total_seconds' of 'datetime.timedelta' objects}
+      232    0.001    0.000    0.065    0.000 upload_state_repository.py:404(<lambda>)
+   250001    0.061    0.000    0.061    0.000 historical_ingestion.py:1076(<genexpr>)
+     5866    0.017    0.000    0.044    0.000 <frozen codecs>:319(decode)
+        3    0.004    0.001    0.034    0.011 historical_ingestion.py:847(profile)
+     5866    0.010    0.000    0.027    0.000 utf_8_sig.py:54(_buffer_decode)
+   262098    0.024    0.000    0.024    0.000 {built-in method builtins.abs}
+        1    0.000    0.000    0.022    0.022 historical_ingestion.py:325(persist_ingestion_record)
+        3    0.000    0.000    0.020    0.007 statistics.py:977(pstdev)
+        3    0.011    0.004    0.020    0.007 statistics.py:208(_ss)
+     5866    0.018    0.000    0.018    0.000 {built-in method _codecs.utf_8_decode}
+        1    0.000    0.000    0.017    0.017 upload_state_repository.py:758(write_shared_state)
+        1    0.000    0.000    0.017    0.017 runtime_db.py:2202(upsert_latest_payload)
+        1    0.000    0.000    0.010    0.010 runtime_db.py:91(init_runtime_db)
+        1    0.009    0.009    0.009    0.009 historical_ingestion.py:1087(<genexpr>)
+    12099    0.003    0.000    0.008    0.000 statistics.py:287(_exact_ratio)
+        1    0.008    0.008    0.008    0.008 {method 'executescript' of 'sqlite3.Connection' objects}
+       16    0.006    0.000    0.006    0.000 {method 'write' of '_io.BufferedRandom' objects}
+    12099    0.006    0.000    0.006    0.000 {method 'as_integer_ratio' of 'float' objects}
+        4    0.000    0.000    0.005    0.001 statistics.py:601(median)
+       14    0.000    0.000    0.005    0.000 {built-in method builtins.next}
+        4    0.000    0.000    0.005    0.001 runtime_db.py:74(db_connection)
+        1    0.000    0.000    0.004    0.004 upload_state_repository.py:549(write_local_json)
+        8    0.004    0.001    0.004    0.001 {method 'execute' of 'sqlite3.Connection' objects}
+        1    0.004    0.004    0.004    0.004 historical_ingestion.py:1734(<genexpr>)
+        1    0.001    0.001    0.004    0.004 historical_ingestion.py:466(_timestamp_candidates)
+       17    0.000    0.000    0.004    0.000 historical_ingestion.py:228(<lambda>)
+        2    0.000    0.000    0.003    0.002 contextlib.py:141(__exit__)
+     2221    0.000    0.000    0.003    0.000 encoder.py:414(_iterencode)
+        2    0.003    0.001    0.003    0.001 {method 'commit' of 'sqlite3.Connection' objects}
+        1    0.000    0.000    0.003    0.003 historical_ingestion.py:348(_read_delimited_header)
+
+
+         67572029 function calls (67568172 primitive calls) in 58.135 seconds
+
+   Ordered by: internal time
+   List reduced from 375 to 60 due to restriction <60>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    8.294    8.294   57.987   57.987 historical_ingestion.py:1521(build_historical_ingestion)
+   750013    7.030    0.000    7.030    0.000 encoder.py:205(iterencode)
+   750000    4.301    0.000   15.577    0.000 historical_ingestion.py:787(add)
+   750003    3.648    0.000    5.417    0.000 historical_ingestion.py:390(_iter_source_rows)
+  9250000    3.647    0.000    5.165    0.000 historical_ingestion.py:793(<genexpr>)
+  1500000    3.420    0.000    5.073    0.000 historical_ingestion.py:535(_parse_number)
+   500004    1.923    0.000    1.923    0.000 {method 'isoformat' of 'datetime.datetime' objects}
+  1500476    1.856    0.000    1.856    0.000 {method 'update' of '_hashlib.HASH' objects}
+   750013    1.612    0.000   11.056    0.000 __init__.py:183(dumps)
+  8500000    1.517    0.000    1.517    0.000 {method 'isalpha' of 'str' objects}
+  7252206    1.479    0.000    1.479    0.000 {method 'strip' of 'str' objects}
+750205/750061    1.457    0.000    6.622    0.000 {built-in method builtins.any}
+   750013    1.381    0.000    9.076    0.000 encoder.py:183(encode)
+  6252901    1.282    0.000    1.282    0.000 {method 'get' of 'dict' objects}
+  4751579    0.903    0.000    0.903    0.000 {built-in method builtins.len}
+   501000    0.898    0.000    1.921    0.000 historical_ingestion.py:425(_parse_timestamp)
+   500011    0.838    0.000    7.475    0.000 historical_ingestion.py:185(_digest)
+        2    0.737    0.368    0.737    0.368 {built-in method posix.fsync}
+   500022    0.715    0.000    0.715    0.000 {built-in method _hashlib.openssl_sha256}
+   500002    0.707    0.000    3.119    0.000 historical_ingestion.py:450(_canonical_timestamp)
+   501012    0.653    0.000    0.653    0.000 {built-in method fromisoformat}
+  2000020    0.649    0.000    0.649    0.000 {method 'replace' of 'str' objects}
+   250001    0.625    0.000    0.625    0.000 {method 'write' of '_io.TextIOWrapper' objects}
+  1750057    0.615    0.000    0.615    0.000 {built-in method builtins.max}
+   750011    0.593    0.000   11.645    0.000 historical_ingestion.py:181(_stable_json)
+   500022    0.571    0.000    0.571    0.000 {method 'hexdigest' of '_hashlib.HASH' objects}
+   750000    0.525    0.000    0.678    0.000 historical_ingestion.py:417(<genexpr>)
+        1    0.475    0.475    1.431    1.431 historical_ingestion.py:1031(_timestamp_profile)
+  1250022    0.467    0.000    0.467    0.000 {method 'encode' of 'str' objects}
+  1502152    0.439    0.000    0.439    0.000 {built-in method builtins.isinstance}
+  1500071    0.406    0.000    0.406    0.000 {method 'lower' of 'str' objects}
+   750012    0.368    0.000    0.368    0.000 encoder.py:105(__init__)
+   250000    0.332    0.000    0.332    0.000 {method 'replace' of 'datetime.datetime' objects}
+   750000    0.324    0.000    1.003    0.000 {built-in method builtins.all}
+   812294    0.290    0.000    0.290    0.000 {method 'add' of 'set' objects}
+   750001    0.288    0.000    0.288    0.000 {method 'astimezone' of 'datetime.datetime' objects}
+  1500000    0.266    0.000    0.266    0.000 {built-in method math.isfinite}
+   501059    0.236    0.000    0.236    0.000 {method 'endswith' of 'str' objects}
+   750058    0.224    0.000    0.224    0.000 {method 'join' of 'str' objects}
+   725285    0.223    0.000    0.223    0.000 {method 'append' of 'list' objects}
+   750000    0.215    0.000    0.215    0.000 {method 'to_bytes' of 'int' objects}
+        6    0.168    0.028    0.466    0.078 {built-in method _collections._count_elements}
+   250020    0.163    0.000    0.163    0.000 {built-in method builtins.sorted}
+   500195    0.159    0.000    0.159    0.000 {method 'items' of 'dict' objects}
+        1    0.148    0.148   58.135   58.135 governed_benchmark.py:53(<lambda>)
+      498    0.143    0.000    0.143    0.000 {method 'read' of '_io.BufferedReader' objects}
+   250037    0.127    0.000    0.127    0.000 {built-in method builtins.round}
+   750000    0.126    0.000    0.126    0.000 historical_ingestion.py:745(_convert_value)
+   250020    0.124    0.000    0.755    0.000 tempfile.py:636(func_wrapper)
+   199999    0.124    0.000    0.124    0.000 historical_ingestion.py:1730(<genexpr>)
+   250000    0.073    0.000    0.073    0.000 {method 'total_seconds' of 'datetime.timedelta' objects}
+        1    0.066    0.066    0.143    0.143 historical_ingestion.py:1097(<genexpr>)
+   250001    0.061    0.000    0.061    0.000 historical_ingestion.py:1076(<genexpr>)
+   250000    0.046    0.000    0.173    0.000 historical_ingestion.py:1085(<genexpr>)
+       70    0.027    0.000    0.245    0.004 {built-in method builtins.sum}
+   262098    0.024    0.000    0.024    0.000 {built-in method builtins.abs}
+     5866    0.018    0.000    0.018    0.000 {built-in method _codecs.utf_8_decode}
+     5866    0.017    0.000    0.044    0.000 <frozen codecs>:319(decode)
+        3    0.011    0.004    0.020    0.007 statistics.py:208(_ss)
+     5866    0.010    0.000    0.027    0.000 utf_8_sig.py:54(_buffer_decode)

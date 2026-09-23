@@ -1,0 +1,244 @@
+ M .planning/screenshots/shared-workspace-authorization/engineer-evidence-desktop.png
+ M .planning/screenshots/shared-workspace-authorization/lead-assignment-desktop.png
+ M .planning/screenshots/shared-workspace-authorization/technician-390.png
+ M .planning/screenshots/shared-workspace-authorization/technician-complete-desktop.png
+ M .planning/screenshots/shared-workspace-authorization/unauthorized-workspace-denial.png
+ M backend/app/connectors/base.py
+ M backend/app/connectors/registry.py
+ M backend/app/core/config.py
+ M backend/app/core/security.py
+ M backend/app/engine/sii/behavioral_model.py
+ M backend/app/engine/sii/behavioral_model_contract.py
+ M backend/app/engine/sii/behavioral_model_store.py
+ M backend/app/engine/sii/phase4.py
+ M backend/app/engine/sii_engine.py
+ M backend/app/entrypoint.py
+ M backend/app/main.py
+ M backend/app/models/api_models.py
+ M backend/app/routers/connectors.py
+ M backend/app/routers/data.py
+ M backend/app/routers/data_connections.py
+ M backend/app/routers/historical_ingestion.py
+ M backend/app/routers/live_analysis.py
+ M backend/app/routers/telemetry.py
+ M backend/app/services/analysis_result_contract.py
+ M backend/app/services/data_connections.py
+ M backend/app/services/dataset_scope.py
+ M backend/app/services/facility_context.py
+ M backend/app/services/finding_workflow.py
+ M backend/app/services/runtime_db.py
+ M backend/app/services/service_status.py
+ M backend/app/services/upload_evidence.py
+ M backend/app/services/upload_jobs.py
+ M backend/app/services/upload_persistence.py
+ M backend/app/services/upload_pipeline.py
+ M backend/app/services/upload_queue_lifecycle.py
+ M backend/app/services/worker_heartbeat.py
+ M docs/ARCHITECTURE.md
+ M docs/AWS_DEPLOYMENT.md
+ M docs/OPERATIONS.md
+ M docs/data_connectors.md
+ M docs/database-migrations.md
+ M frontend/scripts/check-performance-budgets.cjs
+ M frontend/src/App.test.js
+ M frontend/src/AuthenticatedApp.jsx
+ M frontend/src/components/AppWorkspaceRouter.jsx
+ D frontend/src/components/BaselineDetailView.jsx
+ D frontend/src/components/BaselineDetailView.test.js
+ M frontend/src/components/DataConnectionsWorkspace.jsx
+ D frontend/src/components/DataConnectionsWorkspace.stale-progress.test.js
+ M frontend/src/components/EngineeringReasoningWorkspace.jsx
+ M frontend/src/components/EngineeringReasoningWorkspace.test.js
+ M frontend/src/components/GovernanceAdminWorkspace.jsx
+ M frontend/src/components/GovernanceAdminWorkspace.test.js
+ M frontend/src/components/HelpChangelogWorkspace.jsx
+ D frontend/src/components/SystemTopologyWorkspace.jsx
+ D frontend/src/components/SystemTopologyWorkspace.test.js
+ M frontend/src/components/engineering/FindingCaseWorkspaces.jsx
+ M frontend/src/components/engineering/FindingCaseWorkspaces.test.js
+ M frontend/src/components/engineering/FindingSummary.jsx
+ M frontend/src/components/engineering/FindingSummary.test.js
+ M frontend/src/components/engineering/OperationsBrief.jsx
+ M frontend/src/components/replay/ReplayWorkspace.jsx
+ M frontend/src/components/replay/ReplayWorkspace.test.js
+ D frontend/src/components/setup/DiagnosticsPanel.jsx
+ D frontend/src/components/setup/HistorianSetupWorkspace.jsx
+ D frontend/src/components/setup/HistorianSetupWorkspace.test.jsx
+ D frontend/src/components/setup/HistoricalIngestionReview.jsx
+ D frontend/src/components/setup/HistoricalIngestionReview.test.js
+ D frontend/src/components/setup/IntakeFlowPanel.jsx
+ D frontend/src/components/setup/IntakeStatusPanel.jsx
+ D frontend/src/components/setup/JobProgressPanel.jsx
+ D frontend/src/components/setup/JobProgressPanel.test.js
+ D frontend/src/components/setup/PilotReadinessPanel.jsx
+ M frontend/src/components/workspacePrimitives.jsx
+ D frontend/src/components/workspaces/SystemBody/SystemBodyWorkspace.jsx
+ D frontend/src/components/workspaces/SystemBody/SystemBodyWorkspace.test.js
+ M frontend/src/config/workspaces.js
+ M frontend/src/hooks/useFacilityRuntime.js
+ M frontend/src/hooks/useFacilityRuntime.terminal-state.test.js
+ M frontend/src/hooks/useWorkspaceSessionController.js
+ M frontend/src/hooks/useWorkspaceSessionController.upload-attempt.test.js
+ M frontend/src/services/api/baselineApi.js
+ D frontend/src/services/api/uploadApi.js
+ D frontend/src/services/api/uploadApi.test.js
+ M frontend/src/services/datasetSessionCache.js
+ M frontend/src/services/datasetSessionCache.test.js
+ M frontend/src/styles/engineering-reasoning.css
+ M frontend/src/styles/index.css
+ M frontend/src/viewModels/__tests__/analysisHistory.test.js
+ M frontend/src/viewModels/__tests__/currentSession.test.js
+ M frontend/src/viewModels/__tests__/engineeringReasoning.test.js
+ M frontend/src/viewModels/__tests__/operationsBrief.test.js
+ M frontend/src/viewModels/__tests__/operatorFinding.test.js
+ D frontend/src/viewModels/__tests__/sessionState.test.js
+ M frontend/src/viewModels/__tests__/systemState.test.js
+ M frontend/src/viewModels/analysisHistory.js
+ M frontend/src/viewModels/currentSession.js
+ M frontend/src/viewModels/engineeringReasoning.js
+ M frontend/src/viewModels/operationsBrief.js
+ M frontend/src/viewModels/operatorFinding.js
+ M frontend/src/viewModels/sessionState.js
+ M frontend/src/viewModels/systemState.js
+ M frontend/tests/e2e/accessibility.spec.js
+ M frontend/tests/e2e/analysis-complete-layout.spec.js
+ M frontend/tests/e2e/auth-navigation-connectors.spec.js
+ M frontend/tests/e2e/baseline-onboarding-responsive.spec.js
+ M frontend/tests/e2e/baseline-open-navigation.spec.js
+ M frontend/tests/e2e/baseline-submission-webkit.spec.js
+ M frontend/tests/e2e/codex-cloud-chilled-water.spec.js
+ M frontend/tests/e2e/command-center-analysis-record.spec.js
+ M frontend/tests/e2e/engineering-reasoning.spec.js
+ M frontend/tests/e2e/evidence-correlation.spec.js
+ M frontend/tests/e2e/frontend-resilience.spec.js
+ M frontend/tests/e2e/historical-ingestion-review.spec.js
+ M frontend/tests/e2e/import-analysis-responsive.spec.js
+ M frontend/tests/e2e/live-monitoring-responsive.spec.js
+ M frontend/tests/e2e/post-upload-mobile-transition.spec.js
+ M frontend/tests/e2e/responsive-layout.spec.js
+ M frontend/tests/e2e/setup-upload-regression.spec.js
+ M frontend/tests/e2e/shared-maintenance-workflow.spec.js
+ M frontend/tests/e2e/smoke.spec.js
+ M frontend/tests/e2e/upload-refresh-state.spec.js
+ M frontend/tests/e2e/workspace-authorization.spec.js
+ M tests/test_api_contracts.py
+ M tests/test_backend_route_smoke.py
+ M tests/test_behavioral_model_store.py
+ M tests/test_connector_store_security.py
+ M tests/test_connectors.py
+ M tests/test_data_connections.py
+ M tests/test_data_replay.py
+ M tests/test_data_upload.py
+ M tests/test_entrypoint.py
+ M tests/test_evidence_package_fingerprinting_v1.py
+ M tests/test_finding_workflow.py
+ M tests/test_large_upload_contract.py
+ M tests/test_live_analysis_phase2.py
+ M tests/test_live_telemetry_ingestion.py
+ M tests/test_operational_lifecycle.py
+ M tests/test_sii_engine_phase_4.py
+ M tests/test_sii_phase4_orchestrator.py
+ M tests/test_upload_queue_scope_routing.py
+?? .planning/LEARNINGS.md
+?? .planning/architecture-neraium-staging.md
+?? .planning/campaigns/completed/
+?? .planning/campaigns/neraium-staging-preflight.md
+?? .planning/campaigns/phase4-upload-system-identity.md
+?? .planning/iam-neraium-staging.md
+?? .planning/infra-manifest.md
+?? .planning/neraium-staging-cloudformation-role-policy-review.md
+?? .planning/neraium-staging-iam-handoff.json
+?? .planning/neraium-staging-template-review.md
+?? .planning/prd-generic-telemetry-ingestion.md
+?? .planning/prd-shared-maintenance-workflow.md
+?? .planning/qa-report-2026-08-12.md
+?? .planning/qa-report-2026-08-13-work-evidence-polish.md
+?? .planning/qa-report-2026-08-13-workspace-authorization-recheck.md
+?? .planning/qa-report-2026-08-26-generic-telemetry-ingestion.md
+?? .planning/qa-report-2026-08-28-evidence-dashboard.md
+?? .planning/qa-report-2026-09-01-upload-retirement.md
+?? .planning/research/fleet-neraium-innovation/
+?? .planning/research/generic-telemetry-architecture-audit.md
+?? .planning/research/generic-telemetry-ingestion-architecture.md
+?? .planning/research/neraium-staging-iam-remediation.md
+?? .planning/research/phase4-upload-system-identity.md
+?? .planning/research/shared-maintenance-architecture.md
+?? .planning/review-packages/generic-telemetry-ingestion.md
+?? .planning/review-packages/shared-maintenance-team-workflow.md
+?? backend/app/connectors/historian_provider.py
+?? backend/app/connectors/https_telemetry.py
+?? backend/app/models/telemetry_api_models.py
+?? backend/app/services/canonical_signal_catalog.py
+?? backend/app/services/phase4_scope.py
+?? backend/app/services/signal_registry.py
+?? backend/app/services/telemetry_analysis_service.py
+?? backend/app/services/telemetry_analysis_window.py
+?? backend/app/services/telemetry_backfill.py
+?? backend/app/services/telemetry_connection_service.py
+?? backend/app/services/telemetry_domain.py
+?? backend/app/services/telemetry_egress.py
+?? backend/app/services/telemetry_health.py
+?? backend/app/services/telemetry_ingestion.py
+?? backend/app/services/telemetry_lineage.py
+?? backend/app/services/telemetry_repository.py
+?? backend/app/services/telemetry_runtime.py
+?? backend/app/services/telemetry_scheduler.py
+?? backend/app/services/telemetry_scope.py
+?? backend/app/services/telemetry_secrets.py
+?? backend/app/services/telemetry_timestamps.py
+?? backend/app/services/telemetry_units.py
+?? backend/db/migrations/create_telemetry_connection_tables.py
+?? backend/db/migrations/extend_telemetry_ingestion_runtime.py
+?? backend/db/migrations/seed_telemetry_canonical_signal_concepts.py
+?? docs/TELEMETRY_CONNECTIONS.md
+?? docs/UPLOAD_LEGACY_INVENTORY.md
+?? docs/performance/
+?? experiments/
+?? frontend/src/components/TelemetryConnectionsWorkspace.jsx
+?? frontend/src/components/TelemetryConnectionsWorkspace.test.js
+?? frontend/src/components/engineering/EvidenceDashboard.jsx
+?? frontend/src/components/engineering/EvidenceDashboard.test.js
+?? frontend/src/legacyCompatibility/
+?? frontend/src/services/api/analysisApi.js
+?? frontend/src/services/api/analysisApiSupport.js
+?? frontend/src/services/api/telemetryConnectionsApi.js
+?? frontend/src/styles/data-connections.css
+?? frontend/src/viewModels/__tests__/resultsPresentation.test.js
+?? frontend/src/viewModels/resultsPresentation.js
+?? frontend/src/viewModels/telemetryAnalysis.js
+?? frontend/src/viewModels/telemetrySessionState.js
+?? frontend/src/viewModels/telemetrySessionState.test.js
+?? frontend/src/viewModels/telemetrySessionStore.js
+?? frontend/tests/e2e/data-connections.spec.js
+?? tests/test_behavioral_model_runtime_migration.py
+?? tests/test_canonical_signal_catalog.py
+?? tests/test_historian_provider_boundary.py
+?? tests/test_historical_upload_authorization.py
+?? tests/test_https_telemetry_connector.py
+?? tests/test_phase4_authenticated_scope.py
+?? tests/test_phase4_upload_system_identity.py
+?? tests/test_signal_mapping.py
+?? tests/test_signal_registry.py
+?? tests/test_sii_evidence_transport.py
+?? tests/test_telemetry_analysis_authority.py
+?? tests/test_telemetry_analysis_handoff.py
+?? tests/test_telemetry_analysis_service.py
+?? tests/test_telemetry_authorization.py
+?? tests/test_telemetry_backfill.py
+?? tests/test_telemetry_connection_api.py
+?? tests/test_telemetry_connector_contract.py
+?? tests/test_telemetry_entities.py
+?? tests/test_telemetry_full_product_flow.py
+?? tests/test_telemetry_health.py
+?? tests/test_telemetry_ingestion.py
+?? tests/test_telemetry_ingestion_repository.py
+?? tests/test_telemetry_legacy_route_retirement.py
+?? tests/test_telemetry_lineage.py
+?? tests/test_telemetry_migrations.py
+?? tests/test_telemetry_provider_capabilities.py
+?? tests/test_telemetry_repository.py
+?? tests/test_telemetry_scheduler.py
+?? tests/test_telemetry_secrets.py
+?? tests/test_telemetry_ssrf.py
+?? tests/test_telemetry_timestamps.py
+?? tests/test_telemetry_units.py
