@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 import asyncio
 import csv
@@ -12,6 +13,8 @@ from typing import Annotated, Any
 import uuid
 from datetime import datetime, timedelta, timezone
 import re
+
+from app.core.upload_error_presentation import UploadErrorRoute, public_upload_state
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Path as ApiPath, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -112,7 +115,7 @@ from app.services.latest_upload_state import resolve_latest_upload_payload
 from app.services.upload_session_service import resolve_upload_status
 from app.services.upload_errors import build_upload_error_payload, canonical_upload_error_code
 
-router = APIRouter(prefix="/data", tags=["data"], dependencies=[Depends(require_api_access)])
+router = APIRouter(route_class=UploadErrorRoute, prefix="/data", tags=["data"], dependencies=[Depends(require_api_access)])
 logger = logging.getLogger(__name__)
 UPLOAD_JOB_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$", re.IGNORECASE)
 UPLOAD_RATE_LIMIT = 20
@@ -264,9 +267,7 @@ def format_upload_capacity(size_bytes: int) -> str:
 
 
 def _request_client_ip(request: Request) -> str:
-    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
-    if forwarded_for:
-        return forwarded_for
+    # Trust only the peer normalized by explicitly trusted ASGI proxy middleware.
     if request.client and request.client.host:
         return str(request.client.host)
     return "unknown"
@@ -344,11 +345,7 @@ def _record_worker_start_failure(
     try:
         dataset_scope = dataset_scope_from_queue_routing(queue_entry)
     except ValueError:
-        logger.exception(
-            "worker_start_failure_scope_unavailable job_id=%s runtime_dir=%s",
-            worker_job_id,
-            runtime_dir,
-        )
+        logger.error("worker_start_failure_scope_unavailable exception_type=%s", type(sys.exception()).__name__)
         return
     phase4_scope = authenticated_phase4_scope_from_queue_routing(
         queue_entry,
@@ -430,14 +427,7 @@ def _run_upload_worker_for_runtime(runtime_dir: Path) -> None:
         processed = upload_jobs.process_next_queued_upload_job()
         logger.info("worker_process_next_finished runtime_dir=%s processed=%s", runtime_dir, processed)
     except Exception as exc:
-        logger.exception(
-            "worker_process_next_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=%s runtime_dir=%s",
-            None,
-            worker_job_id,
-            None,
-            exc.__class__.__name__,
-            runtime_dir,
-        )
+        logger.error("worker_process_next_failed exception_type=%s", type(sys.exception()).__name__)
         if worker_job_id:
             _record_worker_start_failure(
                 worker_job_id,
@@ -490,7 +480,7 @@ def _dispatch_upload_worker_for_runtime(runtime_dir: Path) -> None:
         if worker is not None:
             with _UPLOAD_WORKERS_LOCK:
                 _UPLOAD_WORKERS.discard(worker)
-        logger.exception("upload_worker_thread_start_failed runtime_dir=%s", runtime_dir)
+        logger.error("upload_worker_thread_start_failed exception_type=%s", type(sys.exception()).__name__)
 
 
 def _upsert_failed_evidence_record(
@@ -664,7 +654,7 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
             expires_in_seconds=3600,
         )
     except Exception:
-        logger.exception("large_upload_session_create_failed request_id=%s size_bytes=%s", request_id, size_bytes)
+        logger.error("large_upload_session_create_failed exception_type=%s", type(sys.exception()).__name__)
         return _large_upload_error(
             503,
             "large_upload_storage_unavailable",
@@ -708,7 +698,7 @@ def create_large_upload_session(request: Request, payload: LargeUploadSessionReq
             },
         )
     except Exception:
-        logger.exception("large_upload_session_persist_failed request_id=%s upload_session_id=%s", request_id, upload_session_id)
+        logger.error("large_upload_session_persist_failed exception_type=%s", type(sys.exception()).__name__)
         return _large_upload_error(
             503,
             "large_upload_storage_unavailable",
@@ -807,7 +797,7 @@ def complete_large_upload_session(
             "large_upload_source_confirmation_failed request_id=%s upload_session_id=%s",
             request_id,
             upload_session_id,
-            exc_info=True,
+            exc_info=False,
         )
         return _large_upload_error(
             409,
@@ -930,13 +920,7 @@ def complete_large_upload_session(
             },
         )
     except Exception as exc:
-        logger.exception(
-            "large_upload_identity_persist_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=%s",
-            dataset_id,
-            job_id,
-            request_id,
-            exc.__class__.__name__,
-        )
+        logger.error("large_upload_identity_persist_failed exception_type=%s", type(sys.exception()).__name__)
         return _large_upload_error(
             503,
             "upload_enqueue_failed",
@@ -1028,13 +1012,7 @@ def complete_large_upload_session(
                 processing_stage="baseline_job_creation",
             )
     except Exception as exc:
-        logger.exception(
-            "large_upload_job_state_write_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=%s",
-            dataset_id,
-            job_id,
-            request_id,
-            exc.__class__.__name__,
-        )
+        logger.error("large_upload_job_state_write_failed exception_type=%s", type(sys.exception()).__name__)
         return _large_upload_error(
             503,
             "upload_enqueue_failed",
@@ -1083,7 +1061,7 @@ def complete_large_upload_session(
                 }
             )
         except Exception:
-            logger.warning("large_upload_evidence_write_failed upload_session_id=%s", upload_session_id, exc_info=True)
+            logger.warning("large_upload_evidence_write_failed upload_session_id=%s", upload_session_id, exc_info=False)
 
     try:
         enqueue_upload_job(
@@ -1103,13 +1081,7 @@ def complete_large_upload_session(
             processing_stage="queued",
         )
     except Exception as exc:
-        logger.exception(
-            "large_upload_job_enqueue_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=%s",
-            dataset_id,
-            job_id,
-            request_id,
-            exc.__class__.__name__,
-        )
+        logger.error("large_upload_job_enqueue_failed exception_type=%s", type(sys.exception()).__name__)
         try:
             upload_jobs.write_job(
                 {
@@ -1127,7 +1099,7 @@ def complete_large_upload_session(
                 }
             )
         except Exception:
-            logger.exception("large_upload_job_failure_state_write_failed upload_session_id=%s", upload_session_id)
+            logger.error("large_upload_job_failure_state_write_failed exception_type=%s", type(sys.exception()).__name__)
         if not is_baseline_workflow(workflow):
             try:
                 _upsert_failed_evidence_record(
@@ -1138,7 +1110,7 @@ def complete_large_upload_session(
                     initiated_by=actor,
                 )
             except Exception:
-                logger.warning("large_upload_failure_evidence_write_failed upload_session_id=%s", upload_session_id, exc_info=True)
+                logger.warning("large_upload_failure_evidence_write_failed upload_session_id=%s", upload_session_id, exc_info=False)
         return _large_upload_error(
             503,
             "upload_enqueue_failed",
@@ -1163,7 +1135,7 @@ def complete_large_upload_session(
             },
         )
     except Exception:
-        logger.warning("large_upload_session_completion_state_write_failed upload_session_id=%s", upload_session_id, exc_info=True)
+        logger.warning("large_upload_session_completion_state_write_failed upload_session_id=%s", upload_session_id, exc_info=False)
     request.state.upload_session_id = upload_session_id
     try:
         record_audit_event(
@@ -1175,7 +1147,7 @@ def complete_large_upload_session(
             detail={"dataset_id": dataset_id, "filename": filename, "size_bytes": received_size, "transport": "presigned_s3_put", "workflow": workflow},
         )
     except Exception:
-        logger.warning("large_upload_audit_write_failed upload_session_id=%s", upload_session_id, exc_info=True)
+        logger.warning("large_upload_audit_write_failed upload_session_id=%s", upload_session_id, exc_info=False)
     if worker_dispatch_status == "thread_dispatched":
         _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
     _log_upload_event(
@@ -1627,15 +1599,7 @@ async def upload_data(
             elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
             failure_reason=error_type,
         )
-        logger.exception(
-            "upload_request_failed request_id=%s job_id=%s filename=%s size_bytes=%s failed_stage=%s error_code=%s",
-            request_id,
-            failed_job_id,
-            filename,
-            file_size_bytes,
-            failure_stage,
-            error_code,
-        )
+        logger.error("upload_request_failed exception_type=%s", type(sys.exception()).__name__)
         try:
             upload_jobs.write_job(
                 {
@@ -1649,7 +1613,7 @@ async def upload_data(
                 }
             )
         except Exception:
-            logger.exception("upload_failure_state_write_failed request_id=%s job_id=%s", request_id, failed_job_id)
+            logger.error("upload_failure_state_write_failed exception_type=%s", type(sys.exception()).__name__)
         if not is_baseline_workflow(workflow):
             upsert_evidence_run(
                 {
@@ -1849,12 +1813,7 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
             preserve_existing_routing=True,
         )
     except Exception:
-        logger.exception(
-            "upload_retry_enqueue_failed dataset_id=%s job_id=%s request_id=%s stage=import exception_type=upload_enqueue_failed",
-            retried.get("dataset_id"),
-            requested_job_id,
-            request_id,
-        )
+        logger.error("upload_retry_enqueue_failed exception_type=%s", type(sys.exception()).__name__)
         failure = build_upload_error_payload(
             "server_unavailable",
             message="The stored file is available, but the import could not be queued. Retry shortly.",
@@ -1873,7 +1832,7 @@ async def retry_upload_analysis(request: Request, job_id: UploadJobPath):
         try:
             upload_jobs.write_job({**retried, **failure})
         except Exception:
-            logger.exception("upload_retry_failure_state_write_failed job_id=%s", requested_job_id)
+            logger.error("upload_retry_failure_state_write_failed exception_type=%s", type(sys.exception()).__name__)
         return JSONResponse(status_code=503, content=failure)
     if worker_dispatch_status == "thread_dispatched":
         _dispatch_upload_worker_for_runtime(request.app.state.settings.runtime_dir)
@@ -1944,7 +1903,7 @@ async def upload_status(request: Request, job_id: UploadJobPath):
                 for key in ("status", "datasetId", "jobId", "baselineId", "workspacePath", "createdAt")
             },
         )
-    return normalized
+    return public_upload_state(normalized)
 
 
 @router.get("/upload-stream/{job_id}")
@@ -1955,7 +1914,7 @@ async def upload_stream(job_id: UploadJobPath, request: Request = None):
         # One-second cadence keeps backend stage transitions visible within the
         # same two-second budget as direct status polling.
         for _ in range(720):
-            payload = resolve_upload_status(job_id, request_id=request_id)
+            payload = public_upload_state(resolve_upload_status(job_id, request_id=request_id))
             yield f"data: {json.dumps(payload)}\n\n"
             if str(payload.get("status", "")).upper() in {"COMPLETE", "FAILED", "TIMEOUT", "CANCELLED"}:
                 break
@@ -2021,7 +1980,7 @@ async def latest_upload(include_persisted: bool = Query(True), request: Request 
             }
     if request is not None:
         request.state.upload_session_id = payload.get("upload_session_id")
-    return product_evidence(payload)
+    return public_upload_state(product_evidence(payload))
 
 
 @router.get("/system-interpretation")

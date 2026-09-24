@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
+from app.core.upload_error_presentation import UploadErrorRoute
+
 from fastapi import APIRouter, Depends, HTTPException, Path as ApiPath, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -18,6 +20,7 @@ from app.services import upload_jobs
 
 
 router = APIRouter(
+    route_class=UploadErrorRoute,
     prefix="/data/ingestion/v1",
     tags=["historical-ingestion"],
     dependencies=[Depends(require_api_access)],

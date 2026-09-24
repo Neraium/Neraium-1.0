@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.output_semantics import runtime_metadata
+
 from dataclasses import dataclass
 from datetime import datetime
 from math import isfinite, log
@@ -166,7 +168,7 @@ def evaluate_temporal_math(
         "instability_index": instability_index,
         "decision_thresholding": {"state": state},
         "lead_time_estimate": lead_time,
-        "step_timings": step_timings,
+        "runtime_metadata": runtime_metadata(step_timings=step_timings),
     }
 
 

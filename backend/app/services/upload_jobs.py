@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.output_semantics import runtime_value
+
 import json
 import logging
 import math
@@ -13,7 +15,8 @@ from pathlib import Path
 from typing import Any
 from app.core.path_safety import safe_upload_suffix
 from app.services.analysis_explanations import build_analysis_explanation
-from app.services.analysis_provenance import canonical_digest, file_digest
+from app.services.analysis_provenance import canonical_digest, file_digest, result_digest
+from app.services.upload_output_semantics import UPLOAD_EVIDENCE_VERSION, encode_upload_result
 from app.services.analysis_result_contract import attach_analysis_result, build_normalized_telemetry
 from app.services.condition_corroboration import ConditionCorroborationService
 from app.services.baseline_contracts import (
@@ -645,6 +648,17 @@ def _finalize_completed_upload(
         finalization["errors"].append(f"latest_sii_state: {exc}")
     report_finalization(1, "Synchronized the latest analysis state.")
 
+    # Bind every derived reference to the completed analytical content before
+    # the evidence record is sealed. Later finalization changes execution only.
+    if finalized_result.get("upload_evidence_contract") == UPLOAD_EVIDENCE_VERSION:
+        final_hash = result_digest(finalized_result)
+        for packet in (finalized_result.get("traceability"),
+                       finalized_result.get("decision_integrity"),
+                       (finalized_result.get("sii_intelligence") or {}).get("decision_integrity"),
+                       (finalized_result.get("analysis_result") or {}).get("sii_evidence")):
+            if isinstance(packet, dict) and isinstance(packet.get("provenance"), dict):
+                packet["provenance"]["result_hash"] = final_hash
+
     evidence_persisted = False
     evidence_persistence_started = time.perf_counter()
     evidence_persistence_cpu_started = time.process_time()
@@ -684,7 +698,7 @@ def _finalize_completed_upload(
     if not evidence_persisted:
         raise RuntimeError("evidence_persistence_failed")
     performance_report = (
-        (finalized_result.get("processing_trace") or {}).get("performance")
+        runtime_value(finalized_result.get("processing_trace") or {}, "performance")
         if isinstance(finalized_result.get("processing_trace"), dict)
         else None
     )
@@ -788,6 +802,8 @@ def _finalize_completed_upload(
     # The durable analysis artifact is part of completion readiness. Publish
     # it before the terminal upload envelope so polling cannot announce a
     # completed job whose saved analysis is still missing.
+    if finalized_result.get("upload_evidence_contract") == UPLOAD_EVIDENCE_VERSION:
+        finalized_result = encode_upload_result(finalized_result)
     persist_completed_analysis(finalized_result)
     _persist_completed_upload(job_id, result=finalized_result, summary=finalized_summary)
     completion_write_ms = (time.perf_counter() - persistence_started) * 1000
@@ -1482,7 +1498,7 @@ def _build_csv_result(
         baseline_reuse_wall_seconds = time.perf_counter() - baseline_reuse_started
         baseline_reuse_cpu_seconds = time.process_time() - baseline_reuse_cpu_started
         append_performance_stage(
-            processing_trace.get("performance"),
+            runtime_value(processing_trace, "performance"),
             stage="baseline_artifact_reuse",
             wall_seconds=baseline_reuse_wall_seconds,
             cpu_seconds=baseline_reuse_cpu_seconds,
@@ -1683,6 +1699,7 @@ def _build_csv_result(
         dataset_id=job_context.get("dataset_id") or job_id,
     )
     result = attach_dataset_scope(result, scope=job_scope, dataset_id=job_context.get("dataset_id") or job_id)
+    result["upload_evidence_contract"] = UPLOAD_EVIDENCE_VERSION
     result["traceability"] = build_traceability_packet(job_id=job_id, filename=filename, result=result)
     result["decision_integrity"] = dict(result["traceability"])
     if isinstance(latest_runner_state, dict):
@@ -1749,7 +1766,7 @@ def _build_csv_result(
         6,
     )
     append_performance_stage(
-        processing_trace.get("performance"),
+        runtime_value(processing_trace, "performance"),
         stage="result_finalization",
         wall_seconds=result_finalization_wall_seconds,
         cpu_seconds=result_finalization_cpu_seconds,
@@ -2059,7 +2076,7 @@ def _scope_job_payload(job_id: str, payload: dict[str, Any]) -> tuple[dict[str, 
     )
     expected_attempt_id = str(payload.get("attempt_id") or existing.get("attempt_id") or job_id)
     persisted_result_attempt_id = str(
-        (persisted_completion_result or {}).get("attempt_id") or job_id
+        runtime_value(persisted_completion_result or {}, "attempt_id") or job_id
     )
     completion_result_ready = bool(
         isinstance(persisted_completion_result, dict)

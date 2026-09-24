@@ -125,6 +125,12 @@ def analyze_multiscale(
         }
 
     latest = valid_pairs[-1][1]
+    # Reuse exact branch-specific projections across horizons in this invocation.
+    if source_clock:
+        timestamp_projections = [(latest - timestamp).total_seconds() for _, timestamp in valid_pairs]
+    else:
+        latest_timestamp = latest.timestamp()
+        timestamp_projections = [timestamp.timestamp() for _, timestamp in valid_pairs]
     learned = (
         empirical_thresholds.get("signal_thresholds", {})
         if isinstance(empirical_thresholds, dict)
@@ -139,21 +145,21 @@ def analyze_multiscale(
 
     for scale_index, spec in enumerate(scale_specs, start=1):
         if source_clock:
-            current_indices = [index for index, timestamp in valid_pairs
-                               if 0 <= (latest - timestamp).total_seconds() < float(spec['seconds'])]
-            baseline_indices = [index for index, timestamp in valid_pairs
-                                if (latest - timestamp).total_seconds() >= float(spec['seconds'])]
+            current_indices = [index for (index, _), elapsed in zip(valid_pairs, timestamp_projections)
+                               if 0 <= elapsed < float(spec['seconds'])]
+            baseline_indices = [index for (index, _), elapsed in zip(valid_pairs, timestamp_projections)
+                                if elapsed >= float(spec['seconds'])]
         else:
-            cutoff = latest.timestamp() - float(spec["seconds"])
+            cutoff = latest_timestamp - float(spec["seconds"])
             current_indices = [
                 index
-                for index, timestamp in valid_pairs
-                if cutoff < timestamp.timestamp() <= latest.timestamp()
+                for (index, _), timestamp in zip(valid_pairs, timestamp_projections)
+                if cutoff < timestamp <= latest_timestamp
             ]
             baseline_indices = [
                 index
-                for index, timestamp in valid_pairs
-                if timestamp.timestamp() <= cutoff
+                for (index, _), timestamp in zip(valid_pairs, timestamp_projections)
+                if timestamp <= cutoff
             ]
         start_time = parsed[current_indices[0]] if current_indices else None
         end_time = parsed[current_indices[-1]] if current_indices else None

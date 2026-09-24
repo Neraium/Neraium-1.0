@@ -1,7 +1,8 @@
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from app.core.security import require_api_access
 from app.services.domain_mode import detect_domain_mode, domain_profile, normalize_domain_mode, read_domain_mode
 
 router = APIRouter(tags=["app"])
@@ -21,7 +22,7 @@ def read_app_metadata(domain_mode: str | None = Query(default=None, pattern=r"^(
     }
 
 
-@router.get("/domain/mode")
+@router.get("/domain/mode", dependencies=[Depends(require_api_access)])
 def read_domain_mode_status() -> dict[str, Any]:
     detection = detect_domain_mode()
     selected_mode = detection["mode"]

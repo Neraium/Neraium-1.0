@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.output_semantics import runtime_value
+
 from datetime import datetime, timezone
 import logging
 from typing import Any
@@ -265,7 +267,7 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
         "sii_completed": True,
         "active_baseline_reference": dict(result.get("active_baseline_reference") or {}),
         "filename": result.get("filename"),
-        "completed_at": result.get("completed_at"),
+        "completed_at": runtime_value(result, "completed_at"),
     }
     _write(
         _analysis_key(identity["baseline_id"], identity["analysis_run_id"], scope=scope),
@@ -304,7 +306,7 @@ def persist_completed_analysis(result: dict[str, Any]) -> dict[str, str] | None:
             **identity,
             "status": "complete",
             "filename": result.get("filename"),
-            "completed_at": result.get("completed_at"),
+            "completed_at": runtime_value(result, "completed_at"),
         }
     )
     entries.sort(key=lambda item: str(item.get("completed_at") or ""))

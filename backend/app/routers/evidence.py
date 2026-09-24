@@ -4,10 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.core.security import require_api_access, require_operator_role
+from app.core.failure_evidence_presentation import customer_evidence_view, is_failure_evidence
 from app.models.api_models import EvidenceRunResponse, EvidenceRunsListResponse, FindingStatusRequest, LatestEvidenceResponse, OperatorFeedbackRequest
 from app.services.bedrock_interpreter import BedrockInterpretationDisabled, BedrockInterpretationError, interpret_evidence_package
+from app.core.spreadsheet_export import spreadsheet_safe_csv
 from app.services.evidence_store import FEEDBACK_CATEGORIES, build_evidence_export, build_evidence_export_csv, build_evidence_export_payload, build_evidence_package_payload, build_evidence_package_pdf, latest_evidence_run, list_evidence_runs_page, read_evidence_run, record_finding_status, record_operator_feedback, tag_evidence_for_audit
-from app.services.runtime_db import now_iso, record_audit_event
+from app.services.runtime_db import now_iso, record_audit_event, read_evidence_run_db
 from app.routers import data as data_router
 from app.services.upload_state_repository import read_evidence_by_identity
 from app.services.upload_state_repository import read_upload_result_by_job_id
@@ -23,7 +25,8 @@ def get_evidence_runs(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0, le=1_000_000),
 ) -> dict[str, Any]:
-    return list_evidence_runs_page(limit=limit, offset=offset)
+    page = list_evidence_runs_page(limit=limit, offset=offset)
+    return {**page, "runs": [customer_evidence_view(record) for record in page["runs"]]}
 
 
 @router.get("/evidence/runs/{run_id}", response_model=EvidenceRunResponse)
@@ -31,6 +34,7 @@ def get_evidence_run(run_id: RunIdPath) -> dict[str, Any]:
     record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
+    record = customer_evidence_view(record)
     return record
 
 
@@ -39,6 +43,7 @@ def verify_evidence_run_integrity(run_id: RunIdPath) -> dict[str, Any]:
     record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
+    record = customer_evidence_view(record)
     result = read_upload_result_by_job_id(run_id)
     expected = str(record.get("result_hash") or "")
     actual = result_digest(result) if isinstance(result, dict) else None
@@ -64,7 +69,7 @@ def get_latest_evidence() -> dict[str, Any]:
             "message": "No evidence trail yet. Connect data or upload telemetry to generate the first evidence record.",
             "run": None,
         }
-    return {"status": "ok", "run": record}
+    return {"status": "ok", "run": customer_evidence_view(record)}
 
 
 @router.get("/evidence/export/{run_id}", response_model=None)
@@ -72,6 +77,7 @@ def export_evidence_run(request: Request, run_id: RunIdPath, format: Literal["ma
     record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
+    record = customer_evidence_view(record)
     auth_context = getattr(request.state, "auth_context", {})
     record_audit_event(
         actor=auth_context.get("auth_subject", record.get("initiated_by", "unknown")),
@@ -88,7 +94,7 @@ def export_evidence_run(request: Request, run_id: RunIdPath, format: Literal["ma
             headers={"Content-Disposition": f'attachment; filename="neraium-evidence-{run_id}.json"'},
         )
     if normalized_format == "csv":
-        body = build_evidence_export_csv(record)
+        body = spreadsheet_safe_csv(build_evidence_export_csv(record))
         return Response(
             content=body,
             media_type="text/csv",
@@ -107,6 +113,7 @@ async def export_evidence_package(request: Request, run_id: RunIdPath, format: L
     record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
+    record = customer_evidence_view(record)
     await require_operator_role(request)
     package = build_evidence_package_payload(record)
     auth_context = getattr(request.state, "auth_context", {})
@@ -142,6 +149,7 @@ async def interpret_evidence_run(request: Request, run_id: RunIdPath) -> dict[st
     record = read_evidence_run(run_id) or read_evidence_by_identity(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Evidence run not found.")
+    record = customer_evidence_view(record)
     await require_operator_role(request)
     package = build_evidence_package_payload(record)
     try:
@@ -191,7 +199,7 @@ async def tag_evidence_run_for_audit(request: Request, run_id: RunIdPath) -> dic
         request_id=auth_context.get("request_id"),
         detail={"tag_count": len(updated.get("audit_tags") or [])},
     )
-    return updated
+    return customer_evidence_view(updated)
 
 
 @router.post("/evidence/runs/{run_id}/feedback", response_model=EvidenceRunResponse)
@@ -236,7 +244,7 @@ async def submit_evidence_feedback(request: Request, run_id: RunIdPath, payload:
         },
     )
     data_router.invalidate_latest_upload_cache()
-    return updated
+    return customer_evidence_view(updated)
 
 
 @router.post("/evidence/runs/{run_id}/status", response_model=EvidenceRunResponse)
@@ -274,4 +282,27 @@ async def update_finding_status(request: Request, run_id: RunIdPath, payload: Fi
         detail={"state": payload.state, "work_order_reference_present": bool(payload.work_order_reference)},
     )
     data_router.invalidate_latest_upload_cache()
-    return updated
+    return customer_evidence_view(updated)
+
+
+@router.get("/evidence/runs/{run_id}/forensic")
+def get_failure_forensic_evidence(request: Request, run_id: RunIdPath) -> dict[str, Any]:
+    """Explicit raw stored failure view; never enabled by development auth bypass."""
+    context = getattr(request.state, "auth_context", {})
+    if not context.get("authenticated"):
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if context.get("auth_role") != "admin":
+        raise HTTPException(status_code=403, detail="Administrator access required.")
+    # This reader enforces the existing workspace scope and returns stored JSON,
+    # without annotation, legacy import, projection or historical rewriting.
+    record = read_evidence_run_db(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Evidence run not found.")
+    if not is_failure_evidence(record):
+        raise HTTPException(status_code=409, detail="This view is only available for failed evidence.")
+    record_audit_event(
+        actor=context["auth_subject"], action="evidence.failure.forensic.read",
+        resource_type="evidence_run", resource_id=run_id,
+        request_id=context.get("request_id"), detail={"view": "internal_forensic_failure.v1"},
+    )
+    return {"view": "internal_forensic_failure.v1", "record": record}

@@ -1,0 +1,18 @@
+{
+  "campaign": "production-processing-2026/complete-upload-repair",
+  "authority": "docs/validation/validated-candidate-integration-2026/SOURCE_HASHES.json",
+  "files": {
+    "docs/performance/production-processing-2026/raw/end_to_end-10000-warmup.semantic.json.gz": {
+      "sha256": "3170f34beeee9323755a282427f8b40351653e93db5fa7608e00f9c6f551df71",
+      "bytes": 300030
+    },
+    "docs/performance/production-processing-2026/raw/end_to_end-10000-1.semantic.json.gz": {
+      "sha256": "525c32073bd98ced8840b4102b0895bd6d4f33a91c270bcba5a37e43463dba21",
+      "bytes": 300025
+    },
+    "docs/performance/production-processing-2026/complete-upload-repair/FIELD_TRACE.json": {
+      "sha256": "8a2b1c821595f8c7496af5ccb49d5833116e65f24d4badc3d33c4291537d3e2b",
+      "bytes": 84075
+    }
+  }
+}

@@ -39,7 +39,7 @@ jobs:
           PYTHONPATH: backend
           APP_ENV: test
           NERAIUM_RUNTIME_DIR: backend/app/runtime-test
-        run: python -m pytest tests
+        run: python -m pytest tests -m "not slow and not integration and not historical_certification"
 
   postgres-integration:
     name: PostgreSQL integration

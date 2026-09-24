@@ -1,7 +1,7 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
-from app.core.security import require_api_access, require_operator_role
+from app.core.security import require_admin_role, require_api_access, require_operator_role
 from app.services.product_evidence_contract import product_evidence
 from app.models.api_models import FacilityContextRequest
 from app.services.facility_context import read_facility_context, write_facility_context
@@ -116,11 +116,11 @@ def is_valid_persisted_intelligence(candidate: Any) -> bool:
     return isinstance(candidate.get("rooms"), list) or isinstance(candidate.get("room_summary"), dict)
 
 
-@router.get("/intelligence/engine-identity")
+@router.get("/intelligence/engine-identity", dependencies=[Depends(require_admin_role)])
 def read_engine_identity() -> dict[str, Any]:
     return build_engine_identity()
 
 
-@router.get("/intelligence/runner-status")
+@router.get("/intelligence/runner-status", dependencies=[Depends(require_admin_role)])
 def read_runner_status() -> dict[str, Any]:
     return build_runner_status()

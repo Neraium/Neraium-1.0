@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.output_semantics import runtime_value
+
 import json
 from pathlib import Path
 from typing import Any, Callable
@@ -7,6 +9,7 @@ from typing import Any, Callable
 from app.services.analysis_result_contract import ensure_analysis_result
 from app.services.dataset_scope import current_dataset_scope, payload_matches_dataset_scope
 from app.services.upload_state import build_session_scope
+from app.services.upload_output_semantics import upload_compatibility_view
 
 
 _TRANSPORT_OMITTED_RESULT_KEYS = {
@@ -24,6 +27,7 @@ _TRANSPORT_OMITTED_RESULT_KEYS = {
 def project_result_for_transport(result: dict[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(result, dict):
         return None
+    result = upload_compatibility_view(result)
     projected = {
         key: value
         for key, value in result.items()
@@ -48,6 +52,7 @@ def project_result_for_transport(result: dict[str, Any] | None) -> dict[str, Any
 
 
 def summarize_result(result: dict[str, Any], *, build_scope: Callable[..., dict[str, Any]] = build_session_scope) -> dict[str, Any]:
+    result = upload_compatibility_view(result)
     replay = (
         result.get("replay_timeline")
         or (result.get("sii_intelligence") or {}).get("replay_timeline")
@@ -73,7 +78,7 @@ def summarize_result(result: dict[str, Any], *, build_scope: Callable[..., dict[
         "replay_frame_count": len(timeline or []),
         "latest_replay_frames": len(timeline or []),
         "replay_source": "persisted" if timeline else "unknown",
-        "last_processed_at": result.get("last_processed_at") or result.get("completed_at"),
+        "last_processed_at": runtime_value(result, "last_processed_at") or runtime_value(result, "completed_at"),
         "session_scope": result.get("session_scope") if isinstance(result.get("session_scope"), dict) else build_scope(result.get("job_id"), filename=result.get("filename"), status="active"),
         "traceability": result.get("traceability") if isinstance(result.get("traceability"), dict) else {},
     }
@@ -155,7 +160,7 @@ def read_upload_history(
                 "sparse_room_count": 0,
                 "unknown_profile": False,
             },
-            "completed_at": result.get("completed_at") or result.get("last_processed_at"),
+            "completed_at": runtime_value(result, "completed_at") or runtime_value(result, "last_processed_at"),
             "session_scope": result.get("session_scope") if isinstance(result.get("session_scope"), dict) else None,
         })
 
@@ -178,7 +183,7 @@ def read_upload_history(
                 "sparse_room_count": 0,
                 "unknown_profile": False,
             },
-            "completed_at": latest.get("completed_at") or latest.get("last_processed_at"),
+            "completed_at": runtime_value(latest, "completed_at") or runtime_value(latest, "last_processed_at"),
             "session_scope": latest.get("session_scope") if isinstance(latest.get("session_scope"), dict) else None,
         })
 

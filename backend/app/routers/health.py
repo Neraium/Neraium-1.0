@@ -1,10 +1,11 @@
 import logging
 import os
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
+from app.core.security import require_admin_role
 from app.services.auth_store import auth_store_available
 from app.services.runtime_db import db_connection, queue_metrics, queue_operational_metrics, upload_queue_backend
 from app.services.service_status import STARTUP_STATUS, service_health_snapshot
@@ -142,18 +143,27 @@ def readiness_snapshot(settings) -> tuple[dict[str, str], list[str]]:
 @router.get("/health")
 def read_health(request: Request) -> JSONResponse:
     snapshot = service_health_snapshot(include_upload_session=False)
-    payload = {**snapshot, "service": "neraium-api", "diagnostics": runtime_diagnostics(request.app.state.settings, include_upload_session=False)}
+    payload = {"status": snapshot["status"], "service": "neraium-api"}
     return JSONResponse(
         status_code=status.HTTP_200_OK if snapshot["status"] == "ok" else status.HTTP_503_SERVICE_UNAVAILABLE,
         content=payload,
     )
 
 
-@router.get("/ready")
+async def _readiness_access(request: Request, verbose: bool = Query(False)):
+    if verbose:
+        await require_admin_role(request)
+
+
+@router.get("/ready", dependencies=[Depends(_readiness_access)])
 def read_ready(request: Request, verbose: bool = Query(False)) -> JSONResponse:
     settings = request.app.state.settings
     checks, failed_modules = readiness_snapshot(settings)
-    diagnostics = runtime_diagnostics(settings, include_upload_session=verbose)
+    if not verbose:
+        is_ready = all(value == "ok" for value in checks.values())
+        return JSONResponse(status_code=200 if is_ready else 503,
+                            content={"status": "ready" if is_ready else "not_ready", "service": "neraium-api"})
+    diagnostics = runtime_diagnostics(settings, include_upload_session=True)
     details: dict[str, object] = {
         "mode": "verbose" if verbose else "lightweight",
     }

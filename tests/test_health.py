@@ -28,12 +28,7 @@ def test_health_endpoint_returns_ok() -> None:
     payload = response.json()
     assert payload["status"] == "ok"
     assert payload["service"] == "neraium-api"
-    assert payload["startup_complete"] is True
-    assert payload["failed_modules"] == []
-    assert payload["upload_session_state"] == "not_checked"
-    assert payload["upload_session_metrics"] == {}
-    assert payload["diagnostics"]["upload"]["latest_upload_session_id"] is None
-    assert payload["diagnostics"]["upload"]["latest_upload_state"] is None
+    assert set(payload) == {"status", "service"}
 
 
 def test_health_endpoint_does_not_resolve_upload_session(monkeypatch) -> None:
@@ -49,8 +44,7 @@ def test_health_endpoint_does_not_resolve_upload_session(monkeypatch) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
-    assert payload["upload_session_state"] == "not_checked"
-    assert payload["diagnostics"]["upload"]["latest_upload_session_id"] is None
+    assert set(payload) == {"status", "service"}
 
 
 def test_health_endpoint_returns_degraded_when_startup_failed() -> None:
@@ -62,25 +56,20 @@ def test_health_endpoint_returns_degraded_when_startup_failed() -> None:
 
     assert response.status_code == 503
     assert response.json()["status"] == "degraded"
-    assert response.json()["failed_modules"] == ["runtime_db: unavailable"]
+    assert set(response.json()) == {"status", "service"}
 
 
-def test_ready_endpoint_exposes_upload_state_backend_metadata() -> None:
+def test_ready_endpoint_minimizes_public_metadata() -> None:
     with TestClient(create_app()) as client:
         response = client.get("/api/ready")
     assert response.status_code == 200
-    payload = response.json()
-    assert "upload_state_backend" in payload
-    assert "upload_state_shared_configured" in payload
-    assert payload["details"]["mode"] == "lightweight"
-    assert "queue_operational_metrics" not in payload["details"]
-    assert "upload_session_metrics" not in payload["details"]
-    assert payload["checks"]["startup"] == "ok"
+    assert response.json() == {"status": "ready", "service": "neraium-api"}
 
 
 
-
-def test_ready_endpoint_exposes_runtime_upload_diagnostics(tmp_path) -> None:
+def test_ready_endpoint_exposes_runtime_upload_diagnostics(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("NERAIUM_API_TOKEN", "diagnostic-admin-token")
+    monkeypatch.setenv("NERAIUM_API_TOKEN_ROLE", "admin")
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -90,7 +79,8 @@ def test_ready_endpoint_exposes_runtime_upload_diagnostics(tmp_path) -> None:
         process_role="api",
     )
     with TestClient(create_app(settings)) as client:
-        response = client.get("/api/ready?verbose=true")
+        assert client.get("/api/ready?verbose=true").status_code == 401
+        response = client.get("/api/ready?verbose=true", headers={"Authorization": "Bearer diagnostic-admin-token"})
 
     assert response.status_code == 503
     payload = response.json()
@@ -142,8 +132,7 @@ def test_ready_endpoint_returns_not_ready_when_startup_failed() -> None:
     assert response.status_code == 503
     payload = response.json()
     assert payload["status"] == "not_ready"
-    assert payload["checks"]["startup"] == "error"
-    assert payload["failed_modules"] == ["upload_worker: unavailable"]
+    assert set(payload) == {"status", "service"}
 
 
 def test_facility_systems_endpoint_returns_empty_state_without_upload() -> None:
@@ -400,7 +389,8 @@ def test_api_errors_return_json_with_cors_header_for_production_frontend(monkeyp
 
     assert response.status_code == 500
     assert response.headers["access-control-allow-origin"] == "https://app.neraium.com"
-    assert response.json()["error_type"] == "api_request_error"
+    assert response.json()["error_code"] == "unexpected_server_error"
+    assert "runtime state unavailable" not in response.text
 
 
 def test_upload_preflight_succeeds_without_auth_for_production_frontend(tmp_path) -> None:
@@ -505,7 +495,9 @@ def test_unconfigured_access_header_is_rejected_without_refreshing_auth_cookie(t
     assert "set-cookie" not in response.headers
 
 
-def test_engine_identity_accepts_access_header_in_production(tmp_path) -> None:
+def test_engine_identity_requires_configured_admin_in_production(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("NERAIUM_API_TOKEN", "diagnostic-admin-token")
+    monkeypatch.setenv("NERAIUM_API_TOKEN_ROLE", "admin")
     settings = Settings(
         app_env="production",
         backend_host="127.0.0.1",
@@ -515,9 +507,10 @@ def test_engine_identity_accepts_access_header_in_production(tmp_path) -> None:
     )
     client = TestClient(create_app(settings))
 
+    assert client.get("/api/intelligence/engine-identity", headers={"X-Neraium-Access-Code": "unconfigured"}).status_code == 401
     response = client.get(
         "/api/intelligence/engine-identity",
-        headers={"X-Neraium-Access-Code": "expected-secret"},
+        headers={"Authorization": "Bearer diagnostic-admin-token"},
     )
 
     assert response.status_code == 200

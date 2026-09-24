@@ -1,0 +1,96 @@
+{
+  "decision": "RELEASE_READY_FOR_COMMIT",
+  "candidate": "Neraium 1.0 RC1",
+  "recorded_at_utc": "2026-09-24T21:03:42.992647+00:00",
+  "branch": "fix/deterministic-governed-output",
+  "pre_release_head": "a4ea0a992841d281e19de8119ecd1275a0d7e654",
+  "blocker": {
+    "status": "RESOLVED",
+    "classification": "HISTORICAL_CERTIFICATION_TEST",
+    "resolution": "EXPLICIT_HISTORICAL_CERTIFICATION_SUITE",
+    "evidence_manifest": "tests/fixtures/historical_certification.json"
+  },
+  "inventory": {
+    "tracked": 1140,
+    "dirty": 61,
+    "untracked": 9468,
+    "proposed_staging": 122,
+    "distribution_files": 1121,
+    "excluded_paths": 9490,
+    "required_ignored_fixture_exceptions": 3
+  },
+  "release_boundary": "EXPLICIT_FILE_ALLOWLIST",
+  "secret_sensitive_audit": "PASS_STATIC_REVIEW_NO_LIVE_SECRET_IDENTIFIED",
+  "reproducibility": "PASS_TARGETED_PACKAGING_CONTRACT",
+  "integration_certification": "INTEGRATION_CERTIFIED (retained)",
+  "security_certification": "SECURITY_CLOSEOUT_COMPLETE_WITH_DEPLOYMENT_LIMITATIONS",
+  "certified_candidate_hashes": "PASS: 647 files",
+  "comparator_hashes": "PASS",
+  "static_checks": {
+    "ordinary_collection": "PASS: 2859/2887 selected; 28 deselected; no test execution",
+    "module_ordinary_collection": "PASS: 2 selected, historical inventory deselected",
+    "historical_collection": "PASS: exactly the inventory test selected",
+    "missing_evidence": "PASS: explicit historical invocation exits 1 at setup, required evidence absent",
+    "invalid_evidence": "PASS: explicit historical invocation exits 1 on invalid temporary probe bytes; no evidence altered",
+    "authoritative_evidence": "PASS: 1 passed, original assertions; read-only integration checkout",
+    "product_compatibility": "PASS: representation round-trip/source sensitivity and historical reader; 2 passed",
+    "frontend_build": "PASS: npm run build; Node 22.23.2, npm 10.9.8; CI Node 20 not reproduced locally",
+    "backend_syntax_import_startup": "PASS: AST parse, Docker import list, isolated test startup, GET /api/health 200",
+    "dependency_metadata": "PASS: installed Python requirements consistency and npm ls --depth=0; pip module absent, used importlib.metadata/packaging",
+    "diff_check": "PASS",
+    "full_suite": "NOT_RUN",
+    "10k_500k_1m_lbnl": "NOT_RUN",
+    "docker_image": "NOT_BUILT",
+    "isolated_release_probe": "PASS: copy of exact allowlist; 2859/2887 ordinary collection, 2 product compatibility tests and 1 explicit historical test with external authoritative evidence",
+    "direct_python_requirements": "PASS: installed versions satisfy all backend/requirements.txt direct version constraints"
+  },
+  "production_changes_during_release": false,
+  "files_staged": [],
+  "commit_message": "release: certify Neraium 1.0 RC1",
+  "commit_tag_merge_push_performed": false,
+  "10k_500k_1m_lbnl_performed": false,
+  "existing_index_paths": [],
+  "previous_decision": "RELEASE_BLOCKED_REPRODUCIBILITY",
+  "previous_record": "docs/releases/neraium-1.0-rc1-2026/history/20260924T205356Z-entry/RELEASE_READINESS.json",
+  "limitations": [
+    "No full regression, performance workload, Docker deployment, vulnerability rescan or production migration executed",
+    "Build used installed locked frontend dependency versions; local Node differs from CI",
+    "Python direct requirements pinned; transitive backend lock and mutable backend image remain prior deployment limitations"
+  ],
+  "certified_state_integrity": {
+    "candidate_matches_final_s08_predeclaration": true,
+    "candidate_files_verified": 647,
+    "comparator_files_verified": 8,
+    "entry_hashed_files_changed": [
+      "tests/conftest.py"
+    ],
+    "certified_production_changed": false,
+    "index_empty": true,
+    "analytical_producers": "UNCHANGED",
+    "relationship_ranking_and_supplied_order_ties": "UNCHANGED",
+    "identity_runtime_semantic_separation": "UNCHANGED",
+    "provenance_and_canonical_replay": "UNCHANGED",
+    "measurable_consequence": "UNCHANGED",
+    "security_boundary": "UNCHANGED",
+    "optimization_stack": {
+      "1": "ACCEPTED_PRESENT",
+      "2": "ACCEPTED_PRESENT",
+      "3": "ACCEPT_WITH_LIMITATIONS_PRESENT",
+      "4": "REJECTED_ABSENT",
+      "5": "ACCEPTED_PRESENT"
+    },
+    "aletheia_current_generation": "RETIRED",
+    "architecture": "READ_ONLY_NON_ACTUATING",
+    "basis": "Exact 647-file equality to final S08 predeclaration plus comparator equality; retained certification, no new workload"
+  },
+  "authorized_commit_whitespace_exception": {
+    "authorization": "Explicit user authorization for this commit retry only",
+    "reason": "Preserving authoritative certified comparator bytes takes precedence over cosmetic EOF normalization. Neither comparator is modified.",
+    "accepted_findings": [
+      "backend/app/services/output_semantics_legacy_source.py:64: new blank line at EOF.",
+      "backend/app/services/output_semantics_legacy_target.py:57: new blank line at EOF."
+    ],
+    "verification": "Run git diff --cached --check and require exactly these two findings. Any additional finding blocks the commit. No global whitespace configuration change.",
+    "previous_attempt": "Stopped without commit; index restored empty. Unstaged diff --check had not covered these previously untracked frozen files."
+  }
+}

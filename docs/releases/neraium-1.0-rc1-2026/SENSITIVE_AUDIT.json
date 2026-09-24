@@ -1,0 +1,656 @@
+{
+  "status": "PASS_STATIC_REVIEW_NO_LIVE_SECRET_IDENTIFIED",
+  "scope": "Exact distribution paths in FILE_MANIFEST.json; includes gzip decoding; history snapshots excluded; tracked archives excluded from distribution but preserved in Git",
+  "methods": [
+    "Credential signatures and assignments/URLs; private keys; bearer values; AWS/provider token formats",
+    "Environment and runtime/data path review",
+    "Candidate code-context review without printing values",
+    "Required evidence fixtures checked against synthetic campaign provenance; compatibility receipts have hashes/metadata and no credential fields"
+  ],
+  "findings": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "line": 159,
+      "kind": "credential_url",
+      "disposition": "CI_LOCAL_TEST_CREDENTIAL"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "line": 182,
+      "kind": "credential_url",
+      "disposition": "CI_LOCAL_TEST_CREDENTIAL"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "line": 183,
+      "kind": "credential_url",
+      "disposition": "CI_LOCAL_TEST_CREDENTIAL"
+    },
+    {
+      "path": ".github/workflows/production-upload-diagnostics.yml",
+      "line": 142,
+      "kind": "assigned_credential",
+      "disposition": "ENVIRONMENT_OR_PLACEHOLDER_REFERENCE"
+    },
+    {
+      "path": "docs/operations/production-runbook.md",
+      "line": 519,
+      "kind": "assigned_credential",
+      "disposition": "ENVIRONMENT_OR_PLACEHOLDER_REFERENCE"
+    },
+    {
+      "path": "frontend/src/components/TelemetryConnectionsWorkspace.jsx",
+      "line": 357,
+      "kind": "assigned_credential",
+      "disposition": "FIELD_NAME_EXPRESSION"
+    },
+    {
+      "path": "frontend/src/services/api/authApi.test.js",
+      "line": 135,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "frontend/src/services/api/authApi.test.js",
+      "line": 142,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "frontend/src/services/api/authApi.test.js",
+      "line": 149,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "frontend/tests/e2e/auth-navigation-connectors.spec.js",
+      "line": 50,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "frontend/tests/e2e/fixtures.js",
+      "line": 33,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "scripts/run-postgres-integration.sh",
+      "line": 44,
+      "kind": "credential_url",
+      "disposition": "CI_LOCAL_TEST_CREDENTIAL"
+    },
+    {
+      "path": "tests/integration/test_database_connector_postgres.py",
+      "line": 30,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_api_contracts.py",
+      "line": 179,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_api_contracts.py",
+      "line": 255,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_api_contracts.py",
+      "line": 270,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_api_contracts.py",
+      "line": 275,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_api_contracts.py",
+      "line": 279,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_config.py",
+      "line": 196,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_connector_sonar_refactors.py",
+      "line": 249,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_connectors.py",
+      "line": 303,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_connectors.py",
+      "line": 430,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_connectors.py",
+      "line": 443,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_connectors.py",
+      "line": 487,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_data_upload.py",
+      "line": 548,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_data_upload.py",
+      "line": 589,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_dataset_state_scoping.py",
+      "line": 249,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_dataset_state_scoping.py",
+      "line": 254,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_dataset_state_scoping.py",
+      "line": 260,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_evidence_package.py",
+      "line": 107,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_evidence_package.py",
+      "line": 115,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_failure_evidence_presentation.py",
+      "line": 19,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_failure_evidence_presentation.py",
+      "line": 20,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_health.py",
+      "line": 83,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_health.py",
+      "line": 472,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_health.py",
+      "line": 513,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_health.py",
+      "line": 534,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_historian_provider_boundary.py",
+      "line": 160,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_historian_provider_boundary.py",
+      "line": 200,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_historian_provider_boundary.py",
+      "line": 83,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_historian_provider_boundary.py",
+      "line": 109,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_https_telemetry_connector.py",
+      "line": 265,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_https_telemetry_connector.py",
+      "line": 424,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_https_telemetry_connector.py",
+      "line": 272,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_live_analysis_phase2.py",
+      "line": 687,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_live_analysis_phase2.py",
+      "line": 701,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_live_analysis_phase2.py",
+      "line": 714,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_live_telemetry_ingestion.py",
+      "line": 440,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_logging.py",
+      "line": 55,
+      "kind": "aws_access",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_logging.py",
+      "line": 65,
+      "kind": "aws_access",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_logging.py",
+      "line": 54,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_logging.py",
+      "line": 57,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase2_auth.py",
+      "line": 39,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase2_auth.py",
+      "line": 55,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase2_auth.py",
+      "line": 72,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase2_auth.py",
+      "line": 88,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase2_auth.py",
+      "line": 103,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase2_auth.py",
+      "line": 116,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase2_auth.py",
+      "line": 141,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase2_auth.py",
+      "line": 177,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase2_auth.py",
+      "line": 199,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase3_auth_runtime.py",
+      "line": 57,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase3_auth_runtime.py",
+      "line": 157,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase3_auth_runtime.py",
+      "line": 165,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase3_auth_runtime.py",
+      "line": 166,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase3_auth_runtime.py",
+      "line": 244,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase3_auth_runtime.py",
+      "line": 249,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase3_auth_runtime.py",
+      "line": 259,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase3_auth_runtime.py",
+      "line": 282,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase3_auth_runtime.py",
+      "line": 289,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase3_auth_runtime.py",
+      "line": 302,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase3_auth_runtime.py",
+      "line": 314,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_phase4_upload_system_identity.py",
+      "line": 57,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_security_closeout.py",
+      "line": 36,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_security_closeout.py",
+      "line": 187,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_security_hardening.py",
+      "line": 143,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_security_hardening.py",
+      "line": 188,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_security_hardening.py",
+      "line": 212,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_security_hardening.py",
+      "line": 213,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_security_hardening.py",
+      "line": 143,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_security_hardening.py",
+      "line": 158,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_shared_maintenance_workflow.py",
+      "line": 333,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_shared_maintenance_workflow.py",
+      "line": 347,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_shared_maintenance_workflow.py",
+      "line": 369,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_connection_api.py",
+      "line": 525,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_connection_api.py",
+      "line": 539,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_connection_api.py",
+      "line": 649,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_connection_api.py",
+      "line": 697,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_connection_api.py",
+      "line": 1031,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_connector_contract.py",
+      "line": 89,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_entities.py",
+      "line": 203,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_entities.py",
+      "line": 204,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_entities.py",
+      "line": 208,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_legacy_route_retirement.py",
+      "line": 87,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_legacy_route_retirement.py",
+      "line": 127,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_legacy_route_retirement.py",
+      "line": 186,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_repository.py",
+      "line": 260,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_repository.py",
+      "line": 261,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_repository.py",
+      "line": 292,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_scheduler.py",
+      "line": 645,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_telemetry_ssrf.py",
+      "line": 39,
+      "kind": "credential_url",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_verification_consequence.py",
+      "line": 31,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_workspace_authorization.py",
+      "line": 35,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_workspace_authorization.py",
+      "line": 82,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_workspace_membership.py",
+      "line": 37,
+      "kind": "assigned_credential",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    },
+    {
+      "path": "tests/test_workspace_membership.py",
+      "line": 234,
+      "kind": "bearer_literal",
+      "disposition": "SYNTHETIC_TEST_LITERAL"
+    }
+  ],
+  "not_claimed": "Exhaustive secret detection, remote credential validation, Git-history clearance, vulnerability rescan, or production data-loss-prevention certification",
+  "additional_review": [
+    "AWS task template contains non-secret environment configuration and no inline credential fields",
+    "Environment credential example fields empty; token-role values are roles, not credentials",
+    "Screenshots excluded from distribution without deleting tracked history",
+    "Required synthetic compatibility receipts are explicit ignored-file exceptions; byte-identical to integration copies",
+    "No untracked .env, runtime database, customer upload, downloaded dataset, raw security campaign or temporary export proposed"
+  ]
+}

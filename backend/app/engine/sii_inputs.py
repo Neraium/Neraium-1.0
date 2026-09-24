@@ -10,7 +10,11 @@ def normalize_rows(
     rows: list[dict[str, Any]] | list[list[Any]],
 ) -> tuple[list[dict[str, Any]], list[list[str]]]:
     if rows and isinstance(rows[0], dict):
-        dict_rows = [dict(row) for row in rows if isinstance(row, dict)]
+        # Explicit schema order carries matrix meaning; mapping insertion order does not.
+        dict_rows = [
+            {key: row[key] for key in [*columns, *sorted(set(row) - set(columns))] if key in row}
+            for row in rows if isinstance(row, dict)
+        ]
         matrix_rows = [[string_value(row.get(column)) for column in columns] for row in dict_rows]
         return dict_rows, matrix_rows
 

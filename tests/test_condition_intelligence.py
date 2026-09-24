@@ -66,13 +66,13 @@ def test_multiple_connected_relationships_form_one_corroborated_condition() -> N
     assert len(result) == 1
     assert result[0]["corroboration_strength"] == "strong"
     assert result[0]["relationship_count"] == 4
-    assert result[0]["affected_signals"] == [
+    assert result[0]["affected_signals"] == sorted([
         "pump_power",
         "flow",
         "discharge_pressure",
         "pump_speed",
         "motor_current",
-    ]
+    ])
     assert result[0]["supporting_relationships"][1]["role"] == "secondary evidence"
 
 
@@ -322,7 +322,8 @@ def test_condition_creation_includes_localization_timeline_and_next_checks() -> 
     assert condition["localization"]["site"] == "Rush Tower"
     assert condition["localization"]["monitored_boundary"] == "Discharge boundary"
     assert condition["affected_boundaries"] == ["Discharge boundary"]
-    assert len(condition["timeline"]) == 3
+    assert len(condition["timeline"]) == 2
+    assert condition["runtime_metadata"]["events"][0]["precision"] == "runtime_timestamp"
     assert condition["timeline"][1]["event_type"] == "evidence_trend_classified"
     assert condition["next_checks"][0].startswith("Verify source data")
     assert condition["comparable_operation"]["status"] == "supported"

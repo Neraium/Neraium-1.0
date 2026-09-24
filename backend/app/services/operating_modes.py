@@ -231,12 +231,12 @@ def numeric_band_references(
     return references
 
 
-def describe_mode(
+def explicit_mode_features(
     rows: list[dict[str, Any]],
     signals: list[ContextSignal],
     references: dict[str, tuple[float, float]],
-    timestamp_column: str | None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], list[str]]:
+    """Return the shared explicit context features in their existing role order."""
     features: dict[str, Any] = {}
     explicit: list[str] = []
     equipment_signals = [signal for signal in signals if signal.role == "equipment_state"]
@@ -260,6 +260,17 @@ def describe_mode(
             continue
         features[signal.role] = feature
         explicit.append(signal.role)
+
+    return features, explicit
+
+
+def describe_mode(
+    rows: list[dict[str, Any]],
+    signals: list[ContextSignal],
+    references: dict[str, tuple[float, float]],
+    timestamp_column: str | None,
+) -> dict[str, Any]:
+    features, explicit = explicit_mode_features(rows, signals, references)
 
     timestamps = [
         parsed

@@ -1,6 +1,5 @@
 import React, { useMemo } from "react";
 import SystemBodyWorkspace from "./workspaces/SystemBody/SystemBodyWorkspace";
-import { ENABLE_ADMISSION_GATE } from "../config";
 import { normalizeOperationalState } from "../viewModels/operationalUiState"; 
 import { 
   ESCALATION_LAYERS, 
@@ -34,7 +33,7 @@ export default function SystemTopologyWorkspace({
   const awaitingSii = ["idle", "empty", "queued", "processing"].includes(sessionUiState);
   const uiState = processingActive || awaitingSii || rawUiState === "neutral" ? "neutral" : rawUiState;
   const layer = deriveEscalationLayer({ awaitingSii, uiState, liveOps });
-  const governed = deriveGovernedOutput(liveOps, {
+  const governed = deriveCurrentOutput(liveOps, {
     awaitingSii,
     uiState,
     layer,
@@ -82,7 +81,7 @@ export default function SystemTopologyWorkspace({
   const focusArea = governed.affectedSubsystem;
   const summaryTitle = pendingVerification
     ? "behavior evidence Verification Pending"
-    : governed.hasPass
+    : governed.hasFinding
       ? "System Review Active"
       : "System Review Pending";
   const lastUpdate = liveOps.connectionSummary ?? EMPTY_VALUE;
@@ -93,7 +92,7 @@ export default function SystemTopologyWorkspace({
 
   const narrativeItems = compactOperationalItems([
     { label: "Current System State", value: governed.currentGovernedSystemState, state: uiState },
-    ...(governed.hasPass ? [{ label: "Affected Equipment", value: concise(governed.affectedSubsystem, 80), state: uiState }] : []),
+    ...(governed.hasFinding ? [{ label: "Affected Equipment", value: concise(governed.affectedSubsystem, 80), state: uiState }] : []),
     { label: "Timestamp", value: governed.timestamp, state: "stable" },
   ]);
 
@@ -150,13 +149,10 @@ export default function SystemTopologyWorkspace({
   ); 
 } 
 
-export function derivePrimaryMessage({ awaitingSii, pendingVerification, governed, canonicalFinding, uploadSignal }) {
+export function derivePrimaryMessage({ awaitingSii, pendingVerification, canonicalFinding, uploadSignal }) {
   if (awaitingSii) return "Analyze or connect telemetry to begin monitoring.";
   if (pendingVerification) {
     return "Telemetry processing finished, but the behavior evidence is still being verified for engineer review.";
-  }
-  if (governed.hasPass) {
-    return concise(governed.passedFindingSummary, 120);
   }
   if (canonicalFinding?.exists && canonicalFinding?.summary) {
     return concise(canonicalFinding.summary, 120);
@@ -196,177 +192,22 @@ export function deriveUploadSignal(latestUploadResult, { reviewReady = true } = 
   return { systemState: null, label: "", statusLight: null };
 }
 
-export function resolveProductionGovernance(liveOps) {
-  return liveOps?.sourceIntelligence?.aletheia_gate ?? liveOps?.governance ?? null;
-}
-
-function deriveGovernedOutput(liveOps, { awaitingSii, uiState, layer }) {
-  const governance = resolveProductionGovernance(liveOps);
-
-  const outcome = gateOutcome(governance);
-  const admittedState = String(governance?.admitted_state ?? "").toUpperCase();
-  const hasPass = ENABLE_ADMISSION_GATE && outcome === "PASS" && ["WATCH", "ALERT"].includes(admittedState);
-  const statusLight = statusLightFromAdmitted(admittedState, hasPass);
-
-  if (!hasPass) {
-    return {
-      hasPass: false,
-      statusLight,
-      currentGovernedSystemState: awaitingSii ? "No Data" : "Stable",
-      passedFindingSummary: "",
-      affectedSubsystem: "",
-      evidenceBackedOperatorFocus: "",
-      persistenceWindowConfirmation: "",
-      evpPreview: "",
-      timestamp: liveOps.connectionSummary ?? "Not available",
-      detail: null,
-    };
-  }
-
-  const evpRaw =
-    governance?.evp_reference?.evp_id
-    ?? governance?.evp_reference?.evp_hash
-    ?? governance?.evp_id
-    ?? governance?.evp_hash
-    ?? governance?.record_id
-    ?? governance?.decision_id
-    ?? null;
-  const intervention = liveOps?.interventionItems?.[0] ?? {};
-  const primaryWindow = liveOps?.primaryWindow ?? {};
-  const finding = liveOps?.findings?.[0] ?? {};
-  const relationshipEvidence = governance?.affected_relationship_path
-    ?? intervention?.relationshipEvidence?.[0]
-    ?? liveOps?.relationshipRows?.[0]?.detail
-    ?? "";
-  const affectedSubsystem = governance?.affected_subsystem
-    ?? intervention?.label
-    ?? primaryWindow?.label
-      ?? "Primary relationship scope";
-  const evidenceSummary = governance?.why_summary
-    ?? finding?.detail
-    ?? "Equipment behavior changed and stayed changed long enough to review.";
-  const persistenceCount = valueOrEmpty(governance?.persistence_count);
-  const trajectoryDirection = normalizeTrajectory(governance?.trajectory_direction);
-  const recoveryWindowStatus = governance?.recovery_window_status ?? "RECOVERY_WINDOW_UNCLEAR";
-  const evpPreview = evpRaw ? previewHash(evpRaw) : "EVP pending server custody";
-
+export function deriveCurrentOutput(liveOps, { awaitingSii }) {
+  const finding = liveOps.canonicalFinding;
   return {
-    hasPass: true,
-    statusLight,
-    currentGovernedSystemState: governedStateFromAdmitted(admittedState),
-    passedFindingSummary: evidenceSummary,
-    affectedSubsystem,
-    evidenceBackedOperatorFocus:
-      governance?.operator_focus
-      ?? intervention?.recommendation
-      ?? "Check the affected equipment loop and confirm recovery after intervention.",
-    persistenceWindowConfirmation:
-      governance?.elapsed_operational_duration
-      ?? intervention?.window
-      ?? primaryWindow?.window
-      ?? `Layer ${layer} persistence confirmed`,
-    evpPreview,
-    timestamp: liveOps.connectionSummary ?? "Unavailable",
-    detail: {
-      admittedState: governedStateFromAdmitted(admittedState),
-      why: evidenceSummary,
-      primaryEvidenceFamily: governance?.primary_evidence_family ?? "Operating pattern evidence",
-      corroboratingEvidenceFamilies: formatList(governance?.corroborating_evidence_families),
-      doctrineRulesSatisfied: formatList(governance?.doctrine_rules_satisfied),
-      doctrineVersion: governance?.doctrine_version ?? "Unknown doctrine",
-      affectedSubsystem,
-      affectedRelationshipPath: relationshipEvidence || "Primary equipment loop",
-      operationalMapping: governance?.operational_mapping ?? "Operational loop under admitted finding",
-      persistenceCount: persistenceCount || "Confirmed",
-      firstAdmittedWindow: governance?.first_admitted_window ?? primaryWindow?.window ?? "First governance-approved window",
-      elapsedOperationalDuration:
-        governance?.elapsed_operational_duration
-        ?? intervention?.window
-        ?? primaryWindow?.window
-        ?? "Confirmed operational window",
-      trajectory: trajectoryDirection,
-      driftVelocity: governance?.drift_velocity ?? `${trajectoryDirection} structural drift`,
-      transitionPressure: governance?.transition_pressure ?? (admittedState === "ALERT" ? "High" : "Elevated"),
-      relationalStabilityTrend: governance?.relational_stability_trend ?? (admittedState === "ALERT" ? "Degrading" : "Under admitted watch"),
-      structuralDriftTrend: governance?.structural_drift_trend ?? trajectoryDirection,
-      recoveryWindowStatus,
-      interventionSensitivity: governance?.intervention_sensitivity ?? recoveryLanguage(recoveryWindowStatus),
-      equipmentEvidence: relationshipEvidence || "Primary equipment loop",
-      operatorFocus:
-        governance?.operator_focus
-        ?? intervention?.recommendation
-        ?? "Check the affected equipment loop and confirm recovery after intervention.",
-      telemetryWindowReferences:
-        governance?.first_admitted_window
-        ?? intervention?.window
-        ?? primaryWindow?.window
-        ?? "Governance-approved telemetry window",
-      evpPreview,
-    },
+    hasFinding: Boolean(finding?.exists),
+    statusLight: "gray",
+    currentGovernedSystemState: awaitingSii ? "No Data" : "Monitoring",
+    affectedSubsystem: finding?.exists ? (liveOps.primaryWindow?.label ?? "") : "",
+    timestamp: liveOps.connectionSummary ?? "Not available",
+    detail: null,
   };
-}
-
-function gateOutcome(governance) {
-  // Aletheia's Gate operator admissibility is strictly binary.
-  const normalized = String(
-    governance?.gate_outcome
-    ?? governance?.validation_status
-    ?? governance?.status
-    ?? governance?.decision?.status
-    ?? "",
-  ).toUpperCase();
-  if (["PASS", "VALIDATED", "APPROVED"].includes(normalized)) return "PASS";
-  // REVIEW and all non-PASS outcomes are non-admitted in operator view.
-  return "NO_PASS";
-}
-
-function governedStateFromAdmitted(admittedState) {
-  if (admittedState === "WATCH") return "Watch";
-  if (admittedState === "ALERT") return "System behavior changed";
-  return "Stable";
-}
-
-function statusLightFromAdmitted(admittedState, hasPass) {
-  if (!hasPass) return "gray";
-  if (admittedState === "WATCH") return "yellow";
-  if (admittedState === "ALERT") return "amber";
-  return "gray";
 }
 
 function orbStateFromStatusLight(statusLight) {
   if (statusLight === "yellow") return "watching";
   if (statusLight === "amber" || statusLight === "red") return "propagation_active";
   return "unknown";
-}
-
-function valueOrEmpty(value) {
-  if (value === null || value === undefined || value === "") return "";
-  return String(value);
-}
-
-function normalizeTrajectory(value) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "Stable";
-  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
-}
-
-function formatList(value) {
-  if (Array.isArray(value)) return value.filter(Boolean).join("; ");
-  return String(value ?? "").trim() || "Doctrine requirements satisfied";
-}
-
-function recoveryLanguage(status) {
-  if (status === "RECOVERY_WINDOW_CRITICAL") return "Urgent intervention sensitivity";
-  if (status === "RECOVERY_WINDOW_NARROWING") return "Elevated intervention sensitivity";
-  if (status === "RECOVERY_WINDOW_OPEN") return "Recovery remains responsive to intervention";
-  return "Recovery sensitivity unclear";
-}
-
-function previewHash(value) {
-  const v = String(value ?? "").trim();
-  if (!v) return "Unavailable";
-  if (v.length <= 12) return v;
-  return `${v.slice(0, 6)}...${v.slice(-4)}`;
 }
 
 function buildStateDescription(layer) {

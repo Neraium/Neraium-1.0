@@ -19,8 +19,6 @@ from app.services.workspace_authorization import (
 _PUBLIC_READONLY_PATHS = (
     "/api/health",
     "/api/ready",
-    "/api/domain/mode",
-    "/api/intelligence/engine-identity",
 )
 _ROLE_ORDER = {"viewer": 0, "operator": 1, "admin": 2}
 LEGACY_GLOBAL_TELEMETRY_RETIRED_DETAIL = {
@@ -37,13 +35,15 @@ def _is_public_readonly_request(request: Request) -> bool:
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         return False
     path = request.url.path
-    return any(path.startswith(prefix) for prefix in _PUBLIC_READONLY_PATHS)
+    if path == "/api/ready" and request.query_params.get("verbose", "false").lower() not in {"false", "0", "no", "off"}:
+        return False
+    return path in _PUBLIC_READONLY_PATHS
 
 
 def _strict_auth_mode(request: Request) -> bool:
     settings = getattr(request.app.state, "settings", None)
     app_env = str(getattr(settings, "app_env", os.getenv("APP_ENV", "development")) or "").strip().lower()
-    return app_env in {"prod", "production"}
+    return app_env in {"staging", "prod", "production"}
 
 
 def _configured_token_role() -> str:
@@ -51,9 +51,7 @@ def _configured_token_role() -> str:
 
 
 def _client_ip(request: Request) -> str:
-    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
-    if forwarded_for:
-        return forwarded_for
+    # Trust only the peer normalized by explicitly trusted ASGI proxy middleware.
     if request.client and request.client.host:
         return str(request.client.host)
     return "unknown"

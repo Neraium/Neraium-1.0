@@ -724,7 +724,7 @@ class _BaseAuthBackend:
         sql = "SELECT * FROM auth_sessions WHERE session_id = ?" if self.placeholder == "?" else "SELECT * FROM auth_sessions WHERE session_id = %s"
         return self._fetch_one(sql, (session_id,))
 
-    def list_sessions(self, *, email: str | None = None, include_revoked: bool = False, limit: int = 500) -> list[dict[str, Any]]:
+    def list_sessions(self, *, email: str | None = None, include_revoked: bool = False, limit: int = 500, offset: int = 0) -> list[dict[str, Any]]:
         sql = "SELECT * FROM auth_sessions"
         params: list[Any] = []
         clauses: list[str] = []
@@ -735,8 +735,8 @@ class _BaseAuthBackend:
             clauses.append("revoked_at IS NULL")
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
-        sql += f" ORDER BY created_at DESC LIMIT {self.placeholder}"
-        params.append(limit)
+        sql += f" ORDER BY created_at DESC, session_id LIMIT {self.placeholder} OFFSET {self.placeholder}"
+        params.extend((limit, offset))
         return self._fetch_all(sql, tuple(params))
 
     def revoke_session(self, session_id: str, *, revoked_at: str | None = None) -> None:
@@ -1702,6 +1702,23 @@ def list_sessions(*, email: str | None = None, include_revoked: bool = False) ->
             continue
         sanitized.append(sanitize_session_record(session))
     return sanitized
+
+
+def resolve_session_management_handle(handle: str) -> str | None:
+    """Admin-only caller resolves a non-authenticating digest, without a schema migration."""
+    import hashlib
+
+    backend = _get_backend()
+    offset = 0
+    while True:
+        page = backend.list_sessions(limit=500, offset=offset)
+        for session in page:
+            token = session["session_id"]
+            if "session-" + hashlib.sha256(token.encode()).hexdigest() == handle:
+                return token
+        if len(page) < 500:
+            return None
+        offset += len(page)
 
 
 def revoke_session(*, session_id: str | None = None, email: str | None = None, revoke_all_for_user: bool = False) -> int:

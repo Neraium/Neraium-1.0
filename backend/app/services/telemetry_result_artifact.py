@@ -319,7 +319,7 @@ def _validate_payload_identity(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise CanonicalResultArtifactError("canonical_result_analysis_window_mismatch")
     if (
         _required_text(
-            analysis_metadata.get("run_id"), "canonical_result_analysis_run_missing"
+            (_mapping(analysis_result.get("runtime_metadata")).get("run_id") or analysis_metadata.get("run_id")), "canonical_result_analysis_run_missing"
         )
         != source_run_id
     ):

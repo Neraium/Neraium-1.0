@@ -81,7 +81,7 @@ def test_evaluate_sii_returns_canonical_phase_1_result_with_preserved_math() -> 
     assert trace["rows_received"] == len(rows)
     assert trace["rows_used"] == len(rows)
     assert trace["columns_used"] == columns[1:]
-    assert trace["total_runtime_seconds"] >= 0.0
+    assert trace["runtime_metadata"]["total_runtime_seconds"] >= 0.0
 
 
 def test_relationship_weakening_is_traceable_to_preserved_pearson_outputs() -> None:

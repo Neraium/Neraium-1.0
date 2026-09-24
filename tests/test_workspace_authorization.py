@@ -29,6 +29,8 @@ def _production_app(monkeypatch, runtime_dir):
 
 
 def _login(client: TestClient, email: str) -> None:
+    # Model the browser origin now required for cookie-authenticated writes.
+    client.headers["Origin"] = "https://testserver"
     response = client.post(
         "/api/auth/login", json={"email": email, "password": "password123"}
     )

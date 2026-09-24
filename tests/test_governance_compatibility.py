@@ -71,6 +71,12 @@ def stable_result(value):
     # Analytical results, findings, state, severity and compatibility stay intact.
     diagnostics = {"runtime_seconds", "total_runtime_seconds", "step_timings", "performance"}
     if isinstance(value, dict):
+        if "runtime_metadata" in value:
+            runtime = value["runtime_metadata"]
+            # Invert only the declared producer relocation to exercise the
+            # unchanged historical mathematical contract and its pinned hash.
+            assert set(runtime) <= diagnostics | {"run_id", "job_id"}
+            value = {**{k: v for k, v in value.items() if k != "runtime_metadata"}, **runtime}
         return {key: ("upload-fixture" if key == "run_id" and isinstance(item, str) and item.startswith("upload-")
                       else stable_result(item)) for key, item in value.items() if key not in diagnostics}
     if isinstance(value, list):

@@ -540,6 +540,10 @@ def validate_environment_completeness(settings: Settings) -> None:
             raise ValueError(
                 "NERAIUM_AUTH_DATABASE_URL must be an absolute PostgreSQL URL with a host and database name."
             )
+    if auth_database_url and app_env in {"prod", "production"}:
+        sslmode = parse_qs(urlsplit(auth_database_url).query).get("sslmode", [""])[-1]
+        if sslmode not in {"require", "verify-ca", "verify-full"}:
+            raise ValueError("NERAIUM_AUTH_DATABASE_URL must require TLS in production.")
     if auth_database_secret_arn:
         if not re.fullmatch(
             r"arn:(?:aws|aws-us-gov|aws-cn):secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+",

@@ -1,3 +1,4 @@
+from app.services.output_semantics import semantic_content
 """Exact sequential runner equivalence and fixed-reference cache boundaries."""
 import numpy as np
 import pytest
@@ -109,9 +110,7 @@ def test_cache_preserves_governed_temporal_replay(monkeypatch, current_correlati
         for result in (cached, uncached):
             assert result['processing_trace']['modules_failed'] == []
             assert result['compatibility']['sii_runner_result']['rows_processed'] == 48
-        assert {k: v for k, v in cached['relationship_graph'].items() if k != 'runtime_seconds'} == {
-            k: v for k, v in uncached['relationship_graph'].items() if k != 'runtime_seconds'
-        }
+        assert semantic_content(cached['relationship_graph']) == semantic_content(uncached['relationship_graph'])
         assert cached['analysis_result']['insights'] == uncached['analysis_result']['insights']
         assert cached['analysis_result']['evidence_index'] == uncached['analysis_result']['evidence_index']
         assert cached['analysis_result']['sii_evidence'] == uncached['analysis_result']['sii_evidence']

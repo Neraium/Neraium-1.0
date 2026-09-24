@@ -15,6 +15,7 @@ from starlette.datastructures import Headers
 from app.connectors.store import ConnectorHealthStore
 from app.contracts import ErrorResponse, enforce_query_contract, validate_contract_headers
 from app.core.config import Settings, get_settings
+from app.core.http_boundary import HttpBoundaryMiddleware, security_headers
 from app.core.logging_config import bind_log_context, configure_logging, reset_log_context
 from app.core.security import require_admin_role, require_api_access
 from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, findings, health, historical_ingestion, infrastructure, live_analysis, observability, replay, telemetry, workspaces
@@ -320,6 +321,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ecosystem.router, prefix="/api")
     app.include_router(distributed_cognition.router, prefix="/api")
 
+    app.add_middleware(HttpBoundaryMiddleware, settings=settings)
+
     @app.middleware("http")
     async def add_request_context(request: Request, call_next):
         try:
@@ -328,40 +331,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return JSONResponse(
                 status_code=exc.status_code,
                 content={"detail": exc.detail, "message": str(exc.detail), "error_type": "invalid_header"},
+                headers=security_headers(request.scope),
             )
-        if request.method in {"POST", "PUT", "PATCH"} and request.url.path not in {
-            "/api/data/upload", "/api/connectors/csv/upload"
-        }:
-            max_payload_bytes = (
-                settings.telemetry_max_request_size_bytes
-                if request.url.path == "/api/telemetry/ingest"
-                else 1_048_576
-            )
-            payload_limit_message = (
-                f"Telemetry request payload exceeds the {max_payload_bytes}-byte limit."
-                if request.url.path == "/api/telemetry/ingest"
-                else "Request payload exceeds the 1 MiB limit."
-            )
-            raw_length = request.headers.get("content-length")
-            try:
-                declared_length = int(raw_length) if raw_length is not None else None
-            except ValueError:
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "Invalid Content-Length header.", "message": "Invalid Content-Length header.", "error_type": "invalid_header"},
-                )
-            if declared_length is not None and declared_length > max_payload_bytes:
-                return JSONResponse(
-                    status_code=413,
-                    content={"detail": payload_limit_message, "message": payload_limit_message, "error_type": "payload_too_large"},
-                )
-            if request.url.path == "/api/telemetry/ingest" or declared_length is None:
-                body = await request.body()
-                if len(body) > max_payload_bytes:
-                    return JSONResponse(
-                        status_code=413,
-                        content={"detail": payload_limit_message, "message": payload_limit_message, "error_type": "payload_too_large"},
-                    )
         inbound_request_id = str(request.headers.get("X-Request-Id") or "").strip()
         request_id = (
             inbound_request_id
@@ -394,14 +365,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             response.headers["X-Request-Id"] = request_id
             if upload_session_id:
                 response.headers["X-Upload-Session-Id"] = upload_session_id
-            response.headers.setdefault("X-Content-Type-Options", "nosniff")
-            response.headers.setdefault("X-Frame-Options", "DENY")
-            response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-            response.headers.setdefault("Content-Security-Policy", "default-src 'self'")
-            if request.url.scheme == "https":
-                response.headers.setdefault(
-                    "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
-                )
+            for key, value in security_headers(request.scope).items():
+                response.headers[key] = value
             return response
         finally:
             duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
@@ -500,7 +465,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "message": "Unexpected API error.",
                     "error_type": "api_request_error",
                 },
-                headers=cors_error_headers(request),
+                headers={**security_headers(request.scope), **cors_error_headers(request)},
             )
         logger.exception("upload_request_failed path=%s", request.url.path)
         return JSONResponse(
@@ -512,28 +477,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 },
                 status_code=500,
             ),
-            headers=cors_error_headers(request),
+            headers={**security_headers(request.scope), **cors_error_headers(request)},
         )
 
     @app.get("/")
     def read_root():
         return {
             "service": "neraium-api",
-            "status": service_health_snapshot()["status"],
+            "status": service_health_snapshot(include_upload_session=False)["status"],
             "docs": "/docs",
             "health": "/health",
-            "process_role": settings.process_role,
-            "background_workers": settings.start_background_workers,
-            "data_poller": bool(STARTUP_STATUS.get("data_poller_started")),
         }
 
     @app.get("/health")
-    def health_check_alias():
-        snapshot = service_health_snapshot()
-        return JSONResponse(
-            status_code=200 if snapshot["status"] == "ok" else 503,
-            content={**snapshot, "service": "neraium-api", "process_role": settings.process_role},
-        )
+    def health_check_alias(request: Request):
+        return health.read_health(request)
 
     # Legacy frontend compatibility aliases. Older bundles may call shorthand
     # endpoints without the "/api/..." prefix.

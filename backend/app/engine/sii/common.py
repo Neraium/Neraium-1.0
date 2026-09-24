@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.output_semantics import runtime_metadata
+
 import math
 import time
 from datetime import datetime
@@ -228,7 +230,7 @@ def module_envelope(
         "assumptions": list(dict.fromkeys(str(item) for item in assumptions if str(item))),
         "output_metrics": output_metrics,
         "limitations": list(dict.fromkeys(str(item) for item in limitations if str(item))),
-        "runtime_seconds": round(max(0.0, time.perf_counter() - started), 6),
+        "runtime_metadata": runtime_metadata(runtime_seconds=round(max(0.0, time.perf_counter() - started), 6)),
     }
     if reason:
         result["reason"] = str(reason)

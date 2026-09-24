@@ -68,6 +68,9 @@ _TECHNICAL_CHANNELS = (
 )
 
 _SHARED_ANALYSIS_FIELDS = (
+    "output_semantics",
+    "identity_contract",
+    "runtime_metadata",
     "schema_version",
     "status",
     "analysis_id",
@@ -99,6 +102,7 @@ _SHARED_ANALYSIS_FIELDS = (
 
 _FINDING_AUDIT_FIELDS = frozenset(
     {
+        "runtime_metadata",
         "measurable_consequence",
         "id",
         "finding_id",
@@ -666,7 +670,7 @@ def _validated_identity(
         )
     if (
         _required_text(
-            analysis_metadata.get("run_id"),
+            (_mapping(analysis.get("runtime_metadata")).get("run_id") or analysis_metadata.get("run_id")),
             "canonical_result_projection_analysis_run_required",
         )
         != run_id

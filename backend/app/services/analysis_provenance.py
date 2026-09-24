@@ -8,6 +8,8 @@ from typing import Any
 from app.engine.sii_contract import ENGINE_NAME, ENGINE_VERSION
 from app.services.analysis_result_contract import CONTRACT_VERSION as ANALYSIS_CONTRACT_VERSION
 from app.services.engine_identity import git_commit
+from app.services.output_semantics import SEMANTICS_VERSION, LEGACY_SEMANTICS_VERSION, semantic_digest, _legacy_reader
+from app.services.upload_output_semantics import UPLOAD_EVIDENCE_VERSION, encode_upload_result
 from app.services.mode_aware_authority import POLICY_VERSION as MODE_AUTHORITY_POLICY_VERSION
 from app.services.performance_instrumentation import PERFORMANCE_CONTRACT_VERSION
 from app.water_intelligence.priors import WATER_PRIORS
@@ -81,6 +83,28 @@ def result_digest(result: dict[str, Any]) -> str:
         )
         if key in result
     }
+    governed = result.get("analysis_result") or {}
+    if governed.get("output_semantics") == LEGACY_SEMANTICS_VERSION and result.get("upload_evidence_contract") != UPLOAD_EVIDENCE_VERSION:
+        return _legacy_reader(governed).semantic_digest(selected)
+    if result.get("upload_evidence_contract") == UPLOAD_EVIDENCE_VERSION:
+        selected = encode_upload_result(selected)
+        # This link points back to the digest being calculated. All other
+        # provenance (source ownership, baseline, configuration) stays bound.
+        embedded = ((selected.get("analysis_result") or {}).get("sii_evidence") or {}).get("provenance")
+        if isinstance(embedded, dict):
+            embedded.pop("result_hash", None)
+        digest = (_legacy_reader(result).semantic_digest
+                  if governed.get("output_semantics") == LEGACY_SEMANTICS_VERSION else semantic_digest)
+        return digest({
+            "identity_contract": UPLOAD_EVIDENCE_VERSION,
+            "input_hash": (result.get("ingestion_report") or {}).get("input_hash") or result.get("input_hash"),
+            "configuration": analysis_configuration(result),
+            "active_baseline_reference": result.get("active_baseline_reference"),
+            "result": selected,
+        })
+    if (result.get("analysis_result") or {}).get("output_semantics") == SEMANTICS_VERSION:
+        return semantic_digest(selected)
+    # Preserve the digest algorithm for previously stored, unversioned records.
     return canonical_digest(_without_runtime_noise(selected))
 
 
@@ -94,6 +118,8 @@ def build_analysis_provenance(result: dict[str, Any]) -> dict[str, Any]:
     configuration = analysis_configuration(result)
     return {
         "schema_version": PROVENANCE_SCHEMA_VERSION,
+        **({"result_hash_contract": UPLOAD_EVIDENCE_VERSION}
+           if result.get("upload_evidence_contract") == UPLOAD_EVIDENCE_VERSION else {}),
         "analysis_run_id": result.get("run_id") or result.get("job_id"),
         "upload_id": result.get("upload_id") or result.get("job_id"),
         "organization_id": result.get("organization_id"),

@@ -3,7 +3,10 @@ from __future__ import annotations
 import math
 import re
 from datetime import datetime, timedelta, timezone
+
 from typing import Any
+
+from app.services.output_semantics import evidence_identifier, govern_runtime, runtime_metadata, runtime_value
 
 from app.services.product_evidence_contract import product_evidence
 from app.services.measurable_consequence import attach_measurable_consequences
@@ -109,10 +112,11 @@ def empty_analysis_result(
     status: str = "empty",
     message: str | None = None,
     errors: list[str] | None = None,
+    identity_contract: str = "execution.v1",
 ) -> dict[str, Any]:
     error_items = [clean_text(item) for item in (errors or []) if clean_text(item)]
     warning_items = [clean_text(message)] if message and not error_items else []
-    return {
+    return govern_runtime({
         "schema_version": CONTRACT_VERSION,
         "status": status,
         "analysis_id": clean_text(analysis_id),
@@ -154,7 +158,7 @@ def empty_analysis_result(
             "source": "empty",
         },
         "sii_evidence": empty_sii_evidence_projection(),
-    }
+    }, identity_contract=identity_contract)
 
 
 def build_normalized_telemetry(
@@ -192,12 +196,11 @@ def build_normalized_telemetry(
             flags = missing_value_flags(raw_value)
             parsed = parse_numeric_value(str(raw_value)) if raw_value is not None else None
             quality = normalized_quality(column, flags, integrity_flags)
-            classification = signal_classification(column, signal_catalog)
-            metadata = signal_metadata(column, signal_catalog)
-            display_name = signal_display_name(column, signal_catalog)
-            tag = tag_summaries.setdefault(
-                column,
-                {
+            if column not in tag_summaries:
+                classification = signal_classification(column, signal_catalog)
+                metadata = signal_metadata(column, signal_catalog)
+                display_name = signal_display_name(column, signal_catalog)
+                tag_summaries[column] = {
                     "tag_name": display_name,
                     "source_column": column,
                     "original_header": metadata.get("original_header"),
@@ -216,8 +219,8 @@ def build_normalized_telemetry(
                     "canonical_role": metadata.get("canonical_role"),
                     "telemetry_classification": classification,
                     "record_count": 0,
-                },
-            )
+                }
+            tag = tag_summaries[column]
             tag["record_count"] += 1
             tag["quality_counts"][quality] = int(tag["quality_counts"].get(quality, 0)) + 1
             tag["missing_value_flags"] = dedupe([*tag["missing_value_flags"], *flags])
@@ -282,15 +285,17 @@ def build_analysis_result(
     ).get("source_type")
     source_type = clean_text(source_type_value)
     connector_analysis = source_kind in {"connector", "telemetry_connector"} or source_type == "telemetry_connector"
-    # Historical uploads retain their established fallback. Connector analysis
-    # must not synthesize an upload identity for an ongoing telemetry window.
-    upload_id = (
-        clean_text(result.get("upload_id"))
-        if connector_analysis
-        else first_present(result.get("upload_id"), result.get("job_id"), analysis_id)
+    identity_contract = (
+        "connector-window.v1" if connector_analysis else
+        "paired-reference.v1" if result.get("source_identity_contract") == "paired-reference.v1" else
+        "complete-upload-evidence.v2" if result.get("upload_evidence_contract") == "complete-upload-evidence.v2"
+        else "execution.v1"
     )
+    # Source upload identity must never be synthesized from an execution ID.
+    upload_id = (first_present(result.get("upload_id"), result.get("job_id"), analysis_id)
+                 if identity_contract == "complete-upload-evidence.v2" else clean_text(result.get("upload_id")))
     source_file = first_present(result.get("source_file"), result.get("filename"))
-    generated_at = first_present(result.get("completed_at"), result.get("last_processed_at"), now_iso())
+    generated_at = first_present(runtime_value(result, "completed_at"), runtime_value(result, "last_processed_at"), now_iso())
     errors = dedupe_text([*to_list(result.get("errors")), result.get("error")])
     if str(result.get("status") or "").upper() == "FAILED" or errors:
         return empty_analysis_result(
@@ -300,6 +305,7 @@ def build_analysis_result(
             status="failed",
             message=first_present(result.get("message"), "Analysis failed."),
             errors=errors,
+            identity_contract=identity_contract,
         )
 
     data_quality = dict(result.get("data_quality") or {}) if isinstance(result.get("data_quality"), dict) else {}
@@ -335,7 +341,14 @@ def build_analysis_result(
     evidence_index: dict[str, dict[str, Any]] = {}
 
     def add_evidence(seed: str, payload: dict[str, Any]) -> str:
-        base_id = f"ev-{slug(analysis_id or upload_id or 'analysis')}-{slug(seed)}"
+        identity_payload = payload
+        if identity_contract == "execution.v1":
+            # These are the explanation producer's correlation aliases, not
+            # telemetry keys. Retain their values in the governed runtime envelope.
+            identity_payload = {key: value for key, value in payload.items()
+                                if key not in {"analysis_id", "source_upload_id", "upload_id"}}
+        base_id = evidence_identifier(seed, {"source_file": source_file, "upload_id": upload_id if identity_contract != "execution.v1" else "",
+                                             "time_window": build_time_window(result), "evidence": identity_payload})
         evidence_id = base_id
         counter = 2
         while evidence_id in evidence_index:
@@ -502,6 +515,7 @@ def build_analysis_result(
                     "persistence_duration": item.get("persistence_duration"),
                     "relationship_evidence": item.get("relationship_evidence"),
                     "activity_timeline": to_list(item.get("activity_timeline")),
+                    "runtime_metadata": runtime_metadata(**dict(item.get("runtime_metadata") or {})),
                     "sii_finding_id": item.get("sii_finding_id"),
                     "affected_assets": to_list(item.get("affected_assets")),
                     "relationship_prior_id": item.get("relationship_prior_id"),
@@ -623,7 +637,7 @@ def build_analysis_result(
             if connector_analysis
             else "uploaded_csv_telemetry"
         ),
-        "processing_time_seconds": result.get("processing_time_seconds"),
+        "processing_time_seconds": runtime_value(result, "processing_time_seconds"),
         "telemetry_signal_count": len(telemetry_signals),
         "condition_contract_version": CONDITION_CONTRACT_VERSION,
         "condition_count": len(conditions),
@@ -677,7 +691,7 @@ def build_analysis_result(
     attach_measurable_consequences(
         payload, source=result, original_findings=[*raw_conditions, *raw_insights],
     )
-    return payload
+    return govern_runtime(payload, identity_contract=identity_contract)
 
 
 def empty_sii_evidence_projection(
@@ -1305,13 +1319,13 @@ def _sii_provenance(result: dict[str, Any]) -> dict[str, Any]:
             "input_hash", "baseline_id", "baseline_dataset_id",
             "baseline_version", "baseline_hash", "engine_name",
             "engine_version", "build_commit", "configuration_hash",
-            "result_hash",
+            "result_hash", "result_hash_contract",
         ),
     )
     ingestion = _sii_map(result.get("ingestion_report"))
     fallbacks = {
         "analysis_run_id": result.get("run_id") or result.get("job_id"),
-        "upload_id": result.get("upload_id") or result.get("job_id"),
+        "upload_id": result.get("upload_id"),
         "dataset_id": result.get("dataset_id") or result.get("comparison_dataset_id"),
         "input_hash": ingestion.get("input_hash") or result.get("input_hash"),
         "baseline_id": result.get("baseline_id"),
@@ -1496,6 +1510,7 @@ def build_condition_contracts(
                     ),
                     "evidence_summary": item.get("evidence_summary"),
                     "comparable_operation": comparable,
+                    "runtime_metadata": runtime_metadata(**dict(item.get("runtime_metadata") or {})),
                     "timeline": to_list(first_present(item.get("timeline"), item.get("activity_timeline"))),
                     "activity_timeline": to_list(first_present(item.get("timeline"), item.get("activity_timeline"))),
                     "next_checks": next_checks,
@@ -1944,7 +1959,7 @@ def build_time_window(result: dict[str, Any]) -> str:
     last = clean_text(timestamp.get("last_timestamp"))
     if first and last:
         return f"{first} to {last}"
-    return first_present(result.get("last_processed_at"), result.get("completed_at"), "")
+    return first_present(first, last, "")
 
 
 def build_behavior_windows(

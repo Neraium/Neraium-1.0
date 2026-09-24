@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.output_semantics import SEMANTICS_VERSION, runtime_metadata
+
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -153,6 +155,8 @@ def interpret_water_intelligence(context: WaterIntelligenceContext) -> dict[str,
 
     return {
         "schema_version": SCHEMA_VERSION,
+        "output_semantics": SEMANTICS_VERSION,
+        "runtime_metadata": runtime_metadata(generated_at=generated_at),
         "generated_at": generated_at,
         "source": "sii_relationship_drift_interpretation",
         "engine_boundary": {
@@ -254,7 +258,7 @@ def _build_water_insight(*, prior: RelationshipPrior, finding: dict[str, Any], f
         "confounding_conditions": active_confounders,
         "recommended_checks": checks,
         "confidence_and_uncertainty": confidence,
-        "water_interpretation": {"schema_version": SCHEMA_VERSION, "generated_at": generated_at, "prior": {key: value for key, value in prior.as_dict().items() if key not in {"possible_explanations", "recommended_checks"}}, "strict_separation": {"observed_evidence": "Observed SII relationship drift and source telemetry context.", "confirmation": "Telemetry alone never sets operator_confirmed."}},
+        "water_interpretation": {"schema_version": SCHEMA_VERSION, "output_semantics": SEMANTICS_VERSION, "runtime_metadata": runtime_metadata(generated_at=generated_at), "generated_at": generated_at, "prior": {key: value for key, value in prior.as_dict().items() if key not in {"possible_explanations", "recommended_checks"}}, "strict_separation": {"observed_evidence": "Observed SII relationship drift and source telemetry context.", "confirmation": "Telemetry alone never sets operator_confirmed."}},
         "what_changed": what_changed,
         "what_happened": what_changed,
         "why_it_matters": why_matters,

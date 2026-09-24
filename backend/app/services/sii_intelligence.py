@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from app.services.output_semantics import runtime_value
+
 from datetime import UTC, datetime
 from typing import Any
 
-from app.services.aletheia_governance import govern_candidate
 from app.services.structural_cognition import build_review_required_evidence_lineage
 
 
@@ -211,7 +212,6 @@ def build_sample_intelligence() -> dict[str, Any]:
         "evidence_lineage": evidence_lineage,
     }
     candidate["core_sii_outputs"] = build_core_sii_outputs(candidate)
-    candidate["aletheia_gate"] = govern_candidate(candidate)
     return candidate
 
 
@@ -396,7 +396,6 @@ def build_upload_intelligence(
         "evidence_lineage": evidence_lineage,
     }
     candidate["core_sii_outputs"] = build_core_sii_outputs(candidate)
-    candidate["aletheia_gate"] = govern_candidate(candidate)
     return candidate
 
 
@@ -634,7 +633,7 @@ def build_intelligence_status(intelligence: dict[str, Any] | None = None) -> dic
     return {
         "engine_loaded": True,
         "source": intelligence.get("source", "sii_engine"),
-        "last_processed_at": intelligence.get("last_updated"),
+        "last_processed_at": runtime_value(intelligence, "last_updated"),
         "active_rooms_count": len(intelligence.get("rooms", [])),
         "evidence_fields_present": sorted(field for field in fields if field in intelligence),
         "mode": intelligence.get("mode", "sample"),

@@ -75,7 +75,7 @@ export default function GovernanceAdminWorkspace({
       <section className="workspace-surface">
         <AdministrationHeader currentUser={currentUser} />
         <InfrastructureHealthDashboard apiFetch={apiFetch} accessCode={accessCode} Panel={Panel} />
-        <Panel title="Evidence governance" subtitle="Loading governance records…" />
+        <Panel title="Historical Aletheia evidence" subtitle="Loading governance records…" />
       </section>
     );
   }
@@ -97,8 +97,8 @@ export default function GovernanceAdminWorkspace({
       <InfrastructureHealthDashboard apiFetch={apiFetch} accessCode={accessCode} Panel={Panel} />
       <div className="workspace-grid workspace-grid--two admin-summary-grid">
       <Panel
-        title="Evidence governance"
-        subtitle="Evidence admission audit."
+        title="Historical Aletheia evidence"
+        subtitle="Legacy records · read-only · no current analytical authority"
       >
         <div className="metric-grid">
           <article className="metric-card"><span className="metric-label">Decision records</span><strong className="metric-value">{payload?.total ?? 0}</strong></article>

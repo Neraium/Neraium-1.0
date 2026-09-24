@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from app.services.output_semantics import runtime_value
+
 from typing import Any
+
+from app.services.output_semantics import separate_generation_events
 
 from app.services.product_evidence_contract import product_evidence
 from app.services.cumulative_counters import is_cumulative_counter_name
@@ -175,7 +179,7 @@ def build_insights(
     ]
     time_window = build_time_window(result)
     source_ranges = source_time_ranges(result, time_window)
-    upload_id = first_text(result.get("upload_id"), result.get("job_id"), result.get("run_id"))
+    upload_id = first_text(result.get("upload_id"))
     analysis_id = first_text(result.get("analysis_id"), result.get("run_id"), upload_id)
 
     supporting_context = context_driver_drift_items(baseline)
@@ -698,13 +702,13 @@ def ensure_finding_context(
                 sensor_health=sensor_health,
                 first_detected_at=first_text(item.get("first_detected_at")),
                 generated_at=first_text(
-                    result.get("completed_at"),
-                    result.get("last_processed_at"),
+                    runtime_value(result, "completed_at"),
+                    runtime_value(result, "last_processed_at"),
                     result.get("generated_at"),
                 ),
             ),
         )
-        normalized.append(compact_dict(updated))
+        normalized.append(compact_dict(separate_generation_events(updated)))
     return normalized
 
 
@@ -1113,7 +1117,8 @@ def finding_activity_timeline(
                 "title": first_text(classification.get("label"), "Finding generated"),
                 "detail": "Neraium generated this evidence-bounded finding for human review.",
                 "time": generated_at,
-                "precision": "source_timestamp",
+                "precision": "runtime_timestamp",
+                "time_basis": "execution_clock",
             }
         )
     return entries
@@ -3096,7 +3101,6 @@ def build_time_window(result: dict[str, Any]) -> str:
                 str(timestamp.get("last_timestamp") or ""),
             ] if item
         ),
-        result.get("last_processed_at"),
     )
 
 

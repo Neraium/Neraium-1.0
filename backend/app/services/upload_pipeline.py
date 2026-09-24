@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.output_semantics import runtime_value
+
 import os
 import time
 from datetime import datetime, timezone
@@ -425,7 +427,7 @@ def run_structural_analysis_pipeline(
         max(0.0, time.perf_counter() - (processing_started_at or time.perf_counter())),
         6,
     )
-    performance_report = (sii_result.get("processing_trace") or {}).get("performance")
+    performance_report = runtime_value(sii_result.get("processing_trace") or {}, "performance")
     if isinstance(performance_report, dict):
         performance_report["total_wall_seconds"] = processing_time_seconds
         performance_report["compact_summary"] = compact_performance_summary(performance_report)

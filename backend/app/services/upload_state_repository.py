@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from app.services.output_semantics import SEMANTICS_VERSION, runtime_value
+from app.services.upload_output_semantics import UPLOAD_EVIDENCE_VERSION, encode_upload_result
+
 import hashlib
 import json
 import os
@@ -98,7 +101,7 @@ def _is_terminal_upload_state(payload: dict[str, Any] | None) -> bool:
 
 def _upload_attempt_id(job_id: str, payload: dict[str, Any] | None = None) -> str:
     if isinstance(payload, dict):
-        explicit = str(payload.get("attempt_id") or "").strip()
+        explicit = str(runtime_value(payload, "attempt_id") or "").strip()
         if explicit:
             return explicit
     return str(job_id)
@@ -1374,12 +1377,18 @@ def write_upload_completion(job_id: str, *, result: dict[str, Any], summary: dic
             normalized_summary
             if normalized_summary.get("attempt_id")
             else normalized_result
-            if normalized_result.get("attempt_id")
+            if runtime_value(normalized_result, "attempt_id")
             else existing_status
         )
         attempt_id = _upload_attempt_id(str(job_id), attempt_source)
         normalized_result["attempt_id"] = attempt_id
         normalized_summary["attempt_id"] = attempt_id
+        # Publication owns the final attempt ID. Encode after stamping it, while
+        # retaining the attempt in the operational terminal summary. Historical
+        # artifacts keep their original representation and bytes.
+        if (normalized_result.get("upload_evidence_contract") == UPLOAD_EVIDENCE_VERSION
+                and (normalized_result.get("analysis_result") or {}).get("output_semantics") == SEMANTICS_VERSION):
+            normalized_result = encode_upload_result(normalized_result)
         existing_terminal = _read_terminal_upload_state(str(job_id), normalized_summary)
         if (
             not isinstance(existing_terminal, dict)
@@ -1519,8 +1528,8 @@ def _payloads_share_attempt(
     """
     if not isinstance(active, dict) or not isinstance(candidate, dict):
         return False
-    active_attempt_id = str(active.get("attempt_id") or "").strip()
-    candidate_attempt_id = str(candidate.get("attempt_id") or "").strip()
+    active_attempt_id = str(runtime_value(active, "attempt_id") or "").strip()
+    candidate_attempt_id = str(runtime_value(candidate, "attempt_id") or "").strip()
     if active_attempt_id or candidate_attempt_id:
         return bool(active_attempt_id and candidate_attempt_id and active_attempt_id == candidate_attempt_id)
     active_job_id = _identity_field(active, "job_id")

@@ -29,6 +29,7 @@ from scripts.benchmark_dataset_processing import BenchmarkCase, run_case
 
 
 _RUNTIME_KEYS = {
+    "runtime_metadata",
     "completed_at",
     "created_at",
     "performance",
@@ -269,7 +270,7 @@ def test_sii_optimized_and_reference_paths_have_identical_intelligence() -> None
     )
 
     assert _without_runtime(optimized) == _without_runtime(reference)
-    report = optimized["processing_trace"]["performance"]
+    report = optimized["processing_trace"]["runtime_metadata"]["performance"]
     stage_names = {item["stage"] for item in report["stages"]}
     assert {
         "signal_drift",
@@ -305,7 +306,7 @@ def test_full_upload_report_includes_validation_and_canonical_stages() -> None:
         + [",".join("" if row.get(column) is None else str(row.get(column)) for column in columns) for row in rows]
     )
     result = process_csv_content(content=content.encode(), filename="performance-report.csv")
-    report = result["processing_trace"]["performance"]
+    report = result["processing_trace"]["runtime_metadata"]["performance"]
     stages = {item["stage"] for item in report["stages"]}
 
     assert {

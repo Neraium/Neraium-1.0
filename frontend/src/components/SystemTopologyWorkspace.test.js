@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { derivePrimaryMessage, deriveUploadSignal, resolveProductionGovernance } from "./SystemTopologyWorkspace";
+import { derivePrimaryMessage, deriveUploadSignal, deriveCurrentOutput } from "./SystemTopologyWorkspace";
 
 describe("SystemTopologyWorkspace operator trust mapping", () => {
   it("keeps upload state pending when operator review evidence is not ready", () => {
@@ -37,14 +37,24 @@ describe("SystemTopologyWorkspace operator trust mapping", () => {
   it("does not reconstruct production governance from removed structural-facade fields", () => {
     const legacyGovernance = { gate_outcome: "PASS", admitted_state: "ALERT" };
 
-    expect(resolveProductionGovernance({
+    expect(deriveCurrentOutput({
       sourceIntelligence: { distributed_cognition_governance: legacyGovernance },
       distributed_cognition_governance: legacyGovernance,
-    })).toBeNull();
+    }, { awaitingSii: false }).detail).toBeNull();
 
     const aletheiaGate = { gate_outcome: "PASS", admitted_state: "WATCH" };
-    expect(resolveProductionGovernance({
+    expect(deriveCurrentOutput({
       sourceIntelligence: { aletheia_gate: aletheiaGate },
-    })).toBe(aletheiaGate);
+    }, { awaitingSii: false }).detail).toBeNull();
   });
 });
+
+ it("shows canonical evidence regardless of legacy denial", () => {
+   const canonicalFinding = { exists: true, summary: "Current relationship evidence" };
+   const output = deriveCurrentOutput({ canonicalFinding, sourceIntelligence: {
+     aletheia_gate: { gate_outcome: "NO_PASS", admitted_state: "NONE" },
+   } }, { awaitingSii: false });
+   expect(output.hasFinding).toBe(true);
+   expect(derivePrimaryMessage({ awaitingSii: false, pendingVerification: false,
+     canonicalFinding, uploadSignal: {} })).toBe(canonicalFinding.summary);
+ });

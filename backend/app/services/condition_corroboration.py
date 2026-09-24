@@ -4,7 +4,11 @@ import hashlib
 import re
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
+
 from typing import Any
+
+from app.services.output_semantics import canonical_json, runtime_metadata
+from app.services.output_semantics import separate_generation_events
 
 from app.services.change_trajectory import build_change_trajectory
 from app.services.finding_classification import (
@@ -285,7 +289,7 @@ class ConditionCorroborationService:
                 evidence=evidence,
                 evidence_summary=corroboration.evidence_summary,
                 comparable_operation=comparable,
-                timeline=timeline,
+                timeline=[event for event in timeline if event.get("event_type") != "condition_generated"],
                 next_checks=next_checks,
                 escalation=escalation,
             ).to_dict()
@@ -325,7 +329,8 @@ class ConditionCorroborationService:
                     },
                     "recommended_check": next_checks[0] if next_checks else "",
                     "recommended_investigation": next_checks,
-                    "activity_timeline": timeline,
+                    "activity_timeline": [event for event in timeline if event.get("event_type") != "condition_generated"],
+                    "runtime_metadata": runtime_metadata(events=[event for event in timeline if event.get("event_type") == "condition_generated"]),
                     "source_time_ranges": _condition_source_time_ranges(
                         primary,
                         evidence_interval,
@@ -356,7 +361,7 @@ class ConditionCorroborationService:
                     "source_tags": corroboration.affected_signals,
                 }
             )
-            conditions.append(condition)
+            conditions.append(separate_generation_events(condition))
 
         return sorted(
             conditions,
@@ -529,7 +534,7 @@ def _normalize_relationship(item: dict[str, Any], index: int) -> dict[str, Any]:
     normalized = dict(item)
     normalized.update(
         {
-            "id": str(item.get("id") or item.get("relationship_id") or f"relationship-{index}"),
+            "id": str(item.get("id") or item.get("relationship_id") or "relationship-" + hashlib.sha256(canonical_json(item).encode()).hexdigest()[:16]),
             "columns": columns,
             "system": str(
                 item.get("system")
@@ -557,13 +562,13 @@ def _coherent_groups(relationships: list[dict[str, Any]]) -> list[list[int]]:
     remaining = set(range(len(relationships)))
     groups: list[list[int]] = []
     while remaining:
-        seed = max(remaining, key=lambda index: _relationship_rank(relationships[index]))
+        seed = max(sorted(remaining), key=lambda index: _relationship_rank(relationships[index]))
         orientation = _orientation(relationships[seed])
         group = {seed}
         expanded = True
         while expanded:
             expanded = False
-            for candidate in list(remaining - group):
+            for candidate in sorted(remaining - group):
                 relationship = relationships[candidate]
                 if _orientation(relationship) != orientation:
                     continue
@@ -572,7 +577,7 @@ def _coherent_groups(relationships: list[dict[str, Any]]) -> list[list[int]]:
                 if any(_related(relationships[current], relationship) for current in group):
                     group.add(candidate)
                     expanded = True
-        ordered = sorted(group, key=lambda index: _relationship_rank(relationships[index]), reverse=True)
+        ordered = sorted(sorted(group), key=lambda index: _relationship_rank(relationships[index]), reverse=True)
         groups.append(ordered)
         remaining -= group
     return groups
@@ -1023,7 +1028,8 @@ def _condition_timeline(
                 "title": "Condition generated for human review",
                 "detail": "Neraium grouped only telemetry-supported relationship evidence.",
                 "time": generated_at,
-                "precision": "source_timestamp",
+                "precision": "runtime_timestamp",
+                "time_basis": "execution_clock",
             }
         )
     return timeline
@@ -1192,7 +1198,7 @@ def _shared_signals(relationships: list[dict[str, Any]]) -> list[str]:
     for item in relationships:
         for column in set(item["columns"]):
             counts[column] = counts.get(column, 0) + 1
-    return [column for column, count in counts.items() if count >= 2]
+    return sorted(column for column, count in counts.items() if count >= 2)
 
 
 def _display_signal_name(value: Any) -> str:
@@ -1340,7 +1346,7 @@ def _condition_id(relationships: list[dict[str, Any]]) -> str:
         for item in relationships
         if str(item.get("system") or "").lower() not in GENERIC_SYSTEMS
     ]
-    prefix = _slug(systems[0] if systems else "monitored-area")
+    prefix = _slug(sorted(systems)[0] if systems else "monitored-area")
     return f"condition-{prefix}-{digest}"
 
 

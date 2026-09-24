@@ -5,6 +5,8 @@ from pathlib import Path, PureWindowsPath
 from typing import Any, TypeVar
 from urllib.parse import unquote
 
+from app.core.upload_error_presentation import UploadErrorRoute
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError
@@ -94,7 +96,10 @@ async def test_connector(request: Request) -> Any:
     ).model_dump()
 
 
-@router.post("/connectors/csv/upload")
+upload_router = APIRouter(route_class=UploadErrorRoute)
+
+
+@upload_router.post("/connectors/csv/upload")
 async def upload_csv_connector(
     request: Request,
     file: UploadFile = File(...),
@@ -323,3 +328,6 @@ def validate_csv_upload_filename(filename: str | None) -> str:
     ):
         raise HTTPException(status_code=400, detail="Filename must be a plain file name.")
     return value
+
+
+router.include_router(upload_router)

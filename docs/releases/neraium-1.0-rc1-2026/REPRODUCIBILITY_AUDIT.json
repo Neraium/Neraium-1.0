@@ -1,0 +1,146 @@
+{
+  "recorded_at_utc": "2026-09-24T21:01:39.401238+00:00",
+  "classification": "HISTORICAL_CERTIFICATION_TEST",
+  "packaging_decision": "EXPLICIT_HISTORICAL_CERTIFICATION_SUITE",
+  "root_cause": "Unmarked retained pre-repair evidence inventory was collected as an ordinary product test, while its three evidence inputs were intentionally not brought into the target worktree. Existing partial packaging edits postdate the stopped audit.",
+  "previous_blocked_decision": "docs/releases/neraium-1.0-rc1-2026/history/20260924T205356Z-entry/RELEASE_READINESS.json",
+  "entry_snapshot": "docs/releases/neraium-1.0-rc1-2026/history/20260924T205356Z-entry/ENTRY.json",
+  "preexisting_changes": {
+    ".github/workflows/ci.yml": {
+      "classification": "POST_FREEZE_TEST_PACKAGING",
+      "head_sha256": "f402d6fe720e0e307b3012a301b6b5c69bb957520ed4e5126162821dffeb4dd7",
+      "entry_sha256": "49929b0f80d25ccb7b689fb6910b135a6b6a8d8ebfe66dbcd28295ecd8b2bc1e",
+      "current_sha256": "49929b0f80d25ccb7b689fb6910b135a6b6a8d8ebfe66dbcd28295ecd8b2bc1e",
+      "mtime_at_entry_utc": "2026-09-24T20:46:04Z",
+      "purpose": "Explicit historical-suite marker/exclusion; conftest now additionally verifies authoritative hashes and supports external evidence root"
+    },
+    "pytest.ini": {
+      "classification": "POST_FREEZE_TEST_PACKAGING",
+      "head_sha256": "441d0e49c66459963fe65c4d18061eab48e9bc87e0fb80b38111cb1f0001ca9a",
+      "entry_sha256": "babe20833d43ec2812de95a87ffba574a5e597fa1912bb13c10270c44dbc7958",
+      "current_sha256": "babe20833d43ec2812de95a87ffba574a5e597fa1912bb13c10270c44dbc7958",
+      "mtime_at_entry_utc": "2026-09-24T20:46:04Z",
+      "purpose": "Explicit historical-suite marker/exclusion; conftest now additionally verifies authoritative hashes and supports external evidence root"
+    },
+    "tests/conftest.py": {
+      "classification": "POST_FREEZE_TEST_PACKAGING",
+      "head_sha256": "d6ee7938e425fae5c10a3e82975f1a5b6b704a4aaeb318cb483124f46b6a5538",
+      "entry_sha256": "8aba57db32fdc42a436d1f4e46adc2eb3b1421c79426c50228d652a651052ad9",
+      "current_sha256": "d601641f92f63c468c0cec9bbed758dbb90fa802dd6c8fc2540d8e79a25b9031",
+      "mtime_at_entry_utc": "2026-09-24T20:46:04Z",
+      "purpose": "Explicit historical-suite marker/exclusion; conftest now additionally verifies authoritative hashes and supports external evidence root"
+    }
+  },
+  "timeline_evidence": [
+    "S08 status-before and final status-after contain none of the three packaging paths",
+    "Previous 20:39:39 UTC release inventory has 58 tracked modifications and omits all three; entry has 61",
+    "All three entry mtimes are 20:46:04 UTC; authorship and exact uncommitted edit time cannot be established from Git"
+  ],
+  "test_introduction": "Untracked in target; no target git log --all entry. Retained complete-upload-repair/REPORT.md records the new regression written before repair and its exhaustive 146-leaf inventory assertion. SOURCE_HASHES captures the SOURCE test; final target comparator manifest captures current gate bytes. No invented introduction commit/date.",
+  "assertion": "Dictionary keys and list lengths match; exactly 146 inventory rows; inventory path set equals all recursively differing leaves; every row has producer, consumer, prospective_representation. Reads two frozen semantic JSON files plus FIELD_TRACE; executes no product analytical producer. Product imports and common pytest runtime isolation still occur.",
+  "inventory_meaning": "140 execution timing/metadata leaves, one execution ID, five derived provenance identities. Pre-repair evidence; not expected current analytical outputs.",
+  "documentation_authority": [
+    "/home/ubuntu/Neraium-current-integration/docs/performance/production-processing-2026/complete-upload-repair/REPORT.md",
+    "/home/ubuntu/Neraium-current-integration/docs/performance/production-processing-2026/EQUIVALENCE.md"
+  ],
+  "artifacts": [
+    {
+      "file": "end_to_end-10000-warmup.semantic.json.gz",
+      "expected_path": "docs/performance/production-processing-2026/raw/end_to_end-10000-warmup.semantic.json.gz",
+      "authoritative_copy_found": "YES",
+      "current_locations": [
+        "/home/ubuntu/Neraium-current-integration/docs/performance/production-processing-2026/raw/end_to_end-10000-warmup.semantic.json.gz"
+      ],
+      "size": 300030,
+      "sha256": "3170f34beeee9323755a282427f8b40351653e93db5fa7608e00f9c6f551df71",
+      "original_campaign": "production-processing-2026/complete-upload-repair",
+      "manifest_hash_evidence": "docs/validation/validated-candidate-integration-2026/SOURCE_HASHES.json#/files/docs/performance/production-processing-2026/raw/end_to_end-10000-warmup.semantic.json.gz",
+      "byte_identical_copies": "NOT_APPLICABLE",
+      "contains_raw_telemetry": "YES",
+      "telemetry_context": "Synthetic generated production benchmark; normalized observation values in semantic payloads, not a customer upload",
+      "contains_customer_data": "NO",
+      "contains_forensic_security_detail": "YES",
+      "forensic_context": "Historical provenance identities and execution metadata / producer-consumer field trace; not production incident records",
+      "required_for_product_runtime": "NO",
+      "required_for_ordinary_product_ci": "NO",
+      "required_for_historical_certification": "YES"
+    },
+    {
+      "file": "end_to_end-10000-1.semantic.json.gz",
+      "expected_path": "docs/performance/production-processing-2026/raw/end_to_end-10000-1.semantic.json.gz",
+      "authoritative_copy_found": "YES",
+      "current_locations": [
+        "/home/ubuntu/Neraium-current-integration/docs/performance/production-processing-2026/raw/end_to_end-10000-1.semantic.json.gz"
+      ],
+      "size": 300025,
+      "sha256": "525c32073bd98ced8840b4102b0895bd6d4f33a91c270bcba5a37e43463dba21",
+      "original_campaign": "production-processing-2026/complete-upload-repair",
+      "manifest_hash_evidence": "docs/validation/validated-candidate-integration-2026/SOURCE_HASHES.json#/files/docs/performance/production-processing-2026/raw/end_to_end-10000-1.semantic.json.gz",
+      "byte_identical_copies": "NOT_APPLICABLE",
+      "contains_raw_telemetry": "YES",
+      "telemetry_context": "Synthetic generated production benchmark; normalized observation values in semantic payloads, not a customer upload",
+      "contains_customer_data": "NO",
+      "contains_forensic_security_detail": "YES",
+      "forensic_context": "Historical provenance identities and execution metadata / producer-consumer field trace; not production incident records",
+      "required_for_product_runtime": "NO",
+      "required_for_ordinary_product_ci": "NO",
+      "required_for_historical_certification": "YES"
+    },
+    {
+      "file": "FIELD_TRACE.json",
+      "expected_path": "docs/performance/production-processing-2026/complete-upload-repair/FIELD_TRACE.json",
+      "authoritative_copy_found": "YES",
+      "current_locations": [
+        "/home/ubuntu/Neraium-current-integration/docs/performance/production-processing-2026/complete-upload-repair/FIELD_TRACE.json"
+      ],
+      "size": 84075,
+      "sha256": "8a2b1c821595f8c7496af5ccb49d5833116e65f24d4badc3d33c4291537d3e2b",
+      "original_campaign": "production-processing-2026/complete-upload-repair",
+      "manifest_hash_evidence": "docs/validation/validated-candidate-integration-2026/SOURCE_HASHES.json#/files/docs/performance/production-processing-2026/complete-upload-repair/FIELD_TRACE.json",
+      "byte_identical_copies": "NOT_APPLICABLE",
+      "contains_raw_telemetry": "NO",
+      "telemetry_context": "Synthetic generated production benchmark; normalized observation values in semantic payloads, not a customer upload",
+      "contains_customer_data": "NO",
+      "contains_forensic_security_detail": "YES",
+      "forensic_context": "Historical provenance identities and execution metadata / producer-consumer field trace; not production incident records",
+      "required_for_product_runtime": "NO",
+      "required_for_ordinary_product_ci": "NO",
+      "required_for_historical_certification": "YES"
+    }
+  ],
+  "similarly_named_files": "end-to-end-scale-2026 semantic snapshots have different hashes and sizes; rejected as substitutes",
+  "test_and_comparator_unchanged": true,
+  "checks": {
+    "ordinary_collection": "PASS: 2859/2887 selected; 28 deselected; no test execution",
+    "module_ordinary_collection": "PASS: 2 selected, historical inventory deselected",
+    "historical_collection": "PASS: exactly the inventory test selected",
+    "missing_evidence": "PASS: explicit historical invocation exits 1 at setup, required evidence absent",
+    "invalid_evidence": "PASS: explicit historical invocation exits 1 on invalid temporary probe bytes; no evidence altered",
+    "authoritative_evidence": "PASS: 1 passed, original assertions; read-only integration checkout",
+    "product_compatibility": "PASS: representation round-trip/source sensitivity and historical reader; 2 passed",
+    "frontend_build": "PASS: npm run build; Node 22.23.2, npm 10.9.8; CI Node 20 not reproduced locally",
+    "backend_syntax_import_startup": "PASS: AST parse, Docker import list, isolated test startup, GET /api/health 200",
+    "dependency_metadata": "PASS: installed Python requirements consistency and npm ls --depth=0; pip module absent, used importlib.metadata/packaging",
+    "diff_check": "PASS",
+    "full_suite": "NOT_RUN",
+    "10k_500k_1m_lbnl": "NOT_RUN",
+    "docker_image": "NOT_BUILT",
+    "isolated_release_probe": "PASS: copy of exact allowlist; 2859/2887 ordinary collection, 2 product compatibility tests and 1 explicit historical test with external authoritative evidence",
+    "direct_python_requirements": "PASS: installed versions satisfy all backend/requirements.txt direct version constraints"
+  },
+  "limitations": [
+    "No full regression, performance workload, Docker deployment, vulnerability rescan or production migration executed",
+    "Build used installed locked frontend dependency versions; local Node differs from CI",
+    "Python direct requirements pinned; transitive backend lock and mutable backend image remain prior deployment limitations"
+  ],
+  "final_integrity": {
+    "candidate_matches_final_s08_predeclaration": true,
+    "candidate_files_verified": 647,
+    "comparator_files_verified": 8,
+    "entry_hashed_files_changed": [
+      "tests/conftest.py"
+    ],
+    "certified_production_changed": false,
+    "index_empty": true
+  }
+}

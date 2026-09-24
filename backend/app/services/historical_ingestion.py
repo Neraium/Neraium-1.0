@@ -760,6 +760,16 @@ def _convert_value(value: float, source: str | None, target: str | None) -> floa
     return round(converter(value) if converter else value, 12)
 
 
+_ASCII_UNIT_MARKER = re.compile(r"[A-Za-z%]")
+
+
+def _has_unit_marker(text: str) -> bool:
+    if text.isascii():
+        return _ASCII_UNIT_MARKER.search(text) is not None
+    # Preserve str.isalpha's Unicode semantics, not a broader regex category.
+    return any(character.isalpha() or character in "%°" for character in text)
+
+
 @dataclass
 class SignalAccumulator:
     source_column: str
@@ -786,11 +796,12 @@ class SignalAccumulator:
 
     def add(self, raw: str, row_index: int, *, sample_stride: int) -> None:
         self.total_count += 1
-        encoded = str(raw).encode("utf-8", errors="replace")
+        text = str(raw)
+        encoded = text.encode("utf-8", errors="replace")
         self.full_value_hasher.update(len(encoded).to_bytes(8, "big"))
         self.full_value_hasher.update(encoded)
         value, kind = _parse_number(raw)
-        if any(character.isalpha() or character in "%°" for character in str(raw)):
+        if _has_unit_marker(text):
             unit = _value_unit(raw)
             if unit:
                 self.observed_units[unit] += 1
@@ -1732,6 +1743,9 @@ def build_historical_ingestion(
         for index in range(max(0, len(timestamp_key_sequence) - 2))
     )
     repeated_timestamp_blocks = sum(count - 1 for count in repeated_windows.values() if count > 1)
+    # These first-pass indexes have no further consumers. Canonicalization has
+    # its own duplicate indexes; do not retain both populations simultaneously.
+    del repeated_windows, timestamp_key_sequence, seen_timestamp_keys, seen_exact_rows
     exclusion_counts.update({
         key: count
         for key, count in {
@@ -1752,6 +1766,8 @@ def build_historical_ingestion(
         duplicate_count=duplicate_timestamps,
         repeated_timestamp_blocks=repeated_timestamp_blocks,
     )
+    timestamp_row_count = len(timestamp_rows)
+    del timestamp_rows
     timestamp_coverage = timestamp_profile.get("effective_usable_coverage_seconds")
     report(
         substage="timestamp_quality",
@@ -1940,7 +1956,7 @@ def build_historical_ingestion(
                 else "Parsed timezone-naive timestamps were preserved without assuming a site timezone."
             ),
             "timezone_policy": "explicit_offset_to_utc" if timezone_status == "explicit" else "preserve_timezone_naive",
-            "affected_rows": len(timestamp_rows),
+            "affected_rows": timestamp_row_count,
         })
     canonical_seen_exact: set[str] = set()
     canonical_seen_timestamps: set[str] = set()

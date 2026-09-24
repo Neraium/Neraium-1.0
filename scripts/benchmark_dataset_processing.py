@@ -45,6 +45,7 @@ CASES = {
     "high-signal": BenchmarkCase("high-signal", rows=3_000, signals=24),
 }
 _RUNTIME_KEYS = {
+    "runtime_metadata",
     "cache_hits",
     "completed_at",
     "created_at",
@@ -281,8 +282,8 @@ def run_case(case: BenchmarkCase, *, iterations: int = 1) -> dict[str, Any]:
     reference_baseline = baseline_reference[-1]["output"]
     optimized_comparison = comparison_optimized[-1]["output"]
     reference_comparison = comparison_reference[-1]["output"]
-    performance = optimized_comparison["processing_trace"]["performance"]
-    reference_performance = reference_comparison["processing_trace"]["performance"]
+    performance = optimized_comparison["processing_trace"]["runtime_metadata"]["performance"]
+    reference_performance = reference_comparison["processing_trace"]["runtime_metadata"]["performance"]
     comparison_stages_after = {
         item["stage"]: item["wall_seconds"]
         for item in performance["stages"]

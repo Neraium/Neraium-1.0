@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import math
 from copy import deepcopy
-from datetime import datetime
+from datetime import timezone, datetime
 from hashlib import sha256
 from statistics import median
 from typing import Any
@@ -629,7 +629,7 @@ def observation_bounds(
         return parsed[0].isoformat(), parsed[-1].isoformat(), limitations
     limitations.append("Source timestamps were unavailable; deterministic run identity time was used for behavioral version attribution.")
     digest = int(sha256(source_run_id.encode("utf-8")).hexdigest()[:8], 16)
-    synthetic = datetime.fromtimestamp(digest % 2147483647).astimezone().isoformat()
+    synthetic = datetime.fromtimestamp(digest % 2147483647, tz=timezone.utc).isoformat()
     return synthetic, synthetic, limitations
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.output_semantics import runtime_metadata
+
 import json
 from copy import deepcopy
 from hashlib import sha256
@@ -79,6 +81,7 @@ def evaluate_phase4(
         authenticated_scope=phase4_scope,
     )
     trace = _initial_trace(identity, source_run_id)
+    trace["runtime_metadata"] = runtime_metadata(**{key: cfg[key] for key in ("run_id", "job_id") if key in cfg})
     storage_failures: list[str] = []
     storage_writes: list[dict[str, Any]] = []
     active_model: dict[str, Any] | None = None
@@ -561,7 +564,7 @@ def _advanced_modules(
 
 
 def _source_run_id(columns: list[str], rows: list[dict[str, Any]], config: dict[str, Any]) -> str:
-    configured = config.get("source_run_id") or config.get("run_id") or config.get("job_id")
+    configured = config.get("source_run_id")
     if configured:
         return str(configured)
     payload = {"columns": columns, "rows": rows}

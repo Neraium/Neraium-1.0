@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
-import { apiFetch, ENABLE_ADMISSION_GATE } from "./config";
+import { apiFetch } from "./config";
 
 import WorkspaceLoadingState from "./components/WorkspaceLoadingState";
 import useFacilityRuntime from "./hooks/useFacilityRuntime";
@@ -260,20 +260,12 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
 
   const liveOps = useMemo(() => {
     const intelligence = effectiveLatestUploadResult?.sii_intelligence ?? null;
-    const governance = intelligence?.aletheia_gate ?? null;
-    const admittedState = String(governance?.admitted_state ?? "").toUpperCase();
-    const gateOutcome = String(governance?.gate_outcome ?? "").toUpperCase();
-    const hasPass = ENABLE_ADMISSION_GATE && gateOutcome === "PASS" && ["WATCH", "ALERT"].includes(admittedState);
     const uploadTone = deriveUploadTone(effectiveLatestUploadResult);
 
     const heartbeatSource = telemetrySession.heartbeatAt;
     const hasTelemetryHeartbeat = Boolean(heartbeatSource);
     const facilityTone = hasTelemetryHeartbeat
-      ? (hasPass
-        ? admittedState === "ALERT"
-          ? "critical"
-          : "watch"
-        : uploadTone)
+      ? uploadTone
       : telemetrySession.sessionMode === "persisted"
         ? "watch"
         : "empty";
@@ -309,29 +301,18 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
       dataFreshness,
       siiVerification,
       primaryWindow: {
-        label: governance?.affected_subsystem ?? roomContext.primary,
-        window: governance?.elapsed_operational_duration ?? "Governed window active",
+        label: roomContext.primary,
+        window: "Current observation",
       },
-      findings: hasPass
-        ? [{ detail: governance?.why_summary ?? canonicalFinding.summary ?? "Governed insight approved for operator review." }]
-        : (canonicalFinding.exists ? [{ detail: canonicalFinding.summary }] : []),
-      interventionItems: hasPass
-        ? [{
-          label: governance?.affected_subsystem ?? roomContext.primary,
-          recommendation: governance?.operator_focus ?? "Review the affected operating pattern.",
-          window: governance?.elapsed_operational_duration ?? "Governed window active",
-          confidence: 90,
-          relationshipEvidence: [governance?.affected_relationship_path ?? "Admitted relationship path"],
-        }]
-        : (canonicalFinding.exists ? [{
-          label: roomContext.primary,
-          recommendation: canonicalFinding.reviewNext,
-          window: canonicalFinding.technicalDetails?.find((item) => item.label === "Behavior duration")?.value ?? "Current observation",
-          confidence: canonicalFinding.confidence === "High" ? 90 : canonicalFinding.confidence === "Moderate" ? 70 : 50,
-          relationshipEvidence: canonicalFinding.supportingEvidence ?? [],
-        }] : []),
+      findings: canonicalFinding.exists ? [{ detail: canonicalFinding.summary }] : [],
+      interventionItems: canonicalFinding.exists ? [{
+        label: roomContext.primary,
+        recommendation: canonicalFinding.reviewNext,
+        window: canonicalFinding.technicalDetails?.find((item) => item.label === "Behavior duration")?.value ?? "Current observation",
+        confidence: canonicalFinding.confidence === "High" ? 90 : canonicalFinding.confidence === "Moderate" ? 70 : 50,
+        relationshipEvidence: canonicalFinding.supportingEvidence ?? [],
+      }] : [],
       relationshipRows: effectiveLatestUploadResult?.baseline_analysis?.relationship_drift ?? [],
-      governance,
       sourceIntelligence: intelligence,
       latestUploadResult: effectiveLatestUploadResult,
       latestUploadSnapshot: effectiveLatestUploadSnapshot,

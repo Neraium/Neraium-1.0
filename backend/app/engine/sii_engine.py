@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.services.output_semantics import runtime_metadata
+
 import time
 from dataclasses import replace
 from typing import Any
@@ -1141,13 +1143,13 @@ def evaluate_sii(
         "engineering_priors_evaluated": len(physics_reasoning.get("evaluated_priors") or []),
         "engineering_priors_applicable": len(physics_reasoning.get("applicable_priors") or []),
         "engineering_observations_generated": len(evidence_fusion.get("observations") or []),
-        "total_runtime_seconds": runtime,
+        "runtime_metadata": runtime_metadata(**{**preliminary_trace.get("runtime_metadata", {}), "total_runtime_seconds": runtime}),
     }
     runner_trace = runner_result.get("processing_trace") if isinstance(runner_result, dict) else None
     if isinstance(runner_trace, dict):
         processing_trace = {**runner_trace, **processing_trace}
 
-    processing_trace["performance"] = profiler.report(
+    processing_trace["runtime_metadata"]["performance"] = profiler.report(
         rows_processed=rows_received,
         signals_processed=len(numeric_columns_used),
     )
@@ -1236,6 +1238,7 @@ def evaluate_sii(
         from app.services.analysis_result_contract import build_analysis_result
         source = {
             **result["compatibility"], "sii_result": result,
+            "source_identity_contract": "paired-reference.v1",
             "analysis_id": "paired-" + paired_provenance["comparison"]["input_hash"][:16] + "-" + paired_provenance["reference"]["input_hash"][:16],
             "columns": column_names, "row_count": len(matrix_rows),
             "warnings": paired_provenance["limitations"],

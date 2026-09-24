@@ -1,0 +1,3678 @@
+{
+  "empty": {
+    "error": {
+      "type": "ValueError",
+      "message": "CSV file is empty."
+    },
+    "progress": [],
+    "measured_progress": []
+  },
+  "blank": {
+    "error": {
+      "type": "ValueError",
+      "message": "CSV file is empty."
+    },
+    "progress": [],
+    "measured_progress": []
+  },
+  "header_only": {
+    "error": {
+      "type": "ValueError",
+      "message": "CSV must include a header and at least one usable data row."
+    },
+    "progress": [],
+    "measured_progress": []
+  },
+  "no_usable_rows": {
+    "error": {
+      "type": "ValueError",
+      "message": "CSV contains no usable telemetry rows after cleaning."
+    },
+    "progress": [],
+    "measured_progress": [
+      [
+        0,
+        3
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        3,
+        3
+      ]
+    ]
+  },
+  "one_numeric": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "Flow GPM"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "Flow GPM": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "Flow GPM": "2.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "Flow GPM": "3.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "Flow GPM": "4.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "Flow GPM": "5.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "Flow GPM": "6.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 6,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "Flow GPM"
+        }
+      },
+      "analysis_gate_state": "READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "Analysis can proceed."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:05:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 258
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "multiple_aliases_and_missing": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "Flow-GPM",
+        "FLOW GPM!",
+        "ordinary",
+        "asset"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "Flow-GPM": "1.0",
+          "FLOW GPM!": "10.0",
+          "ordinary": "20.0",
+          "asset": "A",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "Flow-GPM": "2.0",
+          "FLOW GPM!": "11.0",
+          "ordinary": "21.0",
+          "asset": "A",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "Flow-GPM": "3.0",
+          "FLOW GPM!": "12.0",
+          "ordinary": "22.0",
+          "asset": "A",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "Flow-GPM": "4.0",
+          "FLOW GPM!": "13.0",
+          "ordinary": "23.0",
+          "asset": "A",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "Flow-GPM": "5.0",
+          "FLOW GPM!": "14.0",
+          "ordinary": "24.0",
+          "asset": "A",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "Flow-GPM": "6.0",
+          "FLOW GPM!": "15.0",
+          "ordinary": "25.0",
+          "asset": "A",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:06:00Z",
+          "Flow-GPM": "7.0",
+          "FLOW GPM!": "16.0",
+          "ordinary": "26.0",
+          "asset": "A",
+          "__source_row_number": 7,
+          "__source_timestamp": "2026-01-01T00:06:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:07:00Z",
+          "Flow-GPM": "8.0",
+          "FLOW GPM!": "17.0",
+          "ordinary": "27.0",
+          "asset": "A",
+          "__source_row_number": 8,
+          "__source_timestamp": "2026-01-01T00:07:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:08:00Z",
+          "Flow-GPM": "",
+          "FLOW GPM!": "",
+          "ordinary": "50.0",
+          "asset": "A",
+          "__source_row_number": 9,
+          "__source_timestamp": "2026-01-01T00:08:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:09:00Z",
+          "Flow-GPM": "",
+          "FLOW GPM!": "",
+          "ordinary": "51.0",
+          "asset": "A",
+          "__source_row_number": 10,
+          "__source_timestamp": "2026-01-01T00:09:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:10:00Z",
+          "Flow-GPM": "",
+          "FLOW GPM!": "",
+          "ordinary": "52.0",
+          "asset": "A",
+          "__source_row_number": 11,
+          "__source_timestamp": "2026-01-01T00:10:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:11:00Z",
+          "Flow-GPM": "",
+          "FLOW GPM!": "",
+          "ordinary": "53.0",
+          "asset": "A",
+          "__source_row_number": 12,
+          "__source_timestamp": "2026-01-01T00:11:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:12:00Z",
+          "Flow-GPM": "",
+          "FLOW GPM!": "",
+          "ordinary": "54.0",
+          "asset": "A",
+          "__source_row_number": 13,
+          "__source_timestamp": "2026-01-01T00:12:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:13:00Z",
+          "Flow-GPM": "",
+          "FLOW GPM!": "",
+          "ordinary": "55.0",
+          "asset": "A",
+          "__source_row_number": 14,
+          "__source_timestamp": "2026-01-01T00:13:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:14:00Z",
+          "Flow-GPM": "",
+          "FLOW GPM!": "",
+          "ordinary": "56.0",
+          "asset": "A",
+          "__source_row_number": 15,
+          "__source_timestamp": "2026-01-01T00:14:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:15:00Z",
+          "Flow-GPM": "-9999.0",
+          "FLOW GPM!": "-9999.0",
+          "ordinary": "57.0",
+          "asset": "A",
+          "__source_row_number": 16,
+          "__source_timestamp": "2026-01-01T00:15:00"
+        }
+      ],
+      "row_count": 16,
+      "analysis_sample_rows": 16,
+      "analysis_population_rows": 16,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 16,
+      "snapshot_rows_evaluated": 16,
+      "rows_used": 16,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 1,
+        "rows_with_invalid_numeric": 6,
+        "invalid_numeric_cells": 12,
+        "important_missing_by_column": {
+          "flow_gpm": 14
+        },
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [
+        "1 rows contain missing numeric values.",
+        "6 rows contained non-numeric values that were ignored."
+      ],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "FLOW GPM!",
+          "ordinary": "ordinary",
+          "asset": "asset"
+        }
+      },
+      "analysis_gate_state": "DEGRADED_READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "16 rows loaded.",
+        "Analysis can proceed with confidence warnings."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:15:00Z",
+      "chunk_count": 6,
+      "memory_estimate_bytes": 797
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 8 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 10 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 12 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 14 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 16 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        16
+      ],
+      [
+        2,
+        16
+      ],
+      [
+        4,
+        16
+      ],
+      [
+        6,
+        16
+      ],
+      [
+        8,
+        16
+      ],
+      [
+        10,
+        16
+      ],
+      [
+        12,
+        16
+      ],
+      [
+        14,
+        16
+      ],
+      [
+        16,
+        16
+      ]
+    ]
+  },
+  "duplicate_headers": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "flow_gpm",
+        "flow_gpm_2",
+        "FLOW GPM"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "flow_gpm": "0.0",
+          "flow_gpm_2": "10.0",
+          "FLOW GPM": "20.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "flow_gpm": "1.0",
+          "flow_gpm_2": "11.0",
+          "FLOW GPM": "21.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "flow_gpm": "2.0",
+          "flow_gpm_2": "12.0",
+          "FLOW GPM": "22.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "flow_gpm": "3.0",
+          "flow_gpm_2": "13.0",
+          "FLOW GPM": "23.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        }
+      ],
+      "row_count": 4,
+      "analysis_sample_rows": 4,
+      "analysis_population_rows": 4,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 5,
+      "snapshot_rows_evaluated": 5,
+      "rows_used": 4,
+      "rows_dropped": 1,
+      "drop_reasons": {
+        "no_usable_numeric_values": 1
+      },
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 1,
+        "important_missing_by_column": {
+          "flow_gpm": 2
+        },
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [
+        "1 rows were dropped during safe cleaning."
+      ],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "FLOW GPM",
+          "flow_gpm_2": "flow_gpm_2"
+        }
+      },
+      "analysis_gate_state": "DEGRADED_READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "4 rows loaded.",
+        "Analysis can proceed with confidence warnings."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:03:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 204
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 5 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        5
+      ],
+      [
+        2,
+        5
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        5,
+        5
+      ]
+    ]
+  },
+  "sentinels_units": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "flow_gpm",
+        "other"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "flow_gpm": "1.0",
+          "other": "0.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "flow_gpm": "2.0",
+          "other": "1.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "flow_gpm": "3.0",
+          "other": "2.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "flow_gpm": "",
+          "other": "3.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "flow_gpm": "",
+          "other": "4.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "flow_gpm": "",
+          "other": "5.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:06:00Z",
+          "flow_gpm": "",
+          "other": "6.0",
+          "__source_row_number": 7,
+          "__source_timestamp": "2026-01-01T00:06:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:07:00Z",
+          "flow_gpm": "",
+          "other": "7.0",
+          "__source_row_number": 8,
+          "__source_timestamp": "2026-01-01T00:07:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:08:00Z",
+          "flow_gpm": "",
+          "other": "8.0",
+          "__source_row_number": 9,
+          "__source_timestamp": "2026-01-01T00:08:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:09:00Z",
+          "flow_gpm": "",
+          "other": "9.0",
+          "__source_row_number": 10,
+          "__source_timestamp": "2026-01-01T00:09:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:10:00Z",
+          "flow_gpm": "",
+          "other": "10.0",
+          "__source_row_number": 11,
+          "__source_timestamp": "2026-01-01T00:10:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:11:00Z",
+          "flow_gpm": "",
+          "other": "11.0",
+          "__source_row_number": 12,
+          "__source_timestamp": "2026-01-01T00:11:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:12:00Z",
+          "flow_gpm": "",
+          "other": "12.0",
+          "__source_row_number": 13,
+          "__source_timestamp": "2026-01-01T00:12:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:13:00Z",
+          "flow_gpm": "42.0",
+          "other": "13.0",
+          "__source_row_number": 14,
+          "__source_timestamp": "2026-01-01T00:13:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:14:00Z",
+          "flow_gpm": "12.0",
+          "other": "14.0",
+          "__source_row_number": 15,
+          "__source_timestamp": "2026-01-01T00:14:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:15:00Z",
+          "flow_gpm": "1234.0",
+          "other": "15.0",
+          "__source_row_number": 16,
+          "__source_timestamp": "2026-01-01T00:15:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:16:00Z",
+          "flow_gpm": "",
+          "other": "16.0",
+          "__source_row_number": 17,
+          "__source_timestamp": "2026-01-01T00:16:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:17:00Z",
+          "flow_gpm": "-9999.0",
+          "other": "17.0",
+          "__source_row_number": 18,
+          "__source_timestamp": "2026-01-01T00:17:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:18:00Z",
+          "flow_gpm": "9999.0",
+          "other": "18.0",
+          "__source_row_number": 19,
+          "__source_timestamp": "2026-01-01T00:18:00"
+        }
+      ],
+      "row_count": 19,
+      "analysis_sample_rows": 19,
+      "analysis_population_rows": 19,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 19,
+      "snapshot_rows_evaluated": 19,
+      "rows_used": 19,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 11,
+        "invalid_numeric_cells": 11,
+        "important_missing_by_column": {
+          "flow_gpm": 11
+        },
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [
+        "11 rows contained non-numeric values that were ignored."
+      ],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "flow_gpm",
+          "other": "other"
+        }
+      },
+      "analysis_gate_state": "DEGRADED_READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "19 rows loaded.",
+        "Analysis can proceed with confidence warnings."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:18:00Z",
+      "chunk_count": 7,
+      "memory_estimate_bytes": 872
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 8 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 10 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 12 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 14 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 16 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 18 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 19 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        19
+      ],
+      [
+        2,
+        19
+      ],
+      [
+        4,
+        19
+      ],
+      [
+        6,
+        19
+      ],
+      [
+        8,
+        19
+      ],
+      [
+        10,
+        19
+      ],
+      [
+        12,
+        19
+      ],
+      [
+        14,
+        19
+      ],
+      [
+        16,
+        19
+      ],
+      [
+        18,
+        19
+      ],
+      [
+        19,
+        19
+      ]
+    ]
+  },
+  "duplicates_unsorted": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "flow_gpm"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "flow_gpm": "2.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "flow_gpm": "3.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "flow_gpm": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "flow_gpm": "5.0",
+          "__source_row_number": 7,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        }
+      ],
+      "row_count": 4,
+      "analysis_sample_rows": 4,
+      "analysis_population_rows": 4,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 7,
+      "snapshot_rows_evaluated": 7,
+      "rows_used": 4,
+      "rows_dropped": 3,
+      "drop_reasons": {
+        "invalid_timestamp": 1,
+        "duplicate_timestamp": 1,
+        "exact_duplicate_row": 1
+      },
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [
+        "3 rows were dropped during safe cleaning.",
+        "Timestamps were unsorted and were ordered before analysis."
+      ],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "flow_gpm"
+        }
+      },
+      "analysis_gate_state": "DEGRADED_READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "4 rows loaded.",
+        "Analysis can proceed with confidence warnings."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:01:00Z",
+      "last_timestamp": "2026-01-01T00:04:00Z",
+      "chunk_count": 3,
+      "memory_estimate_bytes": 172
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 7 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        7
+      ],
+      [
+        2,
+        7
+      ],
+      [
+        4,
+        7
+      ],
+      [
+        6,
+        7
+      ],
+      [
+        7,
+        7
+      ]
+    ]
+  },
+  "identity_timestamps": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "asset",
+        "flow_gpm"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "asset": "B",
+          "flow_gpm": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "asset": "A",
+          "flow_gpm": "2.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "asset": "B",
+          "flow_gpm": "3.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "asset": "A",
+          "flow_gpm": "4.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "asset": "B",
+          "flow_gpm": "5.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "asset": "A",
+          "flow_gpm": "6.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "asset": "B",
+          "flow_gpm": "7.0",
+          "__source_row_number": 7,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "asset": "A",
+          "flow_gpm": "8.0",
+          "__source_row_number": 8,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        }
+      ],
+      "row_count": 8,
+      "analysis_sample_rows": 8,
+      "analysis_population_rows": 8,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 8,
+      "snapshot_rows_evaluated": 8,
+      "rows_used": 8,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "asset": "asset",
+          "flow_gpm": "flow_gpm"
+        }
+      },
+      "analysis_gate_state": "READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "8 rows loaded.",
+        "Analysis can proceed."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:03:00Z",
+      "chunk_count": 3,
+      "memory_estimate_bytes": 352
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 8 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        8
+      ],
+      [
+        2,
+        8
+      ],
+      [
+        4,
+        8
+      ],
+      [
+        6,
+        8
+      ],
+      [
+        8,
+        8
+      ]
+    ]
+  },
+  "malformed_blank": {
+    "error": {
+      "type": "ValueError",
+      "message": "CSV must include a header and at least one usable data row."
+    },
+    "progress": [],
+    "measured_progress": []
+  },
+  "row_order_no_timestamp": {
+    "snapshot": {
+      "columns": [
+        "sensor",
+        "other"
+      ],
+      "timestamp_column": null,
+      "sample_rows": [
+        {
+          "sensor": "0.0",
+          "other": "1.0",
+          "__source_row_number": 1
+        },
+        {
+          "sensor": "1.0",
+          "other": "2.0",
+          "__source_row_number": 2
+        },
+        {
+          "sensor": "2.0",
+          "other": "3.0",
+          "__source_row_number": 3
+        },
+        {
+          "sensor": "3.0",
+          "other": "4.0",
+          "__source_row_number": 4
+        },
+        {
+          "sensor": "4.0",
+          "other": "5.0",
+          "__source_row_number": 5
+        },
+        {
+          "sensor": "5.0",
+          "other": "6.0",
+          "__source_row_number": 6
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 6,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [
+        "No usable timestamp column was detected; row-order analysis was used."
+      ],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [],
+        "important_columns": [],
+        "missing_core": [],
+        "column_lookup": {
+          "sensor": "sensor",
+          "other": "other"
+        }
+      },
+      "analysis_gate_state": "DEGRADED_READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "No timestamp column detected; analysis used row order instead.",
+        "Analysis can proceed with confidence warnings."
+      ],
+      "sample_interval_seconds": null,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": null,
+      "last_timestamp": null,
+      "chunk_count": 2,
+      "memory_estimate_bytes": 42
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "no_numeric": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "state"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "state": "manual",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "state": "manual",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "state": "manual",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "state": "manual",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "state": "manual",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "state": "manual",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 6,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "timestamp"
+        ],
+        "important_columns": [],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "state": "state"
+        }
+      },
+      "analysis_gate_state": "READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "Analysis can proceed."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:05:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 276
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "headerless_whitespace": {
+    "snapshot": {
+      "columns": [
+        "column_1",
+        "column_2"
+      ],
+      "timestamp_column": null,
+      "sample_rows": [
+        {
+          "column_1": "1.0",
+          "column_2": "10.0",
+          "__source_row_number": 1
+        },
+        {
+          "column_1": "2.0",
+          "column_2": "11.0",
+          "__source_row_number": 2
+        },
+        {
+          "column_1": "3.0",
+          "column_2": "12.0",
+          "__source_row_number": 3
+        },
+        {
+          "column_1": "4.0",
+          "column_2": "13.0",
+          "__source_row_number": 4
+        },
+        {
+          "column_1": "5.0",
+          "column_2": "14.0",
+          "__source_row_number": 5
+        },
+        {
+          "column_1": "6.0",
+          "column_2": "15.0",
+          "__source_row_number": 6
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 6,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [
+        "Whitespace-delimited telemetry was detected.",
+        "No header row was detected; generic column names were assigned.",
+        "No usable timestamp column was detected; row-order analysis was used."
+      ],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [],
+        "important_columns": [],
+        "missing_core": [],
+        "column_lookup": {
+          "column_1": "column_1",
+          "column_2": "column_2"
+        }
+      },
+      "analysis_gate_state": "DEGRADED_READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "No timestamp column detected; analysis used row order instead.",
+        "Analysis can proceed with confidence warnings."
+      ],
+      "sample_interval_seconds": null,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": "whitespace",
+      "header_present": false,
+      "first_timestamp": null,
+      "last_timestamp": null,
+      "chunk_count": 2,
+      "memory_estimate_bytes": 48
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "sparse_missing_ready": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "CHW Supply Temp F",
+        "chw-return-temp-f",
+        "Flow GPM",
+        "pump_power_kw",
+        "chiller_load_pct",
+        "ordinary"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "CHW Supply Temp F": "42.0",
+          "chw-return-temp-f": "50.0",
+          "Flow GPM": "100.0",
+          "pump_power_kw": "10.0",
+          "chiller_load_pct": "20.0",
+          "ordinary": "0.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "CHW Supply Temp F": "43.0",
+          "chw-return-temp-f": "51.0",
+          "Flow GPM": "101.0",
+          "pump_power_kw": "11.0",
+          "chiller_load_pct": "21.0",
+          "ordinary": "1.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "CHW Supply Temp F": "44.0",
+          "chw-return-temp-f": "52.0",
+          "Flow GPM": "102.0",
+          "pump_power_kw": "12.0",
+          "chiller_load_pct": "22.0",
+          "ordinary": "2.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "CHW Supply Temp F": "45.0",
+          "chw-return-temp-f": "53.0",
+          "Flow GPM": "103.0",
+          "pump_power_kw": "13.0",
+          "chiller_load_pct": "23.0",
+          "ordinary": "3.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "CHW Supply Temp F": "46.0",
+          "chw-return-temp-f": "54.0",
+          "Flow GPM": "",
+          "pump_power_kw": "14.0",
+          "chiller_load_pct": "24.0",
+          "ordinary": "4.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "CHW Supply Temp F": "47.0",
+          "chw-return-temp-f": "55.0",
+          "Flow GPM": "105.0",
+          "pump_power_kw": "15.0",
+          "chiller_load_pct": "25.0",
+          "ordinary": "5.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:06:00Z",
+          "CHW Supply Temp F": "48.0",
+          "chw-return-temp-f": "56.0",
+          "Flow GPM": "106.0",
+          "pump_power_kw": "16.0",
+          "chiller_load_pct": "26.0",
+          "ordinary": "6.0",
+          "__source_row_number": 7,
+          "__source_timestamp": "2026-01-01T00:06:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:07:00Z",
+          "CHW Supply Temp F": "49.0",
+          "chw-return-temp-f": "57.0",
+          "Flow GPM": "107.0",
+          "pump_power_kw": "17.0",
+          "chiller_load_pct": "27.0",
+          "ordinary": "7.0",
+          "__source_row_number": 8,
+          "__source_timestamp": "2026-01-01T00:07:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:08:00Z",
+          "CHW Supply Temp F": "50.0",
+          "chw-return-temp-f": "58.0",
+          "Flow GPM": "108.0",
+          "pump_power_kw": "18.0",
+          "chiller_load_pct": "28.0",
+          "ordinary": "8.0",
+          "__source_row_number": 9,
+          "__source_timestamp": "2026-01-01T00:08:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:09:00Z",
+          "CHW Supply Temp F": "51.0",
+          "chw-return-temp-f": "59.0",
+          "Flow GPM": "109.0",
+          "pump_power_kw": "19.0",
+          "chiller_load_pct": "29.0",
+          "ordinary": "9.0",
+          "__source_row_number": 10,
+          "__source_timestamp": "2026-01-01T00:09:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:10:00Z",
+          "CHW Supply Temp F": "52.0",
+          "chw-return-temp-f": "60.0",
+          "Flow GPM": "110.0",
+          "pump_power_kw": "20.0",
+          "chiller_load_pct": "30.0",
+          "ordinary": "10.0",
+          "__source_row_number": 11,
+          "__source_timestamp": "2026-01-01T00:10:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:11:00Z",
+          "CHW Supply Temp F": "53.0",
+          "chw-return-temp-f": "61.0",
+          "Flow GPM": "111.0",
+          "pump_power_kw": "21.0",
+          "chiller_load_pct": "31.0",
+          "ordinary": "11.0",
+          "__source_row_number": 12,
+          "__source_timestamp": "2026-01-01T00:11:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:12:00Z",
+          "CHW Supply Temp F": "54.0",
+          "chw-return-temp-f": "62.0",
+          "Flow GPM": "112.0",
+          "pump_power_kw": "22.0",
+          "chiller_load_pct": "32.0",
+          "ordinary": "12.0",
+          "__source_row_number": 13,
+          "__source_timestamp": "2026-01-01T00:12:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:13:00Z",
+          "CHW Supply Temp F": "55.0",
+          "chw-return-temp-f": "63.0",
+          "Flow GPM": "113.0",
+          "pump_power_kw": "23.0",
+          "chiller_load_pct": "33.0",
+          "ordinary": "13.0",
+          "__source_row_number": 14,
+          "__source_timestamp": "2026-01-01T00:13:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:14:00Z",
+          "CHW Supply Temp F": "56.0",
+          "chw-return-temp-f": "64.0",
+          "Flow GPM": "114.0",
+          "pump_power_kw": "24.0",
+          "chiller_load_pct": "34.0",
+          "ordinary": "14.0",
+          "__source_row_number": 15,
+          "__source_timestamp": "2026-01-01T00:14:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:15:00Z",
+          "CHW Supply Temp F": "57.0",
+          "chw-return-temp-f": "65.0",
+          "Flow GPM": "115.0",
+          "pump_power_kw": "25.0",
+          "chiller_load_pct": "35.0",
+          "ordinary": "15.0",
+          "__source_row_number": 16,
+          "__source_timestamp": "2026-01-01T00:15:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:16:00Z",
+          "CHW Supply Temp F": "58.0",
+          "chw-return-temp-f": "66.0",
+          "Flow GPM": "116.0",
+          "pump_power_kw": "26.0",
+          "chiller_load_pct": "36.0",
+          "ordinary": "16.0",
+          "__source_row_number": 17,
+          "__source_timestamp": "2026-01-01T00:16:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:17:00Z",
+          "CHW Supply Temp F": "59.0",
+          "chw-return-temp-f": "67.0",
+          "Flow GPM": "117.0",
+          "pump_power_kw": "27.0",
+          "chiller_load_pct": "37.0",
+          "ordinary": "17.0",
+          "__source_row_number": 18,
+          "__source_timestamp": "2026-01-01T00:17:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:18:00Z",
+          "CHW Supply Temp F": "60.0",
+          "chw-return-temp-f": "68.0",
+          "Flow GPM": "118.0",
+          "pump_power_kw": "28.0",
+          "chiller_load_pct": "38.0",
+          "ordinary": "18.0",
+          "__source_row_number": 19,
+          "__source_timestamp": "2026-01-01T00:18:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:19:00Z",
+          "CHW Supply Temp F": "61.0",
+          "chw-return-temp-f": "69.0",
+          "Flow GPM": "119.0",
+          "pump_power_kw": "29.0",
+          "chiller_load_pct": "39.0",
+          "ordinary": "19.0",
+          "__source_row_number": 20,
+          "__source_timestamp": "2026-01-01T00:19:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:20:00Z",
+          "CHW Supply Temp F": "62.0",
+          "chw-return-temp-f": "70.0",
+          "Flow GPM": "120.0",
+          "pump_power_kw": "30.0",
+          "chiller_load_pct": "40.0",
+          "ordinary": "20.0",
+          "__source_row_number": 21,
+          "__source_timestamp": "2026-01-01T00:20:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:21:00Z",
+          "CHW Supply Temp F": "63.0",
+          "chw-return-temp-f": "71.0",
+          "Flow GPM": "121.0",
+          "pump_power_kw": "31.0",
+          "chiller_load_pct": "41.0",
+          "ordinary": "21.0",
+          "__source_row_number": 22,
+          "__source_timestamp": "2026-01-01T00:21:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:22:00Z",
+          "CHW Supply Temp F": "64.0",
+          "chw-return-temp-f": "72.0",
+          "Flow GPM": "122.0",
+          "pump_power_kw": "32.0",
+          "chiller_load_pct": "42.0",
+          "ordinary": "22.0",
+          "__source_row_number": 23,
+          "__source_timestamp": "2026-01-01T00:22:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:23:00Z",
+          "CHW Supply Temp F": "65.0",
+          "chw-return-temp-f": "73.0",
+          "Flow GPM": "123.0",
+          "pump_power_kw": "33.0",
+          "chiller_load_pct": "43.0",
+          "ordinary": "23.0",
+          "__source_row_number": 24,
+          "__source_timestamp": "2026-01-01T00:23:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:24:00Z",
+          "CHW Supply Temp F": "66.0",
+          "chw-return-temp-f": "74.0",
+          "Flow GPM": "124.0",
+          "pump_power_kw": "34.0",
+          "chiller_load_pct": "44.0",
+          "ordinary": "24.0",
+          "__source_row_number": 25,
+          "__source_timestamp": "2026-01-01T00:24:00"
+        }
+      ],
+      "row_count": 25,
+      "analysis_sample_rows": 25,
+      "analysis_population_rows": 25,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 25,
+      "snapshot_rows_evaluated": 25,
+      "rows_used": 25,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 1,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {
+          "flow_gpm": 1
+        },
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [
+        "1 rows contain missing numeric values.",
+        "Sparse missing values detected in flow; gaps were preserved for review."
+      ],
+      "schema_detection": {
+        "detected": true,
+        "system_type": "chilled_water",
+        "matched_columns": [
+          "chiller_load_pct",
+          "chw_return_temp_f",
+          "chw_supply_temp_f",
+          "flow_gpm",
+          "pump_power_kw",
+          "timestamp"
+        ],
+        "important_columns": [
+          "chw_supply_temp_f",
+          "chw_return_temp_f",
+          "flow_gpm",
+          "pump_power_kw",
+          "chiller_load_pct"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "chw_supply_temp_f": "CHW Supply Temp F",
+          "chw_return_temp_f": "chw-return-temp-f",
+          "flow_gpm": "Flow GPM",
+          "pump_power_kw": "pump_power_kw",
+          "chiller_load_pct": "chiller_load_pct",
+          "ordinary": "ordinary"
+        }
+      },
+      "analysis_gate_state": "DEGRADED_READY",
+      "data_quality_messages": [
+        "Detected chilled-water telemetry.",
+        "25 rows loaded.",
+        "1-minute interval detected.",
+        "Sparse missing values detected in flow; gaps were preserved for review.",
+        "Analysis can proceed with confidence warnings."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:24:00Z",
+      "chunk_count": 9,
+      "memory_estimate_bytes": 1626
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 8 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 10 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 12 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 14 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 16 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 18 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 20 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 22 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 24 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 25 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        25
+      ],
+      [
+        2,
+        25
+      ],
+      [
+        4,
+        25
+      ],
+      [
+        6,
+        25
+      ],
+      [
+        8,
+        25
+      ],
+      [
+        10,
+        25
+      ],
+      [
+        12,
+        25
+      ],
+      [
+        14,
+        25
+      ],
+      [
+        16,
+        25
+      ],
+      [
+        18,
+        25
+      ],
+      [
+        20,
+        25
+      ],
+      [
+        22,
+        25
+      ],
+      [
+        24,
+        25
+      ],
+      [
+        25,
+        25
+      ]
+    ]
+  },
+  "missing_core_pending": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "flow_gpm",
+        "pump_power_kw",
+        "chiller_load_pct",
+        "compressor_power_kw",
+        "alarm_count"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "flow_gpm": "1.0",
+          "pump_power_kw": "2.0",
+          "chiller_load_pct": "3.0",
+          "compressor_power_kw": "4.0",
+          "alarm_count": "0.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "flow_gpm": "2.0",
+          "pump_power_kw": "3.0",
+          "chiller_load_pct": "4.0",
+          "compressor_power_kw": "5.0",
+          "alarm_count": "1.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "flow_gpm": "3.0",
+          "pump_power_kw": "4.0",
+          "chiller_load_pct": "5.0",
+          "compressor_power_kw": "6.0",
+          "alarm_count": "2.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "flow_gpm": "4.0",
+          "pump_power_kw": "5.0",
+          "chiller_load_pct": "6.0",
+          "compressor_power_kw": "7.0",
+          "alarm_count": "3.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "flow_gpm": "5.0",
+          "pump_power_kw": "6.0",
+          "chiller_load_pct": "7.0",
+          "compressor_power_kw": "8.0",
+          "alarm_count": "4.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "flow_gpm": "6.0",
+          "pump_power_kw": "7.0",
+          "chiller_load_pct": "8.0",
+          "compressor_power_kw": "9.0",
+          "alarm_count": "5.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 6,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": true,
+        "system_type": "chilled_water",
+        "matched_columns": [
+          "alarm_count",
+          "chiller_load_pct",
+          "compressor_power_kw",
+          "flow_gpm",
+          "pump_power_kw",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm",
+          "pump_power_kw",
+          "chiller_load_pct",
+          "compressor_power_kw"
+        ],
+        "missing_core": [
+          "supply and return temperature"
+        ],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "flow_gpm",
+          "pump_power_kw": "pump_power_kw",
+          "chiller_load_pct": "chiller_load_pct",
+          "compressor_power_kw": "compressor_power_kw",
+          "alarm_count": "alarm_count"
+        }
+      },
+      "analysis_gate_state": "PENDING",
+      "data_quality_messages": [
+        "Detected chilled-water telemetry.",
+        "6 rows loaded.",
+        "1-minute interval detected.",
+        "Required chilled-water timestamp or supply/return temperature signals were not present.",
+        "Analysis is pending until required telemetry is present."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:05:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 330
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "bounded_duplicates": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "flow_gpm"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "flow_gpm": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "flow_gpm": "2.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "flow_gpm": "3.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "flow_gpm": "4.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "flow_gpm": "5.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "flow_gpm": "5.0",
+          "__source_row_number": 7,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "flow_gpm": "99.0",
+          "__source_row_number": 9,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        }
+      ],
+      "row_count": 7,
+      "analysis_sample_rows": 7,
+      "analysis_population_rows": 7,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "bounded",
+      "rows_received": 9,
+      "snapshot_rows_evaluated": 9,
+      "rows_used": 7,
+      "rows_dropped": 2,
+      "drop_reasons": {
+        "duplicate_timestamp": 1,
+        "exact_duplicate_row": 1
+      },
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [
+        "2 rows were dropped during safe cleaning.",
+        "Large-file duplicate detection was bounded to the first 200,000 unique keys."
+      ],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "flow_gpm"
+        }
+      },
+      "analysis_gate_state": "DEGRADED_READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "7 rows loaded.",
+        "Analysis can proceed with confidence warnings."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:04:00Z",
+      "chunk_count": 3,
+      "memory_estimate_bytes": 302
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 9 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        9
+      ],
+      [
+        2,
+        9
+      ],
+      [
+        4,
+        9
+      ],
+      [
+        6,
+        9
+      ],
+      [
+        8,
+        9
+      ],
+      [
+        9,
+        9
+      ]
+    ]
+  },
+  "at_dedup_boundary": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "Flow GPM"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "Flow GPM": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "Flow GPM": "2.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "Flow GPM": "3.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "Flow GPM": "4.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "Flow GPM": "5.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "Flow GPM": "6.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 6,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "Flow GPM"
+        }
+      },
+      "analysis_gate_state": "READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "Analysis can proceed."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:05:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 258
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "below_dedup_boundary": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "Flow GPM"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "Flow GPM": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "Flow GPM": "2.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "Flow GPM": "3.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "Flow GPM": "4.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "Flow GPM": "5.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "Flow GPM": "6.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 6,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "Flow GPM"
+        }
+      },
+      "analysis_gate_state": "READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "Analysis can proceed."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:05:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 258
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "irregular_time": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "flow_gpm"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "flow_gpm": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "flow_gpm": "2.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "flow_gpm": "4.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:06:00Z",
+          "flow_gpm": "7.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:06:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:10:00Z",
+          "flow_gpm": "11.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:10:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:15:00Z",
+          "flow_gpm": "16.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:15:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 6,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "flow_gpm"
+        }
+      },
+      "analysis_gate_state": "READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "Analysis can proceed."
+      ],
+      "sample_interval_seconds": null,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:15:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 260
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "all_numeric_missing_row": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "Flow GPM"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "Flow GPM": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "Flow GPM": "2.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "Flow GPM": "3.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "Flow GPM": "4.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "Flow GPM": "5.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "Flow GPM": "6.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 6,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 8,
+      "snapshot_rows_evaluated": 8,
+      "rows_used": 6,
+      "rows_dropped": 2,
+      "drop_reasons": {
+        "no_usable_numeric_values": 2
+      },
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 1,
+        "important_missing_by_column": {
+          "flow_gpm": 2
+        },
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [
+        "2 rows were dropped during safe cleaning."
+      ],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "Flow GPM"
+        }
+      },
+      "analysis_gate_state": "DEGRADED_READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "Analysis can proceed with confidence warnings."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:05:00Z",
+      "chunk_count": 3,
+      "memory_estimate_bytes": 258
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 8 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        8
+      ],
+      [
+        2,
+        8
+      ],
+      [
+        4,
+        8
+      ],
+      [
+        6,
+        8
+      ],
+      [
+        8,
+        8
+      ]
+    ]
+  },
+  "sample_limit_1": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "Flow GPM"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "Flow GPM": "6.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 1,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": true,
+      "analysis_sample_stride": 6,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "Flow GPM"
+        }
+      },
+      "analysis_gate_state": "READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "Analysis can proceed."
+      ],
+      "sample_interval_seconds": null,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:05:00Z",
+      "last_timestamp": "2026-01-01T00:05:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 43
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "sample_limit_2": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "Flow GPM"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "Flow GPM": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "Flow GPM": "6.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 2,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": true,
+      "analysis_sample_stride": 3,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "Flow GPM"
+        }
+      },
+      "analysis_gate_state": "READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "Analysis can proceed."
+      ],
+      "sample_interval_seconds": 300,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:05:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 86
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "sample_limit_4": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "Flow GPM"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "Flow GPM": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "Flow GPM": "3.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "Flow GPM": "6.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 3,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": true,
+      "analysis_sample_stride": 2,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "Flow GPM"
+        }
+      },
+      "analysis_gate_state": "READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "Analysis can proceed."
+      ],
+      "sample_interval_seconds": null,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:05:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 129
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "sample_limit_0": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "Flow GPM"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "Flow GPM": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "Flow GPM": "2.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "Flow GPM": "3.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "Flow GPM": "4.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "Flow GPM": "5.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "Flow GPM": "6.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 6,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "Flow GPM"
+        }
+      },
+      "analysis_gate_state": "READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "Analysis can proceed."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:05:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 258
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  },
+  "sample_limit_-1": {
+    "snapshot": {
+      "columns": [
+        "Timestamp",
+        "Flow GPM"
+      ],
+      "timestamp_column": "Timestamp",
+      "sample_rows": [
+        {
+          "Timestamp": "2026-01-01T00:00:00Z",
+          "Flow GPM": "1.0",
+          "__source_row_number": 1,
+          "__source_timestamp": "2026-01-01T00:00:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:01:00Z",
+          "Flow GPM": "2.0",
+          "__source_row_number": 2,
+          "__source_timestamp": "2026-01-01T00:01:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:02:00Z",
+          "Flow GPM": "3.0",
+          "__source_row_number": 3,
+          "__source_timestamp": "2026-01-01T00:02:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:03:00Z",
+          "Flow GPM": "4.0",
+          "__source_row_number": 4,
+          "__source_timestamp": "2026-01-01T00:03:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:04:00Z",
+          "Flow GPM": "5.0",
+          "__source_row_number": 5,
+          "__source_timestamp": "2026-01-01T00:04:00"
+        },
+        {
+          "Timestamp": "2026-01-01T00:05:00Z",
+          "Flow GPM": "6.0",
+          "__source_row_number": 6,
+          "__source_timestamp": "2026-01-01T00:05:00"
+        }
+      ],
+      "row_count": 6,
+      "analysis_sample_rows": 6,
+      "analysis_population_rows": 6,
+      "analysis_sampling_applied": false,
+      "analysis_sample_stride": 1,
+      "deduplication_mode": "exact",
+      "rows_received": 6,
+      "snapshot_rows_evaluated": 6,
+      "rows_used": 6,
+      "rows_dropped": 0,
+      "drop_reasons": {},
+      "quality_counts": {
+        "rows_with_missing_values": 0,
+        "rows_with_invalid_numeric": 0,
+        "invalid_numeric_cells": 0,
+        "important_missing_by_column": {},
+        "interpolated_numeric_cells": 0
+      },
+      "cleaning_warnings": [],
+      "schema_detection": {
+        "detected": false,
+        "system_type": null,
+        "matched_columns": [
+          "flow_gpm",
+          "timestamp"
+        ],
+        "important_columns": [
+          "flow_gpm"
+        ],
+        "missing_core": [],
+        "column_lookup": {
+          "timestamp": "Timestamp",
+          "flow_gpm": "Flow GPM"
+        }
+      },
+      "analysis_gate_state": "READY",
+      "data_quality_messages": [
+        "Detected telemetry-style dataset.",
+        "6 rows loaded.",
+        "Analysis can proceed."
+      ],
+      "sample_interval_seconds": 60,
+      "imputation_report": {
+        "imputed_cells": 0,
+        "imputed_columns": [],
+        "policy": "preserve_missing_values"
+      },
+      "delimiter": ",",
+      "header_present": true,
+      "first_timestamp": "2026-01-01T00:00:00Z",
+      "last_timestamp": "2026-01-01T00:05:00Z",
+      "chunk_count": 2,
+      "memory_estimate_bytes": 258
+    },
+    "progress": [
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 2 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 4 rows read."
+      ],
+      [
+        "snapshot-case",
+        "parsing_telemetry",
+        20,
+        "Profiling historical data... 6 rows read."
+      ]
+    ],
+    "measured_progress": [
+      [
+        0,
+        6
+      ],
+      [
+        2,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        6,
+        6
+      ]
+    ]
+  }
+}

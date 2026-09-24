@@ -6,6 +6,7 @@ from typing import Any
 
 from app.services.product_evidence_contract import product_evidence
 from app.services.analysis_provenance import build_analysis_provenance, canonical_digest
+from app.services.output_semantics import runtime_value
 from app.services.analysis_result_contract import build_sii_evidence_projection
 from app.services.telemetry_lineage import bounded_lineage_bundle
 
@@ -341,9 +342,9 @@ def _traceability_timestamps_from_result(result: dict[str, Any]) -> dict[str, An
     first_frame = timeline[0] if isinstance(timeline, list) and timeline else {}
     last_frame = timeline[-1] if isinstance(timeline, list) and timeline else {}
     return {
-        "created_at": result.get("created_at") or result.get("completed_at") or result.get("last_processed_at"),
-        "completed_at": result.get("completed_at") or result.get("last_processed_at"),
-        "processed_at": result.get("last_processed_at") or result.get("completed_at"),
+        "created_at": result.get("created_at") or runtime_value(result, "completed_at") or runtime_value(result, "last_processed_at"),
+        "completed_at": runtime_value(result, "completed_at") or runtime_value(result, "last_processed_at"),
+        "processed_at": runtime_value(result, "last_processed_at") or runtime_value(result, "completed_at"),
         "upload_start": profile.get("first_timestamp") or first_frame.get("timestamp_start") or first_frame.get("timestamp"),
         "upload_end": profile.get("last_timestamp") or last_frame.get("timestamp_end") or last_frame.get("timestamp"),
     }

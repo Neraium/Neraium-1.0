@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import logging
+import hashlib
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
@@ -30,6 +31,7 @@ from app.services.auth_store import (
     list_sessions,
     list_users,
     revoke_session,
+    resolve_session_management_handle,
     session_cookie_name,
     workspace_session_summary,
 )
@@ -68,11 +70,18 @@ class AuthSessionRevokeRequest(ContractModel):
 EmailPath = Annotated[str, Path(min_length=5, max_length=320, pattern=r"^[^/\s@]+@[^/\s@]+\.[^/\s@]+$")]
 
 
+def _public_session(session):
+    """A management handle is not the cookie bearer credential."""
+    if session is None:
+        return None
+    return {**session, "session_id": "session-" + hashlib.sha256(session["session_id"].encode()).hexdigest()}
+
+
 def _session_cookie_secure(request: Request) -> bool:
     settings = getattr(request.app.state, "settings", None)
     app_env = str(getattr(settings, "app_env", "") or "").strip().lower()
     forwarded_scheme = str(request.headers.get("X-Forwarded-Proto") or "").split(",", 1)[0].strip().lower()
-    return app_env in {"prod", "production"} or request.url.scheme == "https" or forwarded_scheme == "https"
+    return app_env in {"staging", "prod", "production"} or request.url.scheme == "https" or forwarded_scheme == "https"
 
 
 def _apply_session_cookie(response: Response, session_id: str, request: Request) -> None:
@@ -194,7 +203,7 @@ def read_auth_me(request: Request) -> dict[str, Any]:
     return {
         "authenticated": True,
         "user": user,
-        "session": session,
+        "session": _public_session(session),
         **workspace_session_summary(user["email"]),
     }
 
@@ -276,7 +285,7 @@ def deactivate_auth_user(email: EmailPath, request: Request) -> AuthUserResponse
 def read_auth_sessions(email: EmailAddress | None = Query(default=None), include_revoked: bool = Query(False)) -> AuthSessionsListResponse:
     sessions = list_sessions(email=email, include_revoked=include_revoked)
     return AuthSessionsListResponse(
-        sessions=[AuthSessionResponse(**session) for session in sessions],
+        sessions=[AuthSessionResponse(**_public_session(session)) for session in sessions],
         summary=auth_summary(),
     )
 
@@ -286,8 +295,13 @@ def read_auth_sessions(email: EmailAddress | None = Query(default=None), include
     dependencies=[Depends(require_api_access), Depends(require_admin_role)],
 )
 def revoke_auth_sessions(payload: AuthSessionRevokeRequest, request: Request) -> dict[str, Any]:
+    internal_session_id = None
+    if payload.session_id:
+        internal_session_id = resolve_session_management_handle(payload.session_id)
+        if internal_session_id is None:
+            raise HTTPException(status_code=404, detail="No matching active session was found.")
     revoked = revoke_session(
-        session_id=payload.session_id,
+        session_id=internal_session_id,
         email=payload.email,
         revoke_all_for_user=payload.revoke_all_for_user,
     )
@@ -342,7 +356,7 @@ def login(payload: LoginRequest, request: Request, response: Response) -> dict[s
     return {
         "authenticated": True,
         "user": user,
-        "session": session,
+        "session": _public_session(session),
         **workspace_session_summary(user["email"]),
     }
 

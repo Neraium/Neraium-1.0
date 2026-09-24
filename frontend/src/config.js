@@ -320,6 +320,3 @@ export async function apiFetch(path, options = {}) {
 export const API_CONFIG_WARNING = "";
 
 export const APP_ACCESS_CONFIG_WARNING = "";
-
-// Admission Gate is intentionally disabled until Exponent defines the final semantics.
-export const ENABLE_ADMISSION_GATE = String(import.meta.env.VITE_ENABLE_ADMISSION_GATE ?? "0") === "1";

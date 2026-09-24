@@ -58,7 +58,6 @@ async function launchWorkspace() {
 
 vi.mock("./config", () => ({
   apiFetch: vi.fn(),
-  ENABLE_ADMISSION_GATE: false,
 }));
 
 vi.mock("./services/api/authApi", () => ({

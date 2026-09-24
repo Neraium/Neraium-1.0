@@ -198,12 +198,13 @@ def get_observability_performance(window: int = Query(default=200, ge=10, le=100
     }
 
 
-@router.get("/observability/evp-governance")
+@router.get("/observability/evp-governance", summary="Legacy Aletheia records (read-only)")
 def get_evp_governance_records(limit: int = Query(default=200, ge=1, le=500)) -> dict:
     records = list_evp_records(limit=limit, operator_visible=None)
     pass_records = [item for item in records if str(item.get("gate_outcome", "")).upper() == "PASS"]
     no_pass_records = [item for item in records if str(item.get("gate_outcome", "")).upper() == "NO_PASS"]
     return {
+        "compatibility": "legacy-aletheia-read-only",
         "total": len(records),
         "pass_count": len(pass_records),
         "no_pass_count": len(no_pass_records),

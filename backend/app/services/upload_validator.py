@@ -251,6 +251,13 @@ def stream_csv_snapshot(
             and sum(parse_numeric_value(row[index]) is not None for row in detection_rows)
             >= max(3, int(min(len(detection_rows), 1000) * 0.15))
         ]
+        # Keep one entry per source index, including names that normalize alike.
+        numeric_column_schema = []
+        for index in numeric_indexes:
+            normalized_column = normalize_schema_column(columns[index])
+            numeric_column_schema.append(
+                (index, normalized_column, normalized_column in CHILLED_WATER_IMPORTANT_COLUMNS)
+            )
 
         handle.seek(0)
         rows_received = 0
@@ -329,11 +336,10 @@ def stream_csv_snapshot(
             missing_in_row = any(raw_row[index] == "" for index in numeric_indexes)
             invalid_in_row = False
             usable_numeric = 0
-            for index in numeric_indexes:
+            for index, normalized_column, is_important in numeric_column_schema:
                 raw_value = raw_row[index]
-                normalized_column = normalize_schema_column(columns[index])
                 numeric_value = parse_numeric_value(raw_value)
-                if numeric_value is None and normalized_column in CHILLED_WATER_IMPORTANT_COLUMNS:
+                if numeric_value is None and is_important:
                     important_missing_by_column[normalized_column] = important_missing_by_column.get(normalized_column, 0) + 1
                 if raw_value == "":
                     continue

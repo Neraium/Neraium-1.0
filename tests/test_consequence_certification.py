@@ -261,7 +261,11 @@ def test_cases_through_canonical_persistence_replay_and_findings_api(
             / "frontend/tests/fixtures/consequence-certification.json"
         ).read_text()
     )
-    assert fixture[f"{case}:{sign}"] == canonical
+    # Preserve the frozen quantitative fixture; invert only the declared
+    # execution-correlation namespace migration for this historical assertion.
+    legacy_canonical = dict(canonical)
+    legacy_canonical["analysis_run_id"] = legacy_canonical.pop("runtime_metadata")["analysis_run_id"]
+    assert fixture[f"{case}:{sign}"] == legacy_canonical
 
 
 def test_historical_evidence_without_consequence_remains_readable(client):

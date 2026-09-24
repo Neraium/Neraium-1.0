@@ -17,6 +17,7 @@ from app.engine.sii.common import (
 from app.services.operating_modes import (
     context_signals,
     describe_mode,
+    explicit_mode_features,
     numeric_band_references,
 )
 
@@ -91,8 +92,7 @@ def analyze_mode_conditioned_baseline(
         progress_callback(0, total_mode_rows)
     if target_features:
         for index, row in enumerate(historical_rows):
-            descriptor = describe_mode([row], signals, references, timestamp_column)
-            features = descriptor.get("features", {})
+            features, _ = explicit_mode_features([row], signals, references)
             comparable = [feature for feature in target_features if feature in features]
             score = (
                 sum(features[feature] == target_features[feature] for feature in comparable)
@@ -303,8 +303,7 @@ def _recent_feature_support(
         return {}
     matches = {feature: 0 for feature in target_features}
     for row in rows:
-        descriptor = describe_mode([row], signals, references, timestamp_column)
-        features = descriptor.get("features", {})
+        features, _ = explicit_mode_features([row], signals, references)
         for feature, target in target_features.items():
             if features.get(feature) == target:
                 matches[feature] += 1
