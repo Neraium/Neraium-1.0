@@ -479,6 +479,10 @@ def test_runtime_readiness_runs_every_structural_migration_verifier(monkeypatch)
         "db.migrations.persist_canonical_analysis_results.verify",
         lambda candidate: calls.append(("results", candidate)),
     )
+    monkeypatch.setattr(
+        "db.migrations.preserve_telemetry_source_representation.verify",
+        lambda candidate: calls.append(("source", candidate)),
+    )
 
     assert _ready_runtime(Repository()).verify_readiness() is True
     assert calls == [
@@ -486,6 +490,7 @@ def test_runtime_readiness_runs_every_structural_migration_verifier(monkeypatch)
         ("catalog", connection),
         ("runtime", connection),
         ("results", connection),
+        ("source", connection),
         ("close", connection),
     ]
 
@@ -515,3 +520,14 @@ def test_runtime_readiness_fails_closed_on_structural_verification_error(
 
     assert captured.value.code == "telemetry_schema_not_ready"
     assert closed == [True]
+
+
+def test_source_representation_extension_requires_authority_and_is_forward_only():
+    from db.migrations import preserve_telemetry_source_representation as source
+
+    connection = _ExtensionConnection(prerequisites=())
+    with pytest.raises(RuntimeError, match='prerequisite_missing'):
+        source.apply(connection)
+    assert not any('ALTER TABLE' in sql for sql, _ in connection.statements)
+    with pytest.raises(RuntimeError, match='downgrade_unsupported'):
+        source.downgrade(connection)

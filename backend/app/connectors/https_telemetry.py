@@ -492,6 +492,9 @@ class HttpsTelemetryConnector(TelemetryConnector):
                 secret=secret,
                 budget=budget,
             )
+            # This response has been received and decoded, including all records.
+            # It is acquisition provenance, not any record's source timestamp.
+            acquired_at = self._now()
             pages_read += 1
             total_bytes += response_bytes
             total_retries += retries
@@ -509,7 +512,7 @@ class HttpsTelemetryConnector(TelemetryConnector):
                 raise _budget_error(error.code) from None
             for record_index, record in enumerate(records):
                 try:
-                    observations.append(_observation(record, config))
+                    observations.append(_observation(record, config, acquired_at_utc=acquired_at))
                 except TelemetryConnectorError as error:
                     issues.append(
                         ConnectorRecordIssue(
@@ -848,7 +851,10 @@ def _extract_records(payload: Any, records_path: str | None) -> list[Mapping[str
     return records
 
 
-def _observation(record: Mapping[str, Any], config: _HttpsConfig) -> RawObservationEnvelope:
+def _observation(
+    record: Mapping[str, Any], config: _HttpsConfig, *,
+    acquired_at_utc: datetime | None = None,
+) -> RawObservationEnvelope:
     tag_id = _at_path(record, config.external_tag_id_field, required=True)
     tag_name = (
         _at_path(record, config.external_tag_name_field, required=False)
@@ -881,6 +887,11 @@ def _observation(record: Mapping[str, Any], config: _HttpsConfig) -> RawObservat
                 else None
             ),
             metadata=metadata,
+            native_quality=(
+                _at_path(record, config.quality_field, required=False)
+                if config.quality_field else None
+            ),
+            acquired_at_utc=acquired_at_utc,
         )
     except (TypeError, ValueError):
         raise TelemetryConnectorError(

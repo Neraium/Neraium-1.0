@@ -30,6 +30,7 @@ from app.services.telemetry_domain import (
     sanitize_telemetry_public_value,
 )
 from app.services.telemetry_units import conversion_contract
+from app.services.telemetry_ingestion import validate_source_representation
 from app.services.phase4_scope import (
     ServerBoundSystemIdentityV2,
     build_telemetry_server_bound_system_identity,
@@ -213,6 +214,26 @@ def _safe_json_records(
     if len(encoded.encode("utf-8")) > 8_388_608:
         raise ValueError(code)
     return encoded
+
+
+def _source_provenance_fields(item: dict[str, Any]) -> None:
+    """Keep nullable acquisition provenance out of analytical projections."""
+    item["source_representation"] = validate_source_representation(item.get("source_representation"))
+    acquired = item.get("acquired_at_utc")
+    if acquired is not None:
+        if not isinstance(acquired, datetime) or acquired.tzinfo is None or acquired.utcoffset() is None:
+            raise ValueError("telemetry_acquisition_timestamp_invalid")
+        acquired = acquired.astimezone(UTC)
+    item["acquired_at_utc"] = acquired
+
+
+def _json_safe_rejected_value(item: dict[str, Any]) -> None:
+    # JSONB cannot represent NaN/Infinity numbers. Preserve their native type in
+    # source_representation and a textual marker in the legacy JSON scalar.
+    # This applies only to rejected records, never analytical numerical values.
+    original = item.get("original_value")
+    if isinstance(original, float) and not math.isfinite(original):
+        item["original_value"] = str(original)
 
 
 def _safe_error_fields(code: str, summary: str | None) -> tuple[str, str | None]:
@@ -2187,6 +2208,7 @@ class PostgreSQLTelemetryRepository:
         )
         for raw in observations:
             item = dict(raw)
+            _source_provenance_fields(item)
             if any(item.get(field) is None for field in required_observation_fields):
                 raise ValueError("telemetry_observation_contract_invalid")
             for field in ("id", "external_signal_id", "mapping_id", "canonical_concept_id"):
@@ -2204,6 +2226,8 @@ class PostgreSQLTelemetryRepository:
         prepared_rejections: list[dict[str, Any]] = []
         for raw in rejections:
             item = dict(raw)
+            _source_provenance_fields(item)
+            _json_safe_rejected_value(item)
             item["id"] = _require_uuid(
                 str(item.get("id") or uuid.uuid4()), "telemetry_rejection_id_invalid"
             )
@@ -2323,6 +2347,7 @@ class PostgreSQLTelemetryRepository:
                             ingestion_disposition TEXT, analysis_eligible BOOLEAN,
                             reason_codes TEXT[], source_record_digest TEXT,
                             source_metadata JSONB,
+                            source_representation JSONB, acquired_at_utc TIMESTAMPTZ,
                             mapping_actor_id TEXT,
                             mapping_mapped_at TIMESTAMPTZ,
                             mapping_authority_digest TEXT,
@@ -2341,6 +2366,7 @@ class PostgreSQLTelemetryRepository:
                         canonical_unit, conversion_id, conversion_version,
                         quality_state, ingestion_disposition, analysis_eligible,
                         reason_codes, source_record_digest, source_metadata,
+                        source_representation, acquired_at_utc,
                         mapping_provenance, mapping_actor_id, mapping_mapped_at,
                         mapping_authority_digest
                     )
@@ -2357,6 +2383,7 @@ class PostgreSQLTelemetryRepository:
                         x.quality_state, x.ingestion_disposition,
                         x.analysis_eligible, COALESCE(x.reason_codes, '{}'),
                         x.source_record_digest, COALESCE(x.source_metadata, '{}'),
+                        x.source_representation, x.acquired_at_utc,
                         m.provenance, m.mapped_by, m.mapped_at, m.authority_digest
                     FROM input x
                     JOIN telemetry.signal_mappings m
@@ -2398,6 +2425,11 @@ class PostgreSQLTelemetryRepository:
                             "external_signal_id": item.get("external_signal_id"),
                             "external_tag_id": item.get("external_tag_id"),
                             "source_timestamp_raw": item.get("source_timestamp_raw"),
+                            "original_value": item.get("original_value"),
+                            "original_unit": item.get("original_unit"),
+                            "reported_quality": item.get("reported_quality"),
+                            "source_representation": item.get("source_representation"),
+                            "acquired_at_utc": item.get("acquired_at_utc"),
                             "source_record_digest": digest,
                             "quality_state": "format_invalid",
                             "reason_code": "duplicate_observation",
@@ -2419,6 +2451,7 @@ class PostgreSQLTelemetryRepository:
                             source_timestamp_raw TEXT, source_record_digest TEXT,
                             original_value JSONB, original_unit TEXT,
                             reported_quality TEXT,
+                            source_representation JSONB, acquired_at_utc TIMESTAMPTZ,
                             quality_state TEXT, reason_code TEXT,
                             disposition TEXT, safe_context JSONB
                         )
@@ -2429,6 +2462,7 @@ class PostgreSQLTelemetryRepository:
                         external_signal_id, external_tag_id, source_timestamp_raw,
                         provider_event_id, mapping_id, original_value,
                         original_unit, reported_quality,
+                        source_representation, acquired_at_utc,
                         source_record_digest, quality_state, reason_code,
                         disposition, safe_context, occurrence_count,
                         first_seen_at, last_seen_at
@@ -2437,6 +2471,7 @@ class PostgreSQLTelemetryRepository:
                         x.external_signal_id, x.external_tag_id,
                         x.source_timestamp_raw, x.provider_event_id, x.mapping_id,
                         x.original_value, x.original_unit, x.reported_quality,
+                        x.source_representation, x.acquired_at_utc,
                         x.source_record_digest,
                         x.quality_state, x.reason_code, x.disposition,
                         COALESCE(x.safe_context, '{}'), 1, NOW(), NOW()
@@ -2451,6 +2486,12 @@ class PostgreSQLTelemetryRepository:
                         original_value = EXCLUDED.original_value,
                         original_unit = EXCLUDED.original_unit,
                         reported_quality = EXCLUDED.reported_quality,
+                        source_representation = COALESCE(
+                            telemetry.observation_rejections.source_representation,
+                            EXCLUDED.source_representation),
+                        acquired_at_utc = COALESCE(
+                            telemetry.observation_rejections.acquired_at_utc,
+                            EXCLUDED.acquired_at_utc),
                         safe_context = EXCLUDED.safe_context,
                         occurrence_count = telemetry.observation_rejections.occurrence_count + 1,
                         last_seen_at = NOW()
@@ -3241,6 +3282,7 @@ class PostgreSQLTelemetryRepository:
                        e.external_tag_id, e.provider_event_id, e.mapping_id,
                        e.source_timestamp_raw, e.original_value,
                        e.original_unit, e.reported_quality,
+                       e.source_representation, e.acquired_at_utc,
                        e.source_record_digest, e.quality_state, e.reason_code,
                        e.disposition, e.occurrence_count, e.first_seen_at,
                        e.last_seen_at, e.safe_context
@@ -3277,7 +3319,8 @@ class PostgreSQLTelemetryRepository:
                        o.analysis_eligible, o.reason_codes,
                        o.source_record_digest, o.source_metadata,
                        o.mapping_provenance, o.mapping_actor_id,
-                       o.mapping_mapped_at, o.mapping_authority_digest
+                       o.mapping_mapped_at, o.mapping_authority_digest,
+                       o.source_representation, o.acquired_at_utc, o.ingested_at_utc
                 FROM telemetry.normalized_observations o
                 WHERE o.resource_scope_id = %s AND o.tenant_scope_id = %s
                   AND o.workspace_id = %s AND o.facility_id = %s

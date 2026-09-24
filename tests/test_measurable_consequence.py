@@ -190,7 +190,10 @@ def test_canonical_analysis_attaches_exact_finding_owned_consequence():
     result = build_analysis_result(source)
     consequence = result["conditions"][0]["measurable_consequence"]
     expected_consequence = run(finding, expected, catalog)
-    expected_consequence["runtime_metadata"] = {"analysis_run_id": expected_consequence.pop("analysis_run_id")}
+    expected_consequence["runtime_metadata"] = {
+        "contract_version": "execution-metadata.v1",
+        "analysis_run_id": expected_consequence.pop("analysis_run_id"),
+    }
     assert consequence == expected_consequence
     assert (
         json.loads(json.dumps(result, allow_nan=False))["conditions"][0][

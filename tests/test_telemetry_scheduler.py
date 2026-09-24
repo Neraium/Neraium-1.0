@@ -23,6 +23,7 @@ from app.services.telemetry_scheduler import TelemetryScheduler
 from app.services.telemetry_ingestion import prepare_connector_page
 from app.services.telemetry_units import UNIT_NORMALIZATION_VERSION
 from app.services import worker_heartbeat
+from app.services.service_status import STARTUP_STATUS
 
 
 NOW = datetime(2026, 8, 25, 10, 0, tzinfo=UTC)
@@ -774,7 +775,10 @@ def test_lifespan_starts_scheduler_only_for_worker_roles(monkeypatch, tmp_path) 
         shutdown_timeout_seconds=0.25,
     )
     with TestClient(create_app(worker_settings)) as client:
-        assert client.get("/api/health").json()["telemetry_worker_started"] is True
+        # Public liveness intentionally omits internal worker diagnostics.
+        assert set(client.get("/api/health").json()) == {"status", "service"}
+        assert STARTUP_STATUS["telemetry_worker_started"] is True
+        assert worker_scheduler.running is True
     assert worker_scheduler.calls == ["start", ("stop", 0.25)]
 
 

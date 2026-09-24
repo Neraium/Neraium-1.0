@@ -58,6 +58,15 @@ class SignalMappingStatus(StrEnum):
     DISABLED = "disabled"
 
 
+class SourceQualityState(StrEnum):
+    """Source report only; None means not supplied, never an admission decision."""
+
+    GOOD = "good"
+    UNCERTAIN = "uncertain"
+    BAD = "bad"
+    UNKNOWN = "unknown"
+
+
 class TelemetryQualityState(StrEnum):
     GOOD = "good"
     STALE = "stale"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -22,6 +23,7 @@ from app.services.telemetry_ingestion import (
     MappingSnapshot,
     prepare_connector_page,
     stable_source_record_digest,
+    validate_source_representation,
 )
 from app.services.telemetry_timestamps import TIMESTAMP_NORMALIZATION_VERSION
 from app.services.telemetry_units import UNIT_NORMALIZATION_VERSION
@@ -467,3 +469,107 @@ def test_mapping_snapshot_fails_closed_on_scope_or_key_mismatch(
             mappings_by_external_tag={mapping.external_tag_id: mapping},
             now=NOW,
         )
+
+
+@pytest.mark.parametrize(
+    'reported,source_state,admission,eligible',
+    [
+        (None, None, 'good', True),
+        ('GOOD', 'good', 'good', True),
+        ('uncertain', 'uncertain', 'invalid_value', False),
+        ('SUSPECT', 'uncertain', 'invalid_value', False),
+        ('BAD', 'bad', 'invalid_value', False),
+        ('invalid', 'bad', 'invalid_value', False),
+        ('UNKNOWN', 'unknown', 'format_invalid', False),
+        ('vendor-code-123', 'unknown', 'format_invalid', False),
+        ('', 'unknown', 'good', True),
+    ],
+)
+def test_source_quality_is_separate_from_unchanged_admission(
+    scope, mapping, reported, source_state, admission, eligible,
+):
+    result = prepare(scope=scope, mapping=mapping, observations=(raw(quality=reported),))
+    record = (result.observations or result.rejections)[0]
+    assert record.analysis_eligible is eligible
+    assert record.quality_state.value == admission
+    representation = validate_source_representation(record.source_representation)
+    assert representation['quality_state'] == source_state
+    assert representation['native_quality']['value'] == reported
+    assert record.reported_quality == reported
+
+
+@pytest.mark.parametrize('value,kind,encoded,eligible', [
+    (Decimal('9007199254740993.000'), 'decimal', '9007199254740993.000', True),
+    (9007199254740993, 'int', '9007199254740993', True),
+    (77.125, 'float', float(77.125).hex(), True),
+    (True, 'bool', True, False),
+    ('RUNNING', 'str', 'RUNNING', False),
+    (None, 'null', None, False),
+])
+def test_lossless_source_scalar_does_not_change_numerical_admission(
+    scope, mapping, value, kind, encoded, eligible,
+):
+    from app.services.telemetry_units import normalize_telemetry_unit
+
+    result = prepare(scope=scope, mapping=mapping, observations=(raw(value=value),))
+    record = (result.observations or result.rejections)[0]
+    assert record.source_representation['value'] == {'type': kind, 'value': encoded}
+    assert record.analysis_eligible is eligible
+    if eligible:
+        existing = normalize_telemetry_unit(
+            value=value, source_unit=mapping.source_unit,
+            canonical_unit=mapping.canonical_unit, expected_dimension=mapping.expected_dimension,
+        )
+        assert record.normalized_value == existing.canonical_value
+    else:
+        assert record.original_value == value
+
+
+def test_acquisition_and_native_code_are_provenance_not_v1_identity(scope, mapping):
+    from datetime import timedelta, timezone
+    from app.services.telemetry_scheduler import _observation_record
+    from app.services.telemetry_lineage import ObservationLineage
+
+    original = raw(quality='good')
+    acquired = NOW.astimezone(timezone(timedelta(hours=2))) - timedelta(minutes=1)
+    enriched = replace(original, acquired_at_utc=acquired, native_quality=192)
+    retry = replace(enriched, acquired_at_utc=NOW, metadata={'worker_id': 'worker-2'})
+    assert stable_source_record_digest(original) == stable_source_record_digest(enriched)
+    assert stable_source_record_digest(enriched) == stable_source_record_digest(retry)
+    changed_source = replace(original, external_tag_id='another-source')
+    assert stable_source_record_digest(original) != stable_source_record_digest(changed_source)
+    first = prepare(scope=scope, mapping=mapping, observations=(enriched,)).observations[0]
+    second = prepare(scope=scope, mapping=mapping, observations=(retry,)).observations[0]
+    assert first.acquired_at_utc == NOW - timedelta(minutes=1)
+    assert first.acquired_at_utc not in (first.observed_at_utc, first.ingested_at_utc)
+    assert first.source_representation['native_quality'] == {'type': 'int', 'value': '192'}
+    # Existing lineage consumes admitted identity; acquisition never enters it.
+    one, two = _observation_record(first), _observation_record(second)
+    two['id'] = one['id']
+    one['ingestion_run_id'] = two['ingestion_run_id'] = RUN_ID
+    assert ObservationLineage.from_observation(one) == ObservationLineage.from_observation(two)
+    old = prepare(scope=scope, mapping=mapping, observations=(original,)).observations[0]
+    assert old.acquired_at_utc is None
+    assert validate_source_representation(None) is None
+    replay = prepare(scope=scope, mapping=mapping, observations=(retry,),
+                     existing_source_record_digests=(first.source_record_digest,))
+    assert replay.duplicate_count == 1
+    assert replay.rejections[0].acquired_at_utc == NOW
+
+
+def test_source_provenance_rejects_unstructured_fields_and_naive_acquisition():
+    with pytest.raises(ValueError, match='acquisition_timestamp_must_be_aware'):
+        replace(raw(), acquired_at_utc=datetime(2026, 1, 1))
+    with pytest.raises(ValueError, match='native_quality_invalid'):
+        replace(raw(), native_quality={'authorization': 'secret'})
+    with pytest.raises(ValueError, match='source_representation_invalid'):
+        validate_source_representation({'credentials': 'secret'})
+
+
+def test_unmapped_native_quality_is_unknown_without_changing_absent_report_policy(scope, mapping):
+    observation = replace(raw(quality=None), native_quality=192)
+    record = prepare(scope=scope, mapping=mapping, observations=(observation,)).observations[0]
+    assert record.source_representation['quality_state'] == 'unknown'
+    assert record.source_representation['native_quality'] == {'type': 'int', 'value': '192'}
+    assert record.quality_state.value == 'good'
+    assert record.analysis_eligible is True

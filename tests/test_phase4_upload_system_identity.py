@@ -52,6 +52,8 @@ def _production_app(monkeypatch: pytest.MonkeyPatch, runtime_dir: Path):
 
 
 def _login(client: TestClient) -> None:
+    # Subsequent cookie-authenticated mutations model a trusted browser request.
+    client.headers["Origin"] = "https://app.neraium.com"
     response = client.post(
         "/api/auth/login",
         json={"email": "admin@example.com", "password": "password123"},

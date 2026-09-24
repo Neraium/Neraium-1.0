@@ -214,6 +214,10 @@ class RawObservationEnvelope:
     reported_quality: str | None = None
     provider_event_id: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    # Original code before adapter text normalization; never used for admission
+    # or the existing v1 source-record digest. None falls back to reported_quality.
+    native_quality: str | int | float | bool | list[Any] | dict[str, Any] | None = field(default=None, repr=False)
+    acquired_at_utc: datetime | None = None
 
     def __post_init__(self) -> None:
         tag_id = str(self.external_tag_id or "").strip()
@@ -224,6 +228,22 @@ class RawObservationEnvelope:
             raise ValueError("reported_unit_invalid")
         if self.reported_quality is not None and len(str(self.reported_quality)) > 128:
             raise ValueError("reported_quality_invalid")
+        if self.native_quality is not None and (
+            type(self.native_quality) not in (str, int, float, bool, list, dict)
+            or len(str(self.native_quality)) > 128
+        ):
+            raise ValueError("native_quality_invalid")
+        if isinstance(self.native_quality, (list, dict)):
+            reject_sensitive_telemetry_fields(self.native_quality, code="native_quality_invalid")
+            try:
+                json.dumps(self.native_quality)
+            except (TypeError, ValueError):
+                raise ValueError("native_quality_invalid") from None
+        if self.acquired_at_utc is not None:
+            acquired = self.acquired_at_utc
+            if not isinstance(acquired, datetime) or acquired.tzinfo is None or acquired.utcoffset() is None:
+                raise ValueError("acquisition_timestamp_must_be_aware")
+            object.__setattr__(self, "acquired_at_utc", acquired.astimezone(UTC))
         if self.provider_event_id is not None and len(str(self.provider_event_id)) > 512:
             raise ValueError("provider_event_id_invalid")
         if len(self.metadata) > 32:
@@ -315,25 +335,28 @@ class TelemetryConnector(ABC):
     def validate(self, context: ConnectorExecutionContext) -> ConnectorValidationResult:
         raise NotImplementedError
 
-    @abstractmethod
     def discover_signals(
         self,
         context: ConnectorExecutionContext,
         *,
         checkpoint: ConnectorCheckpoint | None = None,
     ) -> ConnectorPage:
-        raise NotImplementedError
+        raise TelemetryConnectorError(
+            "discovery_not_supported", kind=ConnectorFailureKind.CONFIGURATION,
+            safe_message="Signal discovery is not supported by this connector.",
+        )
 
-    @abstractmethod
     def fetch_incremental(
         self,
         context: ConnectorExecutionContext,
         *,
         checkpoint: ConnectorCheckpoint | None = None,
     ) -> ConnectorPage:
-        raise NotImplementedError
+        raise TelemetryConnectorError(
+            "incremental_not_supported", kind=ConnectorFailureKind.CONFIGURATION,
+            safe_message="Incremental retrieval is not supported by this connector.",
+        )
 
-    @abstractmethod
     def fetch_backfill(
         self,
         context: ConnectorExecutionContext,
@@ -341,7 +364,10 @@ class TelemetryConnector(ABC):
         time_range: BoundedBackfillRange,
         checkpoint: ConnectorCheckpoint | None = None,
     ) -> ConnectorPage:
-        raise NotImplementedError
+        raise TelemetryConnectorError(
+            "backfill_not_supported", kind=ConnectorFailureKind.CONFIGURATION,
+            safe_message="Historical retrieval is not supported by this connector.",
+        )
 
     @abstractmethod
     def health(self, context: ConnectorExecutionContext) -> ProviderHealthResult:

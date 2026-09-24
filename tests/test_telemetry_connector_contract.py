@@ -115,3 +115,36 @@ def test_checkpoint_and_backfill_bounds_are_explicit_and_aware() -> None:
         end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
     )
     assert bounded.start_at.tzinfo is not None
+
+
+def test_minimal_provider_can_omit_unsupported_acquisition_operations():
+    from app.connectors.base import TelemetryConnectorError
+
+    class HealthOnly(TelemetryConnector):
+        @classmethod
+        def descriptor(cls):
+            return ConnectorProviderDescriptor(
+                connector_type=ConnectorType.HTTPS_TELEMETRY,
+                display_name='Health only', description='No acquisition configured',
+                capabilities=frozenset({ConnectorCapability.VALIDATE, ConnectorCapability.HEALTH_CHECK}),
+                production_available=False,
+            )
+
+        def validate(self, context):
+            raise NotImplementedError
+
+        def health(self, context):
+            raise NotImplementedError
+
+    provider = HealthOnly()
+    assert provider.descriptor().retrieval_only
+    for operation, kwargs in (
+        (provider.discover_signals, {}),
+        (provider.fetch_incremental, {}),
+        (provider.fetch_backfill, {'time_range': None}),
+    ):
+        with pytest.raises(TelemetryConnectorError, match='not supported') as error:
+            operation(None, **kwargs)
+        assert not error.value.retryable
+    with pytest.raises(ValueError):
+        ConnectorCapability('write')

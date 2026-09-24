@@ -26,15 +26,18 @@ from app.connectors.base import (
 )
 from app.services.telemetry_domain import (
     IngestionDisposition,
+    SourceQualityState,
     TelemetryQualityState,
     TelemetryScopeRef,
     is_sensitive_telemetry_key,
+    reject_sensitive_telemetry_fields,
 )
 from app.services.telemetry_timestamps import normalize_telemetry_timestamp
 from app.services.telemetry_units import normalize_telemetry_unit
 
 
 SOURCE_RECORD_DIGEST_VERSION = "neraium.telemetry.source-record/v1"
+SOURCE_REPRESENTATION_VERSION = "neraium.telemetry.source-representation/v1"
 MAX_PREPARED_METADATA_BYTES = 16 * 1024
 MAX_PREPARED_METADATA_KEYS = 32
 MAX_PREPARED_METADATA_DEPTH = 4
@@ -224,6 +227,92 @@ def stable_source_record_digest(observation: RawObservationEnvelope) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def normalized_source_quality(value: str | None) -> SourceQualityState | None:
+    """Describe reported quality without changing the legacy admission policy."""
+    if value is None:
+        return None
+    token = _metadata_key(value)
+    if token in _GOOD_QUALITY - {""}:
+        return SourceQualityState.GOOD
+    if token in {"uncertain", "suspect", "questionable", "poor"} | _STALE_QUALITY:
+        return SourceQualityState.UNCERTAIN
+    if token in _BAD_QUALITY:
+        return SourceQualityState.BAD
+    return SourceQualityState.UNKNOWN
+
+
+def validate_source_representation(value: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Validate the closed provenance shape; historical absence stays absent.
+
+    Scalar encoding reuses the existing typed representation; structured native
+    quality is uninterpreted JSON text. Neither is an identity projection.
+    Arbitrary metadata/credential fields are not accepted;
+    adapters still must never place credentials in scalar telemetry values.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, Mapping) or set(value) != {
+        "contract_version", "value", "native_quality", "reported_quality", "quality_state"
+    }:
+        raise ValueError("source_representation_invalid")
+    if value["contract_version"] != SOURCE_REPRESENTATION_VERSION:
+        raise ValueError("source_representation_version_invalid")
+    quality = value["quality_state"]
+    if quality is not None and (
+        not isinstance(quality, str) or quality not in {item.value for item in SourceQualityState}
+    ):
+        raise ValueError("source_representation_quality_invalid")
+    result = dict(value)
+    for name in ("value", "native_quality", "reported_quality"):
+        scalar = value[name]
+        if not isinstance(scalar, Mapping) or set(scalar) != {"type", "value"}:
+            raise ValueError("source_representation_scalar_invalid")
+        kind, raw = scalar["type"], scalar["value"]
+        if not isinstance(kind, str):
+            raise ValueError("source_representation_scalar_invalid")
+        if name == "native_quality" and kind == "json" and type(raw) is str:
+            try:
+                structured = json.loads(raw)
+            except ValueError:
+                raise ValueError("source_representation_scalar_invalid") from None
+            if not isinstance(structured, (list, dict)):
+                raise ValueError("source_representation_scalar_invalid")
+            reject_sensitive_telemetry_fields(structured, code="source_representation_scalar_invalid")
+            result[name] = dict(scalar)
+            continue
+        if not (
+            (kind == "null" and raw is None)
+            or (kind == "bool" and type(raw) is bool)
+            or (kind in {"int", "float", "decimal", "str", "datetime", "unsupported"} and type(raw) is str)
+        ):
+            raise ValueError("source_representation_scalar_invalid")
+        result[name] = dict(scalar)
+    return result
+
+
+def _source_representation(observation: Any) -> Mapping[str, Any]:
+    reported = getattr(observation, "reported_quality", None)
+    native = getattr(observation, "native_quality", None)
+    structured_quality = isinstance(native, (list, dict))
+    # Legacy report/admission may accept punctuation-stripped structured values.
+    # That is not evidence of GOOD source quality or native protocol meaning.
+    quality = SourceQualityState.UNKNOWN if structured_quality else normalized_source_quality(reported)
+    if quality is None and native is not None:
+        # A code was supplied without a recognized adapter report. Do not guess
+        # its protocol meaning or change legacy admission of an absent report.
+        quality = SourceQualityState.UNKNOWN
+    return MappingProxyType({
+        "contract_version": SOURCE_REPRESENTATION_VERSION,
+        "value": MappingProxyType(dict(_digest_scalar(getattr(observation, "raw_value", None)))),
+        "native_quality": MappingProxyType(
+            {"type": "json", "value": json.dumps(native, ensure_ascii=True, separators=(",", ":"))}
+            if structured_quality else dict(_digest_scalar(native if native is not None else reported))
+        ),
+        "reported_quality": MappingProxyType(dict(_digest_scalar(reported))),
+        "quality_state": quality.value if quality is not None else None,
+    })
+
+
 @dataclass(frozen=True, slots=True)
 class MappingSnapshot:
     """One server-authoritative mapping loaded once for a fetched page."""
@@ -337,6 +426,8 @@ class PreparedObservation:
     source_metadata: Mapping[str, Any] = field(
         default_factory=lambda: MappingProxyType({}), repr=False
     )
+    source_representation: Mapping[str, Any] | None = field(default=None, repr=False)
+    acquired_at_utc: datetime | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.scope, TelemetryScopeRef):
@@ -409,6 +500,7 @@ class PreparedObservation:
             raise ValueError("prepared_observation_digest_invalid")
         object.__setattr__(self, "reason_codes", tuple(self.reason_codes))
         object.__setattr__(self, "source_metadata", _safe_metadata(self.source_metadata))
+        _validate_source_provenance(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -432,6 +524,8 @@ class PreparedRejection:
         default_factory=lambda: MappingProxyType({}), repr=False
     )
     analysis_eligible: bool = False
+    source_representation: Mapping[str, Any] | None = field(default=None, repr=False)
+    acquired_at_utc: datetime | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.scope, TelemetryScopeRef):
@@ -454,6 +548,20 @@ class PreparedRejection:
         if not _SHA256.fullmatch(self.source_record_digest):
             raise ValueError("prepared_rejection_digest_invalid")
         object.__setattr__(self, "safe_context", _safe_metadata(self.safe_context))
+        _validate_source_provenance(self)
+
+
+def _validate_source_provenance(record: PreparedObservation | PreparedRejection) -> None:
+    value = validate_source_representation(record.source_representation)
+    if value is not None:
+        object.__setattr__(record, "source_representation", MappingProxyType({
+            key: MappingProxyType(item) if isinstance(item, dict) else item
+            for key, item in value.items()
+        }))
+    if record.acquired_at_utc is not None:
+        object.__setattr__(record, "acquired_at_utc", _aware_utc(
+            record.acquired_at_utc, "acquisition_timestamp_must_be_aware"
+        ))
 
 
 @dataclass(frozen=True, slots=True)
@@ -579,6 +687,8 @@ def _rejection(
         reason_code=reason_code,
         source_record_digest=digest,
         safe_context=safe_context or {},
+        source_representation=_source_representation(observation),
+        acquired_at_utc=getattr(observation, "acquired_at_utc", None),
     )
 
 
@@ -905,6 +1015,8 @@ def prepare_connector_page(
                 reason_codes=(timestamp.reason_code,) if timestamp.reason_code else (),
                 source_record_digest=digest,
                 source_metadata=source_metadata,
+                source_representation=_source_representation(observation),
+                acquired_at_utc=getattr(observation, "acquired_at_utc", None),
             )
         )
         seen_digests.add(digest)
@@ -942,6 +1054,9 @@ __all__ = [
     "PreparedPage",
     "PreparedRejection",
     "SOURCE_RECORD_DIGEST_VERSION",
+    "SOURCE_REPRESENTATION_VERSION",
+    "normalized_source_quality",
     "prepare_connector_page",
     "stable_source_record_digest",
+    "validate_source_representation",
 ]

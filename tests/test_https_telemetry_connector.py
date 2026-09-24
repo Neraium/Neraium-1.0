@@ -513,3 +513,31 @@ def test_max_pages_returns_resumable_checkpoint_without_unbounded_reads() -> Non
     assert calls == 2
     assert result.has_more is True
     assert result.next_checkpoint == ConnectorCheckpoint(cursor="cursor:cursor-2")
+
+
+def test_native_quality_and_acquisition_are_captured_after_response_completion():
+    received = False
+    acquired = datetime(2026, 1, 2, tzinfo=UTC)
+
+    def handler(request):
+        nonlocal received
+        received = True
+        data = payload()
+        data['data']['records'][0]['quality'] = 0
+        return httpx.Response(200, json=data)
+
+    def clock():
+        assert received
+        return acquired
+
+    provider = HttpsTelemetryConnector(
+        egress_policy=TelemetryEgressPolicy(resolver=StaticResolver('93.184.216.34')),
+        transport=httpx.MockTransport(handler), now=clock,
+    )
+    observation = provider.fetch_incremental(context(configuration())).observations[0]
+    assert observation.native_quality == 0
+    assert type(observation.native_quality) is int
+    # Preserve the pre-existing adapter text and its v1 digest/admission meaning.
+    assert observation.reported_quality == '0'
+    assert observation.acquired_at_utc == acquired
+    assert observation.source_timestamp == '2026-01-01T00:00:00-05:00'
