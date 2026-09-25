@@ -155,7 +155,7 @@ def temporal_descriptor(edge, graph):
             "observations": observations, "assessment": pick(edge, TEMPORAL)}
 
 
-def evidence_record(edge, graph, scope, comparison_qualification=None):
+def evidence_record(edge, graph, scope, comparison_qualification=None, endpoint_identity=None):
     if not valid_source(edge) or graph.get("edge_basis") not in BASES:
         raise ValueError("relationship_source_unavailable")
     basis = graph["edge_basis"]
@@ -188,14 +188,16 @@ def registry_record(registry, record):
     registry["records"][identity] = deepcopy(record)
 
 
-def finalize(relationship_model, graph, *, scope, mode_conditioned=None):
+def finalize(relationship_model, graph, *, scope, mode_conditioned=None, endpoint_identity=None,
+             phase4_system_identity=None, asset_id=None, authenticated_scope=None,
+             observation_lineage=None):
     """Finalize a newly produced result only. Never called by historical reads.
 
     A lineage is resolved only through producer-issued source IDs. Mode evidence
     cannot claim a global candidate. Unassessed global source records stay out of
     the dynamic graph's analytical edge collections.
     """
-    registry = {"version": VERSION, "scope": scope, "records": {}}
+    registry = {"version": VERSION, "scope": scope, "records": {}, "relationship_lineage": {}}
     comparison = {}
     mode_conditioned = mode_conditioned or {}
     if mode_conditioned.get("status") in MODE_STATUSES:
@@ -208,17 +210,25 @@ def finalize(relationship_model, graph, *, scope, mode_conditioned=None):
     by_source = {}
     for edge in graph.get("edges", []):
         try:
-            record = evidence_record(edge, graph, scope, comparison)
+            record = evidence_record(edge, graph, scope, comparison, endpoint_identity)
         except (ValueError, TypeError, KeyError):
             continue
         registry_record(registry, record)
+        from app.services.relationship_lineage import issue
+        lineage = issue(endpoint_identity, edge[SOURCE], {"basis": record["basis"], "context": record["context"]}, authorized_scope=scope, authenticated_scope=authenticated_scope, phase4_system_identity=phase4_system_identity, asset_id=asset_id, observation_lineage=observation_lineage) if endpoint_identity is not None else None
+        if lineage is not None:
+            registry["relationship_lineage"][record["evidence_id"]] = lineage
         by_source.setdefault(record["source"]["source_id"], set()).add(record["evidence_id"])
         edge["relationship_evidence_id"] = record["evidence_id"]
     for edge in (relationship_model.get("relationship_graph") or {}).get("edges", []):
         if not valid_source(edge) or edge[SOURCE]["source_id"] in by_source:
             continue
-        record = evidence_record(edge, {"edge_basis": "global_relationship_model"}, scope, comparison)
+        record = evidence_record(edge, {"edge_basis": "global_relationship_model"}, scope, comparison, endpoint_identity)
         registry_record(registry, record)
+        from app.services.relationship_lineage import issue
+        lineage = issue(endpoint_identity, edge[SOURCE], {"basis": record["basis"], "context": record["context"]}, authorized_scope=scope, authenticated_scope=authenticated_scope, phase4_system_identity=phase4_system_identity, asset_id=asset_id, observation_lineage=observation_lineage) if endpoint_identity is not None else None
+        if lineage is not None:
+            registry["relationship_lineage"][record["evidence_id"]] = lineage
         by_source[record["source"]["source_id"]] = {record["evidence_id"]}
     for candidate in relationship_model.get("top_relationship_changes", []):
         candidate.pop(REF, None)
@@ -233,6 +243,11 @@ def finalize(relationship_model, graph, *, scope, mode_conditioned=None):
         if len(identities) == 1:
             candidate[REF] = next(iter(identities))
             candidate[ASSESSMENT_BINDING] = assessment_binding(candidate[OWNER_REF], candidate[REF], scope)
+            lineage = registry["relationship_lineage"].get(candidate[REF])
+            if isinstance(lineage, dict):
+                candidate["relationship_lineage_ref"] = lineage["ref"]
+            else:
+                candidate.pop("relationship_lineage_ref", None)
     registry["records"] = dict(sorted(registry["records"].items()))
     # Freeze ordinary JSON values and deterministic key ordering at the boundary.
     return json.loads(canonical_json_bytes(registry))
@@ -275,6 +290,13 @@ def resolve(assertion, registry, *, authorized_scope, require_temporal=False):
             return None
         if record["basis"] not in BASES:
             return None
+        lineage = registry.get("relationship_lineage", {}).get(assertion[REF])
+        if "relationship_lineage_ref" in assertion:
+            from app.services.relationship_lineage import verify_for_evidence
+            if (not isinstance(lineage, dict)
+                    or assertion.get("relationship_lineage_ref") != lineage.get("ref")
+                    or not verify_for_evidence(lineage, record, authorized_scope=authorized_scope)):
+                return None
         if (record["basis"] == "mode_conditioned_relationships") != (source["method"] == "pearson-mode.v1"):
             return None
         temporal = record["temporal"]

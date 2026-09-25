@@ -719,6 +719,9 @@ def run_analysis_window(
             progress_callback=progress_callback,
             phase4_scope=window.phase4_scope,
             canonical_endpoint_identity=window.relationship_endpoint_identity(),
+            phase4_system_identity=identity,
+            phase4_asset_id=window.asset_id,
+            phase4_observation_lineage=window.observation_lineage,
         )
     except Exception as error:
         raise AnalysisWindowExecutionError("telemetry_analysis_engine_execution_failed") from error

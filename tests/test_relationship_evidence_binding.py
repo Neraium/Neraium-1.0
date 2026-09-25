@@ -240,7 +240,7 @@ def test_real_connector_generation_retains_registry_and_retries():
     assert all(item['mapping_provenance'] == [{'mapping_id': 'mapping-a', 'mapping_revision': 2}]
                for item in endpoint_identity['endpoints'])
     assert first.sii_result['relationship_graph']['edges'] == baseline.sii_result['relationship_graph']['edges']
-    assert first.sii_result[REGISTRY] == baseline.sii_result[REGISTRY]
+    assert first.sii_result[REGISTRY]['records'] == baseline.sii_result[REGISTRY]['records']
     assert first.analysis_result['relationships'] == baseline.analysis_result['relationships']
     assert first.sii_result[REGISTRY] == second.sii_result[REGISTRY]
     assert first.analysis_result[REGISTRY] == first.sii_result[REGISTRY]
@@ -386,8 +386,15 @@ def test_existing_calculation_ast_unchanged_except_binding_metadata(path, functi
     class RemoveBindingOnly(ast.NodeTransformer):
         def visit_FunctionDef(self, node):
             if node.name == 'evaluate_sii':
-                i = [a.arg for a in node.args.kwonlyargs].index('canonical_endpoint_identity')
-                node.args.kwonlyargs.pop(i); node.args.kw_defaults.pop(i)
+                for name in ('canonical_endpoint_identity', 'phase4_system_identity', 'phase4_asset_id', 'phase4_observation_lineage'):
+                    i = [a.arg for a in node.args.kwonlyargs].index(name)
+                    node.args.kwonlyargs.pop(i); node.args.kw_defaults.pop(i)
+            return self.generic_visit(node)
+
+        def visit_Call(self, node):
+            if function == 'evaluate_sii' and isinstance(node.func, ast.Name) and node.func.id == 'finalize':
+                node.keywords = [keyword for keyword in node.keywords if keyword.arg not in {
+                    'endpoint_identity', 'phase4_system_identity', 'asset_id', 'authenticated_scope', 'observation_lineage'}]
             return self.generic_visit(node)
 
         def visit_Assign(self, node):

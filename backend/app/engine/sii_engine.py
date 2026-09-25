@@ -65,6 +65,9 @@ def evaluate_sii(
     operating_mode=None,
     phase4_scope: AuthenticatedPhase4Scope | None = None,
     canonical_endpoint_identity: dict[str, Any] | None = None,
+    phase4_system_identity=None,
+    phase4_asset_id: str | None = None,
+    phase4_observation_lineage=None,
     relationship_persistence_state: dict[str, Any] | None = None,
     relationship_recurrence_state: dict[str, Any] | None = None,
     config=None,
@@ -1237,7 +1240,15 @@ def evaluate_sii(
         digest("relationship-scope.v1", phase4_scope.as_dict())
         if phase4_scope is not None else "result-local"
     )
-    result[REGISTRY] = finalize(relationship_model, canonical_graph, scope=evidence_scope, mode_conditioned=mode_conditioned)
+    result[REGISTRY] = finalize(
+        relationship_model, canonical_graph, scope=evidence_scope,
+        mode_conditioned=mode_conditioned,
+        endpoint_identity=canonical_endpoint_identity,
+        phase4_system_identity=phase4_system_identity,
+        asset_id=phase4_asset_id,
+        authenticated_scope=phase4_scope,
+        observation_lineage=phase4_observation_lineage,
+    )
     if (
         isinstance(canonical_endpoint_identity, dict)
         and canonical_endpoint_identity.get("contract") == "relationship-endpoint-identity.v1"
