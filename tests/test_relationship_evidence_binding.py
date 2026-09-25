@@ -281,7 +281,25 @@ if case == 'mode':
  assert r['relationship_graph']['edge_basis'] == 'mode_conditioned_relationships'
 else:
  r = evaluate_sii(**contract(16)) if case == 'paired' else context_fallback_case() if case == 'global_fallback' else graph_fallback_case()
-print(json.dumps(without_binding_metadata(semantic_content(product_evidence(r))), sort_keys=True))
+# The authority phase intentionally changes refusal diagnostics. These fixtures
+# have no quantified consequence; preserve/assert that status rather than compare
+# the old broad-original refusal payload to the new fail-closed refusal payload.
+def authority_comparison(value):
+ if isinstance(value, dict):
+  result = {}
+  for key, item in value.items():
+   if key in {'resource_relationship_source_ref', 'resource_relationship_binding'}:
+    continue
+   if key == 'measurable_consequence':
+    assert item['status'] == 'not_quantifiable', item
+    result[key] = {'status': item['status']}
+   else:
+    result[key] = authority_comparison(item)
+  return result
+ if isinstance(value, list):
+  return [authority_comparison(item) for item in value]
+ return value
+print(json.dumps(authority_comparison(without_binding_metadata(semantic_content(product_evidence(r)))), sort_keys=True))
 '''.replace('CASE', repr(case))
     outputs = []
     for backend in (authoritative_backend, root / 'backend'):
@@ -373,7 +391,13 @@ def test_existing_calculation_ast_unchanged_except_binding_metadata(path, functi
             return self.generic_visit(node)
 
         def visit_ImportFrom(self, node):
-            return None if node.module == 'app.services.relationship_evidence_binding' else node
+            return None if node.module in {'app.services.relationship_evidence_binding', 'app.services.resource_relationship_binding'} else node
+
+        def visit_Expr(self, node):
+            if (isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
+                    and node.value.func.id == 'finalize_resources'):
+                return None
+            return self.generic_visit(node)
 
         def visit_Call(self, node):
             node.keywords = [k for k in node.keywords if k.arg != 'binding_signal_units']

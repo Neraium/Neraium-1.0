@@ -16,6 +16,7 @@ from app.engine.sii.common import (
 )
 
 
+from app.services.resource_relationship_binding import LINEAGE
 from app.engine.sii.expected_rate_evidence import expected_rate_observations
 
 
@@ -76,6 +77,8 @@ def train_expected_behavior_models(
                 config=cfg,
             )
             if model is not None:
+                if isinstance(relationship.get(LINEAGE), str):
+                    model[LINEAGE] = relationship[LINEAGE]
                 output[model["model_id"]] = model
     return dict(sorted(output.items()))
 
@@ -236,6 +239,8 @@ def evaluate_expected_behavior(
             )
             item["max_gap_seconds"] = cfg.get("max_gap_seconds")
             item["observation_methodology"] = "validated_model_timestamp_aligned_response_v1"
+            if isinstance(model.get(LINEAGE), str):
+                item[LINEAGE] = model[LINEAGE]
             expected_values.append(item)
             if abs(normalized) >= float(cfg["residual_evidence_threshold"]):
                 residual_evidence.append(

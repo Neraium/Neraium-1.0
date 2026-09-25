@@ -11,6 +11,8 @@ from app.engine.sii.expected_rate_evidence import expected_rate_observations
 from app.main import create_app
 from app.services.analysis_result_contract import build_analysis_result
 from app.services.measurable_consequence import build_measurable_consequence
+from app.services.relationship_evidence_binding import REGISTRY
+from resource_binding_cases import assessment, bind_fixture
 
 
 def fixture():
@@ -47,15 +49,20 @@ def fixture():
         ],
     }
     catalog = {"flow": {"resource_type": "water", "canonical_unit": "gpm", "max_gap_seconds": 3600}}
+    bind_fixture(finding, expected)
     return finding, expected, catalog
 
 
 def run(finding, expected, catalog):
+    # These tests construct fresh producer inputs, including window/quality variants.
+    registry = bind_fixture(finding, expected)
     return build_measurable_consequence(
         finding,
         expected_behavior=expected,
         signal_catalog=catalog,
         analysis_run_id="run-1",
+        relationship_registry=registry,
+        authorized_scope=registry["scope"],
     )
 
 
@@ -179,6 +186,7 @@ def test_aligned_evidence_never_drops_missing_predictor_or_uses_sample_lag():
 def test_canonical_analysis_attaches_exact_finding_owned_consequence():
     finding, expected, catalog = fixture()
     source = {
+        REGISTRY: assessment()[1],
         "analysis_id": "analysis-1",
         "run_id": "run-1",
         "completed_at": "2026-09-05T00:00:00Z",

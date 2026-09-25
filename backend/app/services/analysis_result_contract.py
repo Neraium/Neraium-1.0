@@ -12,6 +12,7 @@ from app.services.output_semantics import evidence_identifier, govern_runtime, r
 
 from app.services.product_evidence_contract import product_evidence
 from app.services.measurable_consequence import attach_measurable_consequences
+from app.services.resource_relationship_binding import ownership
 from app.services.analysis_explanations import build_analysis_explanation
 from app.services.condition_corroboration import ConditionCorroborationService
 from app.services.cumulative_counters import is_cumulative_counter_name
@@ -497,6 +498,7 @@ def build_analysis_result(
             compact_dict(
                 {
                     "id": insight_id,
+                    **(ownership(item) or {}),
                     "title": title,
                     "severity": normalize_severity(item.get("severity")),
                     "confidence": first_present(item.get("confidence"), "limited"),
@@ -1442,6 +1444,7 @@ def build_condition_contracts(
                     "schema_version": first_present(item.get("schema_version"), CONDITION_CONTRACT_VERSION),
                     "object_type": "condition",
                     "condition_id": condition_id,
+                    **(ownership(item) or {}),
                     "id": condition_id,
                     "headline": first_present(item.get("headline"), item.get("title"), "Monitored condition changed"),
                     "title": first_present(item.get("headline"), item.get("title"), "Monitored condition changed"),

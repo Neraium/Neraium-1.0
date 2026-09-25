@@ -655,6 +655,7 @@ def _override_learning(result: dict[str, Any], decision: str, reason: str) -> di
 def _provisional_relationship_memory(graph: dict[str, Any], operating_mode: str) -> dict[str, Any]:
     from app.engine.sii.behavioral_graph import relationship_memory_id
     from app.engine.sii.common import relationship_columns
+    from app.services.resource_relationship_binding import LINEAGE, source_lineage
 
     candidates = graph.get("eligible_edges") if isinstance(graph, dict) else None
     if not isinstance(candidates, list) or not candidates:
@@ -670,6 +671,7 @@ def _provisional_relationship_memory(graph: dict[str, Any], operating_mode: str)
         relationship_id = relationship_memory_id(columns[0], columns[1], relationship_type, operating_mode)
         output[relationship_id] = {
             "relationship_id": relationship_id,
+            LINEAGE: source_lineage(edge),
             "source_signal": columns[0],
             "target_signal": columns[1],
             "relationship_type": relationship_type,

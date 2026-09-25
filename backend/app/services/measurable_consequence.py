@@ -11,6 +11,8 @@ from neraium_consequence.provenance import snapshot
 from neraium_consequence.validation import timestamp_seconds
 
 from app.services.telemetry_units import normalize_telemetry_unit
+from app.services.relationship_evidence_binding import REGISTRY
+from app.services.resource_relationship_binding import ownership, resolve_resource, BINDING
 
 
 def unavailable_consequence() -> dict[str, Any]:
@@ -33,16 +35,8 @@ def _strings(value: Any) -> list[str]:
 
 
 def _relationship_ids(finding: dict[str, Any]) -> list[str]:
-    ids = _strings(finding.get("source_relationship_ids"))
-    for key in ("supporting_relationships", "contributing_relationships"):
-        for item in finding.get(key) or []:
-            if isinstance(item, dict):
-                value = item.get("relationship_id") or item.get("id")
-                if isinstance(value, str):
-                    ids.append(value)
-            elif isinstance(item, str):
-                ids.append(item)
-    return ids
+    # IDs are provenance only. Contributions must never expand the calculation owner.
+    return _strings(finding.get("source_relationship_ids"))
 
 
 def _window(finding: dict[str, Any]) -> tuple[float, float] | None:
@@ -92,6 +86,8 @@ def build_measurable_consequence(
     expected_behavior: dict[str, Any] | None = None,
     signal_catalog: dict[str, Any] | None = None,
     analysis_run_id: str | None = None,
+    relationship_registry: dict[str, Any] | None = None,
+    authorized_scope: str | None = None,
 ) -> dict[str, Any]:
     relationship_ids = _relationship_ids(finding)
     finding_id = (
@@ -154,6 +150,18 @@ def build_measurable_consequence(
             or source_ids != expected.get("source_relationships")
             or not set(source_ids).issubset(relationship_ids)
         ):
+            continue
+        record = resolve_resource(expected, finding, relationship_registry,
+                                  authorized_scope=authorized_scope)
+        if record is None:
+            continue
+        # The finding window must be contained in this exact assessment window.
+        try:
+            assessment_window = record["source"]["measurement"]["window"]
+            if not (timestamp_seconds(assessment_window["current_start"]) <= window[0]
+                    < window[1] <= timestamp_seconds(assessment_window["current_end"])):
+                continue
+        except (KeyError, TypeError, ValueError, OverflowError, OSError):
             continue
         target = expected.get("target_signal")
         if not isinstance(target, str):
@@ -252,6 +260,7 @@ def build_measurable_consequence(
             "conversion_id": conversion.conversion_id,
             "version": conversion.conversion_version,
         }
+    result["provenance"][BINDING] = snapshot(expected[BINDING])
     result["provenance"]["expected_behavior"] = snapshot(expected)
     result["provenance"]["signal_metadata"] = snapshot(
         catalog.get(expected["target_signal"])
@@ -274,11 +283,13 @@ def attach_measurable_consequences(
     source: dict[str, Any],
     original_findings: list[dict[str, Any]],
 ) -> None:
-    originals = {
-        str(item.get("condition_id") or item.get("id") or item.get("finding_id")): item
-        for item in original_findings
-        if isinstance(item, dict)
-    }
+    originals: dict[str, list[dict[str, Any]]] = {}
+    for item in original_findings:
+        if isinstance(item, dict):
+            identity = item.get("condition_id") or item.get("id") or item.get("finding_id")
+            if isinstance(identity, str) and identity:
+                originals.setdefault(identity, []).append(item)
+    registry = _mapping(source.get(REGISTRY) or _mapping(source.get("sii_result")).get(REGISTRY))
     expected = _mapping(_mapping(source.get("sii_result")).get("expected_behavior"))
     catalog = _mapping(source.get("telemetry_signal_catalog"))
     run_id = (
@@ -289,11 +300,40 @@ def attach_measurable_consequences(
     for field in ("conditions", "insights"):
         for finding in analysis.get(field, []):
             identity = str(finding.get("condition_id") or finding.get("id"))
-            finding["measurable_consequence"] = build_measurable_consequence(
-                originals.get(identity, finding),
+            candidates = originals.get(identity, [])
+            # Duplicate IDs, absent owners and a different scoped owner cannot
+            # borrow an original's persistence. Never fall back to the group.
+            if (len(candidates) != 1 or ownership(finding) is None
+                    or ownership(candidates[0]) != ownership(finding)
+                    or _window(candidates[0]) != _window(finding)
+                    or _relationship_ids(candidates[0]) != _relationship_ids(finding)
+                    or _mapping(finding.get("finding_confidence_v1")).get("operating_context")
+                    != _mapping(candidates[0].get("finding_confidence_v1")).get("operating_context")
+                    or any(key in finding and finding[key] != candidates[0].get(key)
+                           for key in ("persistence", "operating_mode", "comparable_operation"))):
+                finding["measurable_consequence"] = unavailable_consequence()
+                continue
+            # Validate the complete projection independently, including any raw
+            # source evidence and every consumer gate. An original may preserve
+            # provenance, but must never restore authority the projection lacks.
+            projected_consequence = build_measurable_consequence(
+                finding,
                 expected_behavior=expected,
                 signal_catalog=catalog,
                 analysis_run_id=run_id if isinstance(run_id, str) else None,
+                relationship_registry=registry,
+                authorized_scope=registry.get("scope"),
+            )
+            if projected_consequence.get("status") != "quantified":
+                finding["measurable_consequence"] = projected_consequence
+                continue
+            finding["measurable_consequence"] = build_measurable_consequence(
+                candidates[0],
+                expected_behavior=expected,
+                signal_catalog=catalog,
+                analysis_run_id=run_id if isinstance(run_id, str) else None,
+                relationship_registry=registry,
+                authorized_scope=registry.get("scope"),
             )
 
 

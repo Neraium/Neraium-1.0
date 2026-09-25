@@ -22,6 +22,7 @@ from app.engine.sii.common import (
     quantile,
     relationship_columns,
 )
+from app.services.resource_relationship_binding import LINEAGE, source_lineage
 from app.services.data_quality import parse_timestamp
 from app.services.telemetry_classification import telemetry_catalog_by_column
 
@@ -886,6 +887,7 @@ def _update_relationship_memory(
         output[relationship_id] = {
             **existing,
             "relationship_id": relationship_id,
+            LINEAGE: source_lineage(edge),
             "source_signal": columns[0],
             "target_signal": columns[1],
             "relationship_type": relationship_type,

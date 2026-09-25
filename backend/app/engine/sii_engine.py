@@ -1237,6 +1237,8 @@ def evaluate_sii(
         if phase4_scope is not None else "result-local"
     )
     result[REGISTRY] = finalize(relationship_model, canonical_graph, scope=evidence_scope, mode_conditioned=mode_conditioned)
+    from app.services.resource_relationship_binding import finalize_resources
+    finalize_resources(phase_4["expected_behavior"], result[REGISTRY], authorized_scope=evidence_scope)
     if paired:
         paired_provenance["engine"] = dict(result["engine"])
         result["supplied_reference"] = paired_provenance
