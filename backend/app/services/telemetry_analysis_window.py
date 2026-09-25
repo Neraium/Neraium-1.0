@@ -663,8 +663,9 @@ def run_analysis_window(
     *,
     evaluator: Callable[..., dict[str, Any]] | None = None,
     lineage_sample_limit: int = DEFAULT_LINEAGE_SAMPLE_LIMIT,
+    temporal_state_repository: Any | None = None,
 ) -> AnalysisWindowExecution:
-    """Revalidate authority and invoke the authoritative SII entry point once."""
+    """Revalidate authority and run the authoritative SII analysis."""
     if not isinstance(window, CanonicalAnalysisWindow):
         raise AnalysisWindowValidationError("canonical_analysis_window_required")
     if not isinstance(window.phase4_system_identity, ServerBoundSystemIdentityV2):
@@ -703,8 +704,9 @@ def run_analysis_window(
         },
     }
     authoritative_evaluator = evaluator or evaluate_sii
+    continuation_discovery = temporal_state_repository is not None and evaluator is None
     try:
-        sii_result = authoritative_evaluator(
+        evaluation_kwargs = dict(
             columns=list(window.columns),
             rows=[dict(row) for row in window.rows],
             numeric_profiles=[dict(item) for item in window.numeric_profiles],
@@ -723,6 +725,74 @@ def run_analysis_window(
             phase4_asset_id=window.asset_id,
             phase4_observation_lineage=window.observation_lineage,
         )
+        if continuation_discovery:
+            # Discovery needs finalized producer-owned evidence to select exact
+            # Phase D keys. Suppress Phase 4 persistence for this pass; the
+            # authoritative evaluator below is the only normal execution.
+            from app.engine.sii.phase4 import phase4_persistence_suppressed
+            with phase4_persistence_suppressed():
+                sii_result = authoritative_evaluator(**evaluation_kwargs)
+        else:
+            sii_result = authoritative_evaluator(**evaluation_kwargs)
+        if continuation_discovery:
+            # Only this certified gate can turn discovery evidence into reducer
+            # input. Discovery output itself is never returned as the analysis.
+            prior_by_pair: dict[str, dict[str, Any]] = {}
+            try:
+                import json
+                from datetime import datetime
+                from app.services.relationship_evidence_binding import REGISTRY, digest
+                from app.services.relationship_temporal_state import load_prior_relationship_state
+                relationship_model = (
+                    (sii_result.get("compatibility") or {}).get("relationship_model") or {}
+                    if isinstance(sii_result, dict) else {}
+                )
+                candidates = relationship_model.get("top_relationship_changes") or []
+                registry = sii_result.get(REGISTRY) if isinstance(sii_result, dict) else None
+                authorized_scope = digest("relationship-scope.v1", window.phase4_scope.as_dict())
+                conflicting_pairs: set[str] = set()
+                for candidate in candidates:
+                    prior = load_prior_relationship_state(
+                        temporal_state_repository, window.phase4_scope,
+                        system_id=identity.system_id, asset_id=window.asset_id,
+                        candidate=candidate, registry=registry,
+                        authorized_scope=authorized_scope,
+                    )
+                    if not isinstance(prior, dict):
+                        continue
+                    # The reducer's current no-prior result supplies the exact
+                    # governed observation. Reject older/conflicting same-time
+                    # candidates before allowing any historical vote.
+                    ref = candidate.get("relationship_evidence_ref")
+                    evidence = (registry or {}).get("records", {}).get(ref, {})
+                    current = ((evidence.get("temporal") or {}).get("observations") or [])
+                    history = prior.get("observations") or []
+                    if not current or not history:
+                        continue
+                    latest = history[-1]
+                    current_item = current[-1]
+                    prior_at = datetime.fromisoformat(str(latest.get("observed_at")).replace("Z", "+00:00"))
+                    current_at = datetime.fromisoformat(str(current_item.get("observed_at")).replace("Z", "+00:00"))
+                    if current_at < prior_at or (current_at == prior_at and current_item != latest):
+                        continue
+                    columns = (candidate.get("relationship_source_evidence") or {}).get("columns")
+                    if not isinstance(columns, list) or len(columns) != 2:
+                        continue
+                    key = json.dumps(sorted(columns), separators=(",", ":"))
+                    if key in prior_by_pair and prior_by_pair[key] != prior:
+                        conflicting_pairs.add(key)
+                    else:
+                        prior_by_pair[key] = prior
+                for key in conflicting_pairs:
+                    prior_by_pair.pop(key, None)
+            except Exception:
+                # A temporal read or optional continuation failure must not
+                # prevent the one normal current-run evaluation.
+                prior_by_pair = {}
+            authoritative_kwargs = dict(evaluation_kwargs)
+            if prior_by_pair:
+                authoritative_kwargs["relationship_persistence_state"] = prior_by_pair
+            sii_result = authoritative_evaluator(**authoritative_kwargs)
     except Exception as error:
         raise AnalysisWindowExecutionError("telemetry_analysis_engine_execution_failed") from error
     if not isinstance(sii_result, dict):

@@ -531,6 +531,7 @@ def run_post_ingestion_analysis(
             window,
             progress_reporter=progress_reporter,
             evaluator=evaluator,
+            temporal_state_repository=repository,
         )
     except AnalysisWindowValidationError as error:
         repository.finish_analysis_window_execution(

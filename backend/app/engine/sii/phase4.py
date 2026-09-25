@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
+
 from app.services.output_semantics import runtime_metadata
 
 import json
@@ -40,6 +43,20 @@ from app.engine.sii.spectral_analysis import analyze_spectral_behavior
 
 
 ADVANCED_MODULES = ("spectral_analysis", "dynamical_stability", "network_stability")
+
+_PHASE4_PERSISTENCE_ENABLED: ContextVar[bool] = ContextVar(
+    "phase4_persistence_enabled", default=True
+)
+
+
+@contextmanager
+def phase4_persistence_suppressed():
+    """Run a discovery evaluation without touching the behavioral model store."""
+    token = _PHASE4_PERSISTENCE_ENABLED.set(False)
+    try:
+        yield
+    finally:
+        _PHASE4_PERSISTENCE_ENABLED.reset(token)
 
 
 def evaluate_phase4(
@@ -92,7 +109,7 @@ def evaluate_phase4(
     if progress_callback:
         progress_callback(0, total_components)
 
-    if identity.get("memory_update_allowed"):
+    if _PHASE4_PERSISTENCE_ENABLED.get() and identity.get("memory_update_allowed"):
         configured_store = phase4_cfg.get("behavioral_model_store") or cfg.get("behavioral_model_store")
         try:
             store = configured_store if configured_store is not None else RuntimeBehavioralModelStore()
