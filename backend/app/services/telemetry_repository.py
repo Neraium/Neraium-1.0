@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import hashlib
 import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -64,6 +65,61 @@ class TelemetryMappingConflict(TelemetryRepositoryError):
 
 class TelemetryResultArtifactConflict(TelemetryRepositoryError):
     """An immutable result identity already names different artifact bytes."""
+
+
+class RelationshipTemporalStateConflict(TelemetryRepositoryError):
+    """A temporal state head, event, or envelope failed validation."""
+
+
+_RELATIONSHIP_STATE_MAX_OBSERVATIONS = 8
+
+
+def _relationship_state_identity(scope: TelemetryScopeRef, system_id: str,
+                                 asset_id: str | None, lineage_ref: str) -> tuple[str, ...]:
+    scope_values = _scope_parameters(scope)
+    if any(value.strip().lower() in {"result-local", "placeholder", "unknown", "none"}
+           for value in scope_values):
+        raise RelationshipTemporalStateConflict("relationship_temporal_placeholder_scope")
+    system_id = _require_identifier(system_id, "relationship_temporal_system_required")
+    lineage_ref = _require_identifier(lineage_ref, "relationship_temporal_lineage_required")
+    if asset_id is not None:
+        asset_id = _require_identifier(asset_id, "relationship_temporal_asset_invalid")
+        if asset_id.lower() in {"result-local", "placeholder", "unknown", "none"}:
+            raise RelationshipTemporalStateConflict("relationship_temporal_placeholder_asset")
+    return (*scope_values, system_id, asset_id, lineage_ref)
+
+
+def _relationship_state_payload(identity: tuple[str, ...], compatibility_digest: str,
+                                 reducer_state: Mapping[str, Any], *, head_event_ref: str | None = None,
+                                 head_event_time: datetime | None = None) -> tuple[dict[str, Any], str]:
+    if not re.fullmatch(r"[0-9a-f]{64}", str(compatibility_digest or "")):
+        raise RelationshipTemporalStateConflict("relationship_temporal_compatibility_digest_invalid")
+    if not isinstance(reducer_state, Mapping) or reducer_state.get("version") != 1:
+        raise RelationshipTemporalStateConflict("relationship_temporal_reducer_state_invalid")
+    observations = reducer_state.get("observations")
+    if not isinstance(observations, list) or len(observations) > _RELATIONSHIP_STATE_MAX_OBSERVATIONS:
+        raise RelationshipTemporalStateConflict("relationship_temporal_state_unbounded")
+    forbidden = {"classification", "ranking", "rank", "primary", "condition", "presentation",
+                 "telemetry", "raw_telemetry", "persistence_supported", "persistent_relationship_change"}
+    def inspect(value: Any) -> None:
+        if isinstance(value, Mapping):
+            if any(str(key).lower() in forbidden for key in value):
+                raise RelationshipTemporalStateConflict("relationship_temporal_state_forbidden_field")
+            for child in value.values(): inspect(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value: inspect(child)
+    inspect(reducer_state)
+    body = {"schema": "relationship-temporal-state.v1", "version": 1,
+            "scope": list(identity[:4]), "system_id": identity[4], "asset_id": identity[5],
+            "lineage_ref": identity[6], "compatibility_digest": compatibility_digest,
+            "reducer_state": dict(reducer_state)}
+    if head_event_ref is not None:
+        body["head_event_ref"] = head_event_ref
+    if head_event_time is not None:
+        body["head_event_time"] = head_event_time.isoformat()
+    encoded = json.dumps(body, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    return body, digest
 
 
 TelemetryRepositoryScope = TelemetryScopeRef
@@ -354,6 +410,114 @@ class PostgreSQLTelemetryRepository:
             f"{alias}.resource_scope_id = %s AND {alias}.tenant_scope_id = %s "
             f"AND {alias}.workspace_id = %s AND {alias}.facility_id = %s"
         )
+
+    def read_relationship_temporal_state(
+        self, scope: TelemetryRepositoryScope, *, system_id: str,
+        asset_id: str | None, lineage_ref: str,
+    ) -> dict[str, Any] | None:
+        identity = _relationship_state_identity(scope, system_id, asset_id, lineage_ref)
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT state_schema, compatibility_digest, reducer_state, head_event_ref,
+                          head_event_time, state_digest, storage_revision
+                   FROM telemetry.relationship_temporal_state_heads
+                   WHERE resource_scope_id=%s AND tenant_scope_id=%s AND workspace_id=%s
+                     AND facility_id=%s AND system_id=%s AND asset_id IS NOT DISTINCT FROM %s
+                     AND relationship_lineage_ref=%s""", identity)
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        keys = ("state_schema", "compatibility_digest", "reducer_state", "head_event_ref",
+                "head_event_time", "state_digest", "storage_revision")
+        record = dict(row) if isinstance(row, Mapping) else dict(zip(keys, row))
+        body, digest = _relationship_state_payload(identity, record["compatibility_digest"], record["reducer_state"],
+                                                   head_event_ref=record["head_event_ref"], head_event_time=record["head_event_time"])
+        if record["state_schema"] != body["schema"] or digest != record["state_digest"]:
+            raise RelationshipTemporalStateConflict("relationship_temporal_state_tampered")
+        return record
+
+    def compare_and_swap_relationship_temporal_state(
+        self, scope: TelemetryRepositoryScope, *, system_id: str, asset_id: str | None,
+        lineage_ref: str, compatibility_digest: str, reducer_state: Mapping[str, Any],
+        head_event_ref: str, head_event_time: datetime,
+        expected_revision: int, expected_head_event_ref: str | None,
+    ) -> dict[str, Any]:
+        identity = _relationship_state_identity(scope, system_id, asset_id, lineage_ref)
+        if not isinstance(expected_revision, int) or expected_revision < 0:
+            raise RelationshipTemporalStateConflict("relationship_temporal_expected_revision_invalid")
+        head_event_ref = _require_identifier(head_event_ref, "relationship_temporal_event_required")
+        if not isinstance(head_event_time, datetime) or head_event_time.tzinfo is None:
+            raise RelationshipTemporalStateConflict("relationship_temporal_event_time_invalid")
+        body, digest = _relationship_state_payload(identity, compatibility_digest, reducer_state,
+                                                    head_event_ref=head_event_ref, head_event_time=head_event_time)
+        state_json = json.dumps(body["reducer_state"], sort_keys=True, separators=(",", ":"), allow_nan=False)
+        scope_and_key = json.dumps(identity, separators=(",", ":"))
+        with self._connection() as connection, connection.cursor() as cursor:
+            # Serialize both an absent key and an existing row under PostgreSQL's transaction lock.
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (scope_and_key,))
+            cursor.execute(
+                """SELECT compatibility_digest, reducer_state, head_event_ref, head_event_time,
+                          state_digest, storage_revision
+                   FROM telemetry.relationship_temporal_state_heads
+                   WHERE resource_scope_id=%s AND tenant_scope_id=%s AND workspace_id=%s
+                     AND facility_id=%s AND system_id=%s AND asset_id IS NOT DISTINCT FROM %s
+                     AND relationship_lineage_ref=%s FOR UPDATE""", identity)
+            row = cursor.fetchone()
+            if row is None:
+                if expected_revision != 0 or expected_head_event_ref is not None:
+                    raise RelationshipTemporalStateConflict("relationship_temporal_stale_head")
+                revision = 1
+            else:
+                keys = ("compatibility_digest", "reducer_state", "head_event_ref", "head_event_time", "state_digest", "storage_revision")
+                current = dict(row) if isinstance(row, Mapping) else dict(zip(keys, row))
+                current_body, current_digest = _relationship_state_payload(identity, current["compatibility_digest"], current["reducer_state"],
+                    head_event_ref=current["head_event_ref"], head_event_time=current["head_event_time"])
+                if current_digest != current["state_digest"]:
+                    raise RelationshipTemporalStateConflict("relationship_temporal_state_tampered")
+                if current["head_event_ref"] == head_event_ref:
+                    if (current["head_event_time"] == head_event_time and
+                        current["compatibility_digest"] == compatibility_digest and
+                        current["reducer_state"] == dict(reducer_state)):
+                        return {**current, "idempotent_replay": True}
+                    raise RelationshipTemporalStateConflict("relationship_temporal_conflicting_replay")
+                if (current["storage_revision"] != expected_revision or
+                    current["head_event_ref"] != expected_head_event_ref):
+                    raise RelationshipTemporalStateConflict("relationship_temporal_stale_head")
+                if head_event_time <= current["head_event_time"]:
+                    raise RelationshipTemporalStateConflict("relationship_temporal_out_of_order")
+                prior = current_body["reducer_state"].get("observations", [])
+                incoming = reducer_state.get("observations", [])
+                old_intervals = {item.get("interval_ref"): item.get("event_ref") for item in prior if isinstance(item, Mapping) and item.get("interval_ref")}
+                for item in incoming:
+                    if isinstance(item, Mapping) and item.get("interval_ref") in old_intervals:
+                        if old_intervals[item["interval_ref"]] != item.get("event_ref"):
+                            raise RelationshipTemporalStateConflict("relationship_temporal_conflicting_interval")
+                revision = current["storage_revision"] + 1
+                cursor.execute(
+                    """UPDATE telemetry.relationship_temporal_state_heads SET
+                         compatibility_digest=%s, reducer_state=%s::JSONB, head_event_ref=%s,
+                         head_event_time=%s, state_digest=%s, storage_revision=%s, updated_at=now()
+                       WHERE resource_scope_id=%s AND tenant_scope_id=%s AND workspace_id=%s
+                         AND facility_id=%s AND system_id=%s AND asset_id IS NOT DISTINCT FROM %s
+                         AND relationship_lineage_ref=%s AND storage_revision=%s""",
+                    (compatibility_digest, state_json, head_event_ref, head_event_time, digest, revision, *identity, expected_revision))
+                if getattr(cursor, "rowcount", 1) != 1:
+                    raise RelationshipTemporalStateConflict("relationship_temporal_stale_head")
+                return {"compatibility_digest": compatibility_digest, "reducer_state": dict(reducer_state),
+                        "head_event_ref": head_event_ref, "head_event_time": head_event_time,
+                        "state_digest": digest, "storage_revision": revision, "idempotent_replay": False}
+            cursor.execute(
+                """INSERT INTO telemetry.relationship_temporal_state_heads
+                     (tenant_scope_id, workspace_id, resource_scope_id, facility_id, system_id,
+                      asset_id, relationship_lineage_ref, state_schema, compatibility_digest,
+                      reducer_state, head_event_ref, head_event_time, state_digest, storage_revision)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::JSONB,%s,%s,%s,%s)""",
+                (identity[1], identity[2], identity[0], identity[3], identity[4], identity[5], identity[6],
+                 body["schema"], compatibility_digest,
+                 state_json, head_event_ref, head_event_time, digest, revision))
+        return {"compatibility_digest": compatibility_digest, "reducer_state": dict(reducer_state),
+                "head_event_ref": head_event_ref, "head_event_time": head_event_time,
+                "state_digest": digest, "storage_revision": revision, "idempotent_replay": False}
 
     def create_connection(
         self,

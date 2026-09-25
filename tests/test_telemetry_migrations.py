@@ -483,6 +483,10 @@ def test_runtime_readiness_runs_every_structural_migration_verifier(monkeypatch)
         "db.migrations.preserve_telemetry_source_representation.verify",
         lambda candidate: calls.append(("source", candidate)),
     )
+    monkeypatch.setattr(
+        "db.migrations.create_relationship_temporal_state.verify",
+        lambda candidate: calls.append(("relationship_state", candidate)),
+    )
 
     assert _ready_runtime(Repository()).verify_readiness() is True
     assert calls == [
@@ -491,6 +495,7 @@ def test_runtime_readiness_runs_every_structural_migration_verifier(monkeypatch)
         ("runtime", connection),
         ("results", connection),
         ("source", connection),
+        ("relationship_state", connection),
         ("close", connection),
     ]
 

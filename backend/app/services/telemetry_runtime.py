@@ -157,6 +157,9 @@ class TelemetryRuntime:
             from db.migrations.preserve_telemetry_source_representation import (
                 verify as verify_source_representation,
             )
+            from db.migrations.create_relationship_temporal_state import (
+                verify as verify_relationship_temporal_state,
+            )
             from db.migrations.seed_telemetry_canonical_signal_concepts import (
                 verify as verify_signal_catalog,
             )
@@ -167,6 +170,7 @@ class TelemetryRuntime:
                 verify_ingestion_runtime,
                 verify_canonical_results,
                 verify_source_representation,
+                verify_relationship_temporal_state,
             ):
                 verifier(connection)
             return True
