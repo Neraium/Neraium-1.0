@@ -319,6 +319,51 @@ class CanonicalAnalysisWindow:
             "source_run_id": self.source_run_id,
         }
 
+    def relationship_endpoint_identity(self) -> dict[str, Any] | None:
+        """Project validated canonical endpoint IDs and mapping provenance.
+
+        This metadata is descriptive input for prospective relationship lineage;
+        it is not itself a lineage ID or an authorization capability. Missing or
+        conflicting authority suppresses the metadata without changing rows.
+        """
+        authority_digest = self.phase4_system_identity.authority_record_digest
+        mappings: dict[str, set[tuple[str, int]]] = {
+            signal_id: set() for signal_id in self.numeric_columns
+        }
+        for item in self.observation_lineage:
+            signal_id = item.canonical_signal_id
+            if (
+                signal_id not in mappings
+                or item.system_id != self.phase4_system_identity.system_id
+                or item.asset_id != self.asset_id
+                or item.mapping_authority_digest != authority_digest
+                or not item.mapping_id
+                or int(item.mapping_revision) < 1
+            ):
+                return None
+            mappings[signal_id].add((item.mapping_id, int(item.mapping_revision)))
+        if any(not references for references in mappings.values()):
+            return None
+        return {
+            "contract": "relationship-endpoint-identity.v1",
+            "scope": {
+                **self.phase4_scope.as_dict(),
+                "system_id": self.phase4_system_identity.system_id,
+                "asset_id": self.asset_id,
+            },
+            "mapping_authority_digest": authority_digest,
+            "endpoints": [
+                {
+                    "canonical_signal_id": signal_id,
+                    "mapping_provenance": [
+                        {"mapping_id": mapping_id, "mapping_revision": revision}
+                        for mapping_id, revision in sorted(mappings[signal_id])
+                    ],
+                }
+                for signal_id in sorted(mappings)
+            ],
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class AnalysisWindowExecution:
@@ -673,6 +718,7 @@ def run_analysis_window(
             config=config,
             progress_callback=progress_callback,
             phase4_scope=window.phase4_scope,
+            canonical_endpoint_identity=window.relationship_endpoint_identity(),
         )
     except Exception as error:
         raise AnalysisWindowExecutionError("telemetry_analysis_engine_execution_failed") from error

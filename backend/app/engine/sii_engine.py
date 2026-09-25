@@ -64,6 +64,7 @@ def evaluate_sii(
     sensor_health=None,
     operating_mode=None,
     phase4_scope: AuthenticatedPhase4Scope | None = None,
+    canonical_endpoint_identity: dict[str, Any] | None = None,
     relationship_persistence_state: dict[str, Any] | None = None,
     relationship_recurrence_state: dict[str, Any] | None = None,
     config=None,
@@ -1237,6 +1238,15 @@ def evaluate_sii(
         if phase4_scope is not None else "result-local"
     )
     result[REGISTRY] = finalize(relationship_model, canonical_graph, scope=evidence_scope, mode_conditioned=mode_conditioned)
+    if (
+        isinstance(canonical_endpoint_identity, dict)
+        and canonical_endpoint_identity.get("contract") == "relationship-endpoint-identity.v1"
+        and isinstance(canonical_endpoint_identity.get("scope"), dict)
+        and isinstance(canonical_endpoint_identity.get("endpoints"), list)
+    ):
+        # Producer-bound mapping provenance is carried as metadata only. It does
+        # not alter calculations or replace result-local evidence ownership.
+        result["relationship_endpoint_identity"] = canonical_endpoint_identity
     from app.services.resource_relationship_binding import finalize_resources
     finalize_resources(phase_4["expected_behavior"], result[REGISTRY], authorized_scope=evidence_scope)
     from app.services.relationship_authority import VERSION, VERSION_FIELD

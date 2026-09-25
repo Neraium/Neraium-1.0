@@ -230,6 +230,18 @@ def test_real_connector_generation_retains_registry_and_retries():
         phase4_system_identity=_identity(scope), observations=observations)
     first = run_analysis_window(window)
     second = run_analysis_window(window)
+    def evaluate_without_endpoint_metadata(**kwargs):
+        kwargs.pop('canonical_endpoint_identity')
+        return evaluate_sii(**kwargs)
+    baseline = run_analysis_window(window, evaluator=evaluate_without_endpoint_metadata)
+    endpoint_identity = first.sii_result['relationship_endpoint_identity']
+    assert endpoint_identity['contract'] == 'relationship-endpoint-identity.v1'
+    assert [item['canonical_signal_id'] for item in endpoint_identity['endpoints']] == sorted(signals)
+    assert all(item['mapping_provenance'] == [{'mapping_id': 'mapping-a', 'mapping_revision': 2}]
+               for item in endpoint_identity['endpoints'])
+    assert first.sii_result['relationship_graph']['edges'] == baseline.sii_result['relationship_graph']['edges']
+    assert first.sii_result[REGISTRY] == baseline.sii_result[REGISTRY]
+    assert first.analysis_result['relationships'] == baseline.analysis_result['relationships']
     assert first.sii_result[REGISTRY] == second.sii_result[REGISTRY]
     assert first.analysis_result[REGISTRY] == first.sii_result[REGISTRY]
     assert first.sii_result[REGISTRY]['scope'] == digest('relationship-scope.v1', scope.as_dict())
@@ -242,13 +254,18 @@ def test_real_connector_generation_retains_registry_and_retries():
                        authorized_scope=first.analysis_result[REGISTRY]['scope']) is not None
 
 
+def test_direct_evaluation_does_not_invent_canonical_endpoint_identity():
+    result = evaluate_sii(**contract(16))
+    assert 'relationship_endpoint_identity' not in result
+
+
 @pytest.fixture(scope='module')
 def authoritative_backend(tmp_path_factory):
     import subprocess
     target = tmp_path_factory.mktemp('binding-baseline')
     archive = target / 'baseline.tar'
     with archive.open('wb') as stream:
-        subprocess.run(['git', 'archive', 'f01d5475967eef8b2f7dd0d05a7b631f79586e25', 'backend/app'], stdout=stream, check=True)
+        subprocess.run(['git', 'archive', 'a75b7c1ef572b3c926e8fd00db3691d69e84e112', 'backend/app'], stdout=stream, check=True)
     subprocess.run(['tar', '-xf', str(archive), '-C', str(target)], check=True)
     return target / 'backend'
 
@@ -361,60 +378,37 @@ def test_existing_calculation_ast_unchanged_except_binding_metadata(path, functi
     import ast
     from pathlib import Path
     import subprocess
-    baseline = ast.parse(subprocess.check_output(['git', 'show', 'f01d5475967eef8b2f7dd0d05a7b631f79586e25:'+path], text=True))
+    baseline = ast.parse(subprocess.check_output(['git', 'show', 'a75b7c1ef572b3c926e8fd00db3691d69e84e112:'+path], text=True))
     candidate = ast.parse(Path(path).read_text())
     original = next(n for n in baseline.body if isinstance(n, ast.FunctionDef) and n.name == function)
     current = next(n for n in candidate.body if isinstance(n, ast.FunctionDef) and n.name == function)
 
     class RemoveBindingOnly(ast.NodeTransformer):
         def visit_FunctionDef(self, node):
-            if node.name == 'binding_rows':
-                return None
-            if node.name == 'build_relationship_baseline':
-                i = [a.arg for a in node.args.kwonlyargs].index('binding_signal_units')
+            if node.name == 'evaluate_sii':
+                i = [a.arg for a in node.args.kwonlyargs].index('canonical_endpoint_identity')
                 node.args.kwonlyargs.pop(i); node.args.kw_defaults.pop(i)
             return self.generic_visit(node)
 
         def visit_Assign(self, node):
             target = node.targets[0]
-            if (function == 'evaluate_sii'
-                    and ast.dump(node, include_attributes=False) == ast.dump(
-                        ast.parse('result[VERSION_FIELD] = VERSION').body[0], include_attributes=False)):
-                return None
-            if isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Name) and target.slice.id in {'SOURCE', 'REGISTRY'}:
-                return None
-            if isinstance(target, ast.Name) and target.id == 'evidence_scope':
-                return None
-            if function == '_conditioned_edge' and isinstance(target, ast.Name) and target.id == 'result':
-                return ast.Return(value=node.value)
-            return self.generic_visit(node)
-
-        def visit_Return(self, node):
-            if function == '_conditioned_edge' and isinstance(node.value, ast.Name) and node.value.id == 'result':
+            if (function == 'evaluate_sii' and isinstance(target, ast.Subscript)
+                    and isinstance(target.value, ast.Name) and target.value.id == 'result'
+                    and isinstance(target.slice, ast.Constant)
+                    and target.slice.value == 'relationship_endpoint_identity'):
                 return None
             return self.generic_visit(node)
 
-        def visit_ImportFrom(self, node):
-            if (function == 'evaluate_sii'
-                    and ast.dump(node, include_attributes=False) == ast.dump(ast.parse(
-                        'from app.services.relationship_authority import VERSION, VERSION_FIELD'
-                    ).body[0], include_attributes=False)):
+        def visit_If(self, node):
+            if function == 'evaluate_sii' and any(
+                isinstance(child, ast.Subscript)
+                and isinstance(child.value, ast.Name)
+                and child.value.id == 'result'
+                and isinstance(child.slice, ast.Constant)
+                and child.slice.value == 'relationship_endpoint_identity'
+                for statement in node.body for child in ast.walk(statement)
+            ):
                 return None
-            return None if node.module in {'app.services.relationship_evidence_binding', 'app.services.resource_relationship_binding'} else node
-
-        def visit_Expr(self, node):
-            if (isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
-                    and node.value.func.id == 'finalize_resources'):
-                return None
-            return self.generic_visit(node)
-
-        def visit_Call(self, node):
-            node.keywords = [k for k in node.keywords if k.arg != 'binding_signal_units']
-            return self.generic_visit(node)
-
-        def visit_Dict(self, node):
-            pairs = [(k, v) for k, v in zip(node.keys, node.values) if not (isinstance(k, ast.Name) and k.id == 'SOURCE')]
-            node.keys = [k for k, _ in pairs]; node.values = [v for _, v in pairs]
             return self.generic_visit(node)
 
     cleaned = RemoveBindingOnly().visit(current)

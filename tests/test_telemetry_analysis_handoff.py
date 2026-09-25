@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from dataclasses import replace
 import inspect
 from types import SimpleNamespace
 
@@ -32,11 +33,17 @@ def _identity(scope: AuthenticatedPhase4Scope | None = None) -> ServerBoundSyste
     )
 
 
-def _lineage(index: int, timestamp: datetime, *, signal_id: str = SIGNAL) -> ObservationLineage:
+def _lineage(
+    index: int,
+    timestamp: datetime,
+    *,
+    signal_id: str = SIGNAL,
+    run_id: str = "run-a",
+) -> ObservationLineage:
     return ObservationLineage(
         observation_id=f"observation-{index}",
         connection_id="connection-a",
-        ingestion_run_id="run-a",
+        ingestion_run_id=run_id,
         external_signal_id=f"external-signal-{index}",
         mapping_id="mapping-a",
         mapping_revision=2,
@@ -59,7 +66,7 @@ def _lineage(index: int, timestamp: datetime, *, signal_id: str = SIGNAL) -> Obs
     )
 
 
-def _window() -> analysis_window.CanonicalAnalysisWindow:
+def _window(*, run_id: str = "run-a") -> analysis_window.CanonicalAnalysisWindow:
     scope = _scope()
     start = datetime(2026, 8, 25, tzinfo=UTC)
     rows = (
@@ -69,7 +76,7 @@ def _window() -> analysis_window.CanonicalAnalysisWindow:
     return analysis_window.CanonicalAnalysisWindow(
         window_id="window-a",
         source_kind="telemetry_connector",
-        source_run_id="run-a",
+        source_run_id=run_id,
         phase4_scope=scope,
         phase4_system_identity=_identity(scope),
         asset_id="asset-a",
@@ -101,7 +108,10 @@ def _window() -> analysis_window.CanonicalAnalysisWindow:
         data_quality={"status": "ready", "readiness": "ready"},
         sensor_health={},
         operating_mode={},
-        observation_lineage=(_lineage(0, start), _lineage(1, start + timedelta(minutes=1))),
+        observation_lineage=(
+            _lineage(0, start, run_id=run_id),
+            _lineage(1, start + timedelta(minutes=1), run_id=run_id),
+        ),
     )
 
 
@@ -121,6 +131,17 @@ def test_analysis_window_calls_sii_once_with_only_server_identity(monkeypatch) -
 
     assert len(calls) == 1
     assert calls[0]["phase4_scope"] == window.phase4_scope
+    endpoint_identity = calls[0]["canonical_endpoint_identity"]
+    assert endpoint_identity["contract"] == "relationship-endpoint-identity.v1"
+    assert endpoint_identity["scope"]["system_id"] == "system-a"
+    assert endpoint_identity["scope"]["asset_id"] == "asset-a"
+    assert endpoint_identity["mapping_authority_digest"] == DIGEST
+    assert endpoint_identity["endpoints"] == [
+        {
+            "canonical_signal_id": SIGNAL,
+            "mapping_provenance": [{"mapping_id": "mapping-a", "mapping_revision": 2}],
+        }
+    ]
     assert calls[0]["config"]["infrastructure_identity"] == {
         "tenant_id": "tenant-a",
         "workspace_id": "ws-facility-a",
@@ -133,6 +154,49 @@ def test_analysis_window_calls_sii_once_with_only_server_identity(monkeypatch) -
     assert execution.analysis_result["source_file"] == ""
     assert execution.analysis_result["analysis_metadata"]["generated_from"] == "canonical_normalized_observations"
     assert execution.analysis_result["telemetry_lineage"]["lineage_digest"]
+
+
+def test_endpoint_identity_is_independent_of_run_identity_and_source_names() -> None:
+    first = _window().relationship_endpoint_identity()
+    retried = _window(run_id="run-b").relationship_endpoint_identity()
+    assert first == retried
+
+    renamed = _window()
+    object.__setattr__(renamed, "observation_lineage", tuple(
+        replace(
+            item,
+            external_signal_id=f"different-vendor-{index}",
+            external_tag_id=f"different.raw.{index}",
+            canonical_signal_name=f"Different display {index}",
+        )
+        for index, item in enumerate(renamed.observation_lineage)
+    ))
+    assert renamed.relationship_endpoint_identity() == first
+
+
+@pytest.mark.parametrize(
+    "failure", ["missing", "stale", "wrong_system", "wrong_asset", "ambiguous_endpoint"]
+)
+def test_endpoint_identity_fails_closed_without_changing_window_rows(failure: str) -> None:
+    window = _window()
+    original_rows = window.rows
+    if failure == "missing":
+        object.__setattr__(window, "observation_lineage", ())
+    else:
+        item = window.observation_lineage[0]
+        changes = {
+            "stale": {"mapping_authority_digest": "b" * 64},
+            "wrong_system": {"system_id": "system-b"},
+            "wrong_asset": {"asset_id": "asset-b"},
+            "ambiguous_endpoint": {"canonical_signal_id": "unmapped-signal"},
+        }[failure]
+        object.__setattr__(
+            window,
+            "observation_lineage",
+            (replace(item, **changes), *window.observation_lineage[1:]),
+        )
+    assert window.relationship_endpoint_identity() is None
+    assert window.rows is original_rows
 
 
 def test_analysis_window_does_not_retry_engine_errors(monkeypatch) -> None:
