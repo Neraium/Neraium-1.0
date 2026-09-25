@@ -8,6 +8,7 @@ analysis or derives new analytical claims.
 from __future__ import annotations
 
 from app.services.product_evidence_contract import product_evidence
+from app.services.relationship_observation_projection import relationship_observations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -218,6 +219,9 @@ def build_canonical_result_projection(
             "detail_source": "analysis_window_observations",
         },
     }
+    disclosure = relationship_observations(sii_result)
+    if disclosure is not None:
+        shared_envelope["relationship_observations"] = disclosure
     shared_bytes = _json_size(shared_envelope)
     if shared_bytes > MAX_SHARED_ENVELOPE_BYTES:
         raise CanonicalResultProjectionError(

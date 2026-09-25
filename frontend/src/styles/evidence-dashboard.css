@@ -120,3 +120,11 @@
 .measurable-consequence summary:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 .measurable-consequence__technical { display: grid; gap: 0.85rem; font-size: 0.85rem; }
 .measurable-consequence__technical ul { margin: 0; padding-left: 1.2rem; }
+
+.relationship-observations { overflow-wrap: anywhere; }
+.relationship-observations > p,
+.relationship-observations > dl,
+.relationship-observations > details { margin: 16px; }
+.relationship-observations details { padding: 12px; border-top: 1px solid var(--fr-line); }
+.relationship-observations summary { cursor: pointer; }
+.relationship-observations summary:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

@@ -1,0 +1,284 @@
+{
+  "data_origin": "Controlled 16-row real-engine evaluation; no customer telemetry",
+  "evidence": {
+    "version": "relationship-observations.v1",
+    "authority": "observation_only",
+    "source_path": "sii_result.relationship_graph.edges",
+    "coverage": {
+      "evaluated": 3,
+      "eligible": 3,
+      "temporally_supported": 0,
+      "promoted_changed_edges": 0,
+      "displayed": 3,
+      "omitted": 0
+    },
+    "selection": "engine_order_first_12_not_primary_ranking",
+    "observations": [
+      {
+        "id": "relationship:pressure:power",
+        "single_window_change_type": "stable",
+        "change_type": "stable",
+        "baseline_correlation": -0.207231,
+        "current_correlation": -0.183249,
+        "signed_correlation_delta": 0.023982,
+        "eligible": true,
+        "promoted_changed_edge": false,
+        "edge_confidence": 0.282,
+        "data_quality_factor": 0.45,
+        "baseline_sample_count": 11,
+        "current_sample_count": 5,
+        "sample_sufficiency_factor": 0.833333,
+        "temporal_persistence_observations": 1,
+        "temporal_persistence_supporting_observations": 0,
+        "temporal_persistence_direction": 0,
+        "temporal_persistence_direction_agreement": 0.0,
+        "temporal_persistence_supported": false,
+        "temporal_persistence_status": "unconfirmed",
+        "persistent_relationship_change": false,
+        "first_supported_observation": null,
+        "latest_supported_observation": null,
+        "source_path": "sii_result.relationship_graph.edges[0]",
+        "columns": [
+          "pressure",
+          "power"
+        ],
+        "time_window": {
+          "baseline_start": "2026-07-01T00:00:00+00:00",
+          "baseline_end": "2026-07-01T00:10:00+00:00",
+          "current_start": "2026-07-01T00:11:00+00:00",
+          "current_end": "2026-07-01T00:15:00+00:00"
+        },
+        "operating_context": {
+          "baseline_mode": "time_band_night_equipment_state_enabled",
+          "recent_mode": "time_band_night_equipment_state_enabled",
+          "match": "strong",
+          "confidence": "limited"
+        },
+        "relationship_context": {
+          "context_only": false,
+          "operator_primary_eligible": true,
+          "state_signal_involved": false
+        },
+        "recurrence": {
+          "status": "unconfirmed",
+          "supported": false,
+          "direction": 0,
+          "episode_count": 0,
+          "opposite_direction_veto": false
+        },
+        "supporting_windows": []
+      },
+      {
+        "id": "relationship:flow:power",
+        "single_window_change_type": "stable",
+        "change_type": "stable",
+        "baseline_correlation": 1.0,
+        "current_correlation": 1.0,
+        "signed_correlation_delta": 0.0,
+        "eligible": true,
+        "promoted_changed_edge": false,
+        "edge_confidence": 0.2708,
+        "data_quality_factor": 0.45,
+        "baseline_sample_count": 11,
+        "current_sample_count": 5,
+        "sample_sufficiency_factor": 0.833333,
+        "temporal_persistence_observations": 1,
+        "temporal_persistence_supporting_observations": 0,
+        "temporal_persistence_direction": 0,
+        "temporal_persistence_direction_agreement": 0.0,
+        "temporal_persistence_supported": false,
+        "temporal_persistence_status": "unconfirmed",
+        "persistent_relationship_change": false,
+        "first_supported_observation": null,
+        "latest_supported_observation": null,
+        "source_path": "sii_result.relationship_graph.edges[1]",
+        "columns": [
+          "flow",
+          "power"
+        ],
+        "time_window": {
+          "baseline_start": "2026-07-01T00:00:00+00:00",
+          "baseline_end": "2026-07-01T00:10:00+00:00",
+          "current_start": "2026-07-01T00:11:00+00:00",
+          "current_end": "2026-07-01T00:15:00+00:00"
+        },
+        "operating_context": {
+          "baseline_mode": "time_band_night_equipment_state_enabled",
+          "recent_mode": "time_band_night_equipment_state_enabled",
+          "match": "strong",
+          "confidence": "limited"
+        },
+        "relationship_context": {
+          "context_only": false,
+          "operator_primary_eligible": true,
+          "state_signal_involved": false
+        },
+        "recurrence": {
+          "status": "unconfirmed",
+          "supported": false,
+          "direction": 0,
+          "episode_count": 0,
+          "opposite_direction_veto": false
+        },
+        "supporting_windows": []
+      },
+      {
+        "id": "relationship:flow:pressure",
+        "single_window_change_type": "stable",
+        "change_type": "stable",
+        "baseline_correlation": -0.207231,
+        "current_correlation": -0.183249,
+        "signed_correlation_delta": 0.023982,
+        "eligible": true,
+        "promoted_changed_edge": false,
+        "edge_confidence": 0.282,
+        "data_quality_factor": 0.45,
+        "baseline_sample_count": 11,
+        "current_sample_count": 5,
+        "sample_sufficiency_factor": 0.833333,
+        "temporal_persistence_observations": 1,
+        "temporal_persistence_supporting_observations": 0,
+        "temporal_persistence_direction": 0,
+        "temporal_persistence_direction_agreement": 0.0,
+        "temporal_persistence_supported": false,
+        "temporal_persistence_status": "unconfirmed",
+        "persistent_relationship_change": false,
+        "first_supported_observation": null,
+        "latest_supported_observation": null,
+        "source_path": "sii_result.relationship_graph.edges[2]",
+        "columns": [
+          "flow",
+          "pressure"
+        ],
+        "time_window": {
+          "baseline_start": "2026-07-01T00:00:00+00:00",
+          "baseline_end": "2026-07-01T00:10:00+00:00",
+          "current_start": "2026-07-01T00:11:00+00:00",
+          "current_end": "2026-07-01T00:15:00+00:00"
+        },
+        "operating_context": {
+          "baseline_mode": "time_band_night_equipment_state_enabled",
+          "recent_mode": "time_band_night_equipment_state_enabled",
+          "match": "strong",
+          "confidence": "limited"
+        },
+        "relationship_context": {
+          "context_only": false,
+          "operator_primary_eligible": true,
+          "state_signal_involved": false
+        },
+        "recurrence": {
+          "status": "unconfirmed",
+          "supported": false,
+          "direction": 0,
+          "episode_count": 0,
+          "opposite_direction_veto": false
+        },
+        "supporting_windows": []
+      }
+    ],
+    "comparison_qualification": {
+      "edge_basis": "global_relationship_model",
+      "mode_conditioned_baseline": {
+        "status": "limited",
+        "used_global_fallback": true,
+        "fallback_reason": "insufficient_recent_mode_rows"
+      }
+    }
+  },
+  "invariants": {
+    "classification": [
+      {
+        "type": "possible_instrumentation_issue",
+        "label": "Possible instrumentation issue",
+        "confidence": "limited",
+        "reasons": [
+          "pump_status: The signal remained at one numeric value across the available analysis rows."
+        ],
+        "certainty_limit": "Signal-health evidence can identify an instrumentation possibility, but it does not confirm that a sensor or transmitter is faulty.",
+        "rule_version": "deterministic_finding_classification_v3",
+        "finding_confidence_v1": {
+          "schema_version": "finding-confidence-v1",
+          "change_detection": {
+            "level": "low",
+            "reason": "The recorded comparison does not clear all sample, magnitude, and support gates for change detection.",
+            "method": "paired_baseline_current_comparison",
+            "score": 0.7667
+          },
+          "interpretation": {
+            "level": "medium",
+            "reason": "pump_status: The signal remained at one numeric value across the available analysis rows.",
+            "method": "deterministic_finding_classification"
+          },
+          "persistence": {
+            "status": "not_assessed",
+            "reason": "Persistence evidence was unavailable for this historical finding."
+          },
+          "operating_context": {
+            "status": "comparable",
+            "reason": "Baseline and recent periods matched across 1 available operating-context feature(s).",
+            "method": "recorded_operating_mode_comparison"
+          },
+          "evidence_quality": {
+            "level": "high",
+            "reason": "Available telemetry passed the recorded data-quality checks.",
+            "method": "recorded_data_quality_assessment"
+          },
+          "relationship_comparison": {
+            "metric": "legacy_finding",
+            "formula": "absolute_change = abs(legacy change magnitude); signed_change unavailable without baseline and current values"
+          }
+        }
+      }
+    ],
+    "primary_selection": [],
+    "promotion": [
+      false,
+      false,
+      false
+    ],
+    "persistence": [
+      false,
+      false,
+      false
+    ],
+    "finding_persistence": [
+      {
+        "status": "unavailable",
+        "persistent": false,
+        "summary": "Persistence evidence was unavailable for this historical finding."
+      }
+    ],
+    "measurable_consequence": [
+      {
+        "status": "not_quantifiable",
+        "profile_key": "unmapped",
+        "resource_type": null,
+        "source_relationship_ids": [],
+        "source_tag_ids": [],
+        "support_level": null,
+        "methodology": "timestamp_aware_trapezoidal_integration",
+        "methodology_version": "1.0.0",
+        "observation_count": 0,
+        "contributing_interval_count": 0,
+        "skipped_interval_count": 0,
+        "limitations": [
+          "Persistent relationship change is not established for this finding."
+        ],
+        "statement": "Consequence not quantifiable from available evidence.",
+        "provenance": {
+          "observations": [],
+          "max_gap_seconds": null
+        },
+        "finding_id": "baseline-stable",
+        "reason": "Persistent relationship change is not established for this finding.",
+        "runtime_metadata": {
+          "contract_version": "execution-metadata.v1",
+          "analysis_run_id": "context-fallback-controlled"
+        }
+      }
+    ],
+    "analytical_digest": "b973f98207ebf3576d9f88d6a13ed5f944f1253358860fef949b380687c2edad",
+    "graph_digest": "e525c41d9557b8532d244fbb758436f9b81433b052a49a239422a234347b01cc"
+  }
+}

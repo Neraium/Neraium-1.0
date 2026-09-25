@@ -86,6 +86,7 @@ from app.services.phase4_scope import (
 )
 from app.models.api_models import BaselineCreationResponse, BehavioralModelApprovalRequest, UploadStatusResponse
 from app.services.upload_evidence import build_evidence_record_from_result
+from app.services.relationship_observation_projection import relationship_observations
 from app.services.upload_persistence import summarize_result
 from app.services.upload_runtime_state import UPLOAD_RUNTIME_STATE
 from app.services.upload_state import has_active_session_artifact
@@ -2221,7 +2222,11 @@ def baseline_comparison_analysis_by_id(
     package = read_evidence_package_by_analysis_id(analysis_run_id)
     if package is not None:
         result["evidence_package"] = package
-    return product_evidence(result)
+    projected = product_evidence(result)
+    disclosure = relationship_observations(result.get("sii_result"))
+    if disclosure is not None:
+        projected["relationship_observations"] = disclosure
+    return projected
 
 
 @router.get("/analyses/{comparison_analysis_id}")
@@ -2232,7 +2237,11 @@ def comparison_analysis_by_id(comparison_analysis_id: UploadJobPath):
     package = read_evidence_package_by_analysis_id(comparison_analysis_id)
     if package is not None:
         result["evidence_package"] = package
-    return product_evidence(result)
+    projected = product_evidence(result)
+    disclosure = relationship_observations(result.get("sii_result"))
+    if disclosure is not None:
+        projected["relationship_observations"] = disclosure
+    return projected
 
 
 @router.get("/analyses/{comparison_analysis_id}/evidence-package", response_model=EvidencePackage)

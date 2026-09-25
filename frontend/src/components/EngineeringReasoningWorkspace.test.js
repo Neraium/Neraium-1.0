@@ -3,6 +3,7 @@ import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EngineeringReasoningWorkspace from "./EngineeringReasoningWorkspace";
+import presentationCases from "../../tests/fixtures/presentation-phase1.json";
 
 function analysisResult(overrides = {}) {
   const analysis = {
@@ -604,4 +605,22 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sites" }));
     expect(screen.getByRole("heading", { name: "Sites" })).toBeTruthy();
   });
+});
+
+
+it.each(["A", "B", "C", "D"])("exposes observation case %s without changing the workspace assessment", async (name) => {
+  const fixture = presentationCases.find((item) => item.case === name);
+  const result = analysisResult({
+    analysis: name === "A" ? { insights: [], relationships: [] } : {},
+    result: { relationship_observations: fixture.evidence, ...(name === "B" ? { sii_reliable_enough_to_show: false } : {}) },
+  });
+  renderWorkspace({ result });
+  const brief = screen.getByTestId("operations-brief");
+  const before = brief.textContent;
+  const control = screen.getByText("Show relationship evidence");
+  expect(control.closest("details").open).toBe(false);
+  fireEvent.click(control);
+  expect(brief.textContent).toBe(before);
+  if (name === "B") expect(brief.textContent).toContain("Insufficient evidence");
+  expect(screen.getByText("Persistent relationship change")).toBeTruthy();
 });

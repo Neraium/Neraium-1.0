@@ -1,3 +1,4 @@
+import RelationshipObservations from "./engineering/RelationshipObservations";
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { buildEngineeringReasoningModel, buildEngineeringReasoningModelsFromEvidenceRuns, buildFacilityLabelContext } from "../viewModels/engineeringReasoning";
 import { analysisBelongsToBaseline } from "../viewModels/baselineSelection";
@@ -479,6 +480,7 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
                             : effectiveRoute === "system" ? <SystemOverview system={selectedSystem} systemsProjection={systemsProjection} onReview={openFinding} onOpenInvestigation={openInvestigation} onOpenEvidence={openEvidence} onSystem={openSystem} />
                               : presentationState.key === "legacyAnalysis" ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
                                 : <SiteOverview projection={resultsProjection} onReview={openFinding} onOpenInvestigation={openInvestigation} onOpenEvidence={openEvidence} />}
+          {["site", "findings", "investigations"].includes(effectiveRoute) && model.hasAnalysis && !model.processing ? <RelationshipObservations evidence={activeResult.relationship_observations} /> : null}
         </main>
       </div>
     </div>

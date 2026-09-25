@@ -1,0 +1,212 @@
+{
+  "evidence": {
+    "version": "relationship-observations.v1",
+    "authority": "observation_only",
+    "source_path": "sii_result.relationship_graph.edges",
+    "coverage": {
+      "evaluated": 3,
+      "eligible": null,
+      "temporally_supported": null,
+      "promoted_changed_edges": null,
+      "displayed": 3,
+      "omitted": 0
+    },
+    "selection": "engine_order_first_12_not_primary_ranking",
+    "observations": [
+      {
+        "id": "relationship:pressure:power",
+        "change_type": "missing",
+        "baseline_correlation": 1.0,
+        "signed_correlation_delta": -1.010566,
+        "reference_dataset_id": "sha256:f98a6ee144dadda859305ff87b5b7b1838cd6cc079d9bb852ed3e1d5c1f191ab",
+        "source_path": "sii_result.relationship_graph.edges[0]",
+        "columns": [],
+        "time_window": {
+          "baseline_start": "2026-04-02T00:00:00+00:00",
+          "baseline_end": "2026-04-02T01:03:00+00:00",
+          "current_start": "2026-07-01T00:00:00+00:00",
+          "current_end": "2026-07-01T01:03:00+00:00"
+        },
+        "operating_context": {},
+        "relationship_context": {
+          "context_only": false,
+          "operator_primary_eligible": true,
+          "state_signal_involved": false
+        },
+        "recurrence": {},
+        "supporting_windows": []
+      },
+      {
+        "id": "relationship:flow:pressure",
+        "change_type": "missing",
+        "baseline_correlation": 1.0,
+        "signed_correlation_delta": -1.010566,
+        "reference_dataset_id": "sha256:f98a6ee144dadda859305ff87b5b7b1838cd6cc079d9bb852ed3e1d5c1f191ab",
+        "source_path": "sii_result.relationship_graph.edges[1]",
+        "columns": [],
+        "time_window": {
+          "baseline_start": "2026-04-02T00:00:00+00:00",
+          "baseline_end": "2026-04-02T01:03:00+00:00",
+          "current_start": "2026-07-01T00:00:00+00:00",
+          "current_end": "2026-07-01T01:03:00+00:00"
+        },
+        "operating_context": {},
+        "relationship_context": {
+          "context_only": false,
+          "operator_primary_eligible": true,
+          "state_signal_involved": false
+        },
+        "recurrence": {},
+        "supporting_windows": []
+      },
+      {
+        "id": "relationship:flow:power",
+        "change_type": "stable",
+        "baseline_correlation": 1.0,
+        "signed_correlation_delta": 0.0,
+        "reference_dataset_id": "sha256:f98a6ee144dadda859305ff87b5b7b1838cd6cc079d9bb852ed3e1d5c1f191ab",
+        "source_path": "sii_result.relationship_graph.edges[2]",
+        "columns": [],
+        "time_window": {
+          "baseline_start": "2026-04-02T00:00:00+00:00",
+          "baseline_end": "2026-04-02T01:03:00+00:00",
+          "current_start": "2026-07-01T00:00:00+00:00",
+          "current_end": "2026-07-01T01:03:00+00:00"
+        },
+        "operating_context": {},
+        "relationship_context": {
+          "context_only": false,
+          "operator_primary_eligible": true,
+          "state_signal_involved": false
+        },
+        "recurrence": {},
+        "supporting_windows": []
+      }
+    ],
+    "comparison_qualification": {
+      "edge_basis": "global_relationship_model_failure_fallback",
+      "mode_conditioned_baseline": {
+        "status": "limited",
+        "used_global_fallback": true,
+        "fallback_reason": "no_explicit_operating_mode_features"
+      }
+    }
+  },
+  "invariants": {
+    "classification": [
+      {
+        "type": "context_limited_relationship_change",
+        "label": "Context-limited relationship change",
+        "confidence": "limited",
+        "reasons": [
+          "No usable equipment-state, staging, load, schedule, weather, setpoint, or event signals were available.",
+          "Operating context was not comparable enough to attribute the observed relationship change."
+        ],
+        "certainty_limit": "The relationship change was observed, but differing or unavailable operating context limits interpretation. The evidence does not establish that the context difference caused the change.",
+        "rule_version": "deterministic_finding_classification_v3",
+        "finding_confidence_v1": {
+          "schema_version": "finding-confidence-v1",
+          "change_detection": {
+            "level": "high",
+            "reason": "The baseline/current comparison has sufficient paired samples and strong recorded support.",
+            "method": "paired_baseline_current_comparison",
+            "evidence_refs": [
+              "{'column': 'pressure', 'display_name': 'Pressure', 'role': 'left_variable', 'baseline_window': {'rows': 64, 'correlation': 1.0}, 'recent_window': {'rows': 64, 'correlation': -0.010566}, 'source_rows': [{'window': 'baseline_start', 'source_row': 1, 'timestamp': '2026-04-02T00:00:00+00:00'}, {'window': 'baseline_end', 'source_row': 64, 'timestamp': '2026-04-02T01:03:00+00:00'}, {'window': 'recent_start', 'source_row': 1, 'timestamp': '2026-07-01T00:00:00+00:00'}, {'window': 'recent_end', 'source_row': 64, 'timestamp': '2026-07-01T01:03:00+00:00'}]}",
+              "{'column': 'power', 'display_name': 'Power', 'role': 'right_variable', 'baseline_window': {'rows': 64, 'correlation': 1.0}, 'recent_window': {'rows': 64, 'correlation': -0.010566}, 'source_rows': [{'window': 'baseline_start', 'source_row': 1, 'timestamp': '2026-04-02T00:00:00+00:00'}, {'window': 'baseline_end', 'source_row': 64, 'timestamp': '2026-04-02T01:03:00+00:00'}, {'window': 'recent_start', 'source_row': 1, 'timestamp': '2026-07-01T00:00:00+00:00'}, {'window': 'recent_end', 'source_row': 64, 'timestamp': '2026-07-01T01:03:00+00:00'}]}"
+            ],
+            "score": 1.0
+          },
+          "interpretation": {
+            "level": "unknown",
+            "reason": "No usable equipment-state, staging, load, schedule, weather, setpoint, or event signals were available.",
+            "method": "deterministic_finding_classification",
+            "evidence_refs": [
+              "{'column': 'pressure', 'display_name': 'Pressure', 'role': 'left_variable', 'baseline_window': {'rows': 64, 'correlation': 1.0}, 'recent_window': {'rows': 64, 'correlation': -0.010566}, 'source_rows': [{'window': 'baseline_start', 'source_row': 1, 'timestamp': '2026-04-02T00:00:00+00:00'}, {'window': 'baseline_end', 'source_row': 64, 'timestamp': '2026-04-02T01:03:00+00:00'}, {'window': 'recent_start', 'source_row': 1, 'timestamp': '2026-07-01T00:00:00+00:00'}, {'window': 'recent_end', 'source_row': 64, 'timestamp': '2026-07-01T01:03:00+00:00'}]}",
+              "{'column': 'power', 'display_name': 'Power', 'role': 'right_variable', 'baseline_window': {'rows': 64, 'correlation': 1.0}, 'recent_window': {'rows': 64, 'correlation': -0.010566}, 'source_rows': [{'window': 'baseline_start', 'source_row': 1, 'timestamp': '2026-04-02T00:00:00+00:00'}, {'window': 'baseline_end', 'source_row': 64, 'timestamp': '2026-04-02T01:03:00+00:00'}, {'window': 'recent_start', 'source_row': 1, 'timestamp': '2026-07-01T00:00:00+00:00'}, {'window': 'recent_end', 'source_row': 64, 'timestamp': '2026-07-01T01:03:00+00:00'}]}"
+            ]
+          },
+          "persistence": {
+            "status": "observing",
+            "reason": "The existing persistence assessment did not confirm every signal in this relationship."
+          },
+          "operating_context": {
+            "status": "not_enough_context",
+            "reason": "No usable equipment-state, staging, load, schedule, weather, setpoint, or event signals were available.",
+            "method": "recorded_operating_mode_comparison"
+          },
+          "evidence_quality": {
+            "level": "high",
+            "reason": "Available telemetry passed the current completeness, timestamp, and signal-health checks.",
+            "method": "recorded_data_quality_assessment"
+          },
+          "relationship_comparison": {
+            "metric": "pearson_correlation",
+            "baseline_value": 1.0,
+            "current_value": -0.010566,
+            "signed_change": -1.010566,
+            "absolute_change": 1.010566,
+            "formula": "signed_change = current_value - baseline_value; absolute_change = abs(signed_change)",
+            "direction": "decreased"
+          }
+        }
+      }
+    ],
+    "primary_selection": [
+      "relationship-0",
+      "relationship-1"
+    ],
+    "edge_decisions": [
+      {},
+      {},
+      {}
+    ],
+    "finding_persistence": [
+      {
+        "status": "limited",
+        "persistent": false,
+        "summary": "The existing persistence assessment did not confirm every signal in this relationship.",
+        "reasons": [
+          "The existing persistence assessment did not confirm every signal in this relationship."
+        ]
+      }
+    ],
+    "measurable_consequence": [
+      {
+        "status": "not_quantifiable",
+        "profile_key": "unmapped",
+        "resource_type": null,
+        "source_relationship_ids": [
+          "relationship-0",
+          "relationship-1"
+        ],
+        "source_tag_ids": [
+          "pressure",
+          "power",
+          "flow"
+        ],
+        "support_level": null,
+        "methodology": "timestamp_aware_trapezoidal_integration",
+        "methodology_version": "1.0.0",
+        "observation_count": 0,
+        "contributing_interval_count": 0,
+        "skipped_interval_count": 0,
+        "limitations": [
+          "Persistent relationship change is not established for this finding."
+        ],
+        "statement": "Consequence not quantifiable from available evidence.",
+        "provenance": {
+          "observations": [],
+          "max_gap_seconds": null
+        },
+        "finding_id": "relationship-0",
+        "reason": "Persistent relationship change is not established for this finding.",
+        "runtime_metadata": {
+          "contract_version": "execution-metadata.v1",
+          "analysis_run_id": "graph-fallback-controlled"
+        }
+      }
+    ],
+    "analytical_digest": "d7491d6e048dbcfbe8185d6a81784413bab599ca21d746b466cbffb9c97545b4",
+    "graph_digest": "ed75209079425cb24bef524b0e2c070f6096ce4496ee34f80a2d82a402c245d1"
+  }
+}

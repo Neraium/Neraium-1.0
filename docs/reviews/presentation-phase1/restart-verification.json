@@ -1,0 +1,54 @@
+{
+  "baseline": "1bc6d9e031264991ce9cc7ea6bee2ac51b070626",
+  "branch": "fix/deterministic-governed-output",
+  "restart_report_discrepancy": {
+    "tracked_modifications_found": [
+      "backend/app/routers/data.py",
+      "backend/app/services/telemetry_result_projection.py",
+      "backend/app/services/upload_persistence.py",
+      "frontend/src/components/EngineeringReasoningWorkspace.jsx",
+      "frontend/src/components/EngineeringReasoningWorkspace.test.js",
+      "frontend/src/styles/evidence-dashboard.css"
+    ],
+    "candidate_artifacts_found": true,
+    "action": "Preserved and independently traced/reviewed/validated against clean HEAD; no reset or reliance on prior completion claims."
+  },
+  "fresh_verification": {
+    "focused_backend_existing_and_candidate": 75,
+    "additional_supported_recurrence_test": 1,
+    "focused_frontend": 81,
+    "chromium_browser": 2,
+    "locked_setup": "passed",
+    "production_build": "passed via browser webServer command",
+    "focused_eslint": "passed",
+    "isolated_head_analytical_digest_matches": [
+      16,
+      32,
+      64
+    ],
+    "git_diff_check": "passed"
+  },
+  "protected_analytical_files_changed": [],
+  "candidate_sha256": {
+    "backend/app/routers/data.py": "5e33db98039be1815131a11756b0a140019107a796bf086d0c0c7be2d6d14b5d",
+    "backend/app/services/telemetry_result_projection.py": "90dff9d115cd9a511975f23ee0a4e42e42dd7d78a47cfd3a9d849689ea1563a0",
+    "backend/app/services/upload_persistence.py": "49da4daac39ba82b8fa569fbe260827df264eaf6991c52bf4c8c6459ad174195",
+    "backend/app/services/relationship_observation_projection.py": "673eff428f3a61fa0b272c0c6efd9ebb3b396df0b8ddbb11598f2baafa781606",
+    "frontend/src/components/EngineeringReasoningWorkspace.jsx": "ab2e33e4a5245a3391ce83f120f321653dfb33320ee6c48149b1682bd6870bf7",
+    "frontend/src/components/EngineeringReasoningWorkspace.test.js": "f093802d8cff6ae502b7d44e8afb84db453a003b822aed7a2b476bcc92c4083a",
+    "frontend/src/components/engineering/RelationshipObservations.jsx": "e0e9e8a23d064bcdc55321bd2cc563195083433155f6ab82e3821bf365abf1ee",
+    "frontend/src/components/engineering/RelationshipObservations.test.js": "7ce0f04f5a74156ab2b1c7e655baae4c0275de333e54761b78dde6b3803034af",
+    "frontend/src/styles/evidence-dashboard.css": "7877245c09ec12cdc912b367d86c1ac8c67cdb6783e414a2b7e71ad3dc9ac464",
+    "frontend/tests/e2e/presentation-phase1.spec.js": "aac3eceef09bf937234b4c86c891a78f00069596c333c0988c4642b970802605",
+    "frontend/tests/fixtures/presentation-phase1.json": "c472e81c117989c0e58c1483d98e8f387b6aec110cde85e0290e37a1435b9cd8",
+    "tests/test_presentation_phase1.py": "211bdff13f6b5b7220bd6052df7b46b4176ec594dcaff246afc8d49e3ab3cddb",
+    "tests/presentation_phase1_cases.py": "18649296bb5b707c409684c68fb3c5732ad40d97ae3657de9bbeaf11791e4072",
+    "tests/fixtures/presentation_phase1_invariants.json": "692d21fd640be448c6aa718a06c8f0b387f2803fc6fda5547e9505c2a2cb5db8",
+    "docs/reviews/presentation-phase1/cases.json": "e6c699846f8e63f7bee5dabb1d299720f0908635f70be556dd17142b32316c7f",
+    "docs/reviews/presentation-phase1/baseline-verification.json": "b4107440ef84cf568b08d453793e26ace366a7e0284bbc7e9a77357451fc6aee",
+    "docs/reviews/presentation-phase1/README.md": "9dbf3e5553b2b221577beeb8bd5fa8ea9c7cd413ab369d8f9b383e7e11ec8e47"
+  },
+  "decision": "PRESENTATION_PHASE1_READY_FOR_REVIEW",
+  "committed": false,
+  "pushed": false
+}

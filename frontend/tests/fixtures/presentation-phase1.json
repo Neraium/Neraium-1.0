@@ -1,0 +1,504 @@
+[
+  {
+    "case": "A",
+    "evidence": {
+      "version": "relationship-observations.v1",
+      "authority": "observation_only",
+      "source_path": "sii_result.relationship_graph.edges",
+      "coverage": {
+        "evaluated": 1,
+        "eligible": 1,
+        "temporally_supported": 0,
+        "promoted_changed_edges": 0,
+        "displayed": 1,
+        "omitted": 0
+      },
+      "selection": "engine_order_first_12_not_primary_ranking",
+      "observations": [
+        {
+          "id": "relationship:synthetic_flow:synthetic_pressure",
+          "single_window_change_type": "stable",
+          "change_type": "stable",
+          "baseline_correlation": -0.668462,
+          "current_correlation": -0.868462,
+          "signed_correlation_delta": -0.2,
+          "eligible": true,
+          "promoted_changed_edge": false,
+          "edge_confidence": 0.73,
+          "data_quality_factor": 1.0,
+          "baseline_sample_count": 48,
+          "current_sample_count": 48,
+          "sample_sufficiency_factor": 1.0,
+          "temporal_persistence_observations": 1,
+          "temporal_persistence_supporting_observations": 1,
+          "temporal_persistence_direction": -1,
+          "temporal_persistence_direction_agreement": 1.0,
+          "temporal_persistence_supported": false,
+          "temporal_persistence_status": "unconfirmed",
+          "persistent_relationship_change": false,
+          "first_supported_observation": "2026-01-02T12:00:00+00:00",
+          "latest_supported_observation": "2026-01-02T12:00:00+00:00",
+          "source_path": "sii_result.relationship_graph.edges[0]",
+          "columns": [
+            "synthetic_flow",
+            "synthetic_pressure"
+          ],
+          "time_window": {
+            "baseline_start": "2025-12-01",
+            "baseline_end": "2025-12-31",
+            "current_start": "2026-01-02T00:00:00+00:00",
+            "current_end": "2026-01-02T12:00:00+00:00"
+          },
+          "operating_context": {
+            "status": "complete",
+            "match": "strong",
+            "confidence": "high"
+          },
+          "relationship_context": {
+            "operator_primary_eligible": true
+          },
+          "recurrence": {
+            "status": "unconfirmed",
+            "supported": false,
+            "direction": 0,
+            "episode_count": 0,
+            "opposite_direction_veto": false
+          },
+          "supporting_windows": [
+            {
+              "observed_at": "2026-01-02T12:00:00+00:00",
+              "signed_correlation_delta": -0.2,
+              "eligible": true,
+              "acceptable": true,
+              "source_dataset_id": null,
+              "time_window": {
+                "baseline_start": "2025-12-01",
+                "baseline_end": "2025-12-31",
+                "current_start": "2026-01-02T00:00:00+00:00",
+                "current_end": "2026-01-02T12:00:00+00:00"
+              },
+              "source_rows": [
+                {
+                  "window": "recent_end",
+                  "source_row": 96,
+                  "timestamp": "2026-01-02T12:00:00+00:00"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "unchanged": {
+      "classification": [],
+      "primary_selection": [],
+      "persistence_decision": [],
+      "measurable_consequence_status": [],
+      "analytical_identity": "9093b1521fec8561469549747dcc09d3aa4065bcfe7fe9c326d037198c4b3014"
+    }
+  },
+  {
+    "case": "B",
+    "evidence": {
+      "version": "relationship-observations.v1",
+      "authority": "observation_only",
+      "source_path": "sii_result.relationship_graph.edges",
+      "coverage": {
+        "evaluated": 1,
+        "eligible": 0,
+        "temporally_supported": 0,
+        "promoted_changed_edges": 0,
+        "displayed": 1,
+        "omitted": 0
+      },
+      "selection": "engine_order_first_12_not_primary_ranking",
+      "observations": [
+        {
+          "id": "relationship:synthetic_flow:synthetic_pressure",
+          "single_window_change_type": "stable",
+          "change_type": "stable",
+          "baseline_correlation": -0.668462,
+          "current_correlation": -0.888462,
+          "signed_correlation_delta": -0.22,
+          "eligible": false,
+          "promoted_changed_edge": false,
+          "edge_confidence": 0.73,
+          "data_quality_factor": 1.0,
+          "baseline_sample_count": 48,
+          "current_sample_count": 2,
+          "sample_sufficiency_factor": 0.333333,
+          "temporal_persistence_observations": 1,
+          "temporal_persistence_supporting_observations": 0,
+          "temporal_persistence_direction": 0,
+          "temporal_persistence_direction_agreement": 0.0,
+          "temporal_persistence_supported": false,
+          "temporal_persistence_status": "unconfirmed",
+          "persistent_relationship_change": false,
+          "first_supported_observation": null,
+          "latest_supported_observation": null,
+          "source_path": "sii_result.relationship_graph.edges[0]",
+          "columns": [
+            "synthetic_flow",
+            "synthetic_pressure"
+          ],
+          "time_window": {
+            "baseline_start": "2025-12-01",
+            "baseline_end": "2025-12-31",
+            "current_start": "2026-01-02T00:00:00+00:00",
+            "current_end": "2026-01-02T12:00:00+00:00"
+          },
+          "operating_context": {
+            "status": "complete",
+            "match": "strong",
+            "confidence": "high"
+          },
+          "relationship_context": {
+            "operator_primary_eligible": true
+          },
+          "recurrence": {
+            "status": "unconfirmed",
+            "supported": false,
+            "direction": 0,
+            "episode_count": 0,
+            "opposite_direction_veto": false
+          },
+          "supporting_windows": []
+        }
+      ]
+    },
+    "unchanged": {
+      "classification": [
+        "insufficient_evidence"
+      ],
+      "primary_selection": [],
+      "persistence_decision": [
+        {
+          "persistent": false,
+          "status": "observing"
+        }
+      ],
+      "measurable_consequence_status": [
+        "not_quantifiable"
+      ],
+      "analytical_identity": "fc3bf6f4344386b1f1ee804a616533f9b05a297ead113f49df6fad2823002705"
+    }
+  },
+  {
+    "case": "C",
+    "evidence": {
+      "version": "relationship-observations.v1",
+      "authority": "observation_only",
+      "source_path": "sii_result.relationship_graph.edges",
+      "coverage": {
+        "evaluated": 1,
+        "eligible": 1,
+        "temporally_supported": 1,
+        "promoted_changed_edges": 1,
+        "displayed": 1,
+        "omitted": 0
+      },
+      "selection": "engine_order_first_12_not_primary_ranking",
+      "observations": [
+        {
+          "id": "relationship:synthetic_flow:synthetic_pressure",
+          "single_window_change_type": "stable",
+          "change_type": "strengthened",
+          "baseline_correlation": -0.668462,
+          "current_correlation": -0.868462,
+          "signed_correlation_delta": -0.2,
+          "eligible": true,
+          "promoted_changed_edge": true,
+          "edge_confidence": 0.73,
+          "data_quality_factor": 1.0,
+          "baseline_sample_count": 48,
+          "current_sample_count": 48,
+          "sample_sufficiency_factor": 1.0,
+          "temporal_persistence_observations": 6,
+          "temporal_persistence_supporting_observations": 6,
+          "temporal_persistence_direction": -1,
+          "temporal_persistence_direction_agreement": 1.0,
+          "temporal_persistence_supported": true,
+          "temporal_persistence_status": "supported",
+          "persistent_relationship_change": true,
+          "first_supported_observation": "2026-01-02T12:00:00+00:00",
+          "latest_supported_observation": "2026-01-07T12:00:00+00:00",
+          "source_path": "sii_result.relationship_graph.edges[0]",
+          "columns": [
+            "synthetic_flow",
+            "synthetic_pressure"
+          ],
+          "time_window": {
+            "baseline_start": "2025-12-01",
+            "baseline_end": "2025-12-31",
+            "current_start": "2026-01-07T00:00:00+00:00",
+            "current_end": "2026-01-07T12:00:00+00:00"
+          },
+          "operating_context": {
+            "status": "complete",
+            "match": "strong",
+            "confidence": "high"
+          },
+          "relationship_context": {
+            "operator_primary_eligible": true
+          },
+          "recurrence": {
+            "status": "unconfirmed",
+            "supported": false,
+            "direction": 0,
+            "episode_count": 0,
+            "opposite_direction_veto": false
+          },
+          "supporting_windows": [
+            {
+              "observed_at": "2026-01-02T12:00:00+00:00",
+              "signed_correlation_delta": -0.2,
+              "eligible": true,
+              "acceptable": true,
+              "source_dataset_id": null,
+              "time_window": {
+                "baseline_start": "2025-12-01",
+                "baseline_end": "2025-12-31",
+                "current_start": "2026-01-02T00:00:00+00:00",
+                "current_end": "2026-01-02T12:00:00+00:00"
+              },
+              "source_rows": [
+                {
+                  "window": "recent_end",
+                  "source_row": 96,
+                  "timestamp": "2026-01-02T12:00:00+00:00"
+                }
+              ]
+            },
+            {
+              "observed_at": "2026-01-03T12:00:00+00:00",
+              "signed_correlation_delta": -0.2,
+              "eligible": true,
+              "acceptable": true,
+              "source_dataset_id": null,
+              "time_window": {
+                "baseline_start": "2025-12-01",
+                "baseline_end": "2025-12-31",
+                "current_start": "2026-01-03T00:00:00+00:00",
+                "current_end": "2026-01-03T12:00:00+00:00"
+              },
+              "source_rows": [
+                {
+                  "window": "recent_end",
+                  "source_row": 144,
+                  "timestamp": "2026-01-03T12:00:00+00:00"
+                }
+              ]
+            },
+            {
+              "observed_at": "2026-01-04T12:00:00+00:00",
+              "signed_correlation_delta": -0.2,
+              "eligible": true,
+              "acceptable": true,
+              "source_dataset_id": null,
+              "time_window": {
+                "baseline_start": "2025-12-01",
+                "baseline_end": "2025-12-31",
+                "current_start": "2026-01-04T00:00:00+00:00",
+                "current_end": "2026-01-04T12:00:00+00:00"
+              },
+              "source_rows": [
+                {
+                  "window": "recent_end",
+                  "source_row": 192,
+                  "timestamp": "2026-01-04T12:00:00+00:00"
+                }
+              ]
+            },
+            {
+              "observed_at": "2026-01-05T12:00:00+00:00",
+              "signed_correlation_delta": -0.2,
+              "eligible": true,
+              "acceptable": true,
+              "source_dataset_id": null,
+              "time_window": {
+                "baseline_start": "2025-12-01",
+                "baseline_end": "2025-12-31",
+                "current_start": "2026-01-05T00:00:00+00:00",
+                "current_end": "2026-01-05T12:00:00+00:00"
+              },
+              "source_rows": [
+                {
+                  "window": "recent_end",
+                  "source_row": 240,
+                  "timestamp": "2026-01-05T12:00:00+00:00"
+                }
+              ]
+            },
+            {
+              "observed_at": "2026-01-06T12:00:00+00:00",
+              "signed_correlation_delta": -0.2,
+              "eligible": true,
+              "acceptable": true,
+              "source_dataset_id": null,
+              "time_window": {
+                "baseline_start": "2025-12-01",
+                "baseline_end": "2025-12-31",
+                "current_start": "2026-01-06T00:00:00+00:00",
+                "current_end": "2026-01-06T12:00:00+00:00"
+              },
+              "source_rows": [
+                {
+                  "window": "recent_end",
+                  "source_row": 288,
+                  "timestamp": "2026-01-06T12:00:00+00:00"
+                }
+              ]
+            },
+            {
+              "observed_at": "2026-01-07T12:00:00+00:00",
+              "signed_correlation_delta": -0.2,
+              "eligible": true,
+              "acceptable": true,
+              "source_dataset_id": null,
+              "time_window": {
+                "baseline_start": "2025-12-01",
+                "baseline_end": "2025-12-31",
+                "current_start": "2026-01-07T00:00:00+00:00",
+                "current_end": "2026-01-07T12:00:00+00:00"
+              },
+              "source_rows": [
+                {
+                  "window": "recent_end",
+                  "source_row": 336,
+                  "timestamp": "2026-01-07T12:00:00+00:00"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "unchanged": {
+      "classification": [
+        "unexplained_systemic_change"
+      ],
+      "primary_selection": [
+        "relationship:synthetic_flow:synthetic_pressure"
+      ],
+      "persistence_decision": [
+        {
+          "persistent": true,
+          "status": "persistent"
+        }
+      ],
+      "measurable_consequence_status": [
+        "not_quantifiable"
+      ],
+      "analytical_identity": "b8a42d08ab4c75a3cd26b031c55927c31acac53cec18689e19661819272b6ea9"
+    }
+  },
+  {
+    "case": "D",
+    "evidence": {
+      "version": "relationship-observations.v1",
+      "authority": "observation_only",
+      "source_path": "sii_result.relationship_graph.edges",
+      "coverage": {
+        "evaluated": 1,
+        "eligible": 1,
+        "temporally_supported": 0,
+        "promoted_changed_edges": 1,
+        "displayed": 1,
+        "omitted": 0
+      },
+      "selection": "engine_order_first_12_not_primary_ranking",
+      "observations": [
+        {
+          "id": "relationship:synthetic_flow:synthetic_pressure",
+          "single_window_change_type": "weakened",
+          "change_type": "weakened",
+          "baseline_correlation": 0.9,
+          "current_correlation": 0.5,
+          "signed_correlation_delta": -0.4,
+          "eligible": true,
+          "promoted_changed_edge": true,
+          "edge_confidence": 0.73,
+          "data_quality_factor": 1.0,
+          "baseline_sample_count": 48,
+          "current_sample_count": 48,
+          "sample_sufficiency_factor": 1.0,
+          "temporal_persistence_observations": 1,
+          "temporal_persistence_supporting_observations": 1,
+          "temporal_persistence_direction": -1,
+          "temporal_persistence_direction_agreement": 1.0,
+          "temporal_persistence_supported": false,
+          "temporal_persistence_status": "unconfirmed",
+          "persistent_relationship_change": false,
+          "first_supported_observation": "2026-01-02T12:00:00+00:00",
+          "latest_supported_observation": "2026-01-02T12:00:00+00:00",
+          "source_path": "sii_result.relationship_graph.edges[0]",
+          "columns": [
+            "synthetic_flow",
+            "synthetic_pressure"
+          ],
+          "time_window": {
+            "baseline_start": "2025-12-01",
+            "baseline_end": "2025-12-31",
+            "current_start": "2026-01-02T00:00:00+00:00",
+            "current_end": "2026-01-02T12:00:00+00:00"
+          },
+          "operating_context": {
+            "status": "limited",
+            "match": "weak",
+            "confidence": "high"
+          },
+          "relationship_context": {
+            "operator_primary_eligible": true
+          },
+          "recurrence": {
+            "status": "unconfirmed",
+            "supported": false,
+            "direction": 0,
+            "episode_count": 0,
+            "opposite_direction_veto": false
+          },
+          "supporting_windows": [
+            {
+              "observed_at": "2026-01-02T12:00:00+00:00",
+              "signed_correlation_delta": -0.4,
+              "eligible": true,
+              "acceptable": true,
+              "source_dataset_id": null,
+              "time_window": {
+                "baseline_start": "2025-12-01",
+                "baseline_end": "2025-12-31",
+                "current_start": "2026-01-02T00:00:00+00:00",
+                "current_end": "2026-01-02T12:00:00+00:00"
+              },
+              "source_rows": [
+                {
+                  "window": "recent_end",
+                  "source_row": 96,
+                  "timestamp": "2026-01-02T12:00:00+00:00"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "unchanged": {
+      "classification": [
+        "context_limited_relationship_change"
+      ],
+      "primary_selection": [
+        "relationship:synthetic_flow:synthetic_pressure"
+      ],
+      "persistence_decision": [
+        {
+          "persistent": false,
+          "status": "observing"
+        }
+      ],
+      "measurable_consequence_status": [
+        "not_quantifiable"
+      ],
+      "analytical_identity": "34efd29a58f9024b652773513c8c93fbabf6e84c5d8324a0f5a54a2a4801c770"
+    }
+  }
+]

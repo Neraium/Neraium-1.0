@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.services.output_semantics import runtime_value
+from app.services.relationship_observation_projection import relationship_observations
 
 import json
 from pathlib import Path
@@ -37,6 +38,9 @@ def project_result_for_transport(result: dict[str, Any] | None) -> dict[str, Any
     # SII result is still present; otherwise compact hydration would strip the
     # only source from which the bounded SII evidence projection can be made.
     projected["analysis_result"] = ensure_analysis_result(result)
+    disclosure = relationship_observations(result.get("sii_result"))
+    if disclosure is not None:
+        projected["relationship_observations"] = disclosure
     baseline = projected.get("baseline_analysis")
     if isinstance(baseline, dict) and "relationship_graph" in baseline:
         projected["baseline_analysis"] = {
