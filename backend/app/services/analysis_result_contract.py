@@ -13,7 +13,8 @@ from app.services.output_semantics import evidence_identifier, govern_runtime, r
 from app.services.product_evidence_contract import product_evidence
 from app.services.measurable_consequence import attach_measurable_consequences
 from app.services.resource_relationship_binding import ownership
-from app.services.analysis_explanations import build_analysis_explanation
+from app.services.relationship_authority import FINDINGS, VERSION, VERSION_FIELD, enabled
+from app.services.analysis_explanations import build_analysis_explanation, build_relationship_findings
 from app.services.condition_corroboration import ConditionCorroborationService
 from app.services.cumulative_counters import is_cumulative_counter_name
 from app.services.data_quality import parse_numeric_value
@@ -580,6 +581,7 @@ def build_analysis_result(
     if not raw_conditions and relationships:
         raw_conditions = ConditionCorroborationService().build_conditions(
             relationships=relationships,
+            relationship_authority=enabled(result),
             findings=insights,
             baseline_analysis=baseline,
             data_quality=data_quality,
@@ -694,9 +696,19 @@ def build_analysis_result(
     if telemetry_lineage is not None:
         payload["telemetry_lineage"] = telemetry_lineage
     payload = product_evidence(sanitize_payload(payload))
+    # Cached explanations are projections, not relationship authority. Rebuild
+    # prospective qualification from producer assertions and the exact registry;
+    # never let cached persistence or classification override that assessment.
+    scoped_findings = (
+        build_relationship_findings(relationship_model or baseline, result)
+        if enabled(result) else []
+    )
+    if enabled(result):
+        payload[VERSION_FIELD] = VERSION
+        payload[FINDINGS] = product_evidence(deepcopy(scoped_findings))
     # Attach after presentation sanitization to preserve exact calculation provenance.
     attach_measurable_consequences(
-        payload, source=result, original_findings=[*raw_conditions, *raw_insights],
+        payload, source=result, original_findings=[*raw_conditions, *raw_insights, *scoped_findings],
     )
     # Copy only retained producer metadata; historical reads never finalize it.
     registry = (result.get("sii_result") or {}).get("relationship_evidence_registry")

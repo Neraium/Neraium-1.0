@@ -88,6 +88,8 @@ _SHARED_ANALYSIS_FIELDS = (
     "conditions",
     "primary_object",
     "relationships",
+    "relationship_authority_version",
+    "relationship_findings",
     "fingerprint",
     "insights",
     "recommendations",

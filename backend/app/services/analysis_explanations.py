@@ -3,6 +3,14 @@ from __future__ import annotations
 from app.services.output_semantics import runtime_value
 
 from typing import Any
+from copy import deepcopy
+
+from app.services.relationship_authority import (
+    FINDINGS, VERSION, VERSION_FIELD, enabled, registry_for, group_persistence,
+    relationship_persistence,
+)
+from app.services.relationship_evidence_binding import REF, resolve, digest
+from app.services.resource_relationship_binding import ownership
 
 from app.services.output_semantics import separate_generation_events
 
@@ -99,6 +107,8 @@ def build_analysis_explanation(result: dict[str, Any]) -> dict[str, Any]:
         "relationships": relationships,
         "relationship_graph": relationship_model.get("relationship_graph", {}),
         "insights": insights,
+        **({VERSION_FIELD: VERSION, FINDINGS: build_relationship_findings(relationship_model, result)}
+           if enabled(result) else {}),
         "fingerprint": fingerprint,
         "evidence": evidence,
         "recommendations": recommendations,
@@ -260,7 +270,7 @@ def build_insights(
         operating_mode = finding_operating_mode(primary.get("operating_mode"), default_operating_mode)
         sensor_health = finding_sensor_health(group, all_sensor_health, all_columns)
         data_confidence = finding_data_confidence(primary.get("data_confidence"), data_quality)
-        persistence_info = relationship_persistence_info(
+        persistence_info = group_persistence() if enabled(result) else relationship_persistence_info(
             all_columns,
             persistence if isinstance(persistence, dict) else {},
             primary,
@@ -775,6 +785,52 @@ def finding_sensor_health(
         if signal:
             by_signal[signal] = profile
     return [by_signal[key] for key in sorted(by_signal)]
+
+
+def build_relationship_findings(relationship_model, result):
+    """Qualify assertions before grouping/ranking; never derive owners from a group."""
+    registry = registry_for(result)
+    quality = result.get("data_quality") or {}
+    default_mode = finding_operating_mode(relationship_model.get("operating_mode"), quality.get("operating_mode"))
+    findings = {}
+    for entry in relationship_model.get("top_relationship_changes", []):
+        if not isinstance(entry, dict):
+            continue
+        record = resolve(entry, registry, authorized_scope=registry.get("scope"))
+        if record is None:
+            continue
+        owner = ownership(entry)
+        persistence = relationship_persistence(entry, registry)
+        columns = record["source"]["columns"]
+        mode = finding_operating_mode(entry.get("operating_mode"), default_mode)
+        confidence = finding_data_confidence(entry.get("data_confidence"), quality)
+        health = finding_sensor_health([entry], quality.get("sensor_health") or [], columns)
+        evidence = relationship_evidence_context(entry)
+        classification = classify_finding(
+            data_confidence=confidence, sensor_health=health, operating_mode=mode,
+            persistence=persistence, relationship_evidence=evidence,
+        )
+        finding = {
+            "id": digest(VERSION, owner), VERSION_FIELD: VERSION, **owner,
+            "persistence": persistence, "classification": classification,
+            "finding_confidence_v1": classification.get("finding_confidence_v1", {}),
+            "operating_mode": mode, "data_confidence": confidence, "sensor_health": health,
+            "relationship_evidence": evidence, "source_tags": list(columns),
+            "time_window": deepcopy(record["source"]["measurement"]["window"]),
+            "source_time_ranges": [deepcopy(record["source"]["measurement"]["window"])],
+        }
+        # Explicit provenance only; no memory-ID, pair, or resource lookup.
+        for key in ("source_relationship_ids", "source_relationships", "relationship_id"):
+            if key in entry:
+                finding[key] = deepcopy(entry[key])
+        # Repeated identical assignments are the same scoped finding. Conflicting
+        # qualification inputs for an assignment must not be resolved by order.
+        key = entry[REF]
+        if key in findings and findings[key] != finding:
+            findings[key] = None
+        elif key not in findings:
+            findings[key] = finding
+    return [findings[key] for key in sorted(findings) if findings[key] is not None]
 
 
 def relationship_persistence_info(

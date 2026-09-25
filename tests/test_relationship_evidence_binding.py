@@ -377,6 +377,10 @@ def test_existing_calculation_ast_unchanged_except_binding_metadata(path, functi
 
         def visit_Assign(self, node):
             target = node.targets[0]
+            if (function == 'evaluate_sii'
+                    and ast.dump(node, include_attributes=False) == ast.dump(
+                        ast.parse('result[VERSION_FIELD] = VERSION').body[0], include_attributes=False)):
+                return None
             if isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Name) and target.slice.id in {'SOURCE', 'REGISTRY'}:
                 return None
             if isinstance(target, ast.Name) and target.id == 'evidence_scope':
@@ -391,6 +395,11 @@ def test_existing_calculation_ast_unchanged_except_binding_metadata(path, functi
             return self.generic_visit(node)
 
         def visit_ImportFrom(self, node):
+            if (function == 'evaluate_sii'
+                    and ast.dump(node, include_attributes=False) == ast.dump(ast.parse(
+                        'from app.services.relationship_authority import VERSION, VERSION_FIELD'
+                    ).body[0], include_attributes=False)):
+                return None
             return None if node.module in {'app.services.relationship_evidence_binding', 'app.services.resource_relationship_binding'} else node
 
         def visit_Expr(self, node):

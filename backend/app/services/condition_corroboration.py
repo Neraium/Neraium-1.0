@@ -11,6 +11,7 @@ from app.services.output_semantics import canonical_json, runtime_metadata
 from app.services.output_semantics import separate_generation_events
 
 from app.services.change_trajectory import build_change_trajectory
+from app.services.relationship_authority import group_persistence
 from app.services.finding_classification import (
     CONTEXT_LIMITED_RELATIONSHIP_CHANGE,
     INSUFFICIENT_EVIDENCE,
@@ -159,6 +160,7 @@ class ConditionCorroborationService:
         telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
         site_name: str | None = None,
         generated_at: str | None = None,
+        relationship_authority: bool = False,
     ) -> list[dict[str, Any]]:
         normalized = [
             _normalize_relationship(item, index)
@@ -208,6 +210,7 @@ class ConditionCorroborationService:
             related_finding = _matching_finding(findings, support)
             classification = _condition_classification(
                 related_finding=related_finding,
+                relationship_authority=relationship_authority,
                 support=support,
                 data_quality=data_quality,
                 operating_mode=operating_mode,
@@ -800,10 +803,12 @@ def _condition_classification(
     data_quality: dict[str, Any],
     operating_mode: dict[str, Any],
     baseline_analysis: dict[str, Any],
+    relationship_authority: bool = False,
 ) -> dict[str, Any]:
     explicit = (related_finding or {}).get("classification")
     if (
-        isinstance(explicit, dict)
+        not relationship_authority
+        and isinstance(explicit, dict)
         and explicit.get("type")
         and explicit.get("type") != KNOWN_OPERATIONAL_CHANGE
     ):
@@ -822,20 +827,22 @@ def _condition_classification(
             "rating": _data_quality_rating(data_quality),
             "reasons": _list(data_quality.get("warnings")),
         }
-    trajectory = baseline_analysis.get("drift_trajectory")
-    persistent_signals = set(
-        (trajectory or {}).get("persistent_columns") or []
-        if isinstance(trajectory, dict)
-        else []
-    )
-    relationship_persistence = any(
-        item.get("persistent") is True
-        or str(item.get("persistence_status") or item.get("status") or "").lower()
-        in {"persistent", "confirmed", "sustained"}
-        or _score(item.get("persistence_score")) >= 0.6
-        for item in support
-    )
-    persistent = bool(persistent_signals & affected) or relationship_persistence
+    persistent = False
+    if not relationship_authority:
+        trajectory = baseline_analysis.get("drift_trajectory")
+        persistent_signals = set(
+            (trajectory or {}).get("persistent_columns") or []
+            if isinstance(trajectory, dict)
+            else []
+        )
+        relationship_persistence = any(
+            item.get("persistent") is True
+            or str(item.get("persistence_status") or item.get("status") or "").lower()
+            in {"persistent", "confirmed", "sustained"}
+            or _score(item.get("persistence_score")) >= 0.6
+            for item in support
+        )
+        persistent = bool(persistent_signals & affected) or relationship_persistence
     relationship_evidence = {
         "baseline_sample_size": primary.get("baseline_sample_size"),
         "recent_sample_size": primary.get("recent_sample_size"),
@@ -846,7 +853,7 @@ def _condition_classification(
         data_confidence=data_confidence,
         sensor_health=sensor_health,
         operating_mode=operating_mode,
-        persistence={
+        persistence=group_persistence() if relationship_authority else {
             "persistent": persistent,
             "status": "persistent" if persistent else "not_established",
             "summary": (

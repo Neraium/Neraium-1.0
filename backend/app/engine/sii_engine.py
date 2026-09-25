@@ -1239,6 +1239,8 @@ def evaluate_sii(
     result[REGISTRY] = finalize(relationship_model, canonical_graph, scope=evidence_scope, mode_conditioned=mode_conditioned)
     from app.services.resource_relationship_binding import finalize_resources
     finalize_resources(phase_4["expected_behavior"], result[REGISTRY], authorized_scope=evidence_scope)
+    from app.services.relationship_authority import VERSION, VERSION_FIELD
+    result[VERSION_FIELD] = VERSION
     if paired:
         paired_provenance["engine"] = dict(result["engine"])
         result["supplied_reference"] = paired_provenance

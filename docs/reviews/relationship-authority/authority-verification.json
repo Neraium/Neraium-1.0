@@ -1,0 +1,413 @@
+{
+  "baseline": "774892e4cfa237195bee51714ae789c061086380",
+  "analytical_math_changed": false,
+  "source_sha256": {
+    "backend/app/engine/sii_engine.py": "7054725810abad8a22b078d7cafb2bb0e573837b11fcc7dfbb90759d694c86be",
+    "backend/app/services/relationship_authority.py": "a74cce4ad5b2ed0d81b901b5dab01554cea0d4e27b258f8b34290ae23ade4af8",
+    "backend/app/services/analysis_explanations.py": "d560a162d829659cc2e5aef2942501622800b908c195dd36c7ded333121b41de",
+    "backend/app/services/analysis_result_contract.py": "ad8722f60a7151d12a859b2d40a27d14707ef7ddc3c5ab5e2cf8f4a743979748",
+    "backend/app/services/condition_corroboration.py": "81d8323bb52b5bc57852061032ceb916b954bd97adf06eba9de5ed885b6052cc",
+    "backend/app/services/measurable_consequence.py": "d6036a31785394d6e2506a1d42049854f0f17c044c3244fea575456bbbd1e4b3",
+    "backend/app/services/upload_jobs.py": "982410f6b462070896abc3ac177092556cba3961f9f1daea541ad1b48d0e8261",
+    "backend/app/services/telemetry_result_projection.py": "a77ccdab490454f0c3f4fbd053b803a72d3c824edc985715b29204fd18cf93e6",
+    "tests/test_relationship_authority.py": "f55f0a634d942ea8570944591cd58501d45f33948751b52abc12b371fa5801de",
+    "tests/test_relationship_evidence_binding.py": "b4a1aed9e0d611d9c13e2c0fe720d50a6a27db9e345ab4fe481871343cd861d7"
+  },
+  "runs": [
+    {
+      "run": "resumed",
+      "summary": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "49",
+        "time": "73.275",
+        "timestamp": "2026-09-25T14:15:07.231839+00:00",
+        "hostname": "ip-172-31-41-178"
+      },
+      "cases": [
+        {
+          "name": "tests.test_relationship_authority::test_members_cannot_suppress_or_promote[members0]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_members_cannot_suppress_or_promote[members1]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_members_cannot_suppress_or_promote[members2]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_members_cannot_suppress_or_promote[members3]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_members_cannot_suppress_or_promote[members4]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_members_cannot_suppress_or_promote[members5]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_members_cannot_suppress_or_promote[members6]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_recurrence_and_abrupt_promotion_are_not_persistence",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_context_quality_and_health_remain_independent",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_global_and_failure_fallback[False]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_global_and_failure_fallback[True]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_grouping_ranking_and_primary_mutations",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_condition_overlap_cannot_copy_classification",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_consequence_exact_owner_and_mismatch",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_identical_signal_persistence_different_relationships",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_unbound_or_conflicting_source_cannot_authorize",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_authority::test_historical_explanation_matches_committed_implementation",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_analysis_result_contract::test_csv_analysis_returns_canonical_analysis_result",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_analysis_result_contract::test_behavior_windows_use_adaptive_baseline_indices",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_analysis_result_contract::test_analysis_completion_does_not_require_replay",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_analysis_result_contract::test_saved_analysis_result_is_viewable_without_replay",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_analysis_result_contract::test_canonical_insights_and_fingerprint_are_evidence_backed",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_analysis_result_contract::test_latest_upload_does_not_reuse_stale_analysis_for_new_upload",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_quantified_and_provenance",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_unsupported_evidence_refuses_number[persistence]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_unsupported_evidence_refuses_number[window]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_unsupported_evidence_refuses_number[sibling]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_unsupported_evidence_refuses_number[unit]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_unsupported_evidence_refuses_number[resource]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_unsupported_evidence_refuses_number[ambiguous]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_unsupported_evidence_refuses_number[summary_only]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_unsupported_evidence_refuses_number[disjoint]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_exact_window_excludes_external_points_without_mutation",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_quality_barrier_is_retained",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_existing_expected_model_emits_aligned_evidence",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_aligned_evidence_never_drops_missing_predictor_or_uses_sample_lag",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_canonical_analysis_attaches_exact_finding_owned_consequence",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_findings_api_uses_package_and_preserves_insufficient_state",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_api_preserves_original_values_and_gates_boolean_rates",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_malformed_model_identity_cannot_pass_ownership_gate[bad0]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_malformed_model_identity_cannot_pass_ownership_gate[bad1]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_missing_or_incomparable_operating_context_withholds_number[context0]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_missing_or_incomparable_operating_context_withholds_number[context1]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_measurable_consequence::test_missing_or_incomparable_operating_context_withholds_number[context2]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_sii_evidence_transport::test_real_engine_relationship_evidence_reaches_transport_projection",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_sii_evidence_transport::test_canonical_sii_evidence_survives_analysis_and_transport_projection",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_sii_evidence_transport::test_transport_upgrades_an_existing_analysis_contract_before_stripping_sii",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_sii_evidence_transport::test_unavailable_phase4_and_missing_sii_remain_explicit",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_sii_evidence_transport::test_durable_evidence_record_and_api_model_preserve_bounded_projection",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "run": "completion",
+      "summary": {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "1",
+        "skipped": "0",
+        "tests": "42",
+        "time": "22.520",
+        "timestamp": "2026-09-25T14:15:49.568844+00:00",
+        "hostname": "ip-172-31-41-178"
+      },
+      "cases": [
+        {
+          "name": "tests.test_relationship_authority::test_scoped_authority_survives_upload_and_connector_transport",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_evidence_binding::test_existing_calculation_ast_unchanged_except_binding_metadata[backend/app/services/relationship_baselines.py-build_relationship_baseline]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_evidence_binding::test_existing_calculation_ast_unchanged_except_binding_metadata[backend/app/engine/sii/mode_conditioned_baseline.py-_conditioned_edge]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_evidence_binding::test_existing_calculation_ast_unchanged_except_binding_metadata[backend/app/engine/sii_engine.py-evaluate_sii]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_evidence_binding::test_real_engine_upload_storage_and_connector_projection",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_evidence_binding::test_real_connector_generation_retains_registry_and_retries",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_relationship_evidence_binding::test_real_upload_compatibility_path_preserves_binding",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_resource_relationship_binding::test_eligible_numerical_and_existing_gate_invariance_against_committed_adapter",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_single_relationship_remains_isolated",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_multiple_connected_relationships_form_one_corroborated_condition",
+          "status": "failed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_same_system_and_time_without_shared_telemetry_does_not_false_corroborate",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_shared_signal_outside_the_comparison_window_does_not_false_corroborate",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_five_connected_relationships_can_reach_systemic_strength",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_opposite_connected_relationship_is_retained_as_conflicting_evidence",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_connected_low_confidence_relationship_is_retained_as_uncertain_evidence",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_zero_current_strength_is_preserved_in_relationship_evidence",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_trajectory_classification[Strengthening-inputs0]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_trajectory_classification[Recovering-inputs1]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_trajectory_classification[Recurring-inputs2]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_trajectory_classification[Stable shift-inputs3]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_trajectory_classification[Sudden-inputs4]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_trajectory_classification[Gradual-inputs5]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_trajectory_classification[Weakening-inputs6]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_trajectory_classification[Intermittent-inputs7]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_comparable_historical_episode_retrieval_is_like_for_like_and_additive",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_condition_creation_includes_localization_timeline_and_next_checks",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_condition_duration_and_copy_use_the_relationship_evidence_window",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_isolated_condition_title_stays_on_the_observed_relationship",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_corroborated_title_uses_shared_boundary_without_claiming_failure",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_evidence_duration_is_omitted_for_missing_or_inconsistent_bounds",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_localization_stops_at_telemetry_supported_boundary",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_condition_escalation_never_uses_one_weak_relationship",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_condition_escalation_uses_all_governed_inputs",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_analysis_contract_adds_conditions_without_removing_legacy_objects",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_condition_intelligence::test_persisted_evidence_record_keeps_condition_as_primary_object",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_telemetry_result_projection::test_projection_routes_exact_result_without_normalized_records_or_recalculation",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_telemetry_result_projection::test_stable_and_insufficient_results_preserve_empty_finding_state[stable]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_telemetry_result_projection::test_stable_and_insufficient_results_preserve_empty_finding_state[insufficient]",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_telemetry_result_projection::test_large_channels_and_catalogs_are_bounded_with_explicit_source_metadata",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_telemetry_result_projection::test_projection_fails_closed_on_version_scope_or_digest_mismatch",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_telemetry_result_projection::test_projection_is_deterministic_and_does_not_mutate_exact_execution",
+          "status": "passed"
+        },
+        {
+          "name": "tests.test_telemetry_result_projection::test_measurable_consequence_survives_canonical_projection_without_recalculation",
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "baseline_failure_verified": "test_multiple_connected_relationships_form_one_corroborated_condition: complete committed and candidate corroboration outputs equal; committed output also violates sorted-order assertion"
+}

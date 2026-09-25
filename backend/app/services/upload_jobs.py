@@ -1736,7 +1736,9 @@ def _build_csv_result(
         ),
     )
     result["analysis_explanation"] = build_analysis_explanation(result)
+    from app.services.relationship_authority import enabled as relationship_authority_enabled
     result["conditions"] = ConditionCorroborationService().build_conditions(
+        relationship_authority=relationship_authority_enabled(result),
         relationships=result["analysis_explanation"].get("relationships", []),
         findings=result["analysis_explanation"].get("insights", []),
         rows=rows,

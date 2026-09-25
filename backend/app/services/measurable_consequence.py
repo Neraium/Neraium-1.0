@@ -297,7 +297,7 @@ def attach_measurable_consequences(
         or source.get("analysis_run_id")
         or analysis.get("analysis_id")
     )
-    for field in ("conditions", "insights"):
+    for field in ("conditions", "insights", "relationship_findings"):
         for finding in analysis.get(field, []):
             identity = str(finding.get("condition_id") or finding.get("id"))
             candidates = originals.get(identity, [])
