@@ -4,6 +4,7 @@ from unittest.mock import patch
 from app.engine.sii_engine import evaluate_sii
 from app.services.analysis_result_contract import build_analysis_result
 from app.services.output_semantics import semantic_digest
+from relationship_evidence_binding_cases import without_binding_metadata
 from test_sii_supplied_reference import contract
 
 FAILURE_TEXT = ('EXCEPTION_CANARY module=MODULE_CANARY traceback=TRACEBACK_CANARY '
@@ -34,6 +35,6 @@ def graph_fallback_invariants(upload):
         ) if key in edge} for edge in graph['edges']],
         'finding_persistence': [item.get('persistence') for item in analysis['insights']],
         'measurable_consequence': [item.get('measurable_consequence') for item in analysis['insights']],
-        'analytical_digest': semantic_digest(analysis),
-        'graph_digest': semantic_digest(graph),
+        'analytical_digest': semantic_digest(without_binding_metadata(analysis)),
+        'graph_digest': semantic_digest(without_binding_metadata(graph)),
     }

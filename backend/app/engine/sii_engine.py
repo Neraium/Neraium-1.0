@@ -274,6 +274,7 @@ def evaluate_sii(
             dict_rows,
             numeric_columns_used,
             timestamp_column=timestamp_column,
+            binding_signal_units=signal_units,
             **({"reference_rows": reference_dict_rows} if paired else {}),
             **({"baseline_window_limit": 12000, "recent_window_limit": 12000} if paired else {}),
             total_row_count=int(cfg.get("row_count_total") or len(dict_rows)),
@@ -1229,6 +1230,13 @@ def evaluate_sii(
             "temporal_analysis": temporal_analysis,
         },
     }
+    # Identity metadata is finalized after analytical consumers have completed.
+    from app.services.relationship_evidence_binding import REGISTRY, digest, finalize
+    evidence_scope = (
+        digest("relationship-scope.v1", phase4_scope.as_dict())
+        if phase4_scope is not None else "result-local"
+    )
+    result[REGISTRY] = finalize(relationship_model, canonical_graph, scope=evidence_scope, mode_conditioned=mode_conditioned)
     if paired:
         paired_provenance["engine"] = dict(result["engine"])
         result["supplied_reference"] = paired_provenance

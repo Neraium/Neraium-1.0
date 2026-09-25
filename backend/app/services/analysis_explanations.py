@@ -1239,6 +1239,9 @@ def build_relationships(
             compact_dict(
                 {
                     "id": f"relationship-{index}",
+                    **({"relationship_evidence_ref": item["relationship_evidence_ref"]} if "relationship_evidence_ref" in item else {}),
+                    **({"relationship_source_ref": item["relationship_source_ref"]} if "relationship_source_ref" in item else {}),
+                    **({"relationship_assessment_binding": item["relationship_assessment_binding"]} if "relationship_assessment_binding" in item else {}),
                     "name": label,
                     "columns": columns,
                     "display_columns": display_columns,
@@ -2183,6 +2186,9 @@ def relationship_contribution(item: dict[str, Any], index: int, columns: list[st
     return compact_dict(
         {
             "id": f"relationship-{index}",
+            **({"relationship_evidence_ref": item["relationship_evidence_ref"]} if "relationship_evidence_ref" in item else {}),
+            **({"relationship_source_ref": item["relationship_source_ref"]} if "relationship_source_ref" in item else {}),
+            **({"relationship_assessment_binding": item["relationship_assessment_binding"]} if "relationship_assessment_binding" in item else {}),
             "columns": columns,
             "display_columns": display_columns,
             "label": relationship_label(item),

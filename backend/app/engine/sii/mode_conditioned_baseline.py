@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import time
+
+from app.services.relationship_evidence_binding import SOURCE, try_source_evidence
 from itertools import combinations
 from typing import Any
 
@@ -8,6 +10,7 @@ from app.engine.relationship_change import relationship_change_type as _change_t
 
 from app.engine.sii.common import (
     clamp,
+    finite_number,
     module_envelope,
     numeric_values,
     paired_values,
@@ -391,7 +394,7 @@ def _conditioned_edge(
         )
         if (anchor := next((item for item in source_rows if item["window"] == label), {})).get("timestamp")
     }
-    return {
+    result = {
         **raw_edge,
         "id": raw_edge.get("id") or f"mode_relationship:{left}:{right}",
         "source": f"metric:{left}",
@@ -432,6 +435,21 @@ def _conditioned_edge(
             "features": recent_mode.get("features", {}),
         },
     }
+
+    # This comparison was recalculated: never inherit global producer lineage.
+    def binding_rows(rows):
+        return [{left: finite_number(row.get(left)), right: finite_number(row.get(right)),
+                 **({timestamp_column: row.get(timestamp_column)} if timestamp_column else {})}
+                for row in rows]
+
+    result[SOURCE] = try_source_evidence(
+        result, columns=[left, right], baseline_rows=binding_rows(selected_rows),
+        current_rows=binding_rows(recent_rows), timestamp_column=timestamp_column,
+        units=raw_edge.get("signal_units") or (raw_edge.get(SOURCE) or {}).get("units"),
+        selection={"mode_id": recent_mode.get("mode_id"), "features": recent_mode.get("features", {})},
+        method="pearson-mode.v1",
+    )
+    return result
 
 
 def _conditioned_source_rows(

@@ -5,6 +5,8 @@ from typing import Any
 
 import pandas as pd
 
+from app.services.relationship_evidence_binding import SOURCE, try_source_evidence
+
 from app.engine.relationship_change import (
     relationship_change_type as _relationship_change_type,
     relationship_change_promotable,
@@ -409,6 +411,7 @@ def build_relationship_baseline(
     numeric_columns: list[str],
     *,
     total_row_count: int | None = None,
+    binding_signal_units: dict[str, str | None] | None = None,
     raw_signal_count: int | None = None,
     reference_rows: list[dict[str, Any]] | None = None,
     timestamp_column: str | None = None,
@@ -631,6 +634,23 @@ def build_relationship_baseline(
             edge.update(importance)
             edge["display_columns"] = display_columns
             edge["source_column_metadata"] = [signal_metadata(left_col, signal_catalog), signal_metadata(right_col, signal_catalog)]
+            # Bind while this calculation still owns both projections. Use the
+            # numerical frames actually consumed by pandas, including missingness.
+            def binding_rows(frame, selected_rows):
+                records = frame[[left_col, right_col]].to_dict("records")
+                if timestamp_column:
+                    for record, row in zip(records, selected_rows):
+                        record[timestamp_column] = row.get(timestamp_column)
+                return records
+
+            edge[SOURCE] = try_source_evidence(
+                edge, columns=[left_col, right_col],
+                baseline_rows=binding_rows(baseline_frame, baseline_rows_for_relationships),
+                current_rows=binding_rows(recent_frame, recent_rows_for_relationships),
+                timestamp_column=timestamp_column,
+                units={c: (binding_signal_units or {}).get(c) or signal_catalog.get(c, {}).get("canonical_unit")
+                       or signal_catalog.get(c, {}).get("unit") for c in (left_col, right_col)},
+            )
             graph_edges.append(edge)
 
             relationship_context = edge.get("relationship_context") if isinstance(edge.get("relationship_context"), dict) else {}
@@ -646,6 +666,7 @@ def build_relationship_baseline(
 
             candidates.append(
                 {
+                    SOURCE: edge[SOURCE],
                     "relationship": f"{left_col} <-> {right_col}",
                     "display_relationship": f"{display_columns[0]} <-> {display_columns[1]}",
                     "display_columns": display_columns,

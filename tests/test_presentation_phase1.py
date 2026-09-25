@@ -7,6 +7,7 @@ import pytest
 
 from app.engine.sii_engine import evaluate_sii
 from app.services.output_semantics import canonical_json, semantic_digest
+from relationship_evidence_binding_cases import without_binding_metadata
 from app.services.relationship_observation_projection import relationship_observations
 from app.services.telemetry_result_projection import build_canonical_result_projection
 from app.services.upload_persistence import project_result_for_transport
@@ -116,12 +117,12 @@ def test_real_engine_classifications_and_semantic_identity_match_retained_baseli
     retained = json.loads((Path(__file__).parent / 'fixtures/presentation_phase1_invariants.json').read_text())
     for case in retained:
         result = evaluate_sii(**contract(case['rows']))
-        before = semantic_digest(result['analysis_result'])
+        before = semantic_digest(without_binding_metadata(result['analysis_result']))
         original = deepcopy(result)
         upload = {'sii_result': result, 'analysis_result': result['analysis_result']}
         transported = project_result_for_transport(upload)
         assert before == case['analytical_digest']
-        assert semantic_digest(transported['analysis_result']) == before
+        assert semantic_digest(without_binding_metadata(transported['analysis_result'])) == before
         assert result == original
         assert [item['classification']['type'] for item in result['analysis_result']['insights']] == case['classifications']
         assert transported['relationship_observations']['observations']

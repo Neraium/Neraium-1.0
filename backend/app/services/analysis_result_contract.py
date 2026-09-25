@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 import math
 import re
 from datetime import datetime, timedelta, timezone
@@ -416,6 +418,9 @@ def build_analysis_result(
             compact_dict(
                 {
                     "id": relationship_id,
+                    **({"relationship_evidence_ref": item["relationship_evidence_ref"]} if "relationship_evidence_ref" in item else {}),
+                    **({"relationship_source_ref": item["relationship_source_ref"]} if "relationship_source_ref" in item else {}),
+                    **({"relationship_assessment_binding": item["relationship_assessment_binding"]} if "relationship_assessment_binding" in item else {}),
                     "source": first_present(item.get("source"), f"tag:{columns[0]}" if columns else ""),
                     "target": first_present(item.get("target"), f"tag:{columns[1]}" if len(columns) > 1 else ""),
                     "relationship_type": first_present(item.get("relationship_type"), "linear_correlation"),
@@ -691,6 +696,10 @@ def build_analysis_result(
     attach_measurable_consequences(
         payload, source=result, original_findings=[*raw_conditions, *raw_insights],
     )
+    # Copy only retained producer metadata; historical reads never finalize it.
+    registry = (result.get("sii_result") or {}).get("relationship_evidence_registry")
+    if isinstance(registry, dict):
+        payload["relationship_evidence_registry"] = deepcopy(registry)
     return govern_runtime(payload, identity_contract=identity_contract)
 
 
