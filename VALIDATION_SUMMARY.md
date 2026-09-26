@@ -1,0 +1,21 @@
+# Neraium validation summary
+
+The current engine was frozen at commit `97d267d317fcce4b4424cf2141e97e87680acfc0`.
+Production analytical logic, thresholds and governance were unchanged.
+
+Neraium’s evidence to date is controlled software validation and saved sandbox connectivity evidence, not field-validated performance. We froze the current engine and retained inputs, outputs, exceptions, source hashes and replay commands. A focused regression run passed all 861 tests.
+
+The main battery executed 1,403 engine calls. None of 40 stable, noisy, transient or alternating control sequences gained temporal persistence support (320 comparison windows). All 48 sustained synthetic cases with correlation displacements of 0.15–0.30 gained support at the sixth comparison window; smaller tested displacements did not. These are designed fixtures, not population accuracy estimates.
+
+The included 58-window replay of archived synthetic chilled-water telemetry produced continuous support in 10 windows and recurring support in 8, with neither on its stable, transient or alternating target pairs.
+
+All 140 successful in-process repeats matched the specified evidence outputs. Fresh JSON replay matched 3 of 4 selected cases; the remaining case exposed dictionary-order sensitivity in operating-context evidence. Restoring source-column order reproduced its original hash.
+
+A million-row upload completed, with analysis bounded to 100,000 rows, in 400.5 seconds under concurrent local load—exceeding the existing 300-second guard. The 100,000-row guard passed when rerun without the other validation workloads. Degraded-data tests exposed limits, including high confidence on a partially flatlined fixture.
+
+Saved Siemens Building X sandbox data demonstrates historical access, but its sparse export is insufficient for persistent-relationship validation. The report retains failures, limited outcomes and incomplete regression coverage. It supports no prediction, diagnosis, root-cause, prescribed-action, live-field-performance or algorithmic-novelty claim.
+
+[Full report](docs/validation/prize-2026/VALIDATION_REPORT.md) ·
+[Machine-readable assessment](docs/validation/prize-2026/raw/assessment.json) ·
+[Claim traceability](docs/validation/prize-2026/CLAIM_TRACEABILITY.json) ·
+[Reproduction](docs/validation/prize-2026/REPRODUCE.md)

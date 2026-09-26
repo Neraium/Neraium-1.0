@@ -1,0 +1,55 @@
+{
+  "decision": "RELEASE_BLOCKED_REPRODUCIBILITY",
+  "candidate": "Neraium 1.0 RC1",
+  "recorded_at_utc": "2026-09-24T20:39:39.239053+00:00",
+  "branch": "fix/deterministic-governed-output",
+  "pre_release_head": "a4ea0a992841d281e19de8119ecd1275a0d7e654",
+  "blocker": {
+    "test": "tests/test_complete_upload_semantics.py::test_retained_146_leaf_inventory_is_exhaustive",
+    "reason": "Required retained evidence files absent from worktree; unmarked test is included by CI pytest tests command",
+    "missing_paths": [
+      "docs/performance/production-processing-2026/raw/end_to_end-10000-warmup.semantic.json.gz",
+      "docs/performance/production-processing-2026/raw/end_to_end-10000-1.semantic.json.gz",
+      "docs/performance/production-processing-2026/complete-upload-repair/FIELD_TRACE.json"
+    ],
+    "resolution": "User-reviewed restoration of authoritative fixtures or explicit historical-test packaging decision; no silent fixes",
+    "test_definition_line": 154,
+    "test_decorators": [],
+    "ci_command": "python -m pytest tests",
+    "ci_path": ".github/workflows/ci.yml:42"
+  },
+  "inventory": {
+    "tracked": 1140,
+    "dirty": 58,
+    "untracked": 9440,
+    "ignored": 27188,
+    "dirty_untracked_classification_counts": {
+      "BENCHMARK_ARTIFACT": 9179,
+      "CERTIFIED_PRODUCTION_CHANGE": 54,
+      "CERTIFIED_SECURITY_EVIDENCE": 107,
+      "GENERATED_RUNTIME_STATE": 60,
+      "CERTIFIED_VALIDATION_EVIDENCE": 70,
+      "CERTIFIED_TEST_CHANGE": 28
+    }
+  },
+  "release_boundary": "NOT_FINALIZED",
+  "secret_sensitive_audit": "NOT_COMPLETED_AFTER_STOP",
+  "reproducibility": "BLOCKED",
+  "integration_certification": "INTEGRATION_CERTIFIED (retained)",
+  "security_certification": "SECURITY_CLOSEOUT_COMPLETE_WITH_DEPLOYMENT_LIMITATIONS",
+  "certified_candidate_hashes": "PASS: 647 files",
+  "comparator_hashes": "PASS",
+  "static_checks": {
+    "missing_fixture_check": "CONFIRMED_STATICALLY",
+    "frontend_build": "NOT_RUN_AFTER_STOP",
+    "syntax_import_startup": "NOT_RUN_AFTER_STOP",
+    "full_suite": "NOT_RUN",
+    "diff_check": "PASS"
+  },
+  "production_changes_during_release": false,
+  "files_staged": [],
+  "commit_message": "release: certify Neraium 1.0 RC1",
+  "commit_tag_merge_push_performed": false,
+  "10k_500k_1m_lbnl_performed": false,
+  "existing_index_paths": []
+}

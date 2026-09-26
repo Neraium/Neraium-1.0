@@ -1,0 +1,45 @@
+{
+  "frozen_at_utc": "2026-09-24T18:00:22.498313+00:00",
+  "contract": "governed-output-semantics.v2",
+  "producer_contracts": [
+    "execution.v1",
+    "connector-window.v1",
+    "paired-reference.v1",
+    "complete-upload-evidence.v2"
+  ],
+  "authority": "ARCHITECTURAL_DECISION.md and current user authorization; no production changes",
+  "comparator": "existing production semantic_content and semantic_digest; prospective freeze of current bytes",
+  "runtime_differences": [
+    "Only runtime_metadata mappings marked contract_version=execution-metadata.v1",
+    "generated_at compatibility alias on governed-output-semantics.v2 mappings",
+    "analysis_id and upload_id compatibility aliases only on governed-output-semantics.v2 + identity_contract=execution.v1",
+    "Upload-owned paths and fields exactly enumerated by frozen upload_output_semantics._owned_records; includes request_id, upload_session_id, attempt_id",
+    "Producer-owned generic run/job/upload IDs, generation events and profiling relocated by frozen govern_runtime and production encoders"
+  ],
+  "prohibited_exclusions": [
+    "No analytical values, evidence, ranking, primary, list order, source time, qualification, consequence, source identity, behavioral identity or provenance removed",
+    "No runtime alias description may redefine semantic fields",
+    "No new filters or normalization after execution starts"
+  ],
+  "source_identity": "Connector-window, paired-reference and complete-upload durable ownership remains semantic; raw source digest, source chronology and evidence links retained",
+  "behavioral_identity": "UTC attribution and explicit source_run_id/content fallback; generic execution IDs cannot determine snapshot source identity",
+  "ranking": "Descending analytical importance, absolute delta, confidence; exact ties preserve supplied candidate order; no ID tie-break",
+  "source_bridge": "Unchanged tests/promotion_contract_bridge.py; version/build translation, normal upload producer encoding and result-link recomputation; two predeclared Aletheia removals only; no analytical transformations",
+  "version_differences": "v1 historical hashes are not asserted equal to v2; original records retain versions/bytes/hash interpretation",
+  "canonical_evidence": "Complete semantic comparison includes canonical replay and ordered evidence references; evidence-store hash and four provenance links equal result_digest; immutable artifact bytes remain independently identity-validated",
+  "aletheia": "Zero EVP audit records and no sii_intelligence.aletheia_gate; historical reader retained",
+  "stack": "#1 #2 #3 #5 present; #3 ACCEPT_WITH_LIMITATIONS; #4 absent",
+  "read_only": "No equipment write-backs or actuation; isolated local evidence/runtime persistence is required by existing gate",
+  "workload": "Exactly tests/test_complete_upload_semantics.py::test_complete_10000_upload_repeat; two uploads, 10000 observations and three signals each; retained production worker; live clocks; no scale controller",
+  "resource_limits": {
+    "sample_timeout_seconds": 180,
+    "peak_rss_bytes": 5368709120,
+    "minimum_available_memory_bytes": 1073741824,
+    "minimum_free_disk_bytes": 2147483648,
+    "threads": 1
+  },
+  "additional_read_only_validation": "Inspect saved outputs for runtime attempt differences and semantic invariance under changes only to declared execution metadata; preserve full differences on failure. No additional workload.",
+  "tie_validation_limit": "10K is not an exact-tie experiment; frozen source inspection and retained passing focused tie regressions establish tie behavior",
+  "static_checks": "PASS; 717 target manifest entries and 2696 SOURCE entries verified; runner functions equal #4-absent SOURCE; three untouched target-only files equal preintegration hashes; other properties inspected in source; git diff --check passed",
+  "no_rerun": true
+}

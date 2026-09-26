@@ -1,0 +1,126 @@
+{
+  "decision": "SECURITY_CLOSEOUT_COMPLETE_WITH_DEPLOYMENT_LIMITATIONS",
+  "completed_at_utc": "2026-09-24T20:25:02.259206+00:00",
+  "scope": "Final unresolved application finding S08 only",
+  "S08": "FIXED",
+  "dispositions": {
+    "S07": "FIXED: session JSON bearer disclosure",
+    "S08": "FIXED",
+    "S13": "FIXED: CSV presentation only",
+    "S14": "FIXED: public diagnostic access/minimization"
+  },
+  "security_cases_passed": 27,
+  "analytical_cases_passed": 15,
+  "new_frontend_tests": 0,
+  "gate_invocations_this_s08_task": 1,
+  "complete_gate_status": "PASS",
+  "complete_uploads": 2,
+  "observations_per_upload": 10000,
+  "target_comparisons": 4,
+  "semantic_mismatches": 0,
+  "semantic_digest": "bd70db4d53f6a28d262834e1f7cd5e55a8bf3f6661f0a0c6a17720496ddbf907",
+  "result_digest": "e41a27d2c2b953b13321fdc0d54207f75ec76f8c14b9158c8297619d24566aac",
+  "freeze_checks": {
+    "candidate_hashes": true,
+    "comparator_files": true,
+    "baseline_target_outputs": true,
+    "gate_predeclaration": true
+  },
+  "optimization_stack": {
+    "1": "present",
+    "2": "present",
+    "3": "ACCEPT_WITH_LIMITATIONS",
+    "4": "absent",
+    "5": "present"
+  },
+  "aletheia_evps": 0,
+  "active_aletheia_gate": false,
+  "read_only": true,
+  "write_backs": false,
+  "actuation": false,
+  "canonical_raw_evidence_rewritten": false,
+  "analytical_producer_changes": false,
+  "comparator_changes": false,
+  "production_changes": [
+    "backend/app/routers/evidence.py",
+    "backend/app/core/upload_error_presentation.py",
+    "backend/app/core/failure_evidence_presentation.py"
+  ],
+  "remaining_unresolved_application_findings_in_scope": [],
+  "forensic_access": "Explicit authenticated admin, workspace scoped, audit event and no-store; returns stored raw failure only",
+  "deployment_responsibilities": [
+    "Ingress TLS, private storage/network/volume isolation and restrictive permissions",
+    "Production/staging configuration, trusted proxies, scoped credentials and narrow CORS",
+    "Log/audit/browser retention, distributed resource limits, backups and key management",
+    "Restrict administrator forensic access and protect/retain raw failure evidence appropriately"
+  ],
+  "broader_previously_classified_items": "At-rest token hashing, MFA/SSO and dependency management limitations were not part of S08 and remain previously classified",
+  "prohibited_actions_performed": [],
+  "prior_closeout": {
+    "decision": "SECURITY_CLOSEOUT_INCOMPLETE",
+    "completed_at_utc": "2026-09-24T20:04:43.730997+00:00",
+    "scope": "Four retained application findings only",
+    "dispositions": {
+      "S07": "FIXED: session JSON bearer disclosure",
+      "S08": "DEFERRED_WITH_REASON: transport fixed; raw failed-evidence responses retain exception text",
+      "S13": "FIXED: CSV presentation only",
+      "S14": "FIXED: public diagnostic access/minimization"
+    },
+    "security_backend_cases_passed": 57,
+    "frontend_unit_cases_passed": 17,
+    "analytical_cases_passed": 14,
+    "initial_test_fixture_failure": "Retained in security-followup.xml; corrected production legacy connector retirement expectation passed",
+    "complete_gate_invocations": 1,
+    "complete_gate_status": "PASS",
+    "target_comparisons": 4,
+    "semantic_mismatches": 0,
+    "semantic_digest": "bd70db4d53f6a28d262834e1f7cd5e55a8bf3f6661f0a0c6a17720496ddbf907",
+    "result_digest": "e41a27d2c2b953b13321fdc0d54207f75ec76f8c14b9158c8297619d24566aac",
+    "freeze_checks": {
+      "candidate_hashes": true,
+      "comparator_files": true,
+      "baseline_target_outputs": true,
+      "gate_predeclaration": true
+    },
+    "optimization_stack": {
+      "1": "present",
+      "2": "present",
+      "3": "ACCEPT_WITH_LIMITATIONS",
+      "4": "absent",
+      "5": "present"
+    },
+    "aletheia_evps": 0,
+    "active_aletheia_gate": false,
+    "read_only": true,
+    "write_backs": false,
+    "actuation": false,
+    "analytical_producer_changes": false,
+    "production_changes": [
+      "backend/app/routers/auth.py",
+      "backend/app/routers/app_info.py",
+      "backend/app/routers/historical_ingestion.py",
+      "backend/app/routers/health.py",
+      "backend/app/services/auth_store.py",
+      "backend/app/routers/connectors.py",
+      "backend/app/main.py",
+      "backend/app/routers/facility.py",
+      "backend/app/core/security.py",
+      "backend/app/routers/evidence.py",
+      "backend/app/routers/data.py",
+      "backend/app/core/upload_error_presentation.py",
+      "backend/app/core/spreadsheet_export.py"
+    ],
+    "remaining_application_limitations": [
+      "S08 raw failed evidence can expose stored exceptions through authenticated evidence retrieval/export",
+      "At-rest session token hashing deferred separate storage migration (outside JSON disclosure fix)"
+    ],
+    "deployment_responsibilities": [
+      "Ingress TLS, private storage/network/volume isolation and restrictive permissions",
+      "Production/staging configuration, trusted proxies, scoped credentials and narrow CORS",
+      "Log/audit/browser retention, distributed resource limits, backups and key management"
+    ],
+    "prohibited_actions_performed": [],
+    "performance": "Retained SOURCE median 121.610119 seconds / 500000 observations / 3 signals / 1500000 scalar values; not reproduced in target"
+  },
+  "evidence_directory": "raw/s08-final/"
+}

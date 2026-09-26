@@ -1,0 +1,16 @@
+{
+  "frozen_at_utc": "2026-09-24T18:00:22.498313+00:00",
+  "historical_freeze_sha256": "05734f2218813dc086a39f325ebe2ea902b938464bd12f1313d5a2b13fa7f4f0",
+  "historical_comparator_sha256": "dd2480dcfb89dbab6a10fd8f66f6bdc60986345c23a07a1a4a7639d00110483c",
+  "files": {
+    "backend/app/services/output_semantics.py": "8127748ff4fa0cb625c8b24a722f803ea5e8c4480620cc57da9a6dac7a5d4c33",
+    "backend/app/services/output_semantics_legacy_source.py": "09813bd24669b3d1ba31268c671447be0bbce7a7dfd51acf35ad9d6c2d5df9e3",
+    "backend/app/services/output_semantics_legacy_target.py": "75e2b41365ce4d3163bcff6776b6d08e3b284e8ae198671844c8000d2be02336",
+    "backend/app/services/upload_output_semantics.py": "481ac14de48df424826be4cc7362440a3b945383a421f2fd622f404e1eaa08bc",
+    "backend/app/services/analysis_provenance.py": "50430a30c661556725e260513205fdd7f09ddcf11d1c4d121ebfeb4b93959a3f",
+    "tests/test_complete_upload_semantics.py": "52c78ac2ca35032d8cc5bb01c092139c816c95327c68e9973695aac53ccf7d4d",
+    "tests/promotion_contract_bridge.py": "bca580746eef3a5ee739b05463cca83f421806ba070bfde9060a5270466cb96a",
+    "docs/performance/production-processing-2026/raw/benchmark.py": "e4dae2d4709a828aeb0ebbc06593269a7e0f56810a85c5faae359ab9f89c217c"
+  },
+  "policy_sha256": "b0eb5a8ea61f6c37326857f19fd11c4287fa6d0e0b490381d77ad8b33eacb770"
+}

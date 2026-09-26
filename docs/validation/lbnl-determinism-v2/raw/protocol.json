@@ -1,0 +1,23 @@
+{
+  "version": "lbnl-determinism-v2",
+  "reference": "Independently supplied fault-free source, fixed first seven source-clock calendar days, 2018-01-01 inclusive to 2018-01-08 exclusive. No later reference observations.",
+  "comparison_start": "2018-01-08 00:00:00",
+  "comparison_end_exclusive": "2019-01-01 00:00:00",
+  "step_days": 3,
+  "sampling": "Retain exact existing observations whose source-clock minute and second equal zero. No averaging, interpolation, numeric conversion, timestamp shift or fabricated row. Full native-minute data separately inventoried and retained. This is a systematic hourly-observation benchmark, not exhaustive minute-resolution analysis.",
+  "signals": "All 77 numeric signals, fixed consecutive source-header blocks of at most 32; 32/32/13. No outcome-dependent selection. Relationships across blocks are not evaluated.",
+  "invalid": "Per block exclude rows with any blank, nonnumeric or nonfinite telemetry; record source row numbers. Never impute. Attempt all periods, including terminal partial period; preserve failures under 16 rows.",
+  "authority": "Current app.engine.sii_engine.evaluate_sii supplied-reference historical interface; no config argument or analytical overrides; fresh engine-owned persistence and recurrence states per case and block, passed chronologically by value.",
+  "cases": [
+    "CASE_001",
+    "CASE_022"
+  ],
+  "objective": "Deterministic governed relationship evidence; no fault-label endpoint.",
+  "comparison": "720 paired calls: primary and repeat from fresh states/runtime, different Python hash seeds. Exact canonical semantic comparison of entire analysis_result, entire relationship_graph, supplied_reference, persistence and recurrence states, and whole engine result. Only declared runtime_metadata namespaces and versioned analysis_id/generated_at runtime aliases are excluded by production output_semantics.py. Lists retain order. No rounding or timestamp-name exclusions.",
+  "acceptance": "720/720 governed semantic outputs. Preserve all mismatches and errors. No comparator changes after execution.",
+  "baseline": "Original v1 files and published 5/720 result immutable. v2 neither replaces nor regenerates v1.",
+  "ordering": "Explicit source-column order and chronological observation order preserved. Neutral hourly CSVs reused byte-for-byte. CASE IDs inherited, labels neither opened nor supplied.",
+  "preservation": "Complete engine returns saved in pickle+gzip checkpoints with input/state chain hashes; standard canonical JSON used for semantic digests. Pickle files are local trusted artifacts only.",
+  "implementation": "Frozen remediation branch working tree; no analytical configuration overrides.",
+  "math_check": "Compare every v2 primary relationship graph against its v1 counterpart, removing solely old runtime_seconds/new runtime_metadata envelope fields to bridge the runtime schema. Do not change v1 outputs or v1 comparator."
+}

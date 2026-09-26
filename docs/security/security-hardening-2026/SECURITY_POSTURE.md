@@ -1,0 +1,20 @@
+# Security posture for technical due diligence
+
+Neraium observes telemetry and produces evidence for human review. It is outside the equipment control path, performs no equipment write-backs and introduces no actuation. These properties reduce control-system exposure; they do not eliminate data-security obligations.
+
+**Application controls verified:** session/service authentication and role checks in production/staging; server-resolved workspace membership and scoped object access; opaque unauthorized-object responses; bounded request streaming, upload file limits, generated storage names/path containment and telemetry contracts; cookie-write origin checks; Secure/HttpOnly/Lax session cookies; API no-store and security headers; server-side secret references and constrained current telemetry egress; credential-pattern log redaction and audit events. Canonical evidence validates source/schema/digest identity; replay preserves stored evidence. Security changes do not alter numerical analysis, ranking, source/behavioral identity, consequence or governed outputs.
+
+**Deployment controls available or required:** non-root container definitions, runtime/secret exclusions from builds, pinned root container digest, production database TLS configuration validation and secret references exist in the repository. Operators must enforce TLS/certificates, private network/storage access, least privilege, trusted proxies, quotas/timeouts, encryption/key management, backups, log retention and patching. Repository configuration does not establish that these controls are active in any customer environment. Backend API headers do not establish security headers on a separately hosted frontend.
+
+**Validation:** 34 new targeted security tests and 22 selected existing security cases passed across final selections; 18 analytical regressions passed. The one complete 10K gate and direct comparison to the certified TARGET are recorded in RESULTS.json and ANALYTICAL_REGRESSION.md. npm production lockfile audit reported zero advisories at execution time; no full dependency/OS assessment is claimed.
+
+**Known limitations:** bearer session IDs are still exposed in session JSON/stored as secrets; some upload errors expose technical details; raw CSV exports are not spreadsheet-formula neutralized; public operational diagnostics and process-local rate limits require attention. Hash integrity relies on trusted expected-hash storage. Review KNOWN_LIMITATIONS.md before deployment acceptance. No security certification, standards compliance, or guarantee of vulnerability absence is claimed.
+
+
+## Application closeout update (2026-09-24)
+
+Current session responses carry non-authenticating management handles; the existing HttpOnly/Secure/SameSite cookie remains the bearer. Upload admission/error, polling, SSE and latest-state failure responses use static safe categories and omit exception details. Spreadsheet CSV downloads escape formula-leading cells without modifying source or canonical evidence. Public health/readiness responses are minimal; verbose readiness, engine/runtime diagnostics and administrative observability require authorized access in production/staging. Domain detection evidence requires authentication.
+
+These boundary changes passed 57 backend security cases, 17 frontend API unit cases, 14 analytical regressions and one complete 10K repeat gate, with exact retained TARGET equivalence and zero Aletheia regressions. Read-only/outside-control-path/non-actuating properties remain intact. No compliance or infrastructure certification is claimed.
+
+Closeout remains INCOMPLETE: authenticated raw failed-evidence retrieval/export can disclose stored exception text. Evidence representations were preserved; a reviewed raw-versus-redacted presentation/access contract is still needed. At-rest session-token hashing is also a separate deferred storage migration. Existing ingress, storage, tenant/network/volume isolation, credentials, proxy, log retention, resource controls and dependency limitations remain deployment or separately scoped responsibilities. See ../security-closeout-2026/DECISION.md and FINDINGS.md.

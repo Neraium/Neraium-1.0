@@ -1,0 +1,17 @@
+{
+  "application_answer_characters": 1866,
+  "claims": {
+    "861 focused tests": "raw/focused-regression.xml; raw/test-outcomes.json",
+    "isolated 100000-row guard pass": "raw/isolated-regression.xml; raw/isolated-100k.json",
+    "1403 calls": "raw/assessment.json: engine_calls; raw/battery/cases.jsonl.gz: every record",
+    "0 of 40 controls / 320 windows": "raw/assessment.json: families stable, stationary_noise, transient, alternating",
+    "48 cases at 0.15\u20130.30, sixth window": "raw/assessment.json: sensitivity rows at 0.15,0.20,0.25,0.30 and first_supported_windows",
+    "58 CHW windows; 10 continuous; 8 recurring": "raw/battery/historical.json: observations; raw/assessment.json: historical_scenarios A and B",
+    "140 successful repeats": "raw/assessment.json: repeat_counts; raw/battery/summary.json: repeat_equal (subtract five rejected repeats)",
+    "3/4 fresh replay matches": "raw/replay-verification.json: fresh_process_replays",
+    "restored order matches": "raw/row-order-check.json: restored_source_column_order_matches_original",
+    "1000000 source rows / 100000 analysis / 400.5 seconds / 300 guard": "raw/performance/upload-scales.json: prize_1000000",
+    "partial flatline high confidence": "raw/ingestion/summary.json: flatline.data_quality.data_confidence",
+    "Siemens insufficiency": "raw/prior-evidence/inventory.json and saved readiness report"
+  }
+}

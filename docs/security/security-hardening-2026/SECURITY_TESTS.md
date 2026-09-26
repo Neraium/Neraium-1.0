@@ -1,0 +1,11 @@
+# Focused security testing
+
+**56 distinct security cases pass on final code:** 34 new HTTP/config abuse cases and 22 existing cases. No full suite/browser/E2E run. All Python commands use repository .venv, PYTHONDONTWRITEBYTECODE=1 and pytest -p no:cacheprovider with isolated runtime directories.
+
+Evidence: raw/security-new.xml (31 pass), raw/security-existing.xml (21 pass, one Origin-less fixture failure), raw/security-followup.xml (three new additional cases plus corrected existing workspace case pass). Final pass inventory: raw/security-passing-cases.json. Existing assertions were not weakened: the workspace fixture now supplies the Origin a real browser sends.
+
+Coverage: streamed oversized requests with absent/false Content-Length; malformed/duplicate lengths; telemetry budget; multipart aggregate cap and early cleanup; accepted bytes unchanged; cookie Origin/Referer controls and hostile login origin; staging forged identity/role rejection; valid-token insufficient-role rejection; forged forwarding headers; safe 401/500 response bodies, no-store/headers and allowed-origin CORS; insecure auth DB configuration rejection and valid TLS acceptance; staging cookie flag; existing login rate limiting, real cross-workspace/IDOR checks, forged scope rejection, encoded filenames/symlink containment, SSRF DNS/redirect denials, credential redaction, malformed JSON/path/query/header/file contracts and historical admin boundary.
+
+Initial diagnostics: raw/security-new-initial.xml retained (4 failures, 27 pass). The first middleware ordering let BaseHTTP wrap stream exceptions and produced incorrect statuses; placing byte enforcement directly before the router corrected it. An unauthorized telemetry request correctly rejected authentication before reading its stream, so the dedicated telemetry-byte-budget test now invokes the same middleware at that path directly. Multipart cleanup is separately verified against the real parser. No comparator/analytical changes were used to fix tests.
+
+Dependency exposure: npm audit --package-lock-only --omit=dev --json on frontend lockfile returned zero advisories; raw/frontend-dependency-audit.json retains result. No dependency installation/update, Python/OS CVE scan or deployed-container test performed.

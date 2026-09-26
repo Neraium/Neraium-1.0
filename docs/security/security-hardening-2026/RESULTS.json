@@ -1,0 +1,112 @@
+{
+  "decision": "SECURITY_HARDENING_VALIDATED_WITH_KNOWN_LIMITATIONS",
+  "completed_at_utc": "2026-09-24T19:40:50.315381+00:00",
+  "implemented_findings": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06"
+  ],
+  "remaining_confirmed_findings": [
+    "S07",
+    "S08",
+    "S10",
+    "S13",
+    "S14"
+  ],
+  "conditional_risks": [
+    "S09",
+    "S11",
+    "S12"
+  ],
+  "security_cases_passed": 56,
+  "analytical_cases_passed": 18,
+  "complete_gate_invocations": 1,
+  "complete_gate_status": "PASS",
+  "target_uploads": [
+    {
+      "run": "first",
+      "wall_seconds": 14.5327900191769,
+      "peak_rss_bytes": 218779648,
+      "semantic_digest": "bd70db4d53f6a28d262834e1f7cd5e55a8bf3f6661f0a0c6a17720496ddbf907",
+      "input_sha256": "7976376ea685bcad1b06a5930a2b6c0f2429b2150f0e8c5326a3638e507e4aac"
+    },
+    {
+      "run": "repeat",
+      "wall_seconds": 14.526761976070702,
+      "peak_rss_bytes": 219230208,
+      "semantic_digest": "bd70db4d53f6a28d262834e1f7cd5e55a8bf3f6661f0a0c6a17720496ddbf907",
+      "input_sha256": "7976376ea685bcad1b06a5930a2b6c0f2429b2150f0e8c5326a3638e507e4aac"
+    }
+  ],
+  "certified_target_direct_semantic_comparisons": 4,
+  "target_semantic_mismatches": 0,
+  "semantic_digest": "bd70db4d53f6a28d262834e1f7cd5e55a8bf3f6661f0a0c6a17720496ddbf907",
+  "result_digest": "e41a27d2c2b953b13321fdc0d54207f75ec76f8c14b9158c8297619d24566aac",
+  "source_bridge_comparison": "PASS in unchanged existing gate",
+  "provenance_links": "PASS evidence store plus four result provenance links per upload",
+  "aletheia_evps": 0,
+  "active_aletheia_gate": false,
+  "optimization_stack": {
+    "1": "present",
+    "2": "present",
+    "3": "ACCEPT_WITH_LIMITATIONS",
+    "4": "absent",
+    "5": "present"
+  },
+  "production_changes": [
+    "backend/app/core/config.py",
+    "backend/app/core/security.py",
+    "backend/app/main.py",
+    "backend/app/routers/auth.py",
+    "backend/app/routers/data.py"
+  ],
+  "new_production_files": [
+    "backend/app/core/http_boundary.py"
+  ],
+  "comparator_unchanged": true,
+  "candidate_unchanged_after_gate_freeze": true,
+  "certified_evidence_unchanged": true,
+  "analytical_sources_unchanged": true,
+  "read_only": true,
+  "equipment_writebacks": false,
+  "actuation": false,
+  "git_diff_check": "PASS",
+  "frontend_production_npm_audit_advisories": 0,
+  "no_full_suite": true,
+  "no_500K": true,
+  "no_1M": true,
+  "no_LBNL": true,
+  "no_commit": true,
+  "no_merge": true,
+  "no_push": true,
+  "retained_source_performance": {
+    "observations": 500000,
+    "signals": 3,
+    "scalar_values": 1500000,
+    "median_seconds": 121.610119,
+    "independently_reproduced_in_target": false
+  },
+  "changed_existing_tests": [
+    "tests/test_workspace_authorization.py"
+  ],
+  "application_security_closeout": {
+    "decision": "SECURITY_CLOSEOUT_INCOMPLETE",
+    "records": "../security-closeout-2026/RESULTS.json",
+    "dispositions": {
+      "S07": "FIXED: session JSON bearer disclosure",
+      "S08": "DEFERRED_WITH_REASON: transport fixed; raw failed-evidence responses retain exception text",
+      "S13": "FIXED: CSV presentation only",
+      "S14": "FIXED: public diagnostic access/minimization"
+    },
+    "security_backend_cases_passed": 57,
+    "frontend_unit_cases_passed": 17,
+    "analytical_cases_passed": 14,
+    "complete_gate_invocations": 1,
+    "complete_gate_status": "PASS",
+    "semantic_mismatches": 0,
+    "note": "Original campaign fields and raw evidence above are retained historical results, not overwritten by closeout."
+  }
+}
