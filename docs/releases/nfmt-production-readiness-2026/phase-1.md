@@ -1,0 +1,134 @@
+# NFMT production readiness — Phase 1
+
+Date: 2026-09-26
+
+## Frozen topology
+
+- Authoritative engine source: `/home/ubuntu/Neraium-1.0` at `f2eae15f8b1035a7d277be35dbdc9fe3e653d3e4` (clean tracked tree; pre-existing untracked validation artifacts were not changed).
+- Demo source: `/home/ubuntu/Demo-Neraium` at base HEAD `68618c2508c0634462b11c2ba29c305102494962` plus the modified tracked files listed in the allowlist below.
+- Preview topology is one task / one replica with three isolated containers. `demo-web` is the only exposed listener (Nginx on 8080); `demo-api` binds task loopback on 8000; the pinned engine binds task loopback on 8010. The preview uses separate persistent EFS access points for Demo SQLite and engine runtime state. The preview stack is paused by default and permits a single active task because SQLite is authoritative.
+- The Demo API persists runs, workflow overlays, and engine packages in its namespace-scoped SQLite database. The engine runtime defaults to local SQLite/runtime files in this preview configuration. Engine shared PostgreSQL runtime storage and shared S3 upload artifacts are production configuration options, not configured by the preview compose/template.
+- Both services are read-only and non-actuating. Demo exposes no arbitrary telemetry upload, connector, tenant, database, or engine configuration surface.
+
+## Frozen engine ↔ Demo API contract
+
+The Demo adapter sends `X-Neraium-User: demo-engine-service` and optional private bearer auth. It resolves a server-side scenario, submits its CSV as multipart `file`, and does not send caller scope. Baseline uses `POST /api/data/upload?workflow=create_baseline` with approval disabled; comparison uses `POST /api/data/upload?workflow=analyze_new_data` with the returned `baseline_id`.
+
+| Engine operation | Contract | Demo use |
+|---|---|---|
+| readiness | `GET /api/ready?verbose=false` | API readiness dependency |
+| identity | `GET /api/intelligence/engine-identity` | Exact commit/name/runtime-version pin check |
+| baseline upload | `POST /api/data/upload?workflow=create_baseline` | Submit controlled baseline CSV |
+| comparison upload | `POST /api/data/upload?workflow=analyze_new_data` | Submit controlled evidence CSV |
+| job state | `GET /api/data/upload-status/{job_id}` | Poll baseline and comparison lifecycle |
+| baseline result | `GET /api/data/baselines/jobs/{job_id}` | Resolve baseline ID |
+| intake result | `GET /api/data/intake/{job_id}/result` | Resolve comparison analysis ID |
+| analysis | `GET /api/data/analyses/{analysis_id}` | Canonical engine analysis |
+| findings | `GET /api/data/analyses/{analysis_id}/findings` | Engine finding projections |
+| evidence | `GET /api/data/analyses/{analysis_id}/evidence-package` | Engine Evidence Package; 404 is a valid absent-package result |
+| replay | `GET /api/data/replay/{job_id}` | Read persisted replay using the comparison upload job ID |
+
+The declared upload/result paths and multipart workflow fields match the current engine route definitions. The former Demo pin (`97d267d317fcce4b4424cf2141e97e87680acfc0`) did not match the requested authoritative HEAD; lock, runtime identity allowlist, preview image identity, release references, and pin assertions now use `f2eae15f8b1035a7d277be35dbdc9fe3e653d3e4`. Current engine identity is `Neraium SII` / `neraium-cultivation-v1`.
+
+The read-only Demo replay route binds a completed Demo run to the comparison upload job ID persisted in that run's analysis package, requests the authoritative engine replay, and fails closed for missing, incomplete, or mismatched bindings. Inline replay generation is explicitly enabled only in the controlled Demo engine launcher and isolated Demo preview/container configuration; the engine's production default remains unchanged. Demo reset is `POST /api/demo/v1/reset` with `X-Demo-Reset-Token` and exact JSON confirmation `{"confirmation":"RESET DEMO"}`; it clears generated Demo runs/packages/workflow state, not engine behavioral memory.
+
+Demo endpoints are under `/api/demo/v1`: version, health, readiness, scenarios, create run, run status, results, findings, per-finding evidence, and a Demo-only workflow PATCH. Demo has no user login/session API; the deployment boundary is private loopback between API and engine and the public web gateway. Engine lightweight health/readiness are `/api/health` and `/api/ready`; the private engine identity route is admin-protected outside the isolated development-mode preview.
+
+## Deterministic demo path
+
+The existing allowlisted `hydraulic-response-v1` catalog entry is the current deterministic offline demonstration fixture: fixed UTC timestamps, fixed cadence, controlled CSV values, and stable checksum `c16575fb2e4d4a553bfd5d717ce4ec3f134a74fdc1a2bcb4d4a2b263de895739`. It has no Building X, live NOAA, LBNL, wastewater, BAS, or network telemetry dependency. The telemetry is synthetic demo input; the displayed finding is generated by the real pinned engine and is not an independently validated plant conclusion. No analytical finding was authored in Demo.
+
+The protected Demo reset clears only generated Demo state. Two repetitions of the same catalog run against pinned engine commit `f2eae15f8b1035a7d277be35dbdc9fe3e653d3e4` produced distinct Demo run IDs and distinct comparison job IDs. Run `c9d65ab723cf44e9994d1c5be727badb` replayed comparison job `f97f5c19ed304fe1918c294ebcf6f122`; run `6b1304a6ed6841be8960060c6ac5eb67` replayed comparison job `46f12c8757ab4f409e91c59781be01de`. Each replay response's job binding exactly matched its own persisted package's comparison upload job ID and returned 100 frames. Both persisted telemetry checksums were `c16575fb2e4d4a553bfd5d717ce4ec3f134a74fdc1a2bcb4d4a2b263de895739`; both outcomes were `review_required`, each with one finding and evidence available. Protected resets succeeded before each repetition, between repetitions, and after the second. Engine baseline/memory is intentionally not reset by the Demo reset route.
+
+## Implementation
+
+- Updated Demo's engine lock to the authoritative engine HEAD and aligned identity checks, compose image/build identity, paused CloudFormation allowlist, `.env.preview.example`, pin assertions, and release instructions.
+- Enabled inline replay generation explicitly in the controlled local Demo engine launcher and preview/container configuration; the authoritative engine production default was not changed.
+- Implemented the read-only run-scoped replay API and verified persisted comparison-job binding through two real pinned-engine runs. Missing and mismatched replay bindings remain fail-closed.
+- No engine source or analytical behavior changed. No thresholds, eligibility, quality/context rules, temporal authority, persistence math, ranking, consequences, or telemetry admission code changed.
+- No files were staged, committed, pushed, merged, tagged, or deployed.
+
+## Database / persistence
+
+- Demo unit tests: engine config, adapter contract, API, and datastore suites — 48 passed.
+- Disposable PostgreSQL integration: `tests/integration/test_database_connector_postgres.py` — 10 passed. Shared runtime suite `tests/test_pilot_shared_state.py` — 5 passed, including PostgreSQL schema initialization/migrations, shared payload persistence across process restart, queue ownership, and stale processing recovery. Two fixture-dependent tests failed before PostgreSQL assertions because the existing `verification_consequence` fixture did not satisfy its expected `quantified` state; teardown also showed attempted S3 calls. No fixture or validation evidence was changed.
+- Demo datastore tests cover result-package persistence, transactional reset, and bounded corruption handling. Real-engine result/package persistence was exercised by the API journey; the repeated result was retained until protected reset. Demo API restart with an in-flight run was not exercised.
+- Engine-specific relationship temporal-state PostgreSQL certification was not rerun.
+
+## Runtime / recovery
+
+- Engine API and worker started at the authoritative HEAD; `/api/ready` returned ready and identity returned the exact locked commit.
+- Demo readiness returned ready only after datastore and engine readiness passed. Built engine, Demo API, and web containers were started; all reached healthy state, and web `/healthz` and proxied Demo readiness passed.
+- Passing shared PostgreSQL tests cover queue single-claim ownership and stale active-job recovery. Existing `test_upload_session_service::test_historical_job_status_is_marked_stale_after_session_switch` fails: response omitted `session_state`; isolated rerun reproduced the failure. Engine code was left untouched.
+- Artifact-store failure behavior and graceful shutdown under a failing store were not verified in this phase.
+
+## Demo end-to-end
+
+Two full API-backed runs against the real engine completed. Each returned completed results, `review_required`, one engine finding, evidence, and 100 replay frames. Replay bindings matched the authoritative comparison job IDs persisted in their own run packages. The telemetry checksum matched across runs (`c16575fb2e4d4a553bfd5d717ce4ec3f134a74fdc1a2bcb4d4a2b263de895739`); outcome and finding count also matched. Protected reset succeeded before each run, between runs, and after the second run. This is repeatability evidence for the synthetic demo fixture only.
+
+## Production build / deployment
+
+- Built authoritative engine image from this checkout and verified OCI revision label `f2eae15f8b1035a7d277be35dbdc9fe3e653d3e4`.
+- Built Demo API and web production Dockerfiles. Demo web production build completed with the lock validations and TypeScript build.
+- Ran the three built services locally with isolated state; engine and Demo API readiness passed, and engine/API/web Docker healthchecks reached healthy. Demo API image was built with its local `unknown` build identity because this working tree has no review commit.
+- `npm run preview:validate` passed for the repinned deployment contract. Full `docker compose` build/config execution was unavailable because Docker Compose is not installed in this environment; images were built individually and run together manually. No deployment, registry push, or cloud resource change occurred.
+- The deployed AWS/EFS stack remains paused with placeholder image digests; a reviewed image digest and approved deployment are still required.
+
+## Analytical freeze
+
+`ANALYTICAL_MATH_CHANGED=NO`. No analytical files were changed. Phase A–F relationship temporal-authority certification was accepted as given and not rerun. No LBNL or wastewater validation campaign was run.
+
+## Tests and builds executed
+
+- Demo: `validate:engine-lock`, `validate:primary-path`, focused Vitest path/depth suites (7 passed), safeguards (40 passed), `preview:validate`, backend focused replay/API/client/config/datastore tests (52 passed), and real pinned-engine scenario compatibility tests (4 passed in 125 seconds).
+- Builds: production web build and direct builds of all three Dockerfiles.
+- Real Demo journey: two real-engine `hydraulic-response-v1` runs with reset/repeat and API assertions as recorded above.
+- Engine: PostgreSQL connector integration (10 passed); shared PostgreSQL runtime suite (5 passed, 2 fixture failures); upload/session/recovery/replay focused suite (55 passed, 1 stale-session failure, 7 deselected). The stale-session failure reproduced in isolation.
+- Not run: Phase A–F certification, LBNL, wastewater, AWS deployment, or full Compose command.
+
+## Remaining production blockers
+
+1. **Runtime test failure:** stale historical engine job status currently lacks `session_state` in the focused test. Separately, artifact-store failure/graceful shutdown behavior remains unverified.
+2. **Recovery / persistence evidence:** Demo API restart with an in-flight run remains unverified. Two PostgreSQL runtime tests are blocked by the pre-existing verification fixture's `quantified` assertion and external S3 attempts; repeat those persistence checks with a corrected isolated fixture/configuration before readiness sign-off.
+3. **Deployment:** Compose plugin was unavailable; full Compose topology validation remains outstanding. Preview is paused and has no immutable image digests/deployment approval.
+
+## Exact commit allowlist
+
+Only these files may enter the Phase 1 commit allowlist:
+
+- Demo-Neraium `.env.preview.example`
+- Demo-Neraium `compose.preview.yml`
+- Demo-Neraium `demo_backend/api.py`
+- Demo-Neraium `demo_backend/config.py`
+- Demo-Neraium `demo_backend/engine_adapter.py`
+- Demo-Neraium `demo_backend/models.py`
+- Demo-Neraium `demo_backend/service.py`
+- Demo-Neraium `docs/deployment-freshness.md`
+- Demo-Neraium `docs/deployment-preview.md`
+- Demo-Neraium `docs/relationship-history.md`
+- Demo-Neraium `engine-lock.json`
+- Demo-Neraium `infra/preview/neraium-demo-preview.yaml`
+- Demo-Neraium `scripts/engine-guard.mjs`
+- Demo-Neraium `scripts/validate-preview-deployment.mjs`
+- Demo-Neraium `tests_engine/test_api.py`
+- Demo-Neraium `tests_engine/test_config.py`
+- Demo-Neraium `tests_engine/test_engine_client.py`
+- Demo-Neraium `tests_engine/test_real_engine_scenarios.py`
+- Demo-Neraium `tests_real/featured-entry.spec.ts`
+- Demo-Neraium `tests_real/real-engine-journey.spec.ts`
+- Demo-Neraium `tests_scripts/engine-guard.test.mjs`
+- Demo-Neraium `tests_scripts/preview-deployment.test.mjs`
+
+The requested `/home/ubuntu/Neraium-1.0/docs/releases/nfmt-production-readiness-2026/phase-1.md` readiness artifact is currently untracked in the engine repository and is explicitly included for review. No Neraium engine source or unrelated pre-existing untracked validation artifacts are allowed in the commit.
+
+## Commit subject
+
+`NFMT Phase 1: enable and verify controlled Demo replay`
+
+## Decision
+
+`NFMT_PHASE_1_BLOCKED_RUNTIME_RECOVERY_DEPLOYMENT`
+
+## Next action
+
+Resolve the stale-session and PostgreSQL fixture test blockers, verify restart/artifact-store recovery behavior, and complete the outstanding Compose/deployment review before readiness sign-off. Replay contract blocker is retired; this does not establish overall production readiness.
