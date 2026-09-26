@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
@@ -18,6 +19,9 @@ from app.services.analysis_result_contract import build_analysis_result
 from app.services.dataset_scope import attach_dataset_scope, build_dataset_scope, dataset_scope_context
 from app.services.finding_workflow import evidence_finding_id
 from app.services.upload_replay import build_replay
+from app.engine.sii.relationship_graph import analyze_relationship_graph
+from app.services.relationship_evidence_binding import SOURCE, finalize as finalize_relationships, source_evidence
+from app.services.resource_relationship_binding import LINEAGE, ownership, finalize_resources
 
 WORKSPACE_ID = "synthetic-consequence-verification-only"
 SCOPE = build_dataset_scope(user_id="service-token", workspace_id=WORKSPACE_ID)
@@ -93,6 +97,64 @@ def build_fixture() -> dict[str, Any]:
         "evidence_id": "synthetic-water-evidence-v1",
         "source_time_ranges": [{"current_start": rows[0]["timestamp"], "current_end": rows[-1]["timestamp"]}],
     }
+    # Issue authority from eight distinct synthetic relationship windows. The
+    # final assessment window is exactly the finding window used below; the
+    # normal producer binding functions issue both finding and rate ownership.
+    state = None
+    relationship_model = {"relationship_graph": {"edges": []}, "top_relationship_changes": []}
+    authorized_scope = SCOPE.storage_id
+    for day in range(1, 9):
+        start = START - timedelta(days=8 - day)
+        end = start + timedelta(hours=6)
+        x = [math.cos(2 * math.pi * i / 48) for i in range(48)]
+        z = [math.sin(2 * math.pi * i / 48) for i in range(48)]
+        baseline_rows = [{FLOW: x[i], LOAD: 0.9 * x[i] + (1 - 0.9**2) ** 0.5 * z[i]}
+                         for i in range(48)]
+        current_rows = [{FLOW: x[i], LOAD: 0.68 * x[i] + (1 - 0.68**2) ** 0.5 * z[i]}
+                        for i in range(48)]
+        edge = {
+            "id": RELATIONSHIP_ID,
+            "columns": [FLOW, LOAD],
+            "baseline_correlation": 0.9,
+            "recent_correlation": 0.68,
+            "change_type": "weakened",
+            "baseline_sample_count": 48,
+            "current_sample_count": 48,
+            "confidence": 0.73,
+            "relationship_context": {"operator_primary_eligible": True},
+            "time_window": {
+                "baseline_start": (START - timedelta(days=30)).isoformat(),
+                "baseline_end": (START - timedelta(days=9)).isoformat(),
+                "current_start": start.isoformat(),
+                "current_end": end.isoformat(),
+            },
+            "source_rows": [{"window": "recent_end", "source_row": day * 48,
+                             "timestamp": end.isoformat()}],
+            "source_relationships": [RELATIONSHIP_ID],
+            "source_tags": [FLOW, LOAD],
+        }
+        edge[SOURCE] = source_evidence(
+            edge, columns=[FLOW, LOAD], baseline_rows=baseline_rows,
+            current_rows=current_rows, timestamp_column=None,
+        )
+        graph = analyze_relationship_graph(
+            relationship_model={"relationship_graph": {"edges": [edge]}},
+            relationship_persistence_state=state,
+            sensor_health={"signals": [{"signal": signal, "health": "healthy"} for signal in (FLOW, LOAD)]},
+            data_quality={"data_confidence": {"rating": "high"}},
+        )
+        state = graph["relationship_persistence_state"]
+        edge = graph["edges"][0]
+        relationship_model = {"relationship_graph": {"edges": [edge]},
+                              "top_relationship_changes": [deepcopy(edge)]}
+    relationship_registry = finalize_relationships(
+        relationship_model, graph, scope=authorized_scope,
+    )
+    assertion = relationship_model["top_relationship_changes"][0]
+    finding.update(ownership(assertion))
+    expected_resource = expected["expected_values"][0]
+    expected_resource[LINEAGE] = assertion["relationship_source_ref"]
+    finalize_resources(expected, relationship_registry, authorized_scope=authorized_scope)
     source = attach_dataset_scope({
         "job_id": RUN_ID, "run_id": RUN_ID, "upload_id": RUN_ID, "analysis_id": RUN_ID,
         "system_id": "synthetic-test-only-water-system",
@@ -105,7 +167,8 @@ def build_fixture() -> dict[str, Any]:
         "input_hash": canonical_digest(rows),
         "conditions": [finding],
         "analysis_explanation": {"insights": []},
-        "sii_result": {"expected_behavior": expected},
+        "sii_result": {"expected_behavior": expected,
+                       "relationship_evidence_registry": relationship_registry},
         "telemetry_signal_catalog": catalog,
     }, scope=SCOPE, dataset_id=RUN_ID)
     source["analysis_result"] = build_analysis_result(source)
@@ -197,7 +260,7 @@ def verify_responses(get) -> dict[str, Any]:
     assert canonical["end_timestamp"] == (START + timedelta(hours=6)).timestamp()
     assert canonical["finding_id"] == FINDING_ID
     assert canonical["evidence_id"] == "synthetic-water-evidence-v1"
-    assert canonical["analysis_run_id"] == RUN_ID
+    assert canonical["runtime_metadata"]["analysis_run_id"] == RUN_ID
     assert canonical["source_relationship_ids"] == [RELATIONSHIP_ID]
     assert canonical["source_tag_ids"] == [FLOW, LOAD]
     assert canonical["methodology"] == "timestamp_aware_trapezoidal_integration"

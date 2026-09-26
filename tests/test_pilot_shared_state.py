@@ -24,6 +24,13 @@ def postgres_runtime(monkeypatch):
         pytest.skip("requires isolated PostgreSQL test database")
     schema = "pilot_test_" + uuid.uuid4().hex
     monkeypatch.setenv("NERAIUM_RUNTIME_DATABASE_URL", dsn)
+    # Tests use PostgreSQL plus per-test local/fake artifact storage. Never let
+    # inherited production bucket configuration reach boto3, including startup
+    # and teardown worker heartbeats.
+    monkeypatch.delenv("NERAIUM_UPLOAD_STATE_BUCKET", raising=False)
+    from app.services import upload_state_repository, worker_heartbeat
+    monkeypatch.setattr(upload_state_repository, "_external_shared_state_enabled", lambda: False)
+    monkeypatch.setattr(worker_heartbeat, "_bucket", lambda: "")
     monkeypatch.setattr(runtime_postgres, "_SCHEMA", schema)
     monkeypatch.setattr(runtime_postgres, "_initialized", set())
     runtime_db.init_runtime_db()

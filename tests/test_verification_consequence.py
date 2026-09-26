@@ -19,6 +19,15 @@ from datasets.verification_consequence import (
 from test_upload_queue_scope_routing import _FakeS3Client, _configure_shared_runtime
 
 
+@pytest.fixture(autouse=True)
+def isolate_artifact_and_heartbeat_storage(monkeypatch):
+    # Shared-mode assertions install their own in-memory fake. Everything else,
+    # including the app worker started by TestClient, stays off external S3.
+    from app.services import worker_heartbeat
+    monkeypatch.delenv("NERAIUM_UPLOAD_STATE_BUCKET", raising=False)
+    monkeypatch.setattr(worker_heartbeat, "_bucket", lambda: "")
+
+
 def forbid(*args, **kwargs):
     raise AssertionError("Reading a persisted fixture must not recalculate or rewrite artifacts")
 
