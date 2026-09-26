@@ -51,7 +51,15 @@ def public_upload_state(payload):
         # Preserve complete governed results when a newer execution has failed.
         safe = public_upload_error(payload)
         for key in ("status", "processing_state", "job_state", "session_state"):
-            if str(payload.get(key, "")).lower() in _FAILURE_STATES:
+            # Session lifecycle is transport metadata. A historical result can
+            # have a terminal COMPLETE status while belonging to a stale
+            # session, so preserve its safe lifecycle state through the error
+            # projection as well.
+            if key == "session_state" and payload.get(key) in {
+                "empty", "queued", "processing", "verified", "restored", "stale", "error"
+            }:
+                safe[key] = payload[key]
+            elif str(payload.get(key, "")).lower() in _FAILURE_STATES:
                 safe[key] = payload[key]
         for key in ("result", "current_result", "latest_result", "latestResult", "analysis_result", "history", "system_interpretation", "traceability", "adaptive_learning"):
             if key in payload:
