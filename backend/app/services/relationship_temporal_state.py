@@ -16,11 +16,27 @@ from app.services.telemetry_repository import (
     _relationship_state_identity,
     _relationship_state_payload,
 )
+from app.services.telemetry_domain import TelemetryScopeRef
+from app.engine.sii.behavioral_model_contract import AuthenticatedPhase4Scope
 
 CONTRACT = "relationship-temporal-compat.v1"
 SCHEMA = "relationship-temporal-state.v1"
 REDUCER = "relationship_temporal_evidence.v1"
 MAX_OBSERVATIONS = 8
+
+
+def _repository_scope(scope):
+    """Adapt the exact authenticated Phase 4 scope to the repository contract."""
+    if isinstance(scope, TelemetryScopeRef):
+        return scope
+    if not isinstance(scope, AuthenticatedPhase4Scope):
+        raise TypeError("relationship_temporal_authenticated_scope_required")
+    return TelemetryScopeRef(
+        tenant_scope_id=scope.tenant_scope_id,
+        workspace_id=scope.workspace_id,
+        resource_scope_id=scope.resource_scope_id,
+        facility_id=scope.workspace_id,
+    )
 
 
 def compatibility_digest(record: Mapping, lineage: Mapping) -> str:
@@ -139,13 +155,95 @@ def load_prior_relationship_state(repository, scope, *, system_id, asset_id,
             return None
         expected = compatibility_digest(evidence, descriptor)
         stored = repository.read_relationship_temporal_state(
-            scope, system_id=system_id, asset_id=asset_id, lineage_ref=descriptor["ref"])
+            _repository_scope(scope), system_id=system_id, asset_id=asset_id, lineage_ref=descriptor["ref"])
         if stored is None:
             return None
-        if not _valid_state(stored, expected, evidence["temporal"]["identity"], scope,
+        if not _valid_state(stored, expected, evidence["temporal"]["identity"], _repository_scope(scope),
                             system_id, asset_id, descriptor["ref"]):
             return None
         return stored["reducer_state"]
     except (TypeError, ValueError, KeyError, AttributeError, OverflowError,
             RelationshipTemporalStateConflict):
         return None
+
+
+def persist_authoritative_relationship_state(repository, scope, *, system_id, asset_id,
+                                             result, authorized_scope):
+    """Best-effort Phase F write from the successful authoritative result only.
+
+    Every write is reconstructed from the result-local evidence registry and
+    producer-issued lineage. Persistence errors are deliberately isolated from
+    the completed analysis result.
+    """
+    try:
+        from app.services.relationship_evidence_binding import REGISTRY, digest, resolve
+        from app.services.relationship_lineage import verify_for_evidence
+
+        compatibility = result.get("compatibility") if isinstance(result, Mapping) else None
+        relationship_model = compatibility.get("relationship_model") if isinstance(compatibility, Mapping) else None
+        candidates = relationship_model.get("top_relationship_changes") if isinstance(relationship_model, Mapping) else None
+        registry = result.get(REGISTRY) if isinstance(result, Mapping) else None
+        if not isinstance(candidates, list) or not isinstance(registry, Mapping):
+            return
+        repository_scope = _repository_scope(scope)
+        for candidate in candidates:
+            try:
+                if not isinstance(candidate, Mapping):
+                    continue
+                evidence = resolve(candidate, registry, authorized_scope=authorized_scope,
+                                   require_temporal=True)
+                if evidence is None or evidence.get("basis") == "global_relationship_model_failure_fallback":
+                    continue
+                ref = candidate.get("relationship_evidence_ref")
+                descriptor = (registry.get("relationship_lineage") or {}).get(ref)
+                lineage_ref = candidate.get("relationship_lineage_ref")
+                payload = descriptor.get("payload") if isinstance(descriptor, Mapping) else None
+                bound_scope = payload.get("scope") if isinstance(payload, Mapping) else None
+                if (not isinstance(descriptor, Mapping) or descriptor.get("ref") != lineage_ref
+                        or not verify_for_evidence(descriptor, evidence, authorized_scope=authorized_scope)
+                        or not isinstance(bound_scope, Mapping)
+                        or bound_scope.get("tenant_scope_id") != scope.tenant_scope_id
+                        or bound_scope.get("workspace_id") != scope.workspace_id
+                        or bound_scope.get("resource_scope_id") != scope.resource_scope_id
+                        or bound_scope.get("system_id") != system_id
+                        or bound_scope.get("asset_id") != asset_id):
+                    continue
+                temporal = evidence.get("temporal") or {}
+                observations = temporal.get("observations")
+                identity = temporal.get("identity")
+                if not isinstance(observations, list) or not observations or not isinstance(identity, Mapping):
+                    continue
+                latest = observations[-1]
+                latest_time = datetime.fromisoformat(str(latest.get("observed_at")).replace("Z", "+00:00"))
+                window = latest.get("time_window")
+                source = evidence.get("source")
+                if (latest_time.tzinfo is None or latest_time.utcoffset() is None
+                        or not isinstance(window, Mapping)
+                        or latest_time.isoformat() != str(window.get("current_end"))
+                        or not isinstance(source, Mapping)
+                        or candidate.get("relationship_source_ref") != source.get("source_id")
+                        or len(observations) > MAX_OBSERVATIONS):
+                    continue
+                compatibility = compatibility_digest(evidence, descriptor)
+                reducer_state = {"version": 1, "identity": dict(identity), "observations": observations}
+                interval = {key: window.get(key) for key in ("baseline_start", "baseline_end", "current_start", "current_end")}
+                event_ref = digest("relationship-temporal-event.v1", {
+                    "lineage_ref": lineage_ref, "source_ref": source["source_id"], "interval": interval,
+                })
+                current = repository.read_relationship_temporal_state(
+                    repository_scope, system_id=system_id, asset_id=asset_id, lineage_ref=lineage_ref)
+                if current is not None and current.get("compatibility_digest") != compatibility:
+                    continue
+                repository.compare_and_swap_relationship_temporal_state(
+                    repository_scope, system_id=system_id, asset_id=asset_id, lineage_ref=lineage_ref,
+                    compatibility_digest=compatibility, reducer_state=reducer_state,
+                    head_event_ref=event_ref, head_event_time=latest_time,
+                    expected_revision=current["storage_revision"] if current else 0,
+                    expected_head_event_ref=current["head_event_ref"] if current else None,
+                )
+            except Exception:
+                # The governed analysis has completed; state write failures are
+                # fail-closed and cannot rewrite its result or status.
+                continue
+    except Exception:
+        return

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import pytest
 from app.services import relationship_temporal_state
 from app.services import telemetry_analysis_window as analysis_window
 from app.services.relationship_evidence_binding import REGISTRY
@@ -142,3 +143,63 @@ def test_injected_evaluator_remains_one_run_even_if_repository_is_available():
     evaluator = lambda **kwargs: calls.append(kwargs) or {"status": "limited", "compatibility": {}, "processing_trace": {}}
     analysis_window.run_analysis_window(_window(), evaluator=evaluator, temporal_state_repository=object())
     assert len(calls) == 1
+
+
+def test_phase_f_persistence_runs_only_after_authoritative_success_and_is_result_neutral(monkeypatch):
+    calls, writes = [], []
+    current = _candidate_result(_current())
+
+    def evaluator(**kwargs):
+        calls.append(kwargs)
+        return deepcopy(current)
+
+    monkeypatch.setattr(analysis_window, "evaluate_sii", evaluator)
+    monkeypatch.setattr(relationship_temporal_state, "persist_authoritative_relationship_state",
+                        lambda *args, **kwargs: writes.append((args, kwargs)))
+    execution = analysis_window.run_analysis_window(_window(), temporal_state_repository=object())
+    assert len(calls) == 2
+    assert len(writes) == 1
+    assert writes[0][1]["result"] == current
+    assert dict(execution.sii_result) == current
+
+
+def test_phase_f_failed_analysis_and_write_failure_do_not_persist_or_change_result(monkeypatch):
+    calls, writes = [], []
+    current = _candidate_result(_current())
+    monkeypatch.setattr(analysis_window, "evaluate_sii",
+                        lambda **kwargs: calls.append(kwargs) or deepcopy(current))
+
+    def fail_write(*_args, **_kwargs):
+        writes.append(True)
+        raise RuntimeError("storage unavailable")
+
+    monkeypatch.setattr(relationship_temporal_state, "persist_authoritative_relationship_state", fail_write)
+    execution = analysis_window.run_analysis_window(_window(), temporal_state_repository=object())
+    assert len(writes) == 1
+    assert dict(execution.sii_result) == current
+
+    calls.clear()
+    writes.clear()
+    failed = _candidate_result(_current())
+    failed["status"] = "failed"
+    monkeypatch.setattr(analysis_window, "evaluate_sii",
+                        lambda **kwargs: calls.append(kwargs) or deepcopy(failed))
+    with pytest.raises(analysis_window.AnalysisWindowExecutionError):
+        analysis_window.run_analysis_window(_window(), temporal_state_repository=object())
+    assert writes == []
+
+
+def test_discovery_and_injected_evaluator_never_write_temporal_state(monkeypatch):
+    writes, calls = [], []
+    monkeypatch.setattr(relationship_temporal_state, "persist_authoritative_relationship_state",
+                        lambda *args, **kwargs: writes.append(True))
+    monkeypatch.setattr(analysis_window, "evaluate_sii",
+                        lambda **kwargs: calls.append(kwargs) or _candidate_result(_current()))
+    analysis_window.run_analysis_window(_window(), temporal_state_repository=object())
+    assert len(calls) == 2
+    assert writes == [True]  # one post-authoritative write attempt; none during discovery
+
+    writes.clear()
+    evaluator = lambda **kwargs: calls.append(kwargs) or _candidate_result(_current())
+    analysis_window.run_analysis_window(_window(), evaluator=evaluator, temporal_state_repository=object())
+    assert writes == []

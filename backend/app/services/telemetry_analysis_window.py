@@ -800,6 +800,22 @@ def run_analysis_window(
     if str(sii_result.get("status") or "").lower() == "failed":
         raise AnalysisWindowExecutionError("telemetry_analysis_engine_reported_failure")
 
+    if continuation_discovery:
+        # Phase F writes only after the sole authoritative result has passed
+        # the engine success checks. The persistence gate is best effort and
+        # cannot alter the already completed analytical result.
+        try:
+            from app.services.relationship_evidence_binding import digest
+            from app.services.relationship_temporal_state import persist_authoritative_relationship_state
+            persist_authoritative_relationship_state(
+                temporal_state_repository, window.phase4_scope,
+                system_id=identity.system_id, asset_id=window.asset_id,
+                result=sii_result,
+                authorized_scope=digest("relationship-scope.v1", window.phase4_scope.as_dict()),
+            )
+        except Exception:
+            pass
+
     compatibility = sii_result.get("compatibility")
     compatibility = compatibility if isinstance(compatibility, dict) else {}
     lineage_summary = window.lineage_summary(sample_limit=lineage_sample_limit)
