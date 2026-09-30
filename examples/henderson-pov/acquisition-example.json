@@ -1,0 +1,49 @@
+{
+  "signals": {
+    "s01": {
+      "unit": "1",
+      "bounds": [0, 1],
+      "bounds_unit": "1",
+      "bounds_basis": "NON-HENDERSON synthetic generator specification: bounded dimensionless values in [0,1]."
+    },
+    "s02": {
+      "unit": "1",
+      "bounds": [0, 1],
+      "bounds_unit": "1",
+      "bounds_basis": "NON-HENDERSON synthetic generator specification: bounded dimensionless values in [0,1]."
+    }
+  },
+  "timestamp": {
+    "column": "timestamp",
+    "mode": "timezone_aware",
+    "basis": "NON-HENDERSON synthetic UTC clock: simultaneous paired records with an arbitrary origin and one-minute spacing."
+  },
+  "acquisition": {
+    "namespace": "non-henderson-synthetic-dry-run-v1",
+    "identity": {"kind": "source_row", "fresh_nonreplayed_rows": true},
+    "basis": "NON-HENDERSON fixture: one generated paired draw per source record in one export; no copied acquisitions, re-exports, averaging, holding, interpolation, deadband, filtering or resampling. Six-decimal rounding is the only value transformation."
+  },
+  "grouping": {
+    "kind": "independent_acquisitions",
+    "justified": true,
+    "basis": "NON-HENDERSON test-only hypothetical acquisition model: each paired draw is an independently initiated acquisition with no shared residual dependence. This declaration exercises the interface; it is not an empirical independence finding."
+  },
+  "dependence_assumption": "independent_groups_conditional_on_context_and_schedule",
+  "independence_basis": "NON-HENDERSON fixture assumption: independent bounded draws conditional on one fixed context and schedule. Deterministic pseudorandom values exercise the contract and do not establish independence for real telemetry.",
+  "schedule": {
+    "assumption": "predeclared_noninformative",
+    "basis": "NON-HENDERSON fixture: fixed 112-record export and acquisition schedule; no value-based retention or outcome-based selection."
+  },
+  "context": {
+    "selection": {},
+    "basis": "NON-HENDERSON hypothetical homogeneous acquisition population using the same generator and bounds throughout."
+  },
+  "coverage_period_seconds": 420,
+  "plan": {
+    "reference_epoch_rows": [8, 8],
+    "comparison_rows": [16, 16, 16, 16, 16, 16],
+    "basis": "NON-HENDERSON dry-run design fixed before analysis: all records partitioned chronologically; a hypothetical seven-minute operating coverage period, unrelated to any incident. This is not a real operating-cycle claim.",
+    "declared_before_analysis": true,
+    "event_independent": true
+  }
+}

@@ -115,6 +115,9 @@ def analyze_relationship_graph(
         )
         persistence_states[state_key] = state
         edge.update(temporal)
+        # The immutable reference and lifetime ledger live once in state. The edge
+        # carries the current assessment and a reference ID, not another reference copy.
+        edge.pop("relationship_qualification", None)
         recurrence, recurrence_state = relationship_recurrence_evidence(
             edge, (relationship_recurrence_state or {}).get(state_key), identity=state["identity"],
             minimum_confidence=float(cfg["minimum_edge_confidence"]),
@@ -231,6 +234,12 @@ def analyze_relationship_graph(
         "recurring_edges": [edge for edge in enriched_edges if edge["recurrence_evidence"]["supported"]],
         "nodes": nodes,
         "edges": enriched_edges,
+        "qualification_summary": {
+            "directionally_supported": sum(e["directional_persistence_supported"] for e in enriched_edges),
+            "qualified_supported": sum(e["qualified_persistence_supported"] for e in enriched_edges),
+            "limited": sum(e["qualification_status"] == "limited" for e in enriched_edges),
+            "insufficient": sum(e["qualification_status"] == "insufficient" for e in enriched_edges),
+        },
         "eligible_edges": eligible_edges,
         "changed_edges": promoted_edges,
         "changed_edge_fraction": metrics["changed_edge_fraction"],

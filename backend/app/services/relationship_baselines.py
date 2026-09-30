@@ -412,6 +412,8 @@ def build_relationship_baseline(
     *,
     total_row_count: int | None = None,
     binding_signal_units: dict[str, str | None] | None = None,
+    acquisition_profile: dict[str, Any] | None = None,
+    relationship_persistence_state: dict[str, Any] | None = None,
     raw_signal_count: int | None = None,
     reference_rows: list[dict[str, Any]] | None = None,
     timestamp_column: str | None = None,
@@ -651,6 +653,15 @@ def build_relationship_baseline(
                 units={c: (binding_signal_units or {}).get(c) or signal_catalog.get(c, {}).get("canonical_unit")
                        or signal_catalog.get(c, {}).get("unit") for c in (left_col, right_col)},
             )
+            from app.engine.relationship_qualification import estimate
+            import json
+            pair_columns = sorted([left_col, right_col])
+            edge["relationship_qualification"] = estimate(
+                acquisition_profile, (relationship_persistence_state or {}).get(json.dumps(pair_columns, separators=(",", ":"))),
+                columns=pair_columns, baseline_rows=binding_rows(baseline_frame, baseline_rows_for_relationships),
+                current_rows=binding_rows(recent_frame, recent_rows_for_relationships),
+                timestamp_column=timestamp_column, units=(edge.get(SOURCE) or {}).get("units", {}),
+                source=edge.get(SOURCE) or {})
             graph_edges.append(edge)
 
             relationship_context = edge.get("relationship_context") if isinstance(edge.get("relationship_context"), dict) else {}

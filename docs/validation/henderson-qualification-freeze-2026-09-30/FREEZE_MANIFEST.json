@@ -1,0 +1,533 @@
+{
+  "base_commit": "979a69d46e2bf2a5b1f8864505099bd8792c847f",
+  "commit_status": "not committed; index unchanged; no push",
+  "created_utc": "2026-09-30T00:52:24.759634+00:00",
+  "files": [
+    {
+      "bytes": 2215,
+      "path": ".gitignore",
+      "sha256": "139dbb1f9e9420bbb1ead36cd151cfcd62ff36fc68e58cc0976706ccb1f9c332",
+      "verification_binding": "no_prior_digest; reviewed_content_and_mtime_predates_final_verification"
+    },
+    {
+      "bytes": 8571,
+      "path": "backend/app/engine/relationship_change.py",
+      "sha256": "f7c183768a63bdee68858cb64ec71eae49b1d40494b1713326b7cadea5017254",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 28730,
+      "path": "backend/app/engine/relationship_qualification.py",
+      "sha256": "02b518fb70c65c27d30145df4e7d3c32d58759f3cf1ab384fd90fdfb04c4ca52",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 22106,
+      "path": "backend/app/engine/sii/mode_conditioned_baseline.py",
+      "sha256": "3a604a12ad5d51a5c63ee88e4a27bec8424e6d8fd668d3ee2e64c06c8987ed06",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 30153,
+      "path": "backend/app/engine/sii/relationship_graph.py",
+      "sha256": "f7bd0ec58597091da50dfa0c16e38b1ce82388a0992ba709a60c2a843575802c",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 59445,
+      "path": "backend/app/engine/sii_engine.py",
+      "sha256": "253a7f36546368c166bd11ecffffce6ece0ca983f09776b466ae8925e0eb1d60",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 102764,
+      "path": "backend/app/services/analysis_result_contract.py",
+      "sha256": "e416e0692facc6fc0e4d74bde62509c32e16c06dbf99ec9d815599151f0ff4d3",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 20972,
+      "path": "backend/app/services/historical_pov.py",
+      "sha256": "711f42e1f5aee4b1cc81bb69263434da77f539838e4878f0266c807643644eed",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 37132,
+      "path": "backend/app/services/relationship_baselines.py",
+      "sha256": "0ccecd3aeadf861d9ab659b2292536863f850ab105820f7136c10aec249fb7be",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 19258,
+      "path": "backend/app/services/relationship_evidence_binding.py",
+      "sha256": "5cf1d18934c256e54e83d8764497edf7333cd514b10471a78ee06809f4910f38",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 7718,
+      "path": "backend/app/services/relationship_observation_projection.py",
+      "sha256": "e1c45882c55a7388fd5d03901ab4b6edf19d549d2c4e69740d215c9dda630892",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 14182,
+      "path": "backend/app/services/relationship_temporal_state.py",
+      "sha256": "dfa4a1d73faeec95e4898646bd17bb1ead2532f3c12c3f3b3a750004c1663783",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 235971,
+      "path": "backend/app/services/telemetry_repository.py",
+      "sha256": "3347b3b9ab8627bbd476983c289f3122de7a560fbd3c6a2da8925497546b1606",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 5328,
+      "path": "docs/henderson_pov_data_request.md",
+      "sha256": "e5e6ac694235c29151616b0abeb3e1ac4d04f8d00b46fe44e93e1805552cf882",
+      "verification_binding": "no_prior_digest; reviewed_content_and_mtime_predates_final_verification"
+    },
+    {
+      "bytes": 10279,
+      "path": "docs/historical_pov_adapter.md",
+      "sha256": "4bae9467db13d88184f6f4a2e33f02376daf15f434afcf824b0e9255e88689a7",
+      "verification_binding": "no_prior_digest; reviewed_content_and_mtime_predates_final_verification"
+    },
+    {
+      "bytes": 7465,
+      "path": "docs/relationship_qualified_evidence.md",
+      "sha256": "774c5deef854564a981a1ce4574c6dbf35f836526c490b34e38f9acbf5bb5834",
+      "verification_binding": "no_prior_digest; reviewed_content_and_mtime_predates_final_verification"
+    },
+    {
+      "bytes": 3531,
+      "path": "examples/henderson-pov/README.md",
+      "sha256": "ecc0cb8b964d23b2394f8ad6919f4fe48fc057135b697483f0dbee7bd954b070",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 2518,
+      "path": "examples/henderson-pov/acquisition-example.json",
+      "sha256": "045e4840746590f9d6bccd54032be4a329915c2e8a3e9ef6fa9ee53614b1d17c",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 4946,
+      "path": "examples/henderson-pov/telemetry-example.csv",
+      "sha256": "abf05beb79778619635fa6d64a84bf7ce6cebebb1366472e1e595c5015622ccc",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 12157,
+      "path": "scripts/validate_relationship_qualification.py",
+      "sha256": "4b8f9cef11b50c9b8e29f22d06b610ea180af58e72f930a5f517b23da7b5a0c5",
+      "verification_binding": "no_prior_digest; reviewed_content_and_mtime_predates_final_verification"
+    },
+    {
+      "bytes": 6763,
+      "path": "tests/qualification_battery_cases.py",
+      "sha256": "1808d4ce02189606402d18c218828aa8bcbf0a5b76b5ddda09d4a660ab4e2a41",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 2627,
+      "path": "tests/qualified_authority_cases.py",
+      "sha256": "bdae6923c2bc42e1643dc5ab0c712de499cccc76aacd090a871498c4f2ea8e48",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 2917,
+      "path": "tests/relationship_evidence_binding_cases.py",
+      "sha256": "11d9b0c3317de89ac99aca65659bb6c4c8cd6569a24c339eff28d1105ef50bad",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 2233,
+      "path": "tests/resource_binding_cases.py",
+      "sha256": "8c07b01b02d3c47641948f824ba7a85a33e2270007f85d4f77105a0afa9e458f",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 6421,
+      "path": "tests/test_henderson_pov_example.py",
+      "sha256": "4d3cf62fc470dbc15fd706ac83ec07b6fb937f4af224d8fd7362942d8557dc0e",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 17044,
+      "path": "tests/test_historical_pov.py",
+      "sha256": "3333baeeb6e012e64a95b5a2515204f40f9e0366fda7da2bac07d971bc732777",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 16953,
+      "path": "tests/test_relationship_authority.py",
+      "sha256": "ef4e64334341d25884cd144669bb20e84d0168d15bfac7db0ed11604be23f9bd",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 26383,
+      "path": "tests/test_relationship_evidence_binding.py",
+      "sha256": "4e88c4b41e02eb9ee30830c6285a7f73819b084f76d6b17b035fcf7270588245",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 17972,
+      "path": "tests/test_relationship_qualification.py",
+      "sha256": "482ab8f59c6656d11d68952eeb759e9400ee6c351a2f090d9bf367e296e90307",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 14622,
+      "path": "tests/test_relationship_qualification_battery.py",
+      "sha256": "f565557318e5afc494355ab31b9e010efd05ffbe3303a70e010d936f1abb4ee0",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 2824,
+      "path": "tests/test_relationship_qualification_invariance.py",
+      "sha256": "8fd0aeb3b8940bc9fa18ded556ab5dbe30e0576d61c276e4c61aabfa085f67ab",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 1102,
+      "path": "tests/test_relationship_qualification_runner.py",
+      "sha256": "1987c9b3d8954e175e1f966ef98ae5369aed828bd099a081a677fd248f60fd94",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 14001,
+      "path": "tests/test_relationship_recurrence.py",
+      "sha256": "05ca4b8e17b4d05a5627133152868e969cba75a196f0d7e749ce7ff63d279a89",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 12993,
+      "path": "tests/test_relationship_temporal_persistence.py",
+      "sha256": "f495a7807be1619e24c6d341e64b0b3928f0b220eb414e75c80a9c9e214402d6",
+      "verification_binding": "matches_retained_source_sha256"
+    },
+    {
+      "bytes": 6239,
+      "path": "tests/test_sii_reference_cache.py",
+      "sha256": "b31edac565770866238d56b1ac34d12ad2c1a3e13c314b4cb2aa1dfb748eb35b",
+      "verification_binding": "matches_retained_source_sha256"
+    }
+  ],
+  "freeze_kind": "SHA-256 manifest of existing working-tree bytes; no implementation edits or Git commit",
+  "pre_existing_out_of_scope_failures": {
+    "historical_log_note": "The 7-failure regression log predates the retained resource migration and Henderson example passes, which supersede its other two failures.",
+    "tests": [
+      "tests/test_sii_contract_enforcement.py::test_upload_status_complete_without_sii_contract_is_failed",
+      "tests/test_sii_runner.py::test_backend_sii_runner_single_vector_preserves_public_shape",
+      "tests/test_governance_compatibility.py::test_unused_governance_preserves_base_sii_result_and_compatibility",
+      "tests/test_analysis_output_quality.py::test_semantic_header_mapping_survives_pipeline_and_titles_avoid_column_fallbacks",
+      "tests/test_analysis_output_quality.py::test_binary_status_columns_use_state_analysis_not_operator_findings"
+    ],
+    "unchanged": true
+  },
+  "preservation": {
+    "benchmarks": "excluded; no benchmark input content read",
+    "equations_thresholds_semantics_fixtures_benchmark_inputs": "unchanged from task start",
+    "existing_files_modified": false,
+    "holdout": "not opened, read, hashed, or run during freeze",
+    "unrelated_dirty_untracked_files": "excluded from frozen set"
+  },
+  "schema": "henderson-qualification-freeze.v1",
+  "status": "FREEZE COMPLETE",
+  "verification": {
+    "checks_run": [
+      "SHA-256 comparison of 615 recorded non-runtime source/test/example/script files: all match",
+      "In-scope recorded SHA-256 comparisons: all match",
+      "Parse retained JUnit XML: final 49 passes and reused 75 passes confirmed",
+      "Python AST parsing of frozen Python files: passed",
+      "git diff reviewed",
+      "git diff --check: passed"
+    ],
+    "final_passes": 49,
+    "prior_digest_limit": "The three docs and .gitignore have no prior SHA-256 in the retained verification snapshot. Current contents reviewed; modification times predate final verification. No byte-for-byte historical identity claim is made for these four files.",
+    "prior_source_hash_record": {
+      "note": "Only in-scope entries retained below; original record also includes unrelated sources.",
+      "original_location": "/tmp/henderson-verification-source-hashes.json",
+      "sha256": "ea2d3c8f76dd0a4c5af4356ccf33c9ae7a58d4e77b6aeb992215867cce0835b5"
+    },
+    "reused_mechanism_battery_passes": 75,
+    "runs": [
+      {
+        "artifacts": [
+          {
+            "bytes": 1939,
+            "path": "evidence/henderson-verification-targeted.log",
+            "sha256": "016494c654b4de851cf5d6cb163bf129e949595da8e03d9aaa0675dfe127d050"
+          },
+          {
+            "bytes": 4651,
+            "path": "evidence/henderson-verification-targeted.xml",
+            "sha256": "bbf476906cfd7f67d8ac9bb52abd50153752ef1d8f6891cb25aa5eeaf03f8e0a"
+          }
+        ],
+        "results": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 33
+        },
+        "role": "final",
+        "run": "henderson-verification-targeted"
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 1015,
+            "path": "evidence/henderson-verification-sustained.log",
+            "sha256": "183b2c1422ae1b5f2ae019ac8b0249ddbadbcd24286625247b7767569bfca966"
+          },
+          {
+            "bytes": 400,
+            "path": "evidence/henderson-verification-sustained.xml",
+            "sha256": "aef6b45c282dd1deaf0429f890a5fe48c61cd3aa363618b13ec9af08b2f16457"
+          }
+        ],
+        "results": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 1
+        },
+        "role": "final",
+        "run": "henderson-verification-sustained"
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 1210,
+            "path": "evidence/henderson-verification-abstention.log",
+            "sha256": "60cc1c646759aa21adecd7f40271717b66e0853aeb0a586a06696899d62d9c9d"
+          },
+          {
+            "bytes": 522,
+            "path": "evidence/henderson-verification-abstention.xml",
+            "sha256": "b8d85908b97c98e8b88860c9bd21fa52b099cbafc2ee0d322293e70c4b505154"
+          }
+        ],
+        "results": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 2
+        },
+        "role": "final",
+        "run": "henderson-verification-abstention"
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 1400,
+            "path": "evidence/henderson-verification-example.log",
+            "sha256": "ea34a8e87622c7d1a6a678585f59b60907f2b9c78746d552d2bf5d3126fd8abf"
+          },
+          {
+            "bytes": 2108,
+            "path": "evidence/henderson-verification-example.xml",
+            "sha256": "a17bbc4f4ad690878efb07737cff2b673b7ad56ede1c7c111e9766910494047b"
+          }
+        ],
+        "results": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 13
+        },
+        "role": "final",
+        "run": "henderson-verification-example"
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 710,
+            "path": "evidence/qualification-final-mechanisms.log",
+            "sha256": "35e8c1961dc8759c264f944364db30f3c8156cc107b78b54d5384710c047ee0a"
+          },
+          {
+            "bytes": 3518,
+            "path": "evidence/qualification-final-mechanisms.xml",
+            "sha256": "e9b2e8520c712dbe674e1ad5f2876f55036f527d0b8ef7c2955a5da8348526b4"
+          }
+        ],
+        "results": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 23
+        },
+        "role": "reused",
+        "run": "qualification-final-mechanisms"
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 710,
+            "path": "evidence/qualification-battery-final.log",
+            "sha256": "5c2e6a2c5c2c7e2acbba9320dae4f44d6c165529e88f6d5bb6a0eca1040aef85"
+          },
+          {
+            "bytes": 18490,
+            "path": "evidence/qualification-battery-final.xml",
+            "sha256": "b4eea9d000b085ff12b5bced7f2cd6c7a8b66330be7aa7fbe6f8b07e75db3b57"
+          }
+        ],
+        "results": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 52
+        },
+        "role": "reused",
+        "run": "qualification-battery-final"
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 629,
+            "path": "evidence/qualification-final-invariance.log",
+            "sha256": "e09a3ae237216b9547d294702e4475a5033634d299a7621c261a90786fc2c687"
+          },
+          {
+            "bytes": 564,
+            "path": "evidence/qualification-final-invariance.xml",
+            "sha256": "c1015aa397eafa6e91bd5c0a36ce53188f2b5e97301e8cb9328ee69e94fd4e29"
+          }
+        ],
+        "results": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 2
+        },
+        "role": "supporting",
+        "run": "qualification-final-invariance"
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 1222,
+            "path": "evidence/qualification-final-state.log",
+            "sha256": "b3b18962424e7910b63ddaf295bbddc7992247db9c551ee1fd56cf1e9dbe801c"
+          },
+          {
+            "bytes": 11154,
+            "path": "evidence/qualification-final-state.xml",
+            "sha256": "3004d0560806975bf108401fe3f0c352746147eb7562b92c3c10eff10d07a077"
+          }
+        ],
+        "results": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 1,
+          "tests": 72
+        },
+        "role": "supporting",
+        "run": "qualification-final-state"
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 629,
+            "path": "evidence/qualification-final-resource-migration.log",
+            "sha256": "b80220bac9d5d7229e7b2c2cea69433b3b4e1018d97ea93f9d7a895930abb124"
+          },
+          {
+            "bytes": 901,
+            "path": "evidence/qualification-final-resource-migration.xml",
+            "sha256": "fbe67c513415a7ac907b94558b827f995f3cfa93cdaf522c0d36baf9aeeb4bd7"
+          }
+        ],
+        "results": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 4
+        },
+        "role": "supporting",
+        "run": "qualification-final-resource-migration"
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 710,
+            "path": "evidence/qualification-final-temporal-migration.log",
+            "sha256": "30032a46715d6e2a217dd4c122aad9f91ff82da811df907bab480672133b9245"
+          },
+          {
+            "bytes": 5877,
+            "path": "evidence/qualification-final-temporal-migration.xml",
+            "sha256": "5d2ec2e415240ae1e7495f25e5ff83d3f8d1a47fcf37f1357624cf6708e1b781"
+          }
+        ],
+        "results": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 35
+        },
+        "role": "supporting",
+        "run": "qualification-final-temporal-migration"
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 13418,
+            "path": "evidence/qualification-final-regressions.log",
+            "sha256": "ab59f2d09d22b5f5d7ad58b71d17a0e4201a57513f227808e59d68c05e4d23bd"
+          },
+          {
+            "bytes": 65579,
+            "path": "evidence/qualification-final-regressions.xml",
+            "sha256": "667bf5cf0b9d6a878648cefe2b45b304b8eff264bedb9f913f9a7378b8d53122"
+          }
+        ],
+        "results": {
+          "errors": 0,
+          "failures": 7,
+          "skipped": 1,
+          "tests": 418
+        },
+        "role": "historical_regression_with_two_superseded_failures",
+        "run": "qualification-final-regressions"
+      }
+    ],
+    "source_hashes": {
+      "backend/app/engine/relationship_change.py": "f7c183768a63bdee68858cb64ec71eae49b1d40494b1713326b7cadea5017254",
+      "backend/app/engine/relationship_qualification.py": "02b518fb70c65c27d30145df4e7d3c32d58759f3cf1ab384fd90fdfb04c4ca52",
+      "backend/app/engine/sii/mode_conditioned_baseline.py": "3a604a12ad5d51a5c63ee88e4a27bec8424e6d8fd668d3ee2e64c06c8987ed06",
+      "backend/app/engine/sii/relationship_graph.py": "f7bd0ec58597091da50dfa0c16e38b1ce82388a0992ba709a60c2a843575802c",
+      "backend/app/engine/sii_engine.py": "253a7f36546368c166bd11ecffffce6ece0ca983f09776b466ae8925e0eb1d60",
+      "backend/app/services/analysis_result_contract.py": "e416e0692facc6fc0e4d74bde62509c32e16c06dbf99ec9d815599151f0ff4d3",
+      "backend/app/services/historical_pov.py": "711f42e1f5aee4b1cc81bb69263434da77f539838e4878f0266c807643644eed",
+      "backend/app/services/relationship_baselines.py": "0ccecd3aeadf861d9ab659b2292536863f850ab105820f7136c10aec249fb7be",
+      "backend/app/services/relationship_evidence_binding.py": "5cf1d18934c256e54e83d8764497edf7333cd514b10471a78ee06809f4910f38",
+      "backend/app/services/relationship_observation_projection.py": "e1c45882c55a7388fd5d03901ab4b6edf19d549d2c4e69740d215c9dda630892",
+      "backend/app/services/relationship_temporal_state.py": "dfa4a1d73faeec95e4898646bd17bb1ead2532f3c12c3f3b3a750004c1663783",
+      "backend/app/services/telemetry_repository.py": "3347b3b9ab8627bbd476983c289f3122de7a560fbd3c6a2da8925497546b1606",
+      "examples/henderson-pov/README.md": "ecc0cb8b964d23b2394f8ad6919f4fe48fc057135b697483f0dbee7bd954b070",
+      "examples/henderson-pov/acquisition-example.json": "045e4840746590f9d6bccd54032be4a329915c2e8a3e9ef6fa9ee53614b1d17c",
+      "examples/henderson-pov/telemetry-example.csv": "abf05beb79778619635fa6d64a84bf7ce6cebebb1366472e1e595c5015622ccc",
+      "tests/qualification_battery_cases.py": "1808d4ce02189606402d18c218828aa8bcbf0a5b76b5ddda09d4a660ab4e2a41",
+      "tests/qualified_authority_cases.py": "bdae6923c2bc42e1643dc5ab0c712de499cccc76aacd090a871498c4f2ea8e48",
+      "tests/relationship_evidence_binding_cases.py": "11d9b0c3317de89ac99aca65659bb6c4c8cd6569a24c339eff28d1105ef50bad",
+      "tests/resource_binding_cases.py": "8c07b01b02d3c47641948f824ba7a85a33e2270007f85d4f77105a0afa9e458f",
+      "tests/test_henderson_pov_example.py": "4d3cf62fc470dbc15fd706ac83ec07b6fb937f4af224d8fd7362942d8557dc0e",
+      "tests/test_historical_pov.py": "3333baeeb6e012e64a95b5a2515204f40f9e0366fda7da2bac07d971bc732777",
+      "tests/test_relationship_authority.py": "ef4e64334341d25884cd144669bb20e84d0168d15bfac7db0ed11604be23f9bd",
+      "tests/test_relationship_evidence_binding.py": "4e88c4b41e02eb9ee30830c6285a7f73819b084f76d6b17b035fcf7270588245",
+      "tests/test_relationship_qualification.py": "482ab8f59c6656d11d68952eeb759e9400ee6c351a2f090d9bf367e296e90307",
+      "tests/test_relationship_qualification_battery.py": "f565557318e5afc494355ab31b9e010efd05ffbe3303a70e010d936f1abb4ee0",
+      "tests/test_relationship_qualification_invariance.py": "8fd0aeb3b8940bc9fa18ded556ab5dbe30e0576d61c276e4c61aabfa085f67ab",
+      "tests/test_relationship_qualification_runner.py": "1987c9b3d8954e175e1f966ef98ae5369aed828bd099a081a677fd248f60fd94",
+      "tests/test_relationship_recurrence.py": "05ca4b8e17b4d05a5627133152868e969cba75a196f0d7e749ce7ff63d279a89",
+      "tests/test_relationship_temporal_persistence.py": "f495a7807be1619e24c6d341e64b0b3928f0b220eb414e75c80a9c9e214402d6",
+      "tests/test_sii_reference_cache.py": "b31edac565770866238d56b1ac34d12ad2c1a3e13c314b4cb2aa1dfb748eb35b"
+    },
+    "tests_rerun": false
+  }
+}

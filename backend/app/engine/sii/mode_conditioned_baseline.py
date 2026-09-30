@@ -38,6 +38,8 @@ def analyze_mode_conditioned_baseline(
     *,
     rows: list[dict[str, Any]],
     reference_rows: list[dict[str, Any]] | None = None,
+    acquisition_profile: dict[str, Any] | None = None,
+    relationship_persistence_state: dict[str, Any] | None = None,
     numeric_columns: list[str],
     timestamp_column: str | None,
     telemetry_signal_catalog: dict[str, dict[str, Any]] | list[dict[str, Any]] | None = None,
@@ -210,6 +212,8 @@ def analyze_mode_conditioned_baseline(
         edges.append(
             _conditioned_edge(
                 raw_edge,
+                acquisition_profile=acquisition_profile,
+                relationship_persistence_state=relationship_persistence_state,
                 left=left,
                 right=right,
                 baseline_correlation=baseline_correlation,
@@ -377,6 +381,8 @@ def _conditioned_edge(
     selected_rows: list[dict[str, Any]],
     recent_rows: list[dict[str, Any]],
     timestamp_column: str | None,
+    acquisition_profile: dict[str, Any] | None = None,
+    relationship_persistence_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     delta = abs(recent_correlation - baseline_correlation)
     confidence = max(0.2, 0.65 * min(1.0, min(baseline_count, recent_count) / 12.0) + 0.35 * min(1.0, delta / 0.75))
@@ -449,6 +455,14 @@ def _conditioned_edge(
         selection={"mode_id": recent_mode.get("mode_id"), "features": recent_mode.get("features", {})},
         method="pearson-mode.v1",
     )
+    from app.engine.relationship_qualification import estimate
+    import json
+    columns = sorted([left, right])
+    result["relationship_qualification"] = estimate(
+        acquisition_profile, (relationship_persistence_state or {}).get(json.dumps(columns, separators=(",", ":"))),
+        columns=columns, baseline_rows=binding_rows(selected_rows), current_rows=binding_rows(recent_rows),
+        timestamp_column=timestamp_column, units=(result.get(SOURCE) or {}).get("units", {}),
+        source=result.get(SOURCE) or {})
     return result
 
 

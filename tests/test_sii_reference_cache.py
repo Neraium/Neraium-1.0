@@ -119,4 +119,6 @@ def test_cache_preserves_governed_temporal_replay(monkeypatch, current_correlati
         uncached_states = uncached['relationship_graph']['relationship_persistence_state']
         assert cached_states == uncached_states
         promotions.append(cached['relationship_graph']['edges'][0]['promoted_changed_edge'])
-    assert promotions == ([False] * 5 + [True] * 3 if current_correlation == -0.89 else [False] * 8)
+    assert promotions == [False] * 8  # No acquisition profile in this cache fixture.
+    assert cached['relationship_graph']['edges'][0]['directional_persistence_supported'] is (current_correlation == -0.89)
+    assert not cached['relationship_graph']['edges'][0]['qualified_persistence_supported']

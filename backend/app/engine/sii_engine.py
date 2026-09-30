@@ -69,6 +69,7 @@ def evaluate_sii(
     phase4_asset_id: str | None = None,
     phase4_observation_lineage=None,
     relationship_persistence_state: dict[str, Any] | None = None,
+    relationship_acquisition_profile: dict[str, Any] | None = None,
     relationship_recurrence_state: dict[str, Any] | None = None,
     config=None,
     progress_callback=None,
@@ -279,6 +280,8 @@ def evaluate_sii(
             numeric_columns_used,
             timestamp_column=timestamp_column,
             binding_signal_units=signal_units,
+            acquisition_profile=relationship_acquisition_profile,
+            relationship_persistence_state=relationship_persistence_state,
             **({"reference_rows": reference_dict_rows} if paired else {}),
             **({"baseline_window_limit": 12000, "recent_window_limit": 12000} if paired else {}),
             total_row_count=int(cfg.get("row_count_total") or len(dict_rows)),
@@ -472,6 +475,8 @@ def evaluate_sii(
     try:
         attempted.append("mode_conditioned_baseline")
         mode_conditioned = analyze_mode_conditioned_baseline(
+            acquisition_profile=relationship_acquisition_profile,
+            relationship_persistence_state=relationship_persistence_state,
             **({"reference_rows": reference_dict_rows} if paired else {}),
             rows=dict_rows,
             numeric_columns=numeric_columns_used,

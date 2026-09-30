@@ -10,6 +10,11 @@ from test_relationship_temporal_persistence import edge, analyze
 
 @lru_cache(maxsize=4)
 def assessment(history=8, columns=('flow', 'load')):
+    if history >= 6 or history == 1:
+        from qualified_authority_cases import qualified_product
+        entry, registry, _ = qualified_product(columns, 'resource-test', history=8 if history == 1 else history,
+                                               epoch_end=True, last_only=history == 1)
+        return deepcopy(entry), deepcopy(registry)
     state = None
     for day in range(1, history + 1):
         raw = edge(day, columns=list(columns))

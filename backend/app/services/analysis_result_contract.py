@@ -946,6 +946,9 @@ def _sii_relationship(item: dict[str, Any]) -> dict[str, Any]:
             "temporal_persistence_supporting_observations", "temporal_persistence_direction",
             "temporal_persistence_direction_agreement", "temporal_persistence_supported",
             "persistent_relationship_change", "temporal_persistence_status",
+            "directional_persistence_supported", "directional_persistence_status",
+            "qualified_persistence_supported", "qualification_status",
+            "reference_qualification_id", "persistence_factor",
             "first_supported_observation", "latest_supported_observation",
         ),
     )

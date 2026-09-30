@@ -41,7 +41,9 @@ def test_retry_serialization_and_read_only_resolution():
     assertion = a['top_relationship_changes'][0]
     original = deepcopy(registry)
     record = resolve(assertion, json.loads(json.dumps(registry)), authorized_scope='authorized-site-A', require_temporal=True)
-    assert record['temporal']['assessment']['persistent_relationship_change'] is True
+    assert record['temporal']['assessment']['directional_persistence_supported'] is True
+    assert record['temporal']['assessment']['qualified_persistence_supported'] is False
+    assert record['temporal']['assessment']['qualification_status'] == 'limited'
     assert assertion[REF] == b['top_relationship_changes'][0][REF]
     assert assertion[ASSESSMENT_BINDING] == b['top_relationship_changes'][0][ASSESSMENT_BINDING]
     assert registry == original
@@ -283,7 +285,7 @@ from app.engine.sii_engine import evaluate_sii
 from test_sii_supplied_reference import contract
 from app.services.output_semantics import semantic_content
 from app.services.product_evidence_contract import product_evidence
-from relationship_evidence_binding_cases import without_binding_metadata
+from relationship_evidence_binding_cases import without_binding_metadata, project_descriptive_contract
 from presentation_phase1_context_case import context_fallback_case
 from presentation_phase1_graph_fallback_case import graph_fallback_case
 case = CASE
@@ -316,13 +318,19 @@ def authority_comparison(value):
  if isinstance(value, list):
   return [authority_comparison(item) for item in value]
  return value
-print(json.dumps(authority_comparison(without_binding_metadata(semantic_content(product_evidence(r)))), sort_keys=True))
+print(json.dumps(project_descriptive_contract(authority_comparison(without_binding_metadata(semantic_content(product_evidence(r))))), sort_keys=True))
 '''.replace('CASE', repr(case))
     outputs = []
     for backend in (authoritative_backend, root / 'backend'):
         env = {**os.environ, 'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONPATH': str(backend)+os.pathsep+str(root/'tests')}
         outputs.append(json.loads(subprocess.check_output([sys.executable, '-c', script], env=env, cwd=authoritative_backend.parent)))
-    assert outputs[0] == outputs[1]
+    def differences(a, b, path=''):
+        if isinstance(a, dict) and isinstance(b, dict):
+            return [d for k in sorted(set(a) | set(b)) for d in differences(a.get(k), b.get(k), path+'/'+k)]
+        if isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
+            return [d for i, (x, y) in enumerate(zip(a, b)) for d in differences(x, y, path+'/'+str(i))]
+        return [] if a == b else [(path, repr(a)[:120], repr(b)[:120])]
+    assert outputs[0] == outputs[1], differences(*outputs)[:20]
 
 
 def test_temporal_identity_mismatch_cannot_supply_proof():
@@ -385,6 +393,14 @@ def test_existing_calculation_ast_unchanged_except_binding_metadata(path, functi
 
     class RemoveBindingOnly(ast.NodeTransformer):
         def visit_FunctionDef(self, node):
+            # Approved qualification admission/state parameters, not estimator
+            # parameters. Numerical bodies must still match the archived AST.
+            for name in ('acquisition_profile', 'relationship_acquisition_profile',
+                         *(() if node.name == 'evaluate_sii' else ('relationship_persistence_state',))):
+                names = [a.arg for a in node.args.kwonlyargs]
+                if name in names:
+                    i = names.index(name)
+                    node.args.kwonlyargs.pop(i); node.args.kw_defaults.pop(i)
             if node.name == 'evaluate_sii':
                 for name in ('canonical_endpoint_identity', 'phase4_system_identity', 'phase4_asset_id', 'phase4_observation_lineage'):
                     i = [a.arg for a in node.args.kwonlyargs].index(name)
@@ -392,6 +408,8 @@ def test_existing_calculation_ast_unchanged_except_binding_metadata(path, functi
             return self.generic_visit(node)
 
         def visit_Call(self, node):
+            if isinstance(node.func, ast.Name) and node.func.id in {'build_relationship_baseline', 'analyze_mode_conditioned_baseline'}:
+                node.keywords = [k for k in node.keywords if k.arg not in {'acquisition_profile', 'relationship_persistence_state'}]
             if function == 'evaluate_sii' and isinstance(node.func, ast.Name) and node.func.id == 'finalize':
                 node.keywords = [keyword for keyword in node.keywords if keyword.arg not in {
                     'endpoint_identity', 'phase4_system_identity', 'asset_id', 'authenticated_scope', 'observation_lineage'}]
@@ -399,12 +417,32 @@ def test_existing_calculation_ast_unchanged_except_binding_metadata(path, functi
 
         def visit_Assign(self, node):
             target = node.targets[0]
+            if (isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant)
+                    and target.slice.value == 'relationship_qualification'):
+                assert isinstance(node.value, ast.Call) and node.value.func.id == 'estimate'
+                return None
+            if (function in {'build_relationship_baseline', '_conditioned_edge'}
+                    and isinstance(target, ast.Name) and target.id in {'pair_columns', 'columns'}
+                    and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
+                    and node.value.func.id == 'sorted'):
+                return None
             if (function == 'evaluate_sii' and isinstance(target, ast.Subscript)
                     and isinstance(target.value, ast.Name) and target.value.id == 'result'
                     and isinstance(target.slice, ast.Constant)
                     and target.slice.value == 'relationship_endpoint_identity'):
                 return None
             return self.generic_visit(node)
+
+        def visit_ImportFrom(self, node):
+            if node.module == 'app.engine.relationship_qualification':
+                assert [n.name for n in node.names] == ['estimate']
+                return None
+            return node
+
+        def visit_Import(self, node):
+            if function in {'build_relationship_baseline', '_conditioned_edge'} and [n.name for n in node.names] == ['json']:
+                return None
+            return node
 
         def visit_If(self, node):
             if function == 'evaluate_sii' and any(

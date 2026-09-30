@@ -34,7 +34,8 @@ def evidence(result):
 ])
 def test_distinct_evidence_models(deltas, continuous, recurring):
     results = replay(deltas)
-    assert any(r['edges'][0]['temporal_persistence_supported'] for r in results) == continuous
+    assert any(r['edges'][0]['directional_persistence_supported'] for r in results) == continuous
+    assert not any(r['edges'][0]['qualified_persistence_supported'] for r in results)
     assert any(evidence(r)['supported'] for r in results) == recurring
     if recurring:
         assert all(not r['changed_edges'] for r in results)
@@ -246,8 +247,13 @@ def test_controlled_chw_campaign_is_one_fixed_validation_fixture():
                              sensor_health={'signals': window['sensor_health_context']})
             persistence, recurrence = result['relationship_persistence_state'], result['relationship_recurrence_state']
             actual = result['edges'][0]
-            assert actual['temporal_persistence_supported'] == window['temporal_supported'], (scenario, day)
-            assert actual['promoted_changed_edge'] == window['promoted'], (scenario, day)
+            assert actual['directional_persistence_supported'] == window['temporal_supported'], (scenario, day)
+            assert not actual['qualified_persistence_supported'], (scenario, day)
+            # Frozen fixture contains only sub-abrupt displacements. Its old
+            # promotion expectation represents directional support, not a profile.
+            assert abs(window['delta']) < .25
+            assert window['promoted'] == window['temporal_supported']
+            assert not actual['promoted_changed_edge'], (scenario, day)
             supported |= evidence(result)['supported']
             if evidence(result)['supported']:
                 projected = build_sii_evidence_projection({'sii_result': {'relationship_graph': result}})

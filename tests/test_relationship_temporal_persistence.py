@@ -75,9 +75,11 @@ def test_observed_wastewater_trajectory_promotes_with_provenance():
               -0.236965, -0.238938, -0.211523, -0.226087, -0.167490]
     outputs, state = sequence(deltas)
     assert not any(e['promoted_changed_edge'] for e in outputs[:7])
-    assert all(e['promoted_changed_edge'] for e in outputs[7:])
+    assert all(e['directional_persistence_supported'] for e in outputs[7:])
+    assert not any(e['qualified_persistence_supported'] or e['promoted_changed_edge'] for e in outputs)
     latest = outputs[-1]
-    assert latest['change_type'] == 'strengthened'
+    assert latest['qualification_status'] == 'limited'
+    assert latest['change_type'] == 'stable'
     assert latest['single_window_change_type'] == 'stable'
     assert latest['temporal_persistence_direction'] == -1
     assert latest['temporal_persistence_observations'] == 8
@@ -89,7 +91,9 @@ def test_observed_wastewater_trajectory_promotes_with_provenance():
 
 def test_noisy_directional_displacement_needs_no_monotonicity():
     outputs, _ = sequence([-0.18, -0.23, 0.02, -0.17, -0.22, 0.16, -0.19, -0.21])
-    assert outputs[-1]['promoted_changed_edge']
+    assert outputs[-1]['directional_persistence_supported']
+    assert not outputs[-1]['qualified_persistence_supported']
+    assert not outputs[-1]['promoted_changed_edge']
     assert outputs[-1]['temporal_persistence_direction_agreement'] == 0.75
     assert outputs[-1]['temporal_persistence_supporting_observations'] == 6
 
@@ -225,11 +229,14 @@ def test_paired_engine_carries_read_only_state_into_governed_evidence(monkeypatc
         assert result['processing_trace']['modules_failed'] == []
         state = result['relationship_graph']['relationship_persistence_state']
     current = result['relationship_graph']['edges'][0]
-    assert current['promoted_changed_edge'], current
-    governed = result['analysis_result']['sii_evidence']['relationship_changes'][0]
-    assert governed['persistent_relationship_change']
-    assert governed['supporting_windows'] == current['supporting_windows']
-    assert all(w['source_dataset_id'] for w in governed['supporting_windows'])
+    assert current['directional_persistence_supported'], current
+    assert not current['promoted_changed_edge']
+    # This no-profile, sub-abrupt fixture has descriptive support only. The
+    # governed change list must not manufacture a promoted relationship finding.
+    assert result['analysis_result']['sii_evidence']['relationship_changes'] == []
+    assert current['qualification_status'] == 'limited'
+    assert current['supporting_windows']
+    assert all(w['source_dataset_id'] for w in current['supporting_windows'])
 
 
 @pytest.mark.parametrize(('baseline', 'delta', 'expected'), [
@@ -238,8 +245,13 @@ def test_paired_engine_carries_read_only_state_into_governed_evidence(monkeypatc
 ])
 def test_temporal_change_classification_uses_strength_for_both_signs(baseline, delta, expected):
     outputs, _ = sequence([delta] * 6, baseline=baseline)
-    assert outputs[-1]['change_type'] == expected
-    assert outputs[-1]['promoted_changed_edge']
+    # Preserve the strength/sign classifier invariant while requiring actual
+    # qualification before the graph may use its temporal classification path.
+    assert relationship_change_type(baseline, baseline + delta, persistent=True) == expected
+    assert outputs[-1]['directional_persistence_supported']
+    assert outputs[-1]['change_type'] == 'stable'
+    assert not outputs[-1]['qualified_persistence_supported']
+    assert not outputs[-1]['promoted_changed_edge']
 
 
 def test_historical_quality_and_legacy_sample_setting_cannot_supply_votes():

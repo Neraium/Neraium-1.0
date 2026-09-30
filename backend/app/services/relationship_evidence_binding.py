@@ -24,7 +24,9 @@ WINDOW = ("baseline_start", "baseline_end", "current_start", "current_end")
 TEMPORAL = ("temporal_persistence_observations", "temporal_persistence_supporting_observations",
             "temporal_persistence_direction", "temporal_persistence_direction_agreement",
             "temporal_persistence_supported", "persistent_relationship_change",
-            "temporal_persistence_status", "first_supported_observation", "latest_supported_observation")
+            "temporal_persistence_status", "first_supported_observation", "latest_supported_observation",
+            "directional_persistence_supported", "directional_persistence_status", "qualified_persistence_supported",
+            "qualification_status", "qualified_persistence", "reference_qualification_id", "persistence_factor")
 
 
 def digest(domain, value):
@@ -132,6 +134,27 @@ def temporal_descriptor(edge, graph):
         if identity.get(key) != expected:
             raise ValueError("relationship_temporal_identity_mismatch")
     observations = []
+    qualification = state.get("qualified_evidence") or {}
+    if not isinstance(qualification, dict):
+        raise ValueError("relationship_reference_qualification_binding_mismatch")
+    if state.get("version") == 2 and any(edge.get(k) is True for k in (
+            "qualified_persistence_supported", "persistent_relationship_change", "temporal_persistence_supported")):
+        reference = qualification.get("reference")
+        if (not isinstance(reference, dict) or reference.get("status") != "sufficient"
+                or edge.get("qualification_status") != "sufficient"
+                or any(edge.get(k) is not True for k in ("directional_persistence_supported",
+                    "qualified_persistence_supported", "persistent_relationship_change", "temporal_persistence_supported"))
+                or edge.get("qualified_persistence", {}).get("supported") is not True):
+            raise ValueError("relationship_supported_qualification_provenance_missing")
+    if qualification.get("invalid_state"):
+        raise ValueError("relationship_reference_qualification_binding_mismatch")
+    if qualification:
+        from app.engine.relationship_qualification import digest as qualification_digest
+        if (qualification.get("reference_hash") != qualification_digest(qualification.get("reference"))
+                or qualification.get("reference_id") != qualification_digest(qualification.get("identity"))
+                or qualification.get("identity", {}).get("reference_observations_hash") != edge[SOURCE]["baseline_observations"]
+                or edge.get("reference_qualification_id") != qualification.get("reference_id")):
+            raise ValueError("relationship_reference_qualification_binding_mismatch")
     for item in state.get("observations", []):
         observations.append({
             **pick(item, ("observed_at", "source_dataset_id", "signed_correlation_delta",
@@ -149,7 +172,8 @@ def temporal_descriptor(edge, graph):
             if latest.get(field) != edge.get(field):
                 raise ValueError("relationship_temporal_measurement_mismatch")
     return {"status": "available", "identity": deepcopy(identity),
-            "method": "relationship_temporal_evidence.v1",
+            "method": "relationship_temporal_evidence.v2" if state.get("version") == 2 else "relationship_temporal_evidence.v1",
+            "qualified_evidence": deepcopy(state.get("qualified_evidence", {})),
             "parameters": pick(graph.get("thresholds") or {},
                                ("temporal_persistence", "minimum_edge_confidence", "minimum_data_quality_factor")),
             "observations": observations, "assessment": pick(edge, TEMPORAL)}
@@ -303,7 +327,7 @@ def resolve(assertion, registry, *, authorized_scope, require_temporal=False):
         if temporal.get("status") not in {"available", "unavailable"}:
             return None
         if temporal["status"] == "available":
-            if temporal.get("method") != "relationship_temporal_evidence.v1":
+            if temporal.get("method") not in {"relationship_temporal_evidence.v1", "relationship_temporal_evidence.v2"}:
                 return None
             if temporal.get("identity", {}).get("columns") != source["columns"]:
                 return None

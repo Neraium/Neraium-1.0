@@ -61,6 +61,7 @@ output/
 *.csv
 !tests/fixtures/hydronic_pilot/*.csv
 !test-fixtures/historical-ingestion/*.csv
+!examples/henderson-pov/telemetry-example.csv
 *.jsonl
 *.db
 backend/app/runtime/latest_sii_state.json

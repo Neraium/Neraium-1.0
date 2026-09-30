@@ -22,6 +22,7 @@ from app.engine.sii.behavioral_model_contract import AuthenticatedPhase4Scope
 CONTRACT = "relationship-temporal-compat.v1"
 SCHEMA = "relationship-temporal-state.v1"
 REDUCER = "relationship_temporal_evidence.v1"
+QUALIFIED_REDUCER = "relationship_temporal_evidence.v2"
 MAX_OBSERVATIONS = 8
 
 
@@ -43,7 +44,7 @@ def compatibility_digest(record: Mapping, lineage: Mapping) -> str:
     """Derive compatibility solely from certified semantic and reducer inputs."""
     temporal = record.get("temporal")
     if (not isinstance(temporal, Mapping) or temporal.get("status") != "available"
-            or temporal.get("method") != REDUCER):
+            or temporal.get("method") not in (REDUCER, QUALIFIED_REDUCER)):
         raise ValueError("relationship_temporal_compatibility_unavailable")
     payload = lineage.get("payload")
     if not isinstance(payload, Mapping):
@@ -59,18 +60,20 @@ def compatibility_digest(record: Mapping, lineage: Mapping) -> str:
         "semantic_version": payload.get("semantic_version"),
         "assessment_basis": payload.get("assessment_basis"),
         "mode_identity": payload.get("mode_identity"),
-        "reducer_contract": REDUCER,
-        "reducer_version": 1,
+        "reducer_contract": temporal["method"],
+        "reducer_version": 2 if temporal["method"] == QUALIFIED_REDUCER else 1,
         "reducer_identity": temporal.get("identity"),
         "reducer_parameters": temporal.get("parameters"),
         "reference": record.get("reference"),
         "context": record.get("context"),
     }
+    if temporal["method"] == QUALIFIED_REDUCER:
+        compatible["qualified_reference_id"] = (temporal.get("qualified_evidence") or {}).get("reference_id")
     return hashlib.sha256(json.dumps(compatible, sort_keys=True, separators=(",", ":"),
                                     ensure_ascii=False, allow_nan=False).encode()).hexdigest()
 
 
-def _valid_state(record, expected_compatibility, expected_identity, scope, system_id, asset_id, lineage_ref):
+def _valid_state(record, expected_compatibility, expected_identity, scope, system_id, asset_id, lineage_ref, expected_version=1):
     if not isinstance(record, Mapping):
         return False
     state = record.get("reducer_state")
@@ -82,7 +85,7 @@ def _valid_state(record, expected_compatibility, expected_identity, scope, syste
             or not isinstance(record.get("head_event_time"), datetime)
             or record["head_event_time"].tzinfo is None
             or record["head_event_time"].utcoffset() is None
-            or not isinstance(state, Mapping) or state.get("version") != 1
+            or not isinstance(state, Mapping) or state.get("version") != expected_version
             or state.get("identity") != expected_identity
             or not isinstance(observations, list) or not observations
             or len(observations) > MAX_OBSERVATIONS):
@@ -159,7 +162,8 @@ def load_prior_relationship_state(repository, scope, *, system_id, asset_id,
         if stored is None:
             return None
         if not _valid_state(stored, expected, evidence["temporal"]["identity"], _repository_scope(scope),
-                            system_id, asset_id, descriptor["ref"]):
+                            system_id, asset_id, descriptor["ref"],
+                            2 if evidence["temporal"]["method"] == QUALIFIED_REDUCER else 1):
             return None
         return stored["reducer_state"]
     except (TypeError, ValueError, KeyError, AttributeError, OverflowError,
@@ -226,6 +230,8 @@ def persist_authoritative_relationship_state(repository, scope, *, system_id, as
                     continue
                 compatibility = compatibility_digest(evidence, descriptor)
                 reducer_state = {"version": 1, "identity": dict(identity), "observations": observations}
+                if temporal["method"] == QUALIFIED_REDUCER:
+                    reducer_state.update(version=2, qualified_evidence=temporal.get("qualified_evidence", {}))
                 interval = {key: window.get(key) for key in ("baseline_start", "baseline_end", "current_start", "current_end")}
                 event_ref = digest("relationship-temporal-event.v1", {
                     "lineage_ref": lineage_ref, "source_ref": source["source_id"], "interval": interval,

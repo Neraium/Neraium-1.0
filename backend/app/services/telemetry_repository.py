@@ -94,8 +94,12 @@ def _relationship_state_payload(identity: tuple[str, ...], compatibility_digest:
                                  head_event_time: datetime | None = None) -> tuple[dict[str, Any], str]:
     if not re.fullmatch(r"[0-9a-f]{64}", str(compatibility_digest or "")):
         raise RelationshipTemporalStateConflict("relationship_temporal_compatibility_digest_invalid")
-    if not isinstance(reducer_state, Mapping) or reducer_state.get("version") != 1:
+    if not isinstance(reducer_state, Mapping) or reducer_state.get("version") not in (1, 2):
         raise RelationshipTemporalStateConflict("relationship_temporal_reducer_state_invalid")
+    if reducer_state.get("version") == 2:
+        qualification = reducer_state.get("qualified_evidence")
+        if not isinstance(qualification, Mapping) or (qualification and qualification.get("version") != "relationship-qualification.v2"):
+            raise RelationshipTemporalStateConflict("relationship_temporal_qualification_state_invalid")
     observations = reducer_state.get("observations")
     if not isinstance(observations, list) or len(observations) > _RELATIONSHIP_STATE_MAX_OBSERVATIONS:
         raise RelationshipTemporalStateConflict("relationship_temporal_state_unbounded")

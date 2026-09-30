@@ -86,7 +86,7 @@ def relationship_temporal_evidence(
     }
     previous = previous or {}
     state = {"version": 1, "identity": identity, "observations": []}
-    if previous.get("version") == 1 and previous.get("identity") == identity:
+    if previous.get("version") in (1, 2) and previous.get("identity") == identity:
         state["observations"] = deepcopy(previous.get("observations", []))[-TEMPORAL_RULES["maximum_observations"]:]
     observations = state["observations"]
     observed_at = _time(window.get("current_end"))
@@ -164,4 +164,16 @@ def relationship_temporal_evidence(
         "latest_supported_observation": supporting[-1]["observed_at"] if supporting else None,
         "persistence_factor": round(agreement * min(1.0, len(supporting) / TEMPORAL_RULES["minimum_supporting_observations"]), 6),
     }
+    from app.engine.relationship_qualification import reduce_qualification
+    evidence["directional_persistence_supported"] = supported
+    evidence["directional_persistence_status"] = evidence["temporal_persistence_status"]
+    qualification = reduce_qualification(edge, state, previous, chronological,
+                                        minimum_confidence, minimum_quality)
+    evidence.update(qualification)
+    qualified = bool(supported and qualification["qualified_persistence_supported"])
+    evidence["qualified_persistence_supported"] = qualified
+    evidence["temporal_persistence_supported"] = qualified
+    evidence["persistent_relationship_change"] = qualified
+    evidence["temporal_persistence_status"] = (
+        "supported" if qualified else "unconfirmed" if qualification["qualification_status"] == "sufficient" else "limited")
     return evidence, state

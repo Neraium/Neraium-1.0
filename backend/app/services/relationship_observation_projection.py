@@ -60,6 +60,8 @@ EDGE_FIELDS = (
     "temporal_persistence_supported", "temporal_persistence_status",
     "persistent_relationship_change", "first_supported_observation",
     "latest_supported_observation", "reference_dataset_id",
+    "directional_persistence_supported", "directional_persistence_status",
+    "qualified_persistence_supported", "qualification_status", "reference_qualification_id", "persistence_factor",
 )
 
 
@@ -111,6 +113,11 @@ def relationship_observations(sii_result: Any) -> dict | None:
                                                      ("context_only", "operator_primary_eligible", "state_signal_involved"))
         item["recurrence"] = _pick(edge.get("recurrence_evidence"),
                                          ("status", "supported", "direction", "episode_count", "opposite_direction_veto"))
+        if isinstance(edge.get("qualified_persistence"), dict):
+            qualification = edge["qualified_persistence"]
+            item["qualification"] = _pick(qualification, ("status", "supported", "direction", "supporting_observations",
+                                                          "observations", "direction_agreement"))
+            item["qualification"]["reason_codes"] = [r[:128] for r in qualification.get("reason_codes", [])[:8] if isinstance(r, str)]
         item["supporting_windows"] = []
         windows = edge.get("supporting_windows")
         for window in (windows[:8] if isinstance(windows, list) else []):

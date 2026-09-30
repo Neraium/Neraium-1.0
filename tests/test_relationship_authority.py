@@ -20,6 +20,9 @@ from test_measurable_consequence import fixture
 
 
 def produce(kind='persistent', columns=('flow', 'load')):
+    if kind == 'persistent':
+        from qualified_authority_cases import qualified_product
+        return deepcopy(qualified_product(columns))
     deltas = {
         'persistent': [-.22] * 8, 'stable': [.001] * 8,
         'transient': [-.22], 'alternating': [-.22, .22] * 4,
