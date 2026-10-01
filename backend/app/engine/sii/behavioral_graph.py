@@ -147,6 +147,150 @@ def compare_behavioral_graph(
     }
 
 
+def compare_long_horizon_graph(
+    *,
+    current_graph: dict[str, Any],
+    snapshots: list[dict[str, Any]],
+    operating_mode: str,
+    authenticated_scope: dict[str, str],
+    model_id: str | None,
+    source_run_id: str,
+    model_version: str | None,
+    change_threshold: float = 0.20,
+    operating_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Read-only displacement from the earliest retained snapshot for this mode."""
+    _, current_edges = _normalized_current(current_graph, operating_mode)
+    reference = None
+    reference_edges: dict[str, dict[str, Any]] = {}
+    for snapshot in snapshots:
+        if not isinstance(snapshot, dict) or not snapshot.get("snapshot_id"):
+            continue
+        if snapshot.get("authenticated_scope") != authenticated_scope or snapshot.get("model_id") != model_id:
+            continue
+        _, stored_edges = _stored_graph(snapshot.get("behavioral_graph"))
+        if any(_edge_matches_mode(edge_id, edge, operating_mode) for edge_id, edge in stored_edges.items()):
+            reference = snapshot
+            reference_edges = stored_edges
+            break
+
+    retained = {}
+    ambiguous_ids = set()
+    for snapshot in snapshots:
+        if not isinstance(snapshot, dict) or not snapshot.get("snapshot_id"):
+            continue
+        if snapshot.get("authenticated_scope") != authenticated_scope or snapshot.get("model_id") != model_id:
+            continue
+        snapshot_id = snapshot["snapshot_id"]
+        if snapshot_id in retained:
+            ambiguous_ids.add(snapshot_id)
+        retained[snapshot_id] = snapshot
+
+    items = []
+    for edge_id, current in sorted(current_edges.items()):
+        prior = reference_edges.get(edge_id)
+        if prior is not None and not _edge_matches_mode(edge_id, prior, operating_mode):
+            prior = None
+        reference_strength = _reported_strength(prior) if prior is not None else None
+        origin = _reference_edge_origin(reference, edge_id, prior, retained, ambiguous_ids) if prior is not None else None
+        current_strength = _reported_strength(current)
+        available = reference is not None and reference_strength is not None and current_strength is not None
+        displacement = round(current_strength - reference_strength, 6) if available else None
+        items.append({
+            "relationship_id": edge_id,
+            "source_signal": current["source_signal"],
+            "target_signal": current["target_signal"],
+            "relationship_type": current["relationship_type"],
+            "operating_mode": operating_mode,
+            "current_operating_context": deepcopy(operating_context),
+            "reference_mode_context": deepcopy((reference.get("operating_mode_memory") or {}).get(operating_mode)) if reference else None,
+            "authenticated_scope": deepcopy(authenticated_scope),
+            "model_id": model_id,
+            "source_run_id": source_run_id,
+            "model_version": model_version,
+            "reference_snapshot_id": origin.get("snapshot_id") if origin else None,
+            "reference_source_run_id": origin.get("source_run_id") if origin else None,
+            "reference_model_version": origin.get("model_version") if origin else None,
+            "reference_operating_context": deepcopy(prior.get("operating_context")) if prior else None,
+            "reference_strength": reference_strength,
+            "current_strength": current_strength,
+            "signed_displacement": displacement,
+            "threshold_crossed": abs(displacement) >= float(change_threshold) if available else False,
+            "status": "available" if available else "unavailable",
+            "unavailable_reason": None if available else (
+                "mode_matched_reference_unavailable" if reference is None else "relationship_reference_unavailable"
+            ),
+            "persistence_inferred": False,
+        })
+    origin_ids = {item["reference_snapshot_id"] for item in items}
+    return {
+        "status": "available" if reference is not None else "unavailable",
+        "reference_snapshot_id": next(iter(origin_ids)) if len(origin_ids) == 1 and None not in origin_ids else None,
+        "operating_mode": operating_mode,
+        "change_threshold": float(change_threshold),
+        "edges": items,
+    }
+
+
+def _reference_edge_origin(
+    reference: dict[str, Any] | None,
+    edge_id: str,
+    edge: dict[str, Any],
+    retained: dict[str, dict[str, Any]],
+    ambiguous_ids: set[str],
+) -> dict[str, Any] | None:
+    """Follow retained predecessors until this exact stored edge state begins."""
+    snapshot = reference
+    visited: set[str] = set()
+    while snapshot is not None:
+        snapshot_id = snapshot.get("snapshot_id")
+        if snapshot_id in visited or snapshot_id in ambiguous_ids:
+            return None
+        visited.add(snapshot_id)
+        previous_id = snapshot.get("previous_snapshot_id")
+        if previous_id is None:
+            return snapshot if _edge_origin_matches_snapshot(edge, snapshot) else None
+        previous = retained.get(previous_id)
+        if previous is None or previous_id in ambiguous_ids:
+            return None
+        _, previous_edges = _stored_graph(previous.get("behavioral_graph"))
+        previous_edge = previous_edges.get(edge_id)
+        if previous_edge != edge:
+            return snapshot if _edge_origin_matches_snapshot(edge, snapshot) else None
+        snapshot = previous
+    return None
+
+
+def _edge_origin_matches_snapshot(edge: dict[str, Any], snapshot: dict[str, Any]) -> bool:
+    if not all(snapshot.get(field) for field in ("snapshot_id", "source_run_id", "model_version")):
+        return False
+    history = edge.get("evolution_history")
+    if not history:
+        return True
+    return (
+        isinstance(history, list)
+        and isinstance(history[-1], dict)
+        and history[-1].get("source_run_id") == snapshot["source_run_id"]
+    )
+
+
+def _edge_matches_mode(edge_id: str, edge: dict[str, Any], operating_mode: str) -> bool:
+    left, right = edge.get("source_signal"), edge.get("target_signal")
+    return bool(left and right and edge_id == relationship_memory_id(
+        str(left), str(right), str(edge.get("relationship_type") or "linear_correlation"), operating_mode
+    ))
+
+
+def _reported_strength(edge: dict[str, Any] | None) -> float | None:
+    if not isinstance(edge, dict):
+        return None
+    for field in ("current_strength", "current_correlation", "recent_correlation", "strength"):
+        value = finite_number(edge.get(field))
+        if value is not None:
+            return round(abs(value), 6)
+    return None
+
+
 def update_behavioral_graph(
     *,
     active_graph: dict[str, Any] | None,

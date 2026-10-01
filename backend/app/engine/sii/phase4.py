@@ -13,7 +13,7 @@ from typing import Any
 from app.engine.sii.baseline_evolution import evaluate_baseline_evolution
 from app.engine.sii.bayesian_evidence import evaluate_bayesian_evidence
 from app.engine.sii.behavioral_evolution import evaluate_behavioral_evolution
-from app.engine.sii.behavioral_graph import compare_behavioral_graph
+from app.engine.sii.behavioral_graph import compare_behavioral_graph, compare_long_horizon_graph
 from app.engine.sii.behavioral_model import (
     active_operating_mode,
     authenticated_scope_mismatch_reason,
@@ -452,6 +452,17 @@ def evaluate_phase4(
         limitations=model_limitations,
     )
     graph_comparison["evidence_classification"] = "Supporting" if graph_comparison.get("changed_edges") else "Neutral"
+    graph_comparison["long_horizon_cumulative"] = compare_long_horizon_graph(
+        current_graph=relationship_graph,
+        snapshots=snapshots,
+        operating_mode=mode_id,
+        authenticated_scope=phase4_scope.as_dict(),
+        model_id=identity.get("model_id"),
+        source_run_id=source_run_id,
+        model_version=str(active_model.get("model_version")) if active_model else None,
+        change_threshold=float(phase4_cfg.get("graph_change_threshold", 0.20)),
+        operating_context=operating_mode,
+    )
     expected_behavior["evidence_classification"] = "Supporting" if expected_behavior.get("residual_evidence") else ("Limiting" if expected_behavior.get("status") == "limited" else "Neutral")
     propagation["evidence_classification"] = "Supporting" if propagation.get("candidate_paths") else "Limiting"
     evolution["evidence_classification"] = "Supporting" if evolution.get("unresolved_changes") or evolution.get("relationship_changes") else ("Limiting" if evolution.get("status") == "limited" else "Neutral")
