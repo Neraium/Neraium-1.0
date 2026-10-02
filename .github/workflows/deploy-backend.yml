@@ -388,11 +388,14 @@ jobs:
                     "startPeriod": 10
                   }
                 | .secrets = ((.secrets // [])
-                    | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD" and .name != "NERAIUM_TELEMETRY_DATABASE_URL"))
+                    | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD" and .name != "NERAIUM_TELEMETRY_DATABASE_URL" and .name != "NERAIUM_RUNTIME_DATABASE_URL"))
                     + [
                       {"name": "NERAIUM_API_TOKEN", "valueFrom": $API_TOKEN_SECRET_ARN},
                       {"name": "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "valueFrom": $BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN}
-                    ] + (if $TELEMETRY_DATABASE_URL_SECRET_ARN == "" then [] else [{"name":"NERAIUM_TELEMETRY_DATABASE_URL","valueFrom":$TELEMETRY_DATABASE_URL_SECRET_ARN}] end))
+                    ] + (if $TELEMETRY_DATABASE_URL_SECRET_ARN == "" then [] else [
+                      {"name":"NERAIUM_TELEMETRY_DATABASE_URL","valueFrom":$TELEMETRY_DATABASE_URL_SECRET_ARN},
+                      {"name":"NERAIUM_RUNTIME_DATABASE_URL","valueFrom":$TELEMETRY_DATABASE_URL_SECRET_ARN}
+                    ] end))
                 | .logConfiguration = {
                     "logDriver": "awslogs",
                     "options": {
@@ -469,8 +472,11 @@ jobs:
                       {"name": "NERAIUM_BUILD_SHA", "value": $BUILD_SHA}
                     ])
                 | .secrets = ((.secrets // [])
-                    | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD" and .name != "NERAIUM_TELEMETRY_DATABASE_URL"))
-                    + (if $TELEMETRY_DATABASE_URL_SECRET_ARN == "" then [] else [{"name":"NERAIUM_TELEMETRY_DATABASE_URL","valueFrom":$TELEMETRY_DATABASE_URL_SECRET_ARN}] end))
+                    | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD" and .name != "NERAIUM_TELEMETRY_DATABASE_URL" and .name != "NERAIUM_RUNTIME_DATABASE_URL"))
+                    + (if $TELEMETRY_DATABASE_URL_SECRET_ARN == "" then [] else [
+                      {"name":"NERAIUM_TELEMETRY_DATABASE_URL","valueFrom":$TELEMETRY_DATABASE_URL_SECRET_ARN},
+                      {"name":"NERAIUM_RUNTIME_DATABASE_URL","valueFrom":$TELEMETRY_DATABASE_URL_SECRET_ARN}
+                    ] end))
                 | .logConfiguration = {
                     "logDriver": "awslogs",
                     "options": {
@@ -513,6 +519,7 @@ jobs:
               --arg version "$TELEMETRY_EXECUTION_IDENTITY_VERSION" '
               .containerDefinitions[0]
               | ([.secrets[]? | select(.name == "NERAIUM_TELEMETRY_DATABASE_URL" and .valueFrom == $arn)] | length) == 1
+                and ([.secrets[]? | select(.name == "NERAIUM_RUNTIME_DATABASE_URL" and .valueFrom == $arn)] | length) == 1
                 and ([.environment[]? | select(.name == "NERAIUM_TELEMETRY_EXECUTION_IDENTITY_VERSION" and .value == $version)] | length) == 1
             ' telemetry-task-definition.json >/dev/null
           done

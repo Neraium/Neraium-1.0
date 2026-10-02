@@ -8,6 +8,7 @@ RUN addgroup --system --gid 10002 connector-executor && \
 
 COPY backend/app/services/connector_execution.py /app/app/services/connector_execution.py
 COPY backend/app/services/connector_execution_child.py /app/app/services/connector_execution_child.py
+COPY backend/db/migrations/ /app/db/migrations/
 COPY infra/production/patch-connector-runtime.py /tmp/patch-connector-runtime.py
 
 RUN python /tmp/patch-connector-runtime.py && rm /tmp/patch-connector-runtime.py

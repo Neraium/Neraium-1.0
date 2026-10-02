@@ -1,0 +1,11 @@
+ARG BASE_IMAGE=680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:d696b79737b8aab4554dbe9e48bee18100dacef59b2f5bd9a2f6c0eca81fe052
+FROM ${BASE_IMAGE}
+
+USER root
+
+COPY backend/db/migrations/ /app/db/migrations/
+COPY backend/app/services/runtime_postgres.py /app/app/services/runtime_postgres.py
+
+RUN python -c "from db.migrations.apply_telemetry import MIGRATIONS; assert len(MIGRATIONS) == 9"
+
+USER neraium

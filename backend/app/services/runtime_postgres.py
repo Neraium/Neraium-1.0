@@ -89,7 +89,11 @@ def initialize() -> None:
         with _open_connection() as connection:
             connection.execute("SET LOCAL lock_timeout = '30s'")
             connection.execute(f"SELECT pg_advisory_xact_lock({_LOCK})")
-            connection.execute(f"CREATE SCHEMA IF NOT EXISTS {_SCHEMA}")
+            schema_exists = connection.execute(
+                "SELECT to_regnamespace(%s)", (_SCHEMA,)
+            ).fetchone()[0]
+            if schema_exists is None:
+                connection.execute(f"CREATE SCHEMA {_SCHEMA}")
             connection.execute(f"SET LOCAL search_path TO {_SCHEMA}, pg_catalog")
             connection.execute("CREATE TABLE IF NOT EXISTS postgres_runtime_migrations (version INTEGER PRIMARY KEY)")
             if not connection.execute("SELECT 1 FROM postgres_runtime_migrations WHERE version = 1").fetchone():
