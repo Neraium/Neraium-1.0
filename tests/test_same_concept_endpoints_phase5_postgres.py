@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.engine.sii.phase4 import phase4_persistence_suppressed
 from app.engine.sii.behavioral_model_contract import canonical_phase4_resource_scope_id
@@ -14,6 +15,7 @@ from app.services.telemetry_domain import TelemetryScopeRef
 from app.services.telemetry_repository import PostgreSQLTelemetryRepository, TelemetryMappingConflict
 from app.services.telemetry_analysis_service_v2 import read_persisted_execution_v2, run_post_ingestion_analysis_v2
 from app.services.telemetry_analysis_service import run_post_ingestion_analysis
+from app.services.telemetry_endpoint_result_v2 import list_customer_executions_v2
 from app.services.telemetry_endpoint_execution_v2_repository import PostgreSQLEndpointExecutionV2Repository, EndpointExecutionV2Error
 from app.services.telemetry_relationship_lineage_v2_repository import PostgreSQLEndpointLineageV2Repository
 from app.services.telemetry_units import conversion_contract, normalize_telemetry_unit
@@ -26,6 +28,7 @@ from db.migrations.create_relationship_temporal_state import apply as temporal
 from db.migrations.create_relationship_lineage_v2_artifacts import apply as lineage
 from db.migrations.create_endpoint_analysis_executions_v2 import apply as execution
 from db.migrations.allow_same_concept_physical_endpoints import apply as coexistence, verify
+from test_telemetry_connection_api import build_client
 
 
 DSN = os.environ.get("NERAIUM_TEST_POSTGRES_DSN", "").strip()
@@ -35,7 +38,7 @@ FLOW = "a19db5be-5ca1-5373-a9e4-6957e9f54c43"
 START = datetime(2026, 8, 25, tzinfo=UTC)
 
 
-def test_same_concept_mappings_ingest_execute_and_replay_after_revision() -> None:
+def test_same_concept_mappings_ingest_execute_and_replay_after_revision(tmp_path) -> None:
     psycopg = pytest.importorskip("psycopg")
     from psycopg import sql
     from psycopg.conninfo import make_conninfo
@@ -225,6 +228,37 @@ def test_same_concept_mappings_ingest_execute_and_replay_after_revision() -> Non
                 persisted_authority_digest="a" * 64,
             )
         assert analysis.status == "completed"
+        listed = list_customer_executions_v2(
+            repository=repository, lineage_repository=lineage_repo,
+            execution_repository=execution_repo, scope=scope,
+            connection_id=connection_id, source_run_id=run_id, limit=100,
+        )
+        assert [item["execution_ref"] for item in listed] == [analysis.result_id]
+        app, _ = build_client(tmp_path)
+        with TestClient(app, base_url="https://testserver") as client:
+            runtime = app.state.telemetry_runtime
+            runtime.repository = repository
+            runtime.execution_identity_version = "physical-endpoint-keyed.v2"
+            base = f"/api/data-connections/{connection_id}/runs/{run_id}"
+            listing = client.get(f"{base}/analysis-results")
+            assert listing.status_code == 200, listing.text
+            assert listing.json()["results"] == listed
+            exact = client.get(f"{base}/v2/analysis-results/{analysis.result_id}")
+            assert exact.status_code == 200, exact.text
+            assert exact.json()["result_id"] == analysis.result_id
+            assert exact.json()["lineage_verified"] is True
+            for headers in ({"X-Test-Workspace": "ws-other"}, {"X-Test-Tenant": "tenant-other"}):
+                assert client.get(f"{base}/v2/analysis-results", headers=headers).status_code == 404
+                assert client.get(f"{base}/v2/analysis-results/{analysis.result_id}", headers=headers).status_code == 404
+            wrong_connection = str(uuid4())
+            wrong_run = str(uuid4())
+            wrong_ref = "telemetry-endpoint-execution.v2:" + "f" * 64
+            assert client.get(f"/api/data-connections/{wrong_connection}/runs/{run_id}/v2/analysis-results").status_code == 404
+            assert client.get(f"/api/data-connections/{connection_id}/runs/{wrong_run}/v2/analysis-results").status_code == 404
+            assert client.get(f"{base}/v2/analysis-results/{wrong_ref}").status_code == 404
+            runtime.execution_identity_version = "concept-keyed.v1"
+            assert client.get(f"{base}/v2/analysis-results").status_code == 404
+            assert client.get(f"{base}/v2/analysis-results/{analysis.result_id}").status_code == 404
         def read():
             return read_persisted_execution_v2(
                 repository=repository, lineage_repository=lineage_repo,
@@ -359,6 +393,14 @@ def test_same_concept_mappings_ingest_execute_and_replay_after_revision() -> Non
                 system_id="system-a", asset_id="pump-1",
                 execution_ref=analysis.result_id,
             )
+        app, _ = build_client(tmp_path)
+        with TestClient(app, base_url="https://testserver") as client:
+            runtime = app.state.telemetry_runtime
+            runtime.repository = TamperedAuthority()
+            runtime.execution_identity_version = "physical-endpoint-keyed.v2"
+            base = f"/api/data-connections/{connection_id}/runs/{run_id}/v2/analysis-results"
+            assert client.get(base).status_code == 404
+            assert client.get(f"{base}/{analysis.result_id}").status_code == 404
         assert read() == before
     finally:
         with psycopg.connect(DSN, autocommit=True, connect_timeout=5) as admin:

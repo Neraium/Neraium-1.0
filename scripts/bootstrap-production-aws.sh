@@ -7,6 +7,8 @@ APP_TASK_ROLE_NAME="${APP_TASK_ROLE_NAME:-neraium-prod-task-app-role}"
 TASK_EXECUTION_ROLE_NAME="${TASK_EXECUTION_ROLE_NAME:-neraium-prod-ecs-task-execution-role}"
 API_TOKEN_SECRET_ARN="${API_TOKEN_SECRET_ARN:?API_TOKEN_SECRET_ARN is required}"
 AUTH_DATABASE_URL_SECRET_ARN="${AUTH_DATABASE_URL_SECRET_ARN:?AUTH_DATABASE_URL_SECRET_ARN is required}"
+TELEMETRY_DATABASE_URL_SECRET_ARN="${TELEMETRY_DATABASE_URL_SECRET_ARN:-}"
+TELEMETRY_CONNECTOR_SECRET_ARN="${TELEMETRY_CONNECTOR_SECRET_ARN:-}"
 AUTH_DATABASE_SECRET_ARN="${AUTH_DATABASE_SECRET_ARN:?AUTH_DATABASE_SECRET_ARN is required}"
 AUTH_DATABASE_KMS_KEY_ARN="${AUTH_DATABASE_KMS_KEY_ARN:?AUTH_DATABASE_KMS_KEY_ARN is required}"
 NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN="${NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN:?NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN is required}"
@@ -91,6 +93,17 @@ cat > "$INLINE_POLICY_FILE" <<JSON
 }
 JSON
 
+if [ -n "$TELEMETRY_CONNECTOR_SECRET_ARN" ]; then
+  case "$TELEMETRY_CONNECTOR_SECRET_ARN" in
+    arn:aws:secretsmanager:"$AWS_REGION":*:secret:neraium/prod/telemetry-connections/\*) ;;
+    *) echo "Telemetry connector IAM scope must match the production secret prefix" >&2; exit 1 ;;
+  esac
+  jq --arg arn "$TELEMETRY_CONNECTOR_SECRET_ARN" \
+    '.Statement += [{"Effect":"Allow","Action":["secretsmanager:GetSecretValue","secretsmanager:DescribeSecret","secretsmanager:CreateSecret","secretsmanager:UpdateSecret","secretsmanager:TagResource"],"Resource":[$arn]}]' \
+    "$INLINE_POLICY_FILE" > "${INLINE_POLICY_FILE}.next"
+  mv "${INLINE_POLICY_FILE}.next" "$INLINE_POLICY_FILE"
+fi
+
 cat > "$EXECUTION_INLINE_POLICY_FILE" <<JSON
 {
   "Version": "2012-10-17",
@@ -129,6 +142,13 @@ cat > "$EXECUTION_SECRETS_POLICY_FILE" <<JSON
   ]
 }
 JSON
+
+if [ -n "$TELEMETRY_DATABASE_URL_SECRET_ARN" ]; then
+  jq --arg arn "$TELEMETRY_DATABASE_URL_SECRET_ARN" \
+    '.Statement[0].Resource += [$arn]' \
+    "$EXECUTION_SECRETS_POLICY_FILE" > "${EXECUTION_SECRETS_POLICY_FILE}.next"
+  mv "${EXECUTION_SECRETS_POLICY_FILE}.next" "$EXECUTION_SECRETS_POLICY_FILE"
+fi
 
 echo "Ensuring S3 bucket ${UPLOAD_STATE_BUCKET} in ${AWS_REGION}"
 if ! aws s3api head-bucket --bucket "$UPLOAD_STATE_BUCKET" 2>/dev/null; then

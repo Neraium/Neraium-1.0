@@ -41,6 +41,11 @@ env:
   APP_TASK_ROLE_NAME: neraium-prod-task-app-role
   API_TOKEN_SECRET_ARN: ${{ vars.NERAIUM_API_TOKEN_SECRET_ARN }}
   AUTH_DATABASE_URL_SECRET_ARN: ${{ vars.NERAIUM_AUTH_DATABASE_URL_SECRET_ARN }}
+  TELEMETRY_DATABASE_URL_SECRET_ARN: ${{ vars.NERAIUM_TELEMETRY_DATABASE_URL_SECRET_ARN }}
+  TELEMETRY_CONNECTOR_SECRET_ARN: ${{ vars.NERAIUM_TELEMETRY_CONNECTOR_SECRET_ARN }}
+  TELEMETRY_EXECUTION_IDENTITY_VERSION: ${{ vars.NERAIUM_TELEMETRY_EXECUTION_IDENTITY_VERSION || 'concept-keyed.v1' }}
+  TELEMETRY_DYNAMIC_SECRET_WRITES: ${{ vars.NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES || 'false' }}
+  TELEMETRY_CONTROLLED_EGRESS_ENABLED: ${{ vars.NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED || 'false' }}
   RDS_AUTH_INSTANCE_ID: neraium-prod-postgres
   AUTH_DATABASE_NAME: postgres
   AUTH_DATABASE_SSLMODE: require
@@ -78,6 +83,16 @@ jobs:
           test -n "$TASK_EXECUTION_ROLE_NAME"
           test -n "$API_TOKEN_SECRET_ARN"
           test -n "$AUTH_DATABASE_URL_SECRET_ARN"
+          case "$TELEMETRY_EXECUTION_IDENTITY_VERSION" in
+            concept-keyed.v1|physical-endpoint-keyed.v2) ;;
+            *) echo "Invalid telemetry execution identity version" >&2; exit 1 ;;
+          esac
+          if [ "$TELEMETRY_EXECUTION_IDENTITY_VERSION" = "physical-endpoint-keyed.v2" ]; then
+            test -n "$TELEMETRY_DATABASE_URL_SECRET_ARN"
+            test -n "$TELEMETRY_CONNECTOR_SECRET_ARN"
+            test "$TELEMETRY_DYNAMIC_SECRET_WRITES" = "true"
+            test "$TELEMETRY_CONTROLLED_EGRESS_ENABLED" = "true"
+          fi
           test -n "$RDS_AUTH_INSTANCE_ID"
           test -n "$AUTH_DATABASE_NAME"
           test -n "$AUTH_DATABASE_SSLMODE"
@@ -291,7 +306,8 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-api-task-definition.json)
           echo "Updating API container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_SECRET_ARN "$AUTH_DATABASE_SECRET_ARN" --arg AUTH_DATABASE_HOST "$AUTH_DATABASE_HOST" --arg AUTH_DATABASE_PORT "$AUTH_DATABASE_PORT" --arg AUTH_DATABASE_NAME "$AUTH_DATABASE_NAME" --arg AUTH_DATABASE_SSLMODE "$AUTH_DATABASE_SSLMODE" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg BACKEND_PORT "$API_CONTAINER_PORT" --argjson CONTAINER_PORT "$API_CONTAINER_PORT" --arg HEALTHCHECK_COMMAND "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${API_CONTAINER_PORT}/api/health', timeout=5).read()\" || exit 1" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_LARGE_UPLOAD_SIZE "$NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" --arg ECS_CLUSTER "$ECS_CLUSTER" --arg ECS_API_SERVICE "$ECS_API_SERVICE" --arg ECS_WORKER_SERVICE "$ECS_WORKER_SERVICE" --arg TARGET_GROUP_ARN "$API_TARGET_GROUP_ARN" --arg INFRA_ALERT_TOPIC_ARN "$INFRA_ALERT_TOPIC_ARN" --arg API_TASK_CPU "$API_TASK_CPU" --arg API_TASK_MEMORY "$API_TASK_MEMORY" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg API_LOG_GROUP "$API_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg API_TOKEN_SECRET_ARN "$API_TOKEN_SECRET_ARN" --arg AUTH_DATABASE_SECRET_ARN "$AUTH_DATABASE_SECRET_ARN" --arg AUTH_DATABASE_HOST "$AUTH_DATABASE_HOST" --arg AUTH_DATABASE_PORT "$AUTH_DATABASE_PORT" --arg AUTH_DATABASE_NAME "$AUTH_DATABASE_NAME" --arg AUTH_DATABASE_SSLMODE "$AUTH_DATABASE_SSLMODE" --arg BOOTSTRAP_ADMIN_EMAIL "$NERAIUM_BOOTSTRAP_ADMIN_EMAIL" --arg BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN "$NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN" --arg BOOTSTRAP_ADMIN_RESET_PASSWORD "$NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg BACKEND_PORT "$API_CONTAINER_PORT" --argjson CONTAINER_PORT "$API_CONTAINER_PORT" --arg HEALTHCHECK_COMMAND "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${API_CONTAINER_PORT}/api/health', timeout=5).read()\" || exit 1" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_LARGE_UPLOAD_SIZE "$NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" --arg ECS_CLUSTER "$ECS_CLUSTER" --arg ECS_API_SERVICE "$ECS_API_SERVICE" --arg ECS_WORKER_SERVICE "$ECS_WORKER_SERVICE" --arg TARGET_GROUP_ARN "$API_TARGET_GROUP_ARN" --arg INFRA_ALERT_TOPIC_ARN "$INFRA_ALERT_TOPIC_ARN" --arg API_TASK_CPU "$API_TASK_CPU" --arg API_TASK_MEMORY "$API_TASK_MEMORY" \
+            --arg TELEMETRY_DATABASE_URL_SECRET_ARN "$TELEMETRY_DATABASE_URL_SECRET_ARN" --arg TELEMETRY_EXECUTION_IDENTITY_VERSION "$TELEMETRY_EXECUTION_IDENTITY_VERSION" --arg TELEMETRY_DYNAMIC_SECRET_WRITES "$TELEMETRY_DYNAMIC_SECRET_WRITES" --arg TELEMETRY_CONTROLLED_EGRESS_ENABLED "$TELEMETRY_CONTROLLED_EGRESS_ENABLED" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
             | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .cpu = $API_TASK_CPU
@@ -301,8 +317,12 @@ jobs:
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "BACKEND_HOST" and .name != "BACKEND_PORT" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" and .name != "NERAIUM_AUTH_DATABASE_SECRET_ARN" and .name != "NERAIUM_AUTH_DATABASE_HOST" and .name != "NERAIUM_AUTH_DATABASE_PORT" and .name != "NERAIUM_AUTH_DATABASE_NAME" and .name != "NERAIUM_AUTH_DATABASE_SSLMODE" and .name != "NERAIUM_INFRA_MONITOR_ENABLED" and .name != "NERAIUM_INFRA_MONITOR_INTERVAL_SECONDS" and .name != "NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS" and .name != "NERAIUM_ECS_CLUSTER" and .name != "NERAIUM_ECS_API_SERVICE" and .name != "NERAIUM_ECS_WORKER_SERVICE" and .name != "NERAIUM_ALB_TARGET_GROUP_ARN" and .name != "NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "BACKEND_HOST" and .name != "BACKEND_PORT" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" and .name != "NERAIUM_AUTH_DATABASE_SECRET_ARN" and .name != "NERAIUM_AUTH_DATABASE_HOST" and .name != "NERAIUM_AUTH_DATABASE_PORT" and .name != "NERAIUM_AUTH_DATABASE_NAME" and .name != "NERAIUM_AUTH_DATABASE_SSLMODE" and .name != "NERAIUM_INFRA_MONITOR_ENABLED" and .name != "NERAIUM_INFRA_MONITOR_INTERVAL_SECONDS" and .name != "NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS" and .name != "NERAIUM_ECS_CLUSTER" and .name != "NERAIUM_ECS_API_SERVICE" and .name != "NERAIUM_ECS_WORKER_SERVICE" and .name != "NERAIUM_ALB_TARGET_GROUP_ARN" and .name != "NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN" and (.name | startswith("NERAIUM_TELEMETRY_") | not)))
                     + [
+                      {"name": "NERAIUM_TELEMETRY_EXECUTION_IDENTITY_VERSION", "value": $TELEMETRY_EXECUTION_IDENTITY_VERSION},
+                      {"name": "NERAIUM_TELEMETRY_SECRET_REGION", "value": $AWS_REGION},
+                      {"name": "NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES", "value": $TELEMETRY_DYNAMIC_SECRET_WRITES},
+                      {"name": "NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED", "value": $TELEMETRY_CONTROLLED_EGRESS_ENABLED},
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "api"},
                       {"name": "APP_ENV", "value": "prod"},
                       {"name": "BACKEND_HOST", "value": "0.0.0.0"},
@@ -341,11 +361,11 @@ jobs:
                     "startPeriod": 10
                   }
                 | .secrets = ((.secrets // [])
-                    | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD"))
+                    | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD" and .name != "NERAIUM_TELEMETRY_DATABASE_URL"))
                     + [
                       {"name": "NERAIUM_API_TOKEN", "valueFrom": $API_TOKEN_SECRET_ARN},
                       {"name": "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD", "valueFrom": $BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN}
-                    ])
+                    ] + (if $TELEMETRY_DATABASE_URL_SECRET_ARN == "" then [] else [{"name":"NERAIUM_TELEMETRY_DATABASE_URL","valueFrom":$TELEMETRY_DATABASE_URL_SECRET_ARN}] end))
                 | .logConfiguration = {
                     "logDriver": "awslogs",
                     "options": {
@@ -388,7 +408,8 @@ jobs:
           CONTAINER_NAME=$(jq -r '.containerDefinitions[0].name' current-worker-task-definition.json)
           echo "Updating worker container $CONTAINER_NAME to image $IMAGE_URI"
 
-          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg WORKER_LOG_GROUP "$WORKER_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_LARGE_UPLOAD_SIZE "$NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" --arg WORKER_TASK_CPU "$WORKER_TASK_CPU" --arg WORKER_TASK_MEMORY "$WORKER_TASK_MEMORY" --argjson WORKER_EPHEMERAL_STORAGE_GIB "$WORKER_EPHEMERAL_STORAGE_GIB" '
+          jq --arg IMAGE_URI "$IMAGE_URI" --arg CONTAINER_NAME "$CONTAINER_NAME" --arg AWS_REGION "$AWS_REGION" --arg WORKER_LOG_GROUP "$WORKER_LOG_GROUP" --arg APP_TASK_ROLE_ARN "$APP_TASK_ROLE_ARN" --arg TASK_EXECUTION_ROLE_ARN "$TASK_EXECUTION_ROLE_ARN" --arg UPLOAD_STATE_BUCKET "$UPLOAD_STATE_BUCKET" --arg NERAIUM_RUNTIME_DIR "$NERAIUM_RUNTIME_DIR" --arg CORS_ORIGINS "$CORS_ORIGINS" --arg MAX_UPLOAD_SIZE "$NERAIUM_MAX_UPLOAD_SIZE_BYTES" --arg MAX_LARGE_UPLOAD_SIZE "$NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" --arg MAX_PENDING_JOBS "$NERAIUM_MAX_PENDING_UPLOAD_JOBS" --arg LOG_LEVEL "$LOG_LEVEL" --arg LOG_FORMAT "$LOG_FORMAT" --arg BUILD_SHA "$GITHUB_SHA" --arg WORKER_TASK_CPU "$WORKER_TASK_CPU" --arg WORKER_TASK_MEMORY "$WORKER_TASK_MEMORY" --argjson WORKER_EPHEMERAL_STORAGE_GIB "$WORKER_EPHEMERAL_STORAGE_GIB" \
+            --arg TELEMETRY_DATABASE_URL_SECRET_ARN "$TELEMETRY_DATABASE_URL_SECRET_ARN" --arg TELEMETRY_EXECUTION_IDENTITY_VERSION "$TELEMETRY_EXECUTION_IDENTITY_VERSION" --arg TELEMETRY_DYNAMIC_SECRET_WRITES "$TELEMETRY_DYNAMIC_SECRET_WRITES" --arg TELEMETRY_CONTROLLED_EGRESS_ENABLED "$TELEMETRY_CONTROLLED_EGRESS_ENABLED" '
             .taskRoleArn = $APP_TASK_ROLE_ARN
             | .executionRoleArn = $TASK_EXECUTION_ROLE_ARN
             | .cpu = $WORKER_TASK_CPU
@@ -399,8 +420,12 @@ jobs:
                 .image = $IMAGE_URI
                 | .command = ["python", "-m", "app.entrypoint"]
                 | .environment = ((.environment // [])
-                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD"))
+                    | map(select(.name != "NERAIUM_PROCESS_ROLE" and .name != "APP_ENV" and .name != "NERAIUM_UPLOAD_STATE_BUCKET" and .name != "NERAIUM_RUNTIME_DIR" and .name != "CORS_ORIGINS" and .name != "NERAIUM_MAX_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES" and .name != "NERAIUM_MAX_PENDING_UPLOAD_JOBS" and .name != "LOG_LEVEL" and .name != "LOG_FORMAT" and .name != "NERAIUM_BUILD_SHA" and .name != "NERAIUM_BOOTSTRAP_ADMIN_EMAIL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD" and (.name | startswith("NERAIUM_TELEMETRY_") | not)))
                     + [
+                      {"name": "NERAIUM_TELEMETRY_EXECUTION_IDENTITY_VERSION", "value": $TELEMETRY_EXECUTION_IDENTITY_VERSION},
+                      {"name": "NERAIUM_TELEMETRY_SECRET_REGION", "value": $AWS_REGION},
+                      {"name": "NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES", "value": $TELEMETRY_DYNAMIC_SECRET_WRITES},
+                      {"name": "NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED", "value": $TELEMETRY_CONTROLLED_EGRESS_ENABLED},
                       {"name": "NERAIUM_PROCESS_ROLE", "value": "worker"},
                       {"name": "APP_ENV", "value": "prod"},
                       {"name": "NERAIUM_UPLOAD_STATE_BUCKET", "value": $UPLOAD_STATE_BUCKET},
@@ -414,7 +439,8 @@ jobs:
                       {"name": "NERAIUM_BUILD_SHA", "value": $BUILD_SHA}
                     ])
                 | .secrets = ((.secrets // [])
-                    | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD")))
+                    | map(select(.name != "NERAIUM_API_TOKEN" and .name != "NERAIUM_AUTH_DATABASE_URL" and .name != "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD" and .name != "NERAIUM_TELEMETRY_DATABASE_URL"))
+                    + (if $TELEMETRY_DATABASE_URL_SECRET_ARN == "" then [] else [{"name":"NERAIUM_TELEMETRY_DATABASE_URL","valueFrom":$TELEMETRY_DATABASE_URL_SECRET_ARN}] end))
                 | .logConfiguration = {
                     "logDriver": "awslogs",
                     "options": {
@@ -443,6 +469,44 @@ jobs:
             --output text)
 
           echo "WORKER_TASK_DEF=$WORKER_TASK_DEF" >> "$GITHUB_ENV"
+
+      - name: Validate telemetry task configuration
+        if: env.TELEMETRY_DATABASE_URL_SECRET_ARN != ''
+        run: |
+          set -euo pipefail
+          aws secretsmanager describe-secret --secret-id "$TELEMETRY_DATABASE_URL_SECRET_ARN" \
+            --region "$AWS_REGION" --query ARN --output text >/dev/null
+          for task_definition in "$API_TASK_DEF" "$WORKER_TASK_DEF"; do
+            aws ecs describe-task-definition --task-definition "$task_definition" \
+              --region "$AWS_REGION" --query taskDefinition > telemetry-task-definition.json
+            jq -e --arg arn "$TELEMETRY_DATABASE_URL_SECRET_ARN" \
+              --arg version "$TELEMETRY_EXECUTION_IDENTITY_VERSION" '
+              .containerDefinitions[0]
+              | ([.secrets[]? | select(.name == "NERAIUM_TELEMETRY_DATABASE_URL" and .valueFrom == $arn)] | length) == 1
+                and ([.environment[]? | select(.name == "NERAIUM_TELEMETRY_EXECUTION_IDENTITY_VERSION" and .value == $version)] | length) == 1
+            ' telemetry-task-definition.json >/dev/null
+          done
+
+      - name: Apply telemetry migrations before service rollout
+        if: env.TELEMETRY_DATABASE_URL_SECRET_ARN != ''
+        run: |
+          set -euo pipefail
+          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_API_SERVICE" \
+            --region "$AWS_REGION" --query 'services[0].networkConfiguration' > telemetry-migration-network.json
+          jq -e '.awsvpcConfiguration.subnets | length > 0' telemetry-migration-network.json >/dev/null
+          jq -n --arg name "$API_CONTAINER_NAME" \
+            '{containerOverrides:[{name:$name,command:["python","-m","db.migrations.apply_telemetry"]}]}' \
+            > telemetry-migration-overrides.json
+          TASK_ARN=$(aws ecs run-task --cluster "$ECS_CLUSTER" --task-definition "$API_TASK_DEF" \
+            --launch-type FARGATE --network-configuration file://telemetry-migration-network.json \
+            --overrides file://telemetry-migration-overrides.json --region "$AWS_REGION" \
+            --query 'tasks[0].taskArn' --output text)
+          test -n "$TASK_ARN"
+          test "$TASK_ARN" != "None"
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" --region "$AWS_REGION"
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \
+            --region "$AWS_REGION" --query 'tasks[0].containers[0].exitCode' --output text)
+          test "$EXIT_CODE" = "0"
 
       - name: Update ECS services to new task definitions
         run: |
