@@ -8,6 +8,8 @@ TASK_EXECUTION_ROLE_NAME="${TASK_EXECUTION_ROLE_NAME:-neraium-prod-ecs-task-exec
 API_TOKEN_SECRET_ARN="${API_TOKEN_SECRET_ARN:?API_TOKEN_SECRET_ARN is required}"
 AUTH_DATABASE_URL_SECRET_ARN="${AUTH_DATABASE_URL_SECRET_ARN:?AUTH_DATABASE_URL_SECRET_ARN is required}"
 TELEMETRY_DATABASE_URL_SECRET_ARN="${TELEMETRY_DATABASE_URL_SECRET_ARN:-}"
+TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN="${TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN:-}"
+TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME="${TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME:-neraium-prod-telemetry-migration-execution-role}"
 TELEMETRY_CONNECTOR_SECRET_ARN="${TELEMETRY_CONNECTOR_SECRET_ARN:-}"
 AUTH_DATABASE_SECRET_ARN="${AUTH_DATABASE_SECRET_ARN:?AUTH_DATABASE_SECRET_ARN is required}"
 AUTH_DATABASE_KMS_KEY_ARN="${AUTH_DATABASE_KMS_KEY_ARN:?AUTH_DATABASE_KMS_KEY_ARN is required}"
@@ -21,6 +23,15 @@ INFRA_ALERT_TOPIC_NAME="${INFRA_ALERT_TOPIC_NAME:-neraium-prod-infrastructure-al
 NERAIUM_INFRA_ALERT_EMAILS="${NERAIUM_INFRA_ALERT_EMAILS:-}"
 
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+if [ -n "$TELEMETRY_DATABASE_URL_SECRET_ARN" ] || [ -n "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN" ]; then
+  test -n "$TELEMETRY_DATABASE_URL_SECRET_ARN"
+  test -n "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN"
+  test "$TELEMETRY_DATABASE_URL_SECRET_ARN" != "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN"
+  case "$TELEMETRY_DATABASE_URL_SECRET_ARN:$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN" in
+    arn:aws:secretsmanager:"$AWS_REGION":"$ACCOUNT_ID":secret:neraium/prod/telemetry-database-url-*:arn:aws:secretsmanager:"$AWS_REGION":"$ACCOUNT_ID":secret:neraium/prod/telemetry-migration-database-url-*) ;;
+    *) echo "Telemetry database secrets must use the production account and distinct application/migration names" >&2; exit 1 ;;
+  esac
+fi
 INFRA_ALERT_TOPIC_ARN="$(aws sns create-topic --name "$INFRA_ALERT_TOPIC_NAME" --region "$AWS_REGION" --query TopicArn --output text)"
 APP_TASK_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${APP_TASK_ROLE_NAME}"
 TASK_EXECUTION_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${TASK_EXECUTION_ROLE_NAME}"
@@ -28,12 +39,13 @@ TRUST_POLICY_FILE="$(mktemp)"
 INLINE_POLICY_FILE="$(mktemp)"
 EXECUTION_INLINE_POLICY_FILE="$(mktemp)"
 EXECUTION_SECRETS_POLICY_FILE="$(mktemp)"
+MIGRATION_EXECUTION_POLICY_FILE="$(mktemp)"
 UPLOAD_CORS_FILE="$(mktemp)"
 CURRENT_CORS_FILE="$(mktemp)"
 UPLOAD_LIFECYCLE_FILE="$(mktemp)"
 CURRENT_LIFECYCLE_FILE="$(mktemp)"
 cleanup() {
-  rm -f "$TRUST_POLICY_FILE" "$INLINE_POLICY_FILE" "$EXECUTION_INLINE_POLICY_FILE" "$EXECUTION_SECRETS_POLICY_FILE" "$UPLOAD_CORS_FILE" "$CURRENT_CORS_FILE" "$UPLOAD_LIFECYCLE_FILE" "$CURRENT_LIFECYCLE_FILE"
+  rm -f "$TRUST_POLICY_FILE" "$INLINE_POLICY_FILE" "$EXECUTION_INLINE_POLICY_FILE" "$EXECUTION_SECRETS_POLICY_FILE" "$MIGRATION_EXECUTION_POLICY_FILE" "$UPLOAD_CORS_FILE" "$CURRENT_CORS_FILE" "$UPLOAD_LIFECYCLE_FILE" "$CURRENT_LIFECYCLE_FILE"
 }
 trap cleanup EXIT
 
@@ -95,11 +107,11 @@ JSON
 
 if [ -n "$TELEMETRY_CONNECTOR_SECRET_ARN" ]; then
   case "$TELEMETRY_CONNECTOR_SECRET_ARN" in
-    arn:aws:secretsmanager:"$AWS_REGION":*:secret:neraium/prod/telemetry-connections/\*) ;;
+    arn:aws:secretsmanager:"$AWS_REGION":"$ACCOUNT_ID":secret:neraium/prod/telemetry-connections/\*) ;;
     *) echo "Telemetry connector IAM scope must match the production secret prefix" >&2; exit 1 ;;
   esac
   jq --arg arn "$TELEMETRY_CONNECTOR_SECRET_ARN" \
-    '.Statement += [{"Effect":"Allow","Action":["secretsmanager:GetSecretValue","secretsmanager:DescribeSecret","secretsmanager:CreateSecret","secretsmanager:UpdateSecret","secretsmanager:TagResource"],"Resource":[$arn]}]' \
+    '.Statement += [{"Effect":"Allow","Action":["secretsmanager:GetSecretValue","secretsmanager:DescribeSecret"],"Resource":[$arn]}]' \
     "$INLINE_POLICY_FILE" > "${INLINE_POLICY_FILE}.next"
   mv "${INLINE_POLICY_FILE}.next" "$INLINE_POLICY_FILE"
 fi
@@ -148,6 +160,13 @@ if [ -n "$TELEMETRY_DATABASE_URL_SECRET_ARN" ]; then
     '.Statement[0].Resource += [$arn]' \
     "$EXECUTION_SECRETS_POLICY_FILE" > "${EXECUTION_SECRETS_POLICY_FILE}.next"
   mv "${EXECUTION_SECRETS_POLICY_FILE}.next" "$EXECUTION_SECRETS_POLICY_FILE"
+fi
+
+if [ -n "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN" ]; then
+  test "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN" != "$TELEMETRY_DATABASE_URL_SECRET_ARN"
+  jq -n --arg secret "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN" \
+    '{Version:"2012-10-17",Statement:[{Effect:"Allow",Action:["secretsmanager:GetSecretValue"],Resource:[$secret]}]}' \
+    > "$MIGRATION_EXECUTION_POLICY_FILE"
 fi
 
 echo "Ensuring S3 bucket ${UPLOAD_STATE_BUCKET} in ${AWS_REGION}"
@@ -245,6 +264,18 @@ aws iam put-role-policy \
   --role-name "$TASK_EXECUTION_ROLE_NAME" \
   --policy-name neraium-secretsmanager-access \
   --policy-document "file://${EXECUTION_SECRETS_POLICY_FILE}"
+
+if [ -n "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN" ]; then
+  if ! aws iam get-role --role-name "$TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME" >/dev/null 2>&1; then
+    aws iam create-role --role-name "$TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME" \
+      --assume-role-policy-document "file://${TRUST_POLICY_FILE}" >/dev/null
+  fi
+  aws iam attach-role-policy --role-name "$TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME" \
+    --policy-arn "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy" >/dev/null
+  aws iam put-role-policy --role-name "$TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME" \
+    --policy-name neraium-telemetry-migration-secret-access \
+    --policy-document "file://${MIGRATION_EXECUTION_POLICY_FILE}"
+fi
 
 echo "UPLOAD_STATE_BUCKET=${UPLOAD_STATE_BUCKET}"
 echo "APP_TASK_ROLE_NAME=${APP_TASK_ROLE_NAME}"

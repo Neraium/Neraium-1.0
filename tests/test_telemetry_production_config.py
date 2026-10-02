@@ -20,12 +20,12 @@ def test_v2_production_settings_fail_closed_until_required_configuration_is_pres
     with pytest.raises(ValueError, match="TELEMETRY_SECRET_REGION"):
         validate_settings(database)
     region = replace(database, telemetry_secret_region="us-east-2")
-    with pytest.raises(ValueError, match="TELEMETRY_DYNAMIC_SECRET_WRITES"):
-        validate_settings(region)
-    writes = replace(region, telemetry_dynamic_secret_writes_enabled=True)
     with pytest.raises(ValueError, match="TELEMETRY_CONTROLLED_EGRESS_ENABLED"):
-        validate_settings(writes)
-    validate_settings(replace(writes, telemetry_controlled_egress_enabled=True))
+        validate_settings(region)
+    validate_settings(replace(region, telemetry_controlled_egress_enabled=True))
+    with pytest.raises(ValueError, match="forbids NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES"):
+        validate_settings(replace(region, telemetry_controlled_egress_enabled=True,
+                                  telemetry_dynamic_secret_writes_enabled=True))
     validate_settings(replace(base, telemetry_execution_identity_version="concept-keyed.v1"))
 
 

@@ -476,8 +476,8 @@ def validate_settings(settings: Settings) -> None:
             raise ValueError("V2 telemetry requires NERAIUM_TELEMETRY_DATABASE_URL.")
         if not settings.telemetry_secret_region:
             raise ValueError("V2 telemetry requires NERAIUM_TELEMETRY_SECRET_REGION.")
-        if not settings.telemetry_dynamic_secret_writes_enabled:
-            raise ValueError("V2 telemetry requires NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES.")
+        if settings.telemetry_dynamic_secret_writes_enabled:
+            raise ValueError("Production V2 telemetry forbids NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES.")
         if not settings.telemetry_controlled_egress_enabled:
             raise ValueError("V2 telemetry requires NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED.")
 

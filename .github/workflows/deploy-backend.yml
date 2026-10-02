@@ -42,6 +42,8 @@ env:
   API_TOKEN_SECRET_ARN: ${{ vars.NERAIUM_API_TOKEN_SECRET_ARN }}
   AUTH_DATABASE_URL_SECRET_ARN: ${{ vars.NERAIUM_AUTH_DATABASE_URL_SECRET_ARN }}
   TELEMETRY_DATABASE_URL_SECRET_ARN: ${{ vars.NERAIUM_TELEMETRY_DATABASE_URL_SECRET_ARN }}
+  TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN: ${{ vars.NERAIUM_TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN }}
+  TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME: neraium-prod-telemetry-migration-execution-role
   TELEMETRY_CONNECTOR_SECRET_ARN: ${{ vars.NERAIUM_TELEMETRY_CONNECTOR_SECRET_ARN }}
   TELEMETRY_EXECUTION_IDENTITY_VERSION: ${{ vars.NERAIUM_TELEMETRY_EXECUTION_IDENTITY_VERSION || 'concept-keyed.v1' }}
   TELEMETRY_DYNAMIC_SECRET_WRITES: ${{ vars.NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES || 'false' }}
@@ -90,8 +92,12 @@ jobs:
           if [ "$TELEMETRY_EXECUTION_IDENTITY_VERSION" = "physical-endpoint-keyed.v2" ]; then
             test -n "$TELEMETRY_DATABASE_URL_SECRET_ARN"
             test -n "$TELEMETRY_CONNECTOR_SECRET_ARN"
-            test "$TELEMETRY_DYNAMIC_SECRET_WRITES" = "true"
+            test "$TELEMETRY_DYNAMIC_SECRET_WRITES" = "false"
             test "$TELEMETRY_CONTROLLED_EGRESS_ENABLED" = "true"
+          fi
+          if [ -n "$TELEMETRY_DATABASE_URL_SECRET_ARN" ]; then
+            test -n "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN"
+            test "$TELEMETRY_DATABASE_URL_SECRET_ARN" != "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN"
           fi
           test -n "$RDS_AUTH_INSTANCE_ID"
           test -n "$AUTH_DATABASE_NAME"
@@ -103,6 +109,12 @@ jobs:
             *) echo "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD must be true or false" >&2; exit 1 ;;
           esac
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          if [ -n "$TELEMETRY_DATABASE_URL_SECRET_ARN" ]; then
+            MIGRATION_ROLE_ARN=$(aws iam get-role --role-name "$TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME" \
+              --query 'Role.Arn' --output text)
+            test "$MIGRATION_ROLE_ARN" = "arn:aws:iam::${ACCOUNT_ID}:role/${TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME}"
+            echo "TELEMETRY_MIGRATION_EXECUTION_ROLE_ARN=$MIGRATION_ROLE_ARN" >> "$GITHUB_ENV"
+          fi
           INFRA_ALERT_TOPIC_ARN=$(aws sns create-topic \
             --name "$INFRA_ALERT_TOPIC_NAME" \
             --region "$AWS_REGION" \
@@ -491,15 +503,28 @@ jobs:
         if: env.TELEMETRY_DATABASE_URL_SECRET_ARN != ''
         run: |
           set -euo pipefail
+          aws secretsmanager describe-secret --secret-id "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN" \
+            --region "$AWS_REGION" --query ARN --output text >/dev/null
+          jq --arg secret "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN" \
+            --arg role "$TELEMETRY_MIGRATION_EXECUTION_ROLE_ARN" '
+            .family = "neraium-prod-telemetry-migrator"
+            | .executionRoleArn = $role
+            | del(.taskRoleArn)
+            | .containerDefinitions |= map(
+                .command = ["python", "-m", "db.migrations.apply_telemetry"]
+                | .secrets = [{"name":"NERAIUM_TELEMETRY_DATABASE_URL","valueFrom":$secret}]
+                | del(.portMappings, .healthCheck)
+              )
+          ' next-api-task-definition.json > telemetry-migration-task-definition.json
+          MIGRATION_TASK_DEF=$(aws ecs register-task-definition \
+            --cli-input-json file://telemetry-migration-task-definition.json \
+            --region "$AWS_REGION" --query 'taskDefinition.taskDefinitionArn' --output text)
           aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_API_SERVICE" \
             --region "$AWS_REGION" --query 'services[0].networkConfiguration' > telemetry-migration-network.json
           jq -e '.awsvpcConfiguration.subnets | length > 0' telemetry-migration-network.json >/dev/null
-          jq -n --arg name "$API_CONTAINER_NAME" \
-            '{containerOverrides:[{name:$name,command:["python","-m","db.migrations.apply_telemetry"]}]}' \
-            > telemetry-migration-overrides.json
-          TASK_ARN=$(aws ecs run-task --cluster "$ECS_CLUSTER" --task-definition "$API_TASK_DEF" \
+          TASK_ARN=$(aws ecs run-task --cluster "$ECS_CLUSTER" --task-definition "$MIGRATION_TASK_DEF" \
             --launch-type FARGATE --network-configuration file://telemetry-migration-network.json \
-            --overrides file://telemetry-migration-overrides.json --region "$AWS_REGION" \
+            --region "$AWS_REGION" \
             --query 'tasks[0].taskArn' --output text)
           test -n "$TASK_ARN"
           test "$TASK_ARN" != "None"
