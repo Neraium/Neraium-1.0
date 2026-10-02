@@ -14,7 +14,9 @@ COPY requirements.txt .
 RUN python -m pip install --upgrade pip && \
     python -m pip install --no-cache-dir -r requirements.txt && \
     addgroup --system --gid 10001 neraium && \
-    adduser --system --uid 10001 --ingroup neraium --home /nonexistent --no-create-home neraium
+    adduser --system --uid 10001 --ingroup neraium --home /nonexistent --no-create-home neraium && \
+    addgroup --system --gid 10002 connector-executor && \
+    adduser --system --uid 10002 --ingroup connector-executor --home /nonexistent --no-create-home connector-executor
 
 COPY api ./api
 COPY app ./app

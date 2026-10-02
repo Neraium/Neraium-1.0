@@ -155,12 +155,20 @@ class ConnectorExecutionContext:
     resource_scope_id: str
     configuration: Mapping[str, Any]
     secret_binding: SecretBinding | None = None
+    tenant_scope_id: str | None = None
+    workspace_id: str | None = None
+    facility_id: str | None = None
 
     def __post_init__(self) -> None:
         if not str(self.connection_id or "").strip():
             raise ValueError("connection_id_required")
         if not str(self.resource_scope_id or "").strip():
             raise ValueError("resource_scope_id_required")
+        authority = (self.tenant_scope_id, self.workspace_id, self.facility_id)
+        if any(value is not None for value in authority) and not all(
+            isinstance(value, str) and value.strip() for value in authority
+        ):
+            raise ValueError("connector_scope_authority_invalid")
         if self.secret_binding is not None:
             if self.secret_binding.connection_id != self.connection_id:
                 raise ValueError("secret_binding_connection_mismatch")

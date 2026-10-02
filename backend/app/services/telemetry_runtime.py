@@ -15,6 +15,7 @@ from app.connectors.historian_provider import (
 )
 from app.core.config import Settings, parse_postgresql_url, validate_settings
 from app.services.telemetry_domain import ConnectorType
+from app.services.connector_execution import RemoteHttpsTelemetryConnector
 from app.services.telemetry_repository import PostgreSQLTelemetryRepository
 from app.services.telemetry_secrets import AwsSecretsManagerTelemetryStore, TelemetrySecretStore
 
@@ -231,11 +232,28 @@ def build_telemetry_runtime(settings: Settings) -> TelemetryRuntime:
         repository = PostgreSQLTelemetryRepository(
             build_telemetry_connection_factory(database_url)
         )
+        https_provider: TelemetryConnector
+        if settings.telemetry_executor_url:
+            executor_client_options: dict[str, str] = {}
+            if settings.telemetry_secret_region:
+                executor_client_options["region_name"] = settings.telemetry_secret_region
+            executor_secrets_client = _LazySecretsManagerClient(
+                lambda: boto3.client("secretsmanager", **executor_client_options)
+            )
+            https_provider = RemoteHttpsTelemetryConnector(
+                endpoint=settings.telemetry_executor_url,
+                ca_pem=settings.telemetry_executor_ca_pem,
+                auth_secret_arn=settings.telemetry_executor_auth_secret_arn,
+                secret_client=executor_secrets_client,
+            )
+        elif settings.app_env in {"prod", "production"}:
+            raise TelemetryRuntimeUnavailable("telemetry_connector_executor_required")
+        else:
+            https_provider = HttpsTelemetryConnector(secret_store=secret_store)
+
         providers = TelemetryProviderRegistry(
             {
-                ConnectorType.HTTPS_TELEMETRY: HttpsTelemetryConnector(
-                    secret_store=secret_store
-                ),
+                ConnectorType.HTTPS_TELEMETRY: https_provider,
                 ConnectorType.HISTORIAN_TEMPLATE: HistorianTemplateConnector(
                     provider_registry=HistorianProviderRegistry(),
                     secret_store=secret_store,

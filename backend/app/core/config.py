@@ -91,6 +91,9 @@ class Settings:
     telemetry_secret_region: str = ""
     telemetry_dynamic_secret_writes_enabled: bool = False
     telemetry_controlled_egress_enabled: bool = False
+    telemetry_executor_url: str = ""
+    telemetry_executor_ca_pem: str = field(default="", repr=False)
+    telemetry_executor_auth_secret_arn: str = ""
     telemetry_legacy_compat_enabled: bool = DEFAULT_TELEMETRY_LEGACY_COMPAT_ENABLED
     telemetry_execution_identity_version: str = DEFAULT_TELEMETRY_EXECUTION_IDENTITY_VERSION
     telemetry_scheduler_poll_interval_seconds: float = (
@@ -235,6 +238,11 @@ def get_settings() -> Settings:
             False,
             name="NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED",
         ),
+        telemetry_executor_url=str(os.getenv("NERAIUM_TELEMETRY_EXECUTOR_URL", "")).strip(),
+        telemetry_executor_ca_pem=os.getenv("NERAIUM_TELEMETRY_EXECUTOR_CA_PEM", ""),
+        telemetry_executor_auth_secret_arn=str(
+            os.getenv("NERAIUM_TELEMETRY_EXECUTOR_AUTH_SECRET_ARN", "")
+        ).strip(),
         telemetry_legacy_compat_enabled=parse_bool(
             os.getenv("NERAIUM_TELEMETRY_LEGACY_COMPAT"),
             DEFAULT_TELEMETRY_LEGACY_COMPAT_ENABLED,
@@ -471,6 +479,14 @@ def validate_settings(settings: Settings) -> None:
                 raise ValueError(
                     "NERAIUM_TELEMETRY_DATABASE_URL must require PostgreSQL TLS in production."
                 )
+    if settings.telemetry_executor_url:
+        endpoint = urlsplit(settings.telemetry_executor_url)
+        if endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password:
+            raise ValueError("NERAIUM_TELEMETRY_EXECUTOR_URL must be an absolute HTTPS URL.")
+        if "BEGIN CERTIFICATE" not in settings.telemetry_executor_ca_pem:
+            raise ValueError("NERAIUM_TELEMETRY_EXECUTOR_CA_PEM must contain a trusted certificate.")
+        if not settings.telemetry_executor_auth_secret_arn:
+            raise ValueError("NERAIUM_TELEMETRY_EXECUTOR_AUTH_SECRET_ARN is required.")
     if app_env in {"prod", "production"} and settings.telemetry_execution_identity_version == "physical-endpoint-keyed.v2":
         if not settings.telemetry_database_url:
             raise ValueError("V2 telemetry requires NERAIUM_TELEMETRY_DATABASE_URL.")
@@ -480,6 +496,10 @@ def validate_settings(settings: Settings) -> None:
             raise ValueError("Production V2 telemetry forbids NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES.")
         if not settings.telemetry_controlled_egress_enabled:
             raise ValueError("V2 telemetry requires NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED.")
+    if (app_env in {"prod", "production"} and settings.telemetry_database_url
+            and not (settings.telemetry_executor_url and settings.telemetry_executor_ca_pem
+                     and settings.telemetry_executor_auth_secret_arn)):
+        raise ValueError("Production telemetry requires the isolated connector executor.")
 
     if settings.notification_webhook_url:
         webhook = urlsplit(settings.notification_webhook_url)

@@ -22,9 +22,17 @@ def test_v2_production_settings_fail_closed_until_required_configuration_is_pres
     region = replace(database, telemetry_secret_region="us-east-2")
     with pytest.raises(ValueError, match="TELEMETRY_CONTROLLED_EGRESS_ENABLED"):
         validate_settings(region)
-    validate_settings(replace(region, telemetry_controlled_egress_enabled=True))
+    controlled = replace(region, telemetry_controlled_egress_enabled=True)
+    with pytest.raises(ValueError, match="isolated connector executor"):
+        validate_settings(controlled)
+    executor = replace(controlled,
+        telemetry_executor_url="https://10.40.32.20:8443",
+        telemetry_executor_ca_pem="-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----",
+        telemetry_executor_auth_secret_arn="arn:aws:secretsmanager:us-east-2:000000000000:secret:executor-auth",
+    )
+    validate_settings(executor)
     with pytest.raises(ValueError, match="forbids NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES"):
-        validate_settings(replace(region, telemetry_controlled_egress_enabled=True,
+        validate_settings(replace(executor,
                                   telemetry_dynamic_secret_writes_enabled=True))
     validate_settings(replace(base, telemetry_execution_identity_version="concept-keyed.v1"))
 

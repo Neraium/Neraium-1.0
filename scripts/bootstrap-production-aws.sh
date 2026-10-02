@@ -11,6 +11,7 @@ TELEMETRY_DATABASE_URL_SECRET_ARN="${TELEMETRY_DATABASE_URL_SECRET_ARN:-}"
 TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN="${TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN:-}"
 TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME="${TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME:-neraium-prod-telemetry-migration-execution-role}"
 TELEMETRY_CONNECTOR_SECRET_ARN="${TELEMETRY_CONNECTOR_SECRET_ARN:-}"
+TELEMETRY_EXECUTOR_AUTH_SECRET_ARN="${TELEMETRY_EXECUTOR_AUTH_SECRET_ARN:-}"
 AUTH_DATABASE_SECRET_ARN="${AUTH_DATABASE_SECRET_ARN:?AUTH_DATABASE_SECRET_ARN is required}"
 AUTH_DATABASE_KMS_KEY_ARN="${AUTH_DATABASE_KMS_KEY_ARN:?AUTH_DATABASE_KMS_KEY_ARN is required}"
 NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN="${NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN:?NERAIUM_BOOTSTRAP_ADMIN_PASSWORD_SECRET_ARN is required}"
@@ -111,7 +112,18 @@ if [ -n "$TELEMETRY_CONNECTOR_SECRET_ARN" ]; then
     *) echo "Telemetry connector IAM scope must match the production secret prefix" >&2; exit 1 ;;
   esac
   jq --arg arn "$TELEMETRY_CONNECTOR_SECRET_ARN" \
-    '.Statement += [{"Effect":"Allow","Action":["secretsmanager:GetSecretValue","secretsmanager:DescribeSecret"],"Resource":[$arn]}]' \
+    '.Statement += [{"Effect":"Allow","Action":["secretsmanager:DescribeSecret"],"Resource":[$arn]}]' \
+    "$INLINE_POLICY_FILE" > "${INLINE_POLICY_FILE}.next"
+  mv "${INLINE_POLICY_FILE}.next" "$INLINE_POLICY_FILE"
+fi
+
+if [ -n "$TELEMETRY_EXECUTOR_AUTH_SECRET_ARN" ]; then
+  case "$TELEMETRY_EXECUTOR_AUTH_SECRET_ARN" in
+    arn:aws:secretsmanager:"$AWS_REGION":"$ACCOUNT_ID":secret:neraium/prod/connector-executor-auth-*) ;;
+    *) echo "Connector executor HMAC secret ARN is outside its expected production scope" >&2; exit 1 ;;
+  esac
+  jq --arg arn "$TELEMETRY_EXECUTOR_AUTH_SECRET_ARN" \
+    '.Statement += [{"Effect":"Allow","Action":["secretsmanager:GetSecretValue"],"Resource":[$arn]}]' \
     "$INLINE_POLICY_FILE" > "${INLINE_POLICY_FILE}.next"
   mv "${INLINE_POLICY_FILE}.next" "$INLINE_POLICY_FILE"
 fi

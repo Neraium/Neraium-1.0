@@ -1,0 +1,15 @@
+ARG BASE_IMAGE=680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:3978bd166d905bb3ee4a6aec6928815eab6d153b335e3c2212e45396ac605ca6
+FROM ${BASE_IMAGE}
+
+USER root
+
+RUN addgroup --system --gid 10002 connector-executor && \
+    adduser --system --uid 10002 --ingroup connector-executor --home /nonexistent --no-create-home connector-executor
+
+COPY backend/app/services/connector_execution.py /app/app/services/connector_execution.py
+COPY backend/app/services/connector_execution_child.py /app/app/services/connector_execution_child.py
+COPY infra/production/patch-connector-runtime.py /tmp/patch-connector-runtime.py
+
+RUN python /tmp/patch-connector-runtime.py && rm /tmp/patch-connector-runtime.py
+
+USER neraium

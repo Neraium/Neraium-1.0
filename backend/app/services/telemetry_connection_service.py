@@ -196,6 +196,9 @@ class TelemetryConnectionService:
             resource_scope_id=scope.resource_scope_id,
             configuration=connection.get("safe_config") or {},
             secret_binding=self._binding(scope, connection),
+            tenant_scope_id=scope.tenant_scope_id,
+            workspace_id=scope.workspace_id,
+            facility_id=scope.facility_id,
         )
 
     def public_connection(

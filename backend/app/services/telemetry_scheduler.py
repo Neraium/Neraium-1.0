@@ -484,6 +484,9 @@ class TelemetryScheduler:
             resource_scope_id=scope.resource_scope_id,
             configuration=configuration,
             secret_binding=secret_binding,
+            tenant_scope_id=scope.tenant_scope_id,
+            workspace_id=scope.workspace_id,
+            facility_id=scope.facility_id,
         )
 
     def _unit_jitter(self) -> float:
