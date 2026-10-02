@@ -42,7 +42,7 @@ from app.services.signal_registry import (
 from app.services.telemetry_analysis_service import process_ingestion_run
 from app.services.telemetry_connection_service import TelemetryConnectionService
 from app.services.telemetry_domain import ConnectorType, TelemetryScopeRef
-from app.services.telemetry_ingestion import prepare_connector_page
+from app.services.telemetry_ingestion import prepare_connector_page, validate_source_representation
 from app.services.telemetry_runtime import TelemetryProviderRegistry, TelemetryRuntime
 from app.services.telemetry_scheduler import TelemetryScheduler
 from app.services.telemetry_secrets import MemoryTelemetrySecretStore, SecretBinding
@@ -611,6 +611,9 @@ class InMemoryProductFlowRepository:
                 "ingestion_run_id": run_id,
             }
             record["source_metadata"] = dict(record.get("source_metadata") or {})
+            record["source_representation"] = validate_source_representation(
+                record.get("source_representation")
+            )
             self.observations.append(record)
             self.signals[record["external_signal_id"]]["last_observed_at"] = record[
                 "observed_at_utc"
@@ -626,6 +629,9 @@ class InMemoryProductFlowRepository:
                 "ingestion_run_id": run_id,
             }
             rejection["safe_context"] = dict(rejection.get("safe_context") or {})
+            rejection["source_representation"] = validate_source_representation(
+                rejection.get("source_representation")
+            )
             self.rejections.append(rejection)
         self.checkpoint = {
             "mode": values["checkpoint_mode"],
