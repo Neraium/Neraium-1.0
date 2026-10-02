@@ -25,6 +25,7 @@ from app.services.telemetry_endpoint_identity import PhysicalEndpointIdentity, p
 from app.services.telemetry_ingestion import MappingSnapshot
 from app.services.telemetry_lineage import ObservationLineage
 from app.services.telemetry_endpoint_execution_v2_repository import EndpointExecutionV2Error
+from app.services.operating_modes import unavailable_operating_mode
 
 
 EXECUTION_IDENTITY_VERSION = "physical-endpoint-keyed.v2"
@@ -116,13 +117,18 @@ def _evaluate(window: EndpointAnalysisWindowV2, *, evaluator: Callable[..., dict
             ),
         },
     }
+    concepts = [item.identity.canonical_concept_id for item in window.series]
+    operating_mode = (
+        unavailable_operating_mode("Multiple physical endpoints share a canonical concept; operating context requires explicit endpoint selection.")
+        if len(set(concepts)) != len(concepts) else {}
+    )
     result = (evaluator or evaluate_sii)(
         columns=columns, rows=rows,
         numeric_profiles=[dict(item) for item in _numeric_profiles(tuple(rows), window.numeric_columns)],
         timestamp_column=TIMESTAMP_COLUMN,
         telemetry_signal_catalog=catalog,
         data_quality={"status": "ready", "readiness": "ready"},
-        sensor_health={}, operating_mode={}, config=config,
+        sensor_health={}, operating_mode=operating_mode, config=config,
         phase4_scope=scope,
         phase4_system_identity=window.system_identity,
         phase4_asset_id=window.asset_id,
@@ -175,6 +181,26 @@ def run_post_ingestion_analysis_v2(
     from app.services.telemetry_analysis_service import TelemetryAnalysisServiceResult, deterministic_analysis_window_id
     if not isinstance(scope, TelemetryScopeRef) or lineage_repository is None or execution_repository is None:
         raise AnalysisWindowValidationError("endpoint_analysis_server_authority_required")
+    base_id = deterministic_analysis_window_id(
+        scope=scope, connection_id=connection_id, source_run_id=source_run_id,
+        system_id=system_id, asset_id=asset_id, window_start=window_start,
+        window_end=window_end, authority_digest=persisted_authority_digest,
+    )
+    window_id = str(uuid5(UUID(base_id), EXECUTION_IDENTITY_VERSION))
+    previously_stored = execution_repository.load_window_row(scope, window_id=window_id)
+    if previously_stored is not None:
+        replay = read_persisted_execution_v2(
+            repository=repository, lineage_repository=lineage_repository,
+            execution_repository=execution_repository, scope=scope,
+            connection_id=connection_id, source_run_id=source_run_id,
+            system_id=system_id, asset_id=asset_id,
+            execution_ref=str(previously_stored["execution_ref"]),
+        )
+        return TelemetryAnalysisServiceResult(
+            window_id=window_id, status="completed", result_id=replay["ref"],
+            artifact_digest=replay["ref"].split(":", 1)[1],
+            reused_existing=True, contract_version=EXECUTION_IDENTITY_VERSION,
+        )
     identity = repository.resolve_analysis_authority_snapshot(
         scope, system_id=system_id, asset_id=asset_id,
         authority_digest=persisted_authority_digest,
@@ -194,12 +220,6 @@ def run_post_ingestion_analysis_v2(
         scope, connection_id=connection_id, external_signal_ids=tuple(source_ids),
     )
     bindings = _bindings(scope, connection_id, observations, authority_rows)
-    base_id = deterministic_analysis_window_id(
-        scope=scope, connection_id=connection_id, source_run_id=source_run_id,
-        system_id=system_id, asset_id=asset_id, window_start=window_start,
-        window_end=window_end, authority_digest=persisted_authority_digest,
-    )
-    window_id = str(uuid5(UUID(base_id), EXECUTION_IDENTITY_VERSION))
     window = build_endpoint_analysis_window_v2(
         window_id=window_id, source_run_id=source_run_id, scope=scope,
         system_identity=identity, asset_id=asset_id,
@@ -305,13 +325,40 @@ def read_persisted_execution_v2(
         )
         if window.as_dict() != raw:
             raise EndpointExecutionV2Error("endpoint_execution_window_mismatch")
-        authority_rows = repository.list_analysis_endpoint_authority(
+        historical_rows = repository.list_historical_analysis_endpoint_authority(
             scope, connection_id=connection_id,
-            external_signal_ids=tuple(item.external_signal_id for item in identities),
+            mapping_ids=tuple(item.mapping_id for item in identities),
         )
-        live_bindings = _bindings(scope, connection_id, raw["observation_lineage"], authority_rows)
-        if {item.identity for item in live_bindings} != set(identities):
-            raise EndpointExecutionV2Error("endpoint_execution_mapping_stale")
+        by_mapping = {str(item["mapping_id"]): item for item in historical_rows}
+        if len(by_mapping) != len(identities):
+            raise EndpointExecutionV2Error("endpoint_execution_mapping_history_ambiguous")
+        for series_item in window.series:
+            identity = series_item.identity
+            historical = by_mapping.get(identity.mapping_id)
+            if historical is None or any((
+                int(historical["revision"]) != identity.mapping_revision,
+                str(historical["connection_id"]) != identity.connection_id,
+                str(historical["external_signal_id"]) != identity.external_signal_id,
+                str(historical["canonical_concept_id"]) != identity.canonical_concept_id,
+                historical["system_id"] != identity.system_id,
+                historical["asset_id"] != identity.asset_id,
+                historical["authority_digest"] != identity.authority_digest,
+                historical["canonical_signal_name"] != series_item.canonical_signal_name,
+                historical["source_unit"] != series_item.source_unit,
+                historical["canonical_unit"] != series_item.canonical_unit,
+                historical["conversion_id"] != series_item.conversion_id,
+                historical["conversion_version"] != series_item.conversion_version,
+                historical["provenance"] != series_item.mapping_provenance,
+            )):
+                raise EndpointExecutionV2Error("endpoint_execution_mapping_history_mismatch")
+            if any(
+                observation.external_tag_id != historical["external_tag_id"]
+                or observation.source_timezone != historical["source_timezone"]
+                or observation.canonical_signal_name != historical["canonical_signal_name"]
+                for observation in window.observation_lineage
+                if observation.mapping_id == identity.mapping_id
+            ):
+                raise EndpointExecutionV2Error("endpoint_execution_observation_history_mismatch")
         pair_rows = execution_repository.list_window_pairs(scope, window_id=window.window_id)
         pairs = tuple(window.relationship_pair(item["source_endpoint_id"], item["target_endpoint_id"])
                       for item in pair_rows)

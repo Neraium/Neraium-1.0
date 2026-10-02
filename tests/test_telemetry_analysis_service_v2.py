@@ -108,6 +108,8 @@ def test_v2_engine_receives_endpoint_keys_and_separate_memory_namespace() -> Non
     assert captured["config"]["infrastructure_identity"]["configured_model_id"].startswith("physical-endpoint-keyed.v2:")
     concepts = {item["canonical_signal_id"] for item in captured["telemetry_signal_catalog"].values()}
     assert len(concepts) == 2 and len(captured["telemetry_signal_catalog"]) == 3
+    assert captured["operating_mode"]["match"] == "unavailable"
+    assert "explicit endpoint selection" in captured["operating_mode"]["reasons"][0]
     with pytest.raises(AnalysisWindowValidationError, match="prior_memory_unsupported"):
         window.relationship_pair(window.numeric_columns[0], window.numeric_columns[1],
                                  prior_memory={"version": "relationship-temporal-state.v1"})
@@ -125,6 +127,27 @@ def test_v2_engine_receives_endpoint_keys_and_separate_memory_namespace() -> Non
         config=v1_config, authenticated_scope=captured["phase4_scope"],
     )
     assert v2_identity["model_id"] != v1_identity["model_id"]
+
+
+def test_same_concept_operating_context_ambiguity_is_order_independent() -> None:
+    from test_telemetry_analysis_window_v2 import CONCEPT_FLOW
+
+    observations = tuple(_observation(binding, minute) for minute in (0, 1)
+                         for binding in (_binding(1), _binding(2), _binding(3, CONCEPT_FLOW)))
+    windows = (
+        _window((_binding(1), _binding(2), _binding(3, CONCEPT_FLOW)), observations),
+        _window((_binding(3, CONCEPT_FLOW), _binding(2), _binding(1)), observations),
+    )
+    modes = []
+    for window in windows:
+        captured = {}
+        def evaluator(**kwargs):
+            captured.update(kwargs)
+            return {"status": "completed"}
+        _evaluate(window, evaluator=evaluator)
+        modes.append(captured["operating_mode"])
+    assert modes[0] == modes[1]
+    assert modes[0]["match"] == "unavailable"
 
 
 def test_v2_persists_and_reads_distinct_same_concept_pairs() -> None:

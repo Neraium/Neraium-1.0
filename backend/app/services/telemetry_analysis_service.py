@@ -443,6 +443,22 @@ def run_post_ingestion_analysis(
         raise
     connection = repository.get_connection(scope, connection_id) or {}
     consequence_config = (connection.get("safe_config") or {}).get("consequence")
+    # V1 columns are canonical concepts. Distinct endpoints with disjoint
+    # timestamps would otherwise be silently spliced into one V1 series.
+    concept_endpoints: dict[str, set[str]] = {}
+    for observation in observations:
+        concept = str(observation.get("canonical_concept_id") or observation.get("canonical_signal_id") or "")
+        endpoint = str(observation.get("external_signal_id") or "")
+        if concept and endpoint:
+            concept_endpoints.setdefault(concept, set()).add(endpoint)
+    if any(len(endpoints) > 1 for endpoints in concept_endpoints.values()):
+        return _persist_ineligible(
+            repository,
+            scope=scope, window_id=window_id, source_run_id=source_run_id,
+            system_id=system_id, asset_id=asset_id,
+            window_start=start, window_end=end, authority_digest=authority_digest,
+            reason_code="telemetry_analysis_v1_concept_endpoint_ambiguous",
+        )
     try:
         window = build_canonical_analysis_window(
             window_id=window_id,

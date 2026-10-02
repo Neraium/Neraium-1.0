@@ -177,8 +177,10 @@ class TelemetryRuntime:
             if self.execution_identity_version == "physical-endpoint-keyed.v2":
                 from db.migrations.create_relationship_lineage_v2_artifacts import verify as verify_v2_lineage
                 from db.migrations.create_endpoint_analysis_executions_v2 import verify as verify_v2_execution
+                from db.migrations.allow_same_concept_physical_endpoints import verify as verify_endpoint_coexistence
                 verify_v2_lineage(connection)
                 verify_v2_execution(connection)
+                verify_endpoint_coexistence(connection)
             return True
         except TelemetryRuntimeUnavailable:
             raise
@@ -257,7 +259,10 @@ def build_telemetry_runtime(settings: Settings) -> TelemetryRuntime:
             )
 
             runtime.signal_registry = SignalRegistryService(
-                repository, FacilityContextHierarchyAuthority()
+                repository, FacilityContextHierarchyAuthority(),
+                allow_same_concept_endpoints=(
+                    settings.telemetry_execution_identity_version == "physical-endpoint-keyed.v2"
+                ),
             )
         except (ImportError, TypeError):
             runtime.signal_registry = None

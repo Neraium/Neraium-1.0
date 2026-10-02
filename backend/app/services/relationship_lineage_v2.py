@@ -129,8 +129,8 @@ def build_artifact(
         raise RelationshipLineageV2Error("relationship_v2_result_evidence_required")
     descriptor = issue(window, pair)
     try:
-        result_copy = json.loads(canonical_json_bytes(result))
-        evidence_copy = json.loads(canonical_json_bytes(evidence))
+        result_copy = _jsonb_stable(json.loads(canonical_json_bytes(result)))
+        evidence_copy = _jsonb_stable(json.loads(canonical_json_bytes(evidence)))
     except (TypeError, ValueError) as exc:
         raise RelationshipLineageV2Error("relationship_v2_payload_invalid") from exc
     payload = {
@@ -143,6 +143,17 @@ def build_artifact(
     if len(encoded) > MAX_ARTIFACT_BYTES:
         raise RelationshipLineageV2Error("relationship_v2_artifact_too_large")
     return {"ref": digest(ARTIFACT_CONTRACT, payload), "payload": payload}
+
+
+def _jsonb_stable(value: Any) -> Any:
+    """Match PostgreSQL JSONB's signed-zero representation before hashing."""
+    if isinstance(value, float) and value == 0.0:
+        return 0.0
+    if isinstance(value, dict):
+        return {key: _jsonb_stable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_jsonb_stable(item) for item in value]
+    return value
 
 
 def readback(

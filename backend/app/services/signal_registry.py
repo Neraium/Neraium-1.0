@@ -195,6 +195,7 @@ class SignalRegistryService:
         *,
         uuid_factory: UuidFactory = uuid.uuid4,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        allow_same_concept_endpoints: bool = False,
     ) -> None:
         if not callable(hierarchy_authority):
             raise TypeError("telemetry_hierarchy_authority_required")
@@ -202,6 +203,7 @@ class SignalRegistryService:
         self._hierarchy_authority = hierarchy_authority
         self._uuid_factory = uuid_factory
         self._clock = clock
+        self._allow_same_concept_endpoints = allow_same_concept_endpoints is True
 
     def register_discovered_signals(
         self,
@@ -414,6 +416,7 @@ class SignalRegistryService:
             ),
             mapped_at=mapped_at,
             expected_revision=expected_revision,
+            allow_same_concept_endpoints=self._allow_same_concept_endpoints,
         )
 
     def disable_mapping(

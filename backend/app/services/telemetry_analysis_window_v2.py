@@ -334,7 +334,7 @@ def build_endpoint_analysis_window_v2(
     for observation in observations:
         if not isinstance(observation, Mapping) or observation.get("analysis_eligible") is not True or observation.get("quality_state") != "good":
             raise AnalysisWindowValidationError("endpoint_window_observation_ineligible")
-        key = (observation.get("connection_id"), observation.get("external_signal_id"))
+        key = (str(observation.get("connection_id")), str(observation.get("external_signal_id")))
         binding = by_source.get(key)
         if binding is None:
             raise AnalysisWindowValidationError("endpoint_window_observation_endpoint_missing")

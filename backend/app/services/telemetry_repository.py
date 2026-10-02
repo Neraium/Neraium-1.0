@@ -1930,6 +1930,7 @@ class PostgreSQLTelemetryRepository:
         mapped_at: datetime,
         authority_snapshot: Mapping[str, Any] | None = None,
         expected_revision: int | None = None,
+        allow_same_concept_endpoints: bool = False,
     ) -> dict[str, Any]:
         """Create or revise the one enabled mapping for a scoped signal."""
         mapping_id = _require_uuid(mapping_id, "telemetry_mapping_id_invalid")
@@ -2005,6 +2006,8 @@ class PostgreSQLTelemetryRepository:
             raise ValueError("telemetry_mapping_timestamp_invalid")
         if expected_revision is not None and int(expected_revision) < 1:
             raise ValueError("telemetry_mapping_revision_invalid")
+        if type(allow_same_concept_endpoints) is not bool:
+            raise ValueError("telemetry_mapping_execution_identity_invalid")
 
         with self._connection() as connection, connection.cursor() as cursor:
             cursor.execute(
@@ -2121,30 +2124,32 @@ class PostgreSQLTelemetryRepository:
             if expected_revision is not None and current_revision != int(expected_revision):
                 raise TelemetryMappingConflict("telemetry_mapping_revision_conflict")
 
-            cursor.execute(
-                """
-                SELECT 1 FROM telemetry.signal_mappings m
-                WHERE m.resource_scope_id = %s AND m.tenant_scope_id = %s
-                  AND m.workspace_id = %s AND m.facility_id = %s
-                  AND m.connection_id = %s::UUID AND m.system_id = %s
-                  AND COALESCE(m.asset_id, '') = COALESCE(%s, '')
-                  AND m.canonical_concept_id = %s::UUID
-                  AND m.external_signal_id <> %s::UUID AND m.enabled = TRUE
-                FOR UPDATE
-                """,
-                (
-                    *_scope_parameters(scope),
-                    connection_id,
-                    system_id,
-                    asset_id,
-                    canonical_concept_id,
-                    signal_id,
-                ),
-            )
-            if cursor.fetchone() is not None:
-                raise TelemetryMappingConflict(
-                    "telemetry_mapping_canonical_hierarchy_duplicate"
+            if not allow_same_concept_endpoints:
+                # Preserve V1 mapping admission after the database index is
+                # removed. Serialize competing approvals for this hierarchy.
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    ("|".join((scope.resource_scope_id, connection_id,
+                                  system_id, asset_id or "", canonical_concept_id)),),
                 )
+                cursor.execute(
+                    """
+                    SELECT 1 FROM telemetry.signal_mappings m
+                    WHERE m.resource_scope_id = %s AND m.tenant_scope_id = %s
+                      AND m.workspace_id = %s AND m.facility_id = %s
+                      AND m.connection_id = %s::UUID AND m.system_id = %s
+                      AND COALESCE(m.asset_id, '') = COALESCE(%s, '')
+                      AND m.canonical_concept_id = %s::UUID
+                      AND m.external_signal_id <> %s::UUID AND m.enabled = TRUE
+                    FOR UPDATE
+                    """,
+                    (*_scope_parameters(scope), connection_id, system_id,
+                     asset_id, canonical_concept_id, signal_id),
+                )
+                if cursor.fetchone() is not None:
+                    raise TelemetryMappingConflict(
+                        "telemetry_mapping_canonical_hierarchy_duplicate"
+                    )
             if current_id is not None:
                 cursor.execute(
                     """
@@ -3608,6 +3613,51 @@ class PostgreSQLTelemetryRepository:
             rows = [_row_dict(cursor, row) or {} for row in cursor.fetchall()]
         if len(rows) != len(signal_ids) or {str(row["external_signal_id"]) for row in rows} != set(signal_ids):
             raise ValueError("telemetry_analysis_endpoint_authority_unavailable")
+        return rows
+
+    def list_historical_analysis_endpoint_authority(
+        self,
+        scope: TelemetryRepositoryScope,
+        *,
+        connection_id: str,
+        mapping_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        """Read exact retained mapping rows for historical V2 evidence verification.
+
+        Disabled revisions may verify an old result but cannot admit new telemetry.
+        """
+        connection_id = _require_uuid(connection_id, "telemetry_connection_id_invalid")
+        ids = tuple(sorted({_require_uuid(value, "telemetry_mapping_id_invalid") for value in mapping_ids}))
+        if not ids or len(ids) > 64:
+            raise ValueError("telemetry_historical_mapping_count_invalid")
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT m.id AS mapping_id, m.revision, m.connection_id,
+                       m.external_signal_id, m.system_id, m.asset_id,
+                       m.canonical_concept_id, m.canonical_signal_name,
+                       m.source_unit, m.canonical_unit, m.conversion_id,
+                       m.conversion_version, m.source_timezone,
+                       m.provenance, m.mapped_by, m.mapped_at,
+                       m.authority_digest, s.external_tag_id
+                FROM telemetry.signal_mappings m
+                JOIN telemetry.external_signals s
+                  ON s.resource_scope_id = m.resource_scope_id
+                 AND s.tenant_scope_id = m.tenant_scope_id
+                 AND s.workspace_id = m.workspace_id
+                 AND s.facility_id = m.facility_id
+                 AND s.connection_id = m.connection_id
+                 AND s.id = m.external_signal_id
+                WHERE m.resource_scope_id = %s AND m.tenant_scope_id = %s
+                  AND m.workspace_id = %s AND m.facility_id = %s
+                  AND m.connection_id = %s::UUID AND m.id = ANY(%s::UUID[])
+                ORDER BY m.id
+                """,
+                (*_scope_parameters(scope), connection_id, list(ids)),
+            )
+            rows = [_row_dict(cursor, row) or {} for row in cursor.fetchall()]
+        if len(rows) != len(ids) or {str(row["mapping_id"]) for row in rows} != set(ids):
+            raise ValueError("telemetry_historical_mapping_unavailable")
         return rows
 
     def list_analysis_eligible_observations(
