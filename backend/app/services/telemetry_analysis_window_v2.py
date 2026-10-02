@@ -271,7 +271,7 @@ class EndpointAnalysisWindowV2:
         return digest(CONTENT_DIGEST_VERSION, {
             "schema_fingerprint": self.schema_fingerprint,
             "rows": [dict(row) for row in self.rows],
-            "observation_ids": [item.observation_id for item in self.observation_lineage],
+            "observation_ids": sorted(item.observation_id for item in self.observation_lineage),
         })
 
     def relationship_pair(
@@ -381,7 +381,7 @@ def build_endpoint_analysis_window_v2(
             conversion_id=binding.mapping.conversion_id,
             conversion_version=binding.mapping.conversion_version,
             mapping_provenance=binding.mapping.provenance,
-            observation_ids=tuple(observation_ids[binding.identity.endpoint_id]),
+            observation_ids=tuple(sorted(observation_ids[binding.identity.endpoint_id])),
         )
         for binding in sorted(bindings, key=lambda item: item.identity.endpoint_id)
     )
@@ -397,5 +397,8 @@ def build_endpoint_analysis_window_v2(
     return EndpointAnalysisWindowV2(
         window_id=window_id, source_run_id=source_run_id, scope=scope,
         system_identity=system_identity, asset_id=asset_id,
-        series=series, rows=rows, observation_lineage=tuple(lineage),
+        series=series, rows=rows, observation_lineage=tuple(sorted(
+            lineage, key=lambda item: (item.observed_at_utc, item.connection_id,
+                                       item.external_signal_id, item.observation_id),
+        )),
     )
