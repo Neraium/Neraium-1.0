@@ -152,6 +152,12 @@ export function getTelemetryAnalysisResult({ apiFetch, accessCode, connectionId,
   );
 }
 
+export function getTelemetryAnalysisResultV2({ apiFetch, accessCode, connectionId, runId, executionRef, signal }) {
+  return request(apiFetch, accessCode,
+    `/api/data-connections/${encodeId(connectionId)}/runs/${encodeId(runId)}/v2/analysis-results/${encodeId(executionRef)}`,
+    { signal, cache: "no-store" });
+}
+
 export function getTelemetryAnalysisResultLineage({ apiFetch, accessCode, connectionId, runId, systemId, resultId, assetId = null, limit = 100, cursor = null, signal }) {
   const query = new URLSearchParams();
   if (assetId !== null && assetId !== undefined && String(assetId).trim()) query.set("asset_id", String(assetId).trim());

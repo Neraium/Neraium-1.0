@@ -4,6 +4,7 @@ import {
   discoverTelemetrySignals,
   getFacilityContext,
   getTelemetryAnalysisResult,
+  getTelemetryAnalysisResultV2,
   listCanonicalSignalConcepts,
   listTelemetryConnections,
   listTelemetryProviders,
@@ -554,7 +555,13 @@ export default function TelemetryConnectionsWorkspace({
     if (!selectedConnection || !result?.result_id || !result?.system_id) return;
     const controller = beginAction(`result:${result.result_id}`);
     try {
-      const payload = await getTelemetryAnalysisResult({
+      const isV2 = result.contract_version === "telemetry-customer-result.v2"
+        && result.execution_ref === result.result_id && result.lineage_verified === true;
+      if (result.contract_version && !isV2) throw new Error("The saved analysis result could not be verified.");
+      const payload = await (isV2 ? getTelemetryAnalysisResultV2({
+        apiFetch, accessCode, connectionId: selectedConnection.connection_id,
+        runId: run.run_id, executionRef: result.execution_ref, signal: controller.signal,
+      }) : getTelemetryAnalysisResult({
         apiFetch,
         accessCode,
         connectionId: selectedConnection.connection_id,
@@ -563,13 +570,16 @@ export default function TelemetryConnectionsWorkspace({
         resultId: result.result_id,
         assetId: result.asset_id ?? null,
         signal: controller.signal,
-      });
+      }));
       const exactIdentity = String(payload?.result_id ?? "") === String(result.result_id)
         && String(payload?.connection_id ?? "") === String(selectedConnection.connection_id)
         && String(payload?.source_run_id ?? "") === String(run.run_id)
         && String(payload?.system_id ?? "") === String(result.system_id)
         && String(payload?.asset_id ?? "") === String(result.asset_id ?? "");
-      if (!payload?.product_result || !exactIdentity) {
+      if (!payload?.product_result || !exactIdentity || (isV2 && (
+        payload.contract_version !== "telemetry-customer-result.v2"
+        || payload.execution_ref !== result.execution_ref || payload.lineage_verified !== true
+      ))) {
         throw new Error("The exact saved analysis result could not be verified.");
       }
       onOpenAnalysisResult(payload);

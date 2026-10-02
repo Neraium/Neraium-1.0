@@ -9,6 +9,36 @@ from app.services.telemetry_domain import TelemetryScopeRef
 from app.services.telemetry_endpoint_execution_v2_repository import EndpointExecutionV2Error
 
 
+def list_customer_executions_v2(
+    *, repository: Any, lineage_repository: Any, execution_repository: Any,
+    scope: TelemetryScopeRef, connection_id: str, source_run_id: str, limit: int,
+) -> list[dict[str, Any]]:
+    """List only executions that pass the existing customer detail verification."""
+    run = repository.get_ingestion_run(scope, run_id=source_run_id)
+    if run is None or str(run.get("connection_id")) != connection_id:
+        raise EndpointExecutionV2Error("endpoint_execution_run_not_found")
+    results = []
+    for ref in execution_repository.list_execution_refs(
+        scope, connection_id=connection_id, source_run_id=source_run_id, limit=limit,
+    ):
+        detail = read_customer_execution_v2(
+            repository=repository, lineage_repository=lineage_repository,
+            execution_repository=execution_repository, scope=scope,
+            connection_id=connection_id, source_run_id=source_run_id, execution_ref=ref,
+        )
+        if (detail.get("contract_version") != "telemetry-customer-result.v2"
+                or detail.get("result_id") != ref or detail.get("execution_ref") != ref
+                or detail.get("connection_id") != connection_id
+                or detail.get("source_run_id") != source_run_id
+                or detail.get("lineage_verified") is not True):
+            raise EndpointExecutionV2Error("endpoint_execution_verification_mismatch")
+        results.append({key: detail[key] for key in (
+            "contract_version", "result_id", "execution_ref", "connection_id",
+            "source_run_id", "system_id", "asset_id", "lineage_verified",
+        )})
+    return results
+
+
 def read_customer_execution_v2(
     *, repository: Any, lineage_repository: Any, execution_repository: Any,
     scope: TelemetryScopeRef, connection_id: str, source_run_id: str,

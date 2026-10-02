@@ -202,4 +202,32 @@ describe("TelemetryConnectionsWorkspace", () => {
     expect(apiFetch).toHaveBeenCalledWith(`/api/data-connections/${CONNECTION_ID}/runs/${runId}/systems/chw-loop/analysis-results/${resultId}?asset_id=pump-1`, expect.objectContaining({ cache: "no-store" }));
     expect(apiFetch.mock.calls.some(([path]) => String(path).includes("/api/data/latest"))).toBe(false);
   });
+
+  it("opens only the verified V2 execution selected by the server list", async () => {
+    const runId = "44444444-4444-4444-8444-444444444444";
+    const ref = `telemetry-endpoint-execution.v2:${"a".repeat(64)}`;
+    const base = `/api/data-connections/${CONNECTION_ID}/runs/${runId}`;
+    const onOpenAnalysisResult = vi.fn();
+    let verified = true;
+    const apiFetch = vi.fn(async (path) => {
+      if (path === "/api/data-connections") return response({ connections: [connection()] });
+      const initial = basePayload(path);
+      if (initial) return initial;
+      if (path.includes("/signals?")) return response({ signals: [signal()] });
+      if (path.includes("/runs?")) return response({ runs: [{ run_id: runId, connection_id: CONNECTION_ID, status: "succeeded" }] });
+      if (path.includes("/errors?")) return response({ errors: [] });
+      if (path === `${base}/analysis-results`) return response({ results: [{ contract_version: "telemetry-customer-result.v2", result_id: ref, execution_ref: ref, system_id: "chw-loop", asset_id: "pump-1", lineage_verified: true }] });
+      if (path === `${base}/v2/analysis-results/${encodeURIComponent(ref)}`) return response({ contract_version: "telemetry-customer-result.v2", result_id: ref, execution_ref: ref, connection_id: CONNECTION_ID, source_run_id: runId, system_id: "chw-loop", asset_id: "pump-1", lineage_verified: verified, product_result: { result_id: ref } });
+      return response({}, 404);
+    });
+    render(h(TelemetryConnectionsWorkspace, { apiFetch, currentUser: { role: "viewer" }, datasetScopeKey: "facility-a", onOpenAnalysisResult }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review results" }));
+    await waitFor(() => expect(onOpenAnalysisResult).toHaveBeenCalledWith(expect.objectContaining({ execution_ref: ref })));
+    expect(apiFetch.mock.calls.some(([path]) => String(path).includes("/systems/chw-loop/analysis-results/"))).toBe(false);
+    onOpenAnalysisResult.mockClear();
+    verified = false;
+    fireEvent.click(screen.getByRole("button", { name: "Review results" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("could not be verified"));
+    expect(onOpenAnalysisResult).not.toHaveBeenCalled();
+  });
 });

@@ -133,6 +133,21 @@ class PostgreSQLEndpointExecutionV2Repository(PostgreSQLTelemetryRepository):
             )
             return _row_dict(cursor, cursor.fetchone())
 
+    def list_execution_refs(self, scope: TelemetryScopeRef, *, connection_id: str,
+                            source_run_id: str, limit: int) -> list[str]:
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT execution_ref FROM telemetry.endpoint_analysis_executions_v2
+                WHERE resource_scope_id = %s AND tenant_scope_id = %s
+                  AND workspace_id = %s AND facility_id = %s
+                  AND connection_id = %s::UUID AND source_run_id = %s::UUID
+                ORDER BY created_at DESC, execution_ref DESC LIMIT %s
+                """,
+                (*_scope_parameters(scope), connection_id, source_run_id, limit),
+            )
+            return [str(row[0]) for row in cursor.fetchall()]
+
     def load_window_row(self, scope: TelemetryScopeRef, *, window_id: str) -> dict[str, Any] | None:
         with self._connection() as connection, connection.cursor() as cursor:
             return self._read_cursor(cursor, scope, window_id)

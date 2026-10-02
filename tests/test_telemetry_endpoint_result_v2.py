@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from app.core.security import require_api_access
 from app.engine.sii.behavioral_model_contract import canonical_phase4_resource_scope_id
 from app.services.telemetry_endpoint_execution_v2_repository import EndpointExecutionV2Error
-from app.services.telemetry_endpoint_result_v2 import read_customer_execution_v2
+from app.services.telemetry_endpoint_result_v2 import list_customer_executions_v2, read_customer_execution_v2
 from test_telemetry_connection_api import _connection_payload, build_client
 from test_telemetry_analysis_window_v2 import _scope
 
@@ -130,3 +130,84 @@ def test_v2_route_requires_auth_scope_and_supported_version(tmp_path, monkeypatc
         assert client.get(path.replace(".v2:", ".v1:")).status_code == 422
         app.dependency_overrides.pop(require_api_access)
         assert client.get(path).status_code in {401, 403}
+
+
+def test_v2_list_verifies_each_execution_and_run_authority(monkeypatch) -> None:
+    from app.services import telemetry_endpoint_result_v2 as module
+
+    scope = _scope()
+    connection_id, run_id = str(uuid4()), str(uuid4())
+    ref = "telemetry-endpoint-execution.v2:" + "a" * 64
+
+    class Repository:
+        def get_ingestion_run(self, supplied_scope, *, run_id):
+            assert supplied_scope == scope
+            return {"connection_id": connection_id} if run_id == expected_run[0] else None
+
+    class Executions:
+        def list_execution_refs(self, supplied_scope, **kwargs):
+            assert supplied_scope == scope
+            assert kwargs == {"connection_id": connection_id, "source_run_id": run_id, "limit": 10}
+            return [ref]
+
+    expected_run = [run_id]
+    details = []
+    def read(**kwargs):
+        details.append(kwargs)
+        return {"contract_version": "telemetry-customer-result.v2", "result_id": ref,
+                "execution_ref": ref, "connection_id": connection_id,
+                "source_run_id": run_id, "system_id": "system-a", "asset_id": None,
+                "lineage_verified": True}
+
+    monkeypatch.setattr(module, "read_customer_execution_v2", read)
+    args = dict(repository=Repository(), lineage_repository=object(), execution_repository=Executions(),
+                scope=scope, connection_id=connection_id, source_run_id=run_id, limit=10)
+    assert list_customer_executions_v2(**args)[0]["execution_ref"] == ref
+    assert details[0]["scope"] == scope
+    with pytest.raises(EndpointExecutionV2Error, match="run_not_found"):
+        list_customer_executions_v2(**{**args, "connection_id": str(uuid4())})
+    expected_run[0] = str(uuid4())
+    with pytest.raises(EndpointExecutionV2Error, match="run_not_found"):
+        list_customer_executions_v2(**args)
+    expected_run[0] = run_id
+    def unverifiable(**kwargs):
+        raise EndpointExecutionV2Error("endpoint_execution_lineage_mismatch")
+    monkeypatch.setattr(module, "read_customer_execution_v2", unverifiable)
+    with pytest.raises(EndpointExecutionV2Error, match="lineage_mismatch"):
+        list_customer_executions_v2(**args)
+    monkeypatch.setattr(module, "read_customer_execution_v2", lambda **kwargs: {**read(**kwargs), "lineage_verified": False})
+    with pytest.raises(EndpointExecutionV2Error, match="verification_mismatch"):
+        list_customer_executions_v2(**args)
+
+
+def test_v2_list_route_is_server_selected_and_scoped(tmp_path, monkeypatch) -> None:
+    from app.routers import data_connections as route
+    from app.services.telemetry_runtime import telemetry_runtime_from_app
+
+    app, _ = build_client(tmp_path)
+    runtime = telemetry_runtime_from_app(app)
+    runtime.execution_identity_version = "physical-endpoint-keyed.v2"
+    monkeypatch.setattr(route, "PostgreSQLEndpointExecutionV2Repository", lambda factory: object())
+    monkeypatch.setattr(route, "PostgreSQLEndpointLineageV2Repository", lambda factory: object())
+    seen = []
+    def listed(**kwargs):
+        seen.append(kwargs["scope"])
+        return [{"contract_version": "telemetry-customer-result.v2", "result_id": "ref"}]
+    monkeypatch.setattr(route, "list_customer_executions_v2", listed)
+    with TestClient(app, base_url="https://testserver") as client:
+        runtime.repository._connection_factory = lambda: None
+        created = client.post("/api/data-connections", json=_connection_payload())
+        connection_id = created.json()["connection"]["connection_id"]
+        run_id = str(uuid4())
+        base = f"/api/data-connections/{connection_id}/runs/{run_id}"
+        for path in (f"{base}/analysis-results", f"{base}/v2/analysis-results"):
+            assert client.get(path).json()["results"][0]["contract_version"] == "telemetry-customer-result.v2"
+            assert client.get(path, headers={"X-Test-Workspace": "ws-other"}).status_code == 404
+        assert len(seen) == 2
+        monkeypatch.setattr(route, "list_customer_executions_v2", lambda **kwargs: (_ for _ in ()).throw(EndpointExecutionV2Error("corrupt")))
+        assert client.get(f"{base}/analysis-results").status_code == 404
+        assert client.get(f"{base}/v2/analysis-results").status_code == 404
+        runtime.execution_identity_version = "concept-keyed.v1"
+        assert client.get(f"{base}/v2/analysis-results").status_code == 404
+        app.dependency_overrides.pop(require_api_access)
+        assert client.get(f"{base}/v2/analysis-results").status_code in {401, 403}

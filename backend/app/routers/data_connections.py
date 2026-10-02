@@ -52,7 +52,7 @@ from app.services.telemetry_result_service import (
 from app.services.telemetry_endpoint_execution_v2_repository import (
     EndpointExecutionV2Error, PostgreSQLEndpointExecutionV2Repository,
 )
-from app.services.telemetry_endpoint_result_v2 import read_customer_execution_v2
+from app.services.telemetry_endpoint_result_v2 import list_customer_executions_v2, read_customer_execution_v2
 from app.services.telemetry_relationship_lineage_v2_repository import PostgreSQLEndpointLineageV2Repository
 from app.services.telemetry_scope import (
     TelemetryScopeUnavailableError,
@@ -420,6 +420,11 @@ def list_data_connection_analysis_results(
 ) -> dict[str, Any]:
     service, scope = _result_service_scope(request, connection_id)
     try:
+        if service.runtime.execution_identity_version == "physical-endpoint-keyed.v2":
+            try:
+                return JSONResponse(_list_v2_results(request, scope, str(connection_id), str(source_run_id), limit))
+            except ValueError:
+                raise HTTPException(status_code=404, detail="Analysis result not found.") from None
         return {
             "results": service.list_results(
                 scope,
@@ -429,6 +434,37 @@ def list_data_connection_analysis_results(
             )
         }
     except TelemetryCanonicalResultServiceError as error:
+        raise _api_error(error) from None
+
+
+def _list_v2_results(request: Request, scope: Any, connection_id: str,
+                     source_run_id: str, limit: int) -> dict[str, Any]:
+    runtime = telemetry_runtime_from_app(request.app)
+    if runtime.execution_identity_version != "physical-endpoint-keyed.v2":
+        raise EndpointExecutionV2Error("endpoint_execution_version_unsupported")
+    factory = getattr(runtime.repository, "_connection_factory", None)
+    if not callable(factory):
+        raise EndpointExecutionV2Error("endpoint_execution_storage_unavailable")
+    return {"results": list_customer_executions_v2(
+        repository=runtime.repository,
+        lineage_repository=PostgreSQLEndpointLineageV2Repository(factory),
+        execution_repository=PostgreSQLEndpointExecutionV2Repository(factory),
+        scope=scope, connection_id=connection_id, source_run_id=source_run_id,
+        limit=limit,
+    )}
+
+
+@router.get("/data-connections/{connection_id}/runs/{source_run_id}/v2/analysis-results")
+def list_data_connection_analysis_results_v2(
+    request: Request, connection_id: ConnectionIdPath, source_run_id: UUID,
+    limit: int = Query(default=100, ge=1, le=200),
+) -> dict[str, Any]:
+    _service, scope = _require_existing(request, connection_id)
+    try:
+        return _list_v2_results(request, scope, str(connection_id), str(source_run_id), limit)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Analysis result not found.") from None
+    except TelemetryRuntimeUnavailable as error:
         raise _api_error(error) from None
 
 
