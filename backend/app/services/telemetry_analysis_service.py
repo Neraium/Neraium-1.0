@@ -674,6 +674,9 @@ def process_ingestion_run(
     source_run_id: str,
     evaluator: Callable[..., dict[str, Any]] | None = None,
     progress_reporter: Any | None = None,
+    execution_identity_version: str = "concept-keyed.v1",
+    v2_lineage_repository: Any | None = None,
+    v2_execution_repository: Any | None = None,
 ) -> IngestionRunAnalysisResult:
     """Derive and process every system/asset group from one persisted run.
 
@@ -683,6 +686,8 @@ def process_ingestion_run(
     """
     if not isinstance(scope, TelemetryScopeRef):
         raise TypeError("telemetry_analysis_scope_required")
+    if execution_identity_version not in {"concept-keyed.v1", "physical-endpoint-keyed.v2"}:
+        raise ValueError("telemetry_execution_identity_version_invalid")
     connection_id = _required_text(
         connection_id, "telemetry_analysis_connection_id_invalid"
     )
@@ -749,8 +754,18 @@ def process_ingestion_run(
         )
         group_end = timestamps[-1] + timedelta(microseconds=1)
         group_start = group_end - ANALYSIS_ROLLING_WINDOW
+        analyzer = run_post_ingestion_analysis
+        if execution_identity_version == "physical-endpoint-keyed.v2":
+            from app.services.telemetry_analysis_service_v2 import run_post_ingestion_analysis_v2
+            analyzer = run_post_ingestion_analysis_v2
+            if v2_lineage_repository is None or v2_execution_repository is None:
+                raise ValueError("telemetry_v2_repositories_required")
+        v2_kwargs = {
+            "lineage_repository": v2_lineage_repository,
+            "execution_repository": v2_execution_repository,
+        } if execution_identity_version == "physical-endpoint-keyed.v2" else {}
         results.append(
-            run_post_ingestion_analysis(
+            analyzer(
                 repository=repository,
                 scope=scope,
                 connection_id=connection_id,
@@ -762,6 +777,7 @@ def process_ingestion_run(
                 persisted_authority_digest=authority_digest,
                 evaluator=evaluator,
                 progress_reporter=progress_reporter,
+                **v2_kwargs,
             )
         )
     return IngestionRunAnalysisResult(

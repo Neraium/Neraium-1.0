@@ -3555,6 +3555,61 @@ class PostgreSQLTelemetryRepository:
             return None
         return identity
 
+    def list_analysis_endpoint_authority(
+        self,
+        scope: TelemetryRepositoryScope,
+        *,
+        connection_id: str,
+        external_signal_ids: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        """Load only currently enabled endpoint/mapping authority for V2."""
+        connection_id = _require_uuid(connection_id, "telemetry_connection_id_invalid")
+        signal_ids = tuple(sorted({_require_uuid(value, "telemetry_signal_id_invalid") for value in external_signal_ids}))
+        if not signal_ids or len(signal_ids) > 64:
+            raise ValueError("telemetry_analysis_endpoint_count_invalid")
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT s.id AS external_signal_id, s.connection_id, s.external_tag_id,
+                       s.external_tag_name, s.enabled AS signal_enabled,
+                       s.mapping_status, m.id AS mapping_id, m.revision,
+                       m.system_id, m.asset_id, m.canonical_concept_id,
+                       m.canonical_signal_name, m.source_unit, m.canonical_unit,
+                       concept.physical_dimension AS expected_dimension,
+                       m.conversion_id, m.conversion_version, m.source_timezone,
+                       m.provenance, m.mapped_by, m.mapped_at,
+                       m.authority_digest, m.enabled AS mapping_enabled
+                FROM telemetry.data_connections c
+                JOIN telemetry.external_signals s
+                  ON s.resource_scope_id = c.resource_scope_id
+                 AND s.tenant_scope_id = c.tenant_scope_id
+                 AND s.workspace_id = c.workspace_id
+                 AND s.facility_id = c.facility_id
+                 AND s.connection_id = c.id
+                JOIN telemetry.signal_mappings m
+                  ON m.resource_scope_id = s.resource_scope_id
+                 AND m.tenant_scope_id = s.tenant_scope_id
+                 AND m.workspace_id = s.workspace_id
+                 AND m.facility_id = s.facility_id
+                 AND m.connection_id = s.connection_id
+                 AND m.external_signal_id = s.id
+                JOIN telemetry.canonical_signal_concepts concept
+                  ON concept.id = m.canonical_concept_id AND concept.active = TRUE
+                WHERE c.resource_scope_id = %s AND c.tenant_scope_id = %s
+                  AND c.workspace_id = %s AND c.facility_id = %s
+                  AND c.id = %s::UUID AND c.enabled = TRUE
+                  AND c.archived_at IS NULL AND s.id = ANY(%s::UUID[])
+                  AND s.enabled = TRUE AND s.mapping_status = 'mapped'
+                  AND m.enabled = TRUE
+                ORDER BY s.id, m.id
+                """,
+                (*_scope_parameters(scope), connection_id, list(signal_ids)),
+            )
+            rows = [_row_dict(cursor, row) or {} for row in cursor.fetchall()]
+        if len(rows) != len(signal_ids) or {str(row["external_signal_id"]) for row in rows} != set(signal_ids):
+            raise ValueError("telemetry_analysis_endpoint_authority_unavailable")
+        return rows
+
     def list_analysis_eligible_observations(
         self,
         scope: TelemetryRepositoryScope,

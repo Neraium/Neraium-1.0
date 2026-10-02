@@ -117,6 +117,7 @@ class TelemetryRuntime:
     health_service: Any | None = None
     scheduler: Any | None = None
     unavailable_code: str | None = None
+    execution_identity_version: str = "concept-keyed.v1"
 
     @property
     def available(self) -> bool:
@@ -173,6 +174,11 @@ class TelemetryRuntime:
                 verify_relationship_temporal_state,
             ):
                 verifier(connection)
+            if self.execution_identity_version == "physical-endpoint-keyed.v2":
+                from db.migrations.create_relationship_lineage_v2_artifacts import verify as verify_v2_lineage
+                from db.migrations.create_endpoint_analysis_executions_v2 import verify as verify_v2_execution
+                verify_v2_lineage(connection)
+                verify_v2_execution(connection)
             return True
         except TelemetryRuntimeUnavailable:
             raise
@@ -240,6 +246,7 @@ def build_telemetry_runtime(settings: Settings) -> TelemetryRuntime:
             repository=repository,
             secret_store=secret_store,
             providers=providers,
+            execution_identity_version=settings.telemetry_execution_identity_version,
         )
         # Registry and health services are imported lazily so provider and
         # canonical-foundation modules remain independently testable.
@@ -264,12 +271,31 @@ def build_telemetry_runtime(settings: Settings) -> TelemetryRuntime:
             from app.services.telemetry_ingestion import prepare_connector_page
             from app.services.telemetry_analysis_service import process_ingestion_run
             from app.services.telemetry_scheduler import TelemetryScheduler
+            from functools import partial
+            from app.services.telemetry_relationship_lineage_v2_repository import PostgreSQLEndpointLineageV2Repository
+            from app.services.telemetry_endpoint_execution_v2_repository import PostgreSQLEndpointExecutionV2Repository
+
+            v2_lineage_repository = (
+                PostgreSQLEndpointLineageV2Repository(build_telemetry_connection_factory(database_url))
+                if settings.telemetry_execution_identity_version == "physical-endpoint-keyed.v2"
+                else None
+            )
+            v2_execution_repository = (
+                PostgreSQLEndpointExecutionV2Repository(build_telemetry_connection_factory(database_url))
+                if settings.telemetry_execution_identity_version == "physical-endpoint-keyed.v2"
+                else None
+            )
 
             runtime.scheduler = TelemetryScheduler(
                 repository=repository,
                 providers=providers,
                 normalize_page=prepare_connector_page,
-                analyze_run=process_ingestion_run,
+                analyze_run=partial(
+                    process_ingestion_run,
+                    execution_identity_version=settings.telemetry_execution_identity_version,
+                    v2_lineage_repository=v2_lineage_repository,
+                    v2_execution_repository=v2_execution_repository,
+                ),
                 lease_seconds=settings.telemetry_scheduler_lease_seconds,
                 poll_interval_seconds=settings.telemetry_scheduler_poll_interval_seconds,
                 heartbeat_interval_seconds=(

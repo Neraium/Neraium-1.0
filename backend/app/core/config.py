@@ -38,6 +38,7 @@ DEFAULT_TELEMETRY_OUT_OF_ORDER_TOLERANCE_SECONDS = 300.0
 DEFAULT_TELEMETRY_DELAY_THRESHOLD_SECONDS = 900.0
 DEFAULT_TELEMETRY_DATABASE_URL = ""
 DEFAULT_TELEMETRY_LEGACY_COMPAT_ENABLED = False
+DEFAULT_TELEMETRY_EXECUTION_IDENTITY_VERSION = "concept-keyed.v1"
 DEFAULT_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS = 2.0
 DEFAULT_TELEMETRY_SCHEDULER_LEASE_SECONDS = 120
 DEFAULT_TELEMETRY_WORKER_HEARTBEAT_INTERVAL_SECONDS = 30.0
@@ -91,6 +92,7 @@ class Settings:
     telemetry_dynamic_secret_writes_enabled: bool = False
     telemetry_controlled_egress_enabled: bool = False
     telemetry_legacy_compat_enabled: bool = DEFAULT_TELEMETRY_LEGACY_COMPAT_ENABLED
+    telemetry_execution_identity_version: str = DEFAULT_TELEMETRY_EXECUTION_IDENTITY_VERSION
     telemetry_scheduler_poll_interval_seconds: float = (
         DEFAULT_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS
     )
@@ -100,6 +102,8 @@ class Settings:
     )
 
     def __post_init__(self) -> None:
+        if self.telemetry_execution_identity_version not in {"concept-keyed.v1", "physical-endpoint-keyed.v2"}:
+            raise ValueError("telemetry_execution_identity_version_invalid")
         # The process-local legacy connection implementation is intentionally
         # unavailable in shared environments, even if a stale deployment flag
         # attempts to turn it back on.
@@ -236,6 +240,10 @@ def get_settings() -> Settings:
             DEFAULT_TELEMETRY_LEGACY_COMPAT_ENABLED,
             name="NERAIUM_TELEMETRY_LEGACY_COMPAT",
         ),
+        telemetry_execution_identity_version=os.getenv(
+            "NERAIUM_TELEMETRY_EXECUTION_IDENTITY_VERSION",
+            DEFAULT_TELEMETRY_EXECUTION_IDENTITY_VERSION,
+        ).strip(),
         telemetry_scheduler_poll_interval_seconds=parse_positive_float(
             os.getenv("NERAIUM_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS"),
             DEFAULT_TELEMETRY_SCHEDULER_POLL_INTERVAL_SECONDS,
