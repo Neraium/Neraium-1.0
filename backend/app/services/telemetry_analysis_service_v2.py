@@ -281,6 +281,21 @@ def read_persisted_execution_v2(
     system_id: str, asset_id: str | None, execution_ref: str,
 ) -> dict[str, Any]:
     """Rebuild V2 authority from server records before returning stored evidence."""
+    execution, _, _ = read_verified_execution_context_v2(
+        repository=repository, lineage_repository=lineage_repository,
+        execution_repository=execution_repository, scope=scope,
+        connection_id=connection_id, source_run_id=source_run_id,
+        system_id=system_id, asset_id=asset_id, execution_ref=execution_ref,
+    )
+    return execution
+
+
+def read_verified_execution_context_v2(
+    *, repository: Any, lineage_repository: Any, execution_repository: Any,
+    scope: TelemetryScopeRef, connection_id: str, source_run_id: str,
+    system_id: str, asset_id: str | None, execution_ref: str,
+) -> tuple[dict[str, Any], EndpointAnalysisWindowV2, tuple[Any, ...]]:
+    """Return the verified persisted execution and its historical endpoint context."""
     row = execution_repository.load_execution_row(scope, execution_ref=execution_ref)
     if row is None or any((
         str(row.get("connection_id")) != connection_id,
@@ -371,7 +386,7 @@ def read_persisted_execution_v2(
         )
         if execution is None or execution["ref"] != execution_ref:
             raise EndpointExecutionV2Error("endpoint_execution_readback_mismatch")
-        return execution
+        return execution, window, pairs
     except (KeyError, TypeError, ValueError) as exc:
         if isinstance(exc, EndpointExecutionV2Error):
             raise

@@ -16,6 +16,7 @@ from app.services.telemetry_endpoint_execution_v2_repository import (
     EndpointExecutionV2Error,
     PostgreSQLEndpointExecutionV2Repository,
 )
+from app.services.telemetry_endpoint_result_v2 import read_customer_execution_v2
 from app.services.telemetry_relationship_lineage_v2_repository import PostgreSQLEndpointLineageV2Repository
 from db.migrations.create_telemetry_connection_tables import apply as foundation
 from db.migrations.seed_telemetry_canonical_signal_concepts import apply as catalog
@@ -97,6 +98,9 @@ def test_execution_roundtrip_requires_exact_window_pair_and_immutable_storage() 
             def list_analysis_endpoint_authority(self, scope, **kwargs):
                 return self.rows
 
+            def list_historical_analysis_endpoint_authority(self, scope, **kwargs):
+                return self.rows
+
         authority = AuthorityRepository()
         read = lambda: read_persisted_execution_v2(
             repository=authority, lineage_repository=lineage_repo,
@@ -106,6 +110,25 @@ def test_execution_roundtrip_requires_exact_window_pair_and_immutable_storage() 
             execution_ref=stored["ref"],
         )
         assert read() == stored
+        customer = lambda: read_customer_execution_v2(
+            repository=authority, lineage_repository=lineage_repo,
+            execution_repository=result_repo, scope=scope,
+            connection_id=bindings[0].mapping.connection_id,
+            source_run_id=source_run_id, execution_ref=stored["ref"],
+        )
+        delivered = customer()
+        assert customer() == delivered
+        assert delivered["product_result"] == result
+        assert delivered["result_id"] == stored["ref"]
+        assert delivered["relationships"][0]["pair"]["source_endpoint"]["endpoint_id"] != delivered["relationships"][1]["pair"]["source_endpoint"]["endpoint_id"]
+        assert delivered["physical_endpoints"][0]["canonical_concept_id"] == delivered["physical_endpoints"][1]["canonical_concept_id"]
+        with pytest.raises(EndpointExecutionV2Error):
+            read_customer_execution_v2(
+                repository=authority, lineage_repository=lineage_repo,
+                execution_repository=result_repo, scope=scope,
+                connection_id=bindings[0].mapping.connection_id,
+                source_run_id=str(uuid4()), execution_ref=stored["ref"],
+            )
         for field, value in (
             ("revision", 4), ("authority_digest", "b" * 64),
             ("canonical_concept_id", bindings[2].mapping.canonical_signal_id),
@@ -116,7 +139,14 @@ def test_execution_roundtrip_requires_exact_window_pair_and_immutable_storage() 
             authority.rows[0][field] = value
             with pytest.raises(EndpointExecutionV2Error):
                 read()
+            with pytest.raises(EndpointExecutionV2Error):
+                customer()
         authority.rows = [_authority_row(item) for item in bindings]
+        historical_rows = authority.rows
+        authority.rows = [{**row, "revision": row["revision"] + 1} for row in historical_rows]
+        authority.list_historical_analysis_endpoint_authority = lambda scope, **kwargs: historical_rows
+        assert customer() == delivered
+        authority.rows = historical_rows
         assert stored["payload"]["window"]["series"][0]["endpoint_identity"]["mapping_revision"] == 3
         assert pair_a.source.canonical_concept_id == pair_b.source.canonical_concept_id
         assert pair_a.source.endpoint_id != pair_b.source.endpoint_id

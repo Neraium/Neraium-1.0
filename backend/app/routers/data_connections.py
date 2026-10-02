@@ -49,6 +49,11 @@ from app.services.telemetry_result_service import (
     TelemetryCanonicalResultService,
     TelemetryCanonicalResultServiceError,
 )
+from app.services.telemetry_endpoint_execution_v2_repository import (
+    EndpointExecutionV2Error, PostgreSQLEndpointExecutionV2Repository,
+)
+from app.services.telemetry_endpoint_result_v2 import read_customer_execution_v2
+from app.services.telemetry_relationship_lineage_v2_repository import PostgreSQLEndpointLineageV2Repository
 from app.services.telemetry_scope import (
     TelemetryScopeUnavailableError,
     current_telemetry_scope,
@@ -424,6 +429,38 @@ def list_data_connection_analysis_results(
             )
         }
     except TelemetryCanonicalResultServiceError as error:
+        raise _api_error(error) from None
+
+
+@router.get(
+    "/data-connections/{connection_id}/runs/{source_run_id}/v2/analysis-results/{execution_ref}",
+)
+def read_data_connection_analysis_result_v2(
+    request: Request,
+    connection_id: ConnectionIdPath,
+    source_run_id: UUID,
+    execution_ref: str = Path(pattern=r"^telemetry-endpoint-execution\.v2:[0-9a-f]{64}$"),
+) -> dict[str, Any]:
+    # The connection and all tenant/resource authority come from the authenticated
+    # workspace. The path values are selectors only.
+    _service, scope = _require_existing(request, connection_id)
+    try:
+        runtime = telemetry_runtime_from_app(request.app)
+        if runtime.execution_identity_version != "physical-endpoint-keyed.v2":
+            raise EndpointExecutionV2Error("endpoint_execution_version_unsupported")
+        factory = getattr(runtime.repository, "_connection_factory", None)
+        if not callable(factory):
+            raise EndpointExecutionV2Error("endpoint_execution_storage_unavailable")
+        return read_customer_execution_v2(
+            repository=runtime.repository,
+            lineage_repository=PostgreSQLEndpointLineageV2Repository(factory),
+            execution_repository=PostgreSQLEndpointExecutionV2Repository(factory),
+            scope=scope, connection_id=str(connection_id),
+            source_run_id=str(source_run_id), execution_ref=execution_ref,
+        )
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Analysis result not found.") from None
+    except TelemetryRuntimeUnavailable as error:
         raise _api_error(error) from None
 
 
