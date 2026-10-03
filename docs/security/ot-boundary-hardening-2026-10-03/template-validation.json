@@ -1,0 +1,8 @@
+{
+  "validation": "PASS",
+  "method": "CloudFormation ValidateTemplate (read-only)",
+  "capabilities": [
+    "CAPABILITY_IAM"
+  ],
+  "limitation": "Does not establish deployment feasibility, effective permissions, DNS inventory or installed host enforcement."
+}

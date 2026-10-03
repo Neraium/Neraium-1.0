@@ -1,0 +1,115 @@
+{
+  "decision": "BLOCKED",
+  "deployment": "NONE",
+  "claims": [
+    {
+      "claim": "Ordinary Neraium application execution cannot directly reach customer control infrastructure.",
+      "status": "GAP",
+      "layer": "NETWORK",
+      "control": "Candidate SG allows only RDS, executor, private AWS endpoints and S3; no broad CIDR egress. Live tasks still use unrestricted SG/NAT.",
+      "test": "test_application_sg_has_no_general_internet_or_controller_egress",
+      "result": "PASS for candidate structure; effective production isolation absent",
+      "evidence": [
+        "prechange.json",
+        "security-tests.xml",
+        "../../../infra/production/ot-boundary-candidate.json"
+      ],
+      "residual": "Apply/qualify independent effective egress and customer network restrictions; no controller reachability was probed."
+    },
+    {
+      "claim": "Neraium connector execution cannot request arbitrary resources merely because they use HTTP GET.",
+      "status": "PARTIAL",
+      "layer": "APPLICATION / EXECUTOR RESOURCE POLICY",
+      "control": "Server-owned immutable manifest, exact paths/single-segment patterns, bounded names/values, no browser policy body; client/broker/child checks.",
+      "test": "test_same_host_get_does_not_authorize_other_resources; test_pagination_cannot_expand_resource_policy; approved synthetic GET mock",
+      "result": "Local candidate PASS; not deployed",
+      "evidence": [
+        "security-tests.xml",
+        "../../../backend/app/services/telemetry_resource_policy.py"
+      ],
+      "residual": "Compromised interpreter can bypass its code; independent gateway/replica and upstream write denial still required."
+    },
+    {
+      "claim": "Connector destination validation fails closed.",
+      "status": "PROVEN",
+      "scope": "Repository candidate, local signed-job/transport tests only",
+      "layer": "CLIENT / BROKER / CHILD TRANSPORT",
+      "control": "Required policy ID, origin HTTPS/443, public-only DNS, pinned transport, GET only, strict schema, no redirects/off-origin continuation.",
+      "test": "Signed prohibited-destination tests, SSRF tests, missing/malformed manifest, unsupported methods/operations, missing scope, oversized admission tests",
+      "result": "PASS",
+      "evidence": [
+        "security-tests.xml",
+        "support-tests.xml"
+      ],
+      "residual": "Does not establish effectiveness against a compromised process or current deployed image."
+    },
+    {
+      "claim": "Customer telemetry credentials must independently lack actuation/write permissions.",
+      "status": "CONFIGURATION-DEPENDENT",
+      "layer": "UPSTREAM CREDENTIAL / ONBOARDING",
+      "control": "Customer policy requires exact scope/binding and read_only_evidence; no customer approval shipped.",
+      "test": "test_missing_policy_and_customer_permission_evidence_deny; credential/scope mismatch cases",
+      "result": "Local admission PASS; actual customer permissions unverified",
+      "evidence": [
+        "security-tests.xml",
+        "ROLLOUT.md"
+      ],
+      "residual": "An attestation reference is not technical denial proof; retain upstream denial tests and isolated replica/network evidence."
+    },
+    {
+      "claim": "Application runtime does not require database master privileges.",
+      "status": "PARTIAL",
+      "layer": "DATABASE IDENTITY / MIGRATION SEPARATION",
+      "control": "Production auth startup verifies existing schema using SELECT; separate offline migration command and auth DML grant candidate.",
+      "test": "test_production_auth_startup_needs_no_schema_writes; privileged/unmigrated identity rejection",
+      "result": "Local mock PASS; actual least-privilege database qualification pending",
+      "evidence": [
+        "security-tests.xml",
+        "../../../infra/production/auth-runtime-grants.sql",
+        "ROLLOUT.md"
+      ],
+      "residual": "No live DB grants/credentials changed; PUBLIC, memberships, functions, ownership and CRUD/rotation must be qualified on restored DB."
+    },
+    {
+      "claim": "Effective application runtime cannot retrieve the RDS master credential.",
+      "status": "GAP",
+      "layer": "IAM / SECRETS",
+      "control": "Candidate explicit master/source-secret denial and dedicated auth-runtime binding; live role still grants master retrieval.",
+      "test": "test_master_and_source_secret_reads_are_explicitly_denied_and_staged",
+      "result": "Candidate PASS; current production gap remains",
+      "evidence": [
+        "prechange.json",
+        "security-tests.xml"
+      ],
+      "residual": "Release guard currently requires master binding; separately recertify before switching/denying."
+    },
+    {
+      "claim": "Executor child and broker egress/metadata privileges are independently constrained.",
+      "status": "PARTIAL",
+      "layer": "HOST / AWS NETWORK / EXECUTION IDENTITY",
+      "control": "Child fixed endpoint firewall, root new-connection allowlist, IPv6 deny, scrubbed child environment, minimum capabilities, IMDSv2 and exact secret-deny candidate.",
+      "test": "Real bootstrap script executed with fake firewall commands; packet policy/refresh checked; EC2 metadata configuration read",
+      "result": "Local simulation PASS; installed kernel/service state UNVERIFIED",
+      "evidence": [
+        "security-tests.xml",
+        "prechange.json",
+        "ROLLOUT.md"
+      ],
+      "residual": "Root may change UID, keep established sessions and access IMDS; require independent SG/NACL/firewall/IAM and isolated host/reboot/DNS qualification."
+    },
+    {
+      "claim": "Production release gates pass for this candidate.",
+      "status": "GAP",
+      "layer": "RELEASE / OPERATIONS",
+      "control": "Existing frozen source/topology/monitoring checks preserved.",
+      "test": "Read-only production_release.py verify and protected-source comparison",
+      "result": "STOP: monitoring_configuration_drift, protected-source recertification and image/DB/network qualification pending",
+      "evidence": [
+        "RELEASE_GATES.json",
+        "production-readonly-verification.json",
+        "support-tests.xml"
+      ],
+      "residual": "Known baseline CSRF fixture failure also prevents claiming a fully green verification run; no production mutation permitted."
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "live_mutations": "NONE",
+  "push": "NOT_PERFORMED",
+  "deployment": "STOPPED",
+  "protected_source_requires_recertification": [
+    "backend/app/connectors/https_telemetry.py",
+    "backend/app/models/telemetry_api_models.py",
+    "backend/app/services/auth_store.py",
+    "backend/app/services/connector_execution.py"
+  ],
+  "release_process": "scripts/production_release.py; image/source overlay only; topology and protected source require separate recertification",
+  "production_verifier": {
+    "result": "FAIL",
+    "reason": "monitoring_configuration_drift",
+    "evidence": "production-readonly-verification.json"
+  },
+  "image_build_and_reproducibility": "NOT_QUALIFIED: stop gates precede build/publish",
+  "executor_installed_rules": "UNVERIFIED: SSM ConnectionLost",
+  "database_identity_cutover": "PENDING: no live credential/schema/grant mutation",
+  "origin_before_candidate": "d1052d04d2c72808c177d7e08589e9a37f206c4f",
+  "rollback": {
+    "api": "neraium-prod-api:339",
+    "worker": "neraium-prod-worker:333",
+    "status": "Both ACTIVE and still running at reconstruction"
+  },
+  "provenance": "Use the commit containing these artifacts; no frozen profile/monitoring guard was altered.",
+  "preserved_unrelated_protected_worktree_files": [
+    "backend/app/routers/historical_ingestion.py",
+    "backend/app/services/historical_ingestion.py"
+  ]
+}

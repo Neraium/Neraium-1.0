@@ -56,6 +56,7 @@ def make_job(**changes):
         "operation": "incremental",
         "approved_destination": f"https://{APPROVED_HOST}:443",
         "configuration": {
+            "resource_policy_id": "synthetic-v2",
             "base_url": f"https://{APPROVED_HOST}",
             "request_path": "/telemetry",
             "authentication_scheme": "none",
@@ -120,7 +121,7 @@ def test_broker_rejects_replay_and_unapproved_destinations(tmp_path, monkeypatch
     denied_body, denied_timestamp, denied_signature = signed(denied_job, key)
     with pytest.raises(TelemetryConnectorError) as denied:
         broker.execute(denied_body, timestamp=denied_timestamp, signature=denied_signature)
-    assert denied.value.code == "unapproved_destination"
+    assert denied.value.code == "resource_origin_not_allowed"
     assert denied.value.kind is ConnectorFailureKind.CONFIGURATION
 
 

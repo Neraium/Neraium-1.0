@@ -1,0 +1,6 @@
+{
+  "observed_at": "2026-10-03T13:17:28.558414+00:00",
+  "command": "verify",
+  "status": "FAIL",
+  "reason": "monitoring_configuration_drift"
+}

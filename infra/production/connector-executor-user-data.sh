@@ -64,16 +64,61 @@ if [ "$valid_ip_count" -eq 0 ]; then
 fi
 iptables -A "$chain" -j REJECT
 if [ -n "$active" ]; then
-  iptables -R OUTPUT 1 -m owner --uid-owner 10002 -j "$chain"
+  # Match the actual owner hook; never assume another owner's rule index.
+  # Both chains deny by default during replacement, so failure stays closed.
+  iptables -I OUTPUT 1 -m owner --uid-owner 10002 -j "$chain"
+  iptables -D OUTPUT -m owner --uid-owner 10002 -j "NERAIUM_CONNECTOR_${active}"
 else
   iptables -I OUTPUT 1 -m owner --uid-owner 10002 -j "$chain"
 fi
 iptables -D OUTPUT -m owner --uid-owner 10002 -j NERAIUM_CONNECTOR 2>/dev/null || true
 iptables -F NERAIUM_CONNECTOR 2>/dev/null || true
 iptables -X NERAIUM_CONNECTOR 2>/dev/null || true
-ip6tables -N NERAIUM_CONNECTOR 2>/dev/null || ip6tables -F NERAIUM_CONNECTOR
+ip6tables -N NERAIUM_CONNECTOR 2>/dev/null || true
+ip6tables -C NERAIUM_CONNECTOR -j REJECT 2>/dev/null || ip6tables -A NERAIUM_CONNECTOR -j REJECT
 ip6tables -C OUTPUT -m owner --uid-owner 10002 -j NERAIUM_CONNECTOR 2>/dev/null || ip6tables -I OUTPUT 1 -m owner --uid-owner 10002 -j NERAIUM_CONNECTOR
-ip6tables -A NERAIUM_CONNECTOR -j REJECT
+
+# Root broker needs instance identity and reviewed AWS services, but no general
+# outbound sockets or database access. Endpoint policies/IAM constrain AWS API
+# privileges independently. Private DNS activation also needs qualified NACLs.
+root_active=''
+for suffix in A B; do
+  if iptables -C OUTPUT -m owner --uid-owner 0 -j "NERAIUM_BROKER_${suffix}" 2>/dev/null; then root_active="$suffix"; fi
+done
+root_next=A
+if [ "$root_active" = A ]; then root_next=B; fi
+root_chain="NERAIUM_BROKER_${root_next}"
+iptables -N "$root_chain" 2>/dev/null || true
+iptables -F "$root_chain"
+iptables -A "$root_chain" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+for resolver in 127.0.0.53 10.40.0.2; do
+  iptables -A "$root_chain" -d "$resolver"/32 -p udp --dport 53 -j ACCEPT
+  iptables -A "$root_chain" -d "$resolver"/32 -p tcp --dport 53 -j ACCEPT
+done
+iptables -A "$root_chain" -d 169.254.169.254/32 -p tcp --dport 80 -j ACCEPT
+iptables -A "$root_chain" -d 10.40.32.20/32 -p tcp --dport 8443 -j ACCEPT
+for hostname in api.ecr.us-east-2.amazonaws.com \
+  680779862188.dkr.ecr.us-east-2.amazonaws.com \
+  prod-us-east-2-starport-layer-bucket.s3.us-east-2.amazonaws.com \
+  logs.us-east-2.amazonaws.com secretsmanager.us-east-2.amazonaws.com; do
+  mapfile -t service_ips < <(getent ahostsv4 "$hostname" | awk '{print $1}' | sort -u)
+  service_ip_count=0
+  for ip in "${service_ips[@]}"; do
+    if python3 -c 'import ipaddress,sys; a=ipaddress.ip_address(sys.argv[1]); raise SystemExit(0 if a.is_global or a in ipaddress.ip_network("10.40.0.0/16") else 1)' "$ip"; then
+      iptables -A "$root_chain" -d "$ip"/32 -p tcp --dport 443 -j ACCEPT
+      service_ip_count=$((service_ip_count + 1))
+    fi
+  done
+  if [ "$service_ip_count" -eq 0 ]; then exit 1; fi
+done
+iptables -A "$root_chain" -j REJECT
+iptables -I OUTPUT 1 -m owner --uid-owner 0 -j "$root_chain"
+if [ -n "$root_active" ]; then
+  iptables -D OUTPUT -m owner --uid-owner 0 -j "NERAIUM_BROKER_${root_active}"
+fi
+ip6tables -N NERAIUM_BROKER 2>/dev/null || true
+ip6tables -C NERAIUM_BROKER -j REJECT 2>/dev/null || ip6tables -A NERAIUM_BROKER -j REJECT
+ip6tables -C OUTPUT -m owner --uid-owner 0 -j NERAIUM_BROKER 2>/dev/null || ip6tables -I OUTPUT 1 -m owner --uid-owner 0 -j NERAIUM_BROKER
 FIREWALL
 chmod 0755 /usr/local/sbin/neraium-connector-egress-firewall
 cat >/etc/systemd/system/neraium-connector-firewall.service <<'UNIT'
@@ -117,6 +162,7 @@ docker run -d --name neraium-connector-executor --restart unless-stopped \
   --mount type=bind,src=/var/lib/neraium-connector,dst=/var/lib/neraium-connector \
   --mount type=bind,src=/run/neraium-connector-cert,dst=/run/neraium-connector-cert,readonly \
   -e AWS_REGION="$REGION" -e NERAIUM_CONNECTOR_EXECUTOR_AUTH_SECRET_ARN="$AUTH_SECRET_ARN" \
+  -e AWS_EC2_METADATA_V1_DISABLED=true \
   -e NERAIUM_CONNECTOR_EXECUTOR_REPLAY_DB=/var/lib/neraium-connector/replay.sqlite3 \
   "$IMAGE" python -c 'import uvicorn; from app.services.connector_execution import build_executor_app; uvicorn.run(build_executor_app(), host="0.0.0.0", port=8443, ssl_keyfile="/run/neraium-connector-cert/server.key", ssl_certfile="/run/neraium-connector-cert/server.crt", access_log=False, log_level="warning")'
 

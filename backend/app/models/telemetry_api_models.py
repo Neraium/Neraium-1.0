@@ -20,7 +20,7 @@ from app.services.telemetry_domain import (
 
 _HTTPS_CONFIG_KEYS = frozenset(
     {
-        "base_url", "request_path", "static_query", "authentication_scheme",
+        "base_url", "resource_policy_id", "request_path", "static_query", "authentication_scheme",
         "records_path", "timestamp_field", "value_field", "external_tag_id_field",
         "external_tag_name_field", "display_label_field", "unit_field", "quality_field",
         "event_id_field", "metadata_fields", "next_cursor_path", "cursor_query_parameter",

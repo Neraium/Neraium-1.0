@@ -52,6 +52,7 @@ from app.services.telemetry_secrets import (
     TelemetrySecretError,
     TelemetrySecretStore,
 )
+from app.services.telemetry_resource_policy import TelemetryResourcePolicyRegistry, TelemetryResourcePolicy
 
 
 _FIELD_PATH_RE = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){0,15}$")
@@ -62,6 +63,7 @@ _MAX_BACKFILL_DAYS = 366
 _ALLOWED_CONFIG_KEYS = frozenset(
     {
         "base_url",
+        "resource_policy_id",
         "request_path",
         "static_query",
         "authentication_scheme",
@@ -282,6 +284,7 @@ class HttpsTelemetryConnector(TelemetryConnector):
         self,
         *,
         egress_policy: TelemetryEgressPolicy | None = None,
+        resource_policy_registry: TelemetryResourcePolicyRegistry | None = None,
         secret_store: TelemetrySecretStore | None = None,
         transport: httpx.BaseTransport | None = None,
         sleeper: Callable[[float], None] = time.sleep,
@@ -290,6 +293,7 @@ class HttpsTelemetryConnector(TelemetryConnector):
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._egress_policy = egress_policy or TelemetryEgressPolicy()
+        self._resource_policies = resource_policy_registry or TelemetryResourcePolicyRegistry.load()
         self._secret_store = secret_store
         self._transport = transport
         self._sleeper = sleeper
@@ -420,6 +424,9 @@ class HttpsTelemetryConnector(TelemetryConnector):
     ) -> ConnectorPage:
         try:
             config = _HttpsConfig.from_mapping(context.configuration)
+            resource = self._resource_policies.authorize_context(context)
+            if checkpoint and not resource.allow_pagination:
+                raise TelemetryEgressError("resource_pagination_not_allowed")
             # Destination authorization remains centralized in the injected
             # policy. Per-connection limits may only reduce transport/run
             # budgets and are enforced independently below.
@@ -486,6 +493,7 @@ class HttpsTelemetryConnector(TelemetryConnector):
         while True:
             payload, response_bytes, retries, secret = self._request_json(
                 policy=policy,
+                resource=resource,
                 url=current_url,
                 config=config,
                 context=context,
@@ -586,6 +594,7 @@ class HttpsTelemetryConnector(TelemetryConnector):
         self,
         *,
         policy: TelemetryEgressPolicy,
+        resource: TelemetryResourcePolicy,
         url: str,
         config: _HttpsConfig,
         context: ConnectorExecutionContext,
@@ -597,6 +606,7 @@ class HttpsTelemetryConnector(TelemetryConnector):
             budget.remaining_seconds(self._monotonic)
             headers = _request_headers(config, secret)
             try:
+                resource.authorize_request(url, method="GET")
                 authorized = policy.authorize_request(url, method="GET", headers=headers)
             except TelemetryEgressError as error:
                 raise _egress_connector_error(error) from None

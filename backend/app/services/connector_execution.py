@@ -43,9 +43,10 @@ from app.connectors.base import (
     TelemetryConnector,
     TelemetryConnectorError,
 )
-from app.connectors.https_telemetry import HttpsTelemetryConnector
+from app.connectors.https_telemetry import HttpsTelemetryConnector, _HttpsConfig
 from app.services.telemetry_domain import ConnectorCapability, ConnectorType
 from app.services.telemetry_egress import TelemetryEgressError, TelemetryEgressPolicy
+from app.services.telemetry_resource_policy import TelemetryResourcePolicyRegistry
 from app.services.telemetry_secrets import (
     AwsSecretsManagerTelemetryStore,
     ResolvedSecret,
@@ -60,6 +61,7 @@ APPROVED_HOST = "bfzcudq5o2.execute-api.us-east-2.amazonaws.com"
 MAX_JOB_BYTES = 256 * 1024
 MAX_RESULT_BYTES = 10 * 1024 * 1024
 MAX_CLOCK_SKEW_SECONDS = 120
+ALLOWED_OPERATIONS = frozenset({"validate", "health", "discovery", "incremental", "backfill"})
 
 
 def _canonical_json(value: Any) -> bytes:
@@ -165,7 +167,8 @@ class RemoteHttpsTelemetryConnector(TelemetryConnector):
     """Synchronous adapter preserving the existing connector contract."""
 
     def __init__(self, *, endpoint: str, ca_pem: str, auth_secret_arn: str,
-                 secret_client: Any, timeout_seconds: float = 90.0) -> None:
+                 secret_client: Any, timeout_seconds: float = 90.0,
+                 resource_policy_registry: TelemetryResourcePolicyRegistry | None = None) -> None:
         self.endpoint = str(endpoint).rstrip("/")
         parts = urlsplit(self.endpoint)
         if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
@@ -175,6 +178,7 @@ class RemoteHttpsTelemetryConnector(TelemetryConnector):
             raise ValueError("connector_executor_ca_invalid")
         self._auth_secret_arn = str(auth_secret_arn)
         self._secret_client = secret_client
+        self._resource_policies = resource_policy_registry or TelemetryResourcePolicyRegistry.load()
         self._timeout = min(max(float(timeout_seconds), 5.0), 120.0)
 
     @classmethod
@@ -185,6 +189,8 @@ class RemoteHttpsTelemetryConnector(TelemetryConnector):
               checkpoint: ConnectorCheckpoint | None = None,
               time_range: BoundedBackfillRange | None = None) -> dict[str, Any]:
         binding = context.secret_binding
+        if operation not in ALLOWED_OPERATIONS:
+            raise TelemetryConnectorError("connector_operation_not_allowed", kind=ConnectorFailureKind.CONFIGURATION)
         if not all((context.tenant_scope_id, context.workspace_id,
                     context.facility_id, context.resource_scope_id,
                     context.connection_id)):
@@ -192,10 +198,10 @@ class RemoteHttpsTelemetryConnector(TelemetryConnector):
                 kind=ConnectorFailureKind.CONFIGURATION)
         config = dict(context.configuration)
         try:
-            destination = TelemetryEgressPolicy().normalize_url(str(config.get("base_url") or ""))
-            parts = urlsplit(destination)
-            if parts.hostname != APPROVED_HOST or parts.port not in (None, 443):
-                raise TelemetryEgressError("unapproved_destination")
+            _HttpsConfig.from_mapping(config)
+            resource = self._resource_policies.authorize_context(context)
+            if checkpoint and not resource.allow_pagination:
+                raise TelemetryEgressError("resource_pagination_not_allowed")
         except TelemetryEgressError as error:
             raise TelemetryConnectorError(error.code,
                 kind=ConnectorFailureKind.CONFIGURATION,
@@ -214,7 +220,7 @@ class RemoteHttpsTelemetryConnector(TelemetryConnector):
             "connection_id": context.connection_id,
             "connector_type": ConnectorType.HTTPS_TELEMETRY.value,
             "operation": operation,
-            "approved_destination": f"https://{APPROVED_HOST}:443",
+            "approved_destination": resource.origin,
             "configuration": config,
             "credential": None if binding is None else {
                 "binding_id": binding.binding_id,
@@ -323,6 +329,11 @@ def _execute_unprivileged(request: Mapping[str, Any], *,
     payload["secret_values"] = getattr(secret, "_values", {}) if secret else None
     env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "PYTHONPATH": "/app",
            "HOME": "/nonexistent", "PYTHONUNBUFFERED": "1"}
+    # Forward only the reviewed policy location from broker startup wiring.
+    # Credentials/AWS environment remain absent; the child rechecks the file.
+    policy_file = os.environ.get("NERAIUM_TELEMETRY_RESOURCE_POLICY_FILE")
+    if policy_file:
+        env["NERAIUM_TELEMETRY_RESOURCE_POLICY_FILE"] = policy_file
 
     try:
         completed = subprocess.run(
@@ -360,9 +371,11 @@ def _execute_unprivileged(request: Mapping[str, Any], *,
 
 class ConnectorExecutionBroker:
     def __init__(self, *, secret_store: AwsSecretsManagerTelemetryStore,
-                 auth_secret_arn: str, replay_db_path: str) -> None:
+                 auth_secret_arn: str, replay_db_path: str,
+                 resource_policy_registry: TelemetryResourcePolicyRegistry | None = None) -> None:
         self.secret_store = secret_store
         self.auth_secret_arn = auth_secret_arn
+        self._resource_policies = resource_policy_registry or TelemetryResourcePolicyRegistry.load()
         self._db_path = replay_db_path
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self._db_path) as db:
@@ -387,7 +400,7 @@ class ConnectorExecutionBroker:
             job = json.loads(raw_body)
         except (UnicodeDecodeError, ValueError):
             raise TelemetryConnectorError("connector_job_invalid", kind=ConnectorFailureKind.CONFIGURATION) from None
-        self._validate_authority(job)
+        self._validate_authority(job, resource_policy_registry=self._resource_policies)
         identity = job["request_identity"]
         digest = hashlib.sha256(raw_body).hexdigest()
         try:
@@ -405,9 +418,13 @@ class ConnectorExecutionBroker:
         return {"request_identity": identity, "result": result}
 
     @staticmethod
-    def _validate_authority(job: Any) -> None:
+    def _validate_authority(job: Any, *, resource_policy_registry: TelemetryResourcePolicyRegistry | None = None) -> None:
         if not isinstance(job, dict) or job.get("version") != EXECUTOR_VERSION:
             raise TelemetryConnectorError("connector_authority_invalid", kind=ConnectorFailureKind.CONFIGURATION)
+        if set(job) != {"version", "request_identity", "created_at", "tenant_scope_id", "workspace_id",
+                        "facility_id", "resource_scope_id", "connection_id", "connector_type", "operation",
+                        "approved_destination", "configuration", "credential", "checkpoint", "time_range"}:
+            raise TelemetryConnectorError("connector_job_schema_invalid", kind=ConnectorFailureKind.CONFIGURATION)
         try:
             uuid.UUID(job["request_identity"])
             created = _datetime(job["created_at"])
@@ -421,19 +438,25 @@ class ConnectorExecutionBroker:
                 raise TelemetryConnectorError("connector_authority_invalid", kind=ConnectorFailureKind.CONFIGURATION)
         if job.get("connector_type") != ConnectorType.HTTPS_TELEMETRY.value:
             raise TelemetryConnectorError("connector_type_not_allowed", kind=ConnectorFailureKind.CONFIGURATION)
-        if job.get("operation") not in {"validate", "health", "discovery", "incremental", "backfill"}:
+        if job.get("operation") not in ALLOWED_OPERATIONS:
             raise TelemetryConnectorError("connector_operation_not_allowed", kind=ConnectorFailureKind.CONFIGURATION)
+        credential = job.get("credential")
+        if credential is not None and (not isinstance(credential, dict) or
+            credential.get("connection_id") != job["connection_id"] or
+            credential.get("resource_scope_id") != job["resource_scope_id"]):
+            raise TelemetryConnectorError("credential_binding_mismatch", kind=ConnectorFailureKind.CONFIGURATION)
         configuration = job.get("configuration")
         if not isinstance(configuration, dict):
             raise TelemetryConnectorError("connector_configuration_invalid", kind=ConnectorFailureKind.CONFIGURATION)
         try:
-            normalized = TelemetryEgressPolicy().normalize_url(str(configuration.get("base_url") or ""))
-            parts = urlsplit(normalized)
+            _HttpsConfig.from_mapping(configuration)
+            resource = (resource_policy_registry or TelemetryResourcePolicyRegistry.load()).authorize_job(job)
         except TelemetryEgressError as error:
             raise TelemetryConnectorError(error.code, kind=ConnectorFailureKind.CONFIGURATION,
                 safe_message="Telemetry destination is not allowed.") from None
-        expected_destination = f"https://{APPROVED_HOST}:443"
-        if parts.hostname != APPROVED_HOST or job.get("approved_destination") != expected_destination:
+        except (TypeError, ValueError):
+            raise TelemetryConnectorError("connector_configuration_invalid", kind=ConnectorFailureKind.CONFIGURATION) from None
+        if job.get("approved_destination") != resource.origin:
             raise TelemetryConnectorError("unapproved_destination", kind=ConnectorFailureKind.CONFIGURATION)
         credential = job.get("credential")
         if credential is not None:

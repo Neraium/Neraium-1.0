@@ -17,6 +17,21 @@ from app.connectors.base import (
 from app.connectors.https_telemetry import HttpsTelemetryConnector
 from app.services.telemetry_egress import TelemetryEgressPolicy, TelemetryRequestLimits
 from app.services.telemetry_secrets import MemoryTelemetrySecretStore
+from app.services.telemetry_resource_policy import TelemetryResourcePolicy
+
+
+class ReviewedFixtureResources:
+    """Transport fixtures approve only their known paths/query names.
+
+    Real immutable-manifest admission and scope checks have dedicated tests.
+    """
+    def authorize_context(self, context):
+        return TelemetryResourcePolicy(
+            "https://telemetry.example.test:443", ("/v1/readings",),
+            {name: (1024, None) for name in ("cursor", "limit", "start", "end", "page")},
+            True, str(context.configuration.get("authentication_scheme", "none")),
+            None, None, None,
+        )
 
 
 class StaticResolver:
@@ -83,6 +98,7 @@ def connector(
     resolver = resolver or StaticResolver("93.184.216.34")
     sleeps = sleeps if sleeps is not None else []
     return HttpsTelemetryConnector(
+        resource_policy_registry=ReviewedFixtureResources(),
         egress_policy=TelemetryEgressPolicy(resolver=resolver),
         secret_store=store,
         transport=httpx.MockTransport(handler),
@@ -452,6 +468,7 @@ def test_connection_limits_cannot_exceed_central_egress_ceiling() -> None:
         limits=TelemetryRequestLimits(max_pages=1),
     )
     provider = HttpsTelemetryConnector(
+        resource_policy_registry=ReviewedFixtureResources(),
         egress_policy=policy,
         transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload())),
     )
@@ -531,6 +548,7 @@ def test_native_quality_and_acquisition_are_captured_after_response_completion()
         return acquired
 
     provider = HttpsTelemetryConnector(
+        resource_policy_registry=ReviewedFixtureResources(),
         egress_policy=TelemetryEgressPolicy(resolver=StaticResolver('93.184.216.34')),
         transport=httpx.MockTransport(handler), now=clock,
     )

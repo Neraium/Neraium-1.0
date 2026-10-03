@@ -1,0 +1,30 @@
+{
+  "security": {
+    "tests": 121,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "support": {
+    "tests": 94,
+    "failures": 1,
+    "errors": 0,
+    "skipped": 0
+  },
+  "baseline_failure": {
+    "commit": "d1052d04d2c72808c177d7e08589e9a37f206c4f",
+    "test": "tests/test_phase3_auth_runtime.py::test_admin_can_manage_users_and_sessions",
+    "result": "Same 403 vs expected 201 reproduced in clean detached starting checkout",
+    "reason": "Cookie-authorized write fixture omits trusted Origin; CSRF enforcement predates this candidate",
+    "action": "Preserved. Release remains stopped; no weakening of auth or tests."
+  },
+  "local_scope": "Mocks and fake firewall commands only. No kernel firewall, real database or customer network tested.",
+  "final_db_guard_followup": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "evidence": "db-final.xml",
+    "reason": "Reverified final admin-membership/database-CREATE guard refinement; these cases overlap the security suite."
+  }
+}

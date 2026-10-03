@@ -1,0 +1,14 @@
+{
+  "version": "neraium.telemetry-resource-policy.v1",
+  "policies": {
+    "synthetic-v2": {
+      "kind": "synthetic",
+      "origin": "https://bfzcudq5o2.execute-api.us-east-2.amazonaws.com",
+      "method": "GET",
+      "paths": ["/telemetry"],
+      "query": {},
+      "allow_pagination": false,
+      "authentication_scheme": "none"
+    }
+  }
+}

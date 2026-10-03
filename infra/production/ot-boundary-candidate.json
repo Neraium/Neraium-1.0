@@ -1,0 +1,1031 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "UNDEPLOYED OT boundary candidate. Do not apply before separate DB, executor, service-access and release recertification. No task/service replacement is automatic.",
+  "Parameters": {
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id"
+    },
+    "ApplicationSubnetIds": {
+      "Type": "List<AWS::EC2::Subnet::Id>"
+    },
+    "ApplicationRouteTableIds": {
+      "Type": "CommaDelimitedList"
+    },
+    "ApplicationRoleName": {
+      "Type": "String"
+    },
+    "ApplicationRoleArn": {
+      "Type": "String"
+    },
+    "ExecutionRoleArn": {
+      "Type": "String"
+    },
+    "RdsSecurityGroupId": {
+      "Type": "AWS::EC2::SecurityGroup::Id"
+    },
+    "ExecutorSecurityGroupId": {
+      "Type": "AWS::EC2::SecurityGroup::Id"
+    },
+    "AlbSecurityGroupId": {
+      "Type": "AWS::EC2::SecurityGroup::Id"
+    },
+    "RegionalS3PrefixListId": {
+      "Type": "String",
+      "AllowedPattern": "pl-[a-z0-9]+"
+    },
+    "AuthRuntimeSecretArn": {
+      "Type": "String",
+      "AllowedPattern": "arn:aws:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:neraium/prod/auth-runtime-.+"
+    },
+    "TelemetryDatabaseSecretArn": {
+      "Type": "String"
+    },
+    "ExecutorAuthSecretArn": {
+      "Type": "String"
+    },
+    "ApiTokenSecretArn": {
+      "Type": "String"
+    },
+    "BootstrapSecretArn": {
+      "Type": "String"
+    },
+    "RdsMasterSecretArn": {
+      "Type": "String"
+    },
+    "EnablePrivateDns": {
+      "Type": "String",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Default": "false",
+      "Description": "Stage false first. Enable only after executor endpoint/NACL/host and private-service qualification."
+    },
+    "EnableRuntimeSecretSeparation": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Description": "Enable only AFTER dedicated auth identity/binding and grant qualification; denies the old master secret."
+    },
+    "ExecutorRoleArn": {
+      "Type": "String"
+    },
+    "ExecutorTlsSecretArn": {
+      "Type": "String"
+    },
+    "RdsHostname": {
+      "Type": "String",
+      "AllowedPattern": "[a-zA-Z0-9.-]+"
+    },
+    "EnableDnsFirewall": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Description": "VPC-wide impact: enable only after DNS inventory and executor qualification."
+    },
+    "ExecutorRoleName": {
+      "Type": "String"
+    },
+    "ApprovedConnectorSecretArn": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "(|arn:aws:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:neraium/prod/telemetry-connections/.+)",
+      "Description": "Empty for current public synthetic source; one separately qualified customer binding per executor."
+    },
+    "EnableExecutorSecretSeparation": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Description": "Enable only after host and secret-access qualification."
+    }
+  },
+  "Conditions": {
+    "PrivateDnsQualified": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnablePrivateDns"
+        },
+        "true"
+      ]
+    },
+    "RuntimeIdentityQualified": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableRuntimeSecretSeparation"
+        },
+        "true"
+      ]
+    },
+    "DnsQualified": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableDnsFirewall"
+        },
+        "true"
+      ]
+    },
+    "ExecutorIdentityQualified": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableExecutorSecretSeparation"
+        },
+        "true"
+      ]
+    },
+    "CustomerCredentialApproved": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "ApprovedConnectorSecretArn"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "EndpointSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Private AWS services; no initiated remote egress",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "127.0.0.1/32"
+          }
+        ]
+      }
+    },
+    "ApplicationSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Runtime traffic restricted to internal services and regional S3",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 8080,
+            "ToPort": 8080,
+            "SourceSecurityGroupId": {
+              "Ref": "AlbSecurityGroupId"
+            }
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "DestinationSecurityGroupId": {
+              "Ref": "RdsSecurityGroupId"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 8443,
+            "ToPort": 8443,
+            "DestinationSecurityGroupId": {
+              "Ref": "ExecutorSecurityGroupId"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationSecurityGroupId": {
+              "Ref": "EndpointSecurityGroup"
+            }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationPrefixListId": {
+              "Ref": "RegionalS3PrefixListId"
+            }
+          }
+        ]
+      }
+    },
+    "EndpointFromApplication": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EndpointSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "SourceSecurityGroupId": {
+          "Ref": "ApplicationSecurityGroup"
+        }
+      }
+    },
+    "EndpointFromExecutor": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EndpointSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "SourceSecurityGroupId": {
+          "Ref": "ExecutorSecurityGroupId"
+        }
+      }
+    },
+    "RdsFromApplication": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "RdsSecurityGroupId"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 5432,
+        "ToPort": 5432,
+        "SourceSecurityGroupId": {
+          "Ref": "ApplicationSecurityGroup"
+        }
+      }
+    },
+    "ExecutorFromApplication": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ExecutorSecurityGroupId"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 8443,
+        "ToPort": 8443,
+        "SourceSecurityGroupId": {
+          "Ref": "ApplicationSecurityGroup"
+        }
+      }
+    },
+    "SecretsEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.secretsmanager"
+        },
+        "SubnetIds": {
+          "Ref": "ApplicationSubnetIds"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PrivateDnsEnabled": {
+          "Fn::If": [
+            "PrivateDnsQualified",
+            true,
+            false
+          ]
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
+              ],
+              "Resource": [
+                {
+                  "Ref": "AuthRuntimeSecretArn"
+                },
+                {
+                  "Ref": "TelemetryDatabaseSecretArn"
+                },
+                {
+                  "Ref": "ExecutorAuthSecretArn"
+                },
+                {
+                  "Ref": "ApiTokenSecretArn"
+                },
+                {
+                  "Ref": "BootstrapSecretArn"
+                }
+              ],
+              "Condition": {
+                "ArnEquals": {
+                  "aws:PrincipalArn": [
+                    {
+                      "Ref": "ApplicationRoleArn"
+                    },
+                    {
+                      "Ref": "ExecutionRoleArn"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
+              ],
+              "Resource": [
+                {
+                  "Ref": "ExecutorAuthSecretArn"
+                },
+                {
+                  "Ref": "ExecutorTlsSecretArn"
+                },
+                {
+                  "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:neraium/prod/telemetry-connections/*"
+                }
+              ],
+              "Condition": {
+                "ArnEquals": {
+                  "aws:PrincipalArn": {
+                    "Ref": "ExecutorRoleArn"
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "secretsmanager:GetSecretValue",
+              "Resource": {
+                "Ref": "RdsMasterSecretArn"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "LogsEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.logs"
+        },
+        "SubnetIds": {
+          "Ref": "ApplicationSubnetIds"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PrivateDnsEnabled": {
+          "Fn::If": [
+            "PrivateDnsQualified",
+            true,
+            false
+          ]
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogStreams",
+                "logs:DescribeMetricFilters",
+                "logs:FilterLogEvents"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:PrincipalArn": [
+                    {
+                      "Ref": "ApplicationRoleArn"
+                    },
+                    {
+                      "Ref": "ExecutionRoleArn"
+                    },
+                    {
+                      "Ref": "ExecutorRoleArn"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "EcrApiEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ecr.api"
+        },
+        "SubnetIds": {
+          "Ref": "ApplicationSubnetIds"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PrivateDnsEnabled": {
+          "Fn::If": [
+            "PrivateDnsQualified",
+            true,
+            false
+          ]
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:PrincipalArn": [
+                    {
+                      "Ref": "ApplicationRoleArn"
+                    },
+                    {
+                      "Ref": "ExecutionRoleArn"
+                    },
+                    {
+                      "Ref": "ExecutorRoleArn"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "EcrDockerEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ecr.dkr"
+        },
+        "SubnetIds": {
+          "Ref": "ApplicationSubnetIds"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PrivateDnsEnabled": {
+          "Fn::If": [
+            "PrivateDnsQualified",
+            true,
+            false
+          ]
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:PrincipalArn": [
+                    {
+                      "Ref": "ApplicationRoleArn"
+                    },
+                    {
+                      "Ref": "ExecutionRoleArn"
+                    },
+                    {
+                      "Ref": "ExecutorRoleArn"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "SnsEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.sns"
+        },
+        "SubnetIds": {
+          "Ref": "ApplicationSubnetIds"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PrivateDnsEnabled": {
+          "Fn::If": [
+            "PrivateDnsQualified",
+            true,
+            false
+          ]
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "sns:Publish"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:PrincipalArn": [
+                    {
+                      "Ref": "ApplicationRoleArn"
+                    },
+                    {
+                      "Ref": "ExecutionRoleArn"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "EcsEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.ecs"
+        },
+        "SubnetIds": {
+          "Ref": "ApplicationSubnetIds"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PrivateDnsEnabled": {
+          "Fn::If": [
+            "PrivateDnsQualified",
+            true,
+            false
+          ]
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "ecs:DescribeServices"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:PrincipalArn": [
+                    {
+                      "Ref": "ApplicationRoleArn"
+                    },
+                    {
+                      "Ref": "ExecutionRoleArn"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ElbEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.elasticloadbalancing"
+        },
+        "SubnetIds": {
+          "Ref": "ApplicationSubnetIds"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PrivateDnsEnabled": {
+          "Fn::If": [
+            "PrivateDnsQualified",
+            true,
+            false
+          ]
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "elasticloadbalancing:DescribeTargetHealth"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:PrincipalArn": [
+                    {
+                      "Ref": "ApplicationRoleArn"
+                    },
+                    {
+                      "Ref": "ExecutionRoleArn"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "CloudWatchEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Interface",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.monitoring"
+        },
+        "SubnetIds": {
+          "Ref": "ApplicationSubnetIds"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "EndpointSecurityGroup"
+          }
+        ],
+        "PrivateDnsEnabled": {
+          "Fn::If": [
+            "PrivateDnsQualified",
+            true,
+            false
+          ]
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "cloudwatch:GetMetricStatistics",
+                "cloudwatch:GetMetricData",
+                "cloudwatch:DescribeAlarms"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:PrincipalArn": [
+                    {
+                      "Ref": "ApplicationRoleArn"
+                    },
+                    {
+                      "Ref": "ExecutionRoleArn"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "S3Endpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "VpcEndpointType": "Gateway",
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
+        "RouteTableIds": {
+          "Ref": "ApplicationRouteTableIds"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "s3:ListBucket",
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:PutObjectTagging",
+                "s3:DeleteObject"
+              ],
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:aws:s3:::neraium-prod-upload-state"
+                },
+                {
+                  "Fn::Sub": "arn:aws:s3:::neraium-prod-upload-state/*"
+                }
+              ],
+              "Condition": {
+                "ArnEquals": {
+                  "aws:PrincipalArn": {
+                    "Ref": "ApplicationRoleArn"
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::prod-${AWS::Region}-starport-layer-bucket/*"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "RuntimeSecretSeparation": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "neraium-ot-runtime-secret-separation",
+        "Roles": [
+          {
+            "Ref": "ApplicationRoleName"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Action": "secretsmanager:GetSecretValue",
+              "Resource": [
+                {
+                  "Ref": "RdsMasterSecretArn"
+                },
+                {
+                  "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:neraium/prod/telemetry-connections/*"
+                }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
+              ],
+              "Resource": {
+                "Ref": "AuthRuntimeSecretArn"
+              }
+            }
+          ]
+        }
+      },
+      "Condition": "RuntimeIdentityQualified"
+    },
+    "ApprovedDnsDomains": {
+      "Type": "AWS::Route53Resolver::FirewallDomainList",
+      "Properties": {
+        "Name": "neraium-ot-approved-dns",
+        "Domains": [
+          {
+            "Fn::Sub": "secretsmanager.${AWS::Region}.amazonaws.com"
+          },
+          {
+            "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+          },
+          {
+            "Fn::Sub": "api.ecr.${AWS::Region}.amazonaws.com"
+          },
+          {
+            "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+          },
+          {
+            "Fn::Sub": "sns.${AWS::Region}.amazonaws.com"
+          },
+          {
+            "Fn::Sub": "ecs.${AWS::Region}.amazonaws.com"
+          },
+          {
+            "Fn::Sub": "elasticloadbalancing.${AWS::Region}.amazonaws.com"
+          },
+          {
+            "Fn::Sub": "monitoring.${AWS::Region}.amazonaws.com"
+          },
+          {
+            "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+          },
+          {
+            "Fn::Sub": "neraium-prod-upload-state.s3.${AWS::Region}.amazonaws.com"
+          },
+          {
+            "Fn::Sub": "prod-${AWS::Region}-starport-layer-bucket.s3.${AWS::Region}.amazonaws.com"
+          },
+          {
+            "Ref": "RdsHostname"
+          },
+          "bfzcudq5o2.execute-api.us-east-2.amazonaws.com"
+        ]
+      }
+    },
+    "AllDnsDomains": {
+      "Type": "AWS::Route53Resolver::FirewallDomainList",
+      "Properties": {
+        "Name": "neraium-ot-default-deny-dns",
+        "Domains": [
+          "*"
+        ]
+      }
+    },
+    "DnsRules": {
+      "Type": "AWS::Route53Resolver::FirewallRuleGroup",
+      "Properties": {
+        "Name": "neraium-ot-dns-policy",
+        "FirewallRules": [
+          {
+            "Action": "ALLOW",
+            "FirewallDomainListId": {
+              "Ref": "ApprovedDnsDomains"
+            },
+            "Priority": 100
+          },
+          {
+            "Action": "BLOCK",
+            "BlockResponse": "NXDOMAIN",
+            "FirewallDomainListId": {
+              "Ref": "AllDnsDomains"
+            },
+            "Priority": 200
+          }
+        ]
+      }
+    },
+    "DnsAssociation": {
+      "Type": "AWS::Route53Resolver::FirewallRuleGroupAssociation",
+      "Condition": "DnsQualified",
+      "Properties": {
+        "Name": "neraium-ot-default-deny-dns",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "FirewallRuleGroupId": {
+          "Ref": "DnsRules"
+        },
+        "Priority": 101,
+        "MutationProtection": "ENABLED"
+      }
+    },
+    "ExecutorSecretSeparation": {
+      "Type": "AWS::IAM::Policy",
+      "Condition": "ExecutorIdentityQualified",
+      "Properties": {
+        "PolicyName": "neraium-ot-executor-secret-separation",
+        "Roles": [
+          {
+            "Ref": "ExecutorRoleName"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
+              ],
+              "NotResource": {
+                "Fn::If": [
+                  "CustomerCredentialApproved",
+                  [
+                    {
+                      "Ref": "ExecutorAuthSecretArn"
+                    },
+                    {
+                      "Ref": "ExecutorTlsSecretArn"
+                    },
+                    {
+                      "Ref": "ApprovedConnectorSecretArn"
+                    }
+                  ],
+                  [
+                    {
+                      "Ref": "ExecutorAuthSecretArn"
+                    },
+                    {
+                      "Ref": "ExecutorTlsSecretArn"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ExecutorMetadataLaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateData": {
+          "MetadataOptions": {
+            "HttpTokens": "required",
+            "HttpEndpoint": "enabled",
+            "HttpPutResponseHopLimit": 1,
+            "InstanceMetadataTags": "disabled"
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ApplicationSecurityGroupId": {
+      "Value": {
+        "Ref": "ApplicationSecurityGroup"
+      }
+    },
+    "EndpointSecurityGroupId": {
+      "Value": {
+        "Ref": "EndpointSecurityGroup"
+      }
+    }
+  }
+}

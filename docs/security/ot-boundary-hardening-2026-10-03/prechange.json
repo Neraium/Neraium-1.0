@@ -1,0 +1,4263 @@
+{
+  "observed_at": "2026-10-03T12:47:56.618680+00:00",
+  "head": "d1052d04d2c72808c177d7e08589e9a37f206c4f",
+  "dirty_worktree": [
+    " M backend/app/routers/historical_ingestion.py",
+    " M backend/app/services/historical_ingestion.py",
+    "?? backend/app/services/historical_review_authority.py",
+    "?? benchmarks/",
+    "?? docs/releases/neraium-1.0-rc1-2026/history/20260924T205356Z-entry/FILE_MANIFEST.json",
+    "?? docs/releases/neraium-1.0-rc1-2026/history/20260924T205356Z-entry/PROPOSED_COMMIT.md",
+    "?? docs/releases/neraium-1.0-rc1-2026/history/20260924T205356Z-entry/SOURCE_HASHES.json",
+    "?? docs/releases/neraium-1.0-rc1-2026/history/20260924T205356Z-entry/index.txt",
+    "?? docs/releases/neraium-1.0-rc1-2026/history/20260924T205356Z-entry/staged-diff.txt",
+    "?? docs/releases/neraium-1.0-rc1-2026/history/20260924T205356Z-entry/status.txt",
+    "?? docs/releases/neraium-1.0-rc1-2026/history/20260924T205356Z-entry/tracked-diff.txt",
+    "?? docs/releases/neraium-1.0-rc1-2026/history/20260924T205356Z-entry/untracked.txt",
+    "?? docs/security/security-closeout-2026/raw/",
+    "?? docs/security/security-hardening-2026/raw/",
+    "?? docs/validation/henderson-qualification-freeze-2026-09-30/evidence/",
+    "?? docs/validation/prize-2026/raw/",
+    "?? docs/validation/validated-candidate-integration-2026/SOURCE_HASHES.json",
+    "?? docs/validation/validated-candidate-integration-2026/TARGET_POSTINTEGRATION_HASHES.json",
+    "?? docs/validation/validated-candidate-integration-2026/TARGET_PREINTEGRATION_HASHES.json",
+    "?? docs/validation/validated-candidate-integration-2026/architecture-tests.xml",
+    "?? docs/validation/validated-candidate-integration-2026/complete-10k-tests.xml",
+    "?? docs/validation/validated-candidate-integration-2026/final-certification/complete-10k-tests.xml",
+    "?? docs/validation/validated-candidate-integration-2026/final-certification/current-comparator.py.txt",
+    "?? docs/validation/validated-candidate-integration-2026/final-certification/execution.json",
+    "?? docs/validation/validated-candidate-integration-2026/final-certification/final-integrity.json",
+    "?? docs/validation/validated-candidate-integration-2026/final-certification/freeze-integrity-before.json",
+    "?? docs/validation/validated-candidate-integration-2026/final-certification/gate/",
+    "?? docs/validation/validated-candidate-integration-2026/final-certification/saved-output-verification.json",
+    "?? docs/validation/validated-candidate-integration-2026/final-contract-tests.xml",
+    "?? docs/validation/validated-candidate-integration-2026/final-integrity.json",
+    "?? docs/validation/validated-candidate-integration-2026/full-retained-mismatches.json",
+    "?? docs/validation/validated-candidate-integration-2026/gate-diagnosis.json",
+    "?? docs/validation/validated-candidate-integration-2026/gate-mismatches.json",
+    "?? docs/validation/validated-candidate-integration-2026/gate/",
+    "?? docs/validation/validated-candidate-integration-2026/history-before-human-authority/",
+    "?? docs/validation/validated-candidate-integration-2026/impact.json",
+    "?? docs/validation/validated-candidate-integration-2026/integrity.json",
+    "?? docs/validation/validated-candidate-integration-2026/lineage.json",
+    "?? docs/validation/validated-candidate-integration-2026/post-gate-signal-order-tests-initial.xml",
+    "?? docs/validation/validated-candidate-integration-2026/post-gate-signal-order-tests.xml",
+    "?? docs/validation/validated-candidate-integration-2026/pre-gate-freeze.json",
+    "?? docs/validation/validated-candidate-integration-2026/production-hunks.json",
+    "?? docs/validation/validated-candidate-integration-2026/protected-analytical-checks.json",
+    "?? docs/validation/validated-candidate-integration-2026/static-promotion-checks.json",
+    "?? docs/validation/validated-candidate-integration-2026/target-contract-tests.xml",
+    "?? docs/validation/validated-candidate-integration-2026/targeted-final.xml",
+    "?? docs/validation/validated-candidate-integration-2026/targeted-nodes.txt",
+    "?? docs/validation/validated-candidate-integration-2026/targeted-tests.xml",
+    "?? docs/validation/validated-candidate-integration-2026/terminal-runtime-tests.xml",
+    "?? docs/validation/validated-candidate-integration-2026/upload-runtime-tests.xml",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/000.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/001.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/002.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/003.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/004.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/005.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/006.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/007.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/008.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/009.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/010.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/011.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/012.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/013.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/014.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/015.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/016.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/017.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/018.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/019.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/020.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/021.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/022.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/023.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/024.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/025.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/026.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/027.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/028.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/029.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/030.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/031.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/032.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/033.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/034.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/035.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/036.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/037.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/038.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/039.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/040.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/041.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/042.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/043.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/044.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/045.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/046.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/047.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/048.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/049.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/050.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/051.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/052.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/053.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/054.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/055.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/056.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/057.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/058.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/059.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/060.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/061.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/062.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/063.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/064.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/065.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/066.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/067.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/068.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/069.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/070.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/071.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/072.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/073.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/074.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/075.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/076.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/077.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/078.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/079.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/080.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/081.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/082.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/083.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/084.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/085.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/086.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/087.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/088.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/089.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/090.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/091.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/092.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/093.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/094.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/095.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/096.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/097.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/098.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/099.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/100.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/101.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/102.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/103.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/104.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/105.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/106.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/107.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/108.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/109.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/110.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/111.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/112.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/113.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/114.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/115.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/116.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/117.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/118.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/119.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/120.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/121.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/122.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/123.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/124.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/125.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/126.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/127.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/128.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/129.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/130.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/131.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/132.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/133.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/134.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/135.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/136.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/137.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/138.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/139.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/140.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/141.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/142.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/143.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/144.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/145.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/146.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/147.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/148.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/149.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/150.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/151.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/152.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/153.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/154.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/155.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/156.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/157.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/158.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/159.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/160.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/161.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/162.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/163.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/164.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/165.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/166.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/167.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/168.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/169.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/170.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/171.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/172.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/173.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/174.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/175.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/176.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/177.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/178.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/179.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/180.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/181.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/182.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/183.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/184.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/185.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/186.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/187.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/188.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/189.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/190.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/191.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/192.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/193.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/194.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/195.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/196.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/197.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/198.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/199.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/200.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/201.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/202.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/203.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/204.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/205.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/206.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/207.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/208.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/209.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/210.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/211.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/212.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/213.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/214.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/215.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/216.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/217.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/218.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/219.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/220.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/221.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/222.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/223.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/224.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/225.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/226.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/227.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/228.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/229.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/230.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/231.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/232.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/233.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/234.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/235.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/236.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/237.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/238.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/239.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/240.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/241.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/242.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/243.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/244.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/245.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/246.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/247.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/248.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/249.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/250.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/251.json",
+    "?? docs/validation/wastewater-real-2026/raw/checkpoints/252.json",
+    "?? docs/validation/wastewater-real-2026/raw/hardware.txt",
+    "?? docs/validation/wastewater-real-2026/raw/posthoc/web-retrievals.json",
+    "?? docs/validation/wastewater-real-2026/raw/prize-integrity-check.txt",
+    "?? docs/validation/wastewater-real-2026/raw/promoted-repeat-runs/",
+    "?? docs/validation/wastewater-real-2026/raw/repeat-outputs.jsonl.gz",
+    "?? research/",
+    "?? tests/test_false_positive_benchmark_v1.py",
+    "?? tests/test_historical_review_authority_phase1.py"
+  ],
+  "identity": {
+    "UserId": "AIDAZ5ANEKCWOHI26BNW7",
+    "Account": "680779862188",
+    "Arn": "arn:aws:iam::680779862188:user/neraium-cli"
+  },
+  "services": [
+    {
+      "serviceArn": "arn:aws:ecs:us-east-2:680779862188:service/neraium-prod-cluster/neraium-prod-api-service",
+      "serviceName": "neraium-prod-api-service",
+      "clusterArn": "arn:aws:ecs:us-east-2:680779862188:cluster/neraium-prod-cluster",
+      "loadBalancers": [
+        {
+          "targetGroupArn": "arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6",
+          "containerName": "api",
+          "containerPort": 8080
+        }
+      ],
+      "serviceRegistries": [],
+      "status": "ACTIVE",
+      "desiredCount": 1,
+      "runningCount": 1,
+      "pendingCount": 0,
+      "launchType": "FARGATE",
+      "platformVersion": "LATEST",
+      "platformFamily": "Linux",
+      "taskDefinition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-api:339",
+      "deploymentConfiguration": {
+        "deploymentCircuitBreaker": {
+          "enable": false,
+          "rollback": false
+        },
+        "maximumPercent": 200,
+        "minimumHealthyPercent": 100
+      },
+      "deployments": [
+        {
+          "id": "ecs-svc/0309752272125900155",
+          "status": "PRIMARY",
+          "taskDefinition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-api:339",
+          "desiredCount": 1,
+          "pendingCount": 0,
+          "runningCount": 1,
+          "failedTasks": 0,
+          "createdAt": "2026-10-03 06:56:03.235000+00:00",
+          "updatedAt": "2026-10-03 06:58:37.570000+00:00",
+          "launchType": "FARGATE",
+          "platformVersion": "1.4.0",
+          "platformFamily": "Linux",
+          "networkConfiguration": {
+            "awsvpcConfiguration": {
+              "subnets": [
+                "subnet-0614e66e02952130c",
+                "subnet-0407ffdef9751856a"
+              ],
+              "securityGroups": [
+                "sg-01ef49d17269dd2d3"
+              ],
+              "assignPublicIp": "DISABLED"
+            }
+          },
+          "rolloutState": "COMPLETED",
+          "rolloutStateReason": "ECS deployment ecs-svc/0309752272125900155 completed."
+        }
+      ],
+      "roleArn": "arn:aws:iam::680779862188:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS",
+      "events": [
+        {
+          "id": "c5d9ee96-fc55-485c-bf77-1c3e6030c2fb",
+          "createdAt": "2026-10-03 06:58:37.579000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "29178b19-b888-4d5d-888d-49c9b07dc86f",
+          "createdAt": "2026-10-03 06:58:37.578000+00:00",
+          "message": "(service neraium-prod-api-service) (deployment ecs-svc/0309752272125900155) deployment completed."
+        },
+        {
+          "id": "4a973549-312d-4629-bade-42d25e4a2ace",
+          "createdAt": "2026-10-03 06:57:26.935000+00:00",
+          "message": "(service neraium-prod-api-service, taskSet ecs-svc/7510256586907684794) has begun draining connections on 1 tasks."
+        },
+        {
+          "id": "1db1af7a-caf5-4dcd-9b35-c4e40bb3124e",
+          "createdAt": "2026-10-03 06:57:26.919000+00:00",
+          "message": "(service neraium-prod-api-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "5510106c-cb88-42a8-b1d7-b6e7dd21a5b3",
+          "createdAt": "2026-10-03 06:57:25.596000+00:00",
+          "message": "(service neraium-prod-api-service) has stopped 1 running tasks: (task 431f3040b6984749af02866dedd562c8)."
+        },
+        {
+          "id": "fc701b5d-dc13-4886-9d8d-a1af7231ed80",
+          "createdAt": "2026-10-03 06:56:45.423000+00:00",
+          "message": "(service neraium-prod-api-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "a61b9932-084e-4568-8bf8-a4d0b97f0018",
+          "createdAt": "2026-10-03 06:56:14.606000+00:00",
+          "message": "(service neraium-prod-api-service) has started 1 tasks: (task 88630bceb13c4bdf8bdec7853eb1a060)."
+        },
+        {
+          "id": "2741f14e-388b-4f73-a9ba-6431f1042c6c",
+          "createdAt": "2026-10-03 06:14:20.323000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "8f73d982-6c9b-4997-8bf9-1e0487c6669d",
+          "createdAt": "2026-10-03 00:13:57.423000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "c707bf9d-c825-45e9-a676-e7c544643b79",
+          "createdAt": "2026-10-03 00:13:57.422000+00:00",
+          "message": "(service neraium-prod-api-service) (deployment ecs-svc/7510256586907684794) deployment completed."
+        },
+        {
+          "id": "eb46ee90-6a57-4c36-83f9-b42248295df8",
+          "createdAt": "2026-10-03 00:13:05.439000+00:00",
+          "message": "(service neraium-prod-api-service, taskSet ecs-svc/7142572897393180213) has begun draining connections on 1 tasks."
+        },
+        {
+          "id": "a0b59620-393e-43b6-8849-22b467ae7b42",
+          "createdAt": "2026-10-03 00:13:05.435000+00:00",
+          "message": "(service neraium-prod-api-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "100fc2fa-6b87-40fa-932f-ea898494ab33",
+          "createdAt": "2026-10-03 00:12:55.207000+00:00",
+          "message": "(service neraium-prod-api-service) has stopped 1 running tasks: (task cabaabcc77e54a22a7a1c86d2991e8a5)."
+        },
+        {
+          "id": "069bb35e-212d-410c-88e4-13f8c27a27e8",
+          "createdAt": "2026-10-03 00:12:14.919000+00:00",
+          "message": "(service neraium-prod-api-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "d7134e45-5981-42a9-b887-de26663a0928",
+          "createdAt": "2026-10-03 00:11:43.539000+00:00",
+          "message": "(service neraium-prod-api-service) has started 1 tasks: (task 431f3040b6984749af02866dedd562c8)."
+        },
+        {
+          "id": "9884028a-1341-4bad-812a-725411f48446",
+          "createdAt": "2026-10-02 23:43:41.181000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "f296e095-ecf0-4091-8976-874bd04d56c4",
+          "createdAt": "2026-10-02 23:43:41.180000+00:00",
+          "message": "(service neraium-prod-api-service) (deployment ecs-svc/7142572897393180213) deployment completed."
+        },
+        {
+          "id": "caa8953d-8534-428d-8664-92728aad5dc6",
+          "createdAt": "2026-10-02 23:42:49.694000+00:00",
+          "message": "(service neraium-prod-api-service, taskSet ecs-svc/1322139622907423024) has begun draining connections on 1 tasks."
+        },
+        {
+          "id": "237d1f0b-2bd7-4c11-ab25-82c30ed18c76",
+          "createdAt": "2026-10-02 23:42:49.676000+00:00",
+          "message": "(service neraium-prod-api-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "2bade59e-c50d-41c5-be4b-421a0298cc99",
+          "createdAt": "2026-10-02 23:42:38.325000+00:00",
+          "message": "(service neraium-prod-api-service) has stopped 1 running tasks: (task fdecbdfc94184995bae6b9d97d33ae63)."
+        },
+        {
+          "id": "21c46dc8-6de7-42d2-8665-001462aaca62",
+          "createdAt": "2026-10-02 23:41:58.372000+00:00",
+          "message": "(service neraium-prod-api-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "106d0980-b7b1-4cf4-9559-27745b89eb52",
+          "createdAt": "2026-10-02 23:41:27.894000+00:00",
+          "message": "(service neraium-prod-api-service) has started 1 tasks: (task cabaabcc77e54a22a7a1c86d2991e8a5)."
+        },
+        {
+          "id": "f5764d5c-300a-48a2-ab32-a75025ce23e2",
+          "createdAt": "2026-10-02 20:40:56.659000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "ff596db9-1581-470f-9c20-09b912647f9c",
+          "createdAt": "2026-10-02 20:40:56.658000+00:00",
+          "message": "(service neraium-prod-api-service) (deployment ecs-svc/1322139622907423024) deployment completed."
+        },
+        {
+          "id": "2976e5fb-bf6c-4879-9c95-eeb0095e7924",
+          "createdAt": "2026-10-02 20:39:55.954000+00:00",
+          "message": "(service neraium-prod-api-service, taskSet ecs-svc/4683324042482935361) has begun draining connections on 1 tasks."
+        },
+        {
+          "id": "08389256-6168-418d-afc8-40573653a80e",
+          "createdAt": "2026-10-02 20:39:55.949000+00:00",
+          "message": "(service neraium-prod-api-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "47123158-64a2-4a1e-80ca-e70aecc2169a",
+          "createdAt": "2026-10-02 20:39:45.588000+00:00",
+          "message": "(service neraium-prod-api-service) has stopped 1 running tasks: (task 4a4d8b646f654c8fafbe2e134931d9de)."
+        },
+        {
+          "id": "d0612ae2-755f-4aca-b187-e61b9e3797cf",
+          "createdAt": "2026-10-02 20:39:05.366000+00:00",
+          "message": "(service neraium-prod-api-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "2e95cd17-37f3-4276-a580-a119cae11ce0",
+          "createdAt": "2026-10-02 20:38:33.584000+00:00",
+          "message": "(service neraium-prod-api-service) has started 1 tasks: (task fdecbdfc94184995bae6b9d97d33ae63)."
+        },
+        {
+          "id": "3835fb16-7129-4ae7-b139-b172946c1a00",
+          "createdAt": "2026-10-02 20:19:23.239000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "c3a6f2fe-27dd-4e3c-868c-6a799d3c07fa",
+          "createdAt": "2026-10-02 20:19:23.238000+00:00",
+          "message": "(service neraium-prod-api-service) (deployment ecs-svc/4683324042482935361) deployment completed."
+        },
+        {
+          "id": "82ec228c-2fdf-4c70-ae76-8deab608dbdd",
+          "createdAt": "2026-10-02 20:18:22.441000+00:00",
+          "message": "(service neraium-prod-api-service, taskSet ecs-svc/3147527036815428029) has begun draining connections on 1 tasks."
+        },
+        {
+          "id": "22491ddb-4c21-48a6-b6c8-e55786eeb439",
+          "createdAt": "2026-10-02 20:18:22.436000+00:00",
+          "message": "(service neraium-prod-api-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "3f21608a-6948-418d-9700-855127ae4c42",
+          "createdAt": "2026-10-02 20:18:12.476000+00:00",
+          "message": "(service neraium-prod-api-service) has stopped 1 running tasks: (task 003799af11e4487dac2cbec6ba2581de)."
+        },
+        {
+          "id": "44bbe9cf-0575-4bc7-a7d9-82112dafdf49",
+          "createdAt": "2026-10-02 20:17:31.054000+00:00",
+          "message": "(service neraium-prod-api-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "c98fcf2e-f063-4c8e-9d4f-b89f1ec2723a",
+          "createdAt": "2026-10-02 20:17:00.344000+00:00",
+          "message": "(service neraium-prod-api-service) has started 1 tasks: (task 4a4d8b646f654c8fafbe2e134931d9de)."
+        },
+        {
+          "id": "a5e8b58b-de7e-4573-a181-bfb0e5c0fef3",
+          "createdAt": "2026-10-02 20:12:45.532000+00:00",
+          "message": "(service neraium-prod-api-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "14e6c448-c383-42f7-a795-6817f2dbbff0",
+          "createdAt": "2026-10-02 20:12:45.479000+00:00",
+          "message": "(service neraium-prod-api-service, taskSet ecs-svc/2125796929303533190) has begun draining connections on 1 tasks."
+        },
+        {
+          "id": "ceedac3b-180c-4128-af86-b1775bd8311d",
+          "createdAt": "2026-10-02 20:12:45.474000+00:00",
+          "message": "(service neraium-prod-api-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "9d3575fd-dc39-4fc1-81bf-99d2d3453b7b",
+          "createdAt": "2026-10-02 20:12:02.961000+00:00",
+          "message": "(service neraium-prod-api-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "1459d8d1-4ac1-4d28-94bb-bf1b1c160618",
+          "createdAt": "2026-10-02 20:11:33.337000+00:00",
+          "message": "(service neraium-prod-api-service) has started 1 tasks: (task 2b1fdf4d54b741db99680d61871950a6)."
+        },
+        {
+          "id": "fe598ed1-b46e-4c23-b192-eee745b4a4e3",
+          "createdAt": "2026-10-02 16:27:49.433000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "2c3155b5-17ad-45a5-a657-30d7a3b9f79c",
+          "createdAt": "2026-10-02 16:27:49.432000+00:00",
+          "message": "(service neraium-prod-api-service) (deployment ecs-svc/3147527036815428029) deployment completed."
+        },
+        {
+          "id": "38c31c47-dcfa-4b75-bfc7-c1a228a27954",
+          "createdAt": "2026-10-02 16:26:55.725000+00:00",
+          "message": "(service neraium-prod-api-service, taskSet ecs-svc/8504010934361316491) has begun draining connections on 1 tasks."
+        },
+        {
+          "id": "61fab88d-0e2d-492b-b4c3-08f5693ef336",
+          "createdAt": "2026-10-02 16:26:55.721000+00:00",
+          "message": "(service neraium-prod-api-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "66067e90-5a6a-40e3-a71a-c0b0c9504df1",
+          "createdAt": "2026-10-02 16:26:46.156000+00:00",
+          "message": "(service neraium-prod-api-service) has stopped 1 running tasks: (task e2424acbf39a4c689dd1495bc7274e50)."
+        },
+        {
+          "id": "2a362b57-22b1-4c22-b7e2-a30b955fe8dd",
+          "createdAt": "2026-10-02 16:26:05.437000+00:00",
+          "message": "(service neraium-prod-api-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "0efdcc86-2d47-45d5-84e2-dd640dfdcca4",
+          "createdAt": "2026-10-02 16:25:34.176000+00:00",
+          "message": "(service neraium-prod-api-service) has started 1 tasks: (task 003799af11e4487dac2cbec6ba2581de)."
+        },
+        {
+          "id": "96f5aec3-6462-4d7f-bfac-c61e393eda2c",
+          "createdAt": "2026-10-02 16:18:06.865000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "6b03a64c-c948-42d8-b45f-ed2949aa0654",
+          "createdAt": "2026-10-02 16:18:06.864000+00:00",
+          "message": "(service neraium-prod-api-service) (deployment ecs-svc/8504010934361316491) deployment completed."
+        },
+        {
+          "id": "a0d4cd7b-1f0e-43fc-9573-2686aa949514",
+          "createdAt": "2026-10-02 16:17:13.645000+00:00",
+          "message": "(service neraium-prod-api-service, taskSet ecs-svc/5148587809791753461) has begun draining connections on 1 tasks."
+        },
+        {
+          "id": "1d8738a2-bf17-47c8-b4e4-b6cd0dbe0817",
+          "createdAt": "2026-10-02 16:17:13.641000+00:00",
+          "message": "(service neraium-prod-api-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "67f314ba-bee3-454c-bca5-221c9b3d20f1",
+          "createdAt": "2026-10-02 16:17:04.376000+00:00",
+          "message": "(service neraium-prod-api-service) has stopped 1 running tasks: (task aedf3cc217554dadb6a742996d50ef69)."
+        },
+        {
+          "id": "5a6b3398-102e-462a-9045-2e5d1cc6664f",
+          "createdAt": "2026-10-02 16:16:14.213000+00:00",
+          "message": "(service neraium-prod-api-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "64eeea55-b9ab-4159-83ef-766ce0299e33",
+          "createdAt": "2026-10-02 16:15:44.532000+00:00",
+          "message": "(service neraium-prod-api-service) has started 1 tasks: (task e2424acbf39a4c689dd1495bc7274e50)."
+        },
+        {
+          "id": "4e12c2ba-9f7a-4307-bdf0-0ef06b2c808e",
+          "createdAt": "2026-10-02 16:07:06.893000+00:00",
+          "message": "(service neraium-prod-api-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "524aa9f0-d223-43f5-86ac-d399acd6c38e",
+          "createdAt": "2026-10-02 16:07:06.844000+00:00",
+          "message": "(service neraium-prod-api-service, taskSet ecs-svc/9476967101607059674) has begun draining connections on 1 tasks."
+        },
+        {
+          "id": "0950ad13-5768-4f18-a912-a600124ce1f3",
+          "createdAt": "2026-10-02 16:07:06.839000+00:00",
+          "message": "(service neraium-prod-api-service) deregistered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "39c65171-da78-4b57-a80c-5564c8ff0ab7",
+          "createdAt": "2026-10-02 16:06:27.977000+00:00",
+          "message": "(service neraium-prod-api-service) registered 1 targets in (target-group arn:aws:elasticloadbalancing:us-east-2:680779862188:targetgroup/neraium-prod-api-tg/56113982023574c6)"
+        },
+        {
+          "id": "ea6bfb2c-117f-4c75-8c9f-d225e76d3e26",
+          "createdAt": "2026-10-02 16:05:56.848000+00:00",
+          "message": "(service neraium-prod-api-service) has started 1 tasks: (task 8ba7f81e6a5647dc969b75194ad82aa9)."
+        },
+        {
+          "id": "e731e229-77ea-40bc-b0cf-9983730f9060",
+          "createdAt": "2026-10-02 13:17:04.271000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "85bd8b7b-e6c3-417b-8c9c-c213819c7fba",
+          "createdAt": "2026-10-02 07:16:33.804000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "e7af3795-cf1c-4c17-ac93-8f75423a49e2",
+          "createdAt": "2026-10-02 01:16:30.756000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "61e285dc-df97-48f8-8f63-5f4c232a1e39",
+          "createdAt": "2026-10-01 19:16:03.405000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "dc4540a3-0f87-42a5-abe1-c99a6f52d5f8",
+          "createdAt": "2026-10-01 13:15:46.253000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "71cb51e8-f43e-4e90-8ebf-abb9c98aff96",
+          "createdAt": "2026-10-01 07:15:28.765000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "d16ee9c7-2324-47a3-b132-630198cb010d",
+          "createdAt": "2026-10-01 01:14:57.378000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "41e69317-8cce-435a-a0aa-4040db7f6b5e",
+          "createdAt": "2026-09-30 19:14:43.971000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "84b9e3a3-5a8d-45a1-a325-e2311925a8c4",
+          "createdAt": "2026-09-30 13:14:17.062000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "7cf2e616-f631-4330-8efe-b8770916fcc4",
+          "createdAt": "2026-09-30 07:13:39.297000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "9d183525-4ef8-4947-a5c8-17b0ac05a469",
+          "createdAt": "2026-09-30 01:13:32.554000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "93f95fd5-50e4-4595-aa9e-8afaea3b0966",
+          "createdAt": "2026-09-29 19:13:14.271000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "ebdeddf6-ac11-408b-9fe4-5d5a7ea111f8",
+          "createdAt": "2026-09-29 13:12:48.787000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "60878c14-9901-4ac8-aa60-2f330978f24a",
+          "createdAt": "2026-09-29 07:12:30.729000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "f4de169a-880b-4cf3-814c-c444a0dedae8",
+          "createdAt": "2026-09-29 01:12:04.614000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "542d3294-f2d5-4c4c-b62e-2fd20abb2652",
+          "createdAt": "2026-09-28 19:11:52.660000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "1a82421e-a925-44d7-abdf-2d5cdab19a0d",
+          "createdAt": "2026-09-28 13:11:09.874000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "9c099c6c-5c45-4cc5-b554-d6f33bea02e4",
+          "createdAt": "2026-09-28 07:10:40.159000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "aaf2fbb4-703b-4429-b728-69d5b6df321d",
+          "createdAt": "2026-09-28 01:10:17.415000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "84bf5e50-6809-4c6f-9261-44a9f00f89b3",
+          "createdAt": "2026-09-27 19:09:35.733000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "ed86f546-ad99-4c6a-914f-f562c1e5d3a5",
+          "createdAt": "2026-09-27 13:09:09.091000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "1f9dfe36-270e-4314-b2d8-207af27f85c0",
+          "createdAt": "2026-09-27 07:08:57.141000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "79a9f97a-3d40-43ed-a4f4-9e398fe104a8",
+          "createdAt": "2026-09-27 01:08:21.090000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "1cbc73af-607f-4f3c-91a2-f0622773bc93",
+          "createdAt": "2026-09-26 19:08:02.531000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "e7296daf-272b-43bf-8bc4-2adc8058a36a",
+          "createdAt": "2026-09-26 13:07:33.411000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "5affb66f-8a2a-43d1-8589-e3d257a4352f",
+          "createdAt": "2026-09-26 07:06:54.719000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "d901b8ec-c3f3-4d0e-ae2f-7cc42cfd7bfb",
+          "createdAt": "2026-09-26 01:06:48.711000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "88b8d79d-fcfa-4236-9167-cb87e635411a",
+          "createdAt": "2026-09-25 19:06:20.936000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "43aa7c6f-20b2-43c5-bcc4-72a049fd4cca",
+          "createdAt": "2026-09-25 13:05:40.796000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "e6f6b81a-15ca-4b69-ad79-b2aa9fb9a591",
+          "createdAt": "2026-09-25 07:05:12.848000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "837cdeb9-9b53-47ba-9e9a-d0303bf51b0a",
+          "createdAt": "2026-09-25 01:04:38.024000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "ffdfc6da-ad0a-4002-9ace-e5b2b6540e8f",
+          "createdAt": "2026-09-24 19:04:01.166000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "df00f84a-cde8-4e9c-a1b2-9953b64914c5",
+          "createdAt": "2026-09-24 13:03:33.034000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "9d28e590-ab87-453c-b5f9-cb29f45361b0",
+          "createdAt": "2026-09-24 07:03:22.071000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "4edbfe02-f674-4f46-948e-2aa8faab65e1",
+          "createdAt": "2026-09-24 01:03:06.636000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "aaf066b1-f1c7-4f7b-bb07-5ed76ec42008",
+          "createdAt": "2026-09-23 19:02:19.804000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "7599720c-ef7f-45d9-9afc-185e44cb1910",
+          "createdAt": "2026-09-23 13:02:18.150000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "029955b1-afd5-449f-ab9e-699dc3932e8c",
+          "createdAt": "2026-09-23 07:01:38.336000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "b5642758-233f-41eb-892b-95976cd9807a",
+          "createdAt": "2026-09-23 01:01:20.862000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        },
+        {
+          "id": "df18fb4b-39d3-45fa-a5d7-ef18a9563d74",
+          "createdAt": "2026-09-22 19:01:01.780000+00:00",
+          "message": "(service neraium-prod-api-service) has reached a steady state."
+        }
+      ],
+      "createdAt": "2026-05-13 22:26:33.640000+00:00",
+      "placementConstraints": [],
+      "placementStrategy": [],
+      "networkConfiguration": {
+        "awsvpcConfiguration": {
+          "subnets": [
+            "subnet-0614e66e02952130c",
+            "subnet-0407ffdef9751856a"
+          ],
+          "securityGroups": [
+            "sg-01ef49d17269dd2d3"
+          ],
+          "assignPublicIp": "DISABLED"
+        }
+      },
+      "healthCheckGracePeriodSeconds": 0,
+      "schedulingStrategy": "REPLICA",
+      "deploymentController": {
+        "type": "ECS"
+      },
+      "createdBy": "arn:aws:iam::680779862188:user/neraium-cli",
+      "enableECSManagedTags": false,
+      "propagateTags": "NONE",
+      "enableExecuteCommand": false,
+      "availabilityZoneRebalancing": "DISABLED"
+    },
+    {
+      "serviceArn": "arn:aws:ecs:us-east-2:680779862188:service/neraium-prod-cluster/neraium-prod-worker-service",
+      "serviceName": "neraium-prod-worker-service",
+      "clusterArn": "arn:aws:ecs:us-east-2:680779862188:cluster/neraium-prod-cluster",
+      "loadBalancers": [],
+      "serviceRegistries": [],
+      "status": "ACTIVE",
+      "desiredCount": 1,
+      "runningCount": 1,
+      "pendingCount": 0,
+      "launchType": "FARGATE",
+      "platformVersion": "LATEST",
+      "platformFamily": "Linux",
+      "taskDefinition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-worker:333",
+      "deploymentConfiguration": {
+        "deploymentCircuitBreaker": {
+          "enable": false,
+          "rollback": false
+        },
+        "maximumPercent": 200,
+        "minimumHealthyPercent": 100
+      },
+      "deployments": [
+        {
+          "id": "ecs-svc/9178134086778314470",
+          "status": "PRIMARY",
+          "taskDefinition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-worker:333",
+          "desiredCount": 1,
+          "pendingCount": 0,
+          "runningCount": 1,
+          "failedTasks": 0,
+          "createdAt": "2026-10-03 06:56:02.788000+00:00",
+          "updatedAt": "2026-10-03 06:58:44.864000+00:00",
+          "launchType": "FARGATE",
+          "platformVersion": "1.4.0",
+          "platformFamily": "Linux",
+          "networkConfiguration": {
+            "awsvpcConfiguration": {
+              "subnets": [
+                "subnet-0614e66e02952130c",
+                "subnet-0407ffdef9751856a"
+              ],
+              "securityGroups": [
+                "sg-01ef49d17269dd2d3"
+              ],
+              "assignPublicIp": "DISABLED"
+            }
+          },
+          "rolloutState": "COMPLETED",
+          "rolloutStateReason": "ECS deployment ecs-svc/9178134086778314470 completed."
+        }
+      ],
+      "roleArn": "arn:aws:iam::680779862188:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS",
+      "events": [
+        {
+          "id": "0e57f169-d26b-4c76-b957-b44a8090f3aa",
+          "createdAt": "2026-10-03 06:58:44.873000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "c4fea66c-0eed-4555-b197-91fb8714bd88",
+          "createdAt": "2026-10-03 06:58:44.872000+00:00",
+          "message": "(service neraium-prod-worker-service) (deployment ecs-svc/9178134086778314470) deployment completed."
+        },
+        {
+          "id": "3f6849a7-bab3-4992-a866-11118e80a9a2",
+          "createdAt": "2026-10-03 06:57:31.010000+00:00",
+          "message": "(service neraium-prod-worker-service) has stopped 1 running tasks: (task bd1b68a284f84fed950b9b7a3269b6a7)."
+        },
+        {
+          "id": "6d00f867-5d28-4540-a4c5-c9a836becbaa",
+          "createdAt": "2026-10-03 06:56:19.693000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 31ab8983c7714c67887f739cc51c1d5a)."
+        },
+        {
+          "id": "4b0252c9-f318-4c8f-85c3-84baff084cb0",
+          "createdAt": "2026-10-03 02:41:12.009000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "76fd2e57-9a95-4425-8d76-64c4869f49e7",
+          "createdAt": "2026-10-02 20:41:08.991000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "3ab9a7b2-684c-4fcc-ba2d-256736f0f39f",
+          "createdAt": "2026-10-02 20:41:08.990000+00:00",
+          "message": "(service neraium-prod-worker-service) (deployment ecs-svc/1334364689463799908) deployment completed."
+        },
+        {
+          "id": "0d3503f8-c756-440e-8505-865ccccf7299",
+          "createdAt": "2026-10-02 20:39:46.496000+00:00",
+          "message": "(service neraium-prod-worker-service) has stopped 1 running tasks: (task 9337707ec49e4407b925c88b36010a62)."
+        },
+        {
+          "id": "0b90cb2f-e539-4b7e-8f33-c790a481939a",
+          "createdAt": "2026-10-02 20:38:35.715000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task bd1b68a284f84fed950b9b7a3269b6a7)."
+        },
+        {
+          "id": "175cdd8d-18c4-466f-81ed-08f26b46d57c",
+          "createdAt": "2026-10-02 20:17:10.728000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "fa1eb68a-8878-484e-b5b3-094b1eae4d3d",
+          "createdAt": "2026-10-02 20:17:10.727000+00:00",
+          "message": "(service neraium-prod-worker-service) (deployment ecs-svc/2160820650308470492) deployment completed."
+        },
+        {
+          "id": "240aed19-18aa-41e1-8f89-232cf6701226",
+          "createdAt": "2026-10-02 20:15:48.557000+00:00",
+          "message": "(service neraium-prod-worker-service) has stopped 1 running tasks: (task cad865dae9fd4192b1cdde7e7c7747a1)."
+        },
+        {
+          "id": "c10e0467-c68b-4f7c-976e-a5612fb43352",
+          "createdAt": "2026-10-02 20:14:38.248000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 9337707ec49e4407b925c88b36010a62)."
+        },
+        {
+          "id": "809fc7bc-a6f3-447e-97ec-1d4a7d5ffe70",
+          "createdAt": "2026-10-02 20:13:36.353000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 9c3e58dd64af424296f08cb7bcfa6aaf)."
+        },
+        {
+          "id": "efaac784-5270-4ed8-ac73-6d38f98bbcea",
+          "createdAt": "2026-10-02 20:12:46.005000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 99d295b1fdfa41df9d7f05c0438da6c6)."
+        },
+        {
+          "id": "1bf3497e-6e4d-4f8d-bb2d-fc48103f7089",
+          "createdAt": "2026-10-02 20:11:43.279000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 1872c28001ae47b784c7de5e85fab19b)."
+        },
+        {
+          "id": "fda5e3fe-a1f9-467c-a757-2db9d9f3148a",
+          "createdAt": "2026-10-02 19:50:11.198000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "f89da926-7b83-45bb-b142-397fe455bec8",
+          "createdAt": "2026-10-02 19:50:11.197000+00:00",
+          "message": "(service neraium-prod-worker-service) (deployment ecs-svc/5062916348095485993) deployment completed."
+        },
+        {
+          "id": "d91d21aa-9cd8-4588-919a-ab444a03a905",
+          "createdAt": "2026-10-02 19:48:58.339000+00:00",
+          "message": "(service neraium-prod-worker-service) has stopped 1 running tasks: (task 2560497af0254899b5f833fca29445ad)."
+        },
+        {
+          "id": "2035a4e5-5666-470d-b03c-9c784b869890",
+          "createdAt": "2026-10-02 19:47:48.367000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task cad865dae9fd4192b1cdde7e7c7747a1)."
+        },
+        {
+          "id": "5215f4c9-2246-40e8-a531-250882b8ad76",
+          "createdAt": "2026-10-02 19:46:57.001000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 60b5f9be40474511b8871c07e3fb8787)."
+        },
+        {
+          "id": "cc84420c-3e5f-45d8-a0d9-6125d494b223",
+          "createdAt": "2026-10-02 19:45:55.502000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 76ebcba84be24d67826ab60cabc5f2a2)."
+        },
+        {
+          "id": "a22fc543-c92e-4527-8c90-c73fefcfe6dd",
+          "createdAt": "2026-10-02 16:28:03.135000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "0f452990-baa8-4b9d-a790-7af9cc9799e1",
+          "createdAt": "2026-10-02 16:28:03.134000+00:00",
+          "message": "(service neraium-prod-worker-service) (deployment ecs-svc/1538393233826498572) deployment completed."
+        },
+        {
+          "id": "06611666-5413-4996-8d1e-2751d34debb7",
+          "createdAt": "2026-10-02 16:26:40.898000+00:00",
+          "message": "(service neraium-prod-worker-service) has stopped 1 running tasks: (task 64593d1895124254a34c867732f8cb4e)."
+        },
+        {
+          "id": "5535dde7-5d6d-401e-a217-16afaa145ea1",
+          "createdAt": "2026-10-02 16:25:30.069000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 2560497af0254899b5f833fca29445ad)."
+        },
+        {
+          "id": "8e8858aa-0246-406d-aa77-51d7ece91f4b",
+          "createdAt": "2026-10-02 16:15:55.312000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "19852446-b1a0-434b-aa0f-522207a66915",
+          "createdAt": "2026-10-02 16:15:55.311000+00:00",
+          "message": "(service neraium-prod-worker-service) (deployment ecs-svc/0862435250948704153) deployment completed."
+        },
+        {
+          "id": "694a59f8-83cb-40e8-9061-3abd3b9e07c1",
+          "createdAt": "2026-10-02 16:13:52.554000+00:00",
+          "message": "(service neraium-prod-worker-service) has stopped 1 running tasks: (task ec7ef8fd5e3143c9a92e50e91f6022fe)."
+        },
+        {
+          "id": "4467ce64-02ea-4b87-a470-5bdd6f479000",
+          "createdAt": "2026-10-02 16:12:40.231000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 64593d1895124254a34c867732f8cb4e)."
+        },
+        {
+          "id": "7a5270ab-0ccf-4b4e-9555-f638a4b09c77",
+          "createdAt": "2026-10-02 16:11:49.316000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 0e438524973f45f89e8e10e6694e0976)."
+        },
+        {
+          "id": "e9a64911-c3e8-40f9-9052-885b4b6d7800",
+          "createdAt": "2026-10-02 16:10:47.421000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 51312207f1804dd390d016fa4b5d3f61)."
+        },
+        {
+          "id": "b3bc9a0b-5ea7-442d-9f7e-d6e646bf1e32",
+          "createdAt": "2026-10-02 16:09:55.982000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task ec338373d1544e17a4d77ed7ce3fcf7b)."
+        },
+        {
+          "id": "357586f6-504c-46f6-8efb-186c15383f36",
+          "createdAt": "2026-10-02 16:08:54.986000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 2bcafdfb6d814f18b287c037bc842863)."
+        },
+        {
+          "id": "a150b760-2b93-425c-95ba-77db3046f51e",
+          "createdAt": "2026-10-02 16:07:53.593000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 1e5ca231911a431aa60c2da082d8b9e5)."
+        },
+        {
+          "id": "0835fff1-6375-471f-828d-2a927978e26e",
+          "createdAt": "2026-10-02 16:06:51.438000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 9eb5ac0f6dd14e3cadd21f2b9b0a012a)."
+        },
+        {
+          "id": "18ffeda4-d8e2-4e43-9dd8-c7d9684c2397",
+          "createdAt": "2026-10-02 16:05:50.896000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task 0d1e798663314ad899ef5e00856f51e0)."
+        },
+        {
+          "id": "312f6c5c-44d9-4757-a796-533572ddfb9e",
+          "createdAt": "2026-10-02 11:11:19.115000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "48d4a819-d411-4150-a4a7-117426d43916",
+          "createdAt": "2026-10-02 05:11:04.244000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "b1b81491-4e51-43d9-bb02-0f20aab76692",
+          "createdAt": "2026-10-01 23:10:39.226000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "08c9ae66-1211-49e9-a0eb-74245e4bdb50",
+          "createdAt": "2026-10-01 17:10:11.037000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "8dd84e23-949c-4bd5-81f4-ba3ff81b00ec",
+          "createdAt": "2026-10-01 11:10:08.877000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "9c43ecee-773e-4e57-8a8c-cfe52c4c9b94",
+          "createdAt": "2026-10-01 05:09:54.741000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "13ca1eb2-868b-4e85-a5ee-0b4581150b6e",
+          "createdAt": "2026-09-30 23:09:32.070000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "c6e7e58c-bcef-48bc-82a5-cddf53f69e41",
+          "createdAt": "2026-09-30 17:09:06.737000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "246c5e95-a4c8-4c75-b29e-d7f76736bdb8",
+          "createdAt": "2026-09-30 11:08:43.927000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "df51231b-e3a3-4740-b3a6-ece588fc7ba1",
+          "createdAt": "2026-09-30 05:08:22.595000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "125f41be-1b6b-4fef-9f8b-85e1fed2281f",
+          "createdAt": "2026-09-29 23:07:58.480000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "2f7f7fe0-c0b3-44da-8804-06665d91cfc7",
+          "createdAt": "2026-09-29 17:07:53.193000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "b6be13a1-16cb-417e-9043-08d5ba198eae",
+          "createdAt": "2026-09-29 11:07:48.023000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "6cd118bc-8295-4fd3-a683-32000e5b7f85",
+          "createdAt": "2026-09-29 05:07:21.981000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "f51cd3f9-6d64-4368-bc88-e734397bc855",
+          "createdAt": "2026-09-28 23:07:16.827000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "ab4ef283-b54c-4948-9b35-53cdcbb88d04",
+          "createdAt": "2026-09-28 17:07:00.742000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "f3da0f58-2ac7-46fd-ac57-e88d97e163e2",
+          "createdAt": "2026-09-28 11:06:32.398000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "ea1412b4-8f32-4c84-8e86-02a262227bc5",
+          "createdAt": "2026-09-28 05:06:08.965000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "fcf8d7aa-18a9-4408-8ede-6e6759f29f41",
+          "createdAt": "2026-09-27 23:05:53.147000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "9c908ac8-9daf-4c88-96b8-f3d588e80748",
+          "createdAt": "2026-09-27 17:05:25.425000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "be317543-0681-4a16-9f89-50478c73be9f",
+          "createdAt": "2026-09-27 11:05:20.132000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "262cc228-f3d7-44f2-b390-31aed05f2db3",
+          "createdAt": "2026-09-27 05:05:16.212000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "f64c2b4c-e09c-441a-bc8f-025d7461d20c",
+          "createdAt": "2026-09-26 23:04:59.516000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "401fc64e-78d5-42cc-8a83-0a4f4cc8c978",
+          "createdAt": "2026-09-26 17:04:57.437000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "ecc748ce-f866-4196-af4d-7d77229f9907",
+          "createdAt": "2026-09-26 11:04:27.530000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "02a1f4ba-b289-40bf-aba8-9ddbf14da2c8",
+          "createdAt": "2026-09-26 05:04:22.767000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "fdcb9fa3-5958-4868-838d-e186e6edc970",
+          "createdAt": "2026-09-25 23:04:13.990000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "37f63b5a-2a18-430a-82fb-1f19edb7ad41",
+          "createdAt": "2026-09-25 17:03:46.504000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "d9c96f04-23c7-40b8-b532-08743c83e8e1",
+          "createdAt": "2026-09-25 11:03:37.646000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "76f24299-d8fb-493d-9fbe-bb9e62f3b199",
+          "createdAt": "2026-09-25 05:03:37.232000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "ff0517b8-c160-4756-80fd-7218b3a0d5fb",
+          "createdAt": "2026-09-24 23:03:07.904000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "56b602e2-ca8c-4c43-91a8-b1767408ab4c",
+          "createdAt": "2026-09-24 17:02:39.694000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "f5a75a54-c603-49e4-ac96-a50b19a41af2",
+          "createdAt": "2026-09-24 11:02:15.974000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "839588d0-3097-4436-bfc5-4a6a325cf372",
+          "createdAt": "2026-09-24 05:01:48.514000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "21294a93-c7c8-4960-aa57-76c097dbd1a2",
+          "createdAt": "2026-09-23 23:01:38.651000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "bf976287-41fc-4db0-9a42-14bf8c47a358",
+          "createdAt": "2026-09-23 17:01:19.056000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "37a8ea67-3ae6-4e22-9b08-5f703b10ccae",
+          "createdAt": "2026-09-23 11:00:55.749000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "cda7d14c-9c7a-468d-891a-9460d6a81555",
+          "createdAt": "2026-09-23 05:00:42.265000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "f4cbefa4-cd51-4bd8-841b-8b020e6d19a1",
+          "createdAt": "2026-09-22 23:00:20.693000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "ebc36b96-f54c-4ddc-8661-84e0fa82e98a",
+          "createdAt": "2026-09-22 16:59:53.084000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "5ca69b53-d738-4b24-a46a-e9568b23380a",
+          "createdAt": "2026-09-22 10:59:27.191000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "8de47af7-d7b2-4984-99f8-546192a0bdbb",
+          "createdAt": "2026-09-22 04:59:11.211000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "28b44112-76dd-40ed-8a23-41799db33e7d",
+          "createdAt": "2026-09-21 22:59:02.951000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "4970a7b6-25b7-4785-a987-831e34a1f50a",
+          "createdAt": "2026-09-21 16:58:44.916000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "fb3465a4-a64e-4d7a-ac93-a9cf5887ab56",
+          "createdAt": "2026-09-21 10:58:38.083000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "9d411efc-ed07-43cc-9fc2-727e0edf9779",
+          "createdAt": "2026-09-21 04:58:26.655000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "cb5cea94-7f0d-46a2-9f70-534be364a8f2",
+          "createdAt": "2026-09-20 22:58:04.006000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "c584ff52-2c03-4fac-b25c-bcbe70dcc593",
+          "createdAt": "2026-09-20 16:57:49.549000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "d6b57770-0869-4cd7-9bda-4272a463d543",
+          "createdAt": "2026-09-20 10:57:19.892000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "06adec78-1dd3-4e1b-aabb-8d0998258803",
+          "createdAt": "2026-09-20 04:57:01.097000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "02a31ce2-cbdd-4ade-a8c0-fca489c72ff7",
+          "createdAt": "2026-09-19 22:56:55.499000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "5d5a17e6-4300-487e-9077-b3db8ee70de8",
+          "createdAt": "2026-09-19 16:56:54.722000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "0ea6da12-cc39-43a9-ba7e-edbdd0465cee",
+          "createdAt": "2026-09-19 10:56:28.263000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "ab17ead4-37b2-4627-97a7-5f20795f31c4",
+          "createdAt": "2026-09-19 04:56:10.173000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "1be054b8-0bdb-45f9-8198-6d489dc686d6",
+          "createdAt": "2026-09-19 04:56:01.315000+00:00",
+          "message": "(service neraium-prod-worker-service) has stopped 1 running tasks: (task 56ccf9b5daaa472e84871e1e9ecf66f0)."
+        },
+        {
+          "id": "2c8acc86-deb3-4ed0-90f6-f5f045e897ea",
+          "createdAt": "2026-09-19 04:54:32.860000+00:00",
+          "message": "(service neraium-prod-worker-service) has started 1 tasks: (task ec7ef8fd5e3143c9a92e50e91f6022fe)."
+        },
+        {
+          "id": "2a34a686-d690-4414-b1a8-40901434cdcf",
+          "createdAt": "2026-09-18 23:21:36.522000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "aaed0b20-b4d6-4d8f-a546-0ff3cac3a560",
+          "createdAt": "2026-09-18 17:21:14.112000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "61d5dad0-d37c-4fcf-b012-586053d8eacf",
+          "createdAt": "2026-09-18 11:21:04.925000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "1d7b6b95-1aa5-445c-9e90-4f8570340c10",
+          "createdAt": "2026-09-18 05:20:58.057000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "e26553a3-964b-4752-8477-700874a4a859",
+          "createdAt": "2026-09-17 23:20:53.653000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "e4095f35-973f-433a-8f98-ed469b816e69",
+          "createdAt": "2026-09-17 17:20:24.967000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        },
+        {
+          "id": "3a370b8a-1a1c-46ef-81ec-1d2a0a0159f7",
+          "createdAt": "2026-09-17 11:19:56.541000+00:00",
+          "message": "(service neraium-prod-worker-service) has reached a steady state."
+        }
+      ],
+      "createdAt": "2026-05-14 02:49:08.170000+00:00",
+      "placementConstraints": [],
+      "placementStrategy": [],
+      "networkConfiguration": {
+        "awsvpcConfiguration": {
+          "subnets": [
+            "subnet-0614e66e02952130c",
+            "subnet-0407ffdef9751856a"
+          ],
+          "securityGroups": [
+            "sg-01ef49d17269dd2d3"
+          ],
+          "assignPublicIp": "DISABLED"
+        }
+      },
+      "healthCheckGracePeriodSeconds": 0,
+      "schedulingStrategy": "REPLICA",
+      "deploymentController": {
+        "type": "ECS"
+      },
+      "createdBy": "arn:aws:iam::680779862188:user/neraium-cli",
+      "enableECSManagedTags": false,
+      "propagateTags": "NONE",
+      "enableExecuteCommand": false,
+      "availabilityZoneRebalancing": "DISABLED"
+    }
+  ],
+  "task_definitions": {
+    "neraium-prod-api-service": {
+      "taskDefinitionArn": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-api:339",
+      "containerDefinitions": [
+        {
+          "name": "api",
+          "image": "680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b",
+          "cpu": 0,
+          "portMappings": [
+            {
+              "containerPort": 8080,
+              "hostPort": 8080,
+              "protocol": "tcp"
+            }
+          ],
+          "essential": true,
+          "command": [
+            "python",
+            "-m",
+            "app.entrypoint"
+          ],
+          "environment": [
+            {
+              "name": "NERAIUM_AUTH_DATABASE_SSLMODE",
+              "value": "require"
+            },
+            {
+              "name": "NERAIUM_BOOTSTRAP_ADMIN_RESET_PASSWORD",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_MAX_UPLOAD_SIZE_BYTES",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "APP_ENV",
+              "value": "prod"
+            },
+            {
+              "name": "NERAIUM_BOOTSTRAP_ADMIN_EMAIL",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_MAX_PENDING_UPLOAD_JOBS",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "BACKEND_PORT",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_AUTH_DATABASE_SECRET_ARN",
+              "value": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_EXECUTOR_CA_PEM",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_INFRA_MONITOR_INTERVAL_SECONDS",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_ECS_WORKER_SERVICE",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_AUTH_DATABASE_PORT",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_UPLOAD_STATE_BUCKET",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_ECS_CLUSTER",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_AUTH_DATABASE_NAME",
+              "value": "postgres"
+            },
+            {
+              "name": "LOG_LEVEL",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_WORKER_HEARTBEAT_TIMEOUT_SECONDS",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_EXECUTION_IDENTITY_VERSION",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_EXECUTOR_URL",
+              "value": "https://10.40.32.20:8443"
+            },
+            {
+              "name": "CORS_ORIGINS",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_BUILD_SHA",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_SECRET_REGION",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "LOG_FORMAT",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_ALB_TARGET_GROUP_ARN",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "BACKEND_HOST",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_INFRA_MONITOR_ENABLED",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_EXECUTOR_AUTH_SECRET_ARN",
+              "value": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-auth-8EDeTQ"
+            },
+            {
+              "name": "NERAIUM_ECS_API_SERVICE",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED",
+              "value": "true"
+            },
+            {
+              "name": "NERAIUM_PROCESS_ROLE",
+              "value": "api"
+            },
+            {
+              "name": "NERAIUM_AUTH_DATABASE_HOST",
+              "value": "neraium-prod-postgres.cxgciqwwi3s2.us-east-2.rds.amazonaws.com"
+            },
+            {
+              "name": "NERAIUM_RUNTIME_DIR",
+              "value": "[OMITTED]"
+            }
+          ],
+          "mountPoints": [],
+          "volumesFrom": [],
+          "secrets": [
+            {
+              "name": "NERAIUM_API_TOKEN",
+              "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium-api-token-zo7tAc"
+            },
+            {
+              "name": "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD",
+              "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/booystrap-admin-password-cTgxAj"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_DATABASE_URL",
+              "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li"
+            },
+            {
+              "name": "NERAIUM_RUNTIME_DATABASE_URL",
+              "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li"
+            }
+          ],
+          "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+              "awslogs-group": "/ecs/neraium-prod-api",
+              "awslogs-region": "us-east-2",
+              "awslogs-stream-prefix": "ecs"
+            }
+          },
+          "healthCheck": {
+            "command": [
+              "CMD-SHELL",
+              "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=5).read()\" || exit 1"
+            ],
+            "interval": 30,
+            "timeout": 10,
+            "retries": 3,
+            "startPeriod": 10
+          },
+          "systemControls": []
+        }
+      ],
+      "family": "neraium-prod-api",
+      "taskRoleArn": "arn:aws:iam::680779862188:role/neraium-prod-task-app-role",
+      "executionRoleArn": "arn:aws:iam::680779862188:role/neraium-prod-ecs-task-execution-role",
+      "networkMode": "awsvpc",
+      "revision": 339,
+      "volumes": [],
+      "status": "ACTIVE",
+      "requiresAttributes": [
+        {
+          "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+        },
+        {
+          "name": "ecs.capability.execution-role-awslogs"
+        },
+        {
+          "name": "com.amazonaws.ecs.capability.ecr-auth"
+        },
+        {
+          "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+        },
+        {
+          "name": "ecs.capability.secrets.asm.environment-variables"
+        },
+        {
+          "name": "com.amazonaws.ecs.capability.docker-remote-api.1.21"
+        },
+        {
+          "name": "com.amazonaws.ecs.capability.task-iam-role"
+        },
+        {
+          "name": "ecs.capability.container-health-check"
+        },
+        {
+          "name": "ecs.capability.execution-role-ecr-pull"
+        },
+        {
+          "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+        },
+        {
+          "name": "ecs.capability.task-eni"
+        },
+        {
+          "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
+        }
+      ],
+      "placementConstraints": [],
+      "compatibilities": [
+        "EC2",
+        "FARGATE",
+        "MANAGED_INSTANCES"
+      ],
+      "requiresCompatibilities": [
+        "FARGATE"
+      ],
+      "cpu": "1024",
+      "memory": "2048",
+      "registeredAt": "2026-10-03 06:56:02.543000+00:00",
+      "registeredBy": "arn:aws:iam::680779862188:user/neraium-cli"
+    },
+    "neraium-prod-worker-service": {
+      "taskDefinitionArn": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-worker:333",
+      "containerDefinitions": [
+        {
+          "name": "worker",
+          "image": "680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b",
+          "cpu": 0,
+          "portMappings": [],
+          "essential": true,
+          "command": [
+            "python",
+            "-m",
+            "app.entrypoint"
+          ],
+          "environment": [
+            {
+              "name": "NERAIUM_TELEMETRY_EXECUTION_IDENTITY_VERSION",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_MAX_UPLOAD_SIZE_BYTES",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "APP_ENV",
+              "value": "prod"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_EXECUTOR_URL",
+              "value": "https://10.40.32.20:8443"
+            },
+            {
+              "name": "NERAIUM_MAX_PENDING_UPLOAD_JOBS",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "BACKEND_PORT",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "CORS_ORIGINS",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_EXECUTOR_CA_PEM",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_BUILD_SHA",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_SECRET_REGION",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_MAX_LARGE_UPLOAD_SIZE_BYTES",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "LOG_FORMAT",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "BACKEND_HOST",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_UPLOAD_STATE_BUCKET",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_EXECUTOR_AUTH_SECRET_ARN",
+              "value": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-auth-8EDeTQ"
+            },
+            {
+              "name": "NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED",
+              "value": "true"
+            },
+            {
+              "name": "NERAIUM_PROCESS_ROLE",
+              "value": "worker"
+            },
+            {
+              "name": "LOG_LEVEL",
+              "value": "[OMITTED]"
+            },
+            {
+              "name": "NERAIUM_RUNTIME_DIR",
+              "value": "[OMITTED]"
+            }
+          ],
+          "mountPoints": [],
+          "volumesFrom": [],
+          "secrets": [
+            {
+              "name": "NERAIUM_TELEMETRY_DATABASE_URL",
+              "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li"
+            },
+            {
+              "name": "NERAIUM_RUNTIME_DATABASE_URL",
+              "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li"
+            }
+          ],
+          "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+              "awslogs-group": "/ecs/neraium-prod-worker",
+              "awslogs-region": "us-east-2",
+              "awslogs-stream-prefix": "ecs"
+            }
+          },
+          "systemControls": []
+        }
+      ],
+      "family": "neraium-prod-worker",
+      "taskRoleArn": "arn:aws:iam::680779862188:role/neraium-prod-task-app-role",
+      "executionRoleArn": "arn:aws:iam::680779862188:role/neraium-prod-ecs-task-execution-role",
+      "networkMode": "awsvpc",
+      "revision": 333,
+      "volumes": [],
+      "status": "ACTIVE",
+      "requiresAttributes": [
+        {
+          "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+        },
+        {
+          "name": "ecs.capability.execution-role-awslogs"
+        },
+        {
+          "name": "com.amazonaws.ecs.capability.ecr-auth"
+        },
+        {
+          "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+        },
+        {
+          "name": "ecs.capability.secrets.asm.environment-variables"
+        },
+        {
+          "name": "com.amazonaws.ecs.capability.docker-remote-api.1.21"
+        },
+        {
+          "name": "com.amazonaws.ecs.capability.task-iam-role"
+        },
+        {
+          "name": "ecs.capability.execution-role-ecr-pull"
+        },
+        {
+          "name": "ecs.capability.extensible-ephemeral-storage"
+        },
+        {
+          "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+        },
+        {
+          "name": "ecs.capability.task-eni"
+        }
+      ],
+      "placementConstraints": [],
+      "compatibilities": [
+        "EC2",
+        "FARGATE"
+      ],
+      "requiresCompatibilities": [
+        "FARGATE"
+      ],
+      "cpu": "1024",
+      "memory": "4096",
+      "registeredAt": "2026-10-03 06:56:02.471000+00:00",
+      "registeredBy": "arn:aws:iam::680779862188:user/neraium-cli",
+      "ephemeralStorage": {
+        "sizeInGiB": 40
+      }
+    }
+  },
+  "running_tasks": [
+    {
+      "attachments": [
+        {
+          "id": "d9dd2d57-4dcc-4385-9f17-61eb91099671",
+          "type": "ElasticNetworkInterface",
+          "status": "ATTACHED",
+          "details": [
+            {
+              "name": "subnetId",
+              "value": "subnet-0614e66e02952130c"
+            },
+            {
+              "name": "networkInterfaceId",
+              "value": "eni-08ae708301eb60ae3"
+            },
+            {
+              "name": "macAddress",
+              "value": "06:ff:e2:99:2b:4d"
+            },
+            {
+              "name": "privateDnsName",
+              "value": "ip-10-40-144-185.us-east-2.compute.internal"
+            },
+            {
+              "name": "privateIPv4Address",
+              "value": "10.40.144.185"
+            }
+          ]
+        }
+      ],
+      "attributes": [
+        {
+          "name": "ecs.cpu-architecture",
+          "value": "x86_64"
+        }
+      ],
+      "availabilityZone": "us-east-2b",
+      "clusterArn": "arn:aws:ecs:us-east-2:680779862188:cluster/neraium-prod-cluster",
+      "connectivity": "CONNECTED",
+      "connectivityAt": "2026-10-03 06:56:26.882000+00:00",
+      "containers": [
+        {
+          "containerArn": "arn:aws:ecs:us-east-2:680779862188:container/neraium-prod-cluster/31ab8983c7714c67887f739cc51c1d5a/b81db4ad-451c-408b-96e3-16310ecdeb38",
+          "taskArn": "arn:aws:ecs:us-east-2:680779862188:task/neraium-prod-cluster/31ab8983c7714c67887f739cc51c1d5a",
+          "name": "worker",
+          "image": "680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b",
+          "imageDigest": "sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b",
+          "runtimeId": "31ab8983c7714c67887f739cc51c1d5a-2513319767",
+          "lastStatus": "RUNNING",
+          "networkBindings": [],
+          "networkInterfaces": [
+            {
+              "attachmentId": "d9dd2d57-4dcc-4385-9f17-61eb91099671",
+              "privateIpv4Address": "10.40.144.185"
+            }
+          ],
+          "healthStatus": "UNKNOWN",
+          "cpu": "0"
+        }
+      ],
+      "cpu": "1024",
+      "createdAt": "2026-10-03 06:56:19.639000+00:00",
+      "desiredStatus": "RUNNING",
+      "enableExecuteCommand": false,
+      "group": "service:neraium-prod-worker-service",
+      "healthStatus": "UNKNOWN",
+      "lastStatus": "RUNNING",
+      "launchType": "FARGATE",
+      "memory": "4096",
+      "overrides": {
+        "containerOverrides": [
+          {
+            "name": "worker"
+          }
+        ],
+        "inferenceAcceleratorOverrides": []
+      },
+      "platformVersion": "1.4.0",
+      "platformFamily": "Linux",
+      "pullStartedAt": "2026-10-03 06:56:35.523000+00:00",
+      "pullStoppedAt": "2026-10-03 06:56:45.531000+00:00",
+      "startedAt": "2026-10-03 06:56:47.683000+00:00",
+      "startedBy": "ecs-svc/9178134086778314470",
+      "tags": [],
+      "taskArn": "arn:aws:ecs:us-east-2:680779862188:task/neraium-prod-cluster/31ab8983c7714c67887f739cc51c1d5a",
+      "taskDefinitionArn": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-worker:333",
+      "version": 3,
+      "ephemeralStorage": {
+        "sizeInGiB": 40
+      },
+      "fargateEphemeralStorage": {
+        "sizeInGiB": 40
+      }
+    },
+    {
+      "attachments": [
+        {
+          "id": "e2409afe-3303-4ec4-92e9-af7b88495a6f",
+          "type": "ElasticNetworkInterface",
+          "status": "ATTACHED",
+          "details": [
+            {
+              "name": "subnetId",
+              "value": "subnet-0407ffdef9751856a"
+            },
+            {
+              "name": "networkInterfaceId",
+              "value": "eni-06d4ad408b0baa37d"
+            },
+            {
+              "name": "macAddress",
+              "value": "02:ff:c1:a4:97:03"
+            },
+            {
+              "name": "privateDnsName",
+              "value": "ip-10-40-137-53.us-east-2.compute.internal"
+            },
+            {
+              "name": "privateIPv4Address",
+              "value": "10.40.137.53"
+            }
+          ]
+        }
+      ],
+      "attributes": [
+        {
+          "name": "ecs.cpu-architecture",
+          "value": "x86_64"
+        }
+      ],
+      "availabilityZone": "us-east-2a",
+      "clusterArn": "arn:aws:ecs:us-east-2:680779862188:cluster/neraium-prod-cluster",
+      "connectivity": "CONNECTED",
+      "connectivityAt": "2026-10-03 06:56:21.049000+00:00",
+      "containers": [
+        {
+          "containerArn": "arn:aws:ecs:us-east-2:680779862188:container/neraium-prod-cluster/88630bceb13c4bdf8bdec7853eb1a060/4a965e0c-782f-4715-a074-2c3b307f9cef",
+          "taskArn": "arn:aws:ecs:us-east-2:680779862188:task/neraium-prod-cluster/88630bceb13c4bdf8bdec7853eb1a060",
+          "name": "api",
+          "image": "680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b",
+          "imageDigest": "sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b",
+          "runtimeId": "88630bceb13c4bdf8bdec7853eb1a060-0946514567",
+          "lastStatus": "RUNNING",
+          "networkBindings": [],
+          "networkInterfaces": [
+            {
+              "attachmentId": "e2409afe-3303-4ec4-92e9-af7b88495a6f",
+              "privateIpv4Address": "10.40.137.53"
+            }
+          ],
+          "healthStatus": "HEALTHY",
+          "cpu": "0"
+        }
+      ],
+      "cpu": "1024",
+      "createdAt": "2026-10-03 06:56:14.552000+00:00",
+      "desiredStatus": "RUNNING",
+      "enableExecuteCommand": false,
+      "group": "service:neraium-prod-api-service",
+      "healthStatus": "HEALTHY",
+      "lastStatus": "RUNNING",
+      "launchType": "FARGATE",
+      "memory": "2048",
+      "overrides": {
+        "containerOverrides": [
+          {
+            "name": "api"
+          }
+        ],
+        "inferenceAcceleratorOverrides": []
+      },
+      "platformVersion": "1.4.0",
+      "platformFamily": "Linux",
+      "pullStartedAt": "2026-10-03 06:56:29.898000+00:00",
+      "pullStoppedAt": "2026-10-03 06:56:38.517000+00:00",
+      "startedAt": "2026-10-03 06:56:52.457000+00:00",
+      "startedBy": "ecs-svc/0309752272125900155",
+      "tags": [],
+      "taskArn": "arn:aws:ecs:us-east-2:680779862188:task/neraium-prod-cluster/88630bceb13c4bdf8bdec7853eb1a060",
+      "taskDefinitionArn": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-api:339",
+      "version": 4,
+      "ephemeralStorage": {
+        "sizeInGiB": 20
+      },
+      "fargateEphemeralStorage": {
+        "sizeInGiB": 20
+      }
+    }
+  ],
+  "executor": {
+    "Architecture": "x86_64",
+    "BlockDeviceMappings": [
+      {
+        "DeviceName": "/dev/xvda",
+        "Ebs": {
+          "AttachTime": "2026-10-02 16:00:19+00:00",
+          "DeleteOnTermination": true,
+          "Status": "attached",
+          "VolumeId": "vol-0f78f6c89b91fd655"
+        }
+      }
+    ],
+    "ClientToken": "abf0c0f9-663c-4dbd-89c3-599218508c66",
+    "EbsOptimized": false,
+    "EnaSupport": true,
+    "Hypervisor": "xen",
+    "IamInstanceProfile": {
+      "Arn": "arn:aws:iam::680779862188:instance-profile/neraium-prod-connector-executor-profile",
+      "Id": "AIPAZ5ANEKCWAYS6HL767"
+    },
+    "NetworkInterfaces": [
+      {
+        "Attachment": {
+          "AttachTime": "2026-10-02 16:00:19+00:00",
+          "AttachmentId": "eni-attach-0dba40ec2300428e1",
+          "DeleteOnTermination": true,
+          "DeviceIndex": 0,
+          "Status": "attached",
+          "NetworkCardIndex": 0
+        },
+        "Description": "",
+        "Groups": [
+          {
+            "GroupId": "sg-0837b1be795c45751",
+            "GroupName": "neraium-prod-v2-connector-egress-task-sg"
+          }
+        ],
+        "Ipv6Addresses": [],
+        "MacAddress": "02:ff:f7:f5:ea:79",
+        "NetworkInterfaceId": "eni-0396798cc2ef26b38",
+        "OwnerId": "680779862188",
+        "PrivateDnsName": "ip-10-40-32-20.us-east-2.compute.internal",
+        "PrivateIpAddress": "10.40.32.20",
+        "PrivateIpAddresses": [
+          {
+            "Primary": true,
+            "PrivateDnsName": "ip-10-40-32-20.us-east-2.compute.internal",
+            "PrivateIpAddress": "10.40.32.20"
+          }
+        ],
+        "SourceDestCheck": true,
+        "Status": "in-use",
+        "SubnetId": "subnet-02cf17768e1dda988",
+        "VpcId": "vpc-046a8eee54c6988ae",
+        "InterfaceType": "interface",
+        "Operator": {
+          "Managed": false
+        }
+      }
+    ],
+    "RootDeviceName": "/dev/xvda",
+    "RootDeviceType": "ebs",
+    "SecurityGroups": [
+      {
+        "GroupId": "sg-0837b1be795c45751",
+        "GroupName": "neraium-prod-v2-connector-egress-task-sg"
+      }
+    ],
+    "SourceDestCheck": true,
+    "Tags": [
+      {
+        "Key": "Purpose",
+        "Value": "isolated-telemetry-connector-executor"
+      },
+      {
+        "Key": "Name",
+        "Value": "neraium-prod-connector-executor"
+      },
+      {
+        "Key": "Project",
+        "Value": "Neraium"
+      },
+      {
+        "Key": "Environment",
+        "Value": "prod"
+      }
+    ],
+    "VirtualizationType": "hvm",
+    "CpuOptions": {
+      "CoreCount": 1,
+      "ThreadsPerCore": 2
+    },
+    "CapacityReservationSpecification": {
+      "CapacityReservationPreference": "open"
+    },
+    "HibernationOptions": {
+      "Configured": false
+    },
+    "MetadataOptions": {
+      "State": "applied",
+      "HttpTokens": "required",
+      "HttpPutResponseHopLimit": 2,
+      "HttpEndpoint": "enabled",
+      "HttpProtocolIpv6": "disabled",
+      "InstanceMetadataTags": "disabled"
+    },
+    "EnclaveOptions": {
+      "Enabled": false
+    },
+    "BootMode": "uefi-preferred",
+    "PlatformDetails": "Linux/UNIX",
+    "UsageOperation": "RunInstances",
+    "UsageOperationUpdateTime": "2026-10-02 16:00:19+00:00",
+    "PrivateDnsNameOptions": {
+      "HostnameType": "ip-name",
+      "EnableResourceNameDnsARecord": false,
+      "EnableResourceNameDnsAAAARecord": false
+    },
+    "MaintenanceOptions": {
+      "AutoRecovery": "default"
+    },
+    "CurrentInstanceBootMode": "uefi",
+    "NetworkPerformanceOptions": {
+      "BandwidthWeighting": "default"
+    },
+    "Operator": {
+      "Managed": false
+    },
+    "InstanceId": "i-081d0aba82dba64e7",
+    "ImageId": "ami-076bf96952708f7ea",
+    "State": {
+      "Code": 16,
+      "Name": "running"
+    },
+    "PrivateDnsName": "ip-10-40-32-20.us-east-2.compute.internal",
+    "PublicDnsName": "",
+    "StateTransitionReason": "",
+    "AmiLaunchIndex": 0,
+    "ProductCodes": [],
+    "InstanceType": "t3.small",
+    "LaunchTime": "2026-10-02 16:00:19+00:00",
+    "Placement": {
+      "GroupName": "",
+      "Tenancy": "default",
+      "AvailabilityZone": "us-east-2a"
+    },
+    "Monitoring": {
+      "State": "disabled"
+    },
+    "SubnetId": "subnet-02cf17768e1dda988",
+    "VpcId": "vpc-046a8eee54c6988ae",
+    "PrivateIpAddress": "10.40.32.20"
+  },
+  "security_groups": [
+    {
+      "GroupId": "sg-096f9e2b8efaa5532",
+      "IpPermissionsEgress": [
+        {
+          "IpProtocol": "-1",
+          "UserIdGroupPairs": [],
+          "IpRanges": [
+            {
+              "CidrIp": "0.0.0.0/0"
+            }
+          ],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "SecurityGroupArn": "arn:aws:ec2:us-east-2:680779862188:security-group/sg-096f9e2b8efaa5532",
+      "OwnerId": "680779862188",
+      "GroupName": "neraium-prod-rds-sg",
+      "Description": "Created by RDS management console",
+      "IpPermissions": [
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 5432,
+          "ToPort": 5432,
+          "UserIdGroupPairs": [
+            {
+              "UserId": "680779862188",
+              "GroupId": "sg-01ef49d17269dd2d3"
+            }
+          ],
+          "IpRanges": [],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ]
+    },
+    {
+      "GroupId": "sg-0a11a26820c0d9963",
+      "IpPermissionsEgress": [
+        {
+          "IpProtocol": "-1",
+          "UserIdGroupPairs": [],
+          "IpRanges": [
+            {
+              "CidrIp": "0.0.0.0/0"
+            }
+          ],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "SecurityGroupArn": "arn:aws:ec2:us-east-2:680779862188:security-group/sg-0a11a26820c0d9963",
+      "OwnerId": "680779862188",
+      "GroupName": "default",
+      "Description": "default VPC security group",
+      "IpPermissions": [
+        {
+          "IpProtocol": "-1",
+          "UserIdGroupPairs": [
+            {
+              "UserId": "680779862188",
+              "GroupId": "sg-0a11a26820c0d9963"
+            }
+          ],
+          "IpRanges": [],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ]
+    },
+    {
+      "GroupId": "sg-01ef49d17269dd2d3",
+      "IpPermissionsEgress": [
+        {
+          "IpProtocol": "-1",
+          "UserIdGroupPairs": [],
+          "IpRanges": [
+            {
+              "CidrIp": "0.0.0.0/0"
+            }
+          ],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "SecurityGroupArn": "arn:aws:ec2:us-east-2:680779862188:security-group/sg-01ef49d17269dd2d3",
+      "OwnerId": "680779862188",
+      "GroupName": "neraium-prod-ecs-sg",
+      "Description": "ECS service security group",
+      "IpPermissions": [
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 80,
+          "ToPort": 80,
+          "UserIdGroupPairs": [
+            {
+              "UserId": "680779862188",
+              "GroupId": "sg-046c61348b9cc473e"
+            }
+          ],
+          "IpRanges": [],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        },
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 8080,
+          "ToPort": 8080,
+          "UserIdGroupPairs": [
+            {
+              "UserId": "680779862188",
+              "GroupId": "sg-046c61348b9cc473e"
+            }
+          ],
+          "IpRanges": [],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ]
+    },
+    {
+      "GroupId": "sg-046c61348b9cc473e",
+      "IpPermissionsEgress": [
+        {
+          "IpProtocol": "-1",
+          "UserIdGroupPairs": [],
+          "IpRanges": [
+            {
+              "CidrIp": "0.0.0.0/0"
+            }
+          ],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "SecurityGroupArn": "arn:aws:ec2:us-east-2:680779862188:security-group/sg-046c61348b9cc473e",
+      "OwnerId": "680779862188",
+      "GroupName": "neraium-prod-alb-sg",
+      "Description": "ALB ingress for Neraium API",
+      "IpPermissions": [
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 80,
+          "ToPort": 80,
+          "UserIdGroupPairs": [],
+          "IpRanges": [
+            {
+              "CidrIp": "0.0.0.0/0"
+            }
+          ],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        },
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 443,
+          "ToPort": 443,
+          "UserIdGroupPairs": [],
+          "IpRanges": [
+            {
+              "CidrIp": "0.0.0.0/0"
+            }
+          ],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ]
+    },
+    {
+      "GroupId": "sg-0837b1be795c45751",
+      "IpPermissionsEgress": [
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 443,
+          "ToPort": 443,
+          "UserIdGroupPairs": [],
+          "IpRanges": [
+            {
+              "Description": "Firewall-routed public HTTPS only",
+              "CidrIp": "0.0.0.0/0"
+            }
+          ],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ],
+      "Tags": [
+        {
+          "Key": "Project",
+          "Value": "Neraium"
+        },
+        {
+          "Key": "Purpose",
+          "Value": "v2-connector-egress"
+        },
+        {
+          "Key": "Name",
+          "Value": "neraium-prod-v2-connector-egress-task-sg"
+        }
+      ],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "SecurityGroupArn": "arn:aws:ec2:us-east-2:680779862188:security-group/sg-0837b1be795c45751",
+      "OwnerId": "680779862188",
+      "GroupName": "neraium-prod-v2-connector-egress-task-sg",
+      "Description": "Isolated connector ECS task; no inbound; HTTPS only through firewall",
+      "IpPermissions": [
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 8443,
+          "ToPort": 8443,
+          "UserIdGroupPairs": [
+            {
+              "UserId": "680779862188",
+              "GroupId": "sg-01ef49d17269dd2d3"
+            }
+          ],
+          "IpRanges": [],
+          "Ipv6Ranges": [],
+          "PrefixListIds": []
+        }
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "Associations": [
+        {
+          "Main": false,
+          "RouteTableAssociationId": "rtbassoc-0871f722e437b9c1d",
+          "RouteTableId": "rtb-0f157fe7d690365ce",
+          "SubnetId": "subnet-0407ffdef9751856a",
+          "AssociationState": {
+            "State": "associated"
+          }
+        }
+      ],
+      "PropagatingVgws": [],
+      "RouteTableId": "rtb-0f157fe7d690365ce",
+      "Routes": [
+        {
+          "DestinationCidrBlock": "10.40.0.0/16",
+          "GatewayId": "local",
+          "Origin": "CreateRouteTable",
+          "State": "active"
+        },
+        {
+          "DestinationCidrBlock": "0.0.0.0/0",
+          "NatGatewayId": "nat-0b4a76ae6016834be",
+          "Origin": "CreateRoute",
+          "State": "active"
+        }
+      ],
+      "Tags": [],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "OwnerId": "680779862188"
+    },
+    {
+      "Associations": [
+        {
+          "Main": false,
+          "RouteTableAssociationId": "rtbassoc-0dab2cda612d8716f",
+          "RouteTableId": "rtb-0659669c66bf50318",
+          "SubnetId": "subnet-0842e11b0b92178b1",
+          "AssociationState": {
+            "State": "associated"
+          }
+        },
+        {
+          "Main": false,
+          "RouteTableAssociationId": "rtbassoc-073e7cef3a85dac8c",
+          "RouteTableId": "rtb-0659669c66bf50318",
+          "SubnetId": "subnet-0c2b8f77922bc3bd4",
+          "AssociationState": {
+            "State": "associated"
+          }
+        }
+      ],
+      "PropagatingVgws": [],
+      "RouteTableId": "rtb-0659669c66bf50318",
+      "Routes": [
+        {
+          "DestinationCidrBlock": "10.40.32.16/28",
+          "GatewayId": "vpce-05d0042158c93739f",
+          "Origin": "CreateRoute",
+          "State": "active"
+        },
+        {
+          "DestinationCidrBlock": "10.40.0.0/16",
+          "GatewayId": "local",
+          "Origin": "CreateRouteTable",
+          "State": "active"
+        },
+        {
+          "DestinationCidrBlock": "0.0.0.0/0",
+          "GatewayId": "igw-09048061e66c8ac5e",
+          "Origin": "CreateRoute",
+          "State": "active"
+        }
+      ],
+      "Tags": [],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "OwnerId": "680779862188"
+    },
+    {
+      "Associations": [
+        {
+          "Main": false,
+          "RouteTableAssociationId": "rtbassoc-05d56a0cec1a8b833",
+          "RouteTableId": "rtb-0179ab85e2f7a1cdb",
+          "SubnetId": "subnet-0614e66e02952130c",
+          "AssociationState": {
+            "State": "associated"
+          }
+        }
+      ],
+      "PropagatingVgws": [],
+      "RouteTableId": "rtb-0179ab85e2f7a1cdb",
+      "Routes": [
+        {
+          "DestinationCidrBlock": "10.40.0.0/16",
+          "GatewayId": "local",
+          "Origin": "CreateRouteTable",
+          "State": "active"
+        },
+        {
+          "DestinationCidrBlock": "0.0.0.0/0",
+          "NatGatewayId": "nat-0b4a76ae6016834be",
+          "Origin": "CreateRoute",
+          "State": "active"
+        }
+      ],
+      "Tags": [],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "OwnerId": "680779862188"
+    },
+    {
+      "Associations": [
+        {
+          "Main": true,
+          "RouteTableAssociationId": "rtbassoc-07cc2529fcab120e0",
+          "RouteTableId": "rtb-04ba8ef257c4445b4",
+          "AssociationState": {
+            "State": "associated"
+          }
+        }
+      ],
+      "PropagatingVgws": [],
+      "RouteTableId": "rtb-04ba8ef257c4445b4",
+      "Routes": [
+        {
+          "DestinationCidrBlock": "10.40.0.0/16",
+          "GatewayId": "local",
+          "Origin": "CreateRouteTable",
+          "State": "active"
+        }
+      ],
+      "Tags": [],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "OwnerId": "680779862188"
+    },
+    {
+      "Associations": [
+        {
+          "Main": false,
+          "RouteTableAssociationId": "rtbassoc-0280ed1d800b628d3",
+          "RouteTableId": "rtb-08b8ea42b8aa328d2",
+          "SubnetId": "subnet-09689a075e2c97139",
+          "AssociationState": {
+            "State": "associated"
+          }
+        }
+      ],
+      "PropagatingVgws": [],
+      "RouteTableId": "rtb-08b8ea42b8aa328d2",
+      "Routes": [
+        {
+          "DestinationCidrBlock": "10.40.0.0/16",
+          "GatewayId": "local",
+          "Origin": "CreateRouteTable",
+          "State": "active"
+        },
+        {
+          "DestinationCidrBlock": "0.0.0.0/0",
+          "NatGatewayId": "nat-0b4a76ae6016834be",
+          "Origin": "CreateRoute",
+          "State": "active"
+        }
+      ],
+      "Tags": [
+        {
+          "Key": "Project",
+          "Value": "Neraium"
+        },
+        {
+          "Key": "Purpose",
+          "Value": "v2-connector-egress"
+        },
+        {
+          "Key": "Name",
+          "Value": "neraium-prod-v2-connector-egress-firewall-rt"
+        }
+      ],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "OwnerId": "680779862188"
+    },
+    {
+      "Associations": [
+        {
+          "Main": false,
+          "RouteTableAssociationId": "rtbassoc-040bc309ce539f9e2",
+          "RouteTableId": "rtb-02dc6ef3e347059ac",
+          "SubnetId": "subnet-02cf17768e1dda988",
+          "AssociationState": {
+            "State": "associated"
+          }
+        }
+      ],
+      "PropagatingVgws": [],
+      "RouteTableId": "rtb-02dc6ef3e347059ac",
+      "Routes": [
+        {
+          "DestinationCidrBlock": "10.40.0.0/16",
+          "GatewayId": "local",
+          "Origin": "CreateRouteTable",
+          "State": "active"
+        },
+        {
+          "DestinationCidrBlock": "0.0.0.0/0",
+          "GatewayId": "vpce-05d0042158c93739f",
+          "Origin": "CreateRoute",
+          "State": "active"
+        }
+      ],
+      "Tags": [
+        {
+          "Key": "Purpose",
+          "Value": "v2-connector-egress"
+        },
+        {
+          "Key": "Project",
+          "Value": "Neraium"
+        },
+        {
+          "Key": "Name",
+          "Value": "neraium-prod-v2-connector-egress-task-rt"
+        }
+      ],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "OwnerId": "680779862188"
+    }
+  ],
+  "nacls": [
+    {
+      "Associations": [
+        {
+          "NetworkAclAssociationId": "aclassoc-0792fddcd485fb849",
+          "NetworkAclId": "acl-069b93470eb2c0776",
+          "SubnetId": "subnet-02cf17768e1dda988"
+        }
+      ],
+      "Entries": [
+        {
+          "CidrBlock": "10.40.144.0/20",
+          "Egress": true,
+          "PortRange": {
+            "From": 1024,
+            "To": 65535
+          },
+          "Protocol": "6",
+          "RuleAction": "allow",
+          "RuleNumber": 80
+        },
+        {
+          "CidrBlock": "10.40.128.0/20",
+          "Egress": true,
+          "PortRange": {
+            "From": 1024,
+            "To": 65535
+          },
+          "Protocol": "6",
+          "RuleAction": "allow",
+          "RuleNumber": 81
+        },
+        {
+          "CidrBlock": "10.0.0.0/8",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 100
+        },
+        {
+          "CidrBlock": "172.16.0.0/12",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 110
+        },
+        {
+          "CidrBlock": "192.168.0.0/16",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 120
+        },
+        {
+          "CidrBlock": "127.0.0.0/8",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 130
+        },
+        {
+          "CidrBlock": "169.254.0.0/16",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 140
+        },
+        {
+          "CidrBlock": "100.64.0.0/10",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 150
+        },
+        {
+          "CidrBlock": "0.0.0.0/8",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 160
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": true,
+          "PortRange": {
+            "From": 443,
+            "To": 443
+          },
+          "Protocol": "6",
+          "RuleAction": "allow",
+          "RuleNumber": 200
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 32767
+        },
+        {
+          "CidrBlock": "10.40.144.0/20",
+          "Egress": false,
+          "PortRange": {
+            "From": 8443,
+            "To": 8443
+          },
+          "Protocol": "6",
+          "RuleAction": "allow",
+          "RuleNumber": 80
+        },
+        {
+          "CidrBlock": "10.40.128.0/20",
+          "Egress": false,
+          "PortRange": {
+            "From": 8443,
+            "To": 8443
+          },
+          "Protocol": "6",
+          "RuleAction": "allow",
+          "RuleNumber": 81
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": false,
+          "PortRange": {
+            "From": 1024,
+            "To": 65535
+          },
+          "Protocol": "6",
+          "RuleAction": "allow",
+          "RuleNumber": 100
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": false,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 32767
+        }
+      ],
+      "IsDefault": false,
+      "NetworkAclId": "acl-069b93470eb2c0776",
+      "Tags": [
+        {
+          "Key": "Purpose",
+          "Value": "v2-connector-egress"
+        },
+        {
+          "Key": "Project",
+          "Value": "Neraium"
+        },
+        {
+          "Key": "Name",
+          "Value": "neraium-prod-v2-connector-egress-task-acl"
+        }
+      ],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "OwnerId": "680779862188"
+    },
+    {
+      "Associations": [
+        {
+          "NetworkAclAssociationId": "aclassoc-05ebb645c8bcfff2f",
+          "NetworkAclId": "acl-09c2d6a4fd2b1997e",
+          "SubnetId": "subnet-0407ffdef9751856a"
+        },
+        {
+          "NetworkAclAssociationId": "aclassoc-046dfe3e1df6e26a7",
+          "NetworkAclId": "acl-09c2d6a4fd2b1997e",
+          "SubnetId": "subnet-0614e66e02952130c"
+        },
+        {
+          "NetworkAclAssociationId": "aclassoc-09d8770173632f024",
+          "NetworkAclId": "acl-09c2d6a4fd2b1997e",
+          "SubnetId": "subnet-09689a075e2c97139"
+        },
+        {
+          "NetworkAclAssociationId": "aclassoc-0c86ff2b558a62780",
+          "NetworkAclId": "acl-09c2d6a4fd2b1997e",
+          "SubnetId": "subnet-0842e11b0b92178b1"
+        },
+        {
+          "NetworkAclAssociationId": "aclassoc-0c1725555cb4df79c",
+          "NetworkAclId": "acl-09c2d6a4fd2b1997e",
+          "SubnetId": "subnet-0c2b8f77922bc3bd4"
+        }
+      ],
+      "Entries": [
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "allow",
+          "RuleNumber": 100
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": true,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 32767
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": false,
+          "Protocol": "-1",
+          "RuleAction": "allow",
+          "RuleNumber": 100
+        },
+        {
+          "CidrBlock": "0.0.0.0/0",
+          "Egress": false,
+          "Protocol": "-1",
+          "RuleAction": "deny",
+          "RuleNumber": 32767
+        }
+      ],
+      "IsDefault": true,
+      "NetworkAclId": "acl-09c2d6a4fd2b1997e",
+      "Tags": [],
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "OwnerId": "680779862188"
+    }
+  ],
+  "endpoints": [
+    {
+      "VpcEndpointId": "vpce-05d0042158c93739f",
+      "VpcEndpointType": "GatewayLoadBalancer",
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "ServiceName": "com.amazonaws.vpce.us-east-2.vpce-svc-02e1d5e8620a65046",
+      "State": "available",
+      "SubnetIds": [
+        "subnet-09689a075e2c97139"
+      ],
+      "IpAddressType": "ipv4",
+      "RequesterManaged": true,
+      "NetworkInterfaceIds": [
+        "eni-0249269b2352a9102"
+      ],
+      "CreationTimestamp": "2026-10-02 13:40:53.136000+00:00",
+      "Tags": [
+        {
+          "Key": "AWSNetworkFirewallManaged",
+          "Value": "true"
+        },
+        {
+          "Key": "Firewall",
+          "Value": "arn:aws:network-firewall:us-east-2:680779862188:firewall/neraium-prod-v2-connector-egress"
+        },
+        {
+          "Key": "Name",
+          "Value": "neraium-prod-v2-connector-egress (us-east-2a)"
+        }
+      ],
+      "OwnerId": "680779862188",
+      "ServiceRegion": "us-east-2"
+    }
+  ],
+  "nat": [
+    {
+      "CreateTime": "2026-05-13 22:23:28+00:00",
+      "NatGatewayAddresses": [
+        {
+          "AllocationId": "eipalloc-0a2cf7e68cd015352",
+          "NetworkInterfaceId": "eni-0a416371db4d82910",
+          "PrivateIp": "10.40.14.123",
+          "PublicIp": "3.137.88.125",
+          "AssociationId": "eipassoc-09bc44d7ec0da37d2",
+          "IsPrimary": true,
+          "Status": "succeeded"
+        }
+      ],
+      "NatGatewayId": "nat-0b4a76ae6016834be",
+      "State": "available",
+      "SubnetId": "subnet-0c2b8f77922bc3bd4",
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "Tags": [],
+      "ConnectivityType": "public"
+    }
+  ],
+  "dns_firewall": [],
+  "firewall": {
+    "UpdateToken": "f5035bd8-4005-49ff-add7-28871f3fcf2b",
+    "Firewall": {
+      "FirewallName": "neraium-prod-v2-connector-egress",
+      "FirewallArn": "arn:aws:network-firewall:us-east-2:680779862188:firewall/neraium-prod-v2-connector-egress",
+      "FirewallPolicyArn": "arn:aws:network-firewall:us-east-2:680779862188:firewall-policy/neraium-prod-v2-connector-egress-policy",
+      "VpcId": "vpc-046a8eee54c6988ae",
+      "SubnetMappings": [
+        {
+          "SubnetId": "subnet-09689a075e2c97139",
+          "IPAddressType": "IPV4"
+        }
+      ],
+      "DeleteProtection": true,
+      "SubnetChangeProtection": true,
+      "FirewallPolicyChangeProtection": true,
+      "Description": "Dedicated connector-only Network Firewall; V1 service routes unchanged",
+      "FirewallId": "620efa86-091f-49d1-a9c7-205bb7baa558",
+      "Tags": [
+        {
+          "Key": "Project",
+          "Value": "Neraium"
+        },
+        {
+          "Key": "Purpose",
+          "Value": "v2-connector-egress"
+        }
+      ],
+      "EncryptionConfiguration": {
+        "KeyId": "AWS_OWNED_KMS_KEY",
+        "Type": "AWS_OWNED_KMS_KEY"
+      }
+    },
+    "FirewallStatus": {
+      "Status": "READY",
+      "ConfigurationSyncStateSummary": "IN_SYNC",
+      "SyncStates": {
+        "us-east-2a": {
+          "Attachment": {
+            "SubnetId": "subnet-09689a075e2c97139",
+            "EndpointId": "vpce-05d0042158c93739f",
+            "Status": "READY"
+          },
+          "Config": {
+            "arn:aws:network-firewall:us-east-2:680779862188:firewall-policy/neraium-prod-v2-connector-egress-policy": {
+              "SyncStatus": "IN_SYNC",
+              "UpdateToken": "5757418a-5fe8-4c78-8a08-a6d6baf2efd9"
+            },
+            "arn:aws:network-firewall:us-east-2:680779862188:stateful-rulegroup/neraium-prod-v2-connector-egress-tls-strict": {
+              "SyncStatus": "IN_SYNC",
+              "UpdateToken": "ceb2b74d-d644-49e1-a896-297be127158a"
+            },
+            "arn:aws:network-firewall:us-east-2:680779862188:stateless-rulegroup/neraium-prod-v2-connector-egress-ip-deny": {
+              "SyncStatus": "IN_SYNC",
+              "UpdateToken": "49ecfcf8-c706-4c09-b374-a83313062ad9"
+            }
+          }
+        }
+      }
+    }
+  },
+  "firewall_policy": {
+    "UpdateToken": "5757418a-5fe8-4c78-8a08-a6d6baf2efd9",
+    "FirewallPolicyResponse": {
+      "FirewallPolicyName": "neraium-prod-v2-connector-egress-policy",
+      "FirewallPolicyArn": "arn:aws:network-firewall:us-east-2:680779862188:firewall-policy/neraium-prod-v2-connector-egress-policy",
+      "FirewallPolicyId": "0bb2e495-acfe-45ea-8b3c-77c25ffb4326",
+      "Description": "Dedicated connector TLS allowlist; default deny",
+      "FirewallPolicyStatus": "ACTIVE",
+      "Tags": [],
+      "ConsumedStatelessRuleCapacity": 100,
+      "ConsumedStatefulRuleCapacity": 100,
+      "NumberOfAssociations": 1,
+      "EncryptionConfiguration": {
+        "KeyId": "AWS_OWNED_KMS_KEY",
+        "Type": "AWS_OWNED_KMS_KEY"
+      },
+      "LastModifiedTime": "2026-10-02 13:37:29.994000+00:00"
+    },
+    "FirewallPolicy": {
+      "StatelessRuleGroupReferences": [
+        {
+          "ResourceArn": "arn:aws:network-firewall:us-east-2:680779862188:stateless-rulegroup/neraium-prod-v2-connector-egress-ip-deny",
+          "Priority": 1
+        }
+      ],
+      "StatelessDefaultActions": [
+        "aws:forward_to_sfe"
+      ],
+      "StatelessFragmentDefaultActions": [
+        "aws:drop"
+      ],
+      "StatefulRuleGroupReferences": [
+        {
+          "ResourceArn": "arn:aws:network-firewall:us-east-2:680779862188:stateful-rulegroup/neraium-prod-v2-connector-egress-tls-strict",
+          "Priority": 1
+        }
+      ],
+      "StatefulDefaultActions": [
+        "aws:drop_established_app_layer"
+      ],
+      "StatefulEngineOptions": {
+        "RuleOrder": "STRICT_ORDER"
+      }
+    }
+  },
+  "rule_groups": [
+    {
+      "UpdateToken": "ceb2b74d-d644-49e1-a896-297be127158a",
+      "RuleGroup": {
+        "RulesSource": {
+          "RulesSourceList": {
+            "Targets": [
+              "bfzcudq5o2.execute-api.us-east-2.amazonaws.com",
+              "api.ecr.us-east-2.amazonaws.com",
+              "680779862188.dkr.ecr.us-east-2.amazonaws.com",
+              "prod-us-east-2-starport-layer-bucket.s3.us-east-2.amazonaws.com",
+              "logs.us-east-2.amazonaws.com",
+              "secretsmanager.us-east-2.amazonaws.com"
+            ],
+            "TargetTypes": [
+              "TLS_SNI"
+            ],
+            "GeneratedRulesType": "ALLOWLIST"
+          }
+        },
+        "StatefulRuleOptions": {
+          "RuleOrder": "STRICT_ORDER"
+        }
+      },
+      "RuleGroupResponse": {
+        "RuleGroupArn": "arn:aws:network-firewall:us-east-2:680779862188:stateful-rulegroup/neraium-prod-v2-connector-egress-tls-strict",
+        "RuleGroupName": "neraium-prod-v2-connector-egress-tls-strict",
+        "RuleGroupId": "f67793be-7625-418a-aee4-7d65e03df0c3",
+        "Type": "STATEFUL",
+        "Capacity": 100,
+        "RuleGroupStatus": "ACTIVE",
+        "Tags": [],
+        "ConsumedCapacity": 6,
+        "NumberOfAssociations": 1,
+        "EncryptionConfiguration": {
+          "KeyId": "AWS_OWNED_KMS_KEY",
+          "Type": "AWS_OWNED_KMS_KEY"
+        },
+        "LastModifiedTime": "2026-10-02 16:29:39.220000+00:00"
+      }
+    },
+    {
+      "UpdateToken": "49ecfcf8-c706-4c09-b374-a83313062ad9",
+      "RuleGroup": {
+        "RulesSource": {
+          "StatelessRulesAndCustomActions": {
+            "StatelessRules": [
+              {
+                "RuleDefinition": {
+                  "MatchAttributes": {
+                    "Sources": [
+                      {
+                        "AddressDefinition": "10.40.32.16/28"
+                      }
+                    ],
+                    "Destinations": [
+                      {
+                        "AddressDefinition": "10.0.0.0/8"
+                      },
+                      {
+                        "AddressDefinition": "172.16.0.0/12"
+                      },
+                      {
+                        "AddressDefinition": "192.168.0.0/16"
+                      },
+                      {
+                        "AddressDefinition": "127.0.0.0/8"
+                      },
+                      {
+                        "AddressDefinition": "169.254.0.0/16"
+                      },
+                      {
+                        "AddressDefinition": "100.64.0.0/10"
+                      },
+                      {
+                        "AddressDefinition": "0.0.0.0/8"
+                      }
+                    ]
+                  },
+                  "Actions": [
+                    "aws:drop"
+                  ]
+                },
+                "Priority": 1
+              }
+            ]
+          }
+        }
+      },
+      "RuleGroupResponse": {
+        "RuleGroupArn": "arn:aws:network-firewall:us-east-2:680779862188:stateless-rulegroup/neraium-prod-v2-connector-egress-ip-deny",
+        "RuleGroupName": "neraium-prod-v2-connector-egress-ip-deny",
+        "RuleGroupId": "4eedf73f-d7ed-49e2-aad6-5973aff9a631",
+        "Type": "STATELESS",
+        "Capacity": 100,
+        "RuleGroupStatus": "ACTIVE",
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Neraium"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "v2-connector-egress"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "codex-prerequisite"
+          }
+        ],
+        "ConsumedCapacity": 7,
+        "NumberOfAssociations": 1,
+        "EncryptionConfiguration": {
+          "KeyId": "AWS_OWNED_KMS_KEY",
+          "Type": "AWS_OWNED_KMS_KEY"
+        },
+        "LastModifiedTime": "2026-10-02 13:58:19.756000+00:00"
+      }
+    }
+  ],
+  "executor_instance_profile": {
+    "Path": "/",
+    "InstanceProfileName": "neraium-prod-connector-executor-profile",
+    "InstanceProfileId": "AIPAZ5ANEKCWAYS6HL767",
+    "Arn": "arn:aws:iam::680779862188:instance-profile/neraium-prod-connector-executor-profile",
+    "CreateDate": "2026-10-02 15:31:49+00:00",
+    "Roles": [
+      {
+        "Path": "/",
+        "RoleName": "neraium-prod-connector-executor-role",
+        "RoleId": "AROAZ5ANEKCWC5TLBOVXO",
+        "Arn": "arn:aws:iam::680779862188:role/neraium-prod-connector-executor-role",
+        "CreateDate": "2026-10-02 15:31:47+00:00",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        }
+      }
+    ],
+    "Tags": []
+  },
+  "iam": {
+    "neraium-prod-connector-executor-role": {
+      "role": {
+        "Path": "/",
+        "RoleName": "neraium-prod-connector-executor-role",
+        "RoleId": "AROAZ5ANEKCWC5TLBOVXO",
+        "Arn": "arn:aws:iam::680779862188:role/neraium-prod-connector-executor-role",
+        "CreateDate": "2026-10-02 15:31:47+00:00",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Description": "Isolated telemetry connector execution; scoped read-only secrets and ECR pull",
+        "MaxSessionDuration": 3600,
+        "RoleLastUsed": {
+          "LastUsedDate": "2026-10-03 00:15:49+00:00",
+          "Region": "us-east-2"
+        }
+      },
+      "policies": {
+        "connector-execution-minimum": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "ecr:GetAuthorizationToken"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage"
+              ],
+              "Resource": "arn:aws:ecr:us-east-2:680779862188:repository/neraium-prod-api"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:GetSecretValue"
+              ],
+              "Resource": [
+                "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-auth-8EDeTQ",
+                "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-tls-wMVlKy",
+                "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-connections/*"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:DescribeSecret"
+              ],
+              "Resource": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-connections/*"
+            }
+          ]
+        }
+      }
+    },
+    "neraium-prod-task-app-role": {
+      "role": {
+        "Path": "/",
+        "RoleName": "neraium-prod-task-app-role",
+        "RoleId": "AROAZ5ANEKCWM5KNTA6K4",
+        "Arn": "arn:aws:iam::680779862188:role/neraium-prod-task-app-role",
+        "CreateDate": "2026-06-10 22:28:38+00:00",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "MaxSessionDuration": 3600,
+        "RoleLastUsed": {
+          "LastUsedDate": "2026-10-03 12:43:11+00:00",
+          "Region": "us-east-2"
+        }
+      },
+      "policies": {
+        "neraium-telemetry-connector-read": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:DescribeSecret"
+              ],
+              "Resource": [
+                "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-connections/*"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:GetSecretValue"
+              ],
+              "Resource": [
+                "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-auth-8EDeTQ"
+              ]
+            }
+          ]
+        },
+        "neraium-upload-state-access": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket"
+              ],
+              "Resource": [
+                "arn:aws:s3:::neraium-prod-upload-state"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:PutObjectTagging",
+                "s3:DeleteObject"
+              ],
+              "Resource": [
+                "arn:aws:s3:::neraium-prod-upload-state/*"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:GetSecretValue"
+              ],
+              "Resource": [
+                "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:DescribeSecret"
+              ],
+              "Resource": [
+                "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt"
+              ],
+              "Resource": [
+                "arn:aws:kms:us-east-2:680779862188:key/e397f3dc-50c6-46a4-b176-d76442cc3d62"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sns:Publish"
+              ],
+              "Resource": [
+                "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "ecs:DescribeServices",
+                "elasticloadbalancing:DescribeTargetHealth"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      }
+    },
+    "neraium-prod-ecs-task-execution-role": {
+      "role": {
+        "Path": "/",
+        "RoleName": "neraium-prod-ecs-task-execution-role",
+        "RoleId": "AROAZ5ANEKCWC3NAIPZZR",
+        "Arn": "arn:aws:iam::680779862188:role/neraium-prod-ecs-task-execution-role",
+        "CreateDate": "2026-07-17 22:36:05+00:00",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "MaxSessionDuration": 3600,
+        "RoleLastUsed": {
+          "LastUsedDate": "2026-10-03 12:38:04+00:00",
+          "Region": "us-east-2"
+        }
+      },
+      "policies": {
+        "neraium-cloudwatch-logs-access": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogStreams"
+              ],
+              "Resource": [
+                "arn:aws:logs:us-east-2:680779862188:log-group:/ecs/neraium-prod-api:*",
+                "arn:aws:logs:us-east-2:680779862188:log-group:/ecs/neraium-prod-worker:*"
+              ]
+            }
+          ]
+        },
+        "neraium-secretsmanager-access": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:GetSecretValue"
+              ],
+              "Resource": [
+                "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium-api-token-zo7tAc",
+                "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/auth-database-url-XrtJxj",
+                "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/booystrap-admin-password-cTgxAj",
+                "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li"
+              ]
+            }
+          ]
+        },
+        "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "rds": [
+    {
+      "DBInstanceIdentifier": "neraium-prod-postgres",
+      "DBInstanceClass": "db.m7g.large",
+      "Engine": "postgres",
+      "DBInstanceStatus": "available",
+      "MasterUsername": "postgres",
+      "Endpoint": {
+        "Address": "neraium-prod-postgres.cxgciqwwi3s2.us-east-2.rds.amazonaws.com",
+        "Port": 5432,
+        "HostedZoneId": "Z2XHWR1WZ565X2"
+      },
+      "AllocatedStorage": 200,
+      "InstanceCreateTime": "2026-07-17 18:55:12.338000+00:00",
+      "PreferredBackupWindow": "07:29-07:59",
+      "BackupRetentionPeriod": 7,
+      "DBSecurityGroups": [],
+      "VpcSecurityGroups": [
+        {
+          "VpcSecurityGroupId": "sg-096f9e2b8efaa5532",
+          "Status": "active"
+        }
+      ],
+      "DBParameterGroups": [
+        {
+          "DBParameterGroupName": "default.postgres16",
+          "ParameterApplyStatus": "in-sync"
+        }
+      ],
+      "AvailabilityZone": "us-east-2a",
+      "DBSubnetGroup": {
+        "DBSubnetGroupName": "default-vpc-046a8eee54c6988ae",
+        "DBSubnetGroupDescription": "Created from the RDS Management Console",
+        "VpcId": "vpc-046a8eee54c6988ae",
+        "SubnetGroupStatus": "Complete",
+        "Subnets": [
+          {
+            "SubnetIdentifier": "subnet-0c2b8f77922bc3bd4",
+            "SubnetAvailabilityZone": {
+              "Name": "us-east-2a"
+            },
+            "SubnetOutpost": {},
+            "SubnetStatus": "Active"
+          },
+          {
+            "SubnetIdentifier": "subnet-0407ffdef9751856a",
+            "SubnetAvailabilityZone": {
+              "Name": "us-east-2a"
+            },
+            "SubnetOutpost": {},
+            "SubnetStatus": "Active"
+          },
+          {
+            "SubnetIdentifier": "subnet-0842e11b0b92178b1",
+            "SubnetAvailabilityZone": {
+              "Name": "us-east-2b"
+            },
+            "SubnetOutpost": {},
+            "SubnetStatus": "Active"
+          },
+          {
+            "SubnetIdentifier": "subnet-0614e66e02952130c",
+            "SubnetAvailabilityZone": {
+              "Name": "us-east-2b"
+            },
+            "SubnetOutpost": {},
+            "SubnetStatus": "Active"
+          }
+        ]
+      },
+      "PreferredMaintenanceWindow": "sun:06:03-sun:06:33",
+      "PendingModifiedValues": {},
+      "LatestRestorableTime": "2026-10-03 12:41:13+00:00",
+      "MultiAZ": false,
+      "EngineVersion": "16.14",
+      "AutoMinorVersionUpgrade": true,
+      "ReadReplicaDBInstanceIdentifiers": [],
+      "LicenseModel": "postgresql-license",
+      "Iops": 3000,
+      "OptionGroupMemberships": [
+        {
+          "OptionGroupName": "default:postgres-16",
+          "Status": "in-sync"
+        }
+      ],
+      "PubliclyAccessible": false,
+      "StorageType": "gp3",
+      "DbInstancePort": 0,
+      "StorageEncrypted": true,
+      "KmsKeyId": "arn:aws:kms:us-east-2:680779862188:key/0f6232c7-b767-48a8-8d0a-87eb0b9d5254",
+      "DbiResourceId": "db-WLXDKA2QDPULV5VTSATFPPKPVQ",
+      "CACertificateIdentifier": "rds-ca-rsa2048-g1",
+      "DomainMemberships": [],
+      "CopyTagsToSnapshot": true,
+      "MonitoringInterval": 60,
+      "EnhancedMonitoringResourceArn": "arn:aws:logs:us-east-2:680779862188:log-group:RDSOSMetrics:log-stream:db-WLXDKA2QDPULV5VTSATFPPKPVQ",
+      "MonitoringRoleArn": "arn:aws:iam::680779862188:role/rds-monitoring-role",
+      "DBInstanceArn": "arn:aws:rds:us-east-2:680779862188:db:neraium-prod-postgres",
+      "IAMDatabaseAuthenticationEnabled": false,
+      "DatabaseInsightsMode": "standard",
+      "PerformanceInsightsEnabled": true,
+      "PerformanceInsightsKMSKeyId": "arn:aws:kms:us-east-2:680779862188:key/0f6232c7-b767-48a8-8d0a-87eb0b9d5254",
+      "PerformanceInsightsRetentionPeriod": 7,
+      "DeletionProtection": true,
+      "AssociatedRoles": [],
+      "MaxAllocatedStorage": 1000,
+      "TagList": [],
+      "CustomerOwnedIpEnabled": false,
+      "ActivityStreamStatus": "stopped",
+      "BackupTarget": "region",
+      "NetworkType": "IPV4",
+      "StorageThroughput": 125,
+      "MasterUserSecret": {
+        "SecretArn": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT",
+        "SecretStatus": "active",
+        "KmsKeyId": "arn:aws:kms:us-east-2:680779862188:key/e397f3dc-50c6-46a4-b176-d76442cc3d62"
+      },
+      "CertificateDetails": {
+        "CAIdentifier": "rds-ca-rsa2048-g1",
+        "ValidTill": "2027-07-17 18:54:05+00:00"
+      },
+      "DedicatedLogVolume": false,
+      "IsStorageConfigUpgradeAvailable": false,
+      "EngineLifecycleSupport": "open-source-rds-extended-support-disabled"
+    }
+  ],
+  "secrets_metadata": [
+    {
+      "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/auth-database-url-XrtJxj",
+      "Name": "neraium/prod/auth-database-url",
+      "Tags": [],
+      "DeletedDate": null,
+      "RotationEnabled": null
+    },
+    {
+      "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/booystrap-admin-password-cTgxAj",
+      "Name": "neraium/prod/booystrap-admin-password",
+      "Tags": [],
+      "DeletedDate": null,
+      "RotationEnabled": null
+    },
+    {
+      "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li",
+      "Name": "neraium/prod/telemetry-database-url",
+      "Tags": null,
+      "DeletedDate": null,
+      "RotationEnabled": null
+    },
+    {
+      "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-migration-database-url-x6bm74",
+      "Name": "neraium/prod/telemetry-migration-database-url",
+      "Tags": null,
+      "DeletedDate": null,
+      "RotationEnabled": null
+    },
+    {
+      "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-auth-8EDeTQ",
+      "Name": "neraium/prod/connector-executor-auth",
+      "Tags": null,
+      "DeletedDate": null,
+      "RotationEnabled": null
+    },
+    {
+      "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-tls-wMVlKy",
+      "Name": "neraium/prod/connector-executor-tls",
+      "Tags": null,
+      "DeletedDate": null,
+      "RotationEnabled": null
+    }
+  ],
+  "alarms": [
+    {
+      "AlarmName": "neraium-prod-api-no-healthy-alb-targets",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-api-no-healthy-alb-targets",
+      "AlarmDescription": "Neraium production ALB has no healthy API target for five consecutive minutes.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-07-25 23:08:51.985000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: 5 out of the last 5 datapoints were not less than the threshold (1.0). The most recent datapoints which not crossed the threshold: [1.0 (25/07/26 23:07:00), 1.0 (25/07/26 23:06:00), 1.0 (25/07/26 23:05:00), 1.0 (25/07/26 23:04:00), 1.0 (25/07/26 23:03:00)] (minimum 1 datapoint for ALARM -> OK transition).",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-07-25T23:10:09.078+0000\",\"startDate\":\"2026-07-25T23:03:00.000+0000\",\"statistic\":\"Minimum\",\"period\":60,\"recentDatapoints\":[1.0,1.0,1.0,1.0,1.0],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-07-25T23:07:00.000+0000\",\"sampleCount\":2.0,\"value\":1.0}]}",
+      "StateUpdatedTimestamp": "2026-07-25 23:10:09.079000+00:00",
+      "MetricName": "HealthyHostCount",
+      "Namespace": "AWS/ApplicationELB",
+      "Statistic": "Minimum",
+      "Dimensions": [
+        {
+          "Name": "LoadBalancer",
+          "Value": "app/neraium-prod-api-alb/fb3d513e74bf3d7f"
+        },
+        {
+          "Name": "TargetGroup",
+          "Value": "targetgroup/neraium-prod-api-tg/56113982023574c6"
+        }
+      ],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 5,
+      "Threshold": 1.0,
+      "ComparisonOperator": "LessThanThreshold",
+      "TreatMissingData": "breaching",
+      "StateTransitionedTimestamp": "2026-07-25 23:10:09.079000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-api-slow",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-api-slow",
+      "AlarmDescription": "Neraium production API target p95 latency exceeds two seconds for five consecutive minutes.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-07-25 23:08:53.124000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: 1 out of the last 5 datapoints [0.004825187090828675 (06/09/26 10:47:00)] was not greater than the threshold (2.0) (minimum 1 datapoint for ALARM -> OK transition).",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-09-06T10:50:21.151+0000\",\"startDate\":\"2026-09-06T10:38:00.000+0000\",\"statistic\":\"p95\",\"period\":60,\"recentDatapoints\":[3.6087606005214443,3.336526582458162,null,4.202816192348443,4.237689030892463,null,null,null,null,0.004825187090828675],\"threshold\":2.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-09-06T10:47:00.000+0000\",\"sampleCount\":18.0,\"value\":0.004825187090828675}]}",
+      "StateUpdatedTimestamp": "2026-09-06 10:50:21.152000+00:00",
+      "MetricName": "TargetResponseTime",
+      "Namespace": "AWS/ApplicationELB",
+      "ExtendedStatistic": "p95",
+      "Dimensions": [
+        {
+          "Name": "LoadBalancer",
+          "Value": "app/neraium-prod-api-alb/fb3d513e74bf3d7f"
+        },
+        {
+          "Name": "TargetGroup",
+          "Value": "targetgroup/neraium-prod-api-tg/56113982023574c6"
+        }
+      ],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 5,
+      "Threshold": 2.0,
+      "ComparisonOperator": "GreaterThanThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-09-06 10:50:21.152000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-api-target-5xx",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-api-target-5xx",
+      "AlarmDescription": "Neraium production API returned five or more target 5xx responses in three of five minutes.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-07-25 23:08:54.279000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: no datapoints were received for 5 periods and 5 missing datapoints were treated as [NonBreaching].",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-07-25T23:09:47.337+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[],\"threshold\":5.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-07-25T23:06:00.000+0000\"},{\"timestamp\":\"2026-07-25T23:05:00.000+0000\"},{\"timestamp\":\"2026-07-25T23:04:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-07-25 23:09:47.339000+00:00",
+      "MetricName": "HTTPCode_Target_5XX_Count",
+      "Namespace": "AWS/ApplicationELB",
+      "Statistic": "Sum",
+      "Dimensions": [
+        {
+          "Name": "LoadBalancer",
+          "Value": "app/neraium-prod-api-alb/fb3d513e74bf3d7f"
+        },
+        {
+          "Name": "TargetGroup",
+          "Value": "targetgroup/neraium-prod-api-tg/56113982023574c6"
+        }
+      ],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 5.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-07-25 23:09:47.339000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-api-tasks-unavailable",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-api-tasks-unavailable",
+      "AlarmDescription": "Neraium production api service has no running task for three consecutive minutes.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-07-25 23:08:49.645000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: 1 out of the last 3 datapoints [1.0 (03/10/26 03:12:00)] was not less than the threshold (1.0) and 2 missing datapoints were treated as [Breaching] (minimum 1 datapoint for ALARM -> OK transition).",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-03T03:13:40.151+0000\",\"startDate\":\"2026-10-03T03:12:00.000+0000\",\"statistic\":\"Minimum\",\"period\":60,\"recentDatapoints\":[1.0],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-03T03:12:00.000+0000\",\"sampleCount\":1.0,\"value\":1.0}]}",
+      "StateUpdatedTimestamp": "2026-10-03 03:13:40.152000+00:00",
+      "MetricName": "RunningTaskCount",
+      "Namespace": "ECS/ContainerInsights",
+      "Statistic": "Minimum",
+      "Dimensions": [
+        {
+          "Name": "ClusterName",
+          "Value": "neraium-prod-cluster"
+        },
+        {
+          "Name": "ServiceName",
+          "Value": "neraium-prod-api-service"
+        }
+      ],
+      "Period": 60,
+      "EvaluationPeriods": 3,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "LessThanThreshold",
+      "TreatMissingData": "breaching",
+      "StateTransitionedTimestamp": "2026-10-03 03:13:40.152000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-auth-database-failures",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-auth-database-failures",
+      "AlarmDescription": "Authentication database readiness failed in three of five minutes.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-07-25 23:08:56.717000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: no datapoints were received for 5 periods and 5 missing datapoints were treated as [NonBreaching].",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-07-25T23:09:55.429+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-07-25T23:08:00.000+0000\"},{\"timestamp\":\"2026-07-25T23:07:00.000+0000\"},{\"timestamp\":\"2026-07-25T23:06:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-07-25 23:09:55.432000+00:00",
+      "MetricName": "AuthenticationDatabaseFailures",
+      "Namespace": "Neraium/Production",
+      "Statistic": "Sum",
+      "Dimensions": [],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-07-25 23:09:55.432000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-connector-executor-repeated-failures",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-connector-executor-repeated-failures",
+      "AlarmDescription": "SEV2: repeated connector executor fetch failures in three of five minutes; telemetry may be delayed. Check EC2 executor status and worker error_code. Runbook: docs/operations/sre-hardening.md#connector-executor-unavailable.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-10-03 03:11:57.765000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: no datapoints were received for 5 periods and 5 missing datapoints were treated as [NonBreaching].",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-03T03:12:18.176+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-03T03:11:00.000+0000\"},{\"timestamp\":\"2026-10-03T03:10:00.000+0000\"},{\"timestamp\":\"2026-10-03T03:09:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-10-03 03:12:18.179000+00:00",
+      "MetricName": "ConnectorExecutorFailures",
+      "Namespace": "Neraium/Production",
+      "Statistic": "Sum",
+      "Dimensions": [],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-10-03 03:12:18.179000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-connector-executor-status-failed",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-connector-executor-status-failed",
+      "AlarmDescription": "SEV2: connector executor EC2 status check failed for two of three minutes; scheduled telemetry may stop. Inspect EC2 instance status and /var/log/neraium-connector-executor.log. Runbook: docs/operations/sre-hardening.md#connector-executor-unavailable.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-10-03 03:08:24.536000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: 3 out of the last 3 datapoints [0.0 (03/10/26 03:07:00), 0.0 (03/10/26 03:06:00), 0.0 (03/10/26 03:05:00)] were not greater than or equal to the threshold (1.0) (minimum 2 datapoints for ALARM -> OK transition).",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-03T03:08:56.512+0000\",\"startDate\":\"2026-10-03T03:05:00.000+0000\",\"statistic\":\"Maximum\",\"period\":60,\"recentDatapoints\":[0.0,0.0,0.0],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-03T03:07:00.000+0000\",\"sampleCount\":1.0,\"value\":0.0},{\"timestamp\":\"2026-10-03T03:06:00.000+0000\",\"sampleCount\":1.0,\"value\":0.0}]}",
+      "StateUpdatedTimestamp": "2026-10-03 03:08:56.513000+00:00",
+      "MetricName": "StatusCheckFailed",
+      "Namespace": "AWS/EC2",
+      "Statistic": "Maximum",
+      "Dimensions": [
+        {
+          "Name": "InstanceId",
+          "Value": "i-081d0aba82dba64e7"
+        }
+      ],
+      "Period": 60,
+      "EvaluationPeriods": 3,
+      "DatapointsToAlarm": 2,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "breaching",
+      "StateTransitionedTimestamp": "2026-10-03 03:08:56.513000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-credential-refresh-failures",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-credential-refresh-failures",
+      "AlarmDescription": "Managed database credential refresh failed in three of five minutes.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-07-25 23:08:59.091000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: no datapoints were received for 5 periods and 5 missing datapoints were treated as [NonBreaching].",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-07-25T23:09:57.453+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-07-25T23:08:00.000+0000\"},{\"timestamp\":\"2026-07-25T23:07:00.000+0000\"},{\"timestamp\":\"2026-07-25T23:06:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-07-25 23:09:57.456000+00:00",
+      "MetricName": "CredentialRefreshFailures",
+      "Namespace": "Neraium/Production",
+      "Statistic": "Sum",
+      "Dimensions": [],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-07-25 23:09:57.456000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-secrets-access-failures",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-secrets-access-failures",
+      "AlarmDescription": "Secrets Manager access failed in three of five minutes.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-07-25 23:09:02.059000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: no datapoints were received for 5 periods and 5 missing datapoints were treated as [NonBreaching].",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-07-25T23:09:46.984+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-07-25T23:08:00.000+0000\"},{\"timestamp\":\"2026-07-25T23:07:00.000+0000\"},{\"timestamp\":\"2026-07-25T23:06:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-07-25 23:09:46.987000+00:00",
+      "MetricName": "SecretsManagerAccessFailures",
+      "Namespace": "Neraium/Production",
+      "Statistic": "Sum",
+      "Dimensions": [],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-07-25 23:09:46.987000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-telemetry-ingestion-failures",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-telemetry-ingestion-failures",
+      "AlarmDescription": "SEV2: ingestion page failed in three of five minutes; new telemetry may be delayed. Inspect error_code in worker logs. Runbook: docs/operations/sre-hardening.md#telemetry-ingestion-failing.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-10-03 03:08:34.577000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: 1 out of the last 5 datapoints [0.0 (03/10/26 03:08:00)] was not greater than or equal to the threshold (1.0) and 4 missing datapoints were treated as [NonBreaching] (minimum 3 datapoints for ALARM -> OK transition).",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-03T03:09:51.857+0000\",\"startDate\":\"2026-10-03T03:08:00.000+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[0.0],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-03T03:08:00.000+0000\",\"sampleCount\":3.0,\"value\":0.0},{\"timestamp\":\"2026-10-03T03:07:00.000+0000\"},{\"timestamp\":\"2026-10-03T03:06:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-10-03 03:09:51.858000+00:00",
+      "MetricName": "TelemetryIngestionFailures",
+      "Namespace": "Neraium/Production",
+      "Statistic": "Sum",
+      "Dimensions": [],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-10-03 03:09:51.858000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-telemetry-scheduler-failures",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-telemetry-scheduler-failures",
+      "AlarmDescription": "SEV2: telemetry scheduler iteration failed in three of five minutes; ingestion may stall. Inspect worker log and DB connectivity. Runbook: docs/operations/sre-hardening.md#worker-unavailable.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-10-03 03:08:33.212000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: 2 out of the last 5 datapoints [0.0 (03/10/26 03:09:00), 0.0 (03/10/26 03:08:00)] were not greater than or equal to the threshold (1.0) and 3 missing datapoints were treated as [NonBreaching] (minimum 3 datapoints for ALARM -> OK transition).",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-03T03:10:31.002+0000\",\"startDate\":\"2026-10-03T03:08:00.000+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[0.0,0.0],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-03T03:09:00.000+0000\",\"sampleCount\":6.0,\"value\":0.0},{\"timestamp\":\"2026-10-03T03:08:00.000+0000\",\"sampleCount\":3.0,\"value\":0.0},{\"timestamp\":\"2026-10-03T03:07:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-10-03 03:10:31.004000+00:00",
+      "MetricName": "TelemetrySchedulerFailures",
+      "Namespace": "Neraium/Production",
+      "Statistic": "Sum",
+      "Dimensions": [],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-10-03 03:10:31.004000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-telemetry-scheduler-lag-high",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-telemetry-scheduler-lag-high",
+      "AlarmDescription": "SEV2: claimed telemetry work was over ten minutes overdue in three of five minutes; ingestion delayed. Inspect worker task count and due-work backlog. Runbook: docs/operations/sre-hardening.md#telemetry-ingestion-failing.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-10-03 03:17:10.669000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: 1 out of the last 5 datapoints [0.0 (03/10/26 03:17:00)] was not greater than or equal to the threshold (1.0) and 4 missing datapoints were treated as [NonBreaching] (minimum 3 datapoints for ALARM -> OK transition).",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-03T03:18:20.476+0000\",\"startDate\":\"2026-10-03T03:17:00.000+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[0.0],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-03T03:17:00.000+0000\",\"sampleCount\":6.0,\"value\":0.0},{\"timestamp\":\"2026-10-03T03:16:00.000+0000\"},{\"timestamp\":\"2026-10-03T03:15:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-10-03 03:18:20.477000+00:00",
+      "MetricName": "TelemetrySchedulerLagHigh",
+      "Namespace": "Neraium/Production",
+      "Statistic": "Sum",
+      "Dimensions": [],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-10-03 03:18:20.477000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-v2-analysis-failures",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-v2-analysis-failures",
+      "AlarmDescription": "SEV2: analysis failed in three of five minutes; V2 results may be unavailable. Inspect worker analysis failure logs. Runbook: docs/operations/sre-hardening.md#v2-execution-failing.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-10-03 03:08:35.936000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: no datapoints were received for 5 periods and 5 missing datapoints were treated as [NonBreaching].",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-03T03:09:51.721+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-03T03:08:00.000+0000\"},{\"timestamp\":\"2026-10-03T03:07:00.000+0000\"},{\"timestamp\":\"2026-10-03T03:06:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-10-03 03:09:51.722000+00:00",
+      "MetricName": "TelemetryAnalysisFailures",
+      "Namespace": "Neraium/Production",
+      "Statistic": "Sum",
+      "Dimensions": [],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-10-03 03:09:51.722000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-v2-persistence-failures",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-v2-persistence-failures",
+      "AlarmDescription": "SEV2: V2 persistence failed in three of five minutes; completed results may not be durable. Inspect DB and worker logs. Runbook: docs/operations/sre-hardening.md#result-persistence-or-retrieval-failing.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-10-03 03:08:37.279000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: no datapoints were received for 5 periods and 5 missing datapoints were treated as [NonBreaching].",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-03T03:09:15.283+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-03T03:08:00.000+0000\"},{\"timestamp\":\"2026-10-03T03:07:00.000+0000\"},{\"timestamp\":\"2026-10-03T03:06:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-10-03 03:09:15.284000+00:00",
+      "MetricName": "TelemetryV2PersistenceFailures",
+      "Namespace": "Neraium/Production",
+      "Statistic": "Sum",
+      "Dimensions": [],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-10-03 03:09:15.284000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-v2-retrieval-failures",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-v2-retrieval-failures",
+      "AlarmDescription": "SEV2: V2 result retrieval failed in three of five minutes; customers may not see saved results. Inspect API logs and DB. Runbook: docs/operations/sre-hardening.md#result-persistence-or-retrieval-failing.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-10-03 03:08:38.640000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: 1 out of the last 5 datapoints [0.0 (03/10/26 03:09:00)] was not greater than or equal to the threshold (1.0) and 4 missing datapoints were treated as [NonBreaching] (minimum 3 datapoints for ALARM -> OK transition).",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-03T03:10:03.814+0000\",\"startDate\":\"2026-10-03T03:09:00.000+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[0.0],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-03T03:09:00.000+0000\",\"sampleCount\":1.0,\"value\":0.0},{\"timestamp\":\"2026-10-03T03:08:00.000+0000\"},{\"timestamp\":\"2026-10-03T03:07:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-10-03 03:10:03.816000+00:00",
+      "MetricName": "TelemetryV2RetrievalFailures",
+      "Namespace": "Neraium/Production",
+      "Statistic": "Sum",
+      "Dimensions": [],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-10-03 03:10:03.816000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-worker-iteration-failures",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-worker-iteration-failures",
+      "AlarmDescription": "Upload worker iteration failed in three of five minutes.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-07-25 23:09:05.762000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: 1 out of the last 5 datapoints [0.0 (25/07/26 23:09:00)] was not greater than or equal to the threshold (1.0) and 4 missing datapoints were treated as [NonBreaching] (minimum 3 datapoints for ALARM -> OK transition).",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-07-25T23:10:03.278+0000\",\"startDate\":\"2026-07-25T23:09:00.000+0000\",\"statistic\":\"Sum\",\"period\":60,\"recentDatapoints\":[0.0],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-07-25T23:09:00.000+0000\",\"sampleCount\":4.0,\"value\":0.0},{\"timestamp\":\"2026-07-25T23:08:00.000+0000\"},{\"timestamp\":\"2026-07-25T23:07:00.000+0000\"}]}",
+      "StateUpdatedTimestamp": "2026-07-25 23:10:03.280000+00:00",
+      "MetricName": "WorkerIterationFailures",
+      "Namespace": "Neraium/Production",
+      "Statistic": "Sum",
+      "Dimensions": [],
+      "Period": 60,
+      "EvaluationPeriods": 5,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+      "TreatMissingData": "notBreaching",
+      "StateTransitionedTimestamp": "2026-07-25 23:10:03.280000+00:00"
+    },
+    {
+      "AlarmName": "neraium-prod-worker-tasks-unavailable",
+      "AlarmArn": "arn:aws:cloudwatch:us-east-2:680779862188:alarm:neraium-prod-worker-tasks-unavailable",
+      "AlarmDescription": "Neraium production worker service has no running task for three consecutive minutes.",
+      "AlarmConfigurationUpdatedTimestamp": "2026-07-25 23:08:50.814000+00:00",
+      "ActionsEnabled": true,
+      "OKActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "AlarmActions": [
+        "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+      ],
+      "InsufficientDataActions": [],
+      "StateValue": "OK",
+      "StateReason": "Threshold Crossed: 1 out of the last 3 datapoints [1.0 (03/10/26 03:08:00)] was not less than the threshold (1.0) and 2 missing datapoints were treated as [Breaching] (minimum 1 datapoint for ALARM -> OK transition).",
+      "StateReasonData": "{\"version\":\"1.0\",\"queryDate\":\"2026-10-03T03:09:42.037+0000\",\"startDate\":\"2026-10-03T03:08:00.000+0000\",\"statistic\":\"Minimum\",\"period\":60,\"recentDatapoints\":[1.0],\"threshold\":1.0,\"evaluatedDatapoints\":[{\"timestamp\":\"2026-10-03T03:08:00.000+0000\",\"sampleCount\":1.0,\"value\":1.0}]}",
+      "StateUpdatedTimestamp": "2026-10-03 03:09:42.039000+00:00",
+      "MetricName": "RunningTaskCount",
+      "Namespace": "ECS/ContainerInsights",
+      "Statistic": "Minimum",
+      "Dimensions": [
+        {
+          "Name": "ClusterName",
+          "Value": "neraium-prod-cluster"
+        },
+        {
+          "Name": "ServiceName",
+          "Value": "neraium-prod-worker-service"
+        }
+      ],
+      "Period": 60,
+      "EvaluationPeriods": 3,
+      "DatapointsToAlarm": 3,
+      "Threshold": 1.0,
+      "ComparisonOperator": "LessThanThreshold",
+      "TreatMissingData": "breaching",
+      "StateTransitionedTimestamp": "2026-10-03 03:09:42.039000+00:00"
+    }
+  ],
+  "rollback": {
+    "api": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-api:339",
+    "worker": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-worker:333"
+  },
+  "comparison_to_previous_audit": "MATCH: task pair, image, identities, broad app egress, dedicated executor route/firewall, IMDSv2 and master-secret grant unchanged",
+  "rollback_task_definitions": {
+    "neraium-prod-api-service": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-api:339",
+    "neraium-prod-worker-service": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-worker:333"
+  }
+}

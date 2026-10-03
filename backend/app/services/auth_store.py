@@ -364,6 +364,45 @@ class _BaseAuthBackend:
     dialect = "unknown"
 
     def ensure_schema(self) -> None:
+        if self.dialect == "postgresql" and os.getenv("APP_ENV", "development").strip().lower() in {"staging", "prod", "production"}:
+            self.verify_runtime_schema()
+            return
+        self.migrate_schema()
+
+    def verify_runtime_schema(self) -> None:
+        """Production startup performs reads only; migration uses another identity."""
+        with self._connect() as connection:
+            flags = connection.execute(
+                "SELECT rolsuper OR rolcreaterole OR rolcreatedb OR rolreplication OR rolbypassrls "
+                "OR has_schema_privilege(current_user, 'public', 'CREATE') "
+                "OR has_database_privilege(current_user, current_database(), 'CREATE') "
+                "OR EXISTS (SELECT 1 FROM pg_roles r WHERE "
+                "(r.rolsuper OR r.rolcreaterole OR r.rolcreatedb OR r.rolreplication OR r.rolbypassrls "
+                "OR r.rolname IN ('rds_superuser','rds_replication','pg_execute_server_program',"
+                "'pg_write_server_files','pg_read_server_files','pg_signal_backend','pg_create_subscription')) "
+                "AND pg_has_role(current_user,r.oid,'MEMBER')) "
+                "FROM pg_roles WHERE rolname = current_user"
+            ).fetchone()
+            if flags is None or flags[0]:
+                raise RuntimeError("auth_runtime_identity_privileged")
+            rows = connection.execute("SELECT migration_id FROM auth_schema_migrations").fetchall()
+            if not set(AUTH_SCHEMA_MIGRATIONS).issubset({row[0] for row in rows}):
+                raise RuntimeError("auth_schema_migration_required")
+            for table in ("auth_users", "auth_workspaces", "auth_workspace_members", "auth_sessions"):
+                # This also confirms schema visibility without touching rows.
+                connection.execute(f"SELECT 1 FROM {table} LIMIT 0")
+            privileged = connection.execute(
+                "SELECT has_table_privilege(current_user, 'auth_schema_migrations', "
+                "'INSERT,UPDATE,DELETE,TRUNCATE') OR "
+                "EXISTS (SELECT 1 FROM pg_class c WHERE c.relname IN "
+                "('auth_users','auth_workspaces','auth_workspace_members','auth_sessions','auth_schema_migrations') "
+                "AND c.relnamespace = 'public'::regnamespace AND pg_has_role(current_user,c.relowner,'MEMBER'))"
+            ).fetchone()
+            if privileged is None or privileged[0]:
+                raise RuntimeError("auth_runtime_identity_privileged")
+
+    def migrate_schema(self) -> None:
+        """Explicit offline/admin operation; never invoked by production startup."""
         with self._connect() as connection:
             if self.dialect == "postgresql":
                 connection.execute("SELECT pg_advisory_xact_lock(173514001)")
@@ -843,7 +882,7 @@ def _password_authentication_failed(error: Exception) -> bool:
 
 
 class _SecretsManagerPostgresAuthBackend(_BaseAuthBackend):
-    """PostgreSQL backend backed directly by the rotating RDS credential secret."""
+    """PostgreSQL backend using a managed dedicated application credential."""
 
     placeholder = "%s"
     dialect = "postgresql"

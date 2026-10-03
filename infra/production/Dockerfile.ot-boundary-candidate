@@ -1,0 +1,9 @@
+# UNDEPLOYED. Protected-source change: requires separate release certification.
+ARG BASE_IMAGE=680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b
+FROM ${BASE_IMAGE}
+USER root
+COPY --chown=root:root backend/app/services/telemetry_resource_policy.py backend/app/services/telemetry_resource_policies.json /app/app/services/
+COPY --chown=root:root backend/app/services/connector_execution.py backend/app/services/connector_execution_child.py backend/app/services/auth_store.py /app/app/services/
+COPY --chown=root:root backend/app/connectors/https_telemetry.py /app/app/connectors/https_telemetry.py
+COPY --chown=root:root backend/app/models/telemetry_api_models.py /app/app/models/telemetry_api_models.py
+USER neraium
