@@ -30,6 +30,18 @@ def test_aws_monitoring_has_persistent_external_failure_detection():
     assert "upload_worker_iteration_failed" in script
     assert "--alarm-actions \"$INFRA_ALERT_TOPIC_ARN\"" in script
     assert "--ok-actions \"$INFRA_ALERT_TOPIC_ARN\"" in script
+    for signal in (
+        "StatusCheckFailed",
+        "telemetry_scheduler_iteration_failed",
+        "telemetry_scheduler_lag_high",
+        "telemetry_ingestion_page_failed",
+        "connector_executor_",
+        "telemetry_analysis_failed",
+        "telemetry_v2_persistence_failed",
+        "telemetry_v2_retrieval_failed",
+        "telemetry_v2_retrieval_completed",
+    ):
+        assert signal in script
 
 
 def test_task_role_and_deployment_enable_in_application_monitoring():

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import logging
 import threading
 
@@ -180,6 +180,16 @@ def _scheduler(
         heartbeat=heartbeat or (lambda **kwargs: True),
         lease_heartbeat_interval_seconds=lease_heartbeat_interval_seconds,
     )
+
+
+def test_claim_lag_emits_alarm_signal_without_changing_processing(caplog) -> None:
+    repository = FakeRepository(claims=[_claim(_scope(), next_attempt_at=NOW - timedelta(seconds=601))])
+    with caplog.at_level(logging.INFO):
+        result = _scheduler(repository).run_once()
+    assert result.outcome == "processed"
+    assert "telemetry_scheduler_claim_lag" in caplog.text
+    assert "telemetry_scheduler_lag_high" in caplog.text
+    assert repository.completed
 
 
 def test_claims_normalizes_and_atomically_persists_one_page_checkpoint() -> None:

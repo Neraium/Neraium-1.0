@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
+import logging
 from typing import Any
 from uuid import UUID, uuid5
 
@@ -29,6 +30,7 @@ from app.services.operating_modes import unavailable_operating_mode
 
 
 EXECUTION_IDENTITY_VERSION = "physical-endpoint-keyed.v2"
+logger = logging.getLogger(__name__)
 
 
 def _bindings(
@@ -251,22 +253,29 @@ def run_post_ingestion_analysis_v2(
             reason_code="endpoint_analysis_no_relationship_evidence",
             persisted=False, contract_version=EXECUTION_IDENTITY_VERSION,
         )
-    for pair, candidate, evidence in evaluated_pairs:
-        artifact = lineage_repository.persist(
-            scope, window=window, pair=pair, result=candidate, evidence=evidence,
+    try:
+        for pair, candidate, evidence in evaluated_pairs:
+            artifact = lineage_repository.persist(
+                scope, window=window, pair=pair, result=candidate, evidence=evidence,
+            )
+            if lineage_repository.read(scope, window=window, pair=pair) != artifact:
+                raise AnalysisWindowValidationError("endpoint_analysis_readback_mismatch")
+            artifacts.append(artifact)
+        pairs = tuple(pair for pair, _, _ in evaluated_pairs)
+        execution = execution_repository.persist_execution(
+            scope, window=window, result=result, pairs=pairs,
+            lineage_repository=lineage_repository,
         )
-        if lineage_repository.read(scope, window=window, pair=pair) != artifact:
-            raise AnalysisWindowValidationError("endpoint_analysis_readback_mismatch")
-        artifacts.append(artifact)
-    pairs = tuple(pair for pair, _, _ in evaluated_pairs)
-    execution = execution_repository.persist_execution(
-        scope, window=window, result=result, pairs=pairs,
-        lineage_repository=lineage_repository,
-    )
-    if execution_repository.read_execution(
-        scope, window=window, pairs=pairs, lineage_repository=lineage_repository,
-    ) != execution:
-        raise AnalysisWindowValidationError("endpoint_analysis_execution_readback_mismatch")
+        if execution_repository.read_execution(
+            scope, window=window, pairs=pairs, lineage_repository=lineage_repository,
+        ) != execution:
+            raise AnalysisWindowValidationError("endpoint_analysis_execution_readback_mismatch")
+    except Exception as error:
+        logger.error("telemetry_v2_persistence_failed", extra={
+            "event": "telemetry_v2_persistence_failed", "error_type": type(error).__name__,
+        })
+        raise
+    logger.info("telemetry_v2_persistence_completed", extra={"event": "telemetry_v2_persistence_completed"})
     return TelemetryAnalysisServiceResult(
         window_id=window_id, status="completed",
         result_id=execution["ref"],

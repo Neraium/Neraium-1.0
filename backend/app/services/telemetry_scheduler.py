@@ -159,6 +159,16 @@ class TelemetryScheduler:
             return SchedulerRunResult("idle")
         if not isinstance(work, Mapping):
             raise RuntimeError("telemetry_claim_contract_invalid")
+        due_at = work.get("next_attempt_at")
+        if isinstance(due_at, datetime) and due_at.tzinfo is not None:
+            lag_seconds = max(0.0, (claimed_at - due_at).total_seconds())
+            logger.info("telemetry_scheduler_claim_lag", extra={
+                "event": "telemetry_scheduler_claim_lag", "lag_seconds": round(lag_seconds, 2),
+            })
+            if lag_seconds >= 600:
+                logger.warning("telemetry_scheduler_lag_high", extra={
+                    "event": "telemetry_scheduler_lag_high", "lag_seconds": round(lag_seconds, 2),
+                })
 
         connection_id = _required_text(work, "connection_id", fallback="id")
         run_id = _required_text(work, "run_id")
@@ -227,6 +237,10 @@ class TelemetryScheduler:
                 )
             else:
                 page = provider.fetch_incremental(context, checkpoint=checkpoint)
+            logger.info(
+                "telemetry_connector_fetch_completed",
+                extra={"event": "telemetry_connector_fetch_completed", "run_id": run_id},
+            )
 
             mappings = _mapping_snapshots(
                 snapshot.get("mappings"),
@@ -349,6 +363,10 @@ class TelemetryScheduler:
                 completed_at=completed_at,
                 next_attempt_at=completed_at + timedelta(seconds=max(delay, 0.1)),
                 partial=bool(rejections),
+            )
+            logger.info(
+                "telemetry_ingestion_run_completed",
+                extra={"event": "telemetry_ingestion_run_completed", "run_id": run_id},
             )
             self._publish_heartbeat(status="healthy", processed_page=True)
             return SchedulerRunResult(
@@ -523,6 +541,16 @@ class TelemetryScheduler:
             ).strip().lower()
             if status not in {"completed", "failed", "ineligible", "partial"}:
                 status = "failed"
+            if status == "failed":
+                logger.error(
+                    "telemetry_analysis_failed",
+                    extra={"event": "telemetry_analysis_failed", "run_id": run_id},
+                )
+            elif status == "completed":
+                logger.info(
+                    "telemetry_analysis_completed",
+                    extra={"event": "telemetry_analysis_completed", "run_id": run_id},
+                )
             return status
         except Exception as error:
             logger.error(
@@ -533,6 +561,10 @@ class TelemetryScheduler:
                     "run_id": run_id,
                     "error_type": type(error).__name__,
                 },
+            )
+            logger.error(
+                "telemetry_analysis_failed",
+                extra={"event": "telemetry_analysis_failed", "run_id": run_id},
             )
             return "failed"
 

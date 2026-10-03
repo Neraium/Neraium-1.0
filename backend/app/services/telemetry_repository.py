@@ -1145,6 +1145,7 @@ class PostgreSQLTelemetryRepository:
                     SELECT c.id, c.tenant_scope_id, c.workspace_id,
                            c.resource_scope_id, c.facility_id, c.connector_type,
                            c.safe_config, c.timezone, c.polling_interval_seconds,
+                           c.next_attempt_at,
                            pending.id AS pending_run_id, pending.mode AS pending_mode,
                            pending.status AS pending_status,
                            pending.range_start, pending.range_end

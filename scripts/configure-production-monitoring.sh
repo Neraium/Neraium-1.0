@@ -7,6 +7,7 @@ ECS_API_SERVICE="${ECS_API_SERVICE:-neraium-prod-api-service}"
 ECS_WORKER_SERVICE="${ECS_WORKER_SERVICE:-neraium-prod-worker-service}"
 API_LOG_GROUP="${API_LOG_GROUP:-/ecs/neraium-prod-api}"
 WORKER_LOG_GROUP="${WORKER_LOG_GROUP:-/ecs/neraium-prod-worker}"
+CONNECTOR_EXECUTOR_INSTANCE_ID="${CONNECTOR_EXECUTOR_INSTANCE_ID:-i-081d0aba82dba64e7}"
 INFRA_ALERT_TOPIC_NAME="${INFRA_ALERT_TOPIC_NAME:-neraium-prod-infrastructure-alerts}"
 INFRA_ALERT_EMAILS="${NERAIUM_INFRA_ALERT_EMAILS:-}"
 
@@ -98,7 +99,21 @@ for service in "$ECS_API_SERVICE" "$ECS_WORKER_SERVICE"; do
     --threshold 1 \
     --comparison-operator LessThanThreshold \
     --treat-missing-data breaching
- done
+done
+
+put_alarm \
+  --alarm-name neraium-prod-connector-executor-status-failed \
+  --alarm-description "SEV2: connector executor EC2 status check failed for two of three minutes; scheduled telemetry may stop. Inspect EC2 instance status and /var/log/neraium-connector-executor.log. Runbook: docs/operations/sre-hardening.md#connector-executor-unavailable." \
+  --namespace AWS/EC2 \
+  --metric-name StatusCheckFailed \
+  --dimensions Name=InstanceId,Value="$CONNECTOR_EXECUTOR_INSTANCE_ID" \
+  --statistic Maximum \
+  --period 60 \
+  --evaluation-periods 3 \
+  --datapoints-to-alarm 2 \
+  --threshold 1 \
+  --comparison-operator GreaterThanOrEqualToThreshold \
+  --treat-missing-data breaching
 
 put_alarm \
   --alarm-name neraium-prod-api-no-healthy-alb-targets \
@@ -197,6 +212,75 @@ put_log_alarm "$WORKER_LOG_GROUP" \
   neraium-prod-worker-iteration-failures \
   "Upload worker iteration failed in three of five minutes."
 
+put_log_alarm "$WORKER_LOG_GROUP" \
+  neraium-telemetry-scheduler-failure \
+  '"telemetry_scheduler_iteration_failed"' \
+  TelemetrySchedulerFailures \
+  neraium-prod-telemetry-scheduler-failures \
+  "SEV2: telemetry scheduler iteration failed in three of five minutes; ingestion may stall. Inspect worker log and DB connectivity. Runbook: docs/operations/sre-hardening.md#worker-unavailable."
+
+put_log_alarm "$WORKER_LOG_GROUP" \
+  neraium-telemetry-scheduler-lag \
+  '"telemetry_scheduler_lag_high"' \
+  TelemetrySchedulerLagHigh \
+  neraium-prod-telemetry-scheduler-lag-high \
+  "SEV2: claimed telemetry work was over ten minutes overdue in three of five minutes; ingestion delayed. Inspect worker task count and due-work backlog. Runbook: docs/operations/sre-hardening.md#telemetry-ingestion-failing."
+
+put_log_alarm "$WORKER_LOG_GROUP" \
+  neraium-telemetry-ingestion-failure \
+  '"telemetry_ingestion_page_failed"' \
+  TelemetryIngestionFailures \
+  neraium-prod-telemetry-ingestion-failures \
+  "SEV2: ingestion page failed in three of five minutes; new telemetry may be delayed. Inspect error_code in worker logs. Runbook: docs/operations/sre-hardening.md#telemetry-ingestion-failing."
+
+put_log_alarm "$WORKER_LOG_GROUP" \
+  neraium-connector-repeated-failure \
+  '"telemetry_ingestion_page_failed" "connector_executor_"' \
+  ConnectorExecutorFailures \
+  neraium-prod-connector-executor-repeated-failures \
+  "SEV2: repeated connector executor fetch failures in three of five minutes; telemetry may be delayed. Check EC2 executor status and worker error_code. Runbook: docs/operations/sre-hardening.md#connector-executor-unavailable."
+
+put_log_alarm "$WORKER_LOG_GROUP" \
+  neraium-telemetry-analysis-failure \
+  '"telemetry_analysis_failed"' \
+  TelemetryAnalysisFailures \
+  neraium-prod-v2-analysis-failures \
+  "SEV2: analysis failed in three of five minutes; V2 results may be unavailable. Inspect worker analysis failure logs. Runbook: docs/operations/sre-hardening.md#v2-execution-failing."
+
+put_log_alarm "$WORKER_LOG_GROUP" \
+  neraium-v2-persistence-failure \
+  '"telemetry_v2_persistence_failed"' \
+  TelemetryV2PersistenceFailures \
+  neraium-prod-v2-persistence-failures \
+  "SEV2: V2 persistence failed in three of five minutes; completed results may not be durable. Inspect DB and worker logs. Runbook: docs/operations/sre-hardening.md#result-persistence-or-retrieval-failing."
+
+put_log_alarm "$API_LOG_GROUP" \
+  neraium-v2-retrieval-failure \
+  '"telemetry_v2_retrieval_failed"' \
+  TelemetryV2RetrievalFailures \
+  neraium-prod-v2-retrieval-failures \
+  "SEV2: V2 result retrieval failed in three of five minutes; customers may not see saved results. Inspect API logs and DB. Runbook: docs/operations/sre-hardening.md#result-persistence-or-retrieval-failing."
+
+put_success_metric() {
+  aws logs put-metric-filter \
+    --log-group-name "$1" \
+    --filter-name "$2" \
+    --filter-pattern "$3" \
+    --metric-transformations metricName="$4",metricNamespace=Neraium/Production,metricValue=1 \
+    --region "$AWS_REGION"
+}
+
+put_success_metric "$WORKER_LOG_GROUP" neraium-connector-fetch-completed \
+  '"telemetry_connector_fetch_completed"' ConnectorFetchCompleted
+put_success_metric "$WORKER_LOG_GROUP" neraium-ingestion-run-completed \
+  '"telemetry_ingestion_run_completed"' TelemetryIngestionCompleted
+put_success_metric "$WORKER_LOG_GROUP" neraium-analysis-completed \
+  '"telemetry_analysis_completed"' TelemetryAnalysisCompleted
+put_success_metric "$WORKER_LOG_GROUP" neraium-v2-persistence-completed \
+  '"telemetry_v2_persistence_completed"' TelemetryV2PersistenceCompleted
+put_success_metric "$API_LOG_GROUP" neraium-v2-retrieval-completed \
+  '"telemetry_v2_retrieval_completed"' TelemetryV2RetrievalCompleted
+
 printf 'INFRA_ALERT_TOPIC_ARN=%s\n' "$INFRA_ALERT_TOPIC_ARN"
 printf 'API_TARGET_GROUP_ARN=%s\n' "$API_TARGET_GROUP_ARN"
-printf 'Configured persistent production alarms for ALB, API latency/5xx, ECS tasks, authentication, secrets, credentials, and workers.\n'
+printf 'Configured production alarms for ALB, ECS, EC2 connector executor, database dependencies, ingestion, analysis, persistence, and retrieval.\n'

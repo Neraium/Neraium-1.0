@@ -180,7 +180,7 @@ def test_v2_list_verifies_each_execution_and_run_authority(monkeypatch) -> None:
         list_customer_executions_v2(**args)
 
 
-def test_v2_list_route_is_server_selected_and_scoped(tmp_path, monkeypatch) -> None:
+def test_v2_list_route_is_server_selected_and_scoped(tmp_path, monkeypatch, caplog) -> None:
     from app.routers import data_connections as route
     from app.services.telemetry_runtime import telemetry_runtime_from_app
 
@@ -207,6 +207,10 @@ def test_v2_list_route_is_server_selected_and_scoped(tmp_path, monkeypatch) -> N
         monkeypatch.setattr(route, "list_customer_executions_v2", lambda **kwargs: (_ for _ in ()).throw(EndpointExecutionV2Error("corrupt")))
         assert client.get(f"{base}/analysis-results").status_code == 404
         assert client.get(f"{base}/v2/analysis-results").status_code == 404
+        monkeypatch.setattr(route, "list_customer_executions_v2", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("db_unavailable")))
+        with pytest.raises(RuntimeError, match="db_unavailable"):
+            client.get(f"{base}/v2/analysis-results")
+        assert "telemetry_v2_retrieval_failed" in caplog.text
         runtime.execution_identity_version = "concept-keyed.v1"
         assert client.get(f"{base}/v2/analysis-results").status_code == 404
         app.dependency_overrides.pop(require_api_access)

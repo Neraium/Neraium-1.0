@@ -598,4 +598,6 @@ For each production deployment, preserve:
 
 Production infrastructure health, persistence thresholds, notification adapters, alarm architecture, dashboard behavior, and validation commands are documented in [`docs/production-self-monitoring.md`](../production-self-monitoring.md).
 
+First-customer SLIs, SLOs, alert response, backup verification, and incident procedures are in [Production V2 operations](sre-hardening.md).
+
 The external CloudWatch/SNS plane is authoritative when the API process is unavailable. The protected `/api/infrastructure/health` endpoint and Administration dashboard provide dependency evidence, current incidents, recovery history, worker heartbeat, secret age, and credential refresh state when the API is reachable.

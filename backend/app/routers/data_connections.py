@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from json import JSONDecodeError
+import logging
 import re
 from typing import Annotated, Any
 from uuid import UUID
@@ -63,6 +64,20 @@ from app.services.telemetry_domain import ConnectorType
 
 
 router = APIRouter(tags=["data-connections"], dependencies=[Depends(require_api_access)])
+logger = logging.getLogger(__name__)
+
+
+def _record_v2_retrieval_error(error: Exception) -> None:
+    if str(error) not in {"endpoint_execution_not_found", "endpoint_execution_run_not_found"}:
+        logger.error("telemetry_v2_retrieval_failed", extra={
+            "event": "telemetry_v2_retrieval_failed", "error_type": type(error).__name__,
+        })
+
+
+def _record_v2_retrieval_completed() -> None:
+    logger.info("telemetry_v2_retrieval_completed", extra={"event": "telemetry_v2_retrieval_completed"})
+
+
 ConnectionIdPath = Annotated[str, Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
 SystemIdPath = Annotated[str, Path(min_length=1, max_length=160, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$")]
 SignalIdPath = Annotated[UUID, Path()]
@@ -422,9 +437,16 @@ def list_data_connection_analysis_results(
     try:
         if service.runtime.execution_identity_version == "physical-endpoint-keyed.v2":
             try:
-                return JSONResponse(_list_v2_results(request, scope, str(connection_id), str(source_run_id), limit))
-            except ValueError:
+                result = _list_v2_results(request, scope, str(connection_id), str(source_run_id), limit)
+                response = JSONResponse(result)
+                _record_v2_retrieval_completed()
+                return response
+            except ValueError as error:
+                _record_v2_retrieval_error(error)
                 raise HTTPException(status_code=404, detail="Analysis result not found.") from None
+            except Exception as error:
+                _record_v2_retrieval_error(error)
+                raise
         return {
             "results": service.list_results(
                 scope,
@@ -461,11 +483,18 @@ def list_data_connection_analysis_results_v2(
 ) -> dict[str, Any]:
     _service, scope = _require_existing(request, connection_id)
     try:
-        return _list_v2_results(request, scope, str(connection_id), str(source_run_id), limit)
-    except ValueError:
+        result = _list_v2_results(request, scope, str(connection_id), str(source_run_id), limit)
+        _record_v2_retrieval_completed()
+        return result
+    except ValueError as error:
+        _record_v2_retrieval_error(error)
         raise HTTPException(status_code=404, detail="Analysis result not found.") from None
     except TelemetryRuntimeUnavailable as error:
+        _record_v2_retrieval_error(error)
         raise _api_error(error) from None
+    except Exception as error:
+        _record_v2_retrieval_error(error)
+        raise
 
 
 @router.get(
@@ -487,17 +516,24 @@ def read_data_connection_analysis_result_v2(
         factory = getattr(runtime.repository, "_connection_factory", None)
         if not callable(factory):
             raise EndpointExecutionV2Error("endpoint_execution_storage_unavailable")
-        return read_customer_execution_v2(
+        result = read_customer_execution_v2(
             repository=runtime.repository,
             lineage_repository=PostgreSQLEndpointLineageV2Repository(factory),
             execution_repository=PostgreSQLEndpointExecutionV2Repository(factory),
             scope=scope, connection_id=str(connection_id),
             source_run_id=str(source_run_id), execution_ref=execution_ref,
         )
-    except ValueError:
+        _record_v2_retrieval_completed()
+        return result
+    except ValueError as error:
+        _record_v2_retrieval_error(error)
         raise HTTPException(status_code=404, detail="Analysis result not found.") from None
     except TelemetryRuntimeUnavailable as error:
+        _record_v2_retrieval_error(error)
         raise _api_error(error) from None
+    except Exception as error:
+        _record_v2_retrieval_error(error)
+        raise
 
 
 @router.get(
