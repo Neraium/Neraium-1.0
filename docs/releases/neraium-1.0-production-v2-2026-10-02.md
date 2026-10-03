@@ -1,6 +1,6 @@
 # Neraium 1.0 Production V2 release certification
 
-Certified at 2026-10-03 00:15 UTC. Result: **PASS; ready for first customer onboarding**.
+Certification completed 2026-10-03 00:20 UTC. Result: **PASS; ready for first customer onboarding**.
 
 ## Immutable release identity
 
@@ -26,7 +26,7 @@ The runtime identity is `neraium_telemetry_runtime`. An initial read-only probe 
 
 ## Customer-like synthetic acceptance
 
-All application requests used `https://app.neraium.com/api` with a real session cookie and workspace selection. Synthetic account and facility workspaces were created only for certification. The approved source was API Gateway `bfzcudq5o2` backed by Neraium Lambda `neraium-prod-v2-synthetic-https-smoke`; its final code SHA-256 is `e8BhABDKMfnW/X+Fh4N/Oh86Jg5MenJod989kiHazq8=`. No customer telemetry or source credentials were used.
+All application requests used `https://app.neraium.com/api` with a real session cookie and workspace selection. Synthetic account and facility workspaces were created only for certification. The approved source was API Gateway `bfzcudq5o2` backed by Neraium Lambda `neraium-prod-v2-synthetic-https-smoke`; its final code SHA-256 is `e8BhABDKMfnW/X+Fh4N/Oh86Jg5MenJod989kiHazq8=`. The 40-observation-per-tag handler used for the passing ingestion is preserved at [synthetic-40-handler.py](neraium-1.0-production-v2-2026-10-02/synthetic-40-handler.py), SHA-256 `b0030aa1fb13a90c101530fb22fb0b33d8f38bf9850a5e160640cf5dc266f374`. The final 80-observation-per-tag handler is preserved at [synthetic-80-handler.py](neraium-1.0-production-v2-2026-10-02/synthetic-80-handler.py), SHA-256 `6d5a5f44a8ec5bc728abe7d6e10ab1c621f833c0eca3f2bdb1bd8b9afac7d731`. No customer telemetry or source credentials were used.
 
 | Check | Result |
 | --- | --- |
@@ -44,7 +44,7 @@ All application requests used `https://app.neraium.com/api` with a real session 
 | Controlled egress and dynamic secret writes | PASS: firewall READY, allowlist and deny policy attached; API/worker task settings enable controlled egress and disable dynamic writes |
 | Rolling API restart and persisted retrieval | PASS: new healthy API task on revision 338; same detail response SHA-256 and verified lineage after fresh login, with no analysis rerun |
 
-Acceptance execution reference: `telemetry-endpoint-execution.v2:10e7a6ab7525950a34494782c701516f707791e9d2894c40d9370f7010659402`. Result digest: `telemetry-endpoint-result.v2:3bb3fc3d9ff8da1c3dae00108ebbe44de4abd615984ca9953b90b3e1639a56d8`. Customer detail HTTP body SHA-256 before and after restart: `a74680170172552f1da330d7457344d91686181223e5c1be9e6efc59e630b458`. Synthetic fixture archive SHA-256: `7bc0610010ca31f9d6fd7f8587837f3a1f3a260e4c7a726877df3d9221daceaf`.
+Acceptance execution reference: `telemetry-endpoint-execution.v2:10e7a6ab7525950a34494782c701516f707791e9d2894c40d9370f7010659402`. Result digest: `telemetry-endpoint-result.v2:3bb3fc3d9ff8da1c3dae00108ebbe44de4abd615984ca9953b90b3e1639a56d8`. Customer detail HTTP body SHA-256 before and after restart: `a74680170172552f1da330d7457344d91686181223e5c1be9e6efc59e630b458`. Synthetic ZIP archive SHA-256 values: 40-per-tag `055dfc0433a32b5a7dd3cf232930183f9aedaa0b0634aba911a728bac2c1a8dd`, 80-per-tag `7bc0610010ca31f9d6fd7f8587837f3a1f3a260e4c7a726877df3d9221daceaf`.
 
 Focused local regression suites: **77 passed, 3 skipped** for the V2 product, connector, authorization, migration, and V1 analysis paths; **150 passed, 4 failed, 1 skipped** for the additional authority, result, route, and window paths. PostgreSQL skips require optional local DSNs; live production DB probes verified the deployed ledger, grant, and result path. The four failures are confined to the retired legacy CSV connector upload route's error body. It returns the required `410` status and does not execute legacy connector activity, but its upload error wrapper replaces the expected structured retirement detail with a generic import error. All four failures reproduced in an isolated clean checkout of release SHA `94007976`; they are not caused by unrelated dirty files and do not affect the supported customer V2 path. V1 analysis and result compatibility tests passed.
 
