@@ -369,37 +369,42 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(screen.getByRole("button", { name: "Open investigation" })).toBeTruthy();
   });
 
-  it("orders finding review around change, importance, checks, timeline, and evidence", () => {
+  it("preserves finding scope and confidence through investigation and the evidence record", async () => {
     renderWorkspace();
     fireEvent.click(screen.getByRole("button", { name: "Review finding" }));
     expect(window.location.pathname).toBe("/findings/finding-1");
-    const headings = [...document.querySelectorAll(".case-sections--review > section > h2")].map((node) => node.textContent);
-    expect(headings).toEqual(["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]);
-    expect(screen.queryByText("Cause / attribution")).toBeNull();
-    for (const dimension of ["Change confidence", "Evidence quality", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) {
-      expect(screen.getAllByText(dimension).length).toBeGreaterThan(0);
+    const review = within(await screen.findByTestId("finding-review"));
+    for (const heading of ["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]) {
+      expect(review.getByRole("heading", { name: heading })).toBeTruthy();
     }
-    expect(screen.queryByText("Cause established?")).toBeNull();
-    expect(screen.getByRole("button", { name: "Open investigation" })).toBeTruthy();
-  });
-
-  it("opens a progressive investigation without evidence-record audit internals", () => {
-    renderWorkspace();
-    fireEvent.click(screen.getByRole("button", { name: "Review finding" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
+    expect(review.queryByText("Cause / attribution")).toBeNull();
+    for (const dimension of ["Change confidence", "Evidence quality", "Persistence", "Operating context", "Corroboration", "Evidence sufficiency"]) {
+      expect(review.getAllByText(dimension).length).toBeGreaterThan(0);
+    }
+    expect(review.queryByText("Cause established?")).toBeNull();
+    fireEvent.click(review.getByRole("button", { name: "Open investigation" }));
     expect(window.location.pathname).toBe("/investigations/finding-1");
-    const headings = [...document.querySelectorAll(".case-sections--investigation > section > h2")].map((node) => node.textContent);
-    expect(headings).toEqual(["Primary relationship comparison", "Relationship evidence", "Persistence and confidence", "Operating context", "System evidence channels", "Data quality and comparability", "Timeline", "Source signals and lineage"]);
-    for (const label of ["Audit history", "Engine and build", "Classification", "Evidence sufficiency"]) expect(screen.queryByRole("heading", { name: label })).toBeNull();
-  });
-
-  it("moves directly from finding to investigation to the evidence record", () => {
-    renderWorkspace();
-    fireEvent.click(screen.getByRole("button", { name: "Review finding" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open investigation" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open evidence record" }));
+    const investigation = within(await screen.findByTestId("investigation-workspace"));
+    for (const heading of ["Source signals and lineage", "Data quality and comparability", "Primary relationship comparison", "Persistence and confidence", "Operating context", "System evidence channels", "Timeline"]) {
+      expect(investigation.getByRole("heading", { name: heading })).toBeTruthy();
+    }
+    const source = within(investigation.getByRole("heading", { name: "Source signals and lineage" }).closest("section"));
+    expect(source.getByText("Finding-owned relationship evidence; system channels are separately scoped below.")).toBeTruthy();
+    for (const signal of ["Condenser approach temperature", "Compressor current"]) {
+      expect(source.getAllByText(signal).length).toBeGreaterThan(0);
+    }
+    const quality = within(investigation.getByRole("heading", { name: "Data quality and comparability" }).closest("section"));
+    expect(quality.getByText("Historian X was unavailable.")).toBeTruthy();
+    const disclosure = investigation.getByText(/All relationship evidence/);
+    expect(disclosure.closest("details").open).toBe(false);
+    fireEvent.click(disclosure);
+    expect(disclosure.closest("details").open).toBe(true);
+    for (const label of ["Audit history", "Engine and build", "Classification", "Evidence sufficiency"]) {
+      expect(investigation.queryByRole("heading", { name: label })).toBeNull();
+    }
+    fireEvent.click(investigation.getByRole("button", { name: "Open evidence record" }));
     expect(window.location.pathname).toBe("/evidence/finding-1");
-    expect(screen.getByTestId("evidence-record")).toBeTruthy();
+    expect(await screen.findByTestId("evidence-record")).toBeTruthy();
     for (const heading of ["Record identity", "Finding-owned relationships", "Finding provenance and lineage", "Evidence sufficiency", "Audit history"]) expect(screen.getAllByRole("heading", { name: heading }).length).toBeGreaterThan(0);
     expect(document.body.textContent).toContain("pearson_correlation");
     expect(document.body.textContent).toContain("0.094013");

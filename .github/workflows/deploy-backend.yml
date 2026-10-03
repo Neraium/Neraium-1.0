@@ -60,7 +60,15 @@ jobs:
             tests/test_telemetry_canonical_result_persistence.py tests/test_telemetry_authorization.py \
             tests/test_telemetry_runtime_grants.py tests/test_phase4_authenticated_scope.py tests/test_telemetry_production_config.py \
             tests/test_connector_execution.py tests/test_telemetry_ssrf.py tests/backend/test_api_health.py \
+            tests/test_health.py::test_root_endpoint_returns_service_metadata \
+            tests/test_health.py::test_health_endpoint_returns_ok \
             tests/test_evidence_governance.py tests/test_governance_audit_boundaries.py
+      - name: Verify candidate upload certification workloads
+        working-directory: ${{ runner.temp }}/neraium-release-source
+        run: |
+          python -m pytest -m upload_certification \
+            tests/test_complete_upload_semantics.py::test_complete_10000_upload_repeat \
+            tests/test_upload_robustness_benchmark.py::test_100k_upload_performance_guard
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:

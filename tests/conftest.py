@@ -51,9 +51,15 @@ def pytest_collection_modifyitems(items):
         "tests/test_complete_upload_semantics.py::"
         "test_retained_146_leaf_inventory_is_exhaustive"
     )
+    upload_certification = {
+        "tests/test_complete_upload_semantics.py::test_complete_10000_upload_repeat",
+        "tests/test_upload_robustness_benchmark.py::test_100k_upload_performance_guard",
+    }
     for item in items:
         if item.nodeid == historical:
             item.add_marker(pytest.mark.historical_certification)
+        if item.nodeid in upload_certification:
+            item.add_marker(pytest.mark.upload_certification)
 
 
 def pytest_addoption(parser):

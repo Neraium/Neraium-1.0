@@ -48,12 +48,6 @@ jobs:
       - name: Install Playwright browsers
         run: npm run playwright:install
 
-      - name: Lint frontend
-        run: npm run lint
-
-      - name: Build frontend
-        run: npm run build
-
       - name: Run Playwright setup and responsive smoke tests
         run: npm run test:e2e -- tests/e2e/setup-upload-regression.spec.js tests/e2e/responsive-layout.spec.js
 

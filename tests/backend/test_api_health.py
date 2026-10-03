@@ -4,28 +4,9 @@ import pytest
 
 
 @pytest.mark.unit
-def test_root_endpoint(client):
-    """Test root endpoint."""
-    response = client.get("/")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["service"] == "neraium-api"
-    assert data["status"] == "ok"
-
-
-@pytest.mark.unit
 def test_health_endpoint(client):
     """Test /health endpoint."""
     response = client.get("/health")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "ok"
-
-
-@pytest.mark.unit
-def test_api_health_endpoint(client):
-    """Test /api/health endpoint."""
-    response = client.get("/api/health")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"

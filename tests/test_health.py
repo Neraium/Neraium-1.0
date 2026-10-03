@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
@@ -330,41 +331,12 @@ def test_latest_sii_state_write_replaces_atomically() -> None:
     assert not STATE_PATH.with_suffix(".json.tmp").exists()
 
 
-def test_health_endpoint_returns_cors_header_for_production_frontend() -> None:
+@pytest.mark.parametrize("endpoint", ["/api/health", "/api/facility/systems", "/api/data/latest-upload"])
+def test_endpoints_return_cors_header_for_production_frontend(endpoint) -> None:
     client = TestClient(create_app())
 
     response = client.options(
-        "/api/health",
-        headers={
-            "Origin": "https://app.neraium.com",
-            "Access-Control-Request-Method": "GET",
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == "https://app.neraium.com"
-
-
-def test_facility_systems_endpoint_returns_cors_header_for_production_frontend() -> None:
-    client = TestClient(create_app())
-
-    response = client.options(
-        "/api/facility/systems",
-        headers={
-            "Origin": "https://app.neraium.com",
-            "Access-Control-Request-Method": "GET",
-        },
-    )
-
-    assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == "https://app.neraium.com"
-
-
-def test_latest_upload_endpoint_returns_cors_header_for_production_frontend() -> None:
-    client = TestClient(create_app())
-
-    response = client.options(
-        "/api/data/latest-upload",
+        endpoint,
         headers={
             "Origin": "https://app.neraium.com",
             "Access-Control-Request-Method": "GET",
