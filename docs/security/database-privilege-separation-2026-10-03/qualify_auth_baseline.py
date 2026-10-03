@@ -1,0 +1,129 @@
+"""Run inside the candidate image sharing ONLY the network-none disposable DB.
+
+No production DSN, credentials or AWS environment is accepted. Invoke using
+docker run --network container:neraium-ot-readiness-db --read-only ... .
+"""
+from pathlib import Path
+import json
+import os
+import time
+import psycopg
+from app.services.auth_store import _PostgresAuthBackend, AUTH_SCHEMA_MIGRATIONS
+
+os.environ["APP_ENV"] = "prod"
+ADMIN = "postgresql://postgres@127.0.0.1/neraium"
+MIGRATION = "postgresql://neraium_auth_migrator@127.0.0.1/neraium"
+RUNTIME = "postgresql://neraium_auth_runtime@127.0.0.1/neraium"
+RESULTS = []
+
+
+def check(name, test):
+    test()
+    RESULTS.append({"check":name,"status":"PASS"})
+
+
+def admin(sql):
+    with psycopg.connect(ADMIN) as c:
+        c.execute(sql)
+
+
+def denied(sql):
+    with psycopg.connect(RUNTIME, autocommit=True) as c:
+        try:
+            c.execute(sql)
+        except psycopg.errors.InsufficientPrivilege:
+            c.rollback()
+        else:
+            raise AssertionError("prohibited SQL succeeded: " + sql)
+
+
+def guard_rejects():
+    try:
+        _PostgresAuthBackend(RUNTIME).ensure_schema()
+    except RuntimeError as exc:
+        assert str(exc)=="auth_runtime_identity_privileged"
+    else:
+        raise AssertionError("privileged startup accepted")
+
+
+def main():
+    for _ in range(50):
+        try:
+            psycopg.connect(ADMIN, connect_timeout=1).close()
+            break
+        except psycopg.OperationalError:
+            time.sleep(0.2)
+    else:
+        raise RuntimeError("local_database_not_ready")
+    admin("CREATE ROLE neraium_auth_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT; ALTER SCHEMA public OWNER TO neraium_auth_migrator; REVOKE CREATE ON SCHEMA public FROM PUBLIC; REVOKE CREATE,TEMP ON DATABASE neraium FROM PUBLIC; GRANT CONNECT ON DATABASE neraium TO neraium_auth_migrator;")
+    migrator = _PostgresAuthBackend(MIGRATION)
+    check("offline_migration_separate_identity", migrator.migrate_schema)
+    check("offline_migration_idempotent", migrator.migrate_schema)
+    admin(Path("/qualification/infra/production/auth-runtime-grants.sql").read_text())
+    admin("GRANT CONNECT ON DATABASE neraium TO neraium_auth_runtime;")
+    backend=_PostgresAuthBackend(RUNTIME)
+    check("runtime_readonly_schema_verification", backend.ensure_schema)
+    def legacy_ddl_rejected():
+        try:
+            backend.migrate_schema()
+        except psycopg.errors.InsufficientPrivilege:
+            return
+        raise AssertionError("legacy runtime migration unexpectedly permitted")
+    check("legacy_startup_DDL_cannot_use_narrow_runtime_identity",legacy_ddl_rejected)
+    now="2026-10-03T12:00:00+00:00"
+    def user_crud():
+        payload={"email":"local@example.test","name":"Local Fixture","role":"admin","salt":"local-fixture","password_hash":"local-fixture","created_at":now,"updated_at":now}
+        assert backend.insert_user_if_absent(payload)
+        assert not backend.insert_user_if_absent(payload)
+        backend.upsert_user(payload)
+        assert backend.read_user(payload["email"])
+        assert backend.list_users()
+        backend.set_user_login(payload["email"], now)
+    check("user_insert_select_update", user_crud)
+    def workspace_crud():
+        workspace={"workspace_id":"local","display_name":"Local","scope_tenant_id":"t","scope_user_id":"u","scope_workspace_id":"w","created_at":now,"updated_at":now,"created_by":"local@example.test"}
+        member={"workspace_id":"local","email":"local@example.test","added_at":now,"updated_at":now,"added_by":"local@example.test"}
+        backend.create_workspace(workspace,member)
+        backend.upsert_workspace_member(member)
+        assert backend.list_workspace_members("local")
+    check("workspace_membership_insert_select_update", workspace_crud)
+    def session_crud():
+        payload={"session_id":"one","email":"local@example.test","created_at":now,"expires_at":"2026-11-03T12:00:00+00:00"}
+        backend.replace_active_session(payload)
+        assert backend.read_session("one")
+        assert backend.list_sessions()
+        backend.revoke_session("one")
+        payload["session_id"]="two"
+        backend.upsert_session(payload)
+        assert backend.revoke_sessions_for_email("local@example.test")==1
+        assert backend.metrics()["total_users"]==1
+        assert backend.delete_expired_sessions("2027-01-01T00:00:00+00:00")==2
+        backend.set_user_active_status("local@example.test",is_active=False)
+    check("session_insert_select_update_delete_and_advisory_lock", session_crud)
+    for sql in (
+        "CREATE TABLE public.prohibited(x int)","CREATE SCHEMA prohibited",
+        "CREATE DATABASE prohibited","CREATE ROLE prohibited",
+        "ALTER TABLE public.auth_users ADD COLUMN prohibited int",
+        "DROP TABLE public.auth_sessions", "TRUNCATE public.auth_users CASCADE",
+        "INSERT INTO public.auth_schema_migrations VALUES ('prohibited',now())",
+        "UPDATE public.auth_schema_migrations SET applied_at=now()",
+        "DELETE FROM public.auth_schema_migrations", "TRUNCATE public.auth_schema_migrations",
+        "SET ROLE neraium_auth_migrator", "CREATE TEMP TABLE prohibited(x int)",
+    ):
+        check("denied:"+sql,lambda sql=sql:denied(sql))
+    admin("GRANT CREATE ON SCHEMA public TO PUBLIC")
+    check("effective_PUBLIC_CREATE_rejected",guard_rejects)
+    admin("REVOKE CREATE ON SCHEMA public FROM PUBLIC; CREATE ROLE local_admin CREATEDB; GRANT local_admin TO neraium_auth_runtime WITH INHERIT FALSE")
+    check("NOINHERIT_admin_SET_ROLE_membership_rejected",guard_rejects)
+    admin("REVOKE local_admin FROM neraium_auth_runtime")
+    # Verify narrower grants are sufficient for every actual auth statement above.
+    admin("REVOKE DELETE ON public.auth_users,public.auth_workspaces,public.auth_workspace_members FROM neraium_auth_runtime")
+    check("narrower_runtime_startup",backend.ensure_schema)
+    check("unnecessary_user_delete_denied",lambda:denied("DELETE FROM public.auth_users"))
+    with psycopg.connect(RUNTIME) as c:
+        assert set(AUTH_SCHEMA_MIGRATIONS)=={r[0] for r in c.execute("SELECT migration_id FROM auth_schema_migrations")}
+    print(json.dumps({"status":"PASS","checks":RESULTS,"production_equivalence":"NOT ESTABLISHED: production owners/PUBLIC/functions/RLS/roles not inventoried","tls_rotation":"covered separately by existing mocked rotation test; this fixture is network-none, trust authentication"},indent=2))
+
+
+if __name__=="__main__":
+    main()

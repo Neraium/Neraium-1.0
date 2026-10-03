@@ -1,0 +1,1977 @@
+{
+  "decision": "BLOCKED",
+  "observed_at": "2026-10-03T19:57:27.347164+00:00",
+  "completed_at": "2026-10-03T20:14:27.077300+00:00",
+  "source": {
+    "branch": "fix/deterministic-governed-output",
+    "head": "43553130e63bf36aa9d4ff748318d7c1e8519492",
+    "origin_branch_head": "43553130e63bf36aa9d4ff748318d7c1e8519492",
+    "origin": "https://github.com/Neraium/Neraium-1.0.git",
+    "dirty_tracked_files_at_start": [
+      "backend/app/routers/historical_ingestion.py",
+      "backend/app/services/historical_ingestion.py"
+    ],
+    "protected_work": {
+      "backend/app/routers/historical_ingestion.py": "23553fbcdd2f530fc45a7bfd53342de6cd4d254fc9014749ed47afffd82321f5",
+      "backend/app/services/historical_ingestion.py": "47813b790c4faea03ef36cd799149ed7493e45079a4d00c709553a3f334155a5",
+      "protected_git_diff_sha256": "ef5a8469c7b063c2d483e764abf5113e069b68da5e439e2e708331cd7fc58f6b"
+    },
+    "unrelated_untracked_paths_excluded": true,
+    "protected_work_preservation_check": "PASS",
+    "retained_readiness_provenance": "Existing untracked security evidence, not present in assessed HEAD; compared read-only and not staged"
+  },
+  "production": {
+    "account": "680779862188",
+    "identity_arn": "arn:aws:iam::680779862188:user/neraium-cli",
+    "region": "us-east-2",
+    "ecs": {
+      "api": {
+        "task_definition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-api:339",
+        "rollback_status": "ACTIVE",
+        "task_role": "arn:aws:iam::680779862188:role/neraium-prod-task-app-role",
+        "execution_role": "arn:aws:iam::680779862188:role/neraium-prod-ecs-task-execution-role",
+        "service": {
+          "serviceName": "neraium-prod-api-service",
+          "status": "ACTIVE",
+          "desiredCount": 1,
+          "runningCount": 1,
+          "pendingCount": 0,
+          "deploymentConfiguration": {
+            "deploymentCircuitBreaker": {
+              "enable": false,
+              "rollback": false
+            },
+            "maximumPercent": 200,
+            "minimumHealthyPercent": 100
+          }
+        },
+        "deployments": [
+          {
+            "status": "PRIMARY",
+            "rolloutState": "COMPLETED",
+            "taskDefinition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-api:339",
+            "runningCount": 1,
+            "pendingCount": 0
+          }
+        ],
+        "containers": [
+          {
+            "name": "api",
+            "image": "680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b",
+            "database_environment": [
+              {
+                "name": "NERAIUM_AUTH_DATABASE_SSLMODE",
+                "value": "require"
+              },
+              {
+                "name": "NERAIUM_AUTH_DATABASE_SECRET_ARN",
+                "value": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT"
+              },
+              {
+                "name": "NERAIUM_AUTH_DATABASE_PORT",
+                "value": "5432"
+              },
+              {
+                "name": "NERAIUM_AUTH_DATABASE_NAME",
+                "value": "postgres"
+              },
+              {
+                "name": "NERAIUM_AUTH_DATABASE_HOST",
+                "value": "neraium-prod-postgres.cxgciqwwi3s2.us-east-2.rds.amazonaws.com"
+              }
+            ],
+            "secret_bindings": [
+              {
+                "name": "NERAIUM_API_TOKEN",
+                "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium-api-token-zo7tAc"
+              },
+              {
+                "name": "NERAIUM_BOOTSTRAP_ADMIN_PASSWORD",
+                "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/booystrap-admin-password-cTgxAj"
+              },
+              {
+                "name": "NERAIUM_TELEMETRY_DATABASE_URL",
+                "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li"
+              },
+              {
+                "name": "NERAIUM_RUNTIME_DATABASE_URL",
+                "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li"
+              }
+            ]
+          }
+        ],
+        "running_tasks": [
+          {
+            "taskArn": "arn:aws:ecs:us-east-2:680779862188:task/neraium-prod-cluster/88630bceb13c4bdf8bdec7853eb1a060",
+            "taskDefinitionArn": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-api:339",
+            "lastStatus": "RUNNING",
+            "healthStatus": "HEALTHY",
+            "startedAt": "2026-10-03 06:56:52.457000+00:00"
+          }
+        ],
+        "task_configuration_sha256": "47187ac646367e30b7eee67a4b7d0364192bf87c90d8582d23ab10e9d8108ccc",
+        "service_topology_sha256": "e71ca105e96d6c4e78edeeb8e9e78b10809cbd05f92dbe1ed4bbe45368e96af9",
+        "task_matches_readiness": true,
+        "topology_matches_readiness": true
+      },
+      "worker": {
+        "task_definition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-worker:333",
+        "rollback_status": "ACTIVE",
+        "task_role": "arn:aws:iam::680779862188:role/neraium-prod-task-app-role",
+        "execution_role": "arn:aws:iam::680779862188:role/neraium-prod-ecs-task-execution-role",
+        "service": {
+          "serviceName": "neraium-prod-worker-service",
+          "status": "ACTIVE",
+          "desiredCount": 1,
+          "runningCount": 1,
+          "pendingCount": 0,
+          "deploymentConfiguration": {
+            "deploymentCircuitBreaker": {
+              "enable": false,
+              "rollback": false
+            },
+            "maximumPercent": 200,
+            "minimumHealthyPercent": 100
+          }
+        },
+        "deployments": [
+          {
+            "status": "PRIMARY",
+            "rolloutState": "COMPLETED",
+            "taskDefinition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-worker:333",
+            "runningCount": 1,
+            "pendingCount": 0
+          }
+        ],
+        "containers": [
+          {
+            "name": "worker",
+            "image": "680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b",
+            "database_environment": [],
+            "secret_bindings": [
+              {
+                "name": "NERAIUM_TELEMETRY_DATABASE_URL",
+                "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li"
+              },
+              {
+                "name": "NERAIUM_RUNTIME_DATABASE_URL",
+                "valueFrom": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li"
+              }
+            ]
+          }
+        ],
+        "running_tasks": [
+          {
+            "taskArn": "arn:aws:ecs:us-east-2:680779862188:task/neraium-prod-cluster/31ab8983c7714c67887f739cc51c1d5a",
+            "taskDefinitionArn": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-worker:333",
+            "lastStatus": "RUNNING",
+            "healthStatus": "UNKNOWN",
+            "startedAt": "2026-10-03 06:56:47.683000+00:00"
+          }
+        ],
+        "task_configuration_sha256": "3e2b24d8cba83780a14cb3ec19f23da1cf5c2300a6c247de22510206a30de250",
+        "service_topology_sha256": "bfa3a5d1cd6170ddc45a21b0c239485ca6ef7153cd3c0081e6bfaf925ea2c0a7",
+        "task_matches_readiness": true,
+        "topology_matches_readiness": true
+      }
+    },
+    "rds": {
+      "DBInstanceIdentifier": "neraium-prod-postgres",
+      "DBInstanceStatus": "available",
+      "DBClusterIdentifier": null,
+      "Engine": "postgres",
+      "EngineVersion": "16.14",
+      "MasterUsername": "postgres",
+      "PubliclyAccessible": false,
+      "Endpoint": {
+        "Address": "neraium-prod-postgres.cxgciqwwi3s2.us-east-2.rds.amazonaws.com",
+        "Port": 5432,
+        "HostedZoneId": "Z2XHWR1WZ565X2"
+      },
+      "DBParameterGroups": [
+        {
+          "DBParameterGroupName": "default.postgres16",
+          "ParameterApplyStatus": "in-sync"
+        }
+      ],
+      "CACertificateIdentifier": "rds-ca-rsa2048-g1",
+      "CertificateDetails": {
+        "CAIdentifier": "rds-ca-rsa2048-g1",
+        "ValidTill": "2027-07-17 18:54:05+00:00"
+      },
+      "BackupRetentionPeriod": 7,
+      "LatestRestorableTime": "2026-10-03 19:51:06+00:00",
+      "MasterUserSecret": {
+        "SecretArn": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT",
+        "SecretStatus": "active",
+        "KmsKeyId": "arn:aws:kms:us-east-2:680779862188:key/e397f3dc-50c6-46a4-b176-d76442cc3d62"
+      },
+      "PendingModifiedValues": {}
+    },
+    "snapshots": [
+      {
+        "DBSnapshotIdentifier": "neraium-prod-pre-v2-prereq-896c646-20261002",
+        "Status": "available",
+        "SnapshotCreateTime": "2026-10-02 13:16:35.613000+00:00",
+        "SnapshotType": "manual"
+      },
+      {
+        "DBSnapshotIdentifier": "rds:neraium-prod-postgres-2026-09-26-07-40",
+        "Status": "available",
+        "SnapshotCreateTime": "2026-09-26 07:40:11.336000+00:00",
+        "SnapshotType": "automated"
+      },
+      {
+        "DBSnapshotIdentifier": "rds:neraium-prod-postgres-2026-09-27-07-40",
+        "Status": "available",
+        "SnapshotCreateTime": "2026-09-27 07:40:11.022000+00:00",
+        "SnapshotType": "automated"
+      },
+      {
+        "DBSnapshotIdentifier": "rds:neraium-prod-postgres-2026-09-28-07-40",
+        "Status": "available",
+        "SnapshotCreateTime": "2026-09-28 07:40:10.560000+00:00",
+        "SnapshotType": "automated"
+      },
+      {
+        "DBSnapshotIdentifier": "rds:neraium-prod-postgres-2026-09-29-07-40",
+        "Status": "available",
+        "SnapshotCreateTime": "2026-09-29 07:40:14.592000+00:00",
+        "SnapshotType": "automated"
+      },
+      {
+        "DBSnapshotIdentifier": "rds:neraium-prod-postgres-2026-09-30-07-40",
+        "Status": "available",
+        "SnapshotCreateTime": "2026-09-30 07:40:06.626000+00:00",
+        "SnapshotType": "automated"
+      },
+      {
+        "DBSnapshotIdentifier": "rds:neraium-prod-postgres-2026-10-01-07-40",
+        "Status": "available",
+        "SnapshotCreateTime": "2026-10-01 07:40:05.851000+00:00",
+        "SnapshotType": "automated"
+      },
+      {
+        "DBSnapshotIdentifier": "rds:neraium-prod-postgres-2026-10-02-07-40",
+        "Status": "available",
+        "SnapshotCreateTime": "2026-10-02 07:40:08.427000+00:00",
+        "SnapshotType": "automated"
+      },
+      {
+        "DBSnapshotIdentifier": "rds:neraium-prod-postgres-2026-10-02-13-16",
+        "Status": "available",
+        "SnapshotCreateTime": "2026-10-02 13:16:35.613000+00:00",
+        "SnapshotType": "automated"
+      },
+      {
+        "DBSnapshotIdentifier": "rds:neraium-prod-postgres-2026-10-03-07-40",
+        "Status": "available",
+        "SnapshotCreateTime": "2026-10-03 07:40:06.723000+00:00",
+        "SnapshotType": "automated"
+      }
+    ],
+    "tls_parameters": [
+      {
+        "ParameterName": "rds.force_ssl",
+        "ParameterValue": "1",
+        "Source": "system",
+        "ApplyType": "dynamic",
+        "ApplyMethod": "pending-reboot",
+        "IsModifiable": true
+      },
+      {
+        "ParameterName": "ssl",
+        "ParameterValue": "1",
+        "Source": "system",
+        "ApplyType": "dynamic",
+        "ApplyMethod": "pending-reboot",
+        "IsModifiable": false
+      },
+      {
+        "ParameterName": "ssl_max_protocol_version",
+        "ParameterValue": null,
+        "Source": "engine-default",
+        "ApplyType": "dynamic",
+        "ApplyMethod": "pending-reboot",
+        "IsModifiable": true
+      },
+      {
+        "ParameterName": "ssl_min_protocol_version",
+        "ParameterValue": "TLSv1.2",
+        "Source": "system",
+        "ApplyType": "dynamic",
+        "ApplyMethod": "pending-reboot",
+        "IsModifiable": true
+      }
+    ],
+    "db_connectivity": {
+      "host": "neraium-prod-postgres.cxgciqwwi3s2.us-east-2.rds.amazonaws.com",
+      "port": 5432,
+      "credentials_retrieved": false,
+      "addresses": [
+        "10.40.3.9"
+      ],
+      "tcp_reachable": false,
+      "error_type": "TimeoutError"
+    },
+    "catalog_inventory": {
+      "status": "NOT OBTAINED",
+      "reason": "Private RDS TCP connection timed out; no established reachable controlled admin runner was found in the release tooling. No tunnel, ECS task, SSM command, or network change was improvised.",
+      "unknown": [
+        "database roles and memberships",
+        "schemas and object owners",
+        "table sequence function ACLs",
+        "effective PUBLIC and inherited rights",
+        "default privileges",
+        "function SECURITY DEFINER search_path and EXECUTE",
+        "RLS policies",
+        "live migration ledgers and compatibility"
+      ]
+    },
+    "iam_role_metadata": {
+      "neraium-prod-connector-executor-role": {
+        "role": {
+          "Role": {
+            "Path": "/",
+            "RoleName": "neraium-prod-connector-executor-role",
+            "RoleId": "AROAZ5ANEKCWC5TLBOVXO",
+            "Arn": "arn:aws:iam::680779862188:role/neraium-prod-connector-executor-role",
+            "CreateDate": "2026-10-02 15:31:47+00:00",
+            "AssumeRolePolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Service": "ec2.amazonaws.com"
+                  },
+                  "Action": "sts:AssumeRole"
+                }
+              ]
+            },
+            "Description": "Isolated telemetry connector execution; scoped read-only secrets and ECR pull",
+            "MaxSessionDuration": 3600,
+            "RoleLastUsed": {
+              "LastUsedDate": "2026-10-03 00:15:49+00:00",
+              "Region": "us-east-2"
+            }
+          }
+        },
+        "inline": [
+          {
+            "RoleName": "neraium-prod-connector-executor-role",
+            "PolicyName": "connector-execution-minimum",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:GetAuthorizationToken"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage"
+                  ],
+                  "Resource": "arn:aws:ecr:us-east-2:680779862188:repository/neraium-prod-api"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": [
+                    "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-auth-8EDeTQ",
+                    "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-tls-wMVlKy",
+                    "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-connections/*"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:DescribeSecret"
+                  ],
+                  "Resource": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-connections/*"
+                }
+              ]
+            }
+          }
+        ],
+        "managed": []
+      },
+      "neraium-prod-ecs-task-execution-role": {
+        "role": {
+          "Role": {
+            "Path": "/",
+            "RoleName": "neraium-prod-ecs-task-execution-role",
+            "RoleId": "AROAZ5ANEKCWC3NAIPZZR",
+            "Arn": "arn:aws:iam::680779862188:role/neraium-prod-ecs-task-execution-role",
+            "CreateDate": "2026-07-17 22:36:05+00:00",
+            "AssumeRolePolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Service": "ecs-tasks.amazonaws.com"
+                  },
+                  "Action": "sts:AssumeRole"
+                }
+              ]
+            },
+            "MaxSessionDuration": 3600,
+            "RoleLastUsed": {
+              "LastUsedDate": "2026-10-03 19:49:09+00:00",
+              "Region": "us-east-2"
+            }
+          }
+        },
+        "inline": [
+          {
+            "RoleName": "neraium-prod-ecs-task-execution-role",
+            "PolicyName": "neraium-cloudwatch-logs-access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": [
+                    "arn:aws:logs:us-east-2:680779862188:log-group:/ecs/neraium-prod-api:*",
+                    "arn:aws:logs:us-east-2:680779862188:log-group:/ecs/neraium-prod-worker:*"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "RoleName": "neraium-prod-ecs-task-execution-role",
+            "PolicyName": "neraium-secretsmanager-access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": [
+                    "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium-api-token-zo7tAc",
+                    "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/auth-database-url-XrtJxj",
+                    "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/booystrap-admin-password-cTgxAj",
+                    "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "managed": [
+          {
+            "policy": {
+              "Policy": {
+                "PolicyName": "AmazonECSTaskExecutionRolePolicy",
+                "PolicyId": "ANPAJG4T4G4PV56DE72PY",
+                "Arn": "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+                "Path": "/service-role/",
+                "DefaultVersionId": "v1",
+                "AttachmentCount": 5,
+                "PermissionsBoundaryUsageCount": 0,
+                "IsAttachable": true,
+                "Description": "Provides access to other AWS service resources that are required to run Amazon ECS tasks",
+                "CreateDate": "2017-11-16 18:48:22+00:00",
+                "UpdateDate": "2017-11-16 18:48:22+00:00",
+                "Tags": []
+              }
+            },
+            "version": {
+              "PolicyVersion": {
+                "Document": {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    {
+                      "Effect": "Allow",
+                      "Action": [
+                        "ecr:GetAuthorizationToken",
+                        "ecr:BatchCheckLayerAvailability",
+                        "ecr:GetDownloadUrlForLayer",
+                        "ecr:BatchGetImage",
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents"
+                      ],
+                      "Resource": "*"
+                    }
+                  ]
+                },
+                "VersionId": "v1",
+                "IsDefaultVersion": true,
+                "CreateDate": "2017-11-16 18:48:22+00:00"
+              }
+            }
+          }
+        ]
+      },
+      "neraium-prod-task-app-role": {
+        "role": {
+          "Role": {
+            "Path": "/",
+            "RoleName": "neraium-prod-task-app-role",
+            "RoleId": "AROAZ5ANEKCWM5KNTA6K4",
+            "Arn": "arn:aws:iam::680779862188:role/neraium-prod-task-app-role",
+            "CreateDate": "2026-06-10 22:28:38+00:00",
+            "AssumeRolePolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Service": "ecs-tasks.amazonaws.com"
+                  },
+                  "Action": "sts:AssumeRole"
+                }
+              ]
+            },
+            "MaxSessionDuration": 3600,
+            "RoleLastUsed": {
+              "LastUsedDate": "2026-10-03 19:50:59+00:00",
+              "Region": "us-east-2"
+            }
+          }
+        },
+        "inline": [
+          {
+            "RoleName": "neraium-prod-task-app-role",
+            "PolicyName": "neraium-telemetry-connector-read",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:DescribeSecret"
+                  ],
+                  "Resource": [
+                    "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-connections/*"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": [
+                    "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-auth-8EDeTQ"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "RoleName": "neraium-prod-task-app-role",
+            "PolicyName": "neraium-upload-state-access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    "arn:aws:s3:::neraium-prod-upload-state"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:PutObjectTagging",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource": [
+                    "arn:aws:s3:::neraium-prod-upload-state/*"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": [
+                    "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:DescribeSecret"
+                  ],
+                  "Resource": [
+                    "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt"
+                  ],
+                  "Resource": [
+                    "arn:aws:kms:us-east-2:680779862188:key/e397f3dc-50c6-46a4-b176-d76442cc3d62"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": [
+                    "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecs:DescribeServices",
+                    "elasticloadbalancing:DescribeTargetHealth"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "managed": []
+      }
+    },
+    "secrets_metadata": [
+      {
+        "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium-api-token-zo7tAc",
+        "Name": "neraium-api-token",
+        "LastChangedDate": "2026-05-24 07:06:56.938000+00:00",
+        "LastAccessedDate": "2026-10-03 00:00:00+00:00",
+        "Tags": [],
+        "VersionIdsToStages": {
+          "6d883e0d-61bb-44cd-9368-15c74a6d9cee": [
+            "AWSPREVIOUS"
+          ],
+          "9e3f2932-1589-4182-91c7-e91d8bbf36b4": [
+            "AWSCURRENT"
+          ]
+        },
+        "CreatedDate": "2026-05-13 21:53:56.341000+00:00"
+      },
+      {
+        "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/auth-database-url-XrtJxj",
+        "Name": "neraium/prod/auth-database-url",
+        "LastChangedDate": "2026-07-25 18:16:31.523000+00:00",
+        "LastAccessedDate": "2026-10-02 00:00:00+00:00",
+        "Tags": [],
+        "VersionIdsToStages": {
+          "2061432f-7a1b-4f02-aaae-80c07caa9fc0": [
+            "AWSCURRENT"
+          ],
+          "ac264535-4cea-437c-a46b-23d766660291": [
+            "AWSPREVIOUS"
+          ]
+        },
+        "CreatedDate": "2026-07-17 21:52:56.973000+00:00"
+      },
+      {
+        "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/booystrap-admin-password-cTgxAj",
+        "Name": "neraium/prod/booystrap-admin-password",
+        "LastChangedDate": "2026-08-08 07:03:26.581000+00:00",
+        "LastAccessedDate": "2026-10-03 00:00:00+00:00",
+        "Tags": [],
+        "VersionIdsToStages": {
+          "79210c97-96a9-46ae-b697-80abd7e35c5e": [
+            "AWSPREVIOUS"
+          ],
+          "cd17d844-65f6-43bc-b340-d408666a89f2": [
+            "AWSCURRENT"
+          ]
+        },
+        "CreatedDate": "2026-07-17 22:47:46.650000+00:00"
+      },
+      {
+        "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-auth-8EDeTQ",
+        "Name": "neraium/prod/connector-executor-auth",
+        "Description": "HMAC authority key shared only by production app tasks and isolated connector executor",
+        "LastChangedDate": "2026-10-02 15:30:34.575000+00:00",
+        "LastAccessedDate": "2026-10-03 00:00:00+00:00",
+        "VersionIdsToStages": {
+          "106303f8-c361-4dea-927a-4532b8278eef": [
+            "AWSCURRENT"
+          ]
+        },
+        "CreatedDate": "2026-10-02 15:30:34.548000+00:00"
+      },
+      {
+        "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-tls-wMVlKy",
+        "Name": "neraium/prod/connector-executor-tls",
+        "Description": "TLS key and certificate for internal production connector executor",
+        "LastChangedDate": "2026-10-02 15:30:36.073000+00:00",
+        "LastAccessedDate": "2026-10-02 00:00:00+00:00",
+        "VersionIdsToStages": {
+          "e8d94750-7a4e-4dc7-aad3-d299930f3f7d": [
+            "AWSCURRENT"
+          ]
+        },
+        "CreatedDate": "2026-10-02 15:30:36.047000+00:00"
+      },
+      {
+        "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li",
+        "Name": "neraium/prod/telemetry-database-url",
+        "Description": "Neraium production dedicated telemetry PostgreSQL URL; TLS required",
+        "LastChangedDate": "2026-10-02 13:20:11.142000+00:00",
+        "LastAccessedDate": "2026-10-03 00:00:00+00:00",
+        "VersionIdsToStages": {
+          "bf148bf3-726a-42a0-86da-a989f381ff60": [
+            "AWSCURRENT"
+          ]
+        },
+        "CreatedDate": "2026-10-02 13:20:11.116000+00:00"
+      },
+      {
+        "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT",
+        "Name": "rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df",
+        "Description": "The secret associated with the primary RDS DB instance: arn:aws:rds:us-east-2:680779862188:db:neraium-prod-postgres",
+        "RotationEnabled": true,
+        "RotationRules": {
+          "AutomaticallyAfterDays": 7
+        },
+        "LastRotatedDate": "2026-10-02 02:13:50.547000+00:00",
+        "LastChangedDate": "2026-10-02 02:13:50.561000+00:00",
+        "LastAccessedDate": "2026-10-03 00:00:00+00:00",
+        "NextRotationDate": "2026-10-09 23:59:59+00:00",
+        "Tags": [
+          {
+            "Key": "aws:rds:primaryDBInstanceArn",
+            "Value": "arn:aws:rds:us-east-2:680779862188:db:neraium-prod-postgres"
+          },
+          {
+            "Key": "aws:secretsmanager:owningService",
+            "Value": "rds"
+          }
+        ],
+        "VersionIdsToStages": {
+          "57a4c01e-ecbe-413b-8db6-e7d1c3f346f4": [
+            "AWSPREVIOUS"
+          ],
+          "7a00d5ad-ac55-450d-9548-d565ee3d363d": [
+            "AWSCURRENT",
+            "AWSPENDING"
+          ]
+        },
+        "OwningService": "rds",
+        "CreatedDate": "2026-07-17 18:52:03.930000+00:00"
+      }
+    ],
+    "secrets_iam_checks": {
+      "policy_simulations": {
+        "neraium-prod-connector-executor-role": [
+          {
+            "EvalActionName": "secretsmanager:GetSecretValue",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT",
+            "EvalDecision": "implicitDeny",
+            "MissingContextValues": []
+          },
+          {
+            "EvalActionName": "secretsmanager:GetSecretValue",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li",
+            "EvalDecision": "implicitDeny",
+            "MissingContextValues": []
+          },
+          {
+            "EvalActionName": "secretsmanager:DescribeSecret",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT",
+            "EvalDecision": "implicitDeny",
+            "MissingContextValues": []
+          },
+          {
+            "EvalActionName": "secretsmanager:DescribeSecret",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li",
+            "EvalDecision": "implicitDeny",
+            "MissingContextValues": []
+          }
+        ],
+        "neraium-prod-ecs-task-execution-role": [
+          {
+            "EvalActionName": "secretsmanager:GetSecretValue",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT",
+            "EvalDecision": "implicitDeny",
+            "MissingContextValues": []
+          },
+          {
+            "EvalActionName": "secretsmanager:GetSecretValue",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li",
+            "EvalDecision": "allowed",
+            "MissingContextValues": []
+          },
+          {
+            "EvalActionName": "secretsmanager:DescribeSecret",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT",
+            "EvalDecision": "implicitDeny",
+            "MissingContextValues": []
+          },
+          {
+            "EvalActionName": "secretsmanager:DescribeSecret",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li",
+            "EvalDecision": "implicitDeny",
+            "MissingContextValues": []
+          }
+        ],
+        "neraium-prod-task-app-role": [
+          {
+            "EvalActionName": "secretsmanager:GetSecretValue",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT",
+            "EvalDecision": "allowed",
+            "MissingContextValues": []
+          },
+          {
+            "EvalActionName": "secretsmanager:GetSecretValue",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li",
+            "EvalDecision": "implicitDeny",
+            "MissingContextValues": []
+          },
+          {
+            "EvalActionName": "secretsmanager:DescribeSecret",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT",
+            "EvalDecision": "allowed",
+            "MissingContextValues": []
+          },
+          {
+            "EvalActionName": "secretsmanager:DescribeSecret",
+            "EvalResourceName": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li",
+            "EvalDecision": "implicitDeny",
+            "MissingContextValues": []
+          }
+        ]
+      },
+      "simulation_limit": "Identity-policy simulation only; not a live request with task credentials or full SCP/resource/key/endpoint evaluation.",
+      "resource_policies": {
+        "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT": {
+          "policy": null
+        },
+        "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li": {
+          "policy": null
+        }
+      },
+      "database_related_secrets_metadata": [
+        {
+          "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/auth-database-url-XrtJxj",
+          "Name": "neraium/prod/auth-database-url",
+          "KmsKeyId": null,
+          "RotationEnabled": null,
+          "RotationLambdaARN": null,
+          "RotationRules": null,
+          "DeletedDate": null
+        },
+        {
+          "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li",
+          "Name": "neraium/prod/telemetry-database-url",
+          "KmsKeyId": null,
+          "RotationEnabled": null,
+          "RotationLambdaARN": null,
+          "RotationRules": null,
+          "DeletedDate": null
+        },
+        {
+          "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-migration-database-url-x6bm74",
+          "Name": "neraium/prod/telemetry-migration-database-url",
+          "KmsKeyId": null,
+          "RotationEnabled": null,
+          "RotationLambdaARN": null,
+          "RotationRules": null,
+          "DeletedDate": null
+        },
+        {
+          "ARN": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-auth-8EDeTQ",
+          "Name": "neraium/prod/connector-executor-auth",
+          "KmsKeyId": null,
+          "RotationEnabled": null,
+          "RotationLambdaARN": null,
+          "RotationRules": null,
+          "DeletedDate": null
+        }
+      ],
+      "secret_values_retrieved": 0
+    },
+    "executor": {
+      "instance_id": "i-081d0aba82dba64e7",
+      "role_arns": [
+        "arn:aws:iam::680779862188:role/neraium-prod-connector-executor-role"
+      ],
+      "security_groups": [
+        {
+          "GroupId": "sg-0837b1be795c45751",
+          "GroupName": "neraium-prod-v2-connector-egress-task-sg"
+        }
+      ]
+    },
+    "monitoring": {
+      "fingerprint": "9cfb4642f34bcfea2415ee2894181effb62d3296865da71724ae2370700336c4",
+      "alarms": [
+        {
+          "AlarmName": "neraium-prod-api-no-healthy-alb-targets",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-api-slow",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-api-target-5xx",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-api-tasks-unavailable",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-auth-database-failures",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-connector-executor-repeated-failures",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-connector-executor-status-failed",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-credential-refresh-failures",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-secrets-access-failures",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-telemetry-ingestion-failures",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-telemetry-scheduler-failures",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-telemetry-scheduler-lag-high",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-v2-analysis-failures",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-v2-persistence-failures",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-v2-retrieval-failures",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-worker-iteration-failures",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        },
+        {
+          "AlarmName": "neraium-prod-worker-tasks-unavailable",
+          "StateValue": "OK",
+          "ActionsEnabled": true
+        }
+      ],
+      "events": {
+        "api": {
+          "stream": "ecs/api/88630bceb13c4bdf8bdec7853eb1a060",
+          "event": "production_health_evaluated",
+          "count": 424,
+          "pagination_remaining": true
+        },
+        "worker": {
+          "stream": "ecs/worker/31ab8983c7714c67887f739cc51c1d5a",
+          "event": "worker_loop_started",
+          "count": 1,
+          "pagination_remaining": true
+        }
+      }
+    },
+    "release_readonly_check": {
+      "result": "PASS",
+      "checks": {
+        "health": "PASS",
+        "ready": "PASS",
+        "rds": "available",
+        "alarms_ok": 17,
+        "v2_configuration": "PASS"
+      },
+      "observed_at": "2026-10-03T19:59:23.838637+00:00"
+    },
+    "permission_error_logs": {
+      "api": {
+        "window_seconds": 3600,
+        "filter": "\"permission denied\"",
+        "matching_event_metadata": [],
+        "pagination_remaining": false,
+        "stream": "ecs/api/88630bceb13c4bdf8bdec7853eb1a060",
+        "limit": "Only this phrase/window/current stream; absence does not prove functional persistence or grant sufficiency."
+      },
+      "worker": {
+        "window_seconds": 3600,
+        "filter": "\"permission denied\"",
+        "matching_event_metadata": [],
+        "pagination_remaining": false,
+        "stream": "ecs/worker/31ab8983c7714c67887f739cc51c1d5a",
+        "limit": "Only this phrase/window/current stream; absence does not prove functional persistence or grant sufficiency."
+      }
+    },
+    "iam_policy_matches_readiness": {
+      "neraium-prod-connector-executor-role": true,
+      "neraium-prod-ecs-task-execution-role": true,
+      "neraium-prod-task-app-role": true
+    },
+    "rds_matches_readiness": {
+      "DBInstanceIdentifier": true,
+      "DBInstanceStatus": true,
+      "Engine": true,
+      "EngineVersion": true,
+      "Endpoint": true,
+      "DBParameterGroups": true,
+      "MasterUserSecret": true,
+      "PubliclyAccessible": true,
+      "BackupRetentionPeriod": true
+    },
+    "final_readonly_check": {
+      "observed_at": "2026-10-03T20:14:27.072065+00:00",
+      "checks": {
+        "health": "PASS",
+        "ready": "PASS",
+        "rds": "available",
+        "alarms_ok": 17,
+        "v2_configuration": "PASS"
+      },
+      "same_task_configuration": {
+        "api": true,
+        "worker": true
+      },
+      "same_service_topology": {
+        "api": true,
+        "worker": true
+      }
+    }
+  },
+  "local": {
+    "input_commit": "43553130e63bf36aa9d4ff748318d7c1e8519492",
+    "source_selection": "git archive HEAD backend infra/production/auth-runtime-grants.sql; application inputs exclude dirty working tree and unrelated untracked files. Retained auth security harness is a separate hashed workspace input, copied as qualify_auth_baseline.py.",
+    "postgres_image": "postgres:16-alpine",
+    "postgres_image_id": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+    "python_image": "neraium-ot-vuln:after",
+    "python_image_id": "sha256:2dde4dea648e8a7ac7db356ac854f1aa88aeb8f720d375248cb6d13aa6530cb8",
+    "network": "Database --network none; probe shares only DB network namespace; no published ports, production DSNs or AWS environment",
+    "auth": {
+      "status": "PASS",
+      "checks": [
+        {
+          "check": "offline_migration_separate_identity",
+          "status": "PASS"
+        },
+        {
+          "check": "offline_migration_idempotent",
+          "status": "PASS"
+        },
+        {
+          "check": "runtime_readonly_schema_verification",
+          "status": "PASS"
+        },
+        {
+          "check": "legacy_startup_DDL_cannot_use_narrow_runtime_identity",
+          "status": "PASS"
+        },
+        {
+          "check": "user_insert_select_update",
+          "status": "PASS"
+        },
+        {
+          "check": "workspace_membership_insert_select_update",
+          "status": "PASS"
+        },
+        {
+          "check": "session_insert_select_update_delete_and_advisory_lock",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:CREATE TABLE public.prohibited(x int)",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:CREATE SCHEMA prohibited",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:CREATE DATABASE prohibited",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:CREATE ROLE prohibited",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:ALTER TABLE public.auth_users ADD COLUMN prohibited int",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:DROP TABLE public.auth_sessions",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:TRUNCATE public.auth_users CASCADE",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:INSERT INTO public.auth_schema_migrations VALUES ('prohibited',now())",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:UPDATE public.auth_schema_migrations SET applied_at=now()",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:DELETE FROM public.auth_schema_migrations",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:TRUNCATE public.auth_schema_migrations",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:SET ROLE neraium_auth_migrator",
+          "status": "PASS"
+        },
+        {
+          "check": "denied:CREATE TEMP TABLE prohibited(x int)",
+          "status": "PASS"
+        },
+        {
+          "check": "effective_PUBLIC_CREATE_rejected",
+          "status": "PASS"
+        },
+        {
+          "check": "NOINHERIT_admin_SET_ROLE_membership_rejected",
+          "status": "PASS"
+        },
+        {
+          "check": "narrower_runtime_startup",
+          "status": "PASS"
+        },
+        {
+          "check": "unnecessary_user_delete_denied",
+          "status": "PASS"
+        }
+      ],
+      "production_equivalence": "NOT ESTABLISHED: production owners/PUBLIC/functions/RLS/roles not inventoried",
+      "tls_rotation": "covered separately by existing mocked rotation test; this fixture is network-none, trust authentication"
+    },
+    "storage": {
+      "database": "network-none disposable fixture",
+      "postgresql_version": "16.15",
+      "admin_schema_install": "PASS",
+      "runtime_denials": [
+        {
+          "sql": "DROP SCHEMA unrelated",
+          "sqlstate": "42501",
+          "result": "DENIED"
+        },
+        {
+          "sql": "ALTER TABLE public.auth_users OWNER TO neraium_auth_runtime",
+          "sqlstate": "42501",
+          "result": "DENIED"
+        },
+        {
+          "sql": "GRANT neraium_auth_migrator TO neraium_storage_migrator",
+          "sqlstate": "42501",
+          "result": "DENIED"
+        },
+        {
+          "sql": "CREATE EXTENSION hstore",
+          "sqlstate": "42501",
+          "result": "DENIED"
+        },
+        {
+          "sql": "SELECT * FROM unrelated.private_data",
+          "sqlstate": "42501",
+          "result": "DENIED"
+        }
+      ],
+      "unauthorized_acl_mutations": [
+        {
+          "operation": "unauthorized GRANT SELECT",
+          "grantee_select_after": false,
+          "result": "NO AUTHORITY TRANSFER"
+        },
+        {
+          "operation": "unauthorized REVOKE SELECT",
+          "grantee_select_after": true,
+          "result": "NO AUTHORITY REMOVAL"
+        }
+      ],
+      "populated_schema_initialize": {
+        "result": "DENIED",
+        "sqlstate": "42501"
+      },
+      "populated_schema_startup_ddl": [
+        "CREATE TABLE IF NOT EXISTS postgres_runtime_migrations (version INTEGER PRIMARY KEY)"
+      ],
+      "verification_only_requirement": "FAIL: initialize requires schema CREATE even with version 1 already installed",
+      "qualification": "BLOCKED; auth-only checks do not qualify API/worker storage",
+      "fixture_grants": "Only storage schema USAGE and storage migration-ledger SELECT; no storage DML granted",
+      "production_mutations": 0
+    },
+    "qualification_limitations": [
+      "PostgreSQL 16.15 fixture versus RDS 16.14",
+      "Synthetic fresh schema, not a production restore",
+      "Local trust authentication; no new TLS/rotation qualification",
+      "Telemetry findings/evidence full DML and ordinary worker qualification not completed",
+      "Shared storage startup qualification failed"
+    ],
+    "cleanup": "Disposable database container removed; no data volumes or published ports were created; existing local images retained."
+  },
+  "release_coordinator_probe": {
+    "changed_binding_accepted": false,
+    "reason": "certified_task_configuration_changed",
+    "original_live_task_validation": "PASS",
+    "production_mutations": 0,
+    "fixture": "Local copy of exact live task; only auth secret ARN changed; no task registered",
+    "production_check": "Source requires RDS MasterUserSecret SecretArn equal auth binding; deploy changes only image/build marker and deploys worker before API"
+  },
+  "preconditions": {
+    "deployment_candidate_committed": "NOT MET: no qualified implementation candidate",
+    "origin_contains_deployment_candidate": "NOT MET",
+    "targeted_full_privilege_tests": "NOT MET: auth partial passes; shared startup fails",
+    "local_disposable_full_qualification": "FAILED",
+    "backup_health": "OBSERVED HEALTHY; restore drill not established",
+    "rds_health": "PASS",
+    "ecs_stability": "PASS",
+    "rollback_task_definitions_known": "PASS: api:339 worker:333 ACTIVE",
+    "monitoring_health": "PASS: 17 alarms OK and actions enabled",
+    "migration_compatibility": "UNRESOLVED: live ledgers and catalog unavailable",
+    "safe_release_coordinator": "FAILED: refuses auth-secret changes; worker-first image-only rollout",
+    "post_cutover_rollback_qualified": "NOT MET"
+  },
+  "production_mutations": 0,
+  "secret_values_retrieved": 0,
+  "pushes": 0,
+  "deployments": 0,
+  "read_ledger": {
+    "started_at": "2026-10-03T19:57:27.347164+00:00",
+    "finished_at": "2026-10-03T19:57:40.322047+00:00",
+    "operations": [
+      {
+        "service": "sts",
+        "operation": "get_caller_identity",
+        "arguments": {}
+      },
+      {
+        "service": "ecs",
+        "operation": "describe_services",
+        "arguments": {
+          "cluster": "neraium-prod-cluster",
+          "services": [
+            "neraium-prod-api-service",
+            "neraium-prod-worker-service"
+          ]
+        }
+      },
+      {
+        "service": "ecs",
+        "operation": "describe_task_definition",
+        "arguments": {
+          "taskDefinition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-api:339"
+        }
+      },
+      {
+        "service": "ecs",
+        "operation": "list_tasks",
+        "arguments": {
+          "cluster": "neraium-prod-cluster",
+          "serviceName": "neraium-prod-api-service",
+          "desiredStatus": "RUNNING"
+        }
+      },
+      {
+        "service": "ecs",
+        "operation": "describe_tasks",
+        "arguments": {
+          "cluster": "neraium-prod-cluster",
+          "tasks": [
+            "arn:aws:ecs:us-east-2:680779862188:task/neraium-prod-cluster/88630bceb13c4bdf8bdec7853eb1a060"
+          ]
+        }
+      },
+      {
+        "service": "ecs",
+        "operation": "describe_task_definition",
+        "arguments": {
+          "taskDefinition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-api:339"
+        }
+      },
+      {
+        "service": "ecs",
+        "operation": "describe_task_definition",
+        "arguments": {
+          "taskDefinition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-worker:333"
+        }
+      },
+      {
+        "service": "ecs",
+        "operation": "list_tasks",
+        "arguments": {
+          "cluster": "neraium-prod-cluster",
+          "serviceName": "neraium-prod-worker-service",
+          "desiredStatus": "RUNNING"
+        }
+      },
+      {
+        "service": "ecs",
+        "operation": "describe_tasks",
+        "arguments": {
+          "cluster": "neraium-prod-cluster",
+          "tasks": [
+            "arn:aws:ecs:us-east-2:680779862188:task/neraium-prod-cluster/31ab8983c7714c67887f739cc51c1d5a"
+          ]
+        }
+      },
+      {
+        "service": "ecs",
+        "operation": "describe_task_definition",
+        "arguments": {
+          "taskDefinition": "arn:aws:ecs:us-east-2:680779862188:task-definition/neraium-prod-worker:333"
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_instances",
+        "arguments": {
+          "InstanceIds": [
+            "i-081d0aba82dba64e7"
+          ]
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "arguments": {
+          "VpcIds": [
+            "vpc-046a8eee54c6988ae"
+          ]
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_vpc_attribute",
+        "arguments": {
+          "VpcId": "vpc-046a8eee54c6988ae",
+          "Attribute": "enableDnsSupport"
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_vpc_attribute",
+        "arguments": {
+          "VpcId": "vpc-046a8eee54c6988ae",
+          "Attribute": "enableDnsHostnames"
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_subnets",
+        "arguments": {
+          "Filters": [
+            {
+              "Name": "vpc-id",
+              "Values": [
+                "vpc-046a8eee54c6988ae"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_security_groups",
+        "arguments": {
+          "Filters": [
+            {
+              "Name": "vpc-id",
+              "Values": [
+                "vpc-046a8eee54c6988ae"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_route_tables",
+        "arguments": {
+          "Filters": [
+            {
+              "Name": "vpc-id",
+              "Values": [
+                "vpc-046a8eee54c6988ae"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_network_acls",
+        "arguments": {
+          "Filters": [
+            {
+              "Name": "vpc-id",
+              "Values": [
+                "vpc-046a8eee54c6988ae"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_vpc_endpoints",
+        "arguments": {
+          "Filters": [
+            {
+              "Name": "vpc-id",
+              "Values": [
+                "vpc-046a8eee54c6988ae"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_nat_gateways",
+        "arguments": {
+          "Filters": [
+            {
+              "Name": "vpc-id",
+              "Values": [
+                "vpc-046a8eee54c6988ae"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_network_interfaces",
+        "arguments": {
+          "Filters": [
+            {
+              "Name": "vpc-id",
+              "Values": [
+                "vpc-046a8eee54c6988ae"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_internet_gateways",
+        "arguments": {
+          "Filters": [
+            {
+              "Name": "attachment.vpc-id",
+              "Values": [
+                "vpc-046a8eee54c6988ae"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_dhcp_options",
+        "arguments": {}
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_managed_prefix_lists",
+        "arguments": {
+          "Filters": [
+            {
+              "Name": "prefix-list-name",
+              "Values": [
+                "com.amazonaws.us-east-2.s3"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "service": "route53resolver",
+        "operation": "list_firewall_rule_group_associations",
+        "arguments": {
+          "VpcId": "vpc-046a8eee54c6988ae"
+        }
+      },
+      {
+        "service": "route53resolver",
+        "operation": "get_firewall_config",
+        "arguments": {
+          "ResourceId": "vpc-046a8eee54c6988ae"
+        }
+      },
+      {
+        "service": "network-firewall",
+        "operation": "describe_firewall",
+        "arguments": {
+          "FirewallName": "neraium-prod-v2-connector-egress"
+        }
+      },
+      {
+        "service": "network-firewall",
+        "operation": "describe_firewall_policy",
+        "arguments": {
+          "FirewallPolicyArn": "arn:aws:network-firewall:us-east-2:680779862188:firewall-policy/neraium-prod-v2-connector-egress-policy"
+        }
+      },
+      {
+        "service": "network-firewall",
+        "operation": "describe_rule_group",
+        "arguments": {
+          "RuleGroupArn": "arn:aws:network-firewall:us-east-2:680779862188:stateful-rulegroup/neraium-prod-v2-connector-egress-tls-strict",
+          "Type": "STATEFUL"
+        }
+      },
+      {
+        "service": "network-firewall",
+        "operation": "describe_rule_group",
+        "arguments": {
+          "RuleGroupArn": "arn:aws:network-firewall:us-east-2:680779862188:stateless-rulegroup/neraium-prod-v2-connector-egress-ip-deny",
+          "Type": "STATELESS"
+        }
+      },
+      {
+        "service": "network-firewall",
+        "operation": "describe_logging_configuration",
+        "arguments": {
+          "FirewallName": "neraium-prod-v2-connector-egress"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "get_instance_profile",
+        "arguments": {
+          "InstanceProfileName": "neraium-prod-connector-executor-profile"
+        }
+      },
+      {
+        "service": "ec2",
+        "operation": "describe_instance_status",
+        "arguments": {
+          "InstanceIds": [
+            "i-081d0aba82dba64e7"
+          ],
+          "IncludeAllInstances": true
+        }
+      },
+      {
+        "service": "ssm",
+        "operation": "describe_instance_information",
+        "arguments": {
+          "Filters": [
+            {
+              "Key": "InstanceIds",
+              "Values": [
+                "i-081d0aba82dba64e7"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "service": "ssm",
+        "operation": "describe_instance_associations_status",
+        "arguments": {
+          "InstanceId": "i-081d0aba82dba64e7"
+        }
+      },
+      {
+        "service": "ssm",
+        "operation": "get_connection_status",
+        "arguments": {
+          "Target": "i-081d0aba82dba64e7"
+        }
+      },
+      {
+        "service": "ssm",
+        "operation": "list_command_invocations",
+        "arguments": {
+          "InstanceId": "i-081d0aba82dba64e7",
+          "Details": false
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "list_role_policies",
+        "arguments": {
+          "RoleName": "neraium-prod-connector-executor-role"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "list_attached_role_policies",
+        "arguments": {
+          "RoleName": "neraium-prod-connector-executor-role"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "get_role",
+        "arguments": {
+          "RoleName": "neraium-prod-connector-executor-role"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "get_role_policy",
+        "arguments": {
+          "RoleName": "neraium-prod-connector-executor-role",
+          "PolicyName": "connector-execution-minimum"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "list_role_policies",
+        "arguments": {
+          "RoleName": "neraium-prod-ecs-task-execution-role"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "list_attached_role_policies",
+        "arguments": {
+          "RoleName": "neraium-prod-ecs-task-execution-role"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "get_policy",
+        "arguments": {
+          "PolicyArn": "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "get_policy_version",
+        "arguments": {
+          "PolicyArn": "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+          "VersionId": "v1"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "get_role",
+        "arguments": {
+          "RoleName": "neraium-prod-ecs-task-execution-role"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "get_role_policy",
+        "arguments": {
+          "RoleName": "neraium-prod-ecs-task-execution-role",
+          "PolicyName": "neraium-cloudwatch-logs-access"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "get_role_policy",
+        "arguments": {
+          "RoleName": "neraium-prod-ecs-task-execution-role",
+          "PolicyName": "neraium-secretsmanager-access"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "list_role_policies",
+        "arguments": {
+          "RoleName": "neraium-prod-task-app-role"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "list_attached_role_policies",
+        "arguments": {
+          "RoleName": "neraium-prod-task-app-role"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "get_role",
+        "arguments": {
+          "RoleName": "neraium-prod-task-app-role"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "get_role_policy",
+        "arguments": {
+          "RoleName": "neraium-prod-task-app-role",
+          "PolicyName": "neraium-telemetry-connector-read"
+        }
+      },
+      {
+        "service": "iam",
+        "operation": "get_role_policy",
+        "arguments": {
+          "RoleName": "neraium-prod-task-app-role",
+          "PolicyName": "neraium-upload-state-access"
+        }
+      },
+      {
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "arguments": {
+          "DBInstanceIdentifier": "neraium-prod-postgres"
+        }
+      },
+      {
+        "service": "rds",
+        "operation": "describe_db_snapshots",
+        "arguments": {
+          "DBInstanceIdentifier": "neraium-prod-postgres"
+        }
+      },
+      {
+        "service": "rds",
+        "operation": "describe_events",
+        "arguments": {
+          "SourceIdentifier": "neraium-prod-postgres",
+          "SourceType": "db-instance",
+          "Duration": 1440
+        }
+      },
+      {
+        "service": "secretsmanager",
+        "operation": "describe_secret",
+        "arguments": {
+          "SecretId": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium-api-token-zo7tAc"
+        }
+      },
+      {
+        "service": "secretsmanager",
+        "operation": "describe_secret",
+        "arguments": {
+          "SecretId": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/auth-database-url-XrtJxj"
+        }
+      },
+      {
+        "service": "secretsmanager",
+        "operation": "describe_secret",
+        "arguments": {
+          "SecretId": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/booystrap-admin-password-cTgxAj"
+        }
+      },
+      {
+        "service": "secretsmanager",
+        "operation": "describe_secret",
+        "arguments": {
+          "SecretId": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-auth-8EDeTQ"
+        }
+      },
+      {
+        "service": "secretsmanager",
+        "operation": "describe_secret",
+        "arguments": {
+          "SecretId": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/connector-executor-tls-wMVlKy"
+        }
+      },
+      {
+        "service": "secretsmanager",
+        "operation": "describe_secret",
+        "arguments": {
+          "SecretId": "arn:aws:secretsmanager:us-east-2:680779862188:secret:neraium/prod/telemetry-database-url-1B15Li"
+        }
+      },
+      {
+        "service": "secretsmanager",
+        "operation": "describe_secret",
+        "arguments": {
+          "SecretId": "arn:aws:secretsmanager:us-east-2:680779862188:secret:rds!db-71cfd5f5-506d-48e5-8794-52b72aa2f4df-ZmbBKT"
+        }
+      },
+      {
+        "service": "cloudwatch",
+        "operation": "describe_alarms",
+        "arguments": {
+          "AlarmNamePrefix": "neraium-prod-"
+        }
+      },
+      {
+        "service": "logs",
+        "operation": "describe_metric_filters",
+        "arguments": {
+          "logGroupName": "/ecs/neraium-prod-api"
+        }
+      },
+      {
+        "service": "logs",
+        "operation": "describe_metric_filters",
+        "arguments": {
+          "logGroupName": "/ecs/neraium-prod-worker"
+        }
+      },
+      {
+        "service": "logs",
+        "operation": "describe_log_groups",
+        "arguments": {
+          "logGroupNamePrefix": "/ecs/neraium-prod-api"
+        }
+      },
+      {
+        "service": "logs",
+        "operation": "describe_log_groups",
+        "arguments": {
+          "logGroupNamePrefix": "/ecs/neraium-prod-worker"
+        }
+      },
+      {
+        "service": "logs",
+        "operation": "filter_log_events",
+        "arguments": {
+          "logGroupName": "/ecs/neraium-prod-api",
+          "logStreamNames": [
+            "ecs/api/88630bceb13c4bdf8bdec7853eb1a060"
+          ],
+          "filterPattern": "\"production_health_evaluated\""
+        }
+      },
+      {
+        "service": "logs",
+        "operation": "filter_log_events",
+        "arguments": {
+          "logGroupName": "/ecs/neraium-prod-worker",
+          "logStreamNames": [
+            "ecs/worker/31ab8983c7714c67887f739cc51c1d5a"
+          ],
+          "filterPattern": "\"worker_loop_started\""
+        }
+      },
+      {
+        "service": "ecs",
+        "operation": "describe_clusters",
+        "arguments": {
+          "clusters": [
+            "neraium-prod-cluster"
+          ],
+          "include": [
+            "SETTINGS"
+          ]
+        }
+      },
+      {
+        "service": "sns",
+        "operation": "list_subscriptions_by_topic",
+        "arguments": {
+          "TopicArn": "arn:aws:sns:us-east-2:680779862188:neraium-prod-infrastructure-alerts"
+        }
+      },
+      {
+        "service": "ecr",
+        "operation": "describe_repositories",
+        "arguments": {
+          "repositoryNames": [
+            "neraium-prod-api"
+          ]
+        }
+      },
+      {
+        "service": "ecr",
+        "operation": "describe_images",
+        "arguments": {
+          "repositoryName": "neraium-prod-api",
+          "imageIds": [
+            {
+              "imageDigest": "sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b"
+            }
+          ]
+        }
+      },
+      {
+        "service": "ecr",
+        "operation": "describe_image_scan_findings",
+        "arguments": {
+          "repositoryName": "neraium-prod-api",
+          "imageId": {
+            "imageDigest": "sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b"
+          }
+        }
+      },
+      {
+        "service": "ecr",
+        "operation": "describe_images",
+        "arguments": {
+          "repositoryName": "neraium-prod-api",
+          "imageIds": [
+            {
+              "imageTag": "release-f3d6e10c7ec6e574474d089a2c7fee10498176ad"
+            }
+          ]
+        }
+      },
+      {
+        "service": "cloudtrail",
+        "operation": "lookup_events",
+        "arguments": {
+          "LookupAttributes": [
+            {
+              "AttributeKey": "EventSource",
+              "AttributeValue": "monitoring.amazonaws.com"
+            }
+          ],
+          "MaxResults": 50
+        }
+      }
+    ],
+    "errors": [
+      {
+        "service": "ecr",
+        "operation": "describe_images",
+        "code": "ImageNotFoundException"
+      }
+    ],
+    "production_mutations": 0
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "decision": "BLOCKED",
+  "source_commit": "43553130e63bf36aa9d4ff748318d7c1e8519492",
+  "artifacts": {
+    "REPORT.md": "34d7e8b2062c80c1e35c216897e3c12142f9705aed9d404b931c948f8c6629a7",
+    "evidence.json": "a0d16dac38e7bb6e1b6c453bc0089f5f85c2eb7c0c236c34c763da44d1653000",
+    "probe_runtime_startup.py": "89eba06e7ecf1cf6b5576a122dff1fca5113f57f0d7dc489038c694d70275c28",
+    "qualify_auth_baseline.py": "0b9e3adb6787dddbc14a1711300535c3b9364b8f4d6a5f2daab92cfe95ba4c65"
+  },
+  "committed_application_and_release_inputs": {
+    "backend/app/services/auth_store.py": "6f2f91d6d136ef2402aad50c5900304923914705e5abc24b37793ab44ffe8d94",
+    "backend/app/services/runtime_postgres.py": "fb7bbc1de388da0a5063b41c6cea19d388788866ef40a8145e21f7f326b0b4e5",
+    "backend/app/services/runtime_postgres_v1.sql": "74479dac0944e074b2eb2af626e2a8853d652ff697d98e1a529ecc33b319e67f",
+    "backend/db/migrations/apply_telemetry.py": "a9a0c1d19d0c55cedda0f364f1dda0c0649f6ab03c44d4818761131a87ad13a5",
+    "infra/production/auth-runtime-grants.sql": "d034fc6db3d8020bb15508e345dbb261b4d59643f3f0f7fd6064637b38fe4f24",
+    "scripts/production_release.py": "8f7b07cb97cd9f2741565c89543f9fe859263c92a4a8f6393bed9e9e167dc1fb"
+  },
+  "retained_workspace_inputs": {
+    "docs/security/ot-cutover-readiness-2026-10-03/qualify_local_database.py": {
+      "sha256": "0b9e3adb6787dddbc14a1711300535c3b9364b8f4d6a5f2daab92cfe95ba4c65",
+      "tracked": false
+    },
+    "docs/security/ot-cutover-readiness-2026-10-03/collect_readonly.py": {
+      "sha256": "0f88490210d6054543dd923de3ed77be6c434bbb120e79112427cc7e610e7e78",
+      "tracked": false
+    },
+    "docs/security/ot-cutover-readiness-2026-10-03/evidence/final/production-services.json": {
+      "sha256": "2409a239cca1fcbe4382f81e1dcd3b767e4852f5827d6ebba55f6ef11de2471d",
+      "tracked": false
+    },
+    "docs/security/ot-cutover-readiness-2026-10-03/evidence/final/iam.json": {
+      "sha256": "dac8f15f5c07d1074ad257210f56b2a388deebdb9d9a00ae362ac0c5e89308e6",
+      "tracked": false
+    },
+    "docs/security/ot-cutover-readiness-2026-10-03/evidence/final/database.json": {
+      "sha256": "aa8212471454338b80ef1aa3995fcf4e3e0835119af77a8089ba5f2a79252aba",
+      "tracked": false
+    }
+  },
+  "verification": {
+    "auth_checks_passed": 24,
+    "additional_denial_checks_passed": 5,
+    "unauthorized_table_acl_effect_checks_passed": 2,
+    "shared_storage_startup": "EXPECTED DENIAL confirms qualification blocker 42501",
+    "coordinator_binding_probe": "EXPECTED REJECTION confirms deployment blocker",
+    "json_and_python_syntax": "PASS",
+    "protected_historical_work": "PASS",
+    "local_database_cleanup": "COMPLETE"
+  }
+}
