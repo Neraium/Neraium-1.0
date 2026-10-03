@@ -350,10 +350,13 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(screen.queryByText(/^Trajectory$/)).toBeNull();
     expect(screen.queryByText(/Observed for 81 days/i)).toBeNull();
     expect(screen.getAllByText("Return temperature signal / Power signal changed from strong to weak coupling.").length).toBeGreaterThan(0);
-    expect(document.querySelectorAll(".case-sections--review > section:last-child li")).toHaveLength(3);
+    const review = within(screen.getByTestId("finding-review"));
+    const nextChecks = review.getByRole("heading", { name: "Where to investigate next" }).closest("section");
+    expect(within(nextChecks).getAllByRole("listitem")).toHaveLength(3);
     expect(screen.queryByText("This fourth action must not appear.")).toBeNull();
-    const headings = [...document.querySelectorAll(".case-sections--review > section > h2")].map((node) => node.textContent);
-    expect(headings).toEqual(["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]);
+    for (const heading of ["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]) {
+      expect(review.getByRole("heading", { name: heading })).toBeTruthy();
+    }
     for (const paragraph of document.querySelectorAll(".case-sections--review p")) {
       expect(paragraph.textContent.length).toBeLessThanOrEqual(260);
     }
@@ -452,7 +455,41 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     expect(window.location.pathname).toBe("/work/canonical-work-1");
     fireEvent.click(await screen.findByRole("button", { name: "Open investigation" }));
     expect(window.location.pathname).toBe("/investigations/finding-1");
-    expect(screen.getByRole("heading", { name: "Relationship evidence" })).toBeTruthy();
+    const investigation = within(await screen.findByTestId("investigation-workspace"));
+    const source = investigation.getByRole("heading", { name: "Source signals and lineage" }).closest("section");
+    expect(source.textContent).toContain("Finding-owned relationship evidence; system channels are separately scoped below.");
+    for (const signal of ["Condenser approach temperature", "Compressor current"]) {
+      expect(within(source).getAllByText(signal).length).toBeGreaterThan(0);
+    }
+    expect(investigation.getByText("Historian X was unavailable.")).toBeTruthy();
+    expect(investigation.getByRole("heading", { name: "Data quality and comparability" })).toBeTruthy();
+    expect(investigation.getByRole("heading", { name: "Operating context" })).toBeTruthy();
+    const comparison = investigation.getByRole("heading", { name: "Primary relationship comparison" }).closest("section");
+    expect(within(comparison).getByText("0.09")).toBeTruthy();
+    expect(within(comparison).getByText("0.83")).toBeTruthy();
+    expect(within(comparison).getAllByText("Sample count not supplied")).toHaveLength(2);
+    const disclosure = investigation.getByText(/All relationship evidence/);
+    expect(disclosure.tagName).toBe("SUMMARY");
+    expect(disclosure.closest("details").open).toBe(false);
+    fireEvent.click(disclosure);
+    expect(disclosure.closest("details").open).toBe(true);
+    fireEvent.click(investigation.getByRole("button", { name: "Open evidence record" }));
+    expect(window.location.pathname).toBe("/evidence/finding-1");
+    const evidence = within(await screen.findByTestId("evidence-record"));
+    expect(evidence.getByRole("heading", { name: "Source and scope" })).toBeTruthy();
+    expect(evidence.getByText("Finding-owned evidence")).toBeTruthy();
+    expect(evidence.getByRole("heading", { name: "Limitations" })).toBeTruthy();
+    const audit = evidence.getByText("Technical evidence and audit trail");
+    expect(audit.tagName).toBe("SUMMARY");
+    expect(audit.closest("details").open).toBe(false);
+    fireEvent.click(audit);
+    expect(audit.closest("details").open).toBe(true);
+    for (const heading of ["Finding-owned relationships", "Evidence sufficiency", "Finding provenance and lineage"]) {
+      expect(evidence.getAllByRole("heading", { name: heading }).length).toBeGreaterThan(0);
+    }
+    expect(audit.closest("details").textContent).toContain("pearson_correlation");
+    expect(audit.closest("details").textContent).toContain("0.094013");
+    expect(audit.closest("details").textContent).toContain("0.833811");
   });
 
   it("speaks confidently when the completed analysis has no meaningful changes", () => {
