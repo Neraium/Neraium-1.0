@@ -1,9 +1,43 @@
 # UNDEPLOYED. Protected-source change: requires separate release certification.
 ARG BASE_IMAGE=680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:635d76fd2ff022bc2b9036ca4f1ca5153651a0b6b749cc8ff19cba347a06fa0b
-FROM ${BASE_IMAGE}
+ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
+ARG PYTHON_IMAGE=python:3.11-slim-trixie@sha256:bab1b7ef4b450c81002278d035eff85ebe394ae94df904f7a3ba14f7e16e487b
+FROM ${PYTHON_IMAGE} AS patched-python
+FROM ${BASE_IMAGE} AS candidate
 USER root
 COPY --chown=root:root backend/app/services/telemetry_resource_policy.py backend/app/services/telemetry_resource_policies.json /app/app/services/
 COPY --chown=root:root backend/app/services/connector_execution.py backend/app/services/connector_execution_child.py backend/app/services/auth_store.py /app/app/services/
 COPY --chown=root:root backend/app/connectors/https_telemetry.py /app/app/connectors/https_telemetry.py
 COPY --chown=root:root backend/app/models/telemetry_api_models.py /app/app/models/telemetry_api_models.py
-USER neraium
+
+# Preserve numerical wheels and application bytes. Apply the Python 3.11.17
+# security patch and patched OpenSSL; package managers and their vulnerable
+# vendored dependencies never enter the final image. The Debian
+# archive metadata and payload checksum both authenticate the security update.
+RUN apt-get update && \
+    cd /tmp && apt-get download libssl3t64=3.5.7-1~deb13u3 && \
+    printf '%s\n' 'ff16bc048bcd7d1b256094450b79c77947d8e76fe2a24bd99b91021d591fa074  libssl3t64_3.5.7-1~deb13u3_amd64.deb' | sha256sum -c - && \
+    dpkg-deb -x libssl3t64_3.5.7-1~deb13u3_amd64.deb /patched-openssl && \
+    dpkg-deb -f libssl3t64_3.5.7-1~deb13u3_amd64.deb > /patched-openssl/control && \
+    python -m pip uninstall --yes setuptools wheel pip
+COPY --from=patched-python /usr/local/bin/python3.11 /usr/local/bin/python3.11
+COPY --from=patched-python /usr/local/lib/libpython3.11.so.1.0 /usr/local/lib/libpython3.11.so.1.0
+COPY --from=patched-python /usr/local/lib/libpython3.so /usr/local/lib/libpython3.so
+COPY --from=patched-python /usr/local/lib/python3.11 /patched-python-stdlib
+COPY infra/production/assemble_ot_runtime.py /tmp/assemble_ot_runtime.py
+RUN python /tmp/assemble_ot_runtime.py
+
+FROM ${RUNTIME_IMAGE}
+COPY --from=candidate /ot-runtime/ /
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app LD_LIBRARY_PATH=/usr/local/lib \
+    PATH=/usr/local/bin:/usr/bin:/bin \
+    BACKEND_HOST=0.0.0.0 BACKEND_PORT=8080
+WORKDIR /app
+EXPOSE 8080
+STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD ["/usr/local/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=5).read()"]
+USER 10001:10001
+ENTRYPOINT []
+CMD ["/usr/local/bin/python", "-m", "app.entrypoint"]
