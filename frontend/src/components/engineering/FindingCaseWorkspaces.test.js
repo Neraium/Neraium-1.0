@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import React from "react";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EvidenceRecordWorkspace, FindingReviewWorkspace, InvestigationWorkspace } from "./FindingCaseWorkspaces";
 
@@ -127,6 +127,24 @@ function response(payload, status = 200) {
 }
 
 describe("progressive results hierarchy", () => {
+  it("places supported actions before the assessment and preserves the exact finding identity", () => {
+    const onOpenInvestigation = vi.fn();
+    const onOpenEvidence = vi.fn();
+    const { rerender } = render(React.createElement(FindingReviewWorkspace, { projection: reviewProjection(), onOpenInvestigation, onOpenEvidence }));
+    const investigation = screen.getByRole("button", { name: "Open investigation" });
+    const evidence = screen.getByRole("button", { name: "Open evidence record" });
+    const assessment = screen.getByRole("heading", { name: "Evidence assessment" });
+    expect(investigation.compareDocumentPosition(assessment) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(investigation);
+    fireEvent.click(evidence);
+    expect(onOpenInvestigation).toHaveBeenCalledWith("finding-a");
+    expect(onOpenEvidence).toHaveBeenCalledWith("finding-a");
+    rerender(React.createElement(FindingReviewWorkspace, { projection: reviewProjection(), onOpenInvestigation }));
+    expect(screen.queryByRole("button", { name: "Open evidence record" })).toBeNull();
+    rerender(React.createElement(FindingReviewWorkspace, { projection: { variant: "unavailable" }, onOpenEvidence }));
+    expect(screen.queryByRole("button", { name: "Open evidence record" })).toBeNull();
+  });
+
   it("keeps Finding Review decision-oriented and preserves independent confidence dimensions", () => {
     render(React.createElement(FindingReviewWorkspace, { projection: reviewProjection() }));
     for (const heading of ["What changed", "Why this deserves attention", "Evidence assessment", "Important limitation", "Where to investigate next"]) expect(screen.getByRole("heading", { name: heading })).toBeTruthy();

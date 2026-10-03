@@ -67,6 +67,24 @@ function basePayload(path) {
 afterEach(() => cleanup());
 
 describe("TelemetryConnectionsWorkspace", () => {
+  it("distinguishes loading, unavailable registry, and a successfully empty registry", async () => {
+    let resolveRegistry;
+    const apiFetch = vi.fn((path) => path === "/api/data-connections"
+      ? new Promise((resolve) => { resolveRegistry = resolve; })
+      : Promise.resolve(basePayload(path) ?? response({}, 404)));
+    const { unmount } = render(h(TelemetryConnectionsWorkspace, { apiFetch, currentUser: { role: "admin" } }));
+    expect(screen.getByText("Loading facility connections…")).toBeTruthy();
+    expect(screen.queryByText("0 configured")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "No telemetry source connected" })).toBeNull();
+    resolveRegistry(response({ detail: "Connection service unavailable." }, 503));
+    await screen.findByRole("heading", { name: "Connections could not be loaded" });
+    expect(screen.queryByText("0 configured")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "No telemetry source connected" })).toBeNull();
+    unmount();
+    render(h(TelemetryConnectionsWorkspace, { apiFetch: vi.fn(async (path) => basePayload(path)), currentUser: { role: "admin" } }));
+    await screen.findByRole("heading", { name: "No telemetry source connected" });
+    expect(screen.getByText("0 configured")).toBeTruthy();
+  });
   it("uses system-first onboarding and does not expose historical upload to a normal customer", async () => {
     const apiFetch = vi.fn(async (path) => basePayload(path) ?? response({}, 404));
     render(h(TelemetryConnectionsWorkspace, { apiFetch, currentUser: { role: "admin" }, currentWorkspace: { display_name: "Central Plant" }, datasetScopeKey: "facility-a" }));
@@ -122,6 +140,9 @@ describe("TelemetryConnectionsWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save connection metadata" }));
 
     expect(await screen.findByRole("heading", { name: "Attach credential securely" })).toBeTruthy();
+    const setupPath = screen.getByRole("list", { name: "System setup progress" });
+    expect(setupPath.querySelectorAll('[aria-current="step"]')).toHaveLength(1);
+    expect(setupPath.querySelector('[aria-current="step"]').textContent).toContain("Secure credentials");
     fireEvent.change(screen.getByLabelText("Bearer token"), { target: { value: "opaque-canary-secret" } });
     fireEvent.click(screen.getByRole("button", { name: "Store credential securely" }));
     expect(await screen.findByRole("button", { name: "Validate" })).toBeTruthy();

@@ -42,6 +42,10 @@
 
 .telemetry-setup-path li { display: grid; gap: 5px; min-width: 76px; padding: 9px 8px; border-top: 2px solid var(--surface-border, #34434d); color: var(--text-muted, #8fa0ab); font-size: 0.72rem; line-height: 1.25; }
 .telemetry-setup-path li.is-current { border-color: var(--color-brand, #4bc6bb); color: var(--text-primary, #eef5f5); }
+.telemetry-current-step { margin: 0; color: var(--text-secondary); font-size: var(--type-body-sm); }
+.telemetry-setup-path li.is-complete { border-color: var(--surface-border-strong); color: var(--text-secondary); }
+.telemetry-setup-path li { font-size: var(--type-label-sm); }
+.telemetry-setup-path:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 3px; }
 .telemetry-setup-path span { display: grid; place-items: center; width: 23px; height: 23px; border: 1px solid currentColor; border-radius: 50%; font-variant-numeric: tabular-nums; }
 
 .telemetry-panel {
@@ -100,6 +104,8 @@
 .telemetry-empty { display: grid; justify-items: start; gap: 8px; padding: clamp(20px, 4vw, 40px); border: 1px dashed var(--surface-border-strong, #425660); border-radius: 12px; }
 .telemetry-empty h3, .telemetry-empty p { margin: 0; }
 .telemetry-empty p { max-width: 68ch; color: var(--text-muted, #94a4ac); }
+.telemetry-empty .command-button { min-height: var(--control-height); padding: var(--space-8) var(--control-padding-x); }
+.telemetry-empty p { font-size: var(--type-body-sm); line-height: var(--line-body); }
 
 .telemetry-health-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
 .telemetry-health-facet { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 10px 12px; border: 1px solid var(--surface-border, #30414c); border-radius: 9px; color: var(--text-secondary, #becad0); font-size: 0.82rem; }
@@ -158,4 +164,7 @@
   .telemetry-health-facet strong { grid-column: 2; }
   .telemetry-actions { align-items: stretch; flex-direction: column; }
   .telemetry-actions button { width: 100%; }
+  .telemetry-panel__heading { flex-wrap: wrap; }
+  .telemetry-empty { padding: var(--space-20); }
+  .telemetry-empty .command-button { width: 100%; }
 }

@@ -715,6 +715,7 @@ export function failedImportStageRows(uploadJob = {}) {
 
 function SuccessState({
   comparison,
+  awaitingApproval = false,
   summary,
   onOpenBaseline,
   onImportComparisonDataset,
@@ -757,7 +758,7 @@ function SuccessState({
         <span className="baseline-success__check" aria-hidden="true">✓</span>
         <div>
           <p className="baseline-success__eyebrow">Initial learning complete</p>
-          <h3 id="baseline-ready-heading">Baseline Established</h3>
+          <h3 id="baseline-ready-heading">{awaitingApproval ? "Baseline awaiting approval" : "Baseline Established"}</h3>
         </div>
         <div className="baseline-success__model" role="img" aria-label="Stable learned relationship network">
           <RelationshipLearningVisual />
@@ -772,7 +773,7 @@ function SuccessState({
         ))}
       </dl>
       <div className="baseline-success__explanation">
-        <p>Neraium has learned the system’s normal operating relationships. Upload a later operating dataset to compare against this baseline.</p>
+        <p>{awaitingApproval ? "Initial learning is complete. Review the baseline and its limitations. Continuing approves the baseline before opening comparison upload." : "Neraium has learned the system’s normal operating relationships. Upload a later operating dataset to compare against this baseline."}</p>
       </div>
       <div className="upload-simple-actions upload-completion-actions">
         <button
@@ -782,7 +783,7 @@ function SuccessState({
           disabled={baselineNavigationPending}
           aria-disabled={baselineNavigationPending}
         >
-          {baselineNavigationPending ? "Opening Baseline…" : "Upload Comparison Dataset"}
+          {baselineNavigationPending ? "Opening Baseline…" : awaitingApproval ? "Approve baseline and continue" : "Upload Comparison Dataset"}
         </button>
         <button type="button" className="secondary-command-button upload-completion-actions__secondary" onClick={onReturnToPortfolio}>Return to Portfolio</button>
       </div>
@@ -1059,6 +1060,7 @@ export default function IntakeFlowPanel({
             ) : null}
             <SuccessState
               comparison={comparison}
+              awaitingApproval={(baselineResult?.activation?.state ?? baselineResult?.candidate_model?.status ?? uploadJob?.baseline_result?.activation?.state ?? uploadJob?.baseline_result?.candidate_model?.status) === "awaiting_approval"}
               summary={summary}
               onOpenBaseline={onOpenBaseline ?? onViewResults}
               baselineNavigationPending={baselineNavigationPending}

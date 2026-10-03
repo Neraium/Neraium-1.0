@@ -1384,6 +1384,13 @@
 .case-primary-action > .forensic-button { background: #125f9c; }
 .case-primary-action > .forensic-button:hover { background: #166bac; }
 .case-primary-action--top { margin-top: 12px; }
+.case-heading-actions { display: flex; flex-wrap: wrap; gap: var(--space-12); margin-top: var(--space-16); }
+.case-heading-actions > button { min-height: var(--control-height); white-space: normal; }
+.finding-review-workspace .case-sections h2 { font-size: var(--type-label-sm); }
+.finding-review-workspace .case-sections p,
+.finding-review-workspace .case-sections li { font-size: var(--type-body-sm); }
+.finding-review-workspace .evidence-assessment dt { font-size: var(--type-label-sm); }
+.finding-review-workspace .evidence-assessment dd { font-size: var(--type-body-sm); }
 .case-sections { display: grid; margin-top: 12px; border: 1px solid var(--fr-line); background: var(--fr-surface); }
 .case-sections > section { min-width: 0; padding: 18px; border-bottom: 1px solid var(--fr-line); }
 .case-sections > section:last-child { border-bottom: 0; }

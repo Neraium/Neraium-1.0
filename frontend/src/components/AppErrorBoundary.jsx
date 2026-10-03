@@ -5,15 +5,15 @@ const CHUNK_RELOAD_KEY_PREFIX = "neraium.chunk-reload:";
 
 const WORKSPACE_RECOVERY_COPY = {
   title: "Workspace temporarily unavailable",
-  message: "We couldn’t load the latest workspace state. Your connected data and existing analysis are still available. Retry the latest telemetry or continue with the last available state.",
-  primaryAction: "Retry latest telemetry",
+  message: "We couldn’t display this workspace. Retry to load it again.",
+  primaryAction: "Retry workspace",
   secondaryAction: "Use last available state",
 };
 
 const CHUNK_RECOVERY_COPY = {
   title: "The workspace was updated",
   bodyTitle: "Reload required",
-  message: "Reload the workspace to fetch the current application bundle. Your connected data and existing analysis are still available.",
+  message: "Reload the workspace to load the updated application.",
   primaryAction: "Reload Workspace",
   secondaryAction: "Use last available state",
 };
@@ -120,13 +120,13 @@ export default class AppErrorBoundary extends React.Component {
                 >
                   {recoveryCopy.primaryAction}
                 </button>
-                <button
+                {typeof this.props.onUseLastAvailableState === "function" && !isChunkLoadError(this.state.error) ? <button
                   type="button"
                   className="secondary-command-button"
                   onClick={this.handleUseLastAvailable}
                 >
                   {recoveryCopy.secondaryAction}
-                </button>
+                </button> : null}
               </div>
             </Panel>
           </div>

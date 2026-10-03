@@ -128,3 +128,19 @@
 .relationship-observations details { padding: 12px; border-top: 1px solid var(--fr-line); }
 .relationship-observations summary { cursor: pointer; }
 .relationship-observations summary:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+
+@media (max-width: 720px) {
+  .finding-review-workspace .case-heading-actions { gap: var(--space-8); }
+  .finding-review-workspace .case-heading-actions > button { flex: 1 1 160px; }
+  .finding-review-workspace .evidence-dashboard__orientation { padding: var(--space-16); }
+  .finding-review-workspace .evidence-dashboard__metric-label { font-size: var(--type-label-sm); }
+  .finding-review-workspace .evidence-dashboard__metric small { font-size: var(--type-label-sm); }
+}
+
+@media (min-width: 360px) and (max-width: 720px) {
+  .finding-review-workspace .evidence-dashboard__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .finding-review-workspace .evidence-dashboard__metric { min-width: 0; padding: var(--space-12); }
+  .finding-review-workspace .evidence-dashboard__metric:nth-child(2) { border-top: 0; }
+  .finding-review-workspace .evidence-dashboard__metric:nth-child(even) { border-left: 1px solid var(--fr-line); }
+  .finding-review-workspace .evidence-dashboard__metric > strong { font-size: var(--type-metric-lg); overflow-wrap: anywhere; }
+}

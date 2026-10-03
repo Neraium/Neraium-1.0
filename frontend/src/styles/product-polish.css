@@ -99,6 +99,13 @@ body { min-width: 320px; }
 .empty-state--compact { min-height: 0; padding: var(--space-16); }
 .empty-state--compact .empty-state__mark { display: none; }
 
+.workspace-back-control__breadcrumb[aria-current="page"] {
+  color: var(--text-secondary);
+  background: transparent;
+  box-shadow: none;
+}
+.workspace-back-control__breadcrumb::before { color: var(--text-muted); }
+
 .workspace-route-main > *,
 .forensic-app > main > * {
   animation: productContentIn var(--motion-slow) var(--ease-product) both;

@@ -59,6 +59,8 @@ const HEALTH_FACETS = Object.freeze([
   ["quality_state", "Data quality acceptable"],
 ]);
 
+const SETUP_STEPS = ["Add data source", "Secure credentials", "Validate connection", "Discover telemetry", "Define system", "Map assets and signals", "Validate coverage", "Prepare reference", "Enable analysis"];
+
 function roleCapabilities(currentUser) {
   const role = String(currentUser?.role ?? "viewer").toLowerCase();
   return {
@@ -174,6 +176,7 @@ export default function TelemetryConnectionsWorkspace({
   const [runResults, setRunResults] = useState({});
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [registryError, setRegistryError] = useState("");
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -188,6 +191,13 @@ export default function TelemetryConnectionsWorkspace({
   const [systemDraft, setSystemDraft] = useState({ systemId: "", name: "", systemType: "", equipmentId: "", equipmentName: "", equipmentType: "" });
   const authorityKeyRef = useRef(`${datasetScopeKey}:pending`);
   const actionControllerRef = useRef(null);
+  const setupPathRef = useRef(null);
+
+  useEffect(() => {
+    const path = setupPathRef.current;
+    const step = path?.querySelector('[aria-current="step"]');
+    if (step) path.scrollTo?.({ left: Math.max(0, step.offsetLeft - path.offsetLeft), behavior: "auto" });
+  }, [wizardStep]);
 
   const selectedConnection = useMemo(
     () => connections.find((connection) => String(connection.connection_id) === selectedConnectionId) ?? null,
@@ -219,9 +229,11 @@ export default function TelemetryConnectionsWorkspace({
     setNotice("");
     setError("");
     setLoading(true);
+    setRegistryError("");
 
     if (typeof apiFetch !== "function") {
       setLoading(false);
+      setRegistryError("Telemetry connections are unavailable in this session.");
       setError("Telemetry connections are unavailable in this session.");
       return () => controller.abort();
     }
@@ -243,7 +255,11 @@ export default function TelemetryConnectionsWorkspace({
         ? current
         : String(nextConnections[0]?.connection_id ?? ""));
     }).catch((requestError) => {
-      if (requestError?.name !== "AbortError") setError(requestError?.message || "Telemetry connections could not be loaded.");
+      if (requestError?.name !== "AbortError") {
+        const message = requestError?.message || "Telemetry connections could not be loaded.";
+        setRegistryError(message);
+        setError(message);
+      }
     }).finally(() => {
       if (!controller.signal.aborted) setLoading(false);
     });
@@ -623,9 +639,10 @@ export default function TelemetryConnectionsWorkspace({
         {canConfigure ? <button type="button" className="command-button" onClick={toggleNewConnectionSetup}>{showWizard ? "Close setup" : "Add data source"}</button> : null}
       </header>
 
-      <ol className="telemetry-setup-path" aria-label="System setup progress" tabIndex="0">
-        {["Add data source", "Secure credentials", "Validate connection", "Discover telemetry", "Define system", "Map assets and signals", "Validate coverage", "Prepare reference", "Enable analysis"].map((label, index) => (
-          <li key={label} className={wizardStep > index ? "is-current" : ""}><span>{index + 1}</span>{label}</li>
+      <p className="telemetry-current-step">Step {wizardStep} of {SETUP_STEPS.length}: {SETUP_STEPS[wizardStep - 1]}</p>
+      <ol ref={setupPathRef} className="telemetry-setup-path" aria-label="System setup progress" tabIndex="0">
+        {SETUP_STEPS.map((label, index) => (
+          <li key={label} aria-current={wizardStep === index + 1 ? "step" : undefined} className={wizardStep === index + 1 ? "is-current" : wizardStep > index + 1 ? "is-complete" : ""}><span>{index + 1}</span>{label}</li>
         ))}
       </ol>
 
@@ -670,8 +687,8 @@ export default function TelemetryConnectionsWorkspace({
       ) : null}
 
       <section className="telemetry-panel" aria-labelledby="connection-registry-heading">
-        <div className="telemetry-panel__heading"><div><p className="section-token">Facility-scoped registry</p><h2 id="connection-registry-heading">Data connections</h2></div><span>{connections.length} configured</span></div>
-        {loading ? <p role="status">Loading facility connections…</p> : connections.length ? <div className="telemetry-connection-grid">{connections.map((connection) => <ConnectionCard key={connection.connection_id} connection={connection} selected={String(connection.connection_id) === selectedConnectionId} onSelect={() => setSelectedConnectionId(String(connection.connection_id))} />)}</div> : <div className="telemetry-empty"><h3>No telemetry source connected</h3><p>Add a read-only data source, define the physical system, and intentionally map its evidence signals before Neraium begins learning system behavior.</p>{canConfigure ? <button type="button" onClick={() => setShowWizard(true)}>Add data source</button> : <small>An administrator can add the first data source for this facility.</small>}</div>}
+        <div className="telemetry-panel__heading"><div><p className="section-token">Facility-scoped registry</p><h2 id="connection-registry-heading">Data connections</h2></div><span>{loading ? "Loading…" : registryError ? "Unavailable" : `${connections.length} configured`}</span></div>
+        {loading ? <p role="status">Loading facility connections…</p> : registryError ? <div className="telemetry-empty"><h3>Connections could not be loaded</h3><p>The configured connections could not be verified. Refresh this page to retry.</p></div> : connections.length ? <div className="telemetry-connection-grid">{connections.map((connection) => <ConnectionCard key={connection.connection_id} connection={connection} selected={String(connection.connection_id) === selectedConnectionId} onSelect={() => setSelectedConnectionId(String(connection.connection_id))} />)}</div> : <div className="telemetry-empty"><h3>No telemetry source connected</h3><p>Add a read-only data source, define the physical system, and intentionally map its evidence signals before Neraium begins learning system behavior.</p>{canConfigure ? <button type="button" className="command-button" onClick={() => setShowWizard(true)}>Add data source</button> : <small>An administrator can add the first data source for this facility.</small>}</div>}
       </section>
 
       {selectedConnection ? (

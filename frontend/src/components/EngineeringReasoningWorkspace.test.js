@@ -118,6 +118,18 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 describe("EngineeringReasoningWorkspace daily workflows", () => {
+  it("focuses route content and opens supported evidence directly from finding review", async () => {
+    renderWorkspace();
+    const main = screen.getByRole("main", { name: "Neraium operational workspace" });
+    expect(document.activeElement).not.toBe(main);
+    fireEvent.click(screen.getByRole("button", { name: "Review finding" }));
+    await screen.findByTestId("finding-review");
+    expect(document.activeElement).toBe(main);
+    fireEvent.click(screen.getByRole("button", { name: "Open evidence record" }));
+    await screen.findByTestId("evidence-record");
+    expect(window.location.pathname).toBe("/evidence/finding-1");
+    expect(document.activeElement).toBe(main);
+  });
   it("switches among explicit facility workspaces from compact workspace controls", () => {
     const onWorkspaceChange = vi.fn();
     renderWorkspace({

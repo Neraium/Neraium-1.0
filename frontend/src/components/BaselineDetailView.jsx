@@ -52,6 +52,13 @@ export default function BaselineDetailView({ routeIdentity, detailState, onRetry
     detailState.result?.activation?.state ?? candidate?.activation?.state ?? candidate?.status ?? "stored",
   ).replaceAll("_", " ");
   const notFound = detailState.status === "error" && detailState.notFound === true;
+  const awaitingApproval = activationState === "awaiting approval";
+  const panelTitle = detailState.status === "error" ? "Baseline unavailable" : !ready ? "Opening baseline" : awaitingApproval ? "Baseline awaiting approval" : "Baseline Established";
+  const panelSubtitle = detailState.status === "error"
+    ? "The selected baseline could not be verified. Retry to open its saved record."
+    : !ready ? "Loading the selected baseline record."
+      : awaitingApproval ? "Initial learning is complete. Human approval is required before comparison."
+        : "The learned baseline is saved and waiting for separate comparison data.";
   const summary = ready ? [
     { label: "Dataset", value: detailState.result?.filename ?? source?.filename ?? "Not reported" },
     { label: "Rows learned", value: source?.row_count ?? quality?.row_count ?? "Not reported" },
@@ -63,7 +70,7 @@ export default function BaselineDetailView({ routeIdentity, detailState, onRetry
 
   return (
     <div className="data-connections-workspace baseline-detail-route" data-testid="baseline-detail-route">
-      <Panel title="Baseline Established" subtitle="The learned baseline is saved and waiting for separate comparison data." className="span-7 baseline-detail-panel">
+      <Panel title={panelTitle} subtitle={panelSubtitle} className="span-7 baseline-detail-panel">
         {detailState.status === "error" ? (
           <section className="baseline-detail-error" role="alert" aria-live="assertive">
             <p className="baseline-detail-error__eyebrow">Baseline unavailable</p>
@@ -90,10 +97,10 @@ export default function BaselineDetailView({ routeIdentity, detailState, onRetry
           <article className="baseline-detail" aria-labelledby="baseline-detail-heading">
             <header className="baseline-detail__header">
               <div>
-                <p className="baseline-detail__eyebrow">Baseline ready</p>
-                <h3 id="baseline-detail-heading">Baseline Established</h3>
+                <p className="baseline-detail__eyebrow">{awaitingApproval ? "Approval required" : "Baseline ready"}</p>
+                <h3 id="baseline-detail-heading">{awaitingApproval ? "Baseline awaiting approval" : "Baseline Established"}</h3>
                 <p className="baseline-detail__lede">
-                  Neraium has learned the system’s normal operating relationships. Upload a later operating dataset to compare against this baseline.
+                  {awaitingApproval ? "Review the learned relationships and data-quality limitations below. Continuing approves this baseline before opening comparison upload." : "Neraium has learned the system’s normal operating relationships. Upload a later operating dataset to compare against this baseline."}
                 </p>
               </div>
               <span className="baseline-detail__status">{activationState}</span>
@@ -102,13 +109,13 @@ export default function BaselineDetailView({ routeIdentity, detailState, onRetry
             <section className="baseline-detail__comparison" aria-labelledby="comparison-state-heading">
               <div>
                 <p className="baseline-detail__eyebrow">Status</p>
-                <h4 id="comparison-state-heading">Waiting for comparison data</h4>
+                <h4 id="comparison-state-heading">{awaitingApproval ? "Review before comparison" : "Waiting for comparison data"}</h4>
                 <p>{!hasLinkedAnalysis
                   ? "No findings, monitoring items, review items, classifications, or trajectories exist yet."
                   : `${analysisState.count} completed comparison ${analysisState.count === 1 ? "analysis remains" : "analyses remain"} isolated from this baseline record.`}</p>
               </div>
               <div className="upload-simple-actions baseline-detail__actions">
-                <button type="button" className="command-button" onClick={onImportComparison}>Upload Comparison Dataset</button>
+                <button type="button" className="command-button" onClick={onImportComparison}>{awaitingApproval ? "Approve baseline and continue" : "Upload Comparison Dataset"}</button>
                 <button type="button" className="secondary-command-button" onClick={onReturnToPortfolio}>Return to Portfolio</button>
               </div>
             </section>

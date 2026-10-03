@@ -30,6 +30,28 @@ const baselineResult = {
 };
 
 describe("baseline-only detail state", () => {
+  it("does not claim an established baseline during loading or failure", () => {
+    const props = { routeIdentity, onRetry: vi.fn() };
+    const { rerender } = render(h(BaselineDetailView, { ...props, detailState: { status: "loading" } }));
+    expect(screen.getByRole("status").textContent).toContain("Opening Baseline");
+    expect(screen.queryByText("Baseline Established")).toBeNull();
+    expect(screen.queryByText(/learned baseline is saved/)).toBeNull();
+    rerender(h(BaselineDetailView, { ...props, detailState: { status: "error", message: "Record unavailable", notFound: true } }));
+    expect(screen.getByRole("heading", { name: "Baseline Not Found" })).toBeTruthy();
+    expect(screen.queryByText("Baseline Established")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Upload Comparison Dataset" })).toBeNull();
+  });
+
+  it("discloses approval before invoking the unchanged comparison action", () => {
+    const onImportComparison = vi.fn();
+    const result = { ...baselineResult, activation: { state: "awaiting_approval" } };
+    render(h(BaselineDetailView, { routeIdentity, detailState: { status: "ready", result }, onImportComparison }));
+    expect(screen.queryByText("Baseline Established")).toBeNull();
+    expect(screen.getByText(/Continuing approves this baseline/)).toBeTruthy();
+    expect(onImportComparison).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Approve baseline and continue" }));
+    expect(onImportComparison).toHaveBeenCalledTimes(1);
+  });
   it("renders the learned model and an explicit empty comparison state without unrelated findings", () => {
     render(h(BaselineDetailView, { routeIdentity, detailState: { status: "ready", result: baselineResult }, onRetry: () => {}, onImportComparison: () => {}, onReturnToPortfolio: () => {} }));
 

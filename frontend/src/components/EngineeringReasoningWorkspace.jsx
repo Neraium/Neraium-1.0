@@ -170,6 +170,8 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const [compactNavigation, setCompactNavigation] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 1024px)")?.matches);
   const mobileMenuButtonRef = useRef(null);
   const mobileSidebarRef = useRef(null);
+  const mainRef = useRef(null);
+  const previousRouteRef = useRef([route, selectedFindingId, selectedSystemName].join(":"));
   const restoreScrollRef = useRef(0);
   const [portfolioRuns, setPortfolioRuns] = useState([]);
   const [facilityLabelContext, setFacilityLabelContext] = useState({});
@@ -238,6 +240,12 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     : Array.isArray(currentUser?.workspaces) ? currentUser.workspaces : [])
     .filter((workspace) => workspace?.is_active !== false);
   const currentWorkspaceId = String(currentWorkspace?.workspace_id ?? currentWorkspace?.workspaceId ?? workspaceSession?.default_workspace_id ?? "default");
+
+  useEffect(() => {
+    const routeKey = [route, selectedFindingId, selectedSystemName].join(":");
+    if (previousRouteRef.current !== routeKey || window.history.state?.neraiumRoute) mainRef.current?.focus({ preventScroll: true });
+    previousRouteRef.current = routeKey;
+  }, [route, selectedFindingId, selectedSystemName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -356,7 +364,6 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     setRoute(nextRoute);
     setMobileNavOpen(false);
     window.requestAnimationFrame?.(() => scrollWindowTo(0));
-    if (mobileNavOpen) window.requestAnimationFrame?.(() => mobileMenuButtonRef.current?.focus());
   }
 
   function navigate(target) {
@@ -464,10 +471,10 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
             {model.selectedFinding?.confidenceContract && Object.keys(model.selectedFinding.confidenceContract).length ? null : <ConfidenceTierChip tier={model.evidenceQuality} />}
           </div>
         </header>
-        <main id="forensic-main" aria-label="Neraium operational workspace" tabIndex={-1} data-route={effectiveRoute}>
+        <main ref={mainRef} id="forensic-main" aria-label="Neraium operational workspace" tabIndex={-1} data-route={effectiveRoute}>
           {effectiveRoute === "work" ? <Suspense fallback={<p className="case-unavailable">Loading work…</p>}><WorkQueueWorkspace apiFetch={apiFetch} currentUser={currentUser} currentWorkspace={currentWorkspace} findingId={pathIdentity(["work"])} onRouteFinding={routeWorkFinding} technicalFindingFor={technicalFindingFor} onOpenInvestigation={(finding) => openInvestigation(finding?.id)} onOpenEvidence={(finding) => openEvidence(finding?.id)} /></Suspense>
             : scopedDetailRoute ? <Suspense fallback={<p className="case-unavailable">Loading finding evidence…</p>}>{effectiveRoute === "finding"
-              ? <FindingReviewWorkspace projection={reviewProjection} onOpenInvestigation={openInvestigation} onBack={() => goBack("site")} />
+              ? <FindingReviewWorkspace projection={reviewProjection} onOpenInvestigation={openInvestigation} onOpenEvidence={evidenceProjection.variant !== "unavailable" ? openEvidence : undefined} onBack={() => goBack("site")} />
               : effectiveRoute === "investigation"
                 ? <InvestigationWorkspace projection={investigationProjection} onOpenEvidence={openEvidence} onBack={() => goBack("findings")} />
                 : <EvidenceRecordWorkspace projection={evidenceProjection} apiFetch={apiFetch} onTrace={() => navigate("trace")} onBack={() => goBack("investigations")} />}</Suspense>

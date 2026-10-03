@@ -118,13 +118,19 @@ function RelationshipList({ relationships }) {
   );
 }
 
-export function FindingReviewWorkspace({ projection, onOpenInvestigation, onBack }) {
+export function FindingReviewWorkspace({ projection, onOpenInvestigation, onOpenEvidence, onBack }) {
   if (!projection || projection.variant === "unavailable") return <ProjectionUnavailable projection={projection} onBack={onBack} />;
   const dashboardSummary = projectEvidenceDashboardSummary(projection);
+  const headingActions = (
+    <div className="case-heading-actions" aria-label="Finding review actions">
+      {projection.primaryAction ? <button type="button" className="forensic-button" onClick={() => onOpenInvestigation?.(projection.identity.findingKey)}>{projection.primaryAction.label}</button> : null}
+      {typeof onOpenEvidence === "function" && projection.identity?.findingKey ? <button type="button" className="forensic-button forensic-button--secondary" onClick={() => onOpenEvidence(projection.identity.findingKey)}>Open evidence record</button> : null}
+    </div>
+  );
   return (
     <div className="case-workspace finding-review-workspace" data-testid="finding-review">
       <button type="button" className="evidence-back" onClick={onBack}>Back to Operations Brief</button>
-      <EvidenceDashboard summary={dashboardSummary} variant={projection.variant} />
+      {dashboardSummary ? <EvidenceDashboard summary={dashboardSummary} variant={projection.variant} headingActions={headingActions} /> : <><CaseHeader eyebrow="Finding" header={projection.header} />{headingActions}</>}
       <div className="case-sections case-sections--review evidence-next-steps">
         <section><h2>What changed</h2><p className="case-lead">{projection.whatChanged}</p></section>
         <section><h2>Why this deserves attention</h2><ul>{projection.whyAttention.map((reason) => <li key={reason}>{reason}</li>)}</ul></section>
@@ -132,7 +138,6 @@ export function FindingReviewWorkspace({ projection, onOpenInvestigation, onBack
         <section><h2>Important limitation</h2><p>{projection.materialLimitation || "No material limitation was recorded at this review depth."}</p></section>
         <section><h2>Where to investigate next</h2>{projection.checks.length ? <ol>{projection.checks.map((item) => <li key={item.label}>{item.label}</li>)}</ol> : <p>No evidence-linked investigation check was recorded.</p>}</section>
       </div>
-      {projection.primaryAction ? <div className="case-primary-action"><div><span className="forensic-kicker">Investigation</span><strong>Inspect comparisons, persistence, context, and source signals.</strong></div><button type="button" className="forensic-button" onClick={() => onOpenInvestigation?.(projection.identity.findingKey)}>{projection.primaryAction.label}</button></div> : null}
     </div>
   );
 }

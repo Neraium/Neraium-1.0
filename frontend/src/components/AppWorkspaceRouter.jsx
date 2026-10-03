@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect, useRef } from "react";
 import "../styles/product-polish.css";
 
 import AppErrorBoundary from "./AppErrorBoundary";
@@ -34,6 +34,10 @@ function WorkspaceWithBackControl({
   children,
 }) {
   const workspaces = workspaceSession?.workspaces ?? [];
+  const mainRef = useRef(null);
+  useEffect(() => {
+    mainRef.current?.focus({ preventScroll: true });
+  }, [activeWorkspace]);
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace} errorContext={{ ...errorContext, workspaceId: activeWorkspace }}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
@@ -72,7 +76,7 @@ function WorkspaceWithBackControl({
               ) : null}
             </div>
           </nav>
-          <main id="main-content" className="workspace-route-main" aria-label="Neraium platform workspace" tabIndex={-1}>
+          <main ref={mainRef} id="main-content" className="workspace-route-main" aria-label="Neraium platform workspace" tabIndex={-1}>
             <h1 className="sr-only">Neraium Platform Workspace</h1>
             {children}
           </main>

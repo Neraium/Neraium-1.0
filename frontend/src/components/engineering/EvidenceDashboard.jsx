@@ -61,7 +61,7 @@ function Sparkline({ data, relationshipLabel }) {
   return <svg className="evidence-dashboard__sparkline" viewBox="0 0 100 30" role="img" aria-label={`${relationshipLabel} trend ${direction} across ${values.length} chronological evidence points.`}><polyline points={points} /></svg>;
 }
 
-export default function EvidenceDashboard({ summary, variant = "ready" }) {
+export default function EvidenceDashboard({ summary, variant = "ready", headingActions = null }) {
   if (!summary) return null;
   if (variant === "insufficient" || summary.insufficient) {
     return (
@@ -69,6 +69,7 @@ export default function EvidenceDashboard({ summary, variant = "ready" }) {
         <span className="evidence-dashboard__kicker">Evidence record</span>
         <h1 id="evidence-insufficient-title">{summary.insufficient?.title || "Insufficient evidence"}</h1>
         <p>{summary.insufficient?.description || "The available evidence does not support a reliable behavioral-change conclusion."}</p>
+        {headingActions}
         <MeasurableConsequence result={summary.measurableConsequence?.status === "not_quantifiable" ? summary.measurableConsequence : null} />
       </section>
     );
@@ -90,6 +91,7 @@ export default function EvidenceDashboard({ summary, variant = "ready" }) {
       <header className="evidence-dashboard__header">
         <span className="evidence-dashboard__kicker">Finding</span>
         <h1 id="evidence-dashboard-title">{summary.title || "Finding title unavailable"}</h1>
+        {headingActions}
       </header>
 
       <div className="evidence-dashboard__context" aria-label="Finding context">

@@ -253,6 +253,16 @@
   max-width: 680px;
 }
 
+.baseline-detail-panel .baseline-detail__eyebrow,
+.baseline-detail-panel .baseline-detail-error__eyebrow,
+.baseline-detail-panel .baseline-detail__identity dt,
+.baseline-detail-panel .baseline-detail__status { font-size: var(--type-label-sm); }
+.baseline-detail-panel .baseline-detail__lede,
+.baseline-detail-panel .baseline-detail__comparison p,
+.baseline-detail-panel .baseline-detail__identity dd { font-size: var(--type-body-sm); line-height: var(--line-body); }
+.baseline-detail__actions { flex-wrap: wrap; }
+.baseline-detail__actions > button { min-height: var(--control-height); white-space: normal; }
+
 @keyframes baseline-detail-spin {
   to { transform: rotate(360deg); }
 }
@@ -275,9 +285,12 @@
     flex-direction: column;
   }
 
-  .baseline-detail__comparison .command-button {
+  .baseline-detail__actions,
+  .baseline-detail__actions > button {
     width: 100%;
   }
+
+  .baseline-detail__actions { align-items: stretch; flex-direction: column; }
 
   .baseline-detail__relationship-list small,
   .baseline-detail__mode-list span {
