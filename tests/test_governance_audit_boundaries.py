@@ -86,8 +86,8 @@ def test_lifecycle_schema_upgrade_preserves_existing_events_and_append_only_trig
         connection.execute(old_ddl)
         connection.executemany("INSERT INTO finding_workflow_events VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [tuple(row) for row in rows])
         connection.execute("DELETE FROM runtime_schema_migrations WHERE migration_id = '014_governance_lifecycle_events'")
-    runtime_db.init_runtime_db()
-    runtime_db.init_runtime_db()  # Upgrade is idempotent.
+    migrate_runtime()
+    migrate_runtime()  # Upgrade is idempotent.
     assert workflow.read_finding_case(finding_id) == before
     assert workflow._events(finding_id) == [original_event]
     lifecycle = workflow.record_governance_lifecycle(
@@ -227,3 +227,11 @@ def test_storage_independently_rejects_backdated_maturity(temporal_store, monkey
     with pytest.raises(ValueError, match="graph_contains_later_knowledge"):
         temporal_store.append_decision(SCOPE, decision, basis)
     assert temporal_store.history(SCOPE, "system-1") == []
+
+
+def migrate_runtime():
+    from db.migrations.runtime_sqlite import apply
+    with sqlite3.connect(runtime_db.DB_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        apply(connection)

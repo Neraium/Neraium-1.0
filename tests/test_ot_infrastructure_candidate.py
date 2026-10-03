@@ -49,12 +49,13 @@ class FakeConnection:
         self.statements=[]
     def __enter__(self): return self
     def __exit__(self, *args): pass
-    def execute(self, sql):
+    def execute(self, sql, params=None):
         self.statements.append(sql)
         self.sql=sql
-        assert sql.startswith("SELECT"), "runtime attempted DDL or mutation"
+        assert sql.startswith(("SELECT", "SET TRANSACTION READ ONLY")), "runtime attempted DDL or mutation"
         return self
     def fetchone(self):
+        if "current_schema()" in self.sql: return ("public",)
         return (self.privileged if "FROM pg_roles" in self.sql else self.ledger_write,)
     def fetchall(self):
         return [(m,) for m in AUTH_SCHEMA_MIGRATIONS] if self.migrated else []
@@ -65,8 +66,12 @@ def test_production_auth_startup_needs_no_schema_writes(monkeypatch):
     backend=_PostgresAuthBackend("local-mock-only")
     conn=FakeConnection()
     monkeypatch.setattr(backend,"_connect",lambda:conn)
+    def verify(connection, schema, name):
+        if not connection.migrated:
+            raise RuntimeError("schema_incompatible:auth:migration_state")
+    monkeypatch.setattr("app.services.auth_store.verify_postgres", verify)
     backend.ensure_schema()
-    assert len(conn.statements)==7
+    assert all(sql.startswith(("SELECT", "SET TRANSACTION READ ONLY")) for sql in conn.statements)
 
 
 @pytest.mark.parametrize("failure", ["privileged","migrated","ledger_write"])
@@ -75,4 +80,8 @@ def test_privileged_or_unmigrated_auth_runtime_fails_closed(monkeypatch, failure
     backend=_PostgresAuthBackend("local-mock-only")
     conn=FakeConnection(**{failure:False if failure=="migrated" else True})
     monkeypatch.setattr(backend,"_connect",lambda:conn)
+    def verify(connection, schema, name):
+        if not connection.migrated:
+            raise RuntimeError("schema_incompatible:auth:migration_state")
+    monkeypatch.setattr("app.services.auth_store.verify_postgres", verify)
     with pytest.raises(RuntimeError): backend.ensure_schema()

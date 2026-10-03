@@ -1,0 +1,47 @@
+{
+  "ledger_column": "migration_id",
+  "ledger_table": "auth_schema_migrations",
+  "migration_ids": ["001_auth_integrity", "002_single_active_session", "003_workspace_membership"],
+  "objects": {
+    "constraints": {
+      "auth_schema_migrations.auth_schema_migrations_pkey": ["PRIMARY KEY (migration_id)", true],
+      "auth_sessions.auth_sessions_email_fkey": ["FOREIGN KEY (email) REFERENCES auth_users(email) ON DELETE CASCADE", true],
+      "auth_sessions.auth_sessions_pkey": ["PRIMARY KEY (session_id)", true],
+      "auth_users.auth_users_pkey": ["PRIMARY KEY (email)", true],
+      "auth_users.ck_auth_users_email_length": ["CHECK (((length(email) >= 1) AND (length(email) <= 320)))", true],
+      "auth_users.ck_auth_users_role": ["CHECK ((role = ANY (ARRAY['viewer'::text, 'operator'::text, 'admin'::text])))", true],
+      "auth_workspace_members.auth_workspace_members_email_fkey": ["FOREIGN KEY (email) REFERENCES auth_users(email) ON DELETE RESTRICT", true],
+      "auth_workspace_members.auth_workspace_members_pkey": ["PRIMARY KEY (workspace_id, email)", true],
+      "auth_workspace_members.auth_workspace_members_workspace_id_fkey": ["FOREIGN KEY (workspace_id) REFERENCES auth_workspaces(workspace_id) ON DELETE RESTRICT", true],
+      "auth_workspaces.auth_workspaces_pkey": ["PRIMARY KEY (workspace_id)", true],
+      "auth_workspaces.auth_workspaces_scope_tenant_id_scope_user_id_scope_workspa_key": ["UNIQUE (scope_tenant_id, scope_user_id, scope_workspace_id)", true]
+    },
+    "functions": {
+    },
+    "indexes": {
+      "auth_schema_migrations_pkey": ["CREATE UNIQUE INDEX auth_schema_migrations_pkey ON auth_schema_migrations USING btree (migration_id)", true, true],
+      "auth_sessions_pkey": ["CREATE UNIQUE INDEX auth_sessions_pkey ON auth_sessions USING btree (session_id)", true, true],
+      "auth_users_pkey": ["CREATE UNIQUE INDEX auth_users_pkey ON auth_users USING btree (email)", true, true],
+      "auth_workspace_members_pkey": ["CREATE UNIQUE INDEX auth_workspace_members_pkey ON auth_workspace_members USING btree (workspace_id, email)", true, true],
+      "auth_workspaces_pkey": ["CREATE UNIQUE INDEX auth_workspaces_pkey ON auth_workspaces USING btree (workspace_id)", true, true],
+      "auth_workspaces_scope_tenant_id_scope_user_id_scope_workspa_key": ["CREATE UNIQUE INDEX auth_workspaces_scope_tenant_id_scope_user_id_scope_workspa_key ON auth_workspaces USING btree (scope_tenant_id, scope_user_id, scope_workspace_id)", true, true],
+      "idx_auth_sessions_email": ["CREATE INDEX idx_auth_sessions_email ON auth_sessions USING btree (email, expires_at DESC)", true, true],
+      "idx_auth_sessions_revoked": ["CREATE INDEX idx_auth_sessions_revoked ON auth_sessions USING btree (revoked_at, expires_at DESC)", true, true],
+      "idx_auth_users_role_active": ["CREATE INDEX idx_auth_users_role_active ON auth_users USING btree (role, is_active)", true, true],
+      "idx_auth_workspace_members_email_active": ["CREATE INDEX idx_auth_workspace_members_email_active ON auth_workspace_members USING btree (email, is_active)", true, true],
+      "idx_auth_workspace_members_workspace_active": ["CREATE INDEX idx_auth_workspace_members_workspace_active ON auth_workspace_members USING btree (workspace_id, is_active)", true, true],
+      "uq_auth_sessions_active_email": ["CREATE UNIQUE INDEX uq_auth_sessions_active_email ON auth_sessions USING btree (email) WHERE (revoked_at IS NULL)", true, true]
+    },
+    "sequences": {
+    },
+    "tables": {
+      "auth_schema_migrations": {"applied_at": [["timestamp with time zone", "text"], true, "", "", null], "migration_id": ["text", true, "", "", null]},
+      "auth_sessions": {"created_at": [["timestamp with time zone", "text"], true, "", "", null], "email": ["text", true, "", "", null], "expires_at": [["timestamp with time zone", "text"], true, "", "", null], "last_seen_at": [["timestamp with time zone", "text"], false, "", "", null], "revoked_at": [["timestamp with time zone", "text"], false, "", "", null], "session_id": ["text", true, "", "", null]},
+      "auth_users": {"bootstrap_managed": ["boolean", true, "", "", "false"], "created_at": [["timestamp with time zone", "text"], true, "", "", null], "deactivated_at": [["timestamp with time zone", "text"], false, "", "", null], "email": ["text", true, "", "", null], "is_active": ["boolean", true, "", "", "true"], "last_login_at": [["timestamp with time zone", "text"], false, "", "", null], "name": ["text", true, "", "", null], "password_hash": ["text", true, "", "", null], "role": ["text", true, "", "", null], "salt": ["text", true, "", "", null], "updated_at": [["timestamp with time zone", "text"], true, "", "", null]},
+      "auth_workspace_members": {"added_at": [["timestamp with time zone", "text"], true, "", "", null], "added_by": ["text", true, "", "", null], "disabled_at": [["timestamp with time zone", "text"], false, "", "", null], "email": ["text", true, "", "", null], "is_active": ["boolean", true, "", "", "true"], "updated_at": [["timestamp with time zone", "text"], true, "", "", null], "workspace_id": ["text", true, "", "", null]},
+      "auth_workspaces": {"created_at": [["timestamp with time zone", "text"], true, "", "", null], "created_by": ["text", true, "", "", null], "disabled_at": [["timestamp with time zone", "text"], false, "", "", null], "display_name": ["text", true, "", "", null], "is_active": ["boolean", true, "", "", "true"], "scope_tenant_id": ["text", true, "", "", null], "scope_user_id": ["text", true, "", "", null], "scope_workspace_id": ["text", true, "", "", null], "updated_at": [["timestamp with time zone", "text"], true, "", "", null], "workspace_id": ["text", true, "", "", null]}
+    },
+    "triggers": {
+    }
+  }
+}

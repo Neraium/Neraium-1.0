@@ -19,6 +19,12 @@ from app.services.connector_execution import (
 )
 
 
+@pytest.fixture(autouse=True)
+def migrate_replay_store(tmp_path):
+    from db.migrations.connector_replay import apply
+    apply(tmp_path / "replay.sqlite")
+
+
 class FakeSecretClient:
     def __init__(self, key: str) -> None:
         self.key = key

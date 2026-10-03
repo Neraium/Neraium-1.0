@@ -21,6 +21,7 @@ from app.core.security import require_admin_role, require_api_access
 from app.routers import app_info, audit, auth, connectors, data, data_connections, distributed_cognition, ecosystem, evidence, facility, findings, health, historical_ingestion, infrastructure, live_analysis, observability, replay, telemetry, workspaces
 from app.routers.data import wait_for_upload_workers
 from app.services.auth_store import initialize_auth_store
+from app.services.schema_verification import SchemaIncompatibilityError
 from app.services.data_connection_poller import start_data_connection_poller, stop_data_connection_poller
 from app.services.data_connections import ensure_default_data_connection
 from app.services.telemetry_runtime import build_telemetry_runtime
@@ -102,6 +103,8 @@ async def app_lifespan(app: FastAPI):
         except Exception as error:
             STARTUP_STATUS["failed_modules"].append("runtime_db: initialization_failed")
             logger.exception("runtime_db_startup_failure")
+            if isinstance(error, SchemaIncompatibilityError):
+                raise
             raise RuntimeError("Required runtime database initialization failed.") from error
 
         try:
@@ -110,6 +113,8 @@ async def app_lifespan(app: FastAPI):
         except Exception as error:
             STARTUP_STATUS["failed_modules"].append("auth_store: initialization_failed")
             logger.exception("auth_store_startup_failure")
+            if isinstance(error, SchemaIncompatibilityError):
+                raise
             raise RuntimeError("Required authentication database initialization failed.") from error
 
         try:
@@ -139,6 +144,8 @@ async def app_lifespan(app: FastAPI):
                         "error_type": type(error).__name__,
                     },
                 )
+                if isinstance(error, SchemaIncompatibilityError):
+                    raise
                 raise RuntimeError("Required telemetry schema is not ready.") from error
         elif production and settings.telemetry_database_url:
             STARTUP_STATUS["failed_modules"].append("telemetry: configuration_invalid")

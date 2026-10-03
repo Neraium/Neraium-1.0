@@ -1,6 +1,7 @@
 import sqlite3
 
 import pytest
+from db.migrations import runtime_sqlite
 
 from app.governance.contracts import FindingLifecycleEvent, LifecycleState
 from app.services import evidence_store, finding_workflow, runtime_db
@@ -89,7 +90,7 @@ def test_future_lifecycle_vocabulary_is_representable_without_maturity(state):
 
 def test_lifecycle_migration_preserves_existing_rows_and_database_constraints():
     with runtime_db.db_connection() as current:
-        schema = runtime_db._table_sql(current, "finding_workflow_events")
+        schema = runtime_sqlite._table_sql(current, "finding_workflow_events")
     old_schema = schema.replace(", 'governance_lifecycle_recorded'", "")
     with sqlite3.connect(":memory:") as connection:
         connection.row_factory = sqlite3.Row
@@ -105,15 +106,15 @@ def test_lifecycle_migration_preserves_existing_rows_and_database_constraints():
         connection.execute("INSERT INTO finding_workflow_events VALUES (?, ?, ?, ?, ?, ?, ?, ?)", original)
         connection.commit()
         connection.execute("BEGIN IMMEDIATE")
-        runtime_db._apply_runtime_migrations(connection)
+        runtime_sqlite._apply_runtime_migrations(connection)
         connection.commit()
         assert tuple(connection.execute("SELECT * FROM finding_workflow_events").fetchone()) == original
-        assert "governance_lifecycle_recorded" in runtime_db._table_sql(connection, "finding_workflow_events")
+        assert "governance_lifecycle_recorded" in runtime_sqlite._table_sql(connection, "finding_workflow_events")
         for sql in ("UPDATE finding_workflow_events SET actor = 'rewrite'", "DELETE FROM finding_workflow_events"):
             with pytest.raises(sqlite3.IntegrityError, match="append_only"):
                 connection.execute(sql)
         # The migration is idempotent and retains FK and uniqueness enforcement.
-        runtime_db._apply_runtime_migrations(connection)
+        runtime_sqlite._apply_runtime_migrations(connection)
         with pytest.raises(sqlite3.IntegrityError, match="UNIQUE"):
             connection.execute("INSERT INTO finding_workflow_events VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                                ("different", *original[1:]))

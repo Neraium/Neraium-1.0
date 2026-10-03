@@ -11,6 +11,7 @@ import uvicorn
 
 from app.core.config import Settings, get_settings, validate_environment_completeness
 from app.core.logging_config import configure_logging
+from app.services.schema_verification import SchemaIncompatibilityError
 from app.services.worker_heartbeat import (
     publish_telemetry_worker_heartbeat,
     publish_worker_heartbeat,
@@ -147,6 +148,8 @@ def _configure_worker_telemetry_scheduler(settings: Settings) -> Any | None:
                 "error_type": type(error).__name__,
             },
         )
+        if isinstance(error, SchemaIncompatibilityError):
+            raise
         raise RuntimeError("Configured telemetry runtime is not ready.") from None
 
     scheduler = getattr(runtime, "scheduler", None)

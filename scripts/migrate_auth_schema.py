@@ -17,7 +17,12 @@ def main() -> int:
         print("auth_migration_identity_required", file=sys.stderr)
         return 1
     try:
-        _PostgresAuthBackend(dsn).migrate_schema()
+        backend = _PostgresAuthBackend(dsn)
+        backend.migrate_schema()
+        from app.services.schema_verification import verify_postgres
+        with backend._connect() as connection:
+            connection.execute("SET TRANSACTION READ ONLY")
+            verify_postgres(connection, "public", "auth_postgres")
     except Exception:
         # Driver exceptions may include DSNs, hostnames or credentials.
         print("auth_schema_migration_failed", file=sys.stderr)

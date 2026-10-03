@@ -167,8 +167,14 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
+python -m db.migrations.apply_runtime --sqlite-dir app/runtime
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 ```
+
+Prepare the directory configured by `NERAIUM_RUNTIME_DIR` if you override the
+default `app/runtime`. API and worker startup verify existing schema and fail
+when migration is required. See [database migrations](docs/database-migrations.md)
+for the separate PostgreSQL release command.
 
 The backend runs locally at:
 

@@ -257,8 +257,8 @@ def test_migration_013_creates_only_the_four_empty_internal_ledgers(
     tmp_path: Path,
 ) -> None:
     runtime_db.configure_runtime_dir(tmp_path)
-    runtime_db.init_runtime_db()
-    runtime_db.init_runtime_db()
+    migrate_runtime()
+    migrate_runtime()
 
     with runtime_db.db_connection() as connection:
         tables = {
@@ -310,7 +310,7 @@ def test_migration_013_upgrades_012_without_backfill_or_existing_schema_changes(
     tmp_path: Path,
 ) -> None:
     runtime_db.configure_runtime_dir(tmp_path)
-    runtime_db.init_runtime_db()
+    migrate_runtime()
 
     with runtime_db.db_connection() as connection:
         for table in HEALTH_RELEVANCE_TABLES:
@@ -350,7 +350,7 @@ def test_migration_013_upgrades_012_without_backfill_or_existing_schema_changes(
             ),
         )
 
-    runtime_db.init_runtime_db()
+    migrate_runtime()
 
     with runtime_db.db_connection() as connection:
         assert {
@@ -378,7 +378,7 @@ def test_migration_013_enforces_constraints_scope_foreign_keys_and_append_only(
     tmp_path: Path,
 ) -> None:
     runtime_db.configure_runtime_dir(tmp_path)
-    runtime_db.init_runtime_db()
+    migrate_runtime()
 
     with runtime_db.db_connection() as connection:
         with pytest.raises(sqlite3.IntegrityError):
@@ -593,3 +593,11 @@ def test_migration_013_enforces_constraints_scope_foreign_keys_and_append_only(
                     f"DELETE FROM {table} WHERE {identity_column} = ?",
                     (identity,),
                 )
+
+
+def migrate_runtime():
+    from db.migrations.runtime_sqlite import apply
+    with sqlite3.connect(runtime_db.DB_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        apply(connection)

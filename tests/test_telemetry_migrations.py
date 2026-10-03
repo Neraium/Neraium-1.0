@@ -455,6 +455,13 @@ def test_runtime_readiness_runs_every_structural_migration_verifier(monkeypatch)
     calls: list[tuple[str, object]] = []
 
     class Connection:
+        def execute(self, statement):
+            assert statement.startswith(("SELECT", "SET TRANSACTION READ ONLY"))
+            return self
+
+        def fetchall(self):
+            return []
+
         def close(self) -> None:
             calls.append(("close", self))
 
@@ -488,8 +495,11 @@ def test_runtime_readiness_runs_every_structural_migration_verifier(monkeypatch)
         lambda candidate: calls.append(("relationship_state", candidate)),
     )
 
+    monkeypatch.setattr("app.services.schema_verification.verify_postgres",
+        lambda candidate, schema, contract: calls.append(("contract", candidate)))
     assert _ready_runtime(Repository()).verify_readiness() is True
     assert calls == [
+        ("contract", connection),
         ("base", connection),
         ("catalog", connection),
         ("runtime", connection),

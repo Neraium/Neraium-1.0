@@ -46,8 +46,8 @@ No production environment was contacted, deployed, seeded, or migrated.
 5. Behavioral-model reads refresh persisted updates from other workers. Shared
    SII state reads/writes fail on database failure instead of silently falling
    back to a stale task-local file or hiding failed persistence.
-6. Auth schema startup is serialized. Session creation rechecks activation under
-   the same database lock used by activation/deactivation; deactivation and
+6. Auth schema migration is serialized; startup verifies existing schema.
+   Session creation rechecks activation under the same database lock used by activation/deactivation; deactivation and
    session revocation commit together. Bootstrap creation cannot overwrite a
    concurrently created account, and ordinary restarts preserve deactivation
    and role changes. Reactivation remains an explicit admin operation.
@@ -62,8 +62,11 @@ branch. Startup deliberately fails if production lacks the shared runtime URL.
 
 - Inject `NERAIUM_RUNTIME_DATABASE_URL` as a task secret for **all** API and worker
   tasks. Use an appropriately provisioned database role on the existing RDS
-  service; the role must be able to create/migrate `neraium_runtime`. Keep auth
-  credentials and its rotating-secret configuration unchanged. Runtime DSN
+  service; the runtime role uses existing objects with DML and verification
+  privileges only. Initialize/migrate `neraium_runtime` beforehand using the
+  release-only `NERAIUM_RUNTIME_MIGRATION_DSN` and
+  `python -m db.migrations.apply_runtime --component runtime`. See
+  [database migrations](database-migrations.md). Runtime DSN
   secret rotation requires replacing tasks so they receive the new secret.
 - Drain writers and take consistent offline SQLite backups from each existing
   runtime mount. Preserve the original backups and S3 objects. Do not run old
@@ -73,8 +76,8 @@ branch. Startup deliberately fails if production lacks the shared runtime URL.
   timestamps are copied verbatim; no analysis is invoked. Conflicting target
   rows or legacy rows missing a stable scoped identity abort the transaction.
   Such conflicts require a reviewed migration decision; the tool does not pick
-  a winner or invent scope. A dry run rolls back copied rows but may initialize
-  an empty target schema. It never alters the source database.
+  a winner or invent scope. A dry run rolls back copied rows and only verifies
+  the already migrated target schema. It never alters the source database.
 
 ```sh
 # DSN must already be injected securely. No credentials in command history.

@@ -32,7 +32,9 @@ def postgres_runtime(monkeypatch):
     monkeypatch.setattr(upload_state_repository, "_external_shared_state_enabled", lambda: False)
     monkeypatch.setattr(worker_heartbeat, "_bucket", lambda: "")
     monkeypatch.setattr(runtime_postgres, "_SCHEMA", schema)
-    monkeypatch.setattr(runtime_postgres, "_initialized", set())
+    from db.migrations.runtime_postgres import apply
+    with psycopg.connect(dsn) as connection:
+        apply(connection, schema=schema)
     runtime_db.init_runtime_db()
     try:
         yield dsn, schema
@@ -101,7 +103,7 @@ def test_postgres_auth_restart_revocation_activation_and_concurrent_startup(post
     schema = auth_schema
     try:
         with ThreadPoolExecutor(max_workers=2) as executor:
-            list(executor.map(lambda _: Backend(dsn).ensure_schema(), range(2)))
+            list(executor.map(lambda _: Backend(dsn).migrate_schema(), range(2)))
         backend = Backend(dsn)
         monkeypatch.setattr(auth_store, "_get_backend", lambda: backend)
         monkeypatch.setenv("NERAIUM_BOOTSTRAP_ADMIN_EMAIL", "durable@example.com")

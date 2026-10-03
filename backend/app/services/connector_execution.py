@@ -377,10 +377,8 @@ class ConnectorExecutionBroker:
         self.auth_secret_arn = auth_secret_arn
         self._resource_policies = resource_policy_registry or TelemetryResourcePolicyRegistry.load()
         self._db_path = replay_db_path
-        Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self._db_path) as db:
-            db.execute("CREATE TABLE IF NOT EXISTS used_jobs (request_identity TEXT PRIMARY KEY, digest TEXT NOT NULL, created_at INTEGER NOT NULL)")
-            db.execute("CREATE INDEX IF NOT EXISTS ix_used_jobs_created ON used_jobs(created_at)")
+        from app.services.schema_verification import verify_sqlite_file
+        verify_sqlite_file(Path(self._db_path), "connector_replay")
 
     def execute(self, raw_body: bytes, *, timestamp: str, signature: str) -> dict[str, Any]:
         if len(raw_body) > MAX_JOB_BYTES:
@@ -404,7 +402,7 @@ class ConnectorExecutionBroker:
         identity = job["request_identity"]
         digest = hashlib.sha256(raw_body).hexdigest()
         try:
-            with sqlite3.connect(self._db_path, timeout=5) as db:
+            with sqlite3.connect(f"{Path(self._db_path).resolve().as_uri()}?mode=rw", uri=True, timeout=5) as db:
                 db.execute("DELETE FROM used_jobs WHERE created_at < ?", (now - 86_400,))
                 db.execute("INSERT INTO used_jobs(request_identity,digest,created_at) VALUES(?,?,?)", (identity,digest,now))
         except sqlite3.IntegrityError:

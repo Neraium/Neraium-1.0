@@ -13,6 +13,8 @@ def executor(tmp_path, monkeypatch):
     monkeypatch.setenv("NERAIUM_CONNECTOR_EXECUTOR_AUTH_SECRET_ARN", "test-auth")
     monkeypatch.setenv("NERAIUM_CONNECTOR_EXECUTOR_REPLAY_DB", str(tmp_path / "replay.sqlite"))
     monkeypatch.setattr(boto3, "client", lambda *args, **kwargs: object())
+    from db.migrations.connector_replay import apply
+    apply(tmp_path / "replay.sqlite")
     calls = []
 
     def execute(self, body, **kwargs):

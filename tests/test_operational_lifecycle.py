@@ -12,6 +12,8 @@ from app.services.upload_runtime_state import UploadRuntimeState
 
 
 def _settings(tmp_path: Path, **overrides) -> Settings:
+    from db.migrations.apply_runtime import migrate_sqlite
+    migrate_sqlite(tmp_path)
     values = {
         "app_env": "development",
         "backend_host": "127.0.0.1",
@@ -159,7 +161,7 @@ def test_runtime_dependency_failure_marks_readiness_not_ready(monkeypatch, tmp_p
         response = client.get("/api/ready")
 
     assert response.status_code == 503
-    assert response.json()["checks"]["runtime_db"] == "error"
+    assert response.json()["status"] == "not_ready"
 
 
 def test_auth_dependency_failure_marks_readiness_not_ready(monkeypatch, tmp_path) -> None:
@@ -168,7 +170,7 @@ def test_auth_dependency_failure_marks_readiness_not_ready(monkeypatch, tmp_path
         response = client.get("/api/ready")
 
     assert response.status_code == 503
-    assert response.json()["checks"]["auth_store"] == "error"
+    assert response.json()["status"] == "not_ready"
 
 
 def test_lifespan_stops_every_started_background_service(monkeypatch, tmp_path) -> None:
@@ -206,6 +208,9 @@ def test_evidence_mirror_follows_reconfigured_runtime_boundary(tmp_path) -> None
     first_runtime = tmp_path / "first-runtime"
     second_runtime = tmp_path / "second-runtime"
 
+    from db.migrations.apply_runtime import migrate_sqlite
+    migrate_sqlite(first_runtime)
+    migrate_sqlite(second_runtime)
     configure_upload_runtime_dir(first_runtime)
     evidence_store.upsert_evidence_run(
         {

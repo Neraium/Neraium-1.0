@@ -766,6 +766,8 @@ def test_lifespan_starts_scheduler_only_for_worker_roles(monkeypatch, tmp_path) 
         process_role="api",
         start_background_workers=True,
     )
+    from db.migrations.apply_runtime import migrate_sqlite
+    migrate_sqlite(api_settings.runtime_dir)
     with TestClient(create_app(api_settings)):
         pass
     assert api_scheduler.calls == []
@@ -784,6 +786,7 @@ def test_lifespan_starts_scheduler_only_for_worker_roles(monkeypatch, tmp_path) 
         start_background_workers=True,
         shutdown_timeout_seconds=0.25,
     )
+    migrate_sqlite(worker_settings.runtime_dir)
     with TestClient(create_app(worker_settings)) as client:
         # Public liveness intentionally omits internal worker diagnostics.
         assert set(client.get("/api/health").json()) == {"status", "service"}

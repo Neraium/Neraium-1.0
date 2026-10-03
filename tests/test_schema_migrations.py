@@ -46,8 +46,8 @@ CREATE TABLE auth_sessions (
 
 def test_runtime_migrations_apply_cleanly_to_fresh_database(tmp_path: Path) -> None:
     runtime_db.configure_runtime_dir(tmp_path)
-    runtime_db.init_runtime_db()
-    runtime_db.init_runtime_db()
+    migrate_runtime()
+    migrate_runtime()
 
     with runtime_db.db_connection() as connection:
         assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
@@ -145,7 +145,7 @@ def test_runtime_upgrade_from_unversioned_schema_preserves_valid_rows(tmp_path: 
             ("orphan", "pending", 0, None, "2026-01-01T00:00:00+00:00", "2026-01-01T00:00:00+00:00", None),
         )
 
-    runtime_db.init_runtime_db()
+    migrate_runtime()
 
     with runtime_db.db_connection() as connection:
         row = connection.execute(
@@ -202,7 +202,7 @@ def test_workspace_evidence_scope_migration_backfills_only_authoritative_scopes(
                 (payload["run_id"], payload["created_at"], payload["status"], json.dumps(payload)),
             )
 
-    runtime_db.init_runtime_db()
+    migrate_runtime()
 
     with runtime_db.db_connection() as connection:
         stored = {
@@ -222,7 +222,7 @@ def test_workspace_evidence_scope_migration_backfills_only_authoritative_scopes(
 
 def test_upload_queue_claim_is_atomic_across_connections(tmp_path: Path) -> None:
     runtime_db.configure_runtime_dir(tmp_path)
-    runtime_db.init_runtime_db()
+    migrate_runtime()
     runtime_db.upsert_upload_job({"job_id": "job-1", "status": "PENDING"})
     runtime_db.enqueue_upload_job("job-1")
     barrier = Barrier(4)
@@ -257,7 +257,7 @@ def test_auth_upgrade_enforces_roles_foreign_keys_and_one_active_session(tmp_pat
             )
 
     backend = _SQLiteAuthBackend(db_path)
-    backend.ensure_schema()
+    backend.migrate_schema()
 
     with sqlite3.connect(db_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
@@ -280,7 +280,7 @@ def test_auth_upgrade_enforces_roles_foreign_keys_and_one_active_session(tmp_pat
 
 def test_auth_user_insert_and_session_replacement_are_concurrency_safe(tmp_path: Path) -> None:
     backend = _SQLiteAuthBackend(tmp_path / "auth.db")
-    backend.ensure_schema()
+    backend.migrate_schema()
     payload = {
         "email": "race@example.com", "name": "Race", "role": "operator",
         "salt": "salt", "password_hash": "hash",
@@ -321,7 +321,7 @@ def test_database_timestamps_are_timezone_aware_iso_8601() -> None:
 
 def test_live_ingestion_buffer_is_idempotent_and_concurrency_safe(tmp_path: Path) -> None:
     runtime_db.configure_runtime_dir(tmp_path)
-    runtime_db.init_runtime_db()
+    migrate_runtime()
     barrier = Barrier(2)
 
     def append(sensor_id: str) -> None:
@@ -398,7 +398,7 @@ def test_postgres_normalization_legacy_schema_requires_documented_online_upgrade
 
 def test_evidence_feedback_append_does_not_lose_concurrent_updates(tmp_path: Path) -> None:
     runtime_db.configure_runtime_dir(tmp_path)
-    runtime_db.init_runtime_db()
+    migrate_runtime()
     runtime_db.upsert_evidence_run_db(
         {
             "run_id": "run-1", "created_at": "2026-01-01T00:00:00+00:00",
@@ -428,7 +428,7 @@ def test_legacy_evidence_is_imported_once_and_cannot_resurrect_after_retention(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     runtime_db.configure_runtime_dir(tmp_path)
-    runtime_db.init_runtime_db()
+    migrate_runtime()
     evidence_dir = tmp_path / "evidence"
     evidence_path = evidence_dir / "runs.json"
     evidence_dir.mkdir(parents=True)
@@ -466,7 +466,7 @@ def test_unscoped_legacy_evidence_is_not_claimed_by_first_reader(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     runtime_db.configure_runtime_dir(tmp_path)
-    runtime_db.init_runtime_db()
+    migrate_runtime()
     evidence_dir = tmp_path / "evidence"
     evidence_path = evidence_dir / "runs.json"
     evidence_dir.mkdir(parents=True)
@@ -497,7 +497,7 @@ def test_unscoped_legacy_evidence_is_not_claimed_by_first_reader(
 
 def test_upload_queue_helpers_validate_status_transitions(tmp_path: Path) -> None:
     runtime_db.configure_runtime_dir(tmp_path)
-    runtime_db.init_runtime_db()
+    migrate_runtime()
     runtime_db.upsert_upload_job(
         {
             "job_id": "state-job",
@@ -531,3 +531,11 @@ def test_s3_queue_helpers_apply_the_same_terminal_transition_guards(
     runtime_db.complete_upload_queue_job("state-job", "failed", "late failure")
     runtime_db.touch_upload_queue_job("state-job", "processing")
     assert writes == []
+
+
+def migrate_runtime():
+    from db.migrations.runtime_sqlite import apply
+    with sqlite3.connect(runtime_db.DB_PATH) as connection:
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        apply(connection)

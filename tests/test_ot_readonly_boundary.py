@@ -2,12 +2,19 @@
 import httpx
 import pytest
 
+
 from app.connectors.base import ConnectorExecutionContext, TelemetryConnectorError
 from app.connectors.https_telemetry import HttpsTelemetryConnector
 from app.services.connector_execution import ConnectorExecutionBroker, RemoteHttpsTelemetryConnector, APPROVED_HOST
 from app.services.telemetry_egress import TelemetryEgressError, TelemetryEgressPolicy
 from app.services.telemetry_resource_policy import TelemetryResourcePolicyRegistry, VERSION
 from test_connector_execution import make_job, signed, FakeSecretClient, FakeConnectorSecretStore
+
+
+@pytest.fixture(autouse=True)
+def migrate_replay_store(tmp_path):
+    from db.migrations.connector_replay import apply
+    apply(tmp_path / "replay.sqlite")
 
 
 def manifest():

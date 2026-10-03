@@ -1,0 +1,39 @@
+{
+  "ledger_column": "migration_id",
+  "ledger_table": "auth_schema_migrations",
+  "migration_ids": ["001_auth_integrity", "002_single_active_session", "003_workspace_membership"],
+  "objects": {
+    "foreign_keys": {
+      "auth_schema_migrations": [],
+      "auth_sessions": [[0, "auth_users", "email", "email", "NO ACTION", "CASCADE", "NONE"]],
+      "auth_users": [],
+      "auth_workspace_members": [[0, "auth_users", "email", "email", "NO ACTION", "RESTRICT", "NONE"], [0, "auth_workspaces", "workspace_id", "workspace_id", "NO ACTION", "RESTRICT", "NONE"]],
+      "auth_workspaces": []
+    },
+    "indexes": {
+      "auth_schema_migrations:pk:[['migration_id', 0, 'BINARY', 1]]": [1, 0, [["migration_id", 0, "BINARY", 1]], null],
+      "auth_sessions:pk:[['session_id', 0, 'BINARY', 1]]": [1, 0, [["session_id", 0, "BINARY", 1]], null],
+      "auth_users:pk:[['email', 0, 'BINARY', 1]]": [1, 0, [["email", 0, "BINARY", 1]], null],
+      "auth_workspace_members:pk:[['workspace_id', 0, 'BINARY', 1], ['email', 0, 'BINARY', 1]]": [1, 0, [["workspace_id", 0, "BINARY", 1], ["email", 0, "BINARY", 1]], null],
+      "auth_workspaces:pk:[['workspace_id', 0, 'BINARY', 1]]": [1, 0, [["workspace_id", 0, "BINARY", 1]], null],
+      "auth_workspaces:u:[['scope_tenant_id', 0, 'BINARY', 1], ['scope_user_id', 0, 'BINARY', 1], ['scope_workspace_id', 0, 'BINARY', 1]]": [1, 0, [["scope_tenant_id", 0, "BINARY", 1], ["scope_user_id", 0, "BINARY", 1], ["scope_workspace_id", 0, "BINARY", 1]], null],
+      "idx_auth_sessions_email": [0, 0, [["email", 0, "BINARY", 1], ["expires_at", 1, "BINARY", 1]], "CREATE INDEX idx_auth_sessions_email ON auth_sessions(email, expires_at DESC)"],
+      "idx_auth_sessions_revoked": [0, 0, [["revoked_at", 0, "BINARY", 1], ["expires_at", 1, "BINARY", 1]], "CREATE INDEX idx_auth_sessions_revoked ON auth_sessions(revoked_at, expires_at DESC)"],
+      "idx_auth_users_role_active": [0, 0, [["role", 0, "BINARY", 1], ["is_active", 0, "BINARY", 1]], "CREATE INDEX idx_auth_users_role_active ON auth_users(role, is_active)"],
+      "idx_auth_workspace_members_email_active": [0, 0, [["email", 0, "BINARY", 1], ["is_active", 0, "BINARY", 1]], "CREATE INDEX idx_auth_workspace_members_email_active ON auth_workspace_members(email, is_active)"],
+      "idx_auth_workspace_members_workspace_active": [0, 0, [["workspace_id", 0, "BINARY", 1], ["is_active", 0, "BINARY", 1]], "CREATE INDEX idx_auth_workspace_members_workspace_active ON auth_workspace_members(workspace_id, is_active)"],
+      "uq_auth_sessions_active_email": [1, 1, [["email", 0, "BINARY", 1]], "CREATE UNIQUE INDEX uq_auth_sessions_active_email ON auth_sessions(email) WHERE revoked_at IS NULL"]
+    },
+    "tables": {
+      "auth_schema_migrations": {"applied_at": ["TEXT", 0], "migration_id": ["TEXT", 1]},
+      "auth_sessions": {"created_at": ["TEXT", 0], "email": ["TEXT", 0], "expires_at": ["TEXT", 0], "last_seen_at": ["TEXT", 0], "revoked_at": ["TEXT", 0], "session_id": ["TEXT", 1]},
+      "auth_users": {"bootstrap_managed": ["BOOLEAN", 0], "created_at": ["TEXT", 0], "deactivated_at": ["TEXT", 0], "email": ["TEXT", 1], "is_active": ["BOOLEAN", 0], "last_login_at": ["TEXT", 0], "name": ["TEXT", 0], "password_hash": ["TEXT", 0], "role": ["TEXT", 0], "salt": ["TEXT", 0], "updated_at": ["TEXT", 0]},
+      "auth_workspace_members": {"added_at": ["TEXT", 0], "added_by": ["TEXT", 0], "disabled_at": ["TEXT", 0], "email": ["TEXT", 2], "is_active": ["BOOLEAN", 0], "updated_at": ["TEXT", 0], "workspace_id": ["TEXT", 1]},
+      "auth_workspaces": {"created_at": ["TEXT", 0], "created_by": ["TEXT", 0], "disabled_at": ["TEXT", 0], "display_name": ["TEXT", 0], "is_active": ["BOOLEAN", 0], "scope_tenant_id": ["TEXT", 0], "scope_user_id": ["TEXT", 0], "scope_workspace_id": ["TEXT", 0], "updated_at": ["TEXT", 0], "workspace_id": ["TEXT", 1]}
+    },
+    "triggers": {
+      "trg_auth_users_integrity_insert": "CREATE TRIGGER trg_auth_users_integrity_insert BEFORE INSERT ON auth_users WHEN NEW.role NOT IN ('viewer', 'operator', 'admin') OR NEW.email = '' OR length(NEW.email) > 320 BEGIN SELECT RAISE(ABORT, 'auth_user_integrity'); END",
+      "trg_auth_users_integrity_update": "CREATE TRIGGER trg_auth_users_integrity_update BEFORE UPDATE OF email, role ON auth_users WHEN NEW.role NOT IN ('viewer', 'operator', 'admin') OR NEW.email = '' OR length(NEW.email) > 320 BEGIN SELECT RAISE(ABORT, 'auth_user_integrity'); END"
+    }
+  }
+}

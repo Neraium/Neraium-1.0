@@ -17,6 +17,7 @@ from app.core.config import Settings, parse_postgresql_url, validate_settings
 from app.services.telemetry_domain import ConnectorType
 from app.services.connector_execution import RemoteHttpsTelemetryConnector
 from app.services.telemetry_repository import PostgreSQLTelemetryRepository
+from app.services.schema_verification import SchemaIncompatibilityError
 from app.services.telemetry_secrets import AwsSecretsManagerTelemetryStore, TelemetrySecretStore
 
 
@@ -147,6 +148,18 @@ class TelemetryRuntime:
             return bool(verifier()) if callable(verifier) else True
         connection = factory()
         try:
+            connection.execute("SET TRANSACTION READ ONLY")
+            from app.services.schema_verification import verify_postgres
+            from psycopg.errors import InvalidSchemaName, UndefinedColumn, UndefinedTable
+            # V1 callers also support the fully migrated V2 schema. Partial
+            # V2 releases fail the complete V2 contract before serving work.
+            try:
+                rows = connection.execute("SELECT migration_id FROM telemetry.schema_migrations").fetchall()
+            except (InvalidSchemaName, UndefinedColumn, UndefinedTable):
+                raise SchemaIncompatibilityError("schema_incompatible:telemetry:migration_state:schema_migrations") from None
+            v2_installed = any(str(row[0]).startswith(("008_", "009_", "010_")) for row in rows)
+            verify_postgres(connection, "telemetry",
+                "telemetry_v2" if v2_installed or self.execution_identity_version == "physical-endpoint-keyed.v2" else "telemetry_v1")
             from db.migrations.create_telemetry_connection_tables import (
                 verify as verify_connection_schema,
             )
@@ -183,7 +196,7 @@ class TelemetryRuntime:
                 verify_v2_execution(connection)
                 verify_endpoint_coexistence(connection)
             return True
-        except TelemetryRuntimeUnavailable:
+        except (TelemetryRuntimeUnavailable, SchemaIncompatibilityError):
             raise
         except Exception as error:
             raise TelemetryRuntimeUnavailable("telemetry_schema_not_ready") from error

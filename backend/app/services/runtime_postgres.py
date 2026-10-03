@@ -10,14 +10,11 @@ from __future__ import annotations
 from contextlib import contextmanager
 from functools import wraps
 import os
-from pathlib import Path
 import re
 import threading
 
 _SCHEMA = "neraium_runtime"
 _LOCK = 173514002
-_initialized: set[str] = set()
-_init_lock = threading.Lock()
 
 
 def database_url() -> str:
@@ -28,7 +25,10 @@ def _open_connection(*, rows: bool = False):
     # Keep SQLite-only local installations independent of the optional driver.
     import psycopg
     from psycopg.rows import dict_row
-    return psycopg.connect(database_url(), **({"row_factory": dict_row} if rows else {}))
+    dsn = database_url()
+    if not dsn:
+        raise RuntimeError("runtime_database_not_configured")
+    return psycopg.connect(dsn, **({"row_factory": dict_row} if rows else {}))
 
 
 def _sql(statement: str) -> str:
@@ -82,24 +82,11 @@ def connect(*, readonly: bool = False):
 
 
 def initialize() -> None:
-    dsn = database_url()
-    with _init_lock:
-        if dsn in _initialized:
-            return
-        with _open_connection() as connection:
-            connection.execute("SET LOCAL lock_timeout = '30s'")
-            connection.execute(f"SELECT pg_advisory_xact_lock({_LOCK})")
-            schema_exists = connection.execute(
-                "SELECT to_regnamespace(%s)", (_SCHEMA,)
-            ).fetchone()[0]
-            if schema_exists is None:
-                connection.execute(f"CREATE SCHEMA {_SCHEMA}")
-            connection.execute(f"SET LOCAL search_path TO {_SCHEMA}, pg_catalog")
-            connection.execute("CREATE TABLE IF NOT EXISTS postgres_runtime_migrations (version INTEGER PRIMARY KEY)")
-            if not connection.execute("SELECT 1 FROM postgres_runtime_migrations WHERE version = 1").fetchone():
-                connection.execute(Path(__file__).with_name("runtime_postgres_v1.sql").read_text())
-                connection.execute("INSERT INTO postgres_runtime_migrations VALUES (1)")
-        _initialized.add(dsn)
+    """Read-only verification; shared schema installation belongs to release."""
+    from app.services.schema_verification import verify_postgres
+    with _open_connection() as connection:
+        connection.execute("SET TRANSACTION READ ONLY")
+        verify_postgres(connection, _SCHEMA, "runtime_postgres")
 
 
 _queue_transaction = threading.local()
