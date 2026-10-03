@@ -38,19 +38,20 @@ export default function MeasurableConsequence({ result }) {
         <strong className="measurable-consequence__amount">{amount(value)} {result.cumulative_unit}</strong>
         <dl className="measurable-consequence__summary">
           <div><dt>Observed across</dt><dd>{(duration / 3600).toFixed(1)} hours</dd></div>
+          <div><dt>Calculation window (UTC)</dt><dd>{timestamp(result.start_timestamp)} → {timestamp(result.end_timestamp)}</dd></div>
           <div><dt>Evidence support</dt><dd>{support}</dd></div>
         </dl>
       </> : <p>{insufficient}</p>}
+      {limitations.length ? <div className="measurable-consequence__limitations"><h3>Limitations</h3><ul>{limitations.map((item, index) => <li key={index}>{item}</li>)}</ul></div> : null}
       {result && (supported || limitations.length > 0) ? <details>
         <summary>Technical evidence</summary>
         <dl className="measurable-consequence__technical">
-          {supported ? <div><dt>Calculation window (UTC)</dt><dd>{timestamp(result.start_timestamp)} → {timestamp(result.end_timestamp)}</dd></div> : null}
           <div><dt>Relationship IDs</dt><dd>{array(result.source_relationship_ids).join(" / ") || "Not supplied"}</dd></div>
           <div><dt>Source signals</dt><dd>{array(result.source_tag_ids).join(" / ") || "Not supplied"}</dd></div>
           <div><dt>Skipped intervals</dt><dd>{Number.isInteger(result.skipped_interval_count) && result.skipped_interval_count >= 0 ? result.skipped_interval_count : "Not supplied"}</dd></div>
           {supported ? <div><dt>Contributing duration</dt><dd>{amount(duration)} seconds; excluded intervals are not counted.</dd></div> : null}
           <div><dt>Methodology</dt><dd>{result.methodology || "Not supplied"}{result.methodology_version ? ` · ${result.methodology_version}` : ""}</dd></div>
-          <div><dt>Limitations</dt><dd>{limitations.length ? <ul>{limitations.map((item, index) => <li key={index}>{item}</li>)}</ul> : "None recorded"}</dd></div>
+          {!limitations.length ? <div><dt>Limitations</dt><dd>None recorded</dd></div> : null}
         </dl>
       </details> : null}
     </section>

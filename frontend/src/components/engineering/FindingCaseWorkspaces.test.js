@@ -181,6 +181,39 @@ describe("progressive results hierarchy", () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
+  it("keeps limits, recorded windows, qualification and scoped exports outside technical depth", () => {
+    const projection = canonicalEvidenceProjection();
+    projection.timestamps.sourceRanges = [{ baseline_start: "2026-08-01", baseline_end: "2026-08-10", current_start: "2026-08-20", current_end: null }];
+    const before = JSON.stringify(projection);
+    const { rerender } = render(React.createElement(EvidenceRecordWorkspace, { projection, apiFetch: vi.fn() }));
+    const technical = screen.getByText("Technical evidence and audit trail").closest("details");
+    expect(technical.open).toBe(false);
+    for (const node of [screen.getByText("No cause is established."), screen.getByRole("button", { name: "PDF" }), screen.getByText("Analysis-run export; not finding-specific"), screen.getByText(/This product view is a bounded projection/), screen.getByText("Current: 2026-08-20 → Not supplied")]) {
+      expect(node.closest("details")).toBeNull();
+    }
+    expect(screen.getByRole("button", { name: "PDF" }).disabled).toBe(false);
+    expect(JSON.stringify(projection)).toBe(before);
+    rerender(React.createElement(EvidenceRecordWorkspace, { projection: { ...projection, actions: { exportRunId: null, exportScopeLabel: null, traceRoute: null } }, apiFetch: vi.fn() }));
+    expect(screen.getByRole("button", { name: "PDF" }).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "JSON" }).disabled).toBe(true);
+  });
+
+  it("leads investigation with source and limits and retains unavailable channel reasons", () => {
+    const projection = investigationProjection();
+    projection.systemEvidence.push({ key: "physics", label: "Physics evidence", state: { state: "unavailable", reason: "Physics was not recorded for this analysis." }, scope: "run", scopeLabel: "Analysis-run evidence; not finding-specific", sourcePath: "model.siiEvidence.phase_4.physics", summary: "", metrics: [] });
+    render(React.createElement(InvestigationWorkspace, { projection }));
+    const comparison = screen.getByRole("heading", { name: "Primary relationship comparison" });
+    for (const node of [screen.getByText("comparison.csv"), screen.getByText("Historian coverage was reduced.")]) expect(node.compareDocumentPosition(comparison) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const unavailable = screen.getByText("Unavailable evidence channels (1)").closest("details");
+    expect(unavailable.open).toBe(false);
+    expect(within(unavailable).getByText("Physics was not recorded for this analysis.")).toBeTruthy();
+    expect(screen.getByText("model.siiEvidence.phase_4.physics").closest("details").open).toBe(false);
+    expect(screen.getByText("Cross-signal structure changed.").closest("details")).toBeNull();
+    expect(screen.getAllByText("Current: 2026-08-20T00:00:00Z → 2026-08-25T00:00:00Z")[0].closest("details")).toBeNull();
+    fireEvent.click(within(unavailable).getByText("Unavailable evidence channels (1)"));
+    expect(unavailable.open).toBe(true);
+  });
+
   it("loads related-package context only for an explicitly linked finding package", async () => {
     const apiFetch = vi.fn(async () => ({ ok: true, json: async () => ({ matches: [] }) }));
     render(React.createElement(EvidenceRecordWorkspace, { projection: evidenceProjection("finding"), apiFetch }));

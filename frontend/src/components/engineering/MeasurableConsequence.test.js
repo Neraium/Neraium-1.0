@@ -48,6 +48,8 @@ describe("Measurable consequence", () => {
     expect(screen.getByText("Not supplied")).toBeTruthy();
     expect(screen.getByText("Mixed signed deviations.")).toBeTruthy();
     expect(screen.getByText("Unsupported gaps excluded.")).toBeTruthy();
+    expect(screen.getByText("Unsupported gaps excluded.").closest("details")).toBeNull();
+    expect(screen.getByText("Calculation window (UTC)").closest("details")).toBeNull();
     expect(screen.getByText("2")).toBeTruthy();
   });
 

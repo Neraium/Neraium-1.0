@@ -88,6 +88,13 @@ describe("EvidenceDashboard", () => {
     expect(document.body.textContent).not.toMatch(/probable|likely cause/i);
   });
 
+  it.each(["Unavailable", "Not quantified", "Not applicable", "Not supplied"])("preserves the distinct metric state %s without supported styling", (value) => {
+    render(React.createElement(EvidenceDashboard, { summary: summary({ metrics: { magnitude: { value }, persistence: {}, operatingContext: {}, confidence: {} } }) }));
+    const metric = within(screen.getByLabelText("Evidence metrics")).getByText(value).closest(".evidence-dashboard__metric");
+    expect(metric.getAttribute("data-supported")).toBe("false");
+    expect(within(metric).getByText("Relationship change magnitude")).toBeTruthy();
+  });
+
   it("ignores a legacy confirmed cause even when supplied", () => {
     render(React.createElement(EvidenceDashboard, { summary: summary({ cause: { established: true, label: "Yes — confirmed in evidence" } }) }));
     expect(screen.queryByText("Yes — confirmed in evidence")).toBeNull();

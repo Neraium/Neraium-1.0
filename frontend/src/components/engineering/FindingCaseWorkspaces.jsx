@@ -59,9 +59,18 @@ function ChannelState({ state }) {
   return <p className="case-unavailable">{state.reason || "This evidence channel was not supplied for this analysis."}</p>;
 }
 
+function ChannelCollection({ channels, renderChannel, className }) {
+  const available = channels.filter((channel) => channel.state.state === "available");
+  const unavailable = channels.filter((channel) => channel.state.state !== "available");
+  return <>
+    {available.length ? <div className={className}>{available.map(renderChannel)}</div> : <p className="case-unavailable">No available evidence channels were supplied.</p>}
+    {unavailable.length ? <details className="evidence-record-technical"><summary>Unavailable evidence channels ({unavailable.length})</summary><div className={className}>{unavailable.map(renderChannel)}</div></details> : null}
+  </>;
+}
+
 function ScopeNote({ scopeLabel, sourcePath, qualification = null }) {
   const bounded = qualification && (qualification.truncated || qualification.transported === false);
-  return <div className="evidence-scope-note"><strong>{scopeLabel}</strong>{sourcePath ? <code>{sourcePath}</code> : null}{qualification ? <small>{bounded ? "Bounded projection; the canonical artifact contains additional exact facts." : "Complete for this projected source channel."}</small> : null}</div>;
+  return <div className="evidence-scope-note"><strong>{scopeLabel}</strong>{sourcePath ? <details><summary>Technical source details</summary><code>{sourcePath}</code></details> : null}{qualification ? <small>{bounded ? "Bounded projection; the canonical artifact contains additional exact facts." : "Complete for this projected source channel."}</small> : null}</div>;
 }
 
 function ProjectionQualification({ qualification, depth }) {
@@ -71,6 +80,7 @@ function ProjectionQualification({ qualification, depth }) {
     <section className="evidence-projection-qualification" data-truncated={qualification.truncated ? "true" : "false"}>
       <h2>Canonical source qualification</h2>
       <p>{qualification.truncated ? "This product view is a bounded projection. Listed sources were truncated or withheld from transport; the immutable canonical artifact remains authoritative." : "The transported canonical sources are complete within their recorded projection bounds."}</p>
+      <details><summary>Technical source details</summary>
       <dl className="classification-detail-grid classification-detail-grid--mode">
         <div><dt>Projection contract</dt><dd>{qualification.contractVersion || "Not supplied"}</dd></div>
         <div><dt>Canonical result</dt><dd>{qualification.canonicalResultId || "Not supplied"}</dd></div>
@@ -79,6 +89,7 @@ function ProjectionQualification({ qualification, depth }) {
       </dl>
       <h3>Reference / model identity</h3>
       {Object.keys(referenceMetadata).length ? <JsonValue value={referenceMetadata} /> : <p className="case-unavailable">The engine did not supply a separate reference or model identity.</p>}
+      </details>
     </section>
   );
 }
@@ -92,8 +103,9 @@ function RelationshipComparison({ relationship }) {
       <dl>
         <div><dt>Baseline</dt><dd>{evidenceNumber(relationship.baseline)}<small>{relationship.baselineSamples === null ? "Sample count not supplied" : `${relationship.baselineSamples} paired samples`}</small></dd></div>
         <div><dt>Current</dt><dd>{evidenceNumber(relationship.current)}<small>{relationship.currentSamples === null ? "Sample count not supplied" : `${relationship.currentSamples} paired samples`}</small></dd></div>
-        <div><dt>Change</dt><dd>{evidenceNumber(relationship.signedChange, { signed: true })}<small>{displayLabel(relationship.direction, "Comparison recorded")}</small></dd></div>
+        <div><dt>Signed change</dt><dd>{evidenceNumber(relationship.signedChange, { signed: true })}<small>{displayLabel(relationship.direction, "Comparison recorded")}</small></dd></div>
       </dl>
+      {relationship.windows?.length ? <EvidenceWindows windows={relationship.windows} /> : null}
     </div>
   );
 }
@@ -104,13 +116,13 @@ function RelationshipList({ relationships }) {
     <ol className="investigation-relationship-list">
       {relationships.map((item, index) => (
         <li key={item.id || index}>
-          <header><span>Relationship {index + 1}</span><strong>{item.source.display} ↔ {item.target.display}</strong><code>{[item.source.sourceId, item.target.sourceId].filter(Boolean).join(" / ")}</code></header>
+          <header><span>Relationship {index + 1}</span><strong>{item.source.display} ↔ {item.target.display}</strong><details><summary>Technical signal identifiers</summary><code>{[item.source.sourceId, item.target.sourceId].filter(Boolean).join(" / ")}</code></details></header>
           <dl>
             <div className="investigation-relationship-list__comparison"><dt>{item.metricChannel} · baseline → current</dt><dd><strong>{evidenceNumber(item.baseline)}</strong><span aria-hidden="true">→</span><strong>{evidenceNumber(item.current)}</strong></dd></div>
             <div><dt>Direction / magnitude</dt><dd>{displayLabel(item.direction)}{item.magnitude === null ? "" : ` · ${evidenceNumber(item.magnitude)}`}</dd></div>
             <div><dt>Paired samples</dt><dd>{item.baselineSamples ?? "Unavailable"} baseline · {item.currentSamples ?? "Unavailable"} current</dd></div>
             <div><dt>Persistence / support</dt><dd>{[item.persistence, item.support].filter(Boolean).join(" · ") || "Unavailable"}</dd></div>
-            {item.windows?.length ? <div className="classification-detail-grid__wide"><dt>Evidence windows</dt><dd>{item.windows.map((window) => [window.baselineStart, window.baselineEnd, window.currentStart, window.currentEnd].filter(Boolean).join(" → ")).filter(Boolean).join("; ") || "Unavailable"}</dd></div> : null}
+            {item.windows?.length ? <div className="classification-detail-grid__wide"><dt>Evidence windows</dt><dd>{item.windows.map((window) => `Baseline: ${window.baselineStart || "Not supplied"} → ${window.baselineEnd || "Not supplied"}; current: ${window.currentStart || "Not supplied"} → ${window.currentEnd || "Not supplied"}`).filter(Boolean).join("; ") || "Unavailable"}</dd></div> : null}
           </dl>
         </li>
       ))}
@@ -150,18 +162,29 @@ export function InvestigationWorkspace({ projection, onOpenEvidence, onBack }) {
       <CaseHeader eyebrow="Investigation" header={projection.header} />
       <div className="case-primary-action case-primary-action--top"><div><span className="forensic-kicker">Evidence record</span><strong>Inspect exact transported facts, canonical references, provenance, and audit history.</strong></div><button type="button" className="forensic-button" onClick={() => onOpenEvidence?.(projection.identity.findingKey)}>{projection.primaryAction.label}</button></div>
       <div className="case-sections case-sections--investigation">
+        <section><h2>Source signals and lineage</h2><p>{projection.identity?.scope === "analysis" ? "Analysis-result evidence" : "Finding-owned relationship evidence; system channels are separately scoped below."}</p>{projection.sourceSignals.length ? <ul className="investigation-signal-list">{projection.sourceSignals.map((signal) => <li key={signal.sourceId}><span>{signal.display}</span><details><summary>Technical signal identifier</summary><code>{signal.sourceId}</code></details></li>)}</ul> : <p className="case-unavailable">No source signal identifiers were recorded.</p>}<dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Source</dt><dd>{projection.lineageSummary.source || "Unavailable"}</dd></div><div><dt>Baseline window</dt><dd>{projection.lineageSummary.baselineWindow || "Unavailable"}</dd></div><div><dt>Current window</dt><dd>{projection.lineageSummary.currentWindow || "Unavailable"}</dd></div></dl><details><summary>Technical lineage references</summary><p>{projection.lineageSummary.evidenceRefs.join(" / ") || "Unavailable"}</p></details></section>
+        <ProjectionQualification qualification={projection.projectionQualification} depth="investigation" />
+        <section><h2>Data quality and comparability</h2><ChannelState state={projection.dataQuality.state} />{projection.dataQuality.summary ? <p>{projection.dataQuality.summary}</p> : null}{projection.dataQuality.limitations.length ? <ul>{projection.dataQuality.limitations.map((item) => <li key={item}>{item}</li>)}</ul> : null}{projection.dataQuality.signalHealth.length ? <dl className="classification-detail-grid">{projection.dataQuality.signalHealth.map((item) => <div key={`${item.signal}-${item.status}`}><dt>{item.signal}</dt><dd>{item.status}</dd></div>)}</dl> : null}</section>
         <section><h2>Primary relationship comparison</h2><RelationshipComparison relationship={projection.primaryComparison} /></section>
-        <section><h2>Relationship evidence</h2><RelationshipList relationships={projection.relationships} /></section>
+        <section><details><summary>All relationship evidence ({projection.relationships.length})</summary><RelationshipList relationships={projection.relationships} /></details></section>
         <section><h2>Persistence and confidence</h2><ChannelState state={projection.persistence.state} /><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Persistence</dt><dd>{projection.persistence.summary || "Unavailable"}</dd></div><div><dt>Support trend</dt><dd>{projection.persistence.supportTrend || "Unavailable"}</dd></div><div className="classification-detail-grid__wide"><dt>Window</dt><dd>{projection.persistence.windowDescription || "Unavailable"}</dd></div></dl></section>
         <section><h2>Operating context</h2><ChannelState state={projection.operatingContext.state} /><dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Baseline mode</dt><dd>{projection.operatingContext.baselineMode || "Unavailable"}</dd></div><div><dt>Current mode</dt><dd>{projection.operatingContext.currentMode || "Unavailable"}</dd></div><div><dt>Comparability</dt><dd>{projection.operatingContext.comparability || "Unavailable"}</dd></div></dl>{projection.operatingContext.reasons.length ? <ul>{projection.operatingContext.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}</section>
-        <section><h2>System evidence channels</h2><div className="investigation-channel-list">{projection.systemEvidence.map((channel) => <article key={channel.key}><h3>{channel.label}</h3><ScopeNote scopeLabel={channel.scopeLabel} sourcePath={channel.sourcePath} qualification={channel.qualification} /><ChannelState state={channel.state} />{channel.summary ? <p>{channel.summary}</p> : null}{channel.metrics.length ? <dl>{channel.metrics.map((metric) => <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value}</dd></div>)}</dl> : null}</article>)}</div></section>
-        <section><h2>Data quality and comparability</h2><ChannelState state={projection.dataQuality.state} />{projection.dataQuality.summary ? <p>{projection.dataQuality.summary}</p> : null}{projection.dataQuality.limitations.length ? <ul>{projection.dataQuality.limitations.map((item) => <li key={item}>{item}</li>)}</ul> : null}{projection.dataQuality.signalHealth.length ? <dl className="classification-detail-grid">{projection.dataQuality.signalHealth.map((item) => <div key={`${item.signal}-${item.status}`}><dt>{item.signal}</dt><dd>{item.status}</dd></div>)}</dl> : null}</section>
+        <section><h2>System evidence channels</h2><ChannelCollection channels={projection.systemEvidence} className="investigation-channel-list" renderChannel={(channel) => <article key={channel.key}><h3>{channel.label}</h3><ScopeNote scopeLabel={channel.scopeLabel} sourcePath={channel.sourcePath} qualification={channel.qualification} /><ChannelState state={channel.state} />{channel.summary ? <p>{channel.summary}</p> : null}{channel.metrics.length ? <dl>{channel.metrics.map((metric) => <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value}</dd></div>)}</dl> : null}</article>} /></section>
         <section><h2>Timeline</h2>{projection.timeline.length ? <ol>{projection.timeline.map((item, index) => <li key={`${item.label}-${index}`}><strong>{item.label}</strong>{item.detail ? ` · ${item.detail}` : ""}</li>)}</ol> : <p className="case-unavailable">No source-bounded timeline was recorded.</p>}</section>
-        <section><h2>Source signals and lineage</h2>{projection.sourceSignals.length ? <ul className="investigation-signal-list">{projection.sourceSignals.map((signal) => <li key={signal.sourceId}><span>{signal.display}</span><code>{signal.sourceId}</code></li>)}</ul> : <p className="case-unavailable">No source signal identifiers were recorded.</p>}<dl className="classification-detail-grid classification-detail-grid--mode"><div><dt>Source</dt><dd>{projection.lineageSummary.source || "Unavailable"}</dd></div><div><dt>Baseline window</dt><dd>{projection.lineageSummary.baselineWindow || "Unavailable"}</dd></div><div><dt>Current window</dt><dd>{projection.lineageSummary.currentWindow || "Unavailable"}</dd></div><div className="classification-detail-grid__wide"><dt>Evidence references</dt><dd>{projection.lineageSummary.evidenceRefs.join(" / ") || "Unavailable"}</dd></div></dl></section>
-        <ProjectionQualification qualification={projection.projectionQualification} depth="investigation" />
       </div>
     </div>
   );
+}
+
+function EvidenceWindows({ windows }) {
+  if (!windows?.length) return <p className="case-unavailable">No source time ranges were recorded.</p>;
+  return <ul>{windows.map((entry, index) => {
+    const window = entry && typeof entry === "object" ? entry : {};
+    return <li key={index}>
+    {window.baseline_start || window.baselineStart || window.baseline_end || window.baselineEnd ? <p>Baseline: {window.baseline_start || window.baselineStart || "Not supplied"} → {window.baseline_end || window.baselineEnd || "Not supplied"}</p> : null}
+    <p>{window.current_start || window.currentStart || window.current_end || window.currentEnd ? "Current" : "Evidence window"}: {window.current_start || window.currentStart || window.start || window.start_time || "Not supplied"} → {window.current_end || window.currentEnd || window.end || window.end_time || "Not supplied"}</p>
+  </li>;
+  })}</ul>;
 }
 
 function RecordList({ items, empty }) {
@@ -275,18 +298,25 @@ export function EvidenceRecordWorkspace({ projection, apiFetch, onTrace, onBack 
     <div className="case-workspace evidence-record-workspace" data-testid="evidence-record">
       <button type="button" className="evidence-back" aria-label="Back" onClick={onBack}>Back</button>
       <EvidenceDashboard summary={dashboardSummary} variant={projection.variant} />
-      <details className="evidence-record-technical" open={!dashboardSummary}>
-        <summary>Technical evidence and audit trail</summary>
-        <div className="evidence-record-technical__body">
-      {analysisScoped ? <CaseHeader eyebrow="Evidence record" header={projection.header} /> : null}
+      {!dashboardSummary ? <CaseHeader eyebrow="Evidence record" header={projection.header} /> : null}
       <p className="evidence-record-intro">{analysisScoped ? "Complete analysis identity, provenance, and available run-scoped technical channels from the persisted connector result." : "Complete finding evidence and explicitly labeled supporting analysis context. Analysis-run and system-scoped channels are not finding provenance."}</p>
       <ProjectionQualification qualification={projection.projectionQualification} depth="evidence" />
       <div className="evidence-record-grid evidence-record-grid--audit">
+        <section><h2>Source and scope</h2><p>{analysisScoped ? "Analysis-result evidence" : "Finding-owned evidence"}</p><h3>Source signals</h3>{projection.signals.length ? <ul>{projection.signals.map((signal, index) => <li key={index}>{signal.display}</li>)}</ul> : <p className="case-unavailable">No source signal identity was recorded.</p>}<p>Exact source provenance is available in Technical evidence and audit trail.</p></section>
+        <section><h2>Recorded times and evidence windows</h2><dl className="classification-detail-grid"><div><dt>Generated</dt><dd>{projection.timestamps.generatedAt ?? "Not supplied"}</dd></div><div><dt>First detected</dt><dd>{projection.timestamps.firstDetectedAt ?? "Not supplied"}</dd></div></dl><EvidenceWindows windows={projection.timestamps.sourceRanges} /></section>
+        <section><h2>Limitations</h2><h3>Material</h3><RecordList items={projection.limitations.material} empty="None recorded." /><h3>Technical</h3><RecordList items={projection.limitations.technical} empty="None recorded." /><h3>Contradictions</h3><RecordList items={projection.limitations.contradictions} empty="None recorded." /></section>
+        <section><h2>Supporting evidence</h2><RecordList items={projection.supportingEvidence.statements} empty={analysisScoped ? "No separate result-level supporting statements were supplied." : "No finding-owned supporting statements were supplied."} /><details><summary>Technical evidence items</summary><RecordList items={projection.supportingEvidence.items} empty={analysisScoped ? "No separate result-level evidence items were supplied." : "No structured finding evidence items were supplied."} /></details></section>
+        <section><h2>Available evidence channels</h2>{projection.channels.filter((channel) => channel.state.state === "available").map((channel) => <div key={`${channel.key}-${channel.sourcePath}`}><h3>{channel.label}</h3><ScopeNote scopeLabel={channel.scopeLabel} qualification={channel.qualification} /></div>)}{!projection.channels.some((channel) => channel.state.state === "available") ? <p className="case-unavailable">No available evidence channels were supplied.</p> : null}</section>
+      </div>
+      <section className="evidence-record-actions"><div>{projection.actions.exportScopeLabel ? <p className="evidence-scope-note"><strong>{projection.actions.exportScopeLabel}</strong></p> : null}<EvidencePackageExport runId={projection.actions.exportRunId} apiFetch={apiFetch} disabled={!projection.actions.exportRunId} /></div>{projection.actions.traceRoute ? <button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open trace mode</button> : null}</section>
+      <details className="evidence-record-technical" open={!dashboardSummary}>
+        <summary>Technical evidence and audit trail</summary>
+        <div className="evidence-record-technical__body">
+      <div className="evidence-record-grid evidence-record-grid--audit">
+        <section><h2>Technical source time ranges</h2><RecordList items={projection.timestamps.sourceRanges} empty="No source time ranges were recorded." /></section>
         <section><h2>Record identity</h2><dl className="classification-detail-grid">{identityRows.map(([key, value]) => <div key={key}><dt>{displayLabel(key)}</dt><dd>{value ?? "Not supplied"}</dd></div>)}</dl></section>
-        <section><h2>Recorded times</h2><dl className="classification-detail-grid"><div><dt>Generated</dt><dd>{projection.timestamps.generatedAt ?? "Not supplied"}</dd></div><div><dt>First detected</dt><dd>{projection.timestamps.firstDetectedAt ?? "Not supplied"}</dd></div></dl><RecordList items={projection.timestamps.sourceRanges} empty="No source time ranges were recorded." /></section>
         <section><h2>Signals</h2>{projection.signals.length ? <dl className="classification-detail-grid">{projection.signals.map((signal) => <div key={signal.rawId || signal.display}><dt>{signal.display}</dt><dd><code>{signal.rawId || "Raw ID not supplied"}</code><br />Canonical: <code>{signal.canonicalId || "Not supplied"}</code></dd></div>)}</dl> : <p className="case-unavailable">No finding-scoped signal identity was recorded.</p>}</section>
         <section><h2>{analysisScoped ? "Analysis relationships" : "Finding-owned relationships"}</h2><RecordList items={projection.exactRelationships} empty={analysisScoped ? "No result-level relationship record was supplied at this depth." : "No finding-owned relationship record was supplied."} /></section>
-        <section><h2>Supporting evidence</h2><RecordList items={projection.supportingEvidence.statements} empty={analysisScoped ? "No separate result-level supporting statements were supplied." : "No finding-owned supporting statements were supplied."} /><h3>Evidence items</h3><RecordList items={projection.supportingEvidence.items} empty={analysisScoped ? "No separate result-level evidence items were supplied." : "No structured finding evidence items were supplied."} /></section>
       </div>
       <section className={`evidence-package-association evidence-package-association--${projection.package.scope}`}>
         <h2>{linkedPackage ? "Package explicitly linked to this finding" : projection.package.scope === "run" ? "Related package for this analysis run" : projection.package.scope === "related" ? "Related evidence package" : "Evidence package unavailable"}</h2>
@@ -295,17 +325,15 @@ export function EvidenceRecordWorkspace({ projection, apiFetch, onTrace, onBack 
         {projection.package.immutableDetails ? <JsonValue value={projection.package.immutableDetails} /> : null}
       </section>
       {linkedPackage ? <RelatedEvidencePackages packageId={projection.package.packageId} apiFetch={apiFetch} /> : null}
-      <div className="evidence-channel-grid">{projection.channels.map((channel) => <EvidenceChannel key={`${channel.key}-${channel.sourcePath}`} channel={channel} />)}</div>
+      <ChannelCollection channels={projection.channels} className="evidence-channel-grid" renderChannel={(channel) => <EvidenceChannel key={`${channel.key}-${channel.sourcePath}`} channel={channel} />} />
       <div className="evidence-record-grid evidence-record-grid--audit">
         <section><h2>Classification</h2><JsonValue value={projection.classifications.classification} /><h3>Confidence contract</h3><JsonValue value={projection.classifications.confidenceContract} /><h3>Alternative explanations</h3><RecordList items={projection.classifications.alternatives} empty="No alternative explanations were recorded." /></section>
         <section><h2>Evidence sufficiency</h2><p>{projection.sufficiency.status || "Unavailable"}</p><RecordList items={projection.sufficiency.reasons} empty="No additional sufficiency reasons were recorded." /></section>
-        <section><h2>Limitations</h2><h3>Material</h3><RecordList items={projection.limitations.material} empty="None recorded." /><h3>Technical</h3><RecordList items={projection.limitations.technical} empty="None recorded." /><h3>Contradictions</h3><RecordList items={projection.limitations.contradictions} empty="None recorded." /></section>
         <section><h2>Finding provenance and lineage</h2><JsonValue value={projection.lineage} /></section>
         <CanonicalObservationLineage projection={projection} apiFetch={apiFetch} />
         <section><h2>Engine and build</h2>{engineRows.length ? <dl className="classification-detail-grid">{engineRows.map(([key, value]) => <div key={key}><dt>{displayLabel(key)}</dt><dd>{value}</dd></div>)}</dl> : <p className="case-unavailable">Engine metadata was not supplied.</p>}</section>
         <section><h2>Audit history</h2><JsonValue value={projection.audit} /></section>
       </div>
-      <section className="evidence-record-actions"><div>{projection.actions.exportScopeLabel ? <p className="evidence-scope-note"><strong>{projection.actions.exportScopeLabel}</strong></p> : null}<EvidencePackageExport runId={projection.actions.exportRunId} apiFetch={apiFetch} disabled={!projection.actions.exportRunId} /></div>{projection.actions.traceRoute ? <button type="button" className="forensic-button forensic-button--secondary" onClick={onTrace}>Open trace mode</button> : null}</section>
         </div>
       </details>
     </div>

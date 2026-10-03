@@ -38,7 +38,7 @@ function ContextCell({ icon, label, value, exactStart, exactEnd, tone }) {
 function Metric({ icon, label, metric, tone }) {
   const number = numericValue(metric?.value, metric?.signed);
   const displayValue = number ?? metric?.label ?? metric?.value ?? "Not established";
-  const supported = !/^(?:not established|insufficient evidence|unavailable)$/i.test(String(displayValue));
+  const supported = !/^(?:not established|insufficient evidence|unavailable|not quantified|not quantifiable|not applicable|not supplied)$/i.test(String(displayValue));
   return (
     <div className="evidence-dashboard__metric" data-tone={tone} data-supported={supported}>
       <div className="evidence-dashboard__metric-label"><Icon name={icon} /><span>{label}</span></div>
@@ -101,7 +101,7 @@ export default function EvidenceDashboard({ summary, variant = "ready", headingA
       </div>
 
       <div className="evidence-dashboard__metrics" aria-label="Evidence metrics">
-        <Metric icon="magnitude" label="Magnitude" metric={metrics.magnitude} tone="change" />
+        <Metric icon="magnitude" label="Relationship change magnitude" metric={metrics.magnitude} tone="change" />
         <Metric icon="persistence" label="Persistence" metric={metrics.persistence} tone="persistence" />
         <Metric icon="context" label="Operating context" metric={metrics.operatingContext} tone="context" />
         <Metric icon="confidence" label="Change confidence" metric={metrics.confidence} tone="confidence" />
