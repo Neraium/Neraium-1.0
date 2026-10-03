@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,16 +47,17 @@ def test_aws_monitoring_has_persistent_external_failure_detection():
 
 def test_task_role_and_deployment_enable_in_application_monitoring():
     bootstrap = read("scripts/bootstrap-production-aws.sh")
-    workflow = read(".github/workflows/deploy-backend.yml")
+    baseline = json.loads(read("docs/operations/first-customer-production-baseline-2026-10-03.json"))
 
     assert '"Action": ["sns:Publish"]' in bootstrap
     assert '"Action": ["secretsmanager:DescribeSecret"]' in bootstrap
     assert '"ecs:DescribeServices", "elasticloadbalancing:DescribeTargetHealth"' in bootstrap
     assert "./scripts/configure-production-monitoring.sh" in bootstrap
-    assert '"name": "NERAIUM_INFRA_MONITOR_ENABLED", "value": "true"' in workflow
-    assert '"name": "NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN", "value": $INFRA_ALERT_TOPIC_ARN' in workflow
-    assert '"name": "NERAIUM_ALB_TARGET_GROUP_ARN", "value": $TARGET_GROUP_ARN' in workflow
-    assert "Validate production monitoring resources" in workflow
+    env = baseline["services"]["api"]["configuration"]
+    assert env["NERAIUM_INFRA_MONITOR_ENABLED"] == "true"
+    assert env["NERAIUM_INFRA_ALERT_SNS_TOPIC_ARN"] == baseline["sns_topic_arn"]
+    assert env["NERAIUM_ALB_TARGET_GROUP_ARN"] == baseline["services"]["api"]["topology"]["loadBalancers"][0]["targetGroupArn"]
+    assert baseline["monitoring"]["all_actions_enabled"] is True
 
 
 def test_notification_adapters_and_deduplication_contract_are_present():

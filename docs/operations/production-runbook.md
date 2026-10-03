@@ -1,6 +1,6 @@
 # Production Deployment Runbook
 
-This runbook covers the production architecture, deployment ownership, routing rules, failure modes, recovery procedures, and smoke tests for Neraium production.
+This runbook covers production architecture and incident context. **Backend releases must follow [the certified Production V2 release procedure](production-release-v2.md).** Its frozen profile and release gates supersede older bootstrap, task reconstruction, and deployment instructions below. Do not run production bootstrap or change secrets as part of a routine release.
 
 Related references:
 
@@ -178,31 +178,17 @@ gh run watch --repo Neraium/Neraium-1.0
 
 ### Deploy Backend To ECS
 
-Workflow: `.github/workflows/deploy-backend.yml`
+Use [the certified Production V2 release procedure](production-release-v2.md).
+The manual `.github/workflows/deploy-backend.yml` workflow invokes
+`scripts/production_release.py`; it defaults to a build and deployment plan.
+Only a full source SHA reachable from `origin/fix/deterministic-governed-output`
+is accepted. Applying a release preserves the complete certified task and service
+configuration and changes only the image digest and build marker.
 
-Runs automatically on pushes to `main` that change `backend/**`, the workflow file, or `scripts/bootstrap-production-aws.sh`. It can also be run manually.
-
-Responsibilities:
-
-- Configure AWS credentials.
-- Login to ECR.
-- Validate production settings.
-- Run production bootstrap.
-- Validate ECS cluster, services, and task-definition families.
-- Build and push the backend image tagged with the GitHub commit SHA.
-- Register new API and worker task definitions.
-- Inject role-specific environment variables and secrets.
-- Update both ECS services.
-- Wait for services to stabilize.
-- Verify worker startup and shared upload bucket configuration.
-- Verify API bootstrap admin startup event where observable.
-
-Manual deploy:
-
-```bash
-gh workflow run "Deploy Backend to ECS" --repo Neraium/Neraium-1.0 --ref main
-gh run watch --repo Neraium/Neraium-1.0
-```
+There is no automatic production deployment on push, production bootstrap,
+secret creation, migration, or reconstruction from legacy workflow defaults.
+Configuration, dependency, schema, security, analytical, and SRE source changes
+that conflict with the frozen profile require separate recertification.
 
 ## ECS Responsibilities
 
