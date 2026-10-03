@@ -1,14 +1,6 @@
 name: Deploy Backend to ECS
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "backend/**"
-      - ".github/workflows/deploy-backend.yml"
-      - "scripts/bootstrap-production-aws.sh"
-      - "scripts/configure-production-monitoring.sh"
   workflow_dispatch:
 
 permissions:
@@ -45,9 +37,9 @@ env:
   TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN: ${{ vars.NERAIUM_TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN }}
   TELEMETRY_MIGRATION_EXECUTION_ROLE_NAME: neraium-prod-telemetry-migration-execution-role
   TELEMETRY_CONNECTOR_SECRET_ARN: ${{ vars.NERAIUM_TELEMETRY_CONNECTOR_SECRET_ARN }}
-  TELEMETRY_EXECUTION_IDENTITY_VERSION: ${{ vars.NERAIUM_TELEMETRY_EXECUTION_IDENTITY_VERSION || 'concept-keyed.v1' }}
-  TELEMETRY_DYNAMIC_SECRET_WRITES: ${{ vars.NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES || 'false' }}
-  TELEMETRY_CONTROLLED_EGRESS_ENABLED: ${{ vars.NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED || 'false' }}
+  TELEMETRY_EXECUTION_IDENTITY_VERSION: ${{ vars.NERAIUM_TELEMETRY_EXECUTION_IDENTITY_VERSION }}
+  TELEMETRY_DYNAMIC_SECRET_WRITES: ${{ vars.NERAIUM_TELEMETRY_DYNAMIC_SECRET_WRITES }}
+  TELEMETRY_CONTROLLED_EGRESS_ENABLED: ${{ vars.NERAIUM_TELEMETRY_CONTROLLED_EGRESS_ENABLED }}
   RDS_AUTH_INSTANCE_ID: neraium-prod-postgres
   AUTH_DATABASE_NAME: postgres
   AUTH_DATABASE_SSLMODE: require
@@ -80,21 +72,23 @@ jobs:
       - name: Resolve production AWS settings
         run: |
           set -euo pipefail
+          # The legacy connector overlay starts from an older V2 image. A
+          # generic rollout must stop until its image lineage is recertified.
+          CERTIFIED_IMAGE='680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:d57f44d3f1af85d6a6eddfcf29c8b99198a63cd5de58ae21408d7fae90594816'
+          if ! grep -Fxq "FROM $CERTIFIED_IMAGE" infra/production/Dockerfile.connector-overlay; then
+            echo '::error::Legacy backend overlay is not based on the certified Production V2 image; use the image-only SRE deployment path.' >&2
+            exit 1
+          fi
           test -n "$UPLOAD_STATE_BUCKET"
           test -n "$APP_TASK_ROLE_NAME"
           test -n "$TASK_EXECUTION_ROLE_NAME"
           test -n "$API_TOKEN_SECRET_ARN"
           test -n "$AUTH_DATABASE_URL_SECRET_ARN"
-          case "$TELEMETRY_EXECUTION_IDENTITY_VERSION" in
-            concept-keyed.v1|physical-endpoint-keyed.v2) ;;
-            *) echo "Invalid telemetry execution identity version" >&2; exit 1 ;;
-          esac
-          if [ "$TELEMETRY_EXECUTION_IDENTITY_VERSION" = "physical-endpoint-keyed.v2" ]; then
-            test -n "$TELEMETRY_DATABASE_URL_SECRET_ARN"
-            test -n "$TELEMETRY_CONNECTOR_SECRET_ARN"
-            test "$TELEMETRY_DYNAMIC_SECRET_WRITES" = "false"
-            test "$TELEMETRY_CONTROLLED_EGRESS_ENABLED" = "true"
-          fi
+          test "$TELEMETRY_EXECUTION_IDENTITY_VERSION" = "physical-endpoint-keyed.v2"
+          test -n "$TELEMETRY_DATABASE_URL_SECRET_ARN"
+          test -n "$TELEMETRY_CONNECTOR_SECRET_ARN"
+          test "$TELEMETRY_DYNAMIC_SECRET_WRITES" = "false"
+          test "$TELEMETRY_CONTROLLED_EGRESS_ENABLED" = "true"
           if [ -n "$TELEMETRY_DATABASE_URL_SECRET_ARN" ]; then
             test -n "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN"
             test "$TELEMETRY_DATABASE_URL_SECRET_ARN" != "$TELEMETRY_MIGRATION_DATABASE_URL_SECRET_ARN"
@@ -322,8 +316,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          CURRENT_API_TASK_DEF=$(jq -r --arg name "$ECS_API_SERVICE" '.services[] | select(.serviceName == $name) | .taskDefinition' current-services.json)
           aws ecs describe-task-definition \
-            --task-definition "$API_TASK_FAMILY" \
+            --task-definition "$CURRENT_API_TASK_DEF" \
             --region "$AWS_REGION" \
             --query taskDefinition > current-api-task-definition.json
 
@@ -417,6 +412,19 @@ jobs:
               )
           ' current-api-task-definition.json > next-api-task-definition.json
 
+          jq -e --slurpfile before current-api-task-definition.json '
+            def protected_env: [.environment[]? | select(.name | startswith("NERAIUM_TELEMETRY_") or startswith("NERAIUM_AUTH_DATABASE_"))] | sort_by(.name);
+            ($before[0].containerDefinitions[0]) as $old
+            | .containerDefinitions[0] as $new
+            | ($old | protected_env) == ($new | protected_env)
+              and (($old.secrets // [] | sort_by(.name)) == ($new.secrets // [] | sort_by(.name)))
+              and .taskRoleArn == $before[0].taskRoleArn
+              and .executionRoleArn == $before[0].executionRoleArn
+              and .networkMode == $before[0].networkMode
+              and .requiresCompatibilities == $before[0].requiresCompatibilities
+              and .volumes == $before[0].volumes
+          ' next-api-task-definition.json >/dev/null
+
           API_TASK_DEF=$(aws ecs register-task-definition \
             --cli-input-json file://next-api-task-definition.json \
             --region "$AWS_REGION" \
@@ -430,8 +438,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          CURRENT_WORKER_TASK_DEF=$(jq -r --arg name "$ECS_WORKER_SERVICE" '.services[] | select(.serviceName == $name) | .taskDefinition' current-services.json)
           aws ecs describe-task-definition \
-            --task-definition "$WORKER_TASK_FAMILY" \
+            --task-definition "$CURRENT_WORKER_TASK_DEF" \
             --region "$AWS_REGION" \
             --query taskDefinition > current-worker-task-definition.json
 
@@ -497,6 +506,19 @@ jobs:
                 .registeredBy
               )
           ' current-worker-task-definition.json > next-worker-task-definition.json
+
+          jq -e --slurpfile before current-worker-task-definition.json '
+            def protected_env: [.environment[]? | select(.name | startswith("NERAIUM_TELEMETRY_") or startswith("NERAIUM_AUTH_DATABASE_"))] | sort_by(.name);
+            ($before[0].containerDefinitions[0]) as $old
+            | .containerDefinitions[0] as $new
+            | ($old | protected_env) == ($new | protected_env)
+              and (($old.secrets // [] | sort_by(.name)) == ($new.secrets // [] | sort_by(.name)))
+              and .taskRoleArn == $before[0].taskRoleArn
+              and .executionRoleArn == $before[0].executionRoleArn
+              and .networkMode == $before[0].networkMode
+              and .requiresCompatibilities == $before[0].requiresCompatibilities
+              and .volumes == $before[0].volumes
+          ' next-worker-task-definition.json >/dev/null
 
           WORKER_TASK_DEF=$(aws ecs register-task-definition \
             --cli-input-json file://next-worker-task-definition.json \

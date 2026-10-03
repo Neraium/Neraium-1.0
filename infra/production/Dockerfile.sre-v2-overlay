@@ -1,0 +1,12 @@
+FROM 680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:d57f44d3f1af85d6a6eddfcf29c8b99198a63cd5de58ae21408d7fae90594816
+
+USER root
+
+COPY --chown=neraium:neraium backend/app/routers/data_connections.py /app/app/routers/data_connections.py
+COPY --chown=neraium:neraium backend/app/services/telemetry_analysis_service_v2.py /app/app/services/telemetry_analysis_service_v2.py
+COPY --chown=neraium:neraium backend/app/services/telemetry_repository.py /app/app/services/telemetry_repository.py
+COPY --chown=neraium:neraium backend/app/services/telemetry_scheduler.py /app/app/services/telemetry_scheduler.py
+
+LABEL org.opencontainers.image.revision="74a542562f4569f9e72c58a0efcd96ff0801b2af"
+
+USER neraium
