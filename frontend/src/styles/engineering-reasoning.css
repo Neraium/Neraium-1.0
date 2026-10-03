@@ -1108,12 +1108,15 @@
 .evidence-section__more,
 .operational-technical { overflow: clip; border-radius: var(--radius-control); }
 .engineering-investigation-disclosures > details > summary,
+.case-workspace details > summary,
 .evidence-section__more > summary,
 .operational-technical > summary { position: relative; padding-right: 42px; }
 .engineering-investigation-disclosures > details > summary::after,
+.case-workspace details > summary::after,
 .evidence-section__more > summary::after,
 .operational-technical > summary::after { position: absolute; right: 16px; width: 7px; height: 7px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg) translateY(-2px); transition: transform 160ms var(--ease-product); content: ""; }
 .engineering-investigation-disclosures > details[open] > summary::after,
+.case-workspace details[open] > summary::after,
 .evidence-section__more[open] > summary::after,
 .operational-technical[open] > summary::after { transform: rotate(225deg) translate(-2px, -2px); }
 .engineering-investigation-disclosures > details > summary:hover,

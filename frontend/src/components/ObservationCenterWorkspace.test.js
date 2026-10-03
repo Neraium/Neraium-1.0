@@ -41,8 +41,8 @@ function installLocalStorageMock() {
   });
 }
 
-function renderWorkspace({ apiFetch = vi.fn(async () => createResponse({ runs: [] })), canonicalFinding, currentSession, onReviewEvidence = vi.fn() } = {}) {
-  return render(h(ObservationCenterWorkspace, { apiFetch, accessCode: "", canonicalFinding, currentSession, onReviewEvidence }));
+function renderWorkspace({ apiFetch = vi.fn(async () => createResponse({ runs: [] })), canonicalFinding, currentSession } = {}) {
+  return render(h(ObservationCenterWorkspace, { apiFetch, accessCode: "", canonicalFinding, currentSession }));
 }
 
 afterEach(() => {
@@ -78,9 +78,8 @@ describe("ObservationCenterWorkspace", () => {
     expect(screen.getAllByText("No structural changes detected.").length).toBeGreaterThan(0);
   });
 
-  it("renders the canonical finding summary and opens evidence review", async () => {
+  it("renders the canonical finding summary and reveals existing evidence details", async () => {
     installLocalStorageMock();
-    const onReviewEvidence = vi.fn();
     renderWorkspace({
       canonicalFinding: {
         exists: true,
@@ -100,7 +99,6 @@ describe("ObservationCenterWorkspace", () => {
           detail: "No structural changes detected.",
         },
       },
-      onReviewEvidence,
     });
 
     await waitFor(() => expect(screen.getAllByText("Behavior Change Detected").length).toBeGreaterThan(0));
@@ -108,7 +106,13 @@ describe("ObservationCenterWorkspace", () => {
     expect(screen.getAllByText(/Confidence:Moderate/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Filter and search insights")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: "Review Details" })[0]);
-    expect(onReviewEvidence).toHaveBeenCalledTimes(1);
+    const detailsSummary = screen.getByText("Analysis Details");
+    expect(detailsSummary.parentElement.open).toBe(true);
+    expect(document.activeElement).toBe(detailsSummary);
+    detailsSummary.parentElement.open = false;
+    fireEvent.click(screen.getByRole("button", { name: "Review Evidence" }));
+    expect(detailsSummary.parentElement.open).toBe(true);
+    expect(document.activeElement).toBe(detailsSummary);
     expect(screen.queryByText(/State Group A/i)).toBeNull();
     expect(screen.queryByText(/relationship divergence/i)).toBeNull();
   });

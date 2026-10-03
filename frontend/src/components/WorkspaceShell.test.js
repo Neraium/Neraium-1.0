@@ -33,4 +33,20 @@ describe("shared workspace navigation", () => {
     expect(document.body.style.overflow).toBe("");
     vi.unstubAllGlobals();
   });
+
+  it("includes the facility selector when wrapping mobile keyboard focus", () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    render(React.createElement(WorkspaceShell, {
+      activeNavigation: "work", onNavigate: vi.fn(),
+      workspaceSession: { workspaces: [{ workspace_id: "north", display_name: "North" }, { workspace_id: "south", display_name: "South" }] },
+      currentWorkspace: { workspace_id: "north" },
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    const first = screen.getByRole("button", { name: "Work", exact: true });
+    const selector = screen.getByRole("combobox", { name: "Facility workspace" });
+    fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(selector);
+    fireEvent.keyDown(selector, { key: "Tab" });
+    expect(document.activeElement).toBe(first);
+  });
 });

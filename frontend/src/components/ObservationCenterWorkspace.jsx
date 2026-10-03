@@ -275,8 +275,15 @@ export default function ObservationCenterWorkspace({
   datasetScopeKey = "anonymous",
   canonicalFinding = null,
   currentSession = null,
-  onReviewEvidence = null,
 }) {
+  const analysisDetailsRef = useRef(null);
+  function openAnalysisDetails() {
+    const details = analysisDetailsRef.current;
+    if (!details) return;
+    details.open = true;
+    details.querySelector("summary")?.focus();
+    details.scrollIntoView?.({ block: "nearest" });
+  }
   const [runs, setRuns] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -781,7 +788,7 @@ export default function ObservationCenterWorkspace({
             compact
           />
           <div className="intake-flow__controls">
-            <button type="button" className="command-button" onClick={() => onReviewEvidence?.()} disabled={!hasCurrentFinding}>
+            <button type="button" className="command-button" onClick={openAnalysisDetails} disabled={!hasCurrentFinding}>
               Review Details
             </button>
           </div>
@@ -906,10 +913,10 @@ export default function ObservationCenterWorkspace({
               <IssueBriefingList title="Evidence-linked verification checks" items={activeBriefing.investigation} />
               {hasCurrentFinding ? (
                 <div className="intake-flow__controls">
-                  <button type="button" className="command-button" onClick={() => onReviewEvidence?.()}>Review Evidence</button>
+                  <button type="button" className="command-button" onClick={openAnalysisDetails}>Review Evidence</button>
                 </div>
               ) : null}
-              <details className="compact-list-block">
+              <details ref={analysisDetailsRef} className="compact-list-block">
                 <summary className="section-token">Analysis Details</summary>
                 <ul className="compact-list">
                   {(selectedReviewFinding.supportingEvidence ?? []).length > 0

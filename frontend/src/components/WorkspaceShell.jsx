@@ -38,7 +38,7 @@ export default function WorkspaceShell({ activeNavigation, onNavigate, currentUs
     if (!mobileNavOpen) return undefined;
     const sidebar = mobileSidebarRef.current;
     const previousOverflow = document.body.style.overflow;
-    const focusable = Array.from(sidebar?.querySelectorAll("button:not([disabled])") ?? []);
+    const focusable = Array.from(sidebar?.querySelectorAll("button:not([disabled]), select:not([disabled])") ?? []);
     const activeNavigationItem = sidebar?.querySelector('nav[aria-label="Primary navigation"] [aria-current="page"]');
     (activeNavigationItem ?? focusable[0])?.focus();
     if (window.matchMedia?.("(max-width: 1024px)")?.matches) document.body.style.overflow = "hidden";

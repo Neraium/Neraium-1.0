@@ -286,7 +286,6 @@ export default function AppWorkspaceRouter({
             canonicalFinding={canonicalFinding}
             currentSession={currentSession}
             onBackToGate={() => setActiveWorkspace("system-body")}
-            onReviewEvidence={() => setActiveWorkspace("observation-center")}
           />
         </Suspense>
       </WorkspaceWithContext>
