@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useRef } from "react";
 import "../styles/product-polish.css";
 
 import AppErrorBoundary from "./AppErrorBoundary";
-import SkipToMainContent from "./SkipToMainContent";
+import WorkspaceShell from "./WorkspaceShell";
 import WorkspaceLoadingState from "./WorkspaceLoadingState";
 import { EmptyState, MetricGrid, Panel } from "./workspacePrimitives";
 import { extractTelemetryBoundaryMeta } from "../viewModels/uploadState";
@@ -19,21 +19,22 @@ function renderLoadingPanel(title, message) {
   return <WorkspaceLoadingState label={title} detail={message} fullScreen />;
 }
 
-function WorkspaceWithBackControl({
+function WorkspaceWithContext({
   appReady,
   errorBoundaryResetKey,
-  handleBackToGate,
   handleRetryWorkspace,
   contextLabel,
   errorContext,
   activeWorkspace,
-  onHelp,
+  onNavigate,
+  currentUser,
+  onSignOut,
+  signOutPending,
   workspaceSession,
   currentWorkspace,
   onWorkspaceChange,
   children,
 }) {
-  const workspaces = workspaceSession?.workspaces ?? [];
   const mainRef = useRef(null);
   useEffect(() => {
     mainRef.current?.focus({ preventScroll: true });
@@ -41,46 +42,13 @@ function WorkspaceWithBackControl({
   return (
     <AppErrorBoundary resetKey={errorBoundaryResetKey} onRetry={handleRetryWorkspace} errorContext={{ ...errorContext, workspaceId: activeWorkspace }}>
       <div data-testid="app-ready-root" data-app-ready={appReady ? "1" : "0"}>
-        <SkipToMainContent />
-        <div className={`workspace-shell-with-back workspace-shell--${activeWorkspace}`}>
-          <nav className="workspace-back-control" aria-label="Workspace navigation">
-            <div className="workspace-back-control__context">
-              <button
-                type="button"
-                className="workspace-back-control__button"
-                onClick={handleBackToGate}
-                aria-label="Back to Portfolio"
-              >
-                Portfolio
-              </button>
-              {contextLabel ? <span className="workspace-back-control__breadcrumb" aria-current="page">{contextLabel}</span> : null}
-            </div>
-            <div className="workspace-back-control__meta">
-              <div className="workspace-facility-context">
-                <span className="workspace-facility-context__label">Facility workspace</span>
-                {workspaces.length > 1 ? (
-                  <select
-                    aria-label="Facility workspace"
-                    value={currentWorkspace?.workspace_id ?? "default"}
-                    onChange={(event) => onWorkspaceChange?.(event.target.value)}
-                  >
-                    {workspaces.map((workspace) => (
-                      <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.display_name}</option>
-                    ))}
-                  </select>
-                ) : <strong>{currentWorkspace?.display_name ?? "Personal workspace"}</strong>}
-              </div>
-              <span className="workspace-back-control__product"><strong>Neraium</strong> · Read-only</span>
-              {typeof onHelp === "function" ? (
-                <button type="button" className="workspace-back-control__help" onClick={onHelp}>Help</button>
-              ) : null}
-            </div>
+        <WorkspaceShell activeNavigation={activeWorkspace} onNavigate={onNavigate} currentUser={currentUser} onSignOut={onSignOut} signOutPending={signOutPending} workspaceSession={workspaceSession} currentWorkspace={currentWorkspace} onWorkspaceChange={onWorkspaceChange} mainRef={mainRef} mainId="main-content" mainLabel="Neraium platform workspace" topbarContent={<div className="forensic-topbar__site"><span>{currentWorkspace?.display_name ?? "Personal workspace"}</span><small>Read-only</small></div>}>
+          <nav className="workspace-context-trail" aria-label="Context trail">
+            <button type="button" onClick={() => onNavigate("site")}>System Status</button>
+            <span aria-hidden="true">/</span><span aria-current="page">{contextLabel}</span>
           </nav>
-          <main ref={mainRef} id="main-content" className="workspace-route-main" aria-label="Neraium platform workspace" tabIndex={-1}>
-            <h1 className="sr-only">Neraium Platform Workspace</h1>
             {children}
-          </main>
-        </div>
+        </WorkspaceShell>
       </div>
     </AppErrorBoundary>
   );
@@ -109,7 +77,6 @@ export default function AppWorkspaceRouter({
   domainMode,
   domainDetection,
   formatClockTime,
-  handleBackToGate,
   handleRetryWorkspace,
   handleGateUploadComplete,
   handleOpenConnectorAnalysisResult = () => {},
@@ -156,7 +123,7 @@ export default function AppWorkspaceRouter({
     selectedAnalysisIdentity?.analysisRunId ?? currentResultIdentity,
     resultsNavigationKey,
   ].join(":");
-  const workspaceContextProps = { workspaceSession, currentWorkspace, onWorkspaceChange };
+  const workspaceContextProps = { workspaceSession, currentWorkspace, onWorkspaceChange, currentUser, onNavigate: setActiveWorkspace, onSignOut: handleSignOut, signOutPending };
 
   if (activeWorkspace === "home") {
     return (
@@ -172,15 +139,13 @@ export default function AppWorkspaceRouter({
 
   if (activeWorkspace === "data-connections") {
     return (
-      <WorkspaceWithBackControl
+      <WorkspaceWithContext
         appReady={appReady}
         errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         contextLabel="Data"
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
-        onHelp={() => setActiveWorkspace("help-changelog")}
         {...workspaceContextProps}
       >
         <Suspense fallback={renderLoadingPanel("Opening Data Connections", "Loading facility-scoped telemetry sources and system mappings...")}>
@@ -218,21 +183,19 @@ export default function AppWorkspaceRouter({
             autoStartInitialFiles={pendingUploadFiles.length > 0}
           />
         </Suspense>
-      </WorkspaceWithBackControl>
+      </WorkspaceWithContext>
     );
   }
 
   if (activeWorkspace === "system-story") {
     return (
-      <WorkspaceWithBackControl
+      <WorkspaceWithContext
         appReady={appReady}
         errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
-        contextLabel="Analysis Details"
+        contextLabel="Historical replay"
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
-        onHelp={() => setActiveWorkspace("help-changelog")}
         {...workspaceContextProps}
       >
         <Suspense fallback={renderLoadingPanel("Loading investigation record", "Preparing analysis history, evidence, and diagnostics...")}>
@@ -257,39 +220,35 @@ export default function AppWorkspaceRouter({
             onReplayModeChange={handleReplayModeChange}
           />
         </Suspense>
-      </WorkspaceWithBackControl>
+      </WorkspaceWithContext>
     );
   }
 
   if (activeWorkspace === "governance-admin" && currentUser?.role !== "admin") {
     return (
-      <WorkspaceWithBackControl
+      <WorkspaceWithContext
         appReady={appReady}
         errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         contextLabel="Administration"
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
-        onHelp={() => setActiveWorkspace("help-changelog")}
         {...workspaceContextProps}
       >
         <EmptyState title="Administrator access required" body="This workspace is limited to administrators." actionLabel="Return to Portfolio" onAction={() => setActiveWorkspace("system-body")} />
-      </WorkspaceWithBackControl>
+      </WorkspaceWithContext>
     );
   }
 
   if (activeWorkspace === "governance-admin") {
     return (
-      <WorkspaceWithBackControl
+      <WorkspaceWithContext
         appReady={appReady}
         errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         contextLabel="Administration"
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
-        onHelp={() => setActiveWorkspace("help-changelog")}
         {...workspaceContextProps}
       >
         <Suspense fallback={renderLoadingPanel("Loading administration", "Preparing access controls and governance records...")}>
@@ -303,21 +262,19 @@ export default function AppWorkspaceRouter({
             currentWorkspace={currentWorkspace}
           />
         </Suspense>
-      </WorkspaceWithBackControl>
+      </WorkspaceWithContext>
     );
   }
 
   if (activeWorkspace === "observation-center") {
     return (
-      <WorkspaceWithBackControl
+      <WorkspaceWithContext
         appReady={appReady}
         errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
-        contextLabel="Insights"
+        contextLabel="Historical review"
         errorContext={errorContext}
         activeWorkspace={activeWorkspace}
-        onHelp={() => setActiveWorkspace("help-changelog")}
         {...workspaceContextProps}
       >
         <Suspense fallback={renderLoadingPanel("Loading investigation", "Prioritizing findings and preparing evidence...")}>
@@ -332,16 +289,15 @@ export default function AppWorkspaceRouter({
             onReviewEvidence={() => setActiveWorkspace("observation-center")}
           />
         </Suspense>
-      </WorkspaceWithBackControl>
+      </WorkspaceWithContext>
     );
   }
 
   if (activeWorkspace === "help-changelog") {
     return (
-      <WorkspaceWithBackControl
+      <WorkspaceWithContext
         appReady={appReady}
         errorBoundaryResetKey={errorBoundaryResetKey}
-        handleBackToGate={handleBackToGate}
         handleRetryWorkspace={handleRetryWorkspace}
         contextLabel="Help & Status"
         errorContext={errorContext}
@@ -355,7 +311,7 @@ export default function AppWorkspaceRouter({
             onWorkspaceNavigate={setActiveWorkspace}
           />
         </Suspense>
-      </WorkspaceWithBackControl>
+      </WorkspaceWithContext>
     );
   }
 

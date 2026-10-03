@@ -1684,3 +1684,8 @@
 @media (max-width: 360px) {
   .finding-classification__facts, .case-review-state dl { grid-template-columns: 1fr; }
 }
+
+/* Compact context shared by workspace and scoped detail routes. */
+.workspace-context-trail { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; color: var(--fr-muted); font-size: 12px; }
+.workspace-context-trail button { min-height: 44px; padding: 4px 6px; border: 0; background: transparent; color: var(--fr-text); cursor: pointer; text-align: left; }
+.forensic-sidebar { min-height: 0; overflow-y: auto; }

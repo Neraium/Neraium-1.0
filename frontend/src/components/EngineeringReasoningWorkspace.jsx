@@ -10,7 +10,7 @@ import ConfidenceTierChip from "./engineering/ConfidenceTierChip";
 import GlobalAssetSearch from "./engineering/GlobalAssetSearch";
 import PortfolioWorkspace from "./engineering/PortfolioWorkspace";
 import OperationsBrief from "./engineering/OperationsBrief";
-import SkipToMainContent from "./SkipToMainContent";
+import WorkspaceShell from "./WorkspaceShell";
 import "../styles/engineering-reasoning.css";
 
 const TraceWorkspace = lazy(() => import("./engineering/TraceWorkspace"));
@@ -166,10 +166,6 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const [route, setRoute] = useState(routeFromLocation);
   const [selectedFindingId, setSelectedFindingId] = useState(() => pathIdentity(["findings", "evidence", "investigations"]));
   const [selectedSystemName, setSelectedSystemName] = useState(() => pathIdentity(["systems"]));
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [compactNavigation, setCompactNavigation] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 1024px)")?.matches);
-  const mobileMenuButtonRef = useRef(null);
-  const mobileSidebarRef = useRef(null);
   const mainRef = useRef(null);
   const previousRouteRef = useRef([route, selectedFindingId, selectedSystemName].join(":"));
   const restoreScrollRef = useRef(0);
@@ -225,16 +221,6 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   const effectiveRoute = route === "portfolio" && portfolioModels.length <= 1 ? "site" : route;
   const scopedDetailRoute = ["finding", "investigation", "evidence"].includes(effectiveRoute);
   const activeNavigation = ["finding", "findings"].includes(effectiveRoute) ? "findings" : ["investigation", "evidence", "trace"].includes(effectiveRoute) ? "investigations" : ["system", "systems"].includes(effectiveRoute) ? "systems" : effectiveRoute;
-  const navItems = [
-    ["work", "Work"],
-    ["site", "System Status"],
-    ["systems", "Systems"],
-    ["findings", "Analysis Findings"],
-    ["investigations", "Evidence & Outcomes"],
-    ["data-connections", "Data"],
-    ...(portfolioModels.length > 1 ? [["portfolio", "Sites"]] : []),
-    ...(currentUser?.role === "admin" ? [["governance-admin", "Administration"]] : []),
-  ];
   const availableWorkspaces = (Array.isArray(workspaceSession?.workspaces)
     ? workspaceSession.workspaces
     : Array.isArray(currentUser?.workspaces) ? currentUser.workspaces : [])
@@ -310,64 +296,16 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
     return () => window.removeEventListener("keydown", keyHandler);
   }, []);
 
-  useEffect(() => {
-    const media = window.matchMedia?.("(max-width: 1024px)");
-    if (!media) return undefined;
-    const syncNavigationMode = () => {
-      setCompactNavigation(media.matches);
-      if (!media.matches) setMobileNavOpen(false);
-    };
-    syncNavigationMode();
-    media.addEventListener?.("change", syncNavigationMode);
-    return () => media.removeEventListener?.("change", syncNavigationMode);
-  }, []);
-
-  useEffect(() => {
-    if (!mobileNavOpen) return undefined;
-    const sidebar = mobileSidebarRef.current;
-    const previousOverflow = document.body.style.overflow;
-    const focusable = Array.from(sidebar?.querySelectorAll("button:not([disabled])") ?? []);
-    const activeNavigationItem = sidebar?.querySelector('nav[aria-label="Primary navigation"] [aria-current="page"]');
-    (activeNavigationItem ?? focusable[0])?.focus();
-    if (window.matchMedia?.("(max-width: 1024px)")?.matches) document.body.style.overflow = "hidden";
-
-    function handleMenuKeyDown(event) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setMobileNavOpen(false);
-        mobileMenuButtonRef.current?.focus();
-        return;
-      }
-      if (event.key !== "Tab" || !focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener("keydown", handleMenuKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleMenuKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [mobileNavOpen]);
-
   function pushRoute(path, nextRoute) {
     const scrollY = typeof window === "undefined" ? 0 : window.scrollY;
     window.history.replaceState({ ...window.history.state, scrollY }, "", window.location.pathname);
     window.history.pushState({ neraiumRoute: true }, "", path);
     setRoute(nextRoute);
-    setMobileNavOpen(false);
     window.requestAnimationFrame?.(() => scrollWindowTo(0));
   }
 
   function navigate(target) {
-    if (["data-connections", "governance-admin"].includes(target)) {
+    if (["data-connections", "governance-admin", "help-changelog", "observation-center", "system-story"].includes(target)) {
       onWorkspaceNavigate?.(target);
       return;
     }
@@ -440,38 +378,22 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
   }
 
   return (
-    <div className="forensic-shell" data-testid="engineering-reasoning-platform">
-      <SkipToMainContent targetId="forensic-main" />
-      <aside id="forensic-navigation" ref={mobileSidebarRef} className={`forensic-sidebar${mobileNavOpen ? " is-open" : ""}`} aria-label="Application sidebar" aria-hidden={compactNavigation && !mobileNavOpen} inert={compactNavigation && !mobileNavOpen ? "" : undefined}>
-        <div className="forensic-brand"><span className="forensic-brand__mark" aria-hidden="true">N</span><div><strong>Neraium</strong><small>Operational evidence</small></div></div>
-        <nav aria-label="Primary navigation">
-          {navItems.map(([id, label]) => <button key={id} type="button" className={activeNavigation === id ? "is-active" : ""} aria-current={activeNavigation === id ? "page" : undefined} onClick={() => navigate(id)}><span aria-hidden="true" className={`nav-glyph nav-glyph--${id}`} />{label}</button>)}
-        </nav>
-        <div className="forensic-sidebar__account">
-          <span>{currentUser?.name || currentUser?.email || "Signed in"}</span><small>{currentUser?.role || "engineer"}</small>
-          {availableWorkspaces.length > 1 ? <label className="forensic-workspace-selector forensic-workspace-selector--sidebar"><span>Facility workspace</span><select value={currentWorkspaceId} onChange={(event) => onWorkspaceChange?.(event.target.value)}>{availableWorkspaces.map((workspace) => <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.display_name}</option>)}</select></label> : null}
-          {onSignOut ? <button type="button" onClick={onSignOut} disabled={signOutPending}>{signOutPending ? "Signing out..." : "Sign out"}</button> : null}
-        </div>
-      </aside>
-      {mobileNavOpen ? <button type="button" className="forensic-sidebar-scrim" aria-label="Close navigation" onClick={() => { setMobileNavOpen(false); mobileMenuButtonRef.current?.focus(); }} /> : null}
-      <div className="forensic-app">
-        <header className="forensic-topbar" aria-label="Workspace controls">
-          <button
-            ref={mobileMenuButtonRef}
-            type="button"
-            className="forensic-mobile-menu"
-            aria-expanded={mobileNavOpen}
-            aria-controls="forensic-navigation"
-            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
-            onClick={() => setMobileNavOpen((value) => !value)}
-          ><span className="forensic-mobile-menu__label">Menu</span><svg className="forensic-mobile-menu__icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
+    <WorkspaceShell route={effectiveRoute} activeNavigation={activeNavigation} onNavigate={navigate} currentUser={currentUser} workspaceSession={workspaceSession} currentWorkspace={currentWorkspace} onWorkspaceChange={onWorkspaceChange} onSignOut={onSignOut} signOutPending={signOutPending} showSites={portfolioModels.length > 1} mainRef={mainRef} testId="engineering-reasoning-platform" topbarContent={<>
           <GlobalAssetSearch items={model.searchItems} onSelect={handleSearch} />
           <div className="forensic-topbar__site">
             {availableWorkspaces.length > 1 ? <label className="forensic-workspace-selector"><span>Facility</span><select aria-label="Current facility workspace" value={currentWorkspaceId} onChange={(event) => onWorkspaceChange?.(event.target.value)}>{availableWorkspaces.map((workspace) => <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.display_name}</option>)}</select></label> : <span>{currentWorkspace?.display_name ?? currentWorkspace?.displayName ?? model.site.name}</span>}
             {model.selectedFinding?.confidenceContract && Object.keys(model.selectedFinding.confidenceContract).length ? null : <ConfidenceTierChip tier={model.evidenceQuality} />}
           </div>
-        </header>
-        <main ref={mainRef} id="forensic-main" aria-label="Neraium operational workspace" tabIndex={-1} data-route={effectiveRoute}>
+        </>}>
+          {scopedDetailRoute || effectiveRoute === "trace" || effectiveRoute === "system" ? <nav className="workspace-context-trail" aria-label="Context trail">
+            <button type="button" onClick={() => navigate("site")}>System Status</button>
+            {scopedDetailRoute ? <>
+              <span aria-hidden="true">/</span><button type="button" onClick={() => navigate("findings")}>Analysis Findings</button>
+              {effectiveRoute === "finding" || reviewProjection.variant !== "unavailable" ? <><span aria-hidden="true">/</span>{effectiveRoute === "finding" ? <span aria-current="page">Finding</span> : <button type="button" onClick={() => openFinding(selectedFindingId)}>Finding</button>}</> : null}
+              {effectiveRoute === "investigation" || (effectiveRoute === "evidence" && investigationProjection.variant !== "unavailable") ? <><span aria-hidden="true">/</span>{effectiveRoute === "investigation" ? <span aria-current="page">Investigation</span> : <button type="button" onClick={() => openInvestigation(selectedFindingId)}>Investigation</button>}</> : null}
+              {effectiveRoute === "evidence" ? <><span aria-hidden="true">/</span><span aria-current="page">Evidence</span></> : null}
+            </> : <><span aria-hidden="true">/</span><span aria-current="page">{effectiveRoute === "trace" ? "Trace mode" : selectedSystem?.name || "System"}</span></>}
+          </nav> : null}
           {effectiveRoute === "work" ? <Suspense fallback={<p className="case-unavailable">Loading work…</p>}><WorkQueueWorkspace apiFetch={apiFetch} currentUser={currentUser} currentWorkspace={currentWorkspace} findingId={pathIdentity(["work"])} onRouteFinding={routeWorkFinding} technicalFindingFor={technicalFindingFor} onOpenInvestigation={(finding) => openInvestigation(finding?.id)} onOpenEvidence={(finding) => openEvidence(finding?.id)} /></Suspense>
             : scopedDetailRoute ? <Suspense fallback={<p className="case-unavailable">Loading finding evidence…</p>}>{effectiveRoute === "finding"
               ? <FindingReviewWorkspace projection={reviewProjection} onOpenInvestigation={openInvestigation} onOpenEvidence={evidenceProjection.variant !== "unavailable" ? openEvidence : undefined} onBack={() => goBack("site")} />
@@ -488,8 +410,6 @@ export default function EngineeringReasoningWorkspace({ liveOps, canonicalFindin
                               : presentationState.key === "legacyAnalysis" ? <WorkspaceStateNotice state={presentationState} onPrimary={presentationPrimaryAction} />
                                 : <SiteOverview projection={resultsProjection} onReview={openFinding} onOpenInvestigation={openInvestigation} onOpenEvidence={openEvidence} />}
           {["site", "findings", "investigations"].includes(effectiveRoute) && model.hasAnalysis && !model.processing ? <RelationshipObservations evidence={activeResult.relationship_observations} /> : null}
-        </main>
-      </div>
-    </div>
+    </WorkspaceShell>
   );
 }

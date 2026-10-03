@@ -7,7 +7,7 @@ export default function TraceWorkspace({ model, finding, apiFetch, onBack }) {
   const runId = finding?.runId ?? model?.result?.run_id ?? model?.result?.job_id ?? model?.result?.upload_id ?? null;
   return (
     <div className="trace-workspace">
-      <button type="button" className="evidence-back" onClick={onBack}>Back to evidence</button>
+      <button type="button" className="evidence-back" aria-label="Back" onClick={onBack}>Back</button>
       <header className="forensic-page-header"><div><span className="forensic-kicker">Technical details</span><h1>Trace mode</h1></div></header>
       <div className="trace-actions"><EvidencePackageExport runId={runId} apiFetch={apiFetch} /></div>
       <TraceTimeline steps={model.trace} selectedId={selectedId} onSelect={(step) => setSelectedId(step.id)} />

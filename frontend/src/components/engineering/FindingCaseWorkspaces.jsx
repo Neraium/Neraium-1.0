@@ -40,7 +40,7 @@ function ProjectionUnavailable({ projection, onBack }) {
       <span className="forensic-kicker">Operations Brief</span>
       <h1>{projection?.title ?? "Result unavailable"}</h1>
       <p>{projection?.explanation ?? "This result is unavailable in the current analysis record."}</p>
-      <button type="button" className="forensic-button forensic-button--secondary" onClick={onBack}>Back to results</button>
+      <button type="button" className="forensic-button forensic-button--secondary" onClick={onBack}>Back</button>
     </div>
   );
 }
@@ -129,7 +129,7 @@ export function FindingReviewWorkspace({ projection, onOpenInvestigation, onOpen
   );
   return (
     <div className="case-workspace finding-review-workspace" data-testid="finding-review">
-      <button type="button" className="evidence-back" onClick={onBack}>Back to Operations Brief</button>
+      <button type="button" className="evidence-back" aria-label="Back" onClick={onBack}>Back</button>
       {dashboardSummary ? <EvidenceDashboard summary={dashboardSummary} variant={projection.variant} headingActions={headingActions} /> : <><CaseHeader eyebrow="Finding" header={projection.header} />{headingActions}</>}
       <div className="case-sections case-sections--review evidence-next-steps">
         <section><h2>What changed</h2><p className="case-lead">{projection.whatChanged}</p></section>
@@ -144,10 +144,9 @@ export function FindingReviewWorkspace({ projection, onOpenInvestigation, onOpen
 
 export function InvestigationWorkspace({ projection, onOpenEvidence, onBack }) {
   if (!projection || projection.variant === "unavailable") return <ProjectionUnavailable projection={projection} onBack={onBack} />;
-  const analysisScoped = projection.identity?.scope === "analysis";
   return (
     <div className="case-workspace investigation-case-workspace" data-testid="investigation-workspace">
-      <button type="button" className="evidence-back" onClick={onBack}>{analysisScoped ? "Back to results" : "Back to finding"}</button>
+      <button type="button" className="evidence-back" aria-label="Back" onClick={onBack}>Back</button>
       <CaseHeader eyebrow="Investigation" header={projection.header} />
       <div className="case-primary-action case-primary-action--top"><div><span className="forensic-kicker">Evidence record</span><strong>Inspect exact transported facts, canonical references, provenance, and audit history.</strong></div><button type="button" className="forensic-button" onClick={() => onOpenEvidence?.(projection.identity.findingKey)}>{projection.primaryAction.label}</button></div>
       <div className="case-sections case-sections--investigation">
@@ -274,7 +273,7 @@ export function EvidenceRecordWorkspace({ projection, apiFetch, onTrace, onBack 
   const engineRows = Object.entries(projection.engine).filter(([, value]) => value !== null);
   return (
     <div className="case-workspace evidence-record-workspace" data-testid="evidence-record">
-      <button type="button" className="evidence-back" onClick={onBack}>Back to investigation</button>
+      <button type="button" className="evidence-back" aria-label="Back" onClick={onBack}>Back</button>
       <EvidenceDashboard summary={dashboardSummary} variant={projection.variant} />
       <details className="evidence-record-technical" open={!dashboardSummary}>
         <summary>Technical evidence and audit trail</summary>

@@ -58,10 +58,13 @@ export default function HelpChangelogWorkspace({
           <h1>Help & status</h1>
           <p>Operator terms, service health, and recent changes.</p>
           <div className="intake-flow__controls">
-            <button type="button" className="secondary-command-button" onClick={() => onWorkspaceNavigate?.("observation-center")}>
+            <button type="button" className="secondary-command-button" onClick={() => onWorkspaceNavigate?.("findings")}>
               Open findings
             </button>
+            <button type="button" className="secondary-command-button" onClick={() => onWorkspaceNavigate?.("observation-center")}>Historical review</button>
+            <button type="button" className="secondary-command-button" onClick={() => onWorkspaceNavigate?.("system-story")}>Historical replay</button>
           </div>
+          <p>Review recorded runs and pattern history in Historical review. Use Historical replay for existing replay controls; available records depend on your current workspace and access.</p>
         </section>
       </div>
 

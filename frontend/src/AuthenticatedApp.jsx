@@ -108,6 +108,12 @@ function AuthenticatedApp({ currentUser, workspaceSession, onSignedOut }) {
   }, [workspaceSession]);
 
   const setActiveWorkspace = useCallback((workspaceId) => {
+    const primaryPaths = { site: "/sites/current", work: "/work", systems: "/systems", findings: "/findings", investigations: "/investigations", portfolio: "/portfolio" };
+    if (primaryPaths[workspaceId]) {
+      setActiveWorkspaceState("system-body");
+      if (typeof window !== "undefined" && window.location.pathname !== primaryPaths[workspaceId]) window.history.pushState({}, "", primaryPaths[workspaceId]);
+      return;
+    }
     const nextWorkspace = workspaceId === "home" ? "home" : workspaceId;
     setActiveWorkspaceState(nextWorkspace);
     setSelectedBaselineIdentity(null);

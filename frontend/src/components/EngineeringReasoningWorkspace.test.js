@@ -420,7 +420,8 @@ describe("EngineeringReasoningWorkspace daily workflows", () => {
     fireEvent.change(search, { target: { value: "Cooling system" } });
     fireEvent.keyDown(search, { key: "Enter" });
     expect(window.location.pathname).toBe("/systems/Cooling%20system");
-    expect(screen.getByText("Cooling system")).toBeTruthy();
+    expect(within(screen.getByRole("navigation", { name: "Context trail" })).getByText("Cooling system")).toBeTruthy();
+    expect(screen.getAllByText("Cooling system")).toHaveLength(2);
   });
 
   it("routes canonical shared work independently and preserves engineer drill-down", async () => {
