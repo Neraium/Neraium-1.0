@@ -18,6 +18,32 @@ REVISION = 'a' * 40
 IMAGE = '680779862188.dkr.ecr.us-east-2.amazonaws.com/neraium-prod-api@sha256:' + 'b' * 64
 
 
+def test_monitoring_optional_false_preserves_certified_semantics():
+    alarms = [{'AlarmName': 'required-alarm', 'Threshold': 1, 'ActionsEnabled': True,
+               'AlarmActions': ['required-topic'], 'OKActions': ['required-topic']}]
+    filters = {'api': [{'filterName': 'required-filter', 'filterPattern': '"failure"',
+                       'metricTransformations': [{'metricName': 'Failures', 'metricValue': '1'}]}]}
+    expected = release.monitoring_fingerprint(alarms, filters)
+    explicit = deepcopy(filters)
+    explicit['api'][0]['applyOnTransformedLogs'] = False
+    assert release.monitoring_fingerprint(alarms, explicit) == expected
+    assert explicit['api'][0]['applyOnTransformedLogs'] is False  # No input mutation.
+    for value in (True, None, 0, 'false'):
+        changed = deepcopy(explicit)
+        changed['api'][0]['applyOnTransformedLogs'] = value
+        assert release.monitoring_fingerprint(alarms, changed) != expected
+    for field, value in (('filterPattern', '"different"'),
+                         ('metricTransformations', [{'metricName': 'Other', 'metricValue': '0'}]),
+                         ('fieldSelectionCriteria', '@aws.account = "different"')):
+        changed = deepcopy(explicit)
+        changed['api'][0][field] = value
+        assert release.monitoring_fingerprint(alarms, changed) != expected
+    for field, value in (('ActionsEnabled', False), ('AlarmActions', []), ('OKActions', []), ('Threshold', 2)):
+        changed = deepcopy(alarms)
+        changed[0][field] = value
+        assert release.monitoring_fingerprint(changed, explicit) != expected
+
+
 @pytest.fixture
 def boundary():
     profile = json.loads(release.BASELINE.read_text())

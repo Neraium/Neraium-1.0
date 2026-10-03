@@ -235,7 +235,12 @@ def certify_image(image: str, revision: str, profile: dict) -> None:
 
 def monitoring_fingerprint(alarms: list, filters: dict) -> str:
     stable_alarms = [{k: v for k, v in a.items() if k not in ALARM_VOLATILE} for a in alarms]
-    stable_filters = {role: [{k: v for k, v in f.items() if k not in {"creationTime", "logGroupName"}}
+    # AWS now returns the optional default explicitly. Both absent and boolean
+    # false evaluate original ingested logs; true and all other values remain
+    # fingerprinted. Preserve the certified hash without accepting drift in
+    # filter semantics, transformations, alarms or delivery destinations.
+    stable_filters = {role: [{k: v for k, v in f.items() if k not in {"creationTime", "logGroupName"}
+                             and not (k == "applyOnTransformedLogs" and v is False)}
                             for f in values] for role, values in filters.items()}
     return digest({"alarms": sorted(stable_alarms, key=lambda a: a["AlarmName"]),
                    "filters": {role: sorted(values, key=lambda f: f["filterName"]) for role, values in stable_filters.items()}})
