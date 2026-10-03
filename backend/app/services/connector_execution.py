@@ -487,7 +487,14 @@ def build_executor_app():
 
     @app.post("/v1/connector-jobs")
     async def execute(request: Request):
-        body = await request.body()
+        # Enforce the existing job cap while receiving, before buffering or
+        # parsing unauthenticated input. Content-Length may be absent or false.
+        body_buffer = bytearray()
+        async for chunk in request.stream():
+            if len(body_buffer) + len(chunk) > MAX_JOB_BYTES:
+                return JSONResponse({"code": "connector_job_too_large"}, status_code=413)
+            body_buffer.extend(chunk)
+        body = bytes(body_buffer)
         try:
             result = broker.execute(body,
                 timestamp=request.headers.get("x-neraium-timestamp", ""),
